@@ -1,0 +1,126 @@
+// This is your Prisma schema file
+
+generator client {
+  provider = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Audit {
+  id               String          @id @default(uuid())
+  businessName     String
+  businessCity     String?
+  businessUrl      String?
+  businessIndustry String?
+  status           AuditStatus     @default(QUEUED)
+  modulesCompleted String[]        @default([])
+  modulesFailed    Json            @default("[]")
+  overallScore     Int?
+  apiCostCents     Int             @default(0)
+  startedAt        DateTime        @default(now())
+  completedAt      DateTime?
+  createdAt        DateTime        @default(now())
+
+  findings  Finding[]
+  proposals Proposal[]
+  evidence  EvidenceSnapshot[]
+
+  @@index([status])
+  @@index([createdAt])
+}
+
+model Finding {
+  id              String       @id @default(uuid())
+  auditId         String
+  module          String
+  category        String
+  type            FindingType
+  title           String
+  description     String?
+  evidence        Json         @default("[]")
+  metrics         Json         @default("{}")
+  impactScore     Int
+  confidenceScore Int
+  effortEstimate  EffortLevel?
+  recommendedFix  Json         @default("[]")
+  manuallyEdited  Boolean      @default(false)
+  excluded        Boolean      @default(false)
+  createdAt       DateTime     @default(now())
+
+  audit Audit @relation(fields: [auditId], references: [id], onDelete: Cascade)
+
+  @@index([auditId])
+  @@index([type])
+}
+
+model Proposal {
+  id               String         @id @default(uuid())
+  auditId          String
+  version          Int            @default(1)
+  status           ProposalStatus @default(DRAFT)
+  executiveSummary String?
+  painClusters     Json           @default("[]")
+  tierEssentials   Json           @default("{}")
+  tierGrowth       Json           @default("{}")
+  tierPremium      Json           @default("{}")
+  pricing          Json           @default("{}")
+  assumptions      String[]       @default([])
+  disclaimers      String[]       @default([])
+  nextSteps        String[]       @default([])
+  pdfUrl           String?
+  webLinkToken     String         @unique @default(uuid())
+  sentAt           DateTime?
+  viewedAt         DateTime?
+  createdAt        DateTime       @default(now())
+
+  audit Audit @relation(fields: [auditId], references: [id])
+
+  @@index([auditId])
+  @@index([webLinkToken])
+  @@index([status])
+}
+
+model EvidenceSnapshot {
+  id          String   @id @default(uuid())
+  auditId     String
+  module      String
+  source      String
+  rawResponse Json
+  collectedAt DateTime @default(now())
+
+  audit Audit @relation(fields: [auditId], references: [id], onDelete: Cascade)
+
+  @@index([auditId])
+}
+
+enum AuditStatus {
+  QUEUED
+  RUNNING
+  COMPLETE
+  PARTIAL
+  FAILED
+}
+
+enum FindingType {
+  PAINKILLER
+  VITAMIN
+}
+
+enum ProposalStatus {
+  DRAFT
+  READY
+  SENT
+  VIEWED
+  ACCEPTED
+  REJECTED
+}
+
+enum EffortLevel {
+  LOW
+  MEDIUM
+  HIGH
+}
