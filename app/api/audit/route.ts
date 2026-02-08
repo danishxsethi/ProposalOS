@@ -5,6 +5,7 @@ import { runCompetitorModule } from '@/lib/modules/competitor';
 import { runSeoDeepModule } from '@/lib/modules/seoDeep';
 import { runReputationModule } from '@/lib/modules/reputation';
 import { runSocialModule } from '@/lib/modules/social';
+import { runGBPModule } from '@/lib/modules/gbp';
 import {
     generateWebsiteFindings,
     generateGBPFindings,
@@ -25,7 +26,16 @@ import { withAuth } from '@/lib/middleware/auth';
 import { getTenantId, createScopedPrisma } from '@/lib/tenant/context';
 import { checkAuditLimit } from '@/lib/billing/limits';
 
+import { z } from 'zod';
+
+const auditSchema = z.object({
+    url: z.string().url(),
+    industry: z.string().optional(),
+    // Allow other properties to pass through if needed, or be strict
+}).passthrough();
+
 export const POST = withAuth(async (req: Request) => {
+    console.log('[DEBUG] POST handler started');
     try {
         const tenantId = await getTenantId();
         if (!tenantId) {
@@ -37,12 +47,18 @@ export const POST = withAuth(async (req: Request) => {
 
         // Parse Body
         const body = await req.json();
-        const { url, industry } = body; // accept industry
 
-        // Validate input
-        if (!url) {
-            return NextResponse.json({ error: 'URL is required' }, { status: 400 });
+        let validatedData;
+        try {
+            validatedData = auditSchema.parse(body);
+        } catch (e) {
+            if (e instanceof z.ZodError) {
+                return NextResponse.json({ error: 'Invalid input', details: e.errors }, { status: 400 });
+            }
+            throw e;
         }
+
+        let { url, industry, name, city } = validatedData as any;
 
         // Check Usage Limits
         const limits = await checkAuditLimit();
@@ -50,20 +66,6 @@ export const POST = withAuth(async (req: Request) => {
             return NextResponse.json(
                 { error: 'Plan Limit Exceeded', details: limits.reason, upgrade: true },
                 { status: 429 }
-            );
-        }
-
-        // Use Scoped Prisma
-        const prisma = createScopedPrisma(tenantId);
-
-        const body = await req.json();
-        let { name, city, url } = body;
-
-        // Validate input
-        if (!url && (!name || !city)) {
-            return NextResponse.json(
-                { error: 'Must provide either (name + city) or url' },
-                { status: 400 }
             );
         }
 
@@ -122,6 +124,7 @@ export const POST = withAuth(async (req: Request) => {
         }
 
         // Run modules in parallel (GCP-native approach)
+        console.log('[DEBUG] Starting modules...');
         const [websiteResult, gbpResult, competitorResult, seoDeepResult] = await Promise.allSettled([
             url ? runWebsiteModule({ url }, tracker) : Promise.resolve({ status: 'failed', error: 'No URL provided' } as any),
             name && city ? runGBPModule({ businessName: name, city }, tracker) : Promise.resolve({ status: 'failed', error: 'No name/city' } as any),
@@ -140,9 +143,23 @@ export const POST = withAuth(async (req: Request) => {
         const allFindings: any[] = [];
 
         // Process Website Module
-        if (websiteResult.status === 'fulfilled' && websiteResult.value.status === 'success') {
+        const websiteVal = websiteResult.status === 'fulfilled' ? websiteResult.value : undefined;
+
+        // Handle both Modern (findings) and Legacy (status/data) formats
+        const isWebsiteSuccess = websiteVal && (
+            (websiteVal as any).findings ||
+            (websiteVal as any).status === 'success'
+        );
+
+        if (websiteResult.status === 'fulfilled' && isWebsiteSuccess) {
             modulesCompleted.push('website');
-            const findings = generateWebsiteFindings(websiteResult.value.data);
+
+            let findings: any[] = [];
+            if ((websiteVal as any).findings) {
+                findings = (websiteVal as any).findings;
+            } else {
+                findings = generateWebsiteFindings((websiteVal as any).data);
+            }
             allFindings.push(...findings);
 
             // Store evidence
@@ -151,11 +168,12 @@ export const POST = withAuth(async (req: Request) => {
                     auditId: audit.id,
                     module: 'website',
                     source: 'PageSpeed Insights API',
-                    rawResponse: websiteResult.value.data,
+                    rawResponse: websiteVal,
                 },
             });
         } else {
-            const err = websiteResult.status === 'fulfilled' ? websiteResult.value.error : 'Promise rejected';
+
+            const err = websiteResult.status === 'fulfilled' ? (websiteVal as any)?.error : 'Promise rejected';
             modulesFailed.push({ module: 'website', error: err });
             Metrics.increment('modules_failed');
             logger.error({
@@ -240,7 +258,8 @@ export const POST = withAuth(async (req: Request) => {
                 parentTrace
             );
 
-            if (reputationResult.status === 'success' && !reputationResult.data?.skipped) {
+            const repVal = reputationResult as any;
+            if (reputationResult && (repVal.status === 'success' || repVal.findings) && !repVal.data?.skipped) {
                 modulesCompleted.push('reputation');
                 Metrics.increment('modules_total');
                 logger.info({
@@ -249,7 +268,7 @@ export const POST = withAuth(async (req: Request) => {
                     module: 'reputation',
                 }, 'Reputation module complete');
 
-                const findings = generateReputationFindings(reputationResult.data);
+                const findings = generateReputationFindings(repVal.data || repVal);
                 allFindings.push(...findings);
 
                 await prisma.evidenceSnapshot.create({
@@ -257,17 +276,17 @@ export const POST = withAuth(async (req: Request) => {
                         auditId: audit.id,
                         module: 'reputation',
                         source: 'Gemini AI + Google Reviews',
-                        rawResponse: reputationResult.data,
+                        rawResponse: reputationResult,
                     },
                 });
-            } else if (reputationResult.status === 'failed') {
-                modulesFailed.push({ module: 'reputation', error: reputationResult.error });
+            } else if (reputationResult && repVal.status === 'failed') {
+                modulesFailed.push({ module: 'reputation', error: repVal.error });
                 Metrics.increment('modules_failed');
                 logger.error({
                     event: 'module.failed',
                     auditId: audit.id,
                     module: 'reputation',
-                    error: reputationResult.error
+                    error: repVal.error
                 }, 'Reputation module failed');
             }
             // If skipped (no reviews), don't add to either list
@@ -280,7 +299,8 @@ export const POST = withAuth(async (req: Request) => {
                 tracker
             );
 
-            if (socialResult.status === 'success' && !socialResult.data?.skipped) {
+            const socVal = socialResult as any;
+            if (socialResult && (socVal.status === 'success' || socVal.findings) && !socVal.data?.skipped) {
                 modulesCompleted.push('social');
                 Metrics.increment('modules_total');
                 logger.info({
@@ -289,7 +309,7 @@ export const POST = withAuth(async (req: Request) => {
                     module: 'social',
                 }, 'Social module complete');
 
-                const findings = generateSocialFindings(socialResult.data);
+                const findings = generateSocialFindings(socVal.data || socVal);
                 allFindings.push(...findings);
 
                 await prisma.evidenceSnapshot.create({
@@ -297,17 +317,17 @@ export const POST = withAuth(async (req: Request) => {
                         auditId: audit.id,
                         module: 'social',
                         source: 'Website HTML',
-                        rawResponse: socialResult.data,
+                        rawResponse: socialResult,
                     },
                 });
-            } else if (socialResult.status === 'failed') {
-                modulesFailed.push({ module: 'social', error: socialResult.error });
+            } else if (socialResult && socVal.status === 'failed') {
+                modulesFailed.push({ module: 'social', error: socVal.error });
                 Metrics.increment('modules_failed');
                 logger.error({
                     event: 'module.failed',
                     auditId: audit.id,
                     module: 'social',
-                    error: socialResult.error
+                    error: socVal.error
                 }, 'Social module failed');
             }
             // If skipped (no URL or fetch failed), don't add to either list
@@ -390,14 +410,4 @@ export const POST = withAuth(async (req: Request) => {
             { status: 500 }
         );
     }
-});
-
-    } catch (error) {
-    logError('Error running audit', error);
-    Metrics.increment('audits_failed');
-    return NextResponse.json(
-        { error: 'Internal Server Error', details: String(error) },
-        { status: 500 }
-    );
-}
 });

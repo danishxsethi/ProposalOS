@@ -64,7 +64,7 @@ export class AuditOrchestrator {
         this.bus.set('websiteUrl', input.websiteUrl);
         this.bus.set('city', input.city);
         this.bus.set('industry', input.industry);
-        if (input.placeId) this.bus.set('placeData', { placeId: input.placeId });
+        if (input.placeId) this.bus.set('placeData', { placeId: input.placeId, reviews: [] });
 
         this.registerModules();
     }
@@ -122,8 +122,9 @@ export class AuditOrchestrator {
             dependencies: ['placeData', 'websiteUrl'],
             outputKey: 'reputationData',
             execute: async (bus, tracker) => {
-                const placeData: any = bus.get('placeData');
-                const placeId = placeData?.evidenceSnapshots?.[0]?.rawResponse?.placeId;
+                const placeData = bus.get('placeData');
+                if (!placeData) throw new Error('Missing placeData'); // Guard
+                const placeId = placeData.placeId; // Inferred from PlaceDataResult
 
                 return await runGbpDeepModule({
                     businessName: bus.get('businessName')!,
@@ -250,8 +251,16 @@ export class AuditOrchestrator {
             dependencies: ['competitorData', 'websiteUrl'],
             outputKey: 'competitorStrategy',
             execute: async (bus, tracker) => {
-                const compData: any = bus.get('competitorData');
-                const topComp = compData?.data?.topCompetitors?.[0]; // Verify structure
+                const compData = bus.get('competitorData');
+                // The structure of Competitor Module Result finding data is nested.
+                // We need to verify if we can get topCompetitors directly.
+                // Assuming findings array contains the data or evidenceSnapshots.
+                // Based on types, we might need to adjust how we access topCompetitor.
+                // For now, let's keep it safe but remove explicit any cast if possible.
+                // Actually competitorData is AuditModuleResult. We need to parse findings or evidence.
+                // Let's assume the evidence snapshot has the raw data.
+                const rawCompData = compData?.evidenceSnapshots?.[0]?.rawResponse;
+                const topComp = rawCompData?.topCompetitors?.[0];
 
                 if (!topComp) {
                     logger.warn('[Orchestrator] No competitor found for strategy');

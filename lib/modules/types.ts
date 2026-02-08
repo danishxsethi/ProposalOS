@@ -85,3 +85,23 @@ export interface SocialModuleInput {
     websiteUrl: string;
     businessName: string;
 }
+
+// Result Types for DataBus
+export interface PlaceDataResult {
+    placeId: string;
+    reviews: any[];
+    rating?: number;
+    userRatingCount?: number;
+    address?: string;
+    phone?: string;
+    website?: string;
+    types?: string[];
+    [key: string]: any; // Allow loose typing for now until we map full Places API
+}
+
+export interface ReputationModuleResult extends ReputationModuleInput {
+    skipped?: boolean;
+    sentimentAnalysis?: any;
+    // Add other fields returned by runReputationModule
+}
+

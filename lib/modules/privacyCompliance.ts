@@ -165,10 +165,11 @@ export async function runPrivacyModule(
             tracker?.addApiCall("GEMINI_FLASH");
             const policyText = await fetchPolicyText(policyUrl);
             if (policyText) {
-                const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-                const prompt = \`Analyze this privacy policy for a small business:
+                {
+                    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+                    const prompt = `Analyze this privacy policy for a small business:
                 
-                \${policyText.substring(0, 10000)} ... [truncated]
+                ${policyText.substring(0, 10000)} ... [truncated]
 
                 Return JSON with fields:
                 - completenessScore (1-10)
@@ -179,18 +180,18 @@ export async function runPrivacyModule(
                 - lastUpdated (string or null)
                 - isGenericTemplate (boolean)
                 - missingElements (array of strings: e.g. "Do Not Sell", "Data Types", "DPO Contact")
-                \`;
+                `;
 
-                const result = await model.generateContent(prompt);
-                const text = result.response.text();
-                const jsonMatch = text.match(/\\{.*\\}/s);
-                if (jsonMatch) {
-                    const aiData = JSON.parse(jsonMatch[0]);
-                    policyAnalysis = { ...policyAnalysis, ...aiData };
+                    const result = await model.generateContent(prompt);
+                    const text = result.response.text();
+                    const jsonMatch = text.match(/\\{.*\\}/s);
+                    if (jsonMatch) {
+                        const aiData = JSON.parse(jsonMatch[0]);
+                        policyAnalysis = { ...policyAnalysis, ...aiData };
+                    }
                 }
-           }
+            }
         }
-
         // 3. Generate Findings
         const findings: Finding[] = [];
 
@@ -211,14 +212,14 @@ export async function runPrivacyModule(
         }
         // PAINKILLER: Illegal Tracking
         else if (cookieAnalysis.initialCookies > 0 && cookieAnalysis.trackingCookiesFound.length > 0) {
-             findings.push({
+            findings.push({
                 type: 'PAINKILLER',
                 category: 'Compliance',
                 title: 'Illegal Tracking Before Consent',
-                description: \`We found \${cookieAnalysis.trackingCookiesFound.length} tracking cookies set BEFORE the user clicked "Accept". This renders your consent banner legally useless.\`,
+                description: `We found ${cookieAnalysis.trackingCookiesFound.length} tracking cookies set BEFORE the user clicked "Accept".This renders your consent banner legally useless.`,
                 impactScore: 7,
                 confidenceScore: 95,
-                evidence: [{ type: 'text', value: \`Cookies: \${cookieAnalysis.trackingCookiesFound.join(', ')}\`, label: 'Cookies' }],
+                evidence: [{ type: 'text', value: `Cookies: ${cookieAnalysis.trackingCookiesFound.join(', ')}`, label: 'Cookies' }],
                 metrics: { count: cookieAnalysis.trackingCookiesFound.length },
                 effortEstimate: 'HIGH',
                 recommendedFix: ['Configure CMP to block scripts until consent is given']
@@ -242,11 +243,11 @@ export async function runPrivacyModule(
         }
         // VITAMIN: Weak Policy
         else if (policyAnalysis.completenessScore < 5) {
-             findings.push({
+            findings.push({
                 type: 'VITAMIN',
                 category: 'Compliance',
                 title: 'Incomplete Privacy Policy',
-                description: \`Your policy scored \${policyAnalysis.completenessScore}/10. It is likely a generic template and misses key business-specific disclosures.\`,
+                description: `Your policy scored ${policyAnalysis.completenessScore}/10. It is likely a generic template and misses key business-specific disclosures.`,
                 impactScore: 5,
                 confidenceScore: 90,
                 evidence: [{ type: 'link', value: policyAnalysis.url || '', label: 'Current Policy' }],
@@ -258,7 +259,7 @@ export async function runPrivacyModule(
 
         // VITAMIN: No Reject Option
         if (cookieAnalysis.hasBanner && !cookieAnalysis.hasRejectButton) {
-             findings.push({
+            findings.push({
                 type: 'VITAMIN',
                 category: 'Compliance',
                 title: 'Cookie Banner Missing "Reject" Option',

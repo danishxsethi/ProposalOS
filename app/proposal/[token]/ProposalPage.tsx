@@ -77,6 +77,7 @@ function useFadeIn() {
     return { ref, isVisible };
 }
 import { BRANDING, getBrandColor } from '@/lib/config/branding';
+import { ProposalShareButton } from '@/components/ProposalShareButton';
 
 // ... (imports remain)
 
@@ -971,8 +972,18 @@ export default function ProposalPage({ proposal }: ProposalProps) {
                             </a>
                         </p>
                     )}
+                    <div className="mt-20 text-center text-gray-500 dark:text-gray-400 text-sm">
+                        © {new Date().getFullYear()} {BRANDING.name}. All rights reserved.
+                    </div>
                 </div>
             </footer>
+
+            {/* Viral Sharing Button */}
+            <ProposalShareButton
+                proposalId={proposal.id}
+                businessName={proposal.audit.businessName}
+                token={proposal.webLinkToken}
+            />
         </main>
     );
 }

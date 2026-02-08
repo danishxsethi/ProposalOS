@@ -20,7 +20,7 @@ export interface ScreenshotOptions {
 export interface AnnotationConfig {
     highlightMissingAlt?: boolean;
     highlightMissingH1?: boolean;
-    highlightNoC TA ?: boolean;
+    highlightNoCTA?: boolean;
 }
 
 export interface ScreenshotResult {

@@ -22,7 +22,7 @@ export function ScoreComparison({ score, city, industry }: { score: number, city
                     <div className="h-2 bg-slate-800 rounded-full overflow-hidden relative">
                         <div
                             className="absolute top-0 bottom-0 bg-indigo-500 rounded-full"
-                            style={{ left: \`\${Math.max(0, score - 5)}%\`, right: \`\${100 - score - 5}%\` }}
+                            style={{ left: `${Math.max(0, score - 5)}%`, right: `${100 - score - 5}%` }}
                         />
                         {/* Markers for average */}
                         <div className="absolute top-0 bottom-0 w-1 bg-yellow-500 left-[65%]" title="Industry Avg" />

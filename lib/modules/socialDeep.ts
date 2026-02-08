@@ -158,10 +158,10 @@ export async function runSocialDeepModule(
             description: `${abandoned.length} profiles haven't posted in 3 months. This looks worse than having no profile.`,
             impactScore: 7,
             confidenceScore: 90,
-            evidence: abandoned.map(p => ({ type: 'text', value: \`Last post: \${p.lastPostDate}\`, label: capitalize(p.platform) })),
-             metrics: { abandonedCount: abandoned.length },
-             effortEstimate: 'LOW',
-             recommendedFix: ['Resume posting or archive the page', 'Pin a "We are still active" post']
+            evidence: abandoned.map(p => ({ type: 'text', value: `Last post: ${p.lastPostDate}`, label: capitalize(p.platform) })),
+            metrics: { abandonedCount: abandoned.length },
+            effortEstimate: 'LOW',
+            recommendedFix: ['Resume posting or archive the page', 'Pin a "We are still active" post']
         });
     }
 
@@ -181,7 +181,7 @@ export async function runSocialDeepModule(
 async function findSocialProfiles(name: string, city: string): Promise<{ platform: string, url: string }[]> {
     // Quick SERP search logic to be implemented or rely on existing module
     // For now returning empty to rely on input
-    return []; 
+    return [];
 }
 
 async function analyzeProfile(platform: string, url: string, tracker?: CostTracker): Promise<SocialProfile> {
@@ -195,15 +195,15 @@ async function analyzeProfile(platform: string, url: string, tracker?: CostTrack
     try {
         // Use SerpAPI "site:" search to get index info + snippet
         // This is cheaper and more reliable than scraping profile directly
-        const query = \`site:\${getDomain(platform)} "\${extractHandle(url)}" \`;
+        const query = `site:${getDomain(platform)} "${extractHandle(url)}" `;
         // Or just search for the profile URL to see google's cache info
-        
+
         // For MVP, we'll implement a Mock/Heuristic or simple fetch if public
         // Real implementation would use SerpAPI /google_search
-        
+
         // Mocking extraction for demo speed, assuming valid URL
         // In prod, use: await fetch(url) -> parse meta tags
-        
+
         // Let's try to fetch meta tags for description (Followers often in description)
         /*
         const res = await fetch(url, { headers: { 'User-Agent': 'Bot' } });
@@ -215,9 +215,9 @@ async function analyzeProfile(platform: string, url: string, tracker?: CostTrack
             if (followers) profile.followers = followers;
         }
         */
-       
+
     } catch (e) {
-        console.error(\`Failed to analyze \${platform}\`, e);
+        console.error(`Failed to analyze ${platform}`, e);
         profile.exists = false;
     }
 
@@ -231,18 +231,18 @@ async function analyzeContentQuality(posts: string[], industry: string, city: st
     try {
         tracker?.addLlmCall('GEMINI_FLASH', 300, 100);
         const genAI = new GoogleGenerativeAI(apiKey);
-        const model = genAI.getGenerativeModel({ 
+        const model = genAI.getGenerativeModel({
             model: "gemini-1.5-flash",
             generationConfig: { responseMimeType: "application/json" }
         });
 
-        const prompt = \`
-            Analyze these social media captions for a \${industry} business in \${city}:
-            \${JSON.stringify(posts)}
+        const prompt = `
+            Analyze these social media captions for a ${industry} business in ${city}:
+            ${JSON.stringify(posts)}
             
             Rate 1-10 on professionalism and engagement.
             Return JSON: { "score": number, "strengths": string[], "weaknesses": string[] }
-        \`;
+        `;
 
         const result = await model.generateContent(prompt);
         return JSON.parse(result.response.text());
@@ -253,11 +253,11 @@ async function analyzeContentQuality(posts: string[], industry: string, city: st
 
 function getMissingPlatformImpact(platform: string, industry: string): number {
     const i = industry.toLowerCase();
-    
+
     if (platform === 'instagram' && (i.includes('food') || i.includes('beauty') || i.includes('retail'))) return 7;
     if (platform === 'linkedin' && (i.includes('law') || i.includes('consulting') || i.includes('b2b'))) return 6;
     if (platform === 'facebook') return 4; // Expected for everyone
-    
+
     return 0; // Not critical
 }
 
@@ -271,7 +271,7 @@ function isOlderThan(dateStr: string, days: number) {
 function getDomain(p: string) {
     if (p === 'linkedin') return 'linkedin.com';
     if (p === 'instagram') return 'instagram.com';
-    return \`\${p}.com\`;
+    return `${p}.com`;
 }
 function extractHandle(url: string) {
     const parts = url.split('/').filter(x => x);
