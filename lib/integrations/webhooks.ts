@@ -69,7 +69,7 @@ async function sendToEndpoint(endpoint: any, payload: WebhookPayload) {
         clearTimeout(id);
 
         if (!response.ok) {
-            throw new Error(\`HTTP \${response.status}\`);
+            throw new Error(`HTTP ${response.status}`);
         }
 
         // Success
@@ -83,7 +83,7 @@ async function sendToEndpoint(endpoint: any, payload: WebhookPayload) {
 
     } catch (error) {
         logger.error({ error, endpointId: endpoint.id }, 'Webhook delivery failed');
-        
+
         // Update Fail Count
         const updated = await prisma.webhookEndpoint.update({
             where: { id: endpoint.id },
@@ -92,11 +92,11 @@ async function sendToEndpoint(endpoint: any, payload: WebhookPayload) {
 
         // Deactivate if too many failures
         if (updated.failCount >= 10) {
-           await prisma.webhookEndpoint.update({
-               where: { id: endpoint.id },
-               data: { isActive: false }
-           });
-           // TODO: Notify tenant owner
+            await prisma.webhookEndpoint.update({
+                where: { id: endpoint.id },
+                data: { isActive: false }
+            });
+            // TODO: Notify tenant owner
         }
     }
 }

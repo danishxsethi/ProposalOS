@@ -81,7 +81,8 @@ export async function handleProposalChat(req: ChatRequest) {
     const chat = model.startChat({
         history: [
             {
-                role: 'user', parts: [{ text: \`SYSTEM_INSTRUCTION: \${systemPrompt}\` }] },
+                role: 'user', parts: [{ text: `SYSTEM_INSTRUCTION: ${systemPrompt}` }]
+            },
             { role: 'model', parts: [{ text: "Understood. I am ready to answer questions about the audit." }] },
             ...historyParts
         ]
@@ -109,23 +110,23 @@ function constructSystemPrompt(proposal: any, audit: any, findings: Finding[]) {
     // Extract key data
     const painFindings = findings.filter(f => f.type === 'PAINKILLER').slice(0, 3);
     const vitaminFindings = findings.filter(f => f.type === 'VITAMIN').slice(0, 3);
-    
+
     const brandName = proposal.tenant?.branding?.brandName || "Digital Agency";
     const businessName = audit.businessName;
 
-    return \`You are a friendly, expert digital marketing consultant representing \${brandName}.
-You are chatting with a business owner (\${businessName}) who is viewing their Digital Audit Proposal.
+    return `You are a friendly, expert digital marketing consultant representing ${brandName}.
+You are chatting with a business owner (${businessName}) who is viewing their Digital Audit Proposal.
 
 CONTEXT:
-- Business Name: \${businessName}
-- Industry: \${audit.businessIndustry || "Business"}
-- Overall Score: \${audit.overallScore || "N/A"}/100
+- Business Name: ${businessName}
+- Industry: ${audit.businessIndustry || "Business"}
+- Overall Score: ${audit.overallScore || "N/A"}/100
 
 TOP CRITICAL ISSUES (PAINKILLERS):
-\${painFindings.map(f => \`- \${f.title} (Impact: \${f.impactScore}/10)\`).join('\\n')}
+${painFindings.map(f => `- ${f.title} (Impact: ${f.impactScore}/10)`).join('\n')}
 
 SECONDARY OPPORTUNITIES (VITAMINS):
-\${vitaminFindings.map(f => \`- \${f.title}\`).join('\\n')}
+${vitaminFindings.map(f => `- ${f.title}`).join('\n')}
 
 PROPOSAL TIERS:
 - Essentials: Basic fixes, foundational SEO.
@@ -136,11 +137,11 @@ GUIDELINES:
 - Be warm, professional, and helpful.
 - Keep answers concise (2-3 sentences max unless asked for detail).
 - If they ask about cost, encourage checking the "Plans" section below but emphasize value.
-- If asked "How do I fix X?", say "\${brandName} can handle this for you in our [Tier Name] plan."
+- If asked "How do I fix X?", say "${brandName} can handle this for you in our [Tier Name] plan."
 - If asked "Why is my score low?", reference specific Painkillers found.
 - DO NOT make up data.
 - Goal: Build trust and encourage them to click "Accept".
 
 Start directly answering the user's last question.
-\`;
+`;
 }

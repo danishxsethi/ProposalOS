@@ -37,7 +37,7 @@ export async function createLocationGroup(input: CreateGroupInput) {
         const audit = await prisma.audit.create({
             data: {
                 tenantId: input.tenantId,
-                businessName: \`\${input.groupName} - \${loc.name}\`,
+                businessName: `${input.groupName} - ${loc.name}`,
                 businessUrl: loc.url || input.masterUrl,
                 businessCity: loc.city,
                 status: 'QUEUED'
@@ -47,13 +47,13 @@ export async function createLocationGroup(input: CreateGroupInput) {
         // Link to Group
         await prisma.locationGroupMember.create({
             data: {
-                 locationGroupId: group.id,
-                 auditId: audit.id,
-                 locationName: loc.name,
-                 address: loc.address,
-                 city: loc.city,
-                 state: loc.state,
-                 placeId: loc.placeId
+                locationGroupId: group.id,
+                auditId: audit.id,
+                locationName: loc.name,
+                address: loc.address,
+                city: loc.city,
+                state: loc.state,
+                placeId: loc.placeId
             }
         });
 
@@ -77,22 +77,22 @@ export async function getGroupReport(groupId: string) {
 
     // Aggregate Stats
     const completedMembers = group.members.filter(m => m.audit.status === 'COMPLETE');
-    
+
     if (completedMembers.length === 0) {
         return {
-             groupName: group.groupName,
-             status: 'PROCESSING',
-             totalLocations: group.members.length,
-             completed: 0
+            groupName: group.groupName,
+            status: 'PROCESSING',
+            totalLocations: group.members.length,
+            completed: 0
         };
     }
 
     const ratings = completedMembers
         .map(m => m.audit.overallScore || 0)
         .filter(r => r > 0);
-        
-    const avgScore = ratings.length > 0 
-        ? Math.round(ratings.reduce((a, b) => a + b, 0) / ratings.length) 
+
+    const avgScore = ratings.length > 0
+        ? Math.round(ratings.reduce((a, b) => a + b, 0) / ratings.length)
         : 0;
 
     // Identify Best/Worst

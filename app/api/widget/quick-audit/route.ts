@@ -56,7 +56,7 @@ export async function POST(req: Request) {
             score,
             grade: score > 80 ? 'B' : score > 60 ? 'C' : 'D',
             topIssue,
-            redirectUrl: \`/proposal/preview/\${audit.id}\` // Or similar
+            redirectUrl: `/proposal/preview/${audit.id}` // Or similar
         });
 
     } catch (error) {

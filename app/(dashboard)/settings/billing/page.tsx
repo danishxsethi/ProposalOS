@@ -67,15 +67,15 @@ export default async function BillingPage() {
 
                     <div className="w-full bg-slate-800 h-4 rounded-full overflow-hidden mb-2">
                         <div
-                            className={\`h-full \${overageCount > 0 ? 'bg-orange-500' : 'bg-indigo-500'}\`}
-                        style={{ width: \`\${percent}%\` }}
+                            className={`h-full ${overageCount > 0 ? 'bg-orange-500' : 'bg-indigo-500'}`}
+                            style={{ width: `${percent}%` }}
                         />
                     </div>
 
                     <p className="text-xs text-slate-500">
                         {overageCount > 0
-                            ?\`You are \${overageCount} audits over your limit. Overage charged at $\${overageCost}/audit.\`
-                        : \`Resets on 1st of month.\`
+                            ? `You are ${overageCount} audits over your limit. Overage charged at $${overageCost}/audit.`
+                            : `Resets on 1st of month.`
                         }
                     </p>
                 </div>

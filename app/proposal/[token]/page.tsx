@@ -25,10 +25,38 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     // Fetch branding to update title if needed, though usually standard is fine
     const branding = await getBranding(proposal.tenantId);
 
+    const shareUrl = `${process.env.NEXT_PUBLIC_BASE_URL || 'https://proposalengine.com'}/proposal/${token}`;
+    const shareTitle = `${branding.name} Proposal for ${proposal.audit.businessName}`;
+    const shareDescription = proposal.executiveSummary?.slice(0, 160) ||
+        `Comprehensive digital marketing audit and growth proposal for ${proposal.audit.businessName}`;
+
     return {
-        title: `${branding.name} Proposal: ${proposal.audit.businessName}`,
-        description: proposal.executiveSummary?.slice(0, 160) || 'Your custom business proposal',
+        title: shareTitle,
+        description: shareDescription,
         icons: branding.logoUrl ? { icon: branding.logoUrl } : undefined,
+
+        // Open Graph Tags for Facebook, LinkedIn
+        openGraph: {
+            title: shareTitle,
+            description: shareDescription,
+            url: shareUrl,
+            siteName: branding.name,
+            type: 'website',
+            images: branding.logoUrl ? [{
+                url: branding.logoUrl,
+                width: 1200,
+                height: 630,
+                alt: `${branding.name} Logo`
+            }] : [],
+        },
+
+        // Twitter Card
+        twitter: {
+            card: 'summary_large_image',
+            title: shareTitle,
+            description: shareDescription,
+            images: branding.logoUrl ? [branding.logoUrl] : [],
+        }
     };
 }
 

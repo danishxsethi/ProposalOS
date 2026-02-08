@@ -12,7 +12,7 @@ interface Message {
 export default function ProposalChatWidget({ token, businessName }: { token: string, businessName: string }) {
     const [isOpen, setIsOpen] = useState(false);
     const [messages, setMessages] = useState<Message[]>([
-        { id: 'welcome', role: 'assistant', text: \`Hi! I've analyzed \${businessName}'s digital presence. Ask me anything about your score or how to improve it!\` }
+        { id: 'welcome', role: 'assistant', text: `Hi! I've analyzed ${businessName}'s digital presence. Ask me anything about your score or how to improve it!` }
     ]);
     const [input, setInput] = useState('');
     const [isLoading, setIsLoading] = useState(false);
@@ -51,9 +51,9 @@ export default function ProposalChatWidget({ token, businessName }: { token: str
                     conversationId
                 })
             });
-            
+
             const data = await res.json();
-            
+
             if (data.error) {
                 // handle error
             } else {
@@ -74,7 +74,7 @@ export default function ProposalChatWidget({ token, businessName }: { token: str
 
     if (!isOpen) {
         return (
-            <button 
+            <button
                 onClick={() => setIsOpen(true)}
                 className="fixed bottom-6 right-6 bg-indigo-600 text-white p-4 rounded-full shadow-lg hover:bg-indigo-700 transition-all z-50 flex items-center gap-2 animate-bounce-subtle"
             >
@@ -103,12 +103,11 @@ export default function ProposalChatWidget({ token, businessName }: { token: str
             {/* Messages */}
             <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50 text-sm">
                 {messages.map((m) => (
-                    <div key={m.id} className={`flex ${ m.role === 'user' ? 'justify-end' : 'justify-start' }`}>
-                        <div className={`max - w - [85 %] rounded - 2xl p - 3 ${
-            m.role === 'user'
-                ? 'bg-indigo-600 text-white rounded-br-none'
-                : 'bg-white border border-slate-200 text-slate-800 rounded-bl-none shadow-sm'
-        }`}>
+                    <div key={m.id} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                        <div className={`max-w-[85%] rounded-2xl p-3 ${m.role === 'user'
+                                ? 'bg-indigo-600 text-white rounded-br-none'
+                                : 'bg-white border border-slate-200 text-slate-800 rounded-bl-none shadow-sm'
+                            }`}>
                             {m.text}
                         </div>
                     </div>
@@ -125,22 +124,22 @@ export default function ProposalChatWidget({ token, businessName }: { token: str
 
             {/* Suggestions (Only show provided active conversation is short) */}
             {messages.length < 4 && !isLoading && (
-                 <div className="px-4 pb-2 flex gap-2 overflow-x-auto no-scrollbar">
-                     {suggestions.map(s => (
-                         <button 
-                             key={s} 
-                             onClick={() => handleSuggest(s)}
-                             className="whitespace-nowrap bg-indigo-50 text-indigo-700 text-xs px-3 py-1.5 rounded-full hover:bg-indigo-100 transition-colors border border-indigo-100"
-                         >
-                             {s}
-                         </button>
-                     ))}
-                 </div>
+                <div className="px-4 pb-2 flex gap-2 overflow-x-auto no-scrollbar">
+                    {suggestions.map(s => (
+                        <button
+                            key={s}
+                            onClick={() => handleSuggest(s)}
+                            className="whitespace-nowrap bg-indigo-50 text-indigo-700 text-xs px-3 py-1.5 rounded-full hover:bg-indigo-100 transition-colors border border-indigo-100"
+                        >
+                            {s}
+                        </button>
+                    ))}
+                </div>
             )}
 
             {/* Input */}
             <div className="p-4 bg-white border-t border-slate-100 shrink-0">
-                <form 
+                <form
                     onSubmit={(e) => { e.preventDefault(); sendMessage(input); }}
                     className="flex gap-2"
                 >
@@ -152,8 +151,8 @@ export default function ProposalChatWidget({ token, businessName }: { token: str
                         className="flex-1 bg-slate-50 border border-slate-200 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900"
                         disabled={isLoading}
                     />
-                    <button 
-                        type="submit" 
+                    <button
+                        type="submit"
                         disabled={isLoading || !input.trim()}
                         className="bg-indigo-600 text-white p-2 rounded-lg hover:bg-indigo-700 disabled:opacity-50 transition-colors"
                     >

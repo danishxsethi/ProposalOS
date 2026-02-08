@@ -107,61 +107,62 @@ async function getProfile(url: string, name: string, city: string, tracker?: Cos
     // 1. Indexed Pages (site:domain.com)
     try {
         tracker?.addApiCall('SERP');
-        const siteQuery = \`site:\${domain}\`;
-        const serpUrl = \`https://serpapi.com/search.json?q=\${encodeURIComponent(siteQuery)}&api_key=\${serpApiKey}\`;
-        
+        const siteQuery = `site:${domain}`;
+        const serpUrl = `https://serpapi.com/search.json?q=${encodeURIComponent(siteQuery)}&api_key=${serpApiKey}`;
+
         const data = await cachedFetch('se_site:' + domain, {}, async () => {
-             const res = await fetch(serpUrl);
-             return await res.json();
+            const res = await fetch(serpUrl);
+            return await res.json();
         }, { ttlHours: 168 });
-        
+
         // SerpAPI returns "About X results" in search_information.total_results
         profile.indexedPages = data.search_information?.total_results || 0;
-    } catch (e) { console.error('Site search failed', e); }
+    } catch (e) {
+        console.error('Site search failed', e);
+    }
 
     // 2. Link Estimation (link:domain.com) - Less reliable on Google but nonzero
     try {
         tracker?.addApiCall('SERP');
-        const linkQuery = \`link:\${domain}\`;
+        const linkQuery = `link:${domain}`;
         const data = await cachedFetch('se_link:' + domain, {}, async () => {
-             const res = await fetch(\`https://serpapi.com/search.json?q=\${encodeURIComponent(linkQuery)}&api_key=\${serpApiKey}\`);
-             return await res.json();
-        }, { ttlHours: 168 });
+            const res = await fetch(`https://serpapi.com/search.json?q=${encodeURIComponent(linkQuery)}&api_key=${serpApiKey}`);
+        });
         profile.estimatedLinks = data.search_information?.total_results || 0;
-    } catch (e) {}
+    } catch (e) { }
 
     // 3. High Value Links (Only check for main business, competitors skip this to save cost/time)
     if (name) {
         // Chamber
-        profile.hasChamber = await checkLinkPresence(\`"\${city}" chamber of commerce "\${name}"\`, domain, serpApiKey, tracker);
-        
+        profile.hasChamber = await checkLinkPresence(`"${city}" chamber of commerce "${name}"`, domain, serpApiKey, tracker);
+
         // News (generic "news" keyword with city + business name)
-        profile.hasLocalNews = await checkLinkPresence(\`"\${city}" news "\${name}"\`, domain, serpApiKey, tracker);
+        profile.hasLocalNews = await checkLinkPresence(`"${city}" news "${name}"`, domain, serpApiKey, tracker);
     }
 
     return profile;
 }
 
 async function checkLinkPresence(query: string, targetDomain: string, apiKey: string, tracker?: CostTracker): Promise<boolean> {
-     try {
+    try {
         tracker?.addApiCall('SERP');
-        const url = \`https://serpapi.com/search.json?q=\${encodeURIComponent(query)}&api_key=\${apiKey}\`;
+        const url = `https://serpapi.com/search.json?q=${encodeURIComponent(query)}&api_key=${apiKey}`;
         const data = await cachedFetch('se_check:' + query, {}, async () => {
-             const res = await fetch(url);
-             return await res.json();
+            const res = await fetch(url);
+            return await res.json();
         }, { ttlHours: 168 });
-        
+
         // Check if any result is NOT the target domain itself
         // Actually, we want to find IF the target domain is mentioned/linked in these results results
         // But simpler: does a result appear that matches the query? 
         // If we search "City Chamber Business Name" and get a result from "citychamber.com", that's a hit.
-        
+
         const results = data.organic_results || [];
         // If we find a result from a different domain that mentions us?
         // Heuristic: If we get ANY results that aren't our own website, likely a mention.
         const externalHits = results.filter((r: any) => !r.link.includes(targetDomain));
         return externalHits.length > 0;
-     } catch (e) { return false; }
+    } catch (e) { return false; }
 }
 
 
@@ -178,7 +179,7 @@ function generateBacklinkFindings(analysis: BacklinkAnalysis, input: BacklinksMo
             type: 'PAINKILLER',
             category: 'Visibility',
             title: 'Website Not Properly Indexed',
-            description: \`Google has only indexed \${b.indexedPages} pages of your website. Most customers effectively cannot find you.\`,
+            description: `Google has only indexed ${b.indexedPages} pages of your website. Most customers effectively cannot find you.`,
             impactScore: 8,
             confidenceScore: 95,
             evidence: [{ type: 'metric', value: b.indexedPages, label: 'Indexed Pages' }],
@@ -192,16 +193,16 @@ function generateBacklinkFindings(analysis: BacklinkAnalysis, input: BacklinksMo
     const strongCompetitor = analysis.competitors.find(c => c.indexedPages > b.indexedPages * 5);
     if (strongCompetitor) {
         findings.push({
-             type: 'PAINKILLER',
-             category: 'Visibility',
-             title: 'Competitors Dominate Search Presence',
-             description: \`Competitors have 5x more pages indexed by Google (\${strongCompetitor.indexedPages} vs \${b.indexedPages}). They are capturing significantly more traffic.\`,
-             impactScore: 7,
-             confidenceScore: 90,
-             evidence: [{ type: 'metric', value: strongCompetitor.indexedPages, label: 'Competitor Pages' }],
-             metrics: { gap: strongCompetitor.indexedPages - b.indexedPages },
-             effortEstimate: 'HIGH',
-             recommendedFix: ['Publish weekly blog content', 'Create location service pages', 'Expand service descriptions']
+            type: 'PAINKILLER',
+            category: 'Visibility',
+            title: 'Competitors Dominate Search Presence',
+            description: `Competitors have 5x more pages indexed by Google (${strongCompetitor.indexedPages} vs ${b.indexedPages}). They are capturing significantly more traffic.`,
+            impactScore: 7,
+            confidenceScore: 90,
+            evidence: [{ type: 'metric', value: strongCompetitor.indexedPages, label: 'Competitor Pages' }],
+            metrics: { gap: strongCompetitor.indexedPages - b.indexedPages },
+            effortEstimate: 'HIGH',
+            recommendedFix: ['Publish weekly blog content', 'Create location service pages', 'Expand service descriptions']
         });
     }
 
@@ -223,7 +224,7 @@ function generateBacklinkFindings(analysis: BacklinkAnalysis, input: BacklinksMo
 
     // VITAMIN: Missing specific links
     if (!b.hasChamber) {
-         findings.push({
+        findings.push({
             type: 'VITAMIN',
             category: 'Authority',
             title: 'Missing Chamber of Commerce Link',

@@ -45,7 +45,7 @@ export async function trackUsage(tenantId: string, event: BillableEvent, quantit
         }
         */
 
-        console.log(\`[Metering] Recorded \${credits} credits for \${tenantId} (\${event})\`);
+        console.log(`[Metering] Recorded ${credits} credits for ${tenantId} (${event})`);
         return record;
 
     } catch (error) {
@@ -55,9 +55,9 @@ export async function trackUsage(tenantId: string, event: BillableEvent, quantit
 }
 
 export async function getUsageStats(tenantId: string) {
-    const startOfBillingPeriod = new Date(); 
+    const startOfBillingPeriod = new Date();
     startOfBillingPeriod.setDate(1); // Simplification: assume 1st of month
-    
+
     const usage = await prisma.usageRecord.aggregate({
         where: {
             tenantId,
@@ -72,20 +72,20 @@ export async function getUsageStats(tenantId: string) {
 }
 
 export async function checkLimit(tenantId: string, planTier: string): Promise<{ allowed: boolean, usage: number, limit: number }> {
-     const usage = await getUsageStats(tenantId);
-     
-     let limit = 10; // Default Free
-     if (planTier === 'starter') limit = 25;
-     if (planTier === 'pro') limit = 100;
-     if (planTier === 'agency') limit = 999999; // Unlimited
+    const usage = await getUsageStats(tenantId);
 
-     // If we allow overage, we always return allowed=true, but we might flag it
-     // The prompt says "Hybrid pricing... PLUS overage charges". So we don't block.
-     // Except maybe Free tier? 
-     
-     if (planTier === 'free' && usage >= limit) {
-         return { allowed: false, usage, limit };
-     }
+    let limit = 10; // Default Free
+    if (planTier === 'starter') limit = 25;
+    if (planTier === 'pro') limit = 100;
+    if (planTier === 'agency') limit = 999999; // Unlimited
 
-     return { allowed: true, usage, limit };
+    // If we allow overage, we always return allowed=true, but we might flag it
+    // The prompt says "Hybrid pricing... PLUS overage charges". So we don't block.
+    // Except maybe Free tier? 
+
+    if (planTier === 'free' && usage >= limit) {
+        return { allowed: false, usage, limit };
+    }
+
+    return { allowed: true, usage, limit };
 }

@@ -71,7 +71,7 @@ export async function runVideoModule(
                 type: 'VITAMIN',
                 category: 'Visibility',
                 title: 'No YouTube Channel Found',
-                description: \`We couldn't find a YouTube channel for \${input.businessName}. YouTube is the #2 search engine in the world and a massive opportunity for \${input.industry} businesses.\`,
+                description: `We couldn't find a YouTube channel for ${input.businessName}. YouTube is the #2 search engine in the world and a massive opportunity for ${input.industry} businesses.`,
                 impactScore: 6,
                 confidenceScore: 90,
                 evidence: [{ type: 'text', value: 'No channel found in Top 20 search results', label: 'YouTube Search' }],
@@ -83,17 +83,17 @@ export async function runVideoModule(
                     'Optimize channel with business info and website link'
                 ]
             });
-        } 
+        }
         // VITAMIN: Inactive Channel
         else if (channel.recentVideos.length === 0 || isInactive(channel.lastUpload)) {
-             findings.push({
+            findings.push({
                 type: 'VITAMIN',
                 category: 'Visibility',
                 title: 'YouTube Channel Inactive',
-                description: \`Your YouTube channel exists but hasn't been updated recently. Consistent video content builds trust and authority.\`,
+                description: `Your YouTube channel exists but hasn't been updated recently. Consistent video content builds trust and authority.`,
                 impactScore: 5,
                 confidenceScore: 90,
-                evidence: [{ type: 'text', value: \`Last upload: \${channel.lastUpload || 'Unknown'}\`, label: 'Activity' }],
+                evidence: [{ type: 'text', value: `Last upload: ${channel.lastUpload || 'Unknown'}`, label: 'Activity' }],
                 metrics: { lastUpload: channel.lastUpload },
                 effortEstimate: 'MEDIUM',
                 recommendedFix: ['Post at least one new video per month', 'Share customer testimonials', 'Showcase completed projects']
@@ -118,11 +118,11 @@ export async function runVideoModule(
 
         // VITAMIN: Poor Video SEO (if analyzed)
         if (contentAnalysis && contentAnalysis.score < 5) {
-             findings.push({
+            findings.push({
                 type: 'VITAMIN',
                 category: 'Visibility',
                 title: 'Video Content Not Optimized',
-                description: \`Your video titles lack local keywords. AI analysis scored your video SEO \${contentAnalysis.seoOptimization}/10.\`,
+                description: `Your video titles lack local keywords. AI analysis scored your video SEO ${contentAnalysis.seoOptimization}/10.`,
                 impactScore: 4,
                 confidenceScore: 85,
                 evidence: [{ type: 'text', value: channel?.recentVideos[0]?.title || '', label: 'Example Title' }],
@@ -139,10 +139,10 @@ export async function runVideoModule(
                 type: 'VITAMIN',
                 category: 'Competitive',
                 title: 'Competitors Are Winning on Video',
-                description: \`\${activeCompetitors.length} of your top competitors have YouTube channels. You are missing out on this audience.\`,
+                description: `${activeCompetitors.length} of your top competitors have YouTube channels. You are missing out on this audience.`,
                 impactScore: 5,
                 confidenceScore: 90,
-                evidence: activeCompetitors.map(c => ({ type: 'text', value: \`\${c.name}: \${c.subscribers} subs\`, label: 'Competitor' })),
+                evidence: activeCompetitors.map(c => ({ type: 'text', value: `${c.name}: ${c.subscribers} subs`, label: 'Competitor' })),
                 metrics: { competitorCount: activeCompetitors.length },
                 effortEstimate: 'MEDIUM',
                 recommendedFix: ['Start a channel to compete', 'Analyze competitor top videos for ideas']
@@ -151,12 +151,12 @@ export async function runVideoModule(
 
         // Opportunity: Suggested Topics (Positive/Info)
         if (contentAnalysis && contentAnalysis.suggestedTopics.length > 0) {
-             findings.push({
+            findings.push({
                 type: 'VITAMIN', // Could be INFO type if we had it, using Vitamin as opportunity
                 category: 'Strategy',
                 title: '5 Video Content Opportunities',
                 description: 'Based on your industry and local market, here are 5 video topics that would perform well:',
-                impactScore: 3, 
+                impactScore: 3,
                 confidenceScore: 80,
                 evidence: contentAnalysis.suggestedTopics.map(t => ({ type: 'text', value: t, label: 'Idea' })),
                 metrics: {},
@@ -164,7 +164,7 @@ export async function runVideoModule(
                 recommendedFix: ['Create 60-second shorts on these topics', 'Post to YouTube, Instagram, and TikTok']
             });
         }
-        
+
         return {
             findings,
             evidenceSnapshots: [
@@ -187,19 +187,19 @@ export async function runVideoModule(
 
 async function findYouTubeChannel(name: string, city: string, tracker?: CostTracker): Promise<YouTubeChannel | null> {
     tracker?.addApiCall('SERP_API'); // Cost tracking
-    
+
     // We strive to use SerpAPI to find the channel
-    const query = \`site:youtube.com "\${name}" "\${city}"\`;
+    const query = `site:youtube.com "${name}" "${city}"`;
     const results = await cachedFetch(
-        \`youtube_search_\${name}_\${city}\`,
+        `youtube_search_${name}_${city}`,
         { query },
         async () => {
-             const apiKey = process.env.SERPAPI_KEY;
-             if (!apiKey) return null;
-             
-             const url = \`https://serpapi.com/search.json?engine=google&q=\${encodeURIComponent(query)}&api_key=\${apiKey}&num=5\`;
-             const res = await fetch(url);
-             return await res.json();
+            const apiKey = process.env.SERPAPI_KEY;
+            if (!apiKey) return null;
+
+            const url = `https://serpapi.com/search.json?engine=google&q=${encodeURIComponent(query)}&api_key=${apiKey}&num=5`;
+            const res = await fetch(url);
+            return await res.json();
         },
         { ttlHours: 24 * 7 }
     );
@@ -208,12 +208,12 @@ async function findYouTubeChannel(name: string, city: string, tracker?: CostTrac
 
     // Look for a channel result (usually has 'channel' or 'user' in URL)
     const channelResult = results.organic_results.find((r: any) => r.link.includes('/channel/') || r.link.includes('/c/') || r.link.includes('/@'));
-    
+
     if (channelResult) {
         // In a real optimized version, we'd fetch the channel page specifically to get sub count if not in snippet
         // For now, we extract what we can from the snippet or mock a second call if necessary.
         // Let's assume we can get basic info or do a lightweight page fetch.
-        
+
         return {
             title: channelResult.title,
             url: channelResult.link,
@@ -224,7 +224,7 @@ async function findYouTubeChannel(name: string, city: string, tracker?: CostTrac
             recentVideos: [] // Would need to fetch channel page
         };
     }
-    
+
     return null;
 }
 
@@ -233,11 +233,11 @@ async function analyzeWebsiteVideo(url: string): Promise<WebsiteVideoAnalysis> {
         const res = await fetch(url);
         const html = await res.text();
         const $ = cheerio.load(html);
-        
+
         const youtube = $('iframe[src*="youtube.com"], iframe[src*="youtu.be"]').length;
         const vimeo = $('iframe[src*="vimeo.com"]').length;
         const tags = $('video').length;
-        
+
         const hasHeroVideo = $('section:first-of-type video, header video, .hero video').length > 0;
         const hasVideoSchema = $('script[type="application/ld+json"]').text().includes('"@type":"VideoObject"');
 
@@ -254,19 +254,19 @@ async function analyzeWebsiteVideo(url: string): Promise<WebsiteVideoAnalysis> {
 
 async function analyzeVideoContent(titles: string[], industry: string, city: string, tracker?: CostTracker): Promise<VideoContentAnalysis> {
     tracker?.addApiCall('GEMINI_FLASH');
-    
+
     const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-    const prompt = \`Analyze these YouTube video titles for a \${industry} business in \${city}:
-    \${JSON.stringify(titles)}
+    const prompt = `Analyze these YouTube video titles for a ${industry} business in ${city}:
+    ${JSON.stringify(titles)}
     
     Score 1-10 on:
     - SEO optimization (keywords in titles)
-    - Local relevance (mentions \${city} or local terms)
+    - Local relevance (mentions ${city} or local terms)
     
     Suggest 5 viral/useful video topics this business SHOULD create.
     
-    Return JSON: { score, seoOptimization, localRelevance, suggestedTopics: [] }\`;
-    
+    Return JSON: { score, seoOptimization, localRelevance, suggestedTopics: [] }`;
+
     try {
         const result = await model.generateContent(prompt);
         const text = result.response.text();
@@ -275,7 +275,7 @@ async function analyzeVideoContent(titles: string[], industry: string, city: str
     } catch (e) {
         logger.error({ error: e }, 'Gemini video analysis failed');
     }
-    
+
     return { score: 5, seoOptimization: 5, localRelevance: 5, suggestedTopics: [] };
 }
 
@@ -295,5 +295,5 @@ async function checkCompetitorYouTube(competitors: string[], city: string, track
 function isInactive(lastUpload?: string): boolean {
     if (!lastUpload) return true; // Assume inactive if parsing failed
     // Need flexible date parsing, skipping for MVP logic
-    return false; 
+    return false;
 }
