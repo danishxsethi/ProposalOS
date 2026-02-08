@@ -6,9 +6,9 @@ describe('AutoQA System', () => {
         const mockProposal: any = {
             executiveSummary: 'Valid summary with [Business Name] logic handled separately or mocked.',
             tiers: {
-                essentials: { deliverables: ['A', 'B'] },
-                growth: { deliverables: ['A', 'B', 'C'] },
-                premium: { deliverables: ['A', 'B', 'C', 'D'] }
+                essentials: { deliverables: ['A', 'B'], findingIds: ['1'] },
+                growth: { deliverables: ['A', 'B', 'C'], findingIds: ['1', '2'] },
+                premium: { deliverables: ['A', 'B', 'C', 'D'], findingIds: ['1', '2', '3'] }
             },
             pricing: { essentials: 500, growth: 1000, premium: 2000 }
         };
@@ -25,7 +25,11 @@ describe('AutoQA System', () => {
     it('should detect placeholder text in summary', () => {
         const mockProposal: any = {
             executiveSummary: 'This is a [INSERT NAME] placeholder.',
-            tiers: { essentials: {}, growth: {}, premium: {} },
+            tiers: {
+                essentials: { findingIds: [] },
+                growth: { findingIds: [] },
+                premium: { findingIds: [] }
+            },
             pricing: {}
         };
 

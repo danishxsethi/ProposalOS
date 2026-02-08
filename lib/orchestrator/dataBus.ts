@@ -23,7 +23,8 @@ export type DataBusKey =
     | 'accessibilityData'
     | 'keywordGapData'
     | 'screenshotData'
-    | 'benchmarkData';
+    | 'benchmarkData'
+    | 'auditId';
 
 /**
  * Shared Data Bus for Audit Execution

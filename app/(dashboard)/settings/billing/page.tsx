@@ -1,150 +1,110 @@
-'use client';
+import { auth } from '@/lib/auth';
+import { prisma } from '@/lib/prisma';
+import { getUsageStats } from '@/lib/billing/metering';
 
-import { useState } from 'react';
-import { loadStripe } from '@stripe/stripe-js';
+export default async function BillingPage() {
+    const session = await auth();
+    if (!session?.user?.tenantId) return <div>Auth required</div>;
 
-const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!);
+    const tenant = await prisma.tenant.findUnique({
+        where: { id: session.user.tenantId }
+    });
 
-export default function BillingPage() {
-    // Current state (should ideally fetch from API)
-    // For now, mock or minimal fetch. Since this is client component, we'd usually fetch user+tenant in a server component wrapper or useSWR
-    // To keep it simple, let's assume we fetch tenant plan details via a quick API call or prop drill
+    if (!tenant) return <div>Tenant not found</div>;
 
-    const [loading, setLoading] = useState('');
+    const usage = await getUsageStats(tenant.id);
 
-    const handleUpgrade = async (planId: string) => {
-        setLoading(planId);
-        try {
-            const res = await fetch('/api/billing/checkout', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ planId, interval: 'month' }),
-            });
-            const data = await res.json();
-            if (data.url) {
-                window.location.href = data.url;
-            } else {
-                alert('Failed to start checkout');
-            }
-        } catch (e) {
-            console.error(e);
-            alert('Something went wrong');
-        } finally {
-            setLoading('');
-        }
-    };
+    // Limits logic (duplicate from lib, ideally shared const)
+    let limit = 10;
+    let price = 0;
+    let overageCost = 0;
 
-    const handlePortal = async () => {
-        setLoading('portal');
-        try {
-            const res = await fetch('/api/billing/portal', {
-                method: 'POST',
-            });
-            const data = await res.json();
-            if (data.url) {
-                window.location.href = data.url;
-            } else {
-                alert('Failed to load portal');
-            }
-        } catch (e) {
-            console.error(e);
-        } finally {
-            setLoading('');
-        }
-    };
+    if (tenant.planTier === 'starter') { limit = 25; price = 99; overageCost = 4; }
+    if (tenant.planTier === 'pro') { limit = 100; price = 299; overageCost = 3; }
+    if (tenant.planTier === 'agency') { limit = 999999; price = 599; overageCost = 0; }
+
+    const percent = Math.min((usage / limit) * 100, 100);
+    const overageCount = Math.max(0, usage - limit);
+    const estimatedOverageBill = overageCount * overageCost;
 
     return (
-        <div className="container max-w-5xl mx-auto py-10 px-4">
-            <h1 className="text-3xl font-bold mb-2 text-slate-100">Billing & Subscription</h1>
-            <p className="text-slate-400 mb-8">Manage your plan and payment details</p>
+        <div className="max-w-4xl mx-auto p-8">
+            <h1 className="text-3xl font-bold text-white mb-2">Billing & Usage</h1>
+            <p className="text-slate-400 mb-8">Manage your subscription and view usage.</p>
 
-            <div className="grid md:grid-cols-3 gap-6">
-                {/* Free / Trial Plan Card */}
-                <PlanCard
-                    title="Starter"
-                    price="$99"
-                    features={['25 Audits/mo', '1 Seat', 'Basic Branding']}
-                    cta="Downgrade"
-                    current={false}
-                    onAction={() => handleUpgrade('starter')}
-                    loading={loading === 'starter'}
-                />
+            <div className="grid gap-8 md:grid-cols-2">
 
-                {/* Pro Plan Card */}
-                <PlanCard
-                    title="Professional"
-                    price="$299"
-                    features={['100 Audits/mo', '3 Seats', 'Full Branding', 'Batch Mode']}
-                    cta="Upgrade to Pro"
-                    current={true} // For demo purpose, assume Pro Trial
-                    highlight
-                    onAction={() => handleUpgrade('pro')}
-                    loading={loading === 'pro'}
-                />
-
-                {/* Agency Plan Card */}
-                <PlanCard
-                    title="Agency"
-                    price="$599"
-                    features={['Unlimited Audits', '10 Seats', 'White-Label', 'API Access', 'Priority Support']}
-                    cta="Upgrade to Agency"
-                    current={false}
-                    onAction={() => handleUpgrade('agency')}
-                    loading={loading === 'agency'}
-                />
-            </div>
-
-            <div className="mt-12 p-6 bg-slate-800 rounded-lg border border-slate-700 flex justify-between items-center">
-                <div>
-                    <h3 className="text-lg font-semibold text-white">Manage Subscription</h3>
-                    <p className="text-slate-400 text-sm">Update credit card, download invoices, cancel plan</p>
+                {/* CURRENT PLAN */}
+                <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
+                    <div className="flex justify-between items-start mb-6">
+                        <div>
+                            <div className="text-slate-400 text-sm font-bold uppercase tracking-wider">Current Plan</div>
+                            <div className="text-3xl font-black text-white capitalize">{tenant.planTier}</div>
+                            <div className="text-slate-400">${price}/mo</div>
+                        </div>
+                        <button className="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded font-bold text-sm">
+                            Manage Subscription
+                        </button>
+                    </div>
                 </div>
-                <button
-                    onClick={handlePortal}
-                    disabled={loading === 'portal'}
-                    className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors disabled:opacity-50"
-                >
-                    {loading === 'portal' ? 'Loading...' : 'Open Customer Portal'}
-                </button>
-            </div>
-        </div>
-    );
-}
 
-function PlanCard({ title, price, features, cta, current, highlight, onAction, loading }: any) {
-    return (
-        <div className={`relative p-6 rounded-2xl border ${highlight ? 'border-blue-500 bg-slate-800/50' : 'border-slate-700 bg-slate-800/30'} flex flex-col`}>
-            {highlight && (
-                <div className="absolute top-0 right-0 bg-blue-600 text-xs font-bold px-3 py-1 rounded-bl-lg rounded-tr-lg">
-                    POPULAR
+                {/* USAGE */}
+                <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
+                    <div className="flex justify-between items-end mb-4">
+                        <div>
+                            <div className="text-slate-400 text-sm font-bold uppercase tracking-wider">Audit Usage</div>
+                            <div className="text-3xl font-black text-white">
+                                {usage} <span className="text-lg text-slate-500 font-normal">/ {limit === 999999 ? '∞' : limit}</span>
+                            </div>
+                        </div>
+                        {overageCount > 0 && (
+                            <div className="text-right">
+                                <div className="text-xs text-orange-400 font-bold uppercase">Overage</div>
+                                <div className="text-xl font-bold text-white">+${estimatedOverageBill}</div>
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="w-full bg-slate-800 h-4 rounded-full overflow-hidden mb-2">
+                        <div
+                            className={\`h-full \${overageCount > 0 ? 'bg-orange-500' : 'bg-indigo-500'}\`}
+                        style={{ width: \`\${percent}%\` }}
+                        />
+                    </div>
+
+                    <p className="text-xs text-slate-500">
+                        {overageCount > 0
+                            ?\`You are \${overageCount} audits over your limit. Overage charged at $\${overageCost}/audit.\`
+                        : \`Resets on 1st of month.\`
+                        }
+                    </p>
                 </div>
-            )}
-            <h3 className="text-xl font-bold text-white mb-2">{title}</h3>
-            <div className="text-3xl font-bold text-white mb-6">
-                {price}<span className="text-sm text-slate-400 font-normal">/mo</span>
             </div>
-            <ul className="space-y-3 mb-8 flex-1">
-                {features.map((f: string, i: number) => (
-                    <li key={i} className="flex items-center text-slate-300 text-sm">
-                        <svg className="w-5 h-5 text-blue-400 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                        </svg>
-                        {f}
-                    </li>
-                ))}
-            </ul>
-            <button
-                onClick={onAction}
-                disabled={current || loading}
-                className={`w-full py-3 rounded-lg font-semibold transition-all ${current
-                        ? 'bg-slate-700 text-slate-400 cursor-default'
-                        : highlight
-                            ? 'bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-500/20'
-                            : 'bg-slate-700 hover:bg-slate-600 text-white'
-                    }`}
-            >
-                {loading ? 'Processing...' : current ? 'Current Plan' : cta}
-            </button>
+
+            {/* INVOICE HISTORY TABLE PLACEHOLDER */}
+            <div className="mt-12">
+                <h2 className="text-xl font-bold text-white mb-4">Invoice History</h2>
+                <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
+                    <table className="w-full text-left text-sm text-slate-400">
+                        <thead className="bg-slate-950 text-slate-500 font-bold uppercase text-xs">
+                            <tr>
+                                <th className="p-4">Date</th>
+                                <th className="p-4">Amount</th>
+                                <th className="p-4">Status</th>
+                                <th className="p-4">Invoice</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr className="border-t border-slate-800">
+                                <td className="p-4">Nov 1, 2025</td>
+                                <td className="p-4">$99.00</td>
+                                <td className="p-4 text-green-400">Paid</td>
+                                <td className="p-4"><a href="#" className="hover:text-white">Download</a></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
         </div>
     );
 }
