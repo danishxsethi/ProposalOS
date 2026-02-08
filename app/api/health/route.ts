@@ -2,6 +2,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 
+// Note: This endpoint intentionally has minimal logging to reduce log noise
 export async function GET() {
     try {
         // Check database connection

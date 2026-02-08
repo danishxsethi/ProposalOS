@@ -2,6 +2,13 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 
+// Validate environment on server startup
+if (typeof window === 'undefined' && process.env.NODE_ENV !== 'test') {
+    const { validateEnv } = require('@/lib/config/validateEnv');
+    validateEnv();
+}
+
+
 const inter = Inter({
     subsets: ["latin"],
     variable: "--font-inter",

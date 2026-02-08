@@ -2,6 +2,10 @@ import { VertexAI } from '@google-cloud/vertexai';
 import { Finding, PreCluster, PainCluster } from './types';
 import { scoreCluster } from './validation';
 import { CostTracker } from '@/lib/costs/costTracker';
+import { traceLlmCall } from '@/lib/tracing';
+import { RunTree } from 'langsmith';
+// Import A/B testing system
+import { getPromptVariant, fillTemplate } from '../experiments/promptAB';
 
 /**
  * Initialize Vertex AI client
@@ -23,7 +27,8 @@ function getVertexAI() {
 export async function llmClusterFindings(
     preClusters: PreCluster[],
     allFindings: Finding[],
-    tracker?: CostTracker
+    tracker?: CostTracker,
+    parentTrace?: RunTree
 ): Promise<PainCluster[]> {
     const vertexAI = getVertexAI();
     const model = vertexAI.getGenerativeModel({
@@ -48,76 +53,74 @@ export async function llmClusterFindings(
         findingIds: pc.findings.map((f) => f.id),
     }));
 
-    const prompt = `You are analyzing audit findings for a local business. 
-Group these findings into root-cause clusters. 
-Each cluster should represent ONE underlying problem.
+    // Get Audit ID for deterministic A/B testing
+    const auditId = allFindings[0]?.auditId || 'unknown_audit';
 
-For each cluster, provide:
-- root_cause: 1-sentence description of the underlying problem
-- finding_ids: array of finding IDs in this cluster
+    // Get prompt variant
+    const promptConfig = getPromptVariant('clustering-strategy', auditId);
 
-Rules:
-- Every finding must appear in exactly one cluster
-- Do NOT invent new findings or data
-- Reference finding IDs, not descriptions
-- Merge related issues into single clusters
-- Keep clusters semantically meaningful
+    const prompt = fillTemplate(promptConfig.template, {
+        findings_json: JSON.stringify(findingsJson, null, 2),
+        preclusters_json: JSON.stringify(preClustersJson, null, 2)
+    });
 
-Findings: ${JSON.stringify(findingsJson, null, 2)}
-
-Pre-clusters: ${JSON.stringify(preClustersJson, null, 2)}
-
-Return valid JSON only: { "clusters": [ { "root_cause": "...", "finding_ids": ["id1", "id2"] } ] }`;
-
-    try {
-        const result = await model.generateContent(prompt);
-        const response = result.response;
-        const text = response.candidates?.[0]?.content?.parts?.[0]?.text || '';
-
-        // Track usage
-        if (tracker && response.usageMetadata) {
-            tracker.addLlmCall(
-                'GEMINI_FLASH',
-                response.usageMetadata.promptTokenCount || 0,
-                response.usageMetadata.candidatesTokenCount || 0
-            );
+    return traceLlmCall({
+        name: "clustering",
+        run_type: "chain",
+        inputs: { findings: findingsJson, preClusters: preClustersJson, prompt_variant: promptConfig.variant },
+        parent: parentTrace,
+        tags: ["clustering", "gemini-flash", `exp:${promptConfig.name}`, `variant:${promptConfig.variant}`],
+        metadata: {
+            experiment: {
+                name: promptConfig.name,
+                variant: promptConfig.variant
+            }
         }
+    }, async () => {
+        try {
+            const result = await model.generateContent(prompt);
+            const response = result.response;
+            const text = response.candidates?.[0]?.content?.parts?.[0]?.text || '';
 
-        // Extract JSON from response (handle markdown code blocks if present)
-        let jsonText = text.trim();
-        if (jsonText.startsWith('```json')) {
-            jsonText = jsonText.replace(/```json\n?/, '').replace(/\n?```$/, '');
-        } else if (jsonText.startsWith('```')) {
-            jsonText = jsonText.replace(/```\n?/, '').replace(/\n?```$/, '');
-        }
+            // Extract JSON from response (handle markdown code blocks if present)
+            let jsonText = text.trim();
+            if (jsonText.startsWith('```json')) {
+                jsonText = jsonText.replace(/```json\n?/, '').replace(/\n?```$/, '');
+            } else if (jsonText.startsWith('```')) {
+                jsonText = jsonText.replace(/```\n?/, '').replace(/\n?```$/, '');
+            }
 
-        const parsed = JSON.parse(jsonText);
-        const rawClusters = parsed.clusters || [];
+            const parsed = JSON.parse(jsonText);
+            const rawClusters = parsed.clusters || [];
 
-        // Convert to PainCluster format and score
-        const painClusters: PainCluster[] = rawClusters.map((rc: any, idx: number) => {
-            const findingsInCluster = allFindings.filter((f) => rc.finding_ids.includes(f.id));
-            const severity = scoreCluster(findingsInCluster);
+            // Convert to PainCluster format and score
+            const painClusters: PainCluster[] = rawClusters.map((rc: any, idx: number) => {
+                const findingsInCluster = allFindings.filter((f) => rc.finding_ids.includes(f.id));
+                const severity = scoreCluster(findingsInCluster);
 
-            return {
+                return {
+                    id: `cluster-${idx + 1}`,
+                    rootCause: rc.root_cause,
+                    severity,
+                    findingIds: rc.finding_ids,
+                };
+            });
+
+            return painClusters;
+        } catch (error) {
+            console.error('[LLM Clustering] Error:', error);
+            // Fallback: use pre-clusters as-is
+            return preClusters.map((pc, idx) => ({
                 id: `cluster-${idx + 1}`,
-                rootCause: rc.root_cause,
-                severity,
-                findingIds: rc.finding_ids,
-            };
-        });
-
-        return painClusters;
-    } catch (error) {
-        console.error('[LLM Clustering] Error:', error);
-        // Fallback: use pre-clusters as-is
-        return preClusters.map((pc, idx) => ({
-            id: `cluster-${idx + 1}`,
-            rootCause: `Issues with ${pc.key}`,
-            severity: scoreCluster(pc.findings),
-            findingIds: pc.findings.map((f) => f.id),
-        }));
-    }
+                rootCause: `Issues with ${pc.key}`,
+                severity: scoreCluster(pc.findings),
+                findingIds: pc.findings.map((f) => f.id),
+            }));
+        }
+    }, (result) => {
+        // Simple token usage logging not implemented for Flash in this wrapper yet
+        return { prompt: 0, completion: 0, model: "gemini-2.0-flash" };
+    });
 }
 
 /**
@@ -126,7 +129,8 @@ Return valid JSON only: { "clusters": [ { "root_cause": "...", "finding_ids": ["
 export async function generateNarratives(
     clusters: PainCluster[],
     findings: Finding[],
-    tracker?: CostTracker
+    tracker?: CostTracker,
+    parentTrace?: RunTree
 ): Promise<PainCluster[]> {
     const vertexAI = getVertexAI();
     const model = vertexAI.getGenerativeModel({
@@ -136,6 +140,12 @@ export async function generateNarratives(
             maxOutputTokens: 512,
         },
     });
+
+    // Get Audit ID for deterministic A/B testing
+    const auditId = findings[0]?.auditId || 'unknown_audit';
+
+    // Get prompt variant - this applies to all narratives in this run
+    const promptConfig = getPromptVariant('narrative-tone', auditId);
 
     const narrativeClusters: PainCluster[] = [];
 
@@ -149,46 +159,52 @@ export async function generateNarratives(
             metrics: f.metrics,
         }));
 
-        const prompt = `Write a clear, empathetic explanation of this problem for a 
-local business owner. Use plain English, no jargon.
+        const prompt = fillTemplate(promptConfig.template, {
+            root_cause: cluster.rootCause,
+            findings_detail: JSON.stringify(findingsDetail, null, 2)
+        });
 
-Rules:
-- Reference specific metrics from the findings (e.g., "your page speed score is 34/100")
-- Explain WHY this matters to their business
-- Do NOT make claims that aren't in the findings
-- Keep it to 2-3 sentences
-- Tone: concerned but helpful, not alarming
-
-Cluster: ${cluster.rootCause}
-Findings: ${JSON.stringify(findingsDetail, null, 2)}
-
-Write a narrative explanation (2-3 sentences only):`;
-
-        try {
-            const result = await model.generateContent(prompt);
-            const response = result.response;
-            const narrative = (response.candidates?.[0]?.content?.parts?.[0]?.text || cluster.rootCause).trim();
-
-            if (tracker && response.usageMetadata) {
-                tracker.addLlmCall(
-                    'GEMINI_PRO', // Narratives use Pro
-                    response.usageMetadata.promptTokenCount || 0,
-                    response.usageMetadata.candidatesTokenCount || 0
-                );
+        await traceLlmCall({
+            name: "narrative_gen",
+            run_type: "llm",
+            inputs: { cluster: cluster.rootCause, findings: findingsDetail, prompt_variant: promptConfig.variant },
+            parent: parentTrace,
+            tags: ["narrative", "gemini-pro", `exp:${promptConfig.name}`, `variant:${promptConfig.variant}`],
+            metadata: {
+                experiment: {
+                    name: promptConfig.name,
+                    variant: promptConfig.variant
+                }
             }
+        }, async () => {
+            try {
+                const result = await model.generateContent(prompt);
+                const response = result.response;
+                const narrative = (response.candidates?.[0]?.content?.parts?.[0]?.text || cluster.rootCause).trim();
 
-            narrativeClusters.push({
-                ...cluster,
-                narrative,
-            });
-        } catch (error) {
-            console.error(`[Narrative Generation] Error for cluster ${cluster.id}:`, error);
-            // Fallback: use root cause as narrative
-            narrativeClusters.push({
-                ...cluster,
-                narrative: cluster.rootCause,
-            });
-        }
+                if (tracker && response.usageMetadata) {
+                    tracker.addLlmCall(
+                        'GEMINI_PRO', // Narratives use Pro
+                        response.usageMetadata.promptTokenCount || 0,
+                        response.usageMetadata.candidatesTokenCount || 0
+                    );
+                }
+
+                narrativeClusters.push({
+                    ...cluster,
+                    narrative,
+                });
+                return narrative;
+            } catch (error) {
+                console.error(`[Narrative Generation] Error for cluster ${cluster.id}:`, error);
+                // Fallback
+                narrativeClusters.push({
+                    ...cluster,
+                    narrative: cluster.rootCause,
+                });
+                return cluster.rootCause;
+            }
+        });
     }
 
     return narrativeClusters;

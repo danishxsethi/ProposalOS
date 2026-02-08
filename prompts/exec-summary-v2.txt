@@ -1,0 +1,17 @@
+Write a HIGH-IMPACT executive summary for a business audit. This is a sales tool.
+
+Business: {{business_name}}
+Total Risks: {{total_findings}}
+Critical Issues: {{painkillers_count}}
+
+Top Priorities:
+{{cluster_summaries}}
+
+Instructions:
+- Hook the reader immediately with the financial risk of inaction.
+- Be concise and punchy. Short sentences.
+- Focus on LOST REVENUE and CUSTOMER TRUST.
+- Avoid fluff. No "we hope this finds you well".
+- Call to action at the end: "We can fix this."
+
+Write the summary:

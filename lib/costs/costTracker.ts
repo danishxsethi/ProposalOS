@@ -1,6 +1,7 @@
 /**
  * Cost tracking for external APIs and LLMs
  */
+import { logger } from '@/lib/logger';
 
 export const COSTS = {
     PAGESPEED_COST_CENTS: 0,
@@ -8,9 +9,9 @@ export const COSTS = {
     PLACES_DETAILS_CENTS: 2, // $0.017 -> 2 cents
     SERP_API_CENTS: 1, // $0.01 -> 1 cent
     GEMINI_FLASH_PER_1K_INPUT_CENTS: 0.01,
-    GEMINI_FLASH_PER_1K_OUTPUT_CENTS: 0.03, // Adding output cost assumption (usually 3x input) or maybe keep user's simple model
+    GEMINI_FLASH_PER_1K_OUTPUT_CENTS: 0.03,
     GEMINI_PRO_PER_1K_INPUT_CENTS: 0.07,
-    GEMINI_PRO_PER_1K_OUTPUT_CENTS: 0.21, // Adding output cost
+    GEMINI_PRO_PER_1K_OUTPUT_CENTS: 0.21,
 };
 
 // User only specified input costs. I will stick to their request for input primarily
@@ -62,24 +63,34 @@ export class CostTracker {
         switch (model) {
             case 'GEMINI_FLASH':
                 inputCostPer1k = COSTS.GEMINI_FLASH_PER_1K_INPUT_CENTS;
-                // Assuming output cost if not specified? User didn't specify output.
-                // I'll assume only input was requested or handle output same rate? 
-                // Usually output is more. I'll use 0 for output if not specified to be safe/consistent with request.
-                // Or I can add a small buffer.
-                // Let's just track input for now as per "PER_1K_INPUT_CENTS" constant name.
+                outputCostPer1k = COSTS.GEMINI_FLASH_PER_1K_OUTPUT_CENTS;
                 break;
             case 'GEMINI_PRO':
                 inputCostPer1k = COSTS.GEMINI_PRO_PER_1K_INPUT_CENTS;
+                outputCostPer1k = COSTS.GEMINI_PRO_PER_1K_OUTPUT_CENTS;
                 break;
         }
 
-        const cost = (inputTokens / 1000) * inputCostPer1k;
+        const inputCost = (inputTokens / 1000) * inputCostPer1k;
+        const outputCost = (outputTokens / 1000) * outputCostPer1k;
+        const cost = inputCost + outputCost;
+
         this.totalCents += cost;
 
         const key = `LLM_${model}`;
         this.usage[key] = (this.usage[key] || 0) + 1;
         this.usage[`${key}_INPUT_TOKENS`] = (this.usage[`${key}_INPUT_TOKENS`] || 0) + inputTokens;
         this.usage[`${key}_OUTPUT_TOKENS`] = (this.usage[`${key}_OUTPUT_TOKENS`] || 0) + outputTokens;
+
+        logger.info({
+            event: 'llm.call',
+            model,
+            inputTokens,
+            outputTokens,
+            inputCost_cents: inputCost,
+            outputCost_cents: outputCost,
+            total_cost_cents: cost
+        }, 'LLM call tracked');
     }
 
     /**

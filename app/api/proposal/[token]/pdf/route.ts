@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { generatePdf } from '@/lib/pdf/generatePdf';
-import { uploadPdf } from '@/lib/storage';
+import { uploadPdfToGCS } from '@/lib/pdf/uploadPdf';
+import { logger } from '@/lib/logger';
 
 interface Params {
     params: {
@@ -12,6 +13,7 @@ interface Params {
 /**
  * GET /api/proposal/[token]/pdf
  * Generates and downloads the proposal PDF
+ * Caches PDF to GCS for repeat downloads
  */
 export async function GET(request: Request, { params }: Params) {
     try {
@@ -29,23 +31,57 @@ export async function GET(request: Request, { params }: Params) {
             );
         }
 
-        // Generate PDF
-        console.log(`Generating PDF for proposal ${token}...`);
-        const pdfBuffer = await generatePdf(token);
+        // Check if PDF already cached
+        if (proposal.pdfUrl) {
+            logger.info(
+                {
+                    event: 'pdf.cache_hit',
+                    proposalId: proposal.id,
+                    pdfUrl: proposal.pdfUrl,
+                },
+                'Redirecting to cached PDF'
+            );
 
-        // Upload to GCS and cache URL (if bucket configured)
-        const filename = `proposal-${proposal.audit.businessName.replace(/[^a-z0-9]/gi, '_').toLowerCase()}-${token.substring(0, 8)}.pdf`;
-        const pdfUrl = await uploadPdf(pdfBuffer, filename);
-
-        if (pdfUrl) {
-            await prisma.proposal.update({
-                where: { id: proposal.id },
-                data: { pdfUrl },
-            });
-            console.log(`PDF cached at: ${pdfUrl}`);
+            // Redirect to cached PDF
+            return NextResponse.redirect(proposal.pdfUrl);
         }
 
-        // Return PDF
+        // Generate new PDF
+        logger.info(
+            {
+                event: 'pdf.generating',
+                proposalId: proposal.id,
+                businessName: proposal.audit.businessName,
+            },
+            'Generating PDF'
+        );
+
+        const pdfBuffer = await generatePdf(token);
+
+        // Upload to GCS and cache URL
+        const pdfUrl = await uploadPdfToGCS(proposal.id, pdfBuffer);
+
+        // Update database with cached URL
+        await prisma.proposal.update({
+            where: { id: proposal.id },
+            data: {
+                pdfUrl,
+                pdfGeneratedAt: new Date(),
+            },
+        });
+
+        logger.info(
+            {
+                event: 'pdf.cached',
+                proposalId: proposal.id,
+                pdfUrl,
+            },
+            'PDF generated and cached'
+        );
+
+        // Return PDF buffer
+        const filename = `proposal-${proposal.audit.businessName.replace(/[^a-z0-9]/gi, '_').toLowerCase()}-${token.substring(0, 8)}.pdf`;
+
         return new NextResponse(pdfBuffer as any as BodyInit, {
             headers: {
                 'Content-Type': 'application/pdf',
@@ -54,7 +90,14 @@ export async function GET(request: Request, { params }: Params) {
         });
 
     } catch (error) {
-        console.error('[PDF Export] Error:', error);
+        logger.error(
+            {
+                event: 'pdf.generation_failed',
+                error: error instanceof Error ? error.message : String(error),
+            },
+            'Failed to generate PDF'
+        );
+
         return NextResponse.json(
             {
                 error: 'Failed to generate PDF',

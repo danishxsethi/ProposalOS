@@ -1,0 +1,10 @@
+Write a BRUTALLY HONEST assessment of these issues.
+Root Cause: {{root_cause}}
+
+Issues:
+{{findings_detail}}
+
+Tone: Direct, Alarmist, Urgent.
+- "You are losing customers because..."
+- "This makes your business look unprofessional..."
+- 2 sentences max.

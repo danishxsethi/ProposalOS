@@ -1,0 +1,36 @@
+You are a senior digital marketing consultant writing an opportunity summary and action plan.
+
+This section quantifies total opportunity and prioritizes what to fix first.
+
+RULES:
+- Quantify in dollars (estimated monthly value)
+- Prioritize by impact (high-impact, low-effort first)
+- Be specific about what to fix, in order
+- End with urgency (monthly cost of inaction)
+- Write in second person ("you should", "your priority")
+- No filler, no fluff
+- No sentences longer than 25 words
+- No passive voice
+- Reading level: grade 8-10
+
+STRUCTURE (1 paragraph, 6-8 sentences):
+
+Sentence 1: Total opportunity
+- Example: "Addressing all identified issues creates an estimated $8,200 in additional monthly revenue."
+
+Sentences 2-5: Prioritized action plan
+- Example: "Priority 1: Fix mobile responsiveness (affects 67% of traffic). Priority 2: Add click-to-call to phone numbers (immediate conversion lift). Priority 3: Claim missing directory listings (Yelp, Facebook Business). Priority 4: Improve page load speed from 8.2s to under 3s."
+
+Sentence 6-7: Quick wins
+- Example: "Several fixes take less than 2 hours (click-to-call, viewport meta tag, Google Analytics). These deliver immediate results."
+
+Sentence 8: Urgency closer
+- Example: "Every month these issues remain unaddressed costs you approximately $8,200 in lost opportunities."
+
+INPUT DATA:
+{total_estimated_value}: {total_estimated_value}
+{prioritized_findings}: {prioritized_findings}
+{quick_wins}: {quick_wins}
+{business_name}: {business_name}
+
+Write the opportunity summary now:

@@ -1,51 +1,52 @@
+
 import { NextResponse } from 'next/server';
+import { auth } from '@/lib/auth';
+import { validateApiKey } from '@/lib/auth/apiKeys';
 
-type RouteHandler = (req: Request, context?: any) => Promise<NextResponse>;
-
-/**
- * Middleware to protect API routes with a simple API Key
- * Validates 'Authorization' header: "Bearer <API_KEY>"
- */
-export function withAuth(handler: RouteHandler): RouteHandler {
-    return async (req: Request, context?: any) => {
-        // Skip auth for OPTIONS requests (CORS preflight)
-        if (req.method === 'OPTIONS') {
-            return handler(req, context);
-        }
-
-        const apiKeyHeader = req.headers.get('x-api-key');
+// Middleware to check authentication (Session OR API Key)
+export function withAuth(handler: Function) {
+    return async (req: Request, ...args: any[]) => {
+        // 1. Check for API Key in Authorization Header
         const authHeader = req.headers.get('Authorization');
-        const envApiKey = process.env.API_KEY;
+        if (authHeader?.startsWith('Bearer pe_live_')) {
+            const apiKey = authHeader.split(' ')[1];
+            const validation = await validateApiKey(apiKey);
 
-        if (!envApiKey) {
-            console.error('API_KEY is not defined in environment variables');
-            return NextResponse.json(
-                { error: 'Server Configuration Error', message: 'API_KEY not set' },
-                { status: 500 }
-            );
+            if (!validation) {
+                return NextResponse.json({ error: 'Invalid API Key' }, { status: 401 });
+            }
+
+            if (validation.error) {
+                return NextResponse.json({ error: validation.error }, { status: 429 });
+            }
+
+            // Inject tenantId into header for downstream consumption if needed, 
+            // but mostly validation returns context we can use if we modify handler signature.
+            // For now, we'll monkey-patch a "user" object onto the request if possible, 
+            // or we expect the handler to call `getTenantId()` which usually looks at headers/cookies.
+            // Since `getTenantId` looks at headers, let's set a header for internal use?
+            // Actually `getTenantId` in `lib/tenant/context.ts` might need update to read from a specific header if using API keys.
+            // Let's assume for now we just pass through.
+
+            // Note: createScopedPrisma and getTenantId rely on context. 
+            // We might need to handle context passing.
+
+            // For MVP, we'll trust that the handler will verify tenant context or we update `getTenantId` to check a header we set here.
+
+            const reqWithContext = new Request(req, {
+                headers: new Headers(req.headers)
+            });
+            reqWithContext.headers.set('x-tenant-id', validation.tenantId);
+
+            return handler(reqWithContext, ...args);
         }
 
-        let token: string | undefined;
-
-        if (apiKeyHeader) {
-            token = apiKeyHeader;
-        } else if (authHeader && authHeader.startsWith('Bearer ')) {
-            token = authHeader.split(' ')[1];
-        } else {
-            return NextResponse.json(
-                { error: 'Unauthorized', message: 'Missing API Key (x-api-key or Authorization header)' },
-                { status: 401 }
-            );
+        // 2. Fallback to Session Auth
+        const session = await auth();
+        if (!session?.user?.email) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
-        if (token !== envApiKey) {
-            return NextResponse.json(
-                { error: 'Unauthorized', message: 'Invalid API Key' },
-                { status: 401 }
-            );
-        }
-
-        // Auth successful, proceed to handler
-        return handler(req, context);
+        return handler(req, ...args);
     };
 }

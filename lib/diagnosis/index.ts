@@ -4,12 +4,17 @@ import { llmClusterFindings, generateNarratives } from './llmCluster';
 import { validateClusters } from './validation';
 
 import { CostTracker } from '@/lib/costs/costTracker';
+import { RunTree } from 'langsmith';
 
 /**
  * Main diagnosis pipeline
  * Orchestrates: pre-cluster → LLM cluster → validate → narrate
  */
-export async function runDiagnosisPipeline(findings: Finding[], tracker?: CostTracker): Promise<DiagnosisResult> {
+export async function runDiagnosisPipeline(
+    findings: Finding[],
+    tracker?: CostTracker,
+    parentTrace?: RunTree
+): Promise<DiagnosisResult> {
     console.log(`[DiagnosisPipeline] Processing ${findings.length} findings...`);
 
     // Step 1: Pre-cluster (rule-based)
@@ -17,7 +22,7 @@ export async function runDiagnosisPipeline(findings: Finding[], tracker?: CostTr
     console.log(`[DiagnosisPipeline] Pre-clustered into ${preClusters.length} groups`);
 
     // Step 2: LLM refine clusters
-    let clusters = await llmClusterFindings(preClusters, findings, tracker);
+    let clusters = await llmClusterFindings(preClusters, findings, tracker, parentTrace);
     console.log(`[DiagnosisPipeline] LLM refined into ${clusters.length} clusters`);
 
     // Step 3: Validate
@@ -36,7 +41,7 @@ export async function runDiagnosisPipeline(findings: Finding[], tracker?: CostTr
     }
 
     // Step 4: Generate narratives (GPT-4)
-    const narrativeClusters = await generateNarratives(clusters, findings, tracker);
+    const narrativeClusters = await generateNarratives(clusters, findings, tracker, parentTrace);
     console.log(`[DiagnosisPipeline] Generated narratives for ${narrativeClusters.length} clusters`);
 
     return {

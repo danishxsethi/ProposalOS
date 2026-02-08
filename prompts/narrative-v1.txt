@@ -1,0 +1,11 @@
+Generate a short, persuasive narrative for this group of issues.
+Root Cause: {{root_cause}}
+
+Issues:
+{{findings_detail}}
+
+Requirements:
+- 2-3 sentences max
+- Focus on the business impact
+- Use "concerns" or "risks" language
+- Explain WHY this matters to the business owner
