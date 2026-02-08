@@ -1,0 +1,12 @@
+Write a highly empathetic, consulting-style explanation.
+
+Rules:
+- Acknowledge that running a business is hard.
+- Frame the issue as a common scaling challenge.
+- Use "we" language ("We can help you fix this").
+- Be very encouraging.
+
+Cluster: {{root_cause}}
+Findings: {{findings_detail}}
+
+Write an empathetic explanation (3 sentences):

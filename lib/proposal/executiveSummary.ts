@@ -2,6 +2,9 @@ import { VertexAI } from '@google-cloud/vertexai';
 import { PainCluster } from '../diagnosis/types';
 import { Finding } from '@prisma/client';
 import { CostTracker } from '@/lib/costs/costTracker';
+import { traceLlmCall } from '@/lib/tracing';
+import { RunTree } from 'langsmith';
+import { getPromptVariant, fillTemplate } from '../experiments/promptAB';
 
 /**
  * Initialize Vertex AI client
@@ -24,7 +27,8 @@ export async function generateExecutiveSummary(
     businessName: string,
     clusters: PainCluster[],
     findings: Finding[],
-    tracker?: CostTracker
+    tracker?: CostTracker,
+    parentTrace?: RunTree
 ): Promise<string> {
     const vertexAI = getVertexAI();
     // Switched to Pro as per user request ("Proposal: track Gemini Pro call")
@@ -49,41 +53,50 @@ export async function generateExecutiveSummary(
     const painkillers = findings.filter((f) => f.type === 'PAINKILLER').length;
     const vitamins = findings.filter((f) => f.type === 'VITAMIN').length;
 
-    const prompt = `Write a compelling executive summary for a business audit proposal.
+    // Get Audit ID for deterministic A/B testing
+    const auditId = findings[0]?.auditId || 'unknown_audit';
 
-Business: ${businessName}
-Total Findings: ${findings.length} (${painkillers} urgent issues, ${vitamins} growth opportunities)
+    // Get prompt variant
+    const promptConfig = getPromptVariant('exec-summary', auditId);
 
-Key Issues Identified:
-${clusterSummaries.map((c, i) => `${i + 1}. [${c.severity.toUpperCase()}] ${c.rootCause}`).join('\n')}
+    const clusterSummariesText = clusterSummaries.map((c, i) => `${i + 1}. [${c.severity.toUpperCase()}] ${c.rootCause}`).join('\n');
 
-Requirements:
-- Start with the most urgent problem (painkillers first)
-- Reference specific numbers from the findings
-- Explain the business impact (lost revenue, missed opportunities)
-- End with a forward-looking statement about the solution
-- Keep it to 3-4 sentences
-- Tone: Direct but empathetic, business-focused
+    const prompt = fillTemplate(promptConfig.template, {
+        business_name: businessName,
+        total_findings: findings.length,
+        painkillers_count: painkillers,
+        vitamins_count: vitamins,
+        cluster_summaries: clusterSummariesText
+    });
 
-Write the executive summary now:`;
-
-    try {
-        const result = await model.generateContent(prompt);
-        const response = result.response;
-        const summary = (response.candidates?.[0]?.content?.parts?.[0]?.text || '').trim();
-
-        if (tracker && response.usageMetadata) {
-            tracker.addLlmCall(
-                'GEMINI_PRO',
-                response.usageMetadata.promptTokenCount || 0,
-                response.usageMetadata.candidatesTokenCount || 0
-            );
+    return traceLlmCall({
+        name: "exec_summary",
+        run_type: "llm",
+        inputs: { businessName, findingsCount: findings.length, topIssues: clusterSummaries.slice(0, 3), prompt_variant: promptConfig.variant },
+        parent: parentTrace,
+        tags: ["exec_summary", "gemini-pro", `exp:${promptConfig.name}`, `variant:${promptConfig.variant}`],
+        metadata: {
+            experiment: {
+                name: promptConfig.name,
+                variant: promptConfig.variant
+            }
         }
+    }, async () => {
+        try {
+            const result = await model.generateContent(prompt);
+            const text = result.response.candidates?.[0].content.parts[0].text;
 
-        return summary || `We identified ${painkillers} urgent issues and ${vitamins} growth opportunities affecting ${businessName}'s online presence and local visibility.`;
-    } catch (error) {
-        console.error('[Executive Summary] Error:', error);
-        // Fallback
-        return `We identified ${painkillers} urgent issues and ${vitamins} growth opportunities affecting ${businessName}'s online presence and local visibility.`;
-    }
+            if (tracker && result.response.usageMetadata) {
+                tracker.addLlmCall('GEMINI_PRO',
+                    result.response.usageMetadata.promptTokenCount || 0,
+                    result.response.usageMetadata.candidatesTokenCount || 0
+                );
+            }
+
+            return text || "Executive summary generation failed.";
+        } catch (error) {
+            console.error("Error generating executive summary:", error);
+            throw error;
+        }
+    }); // Ended traceLlmCall
 }

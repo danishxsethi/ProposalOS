@@ -1,5 +1,6 @@
 import { AuditModuleResult, GBPModuleInput } from './types';
 import { CostTracker } from '@/lib/costs/costTracker';
+import { cachedFetch } from '@/lib/cache/apiCache';
 
 const PLACES_API_BASE = 'https://places.googleapis.com/v1';
 
@@ -11,22 +12,36 @@ export async function runGBPModule(input: GBPModuleInput, tracker?: CostTracker)
     }
 
     try {
-        // 1. Find Place ID (Text Search)
+        // 1. Find Place ID via Text Search (Cached 24 hours)
         tracker?.addApiCall('PLACES_TEXT_SEARCH');
-        const searchRes = await fetch(`${PLACES_API_BASE}/places:searchText`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-Goog-Api-Key': process.env.GOOGLE_PLACES_API_KEY,
-                'X-Goog-FieldMask': 'places.name,places.id,places.formattedAddress,places.rating,places.userRatingCount',
-            },
-            body: JSON.stringify({
-                textQuery: `${input.businessName} in ${input.city}`,
-                maxResultCount: 1,
-            }),
-        });
 
-        const searchData = await searchRes.json();
+        const searchData = await cachedFetch(
+            'places_text_search',
+            { businessName: input.businessName, city: input.city },
+            async () => {
+                const searchRes = await fetch(`${PLACES_API_BASE}/places:searchText`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Goog-Api-Key': process.env.GOOGLE_PLACES_API_KEY!,
+                        'X-Goog-FieldMask': 'places.name,places.id,places.formattedAddress,places.rating,places.userRatingCount',
+                    },
+                    body: JSON.stringify({
+                        textQuery: `${input.businessName} in ${input.city}`,
+                        maxResultCount: 1,
+                    }),
+                });
+
+
+                if (!searchRes.ok) {
+                    throw new Error(`Places Text Search failed: ${searchRes.statusText}`);
+                }
+
+                return searchRes.json();
+            },
+            { ttlHours: 24 }
+        );
+
         if (!searchData.places || searchData.places.length === 0) {
             throw new Error(`Business not found: ${input.businessName} in ${input.city}`);
         }
@@ -35,16 +50,19 @@ export async function runGBPModule(input: GBPModuleInput, tracker?: CostTracker)
         const placeId = place.id;
 
         // 2. Get Details + Reviews
+        // 2. Get Details + Reviews (Cached 7 days)
         tracker?.addApiCall('PLACES_DETAILS');
-        const detailsRes = await fetch(`${PLACES_API_BASE}/places/${placeId}`, {
-            headers: {
-                'Content-Type': 'application/json',
-                'X-Goog-Api-Key': process.env.GOOGLE_PLACES_API_KEY,
-                'X-Goog-FieldMask': 'id,displayName,formattedAddress,rating,userRatingCount,websiteUri,reviews,photos,regularOpeningHours,types',
-            },
-        });
 
-        const details = await detailsRes.json();
+        const details = await cachedFetch('places_details', { placeId }, async () => {
+            const detailsRes = await fetch(`${PLACES_API_BASE}/places/${placeId}`, {
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Goog-Api-Key': process.env.GOOGLE_PLACES_API_KEY!,
+                    'X-Goog-FieldMask': 'id,displayName,formattedAddress,rating,userRatingCount,websiteUri,reviews,photos,regularOpeningHours,types',
+                },
+            });
+            return await detailsRes.json();
+        }, { ttlHours: 24 * 7 });
 
         return {
             moduleId: 'gbp-audit',

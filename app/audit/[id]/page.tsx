@@ -1,31 +1,30 @@
-import { notFound } from 'next/navigation';
 import { prisma } from '@/lib/prisma';
-import AuditStatusClient from './AuditStatusClient';
+import { notFound } from 'next/navigation';
+import AuditDetailClient from './AuditDetailClient';
 
-interface PageProps {
+interface Props {
     params: Promise<{ id: string }>;
 }
 
-export default async function AuditStatusPage({ params }: PageProps) {
+export default async function AuditDetailPage({ params }: Props) {
     const { id } = await params;
 
     const audit = await prisma.audit.findUnique({
         where: { id },
         include: {
             findings: {
-                where: { excluded: false },
-                orderBy: { impactScore: 'desc' },
+                orderBy: { impactScore: 'desc' }
             },
             proposals: {
-                orderBy: { version: 'desc' },
-                take: 1,
-            },
-        },
+                orderBy: { createdAt: 'desc' },
+                take: 1
+            }
+        }
     });
 
     if (!audit) {
         notFound();
     }
 
-    return <AuditStatusClient audit={audit} />;
+    return <AuditDetailClient audit={audit} />;
 }

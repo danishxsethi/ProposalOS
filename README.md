@@ -57,7 +57,48 @@
 
    Open [http://localhost:3000](http://localhost:3000)
 
-## API Endpoints
+## Caching
+
+ProposalOS supports two caching backends for API responses (PageSpeed, Places, SerpAPI):
+
+### File-Based Cache (Default)
+- **Usage:** Automatic if `REDIS_URL` not set
+- **Limitations:** 
+  - ⚠️ **Not shared across instances** - Each Cloud Run instance has its own cache
+  - Not suitable for auto-scaling beyond 1 instance
+  - Cache cleared on instance restart
+
+### Redis Cache (Recommended for Production)
+- **Usage:** Set `REDIS_URL` environment variable
+- **Benefits:**
+  - ✅ Shared across all instances
+  - ✅ Persistent across deployments
+  - ✅ Supports auto-scaling
+  - ✅ Better cache hit rates
+
+#### Setup Redis on GCP
+
+```bash
+# Create Redis instance
+gcloud redis instances create proposalus-cache \
+  --size=1 \
+  --region=us-central1 \
+  --tier=basic
+
+# Get connection string
+REDIS_HOST=$(gcloud redis instances describe proposalus-cache \
+  --region=us-central1 \
+  --format="value(host)")
+
+# Set in Cloud Run
+gcloud run services update proposalus \
+  --set-env-vars REDIS_URL=redis://$REDIS_HOST:6379
+```
+
+**Recommendation:** Always use Redis in production if running more than 1 instance.
+
+## Development Roadmap
+
 
 ### Health Check
 ```bash

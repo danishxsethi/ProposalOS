@@ -1,0 +1,17 @@
+Write a compelling executive summary for a business audit proposal.
+
+Business: {{business_name}}
+Total Findings: {{total_findings}} ({{painkillers_count}} urgent issues, {{vitamins_count}} growth opportunities)
+
+Key Issues Identified:
+{{cluster_summaries}}
+
+Requirements:
+- Start with the most urgent problem (painkillers first)
+- Reference specific numbers from the findings
+- Explain the business impact (lost revenue, missed opportunities)
+- End with a forward-looking statement about the solution
+- Keep it to 3-4 sentences
+- Tone: Direct but empathetic, business-focused
+
+Write the executive summary now:

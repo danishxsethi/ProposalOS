@@ -3,6 +3,9 @@ import { notFound } from 'next/navigation';
 import { Metadata } from 'next';
 import './print.css';
 import ProposalPage from './ProposalPage';
+import { sendProposalViewed } from '@/lib/notifications/email';
+import { sendWebhook } from '@/lib/notifications/webhook';
+import { getBranding } from '@/lib/config/branding';
 
 interface Props {
     params: Promise<{ token: string }>;
@@ -19,9 +22,13 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
         return { title: 'Proposal Not Found' };
     }
 
+    // Fetch branding to update title if needed, though usually standard is fine
+    const branding = await getBranding(proposal.tenantId);
+
     return {
-        title: `Proposal for ${proposal.audit.businessName}`,
+        title: `${branding.name} Proposal: ${proposal.audit.businessName}`,
         description: proposal.executiveSummary?.slice(0, 160) || 'Your custom business proposal',
+        icons: branding.logoUrl ? { icon: branding.logoUrl } : undefined,
     };
 }
 
@@ -33,26 +40,42 @@ export default async function Page({ params }: Props) {
         include: {
             audit: {
                 include: {
-                    findings: {
-                        where: { excluded: false },
-                        orderBy: { impactScore: 'desc' },
-                    },
-                },
+                    findings: true,
+                    evidence: true // Include evidence for images
+                }
             },
-        },
+            template: true // Fetch template data
+        }
     });
 
     if (!proposal) {
-        notFound();
+        return <div>Proposal not found</div>;
     }
 
-    // Track view (only first time)
-    if (!proposal.viewedAt) {
+    const branding = await getBranding(proposal.tenantId);
+
+    // Track View
+    if (proposal && !proposal.viewedAt) {
+        // Trigger server-side tracking via a separate async call or direct prisma update if we were in server component.
+        // We are in a server component (Page).
+        // Best practice: Use a client effect or a Next.js middleware, but since this is a server page render, we can just update DB directly!
+        // CAUTION: This means every refresh triggers DB write.
+        // Better: Only if viewedAt is null.
+        // Also trigger Scheduler.
+
         await prisma.proposal.update({
             where: { id: proposal.id },
             data: { viewedAt: new Date(), status: 'VIEWED' },
         });
+
+        // Send notifications
+        sendProposalViewed(proposal.id, proposal.audit.businessName, new Date()).catch(console.error);
+        sendWebhook('proposal.viewed', {
+            proposalId: proposal.id,
+            businessName: proposal.audit.businessName,
+            viewedAt: new Date()
+        });
     }
 
-    return <ProposalPage proposal={proposal} />;
+    return <ProposalPage proposal={proposal} branding={branding} />;
 }

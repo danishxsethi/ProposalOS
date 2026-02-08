@@ -1,0 +1,1901 @@
+[
+  {
+    "id": "bdb64f3f-ff66-46ed-b99e-c4131a6bc14b",
+    "auditId": "d90e2b8d-bb17-4447-814f-56975f3c745d",
+    "version": 1,
+    "status": "DRAFT",
+    "executiveSummary": "We identified 1 urgent issues and 0 growth opportunities affecting Joes Plumbing's online presence and local visibility.",
+    "painClusters": [
+      {
+        "id": "cluster-1",
+        "severity": "high",
+        "narrative": "Issues with other:misc",
+        "rootCause": "Issues with other:misc",
+        "findingIds": [
+          "55bba5ab-98cf-41ca-a31f-8673cd7d7363"
+        ]
+      }
+    ],
+    "tierEssentials": {
+      "name": "Essentials",
+      "price": 450,
+      "findingIds": [
+        "55bba5ab-98cf-41ca-a31f-8673cd7d7363"
+      ],
+      "description": "Quick wins. Fix the things actively costing you money.",
+      "deliveryTime": "1-2 weeks"
+    },
+    "tierGrowth": {
+      "name": "Growth",
+      "price": 1000,
+      "findingIds": [
+        "55bba5ab-98cf-41ca-a31f-8673cd7d7363"
+      ],
+      "description": "Essentials + competitive improvements. Close the gap with top competitors.",
+      "deliveryTime": "3-4 weeks"
+    },
+    "tierPremium": {
+      "name": "Premium",
+      "price": 2000,
+      "findingIds": [
+        "55bba5ab-98cf-41ca-a31f-8673cd7d7363"
+      ],
+      "description": "Full optimization. Everything in Growth + long-term positioning.",
+      "deliveryTime": "6-8 weeks"
+    },
+    "pricing": {
+      "growth": 1000,
+      "premium": 2000,
+      "currency": "USD",
+      "essentials": 450
+    },
+    "assumptions": [
+      "Joes Plumbing will provide necessary access to accounts (Google Business Profile, website analytics)",
+      "Implementation timeline assumes standard business hours and reasonable response times",
+      "Pricing is based on the scope outlined in each tier; additional work may incur extra fees",
+      "Monthly reporting and ongoing support not included (available as add-on)"
+    ],
+    "disclaimers": [
+      "Audit data collected on the date of analysis; some metrics may change over time",
+      "Competitor data is based on publicly available information",
+      "Results may vary based on industry, location, and market conditions",
+      "SEO and ranking improvements can take 3-6 months to materialize"
+    ],
+    "nextSteps": [
+      "Review this proposal and select your preferred tier",
+      "Reply to this email or schedule a 15-minute call to discuss",
+      "We'll send a simple contract and invoice",
+      "Kickoff call within 3 business days of signing"
+    ],
+    "pdfUrl": null,
+    "webLinkToken": "f37e7853-8d5b-43de-b17f-d69561175571",
+    "sentAt": null,
+    "viewedAt": null,
+    "createdAt": "2026-02-07T07:03:21.587Z"
+  },
+  {
+    "id": "81c278b6-0e3e-44db-ba09-c9d4e848bf1a",
+    "auditId": "daffad26-f22e-42ce-9d5e-afe840c684d4",
+    "version": 1,
+    "status": "DRAFT",
+    "executiveSummary": "We identified 1 urgent issues and 0 growth opportunities affecting Main Street Dental's online presence and local visibility.",
+    "painClusters": [
+      {
+        "id": "cluster-1",
+        "severity": "high",
+        "narrative": "Issues with other:misc",
+        "rootCause": "Issues with other:misc",
+        "findingIds": [
+          "42586da1-e705-4a18-9088-a0a0df88b2ec"
+        ]
+      }
+    ],
+    "tierEssentials": {
+      "name": "Essentials",
+      "price": 450,
+      "findingIds": [
+        "42586da1-e705-4a18-9088-a0a0df88b2ec"
+      ],
+      "description": "Quick wins. Fix the things actively costing you money.",
+      "deliveryTime": "1-2 weeks"
+    },
+    "tierGrowth": {
+      "name": "Growth",
+      "price": 1000,
+      "findingIds": [
+        "42586da1-e705-4a18-9088-a0a0df88b2ec"
+      ],
+      "description": "Essentials + competitive improvements. Close the gap with top competitors.",
+      "deliveryTime": "3-4 weeks"
+    },
+    "tierPremium": {
+      "name": "Premium",
+      "price": 2000,
+      "findingIds": [
+        "42586da1-e705-4a18-9088-a0a0df88b2ec"
+      ],
+      "description": "Full optimization. Everything in Growth + long-term positioning.",
+      "deliveryTime": "6-8 weeks"
+    },
+    "pricing": {
+      "growth": 1000,
+      "premium": 2000,
+      "currency": "USD",
+      "essentials": 450
+    },
+    "assumptions": [
+      "Main Street Dental will provide necessary access to accounts (Google Business Profile, website analytics)",
+      "Implementation timeline assumes standard business hours and reasonable response times",
+      "Pricing is based on the scope outlined in each tier; additional work may incur extra fees",
+      "Monthly reporting and ongoing support not included (available as add-on)"
+    ],
+    "disclaimers": [
+      "Audit data collected on the date of analysis; some metrics may change over time",
+      "Competitor data is based on publicly available information",
+      "Results may vary based on industry, location, and market conditions",
+      "SEO and ranking improvements can take 3-6 months to materialize"
+    ],
+    "nextSteps": [
+      "Review this proposal and select your preferred tier",
+      "Reply to this email or schedule a 15-minute call to discuss",
+      "We'll send a simple contract and invoice",
+      "Kickoff call within 3 business days of signing"
+    ],
+    "pdfUrl": null,
+    "webLinkToken": "18f99630-64bb-42fb-8ef6-2a12ae952f42",
+    "sentAt": null,
+    "viewedAt": null,
+    "createdAt": "2026-02-07T07:03:23.223Z"
+  },
+  {
+    "id": "584af81c-32c9-4e1a-8362-2a4c8de512fd",
+    "auditId": "f8cf73d1-e868-4a49-adaf-c289cff38bcd",
+    "version": 1,
+    "status": "DRAFT",
+    "executiveSummary": "Main Street Dental's current online presence significantly lags behind competitors, representing an urgent issue impacting new patient acquisition and brand trust. This audit reveals a critical need to improve online visibility, as the current weakness translates to missed opportunities and potential revenue loss. We understand the importance of a strong digital footprint in today's market and are confident that our proposed solutions will revitalize your online presence, driving growth and solidifying Main Street Dental's position as a leading provider in the community.",
+    "painClusters": [
+      {
+        "id": "cluster-1",
+        "severity": "high",
+        "narrative": "The business has a weak online presence compared to competitors, impacting visibility and trust.",
+        "rootCause": "The business has a weak online presence compared to competitors, impacting visibility and trust.",
+        "findingIds": [
+          "05e0744b-6b37-4fbe-ab1b-a61a00904292",
+          "6245eedc-c1e6-4bbb-ab11-c4e367c7fe78"
+        ]
+      }
+    ],
+    "tierEssentials": {
+      "name": "Essentials",
+      "price": 450,
+      "findingIds": [
+        "05e0744b-6b37-4fbe-ab1b-a61a00904292",
+        "6245eedc-c1e6-4bbb-ab11-c4e367c7fe78"
+      ],
+      "description": "Quick wins. Fix the things actively costing you money.",
+      "deliveryTime": "1-2 weeks"
+    },
+    "tierGrowth": {
+      "name": "Growth",
+      "price": 1000,
+      "findingIds": [
+        "05e0744b-6b37-4fbe-ab1b-a61a00904292",
+        "6245eedc-c1e6-4bbb-ab11-c4e367c7fe78"
+      ],
+      "description": "Essentials + competitive improvements. Close the gap with top competitors.",
+      "deliveryTime": "3-4 weeks"
+    },
+    "tierPremium": {
+      "name": "Premium",
+      "price": 2000,
+      "findingIds": [
+        "05e0744b-6b37-4fbe-ab1b-a61a00904292",
+        "6245eedc-c1e6-4bbb-ab11-c4e367c7fe78"
+      ],
+      "description": "Full optimization. Everything in Growth + long-term positioning.",
+      "deliveryTime": "6-8 weeks"
+    },
+    "pricing": {
+      "growth": 1000,
+      "premium": 2000,
+      "currency": "USD",
+      "essentials": 450
+    },
+    "assumptions": [
+      "Main Street Dental will provide necessary access to accounts (Google Business Profile, website analytics)",
+      "Implementation timeline assumes standard business hours and reasonable response times",
+      "Pricing is based on the scope outlined in each tier; additional work may incur extra fees",
+      "Monthly reporting and ongoing support not included (available as add-on)"
+    ],
+    "disclaimers": [
+      "Audit data collected on the date of analysis; some metrics may change over time",
+      "Competitor data is based on publicly available information",
+      "Results may vary based on industry, location, and market conditions",
+      "SEO and ranking improvements can take 3-6 months to materialize"
+    ],
+    "nextSteps": [
+      "Review this proposal and select your preferred tier",
+      "Reply to this email or schedule a 15-minute call to discuss",
+      "We'll send a simple contract and invoice",
+      "Kickoff call within 3 business days of signing"
+    ],
+    "pdfUrl": null,
+    "webLinkToken": "d9858d84-b373-43dc-9a7b-d0e051f7decc",
+    "sentAt": null,
+    "viewedAt": null,
+    "createdAt": "2026-02-07T07:27:25.553Z"
+  },
+  {
+    "id": "3703638b-74c4-4a57-993f-1193d1579bb5",
+    "auditId": "57d4dc8a-cf30-41f6-99e6-3c2d8a1db5b9",
+    "version": 1,
+    "status": "VIEWED",
+    "executiveSummary": "Joe's Plumbing is currently missing significant revenue opportunities due to a subpar online presence, a critical issue identified in our audit. This urgent problem, alongside two other growth opportunities, is hindering your ability to compete effectively and provide a positive user experience for potential customers. Our proposed audit will prioritize addressing this online deficit, developing a strategy to capture lost revenue and position Joe's Plumbing for sustained growth in the digital landscape.",
+    "painClusters": [
+      {
+        "id": "cluster-1",
+        "severity": "high",
+        "narrative": "The business's online presence needs improvement to match competitors and ensure a positive user experience.",
+        "rootCause": "The business's online presence needs improvement to match competitors and ensure a positive user experience.",
+        "findingIds": [
+          "0f1893fb-8b44-41fd-aed4-5d57a0e9ae9e",
+          "0d2a95b3-a117-46c5-8b04-726347eba594",
+          "dd834f46-33e4-4393-9689-5ff607332be9"
+        ]
+      }
+    ],
+    "tierEssentials": {
+      "name": "Essentials",
+      "price": 450,
+      "findingIds": [
+        "0d2a95b3-a117-46c5-8b04-726347eba594",
+        "dd834f46-33e4-4393-9689-5ff607332be9"
+      ],
+      "description": "Quick wins. Fix the things actively costing you money.",
+      "deliveryTime": "1-2 weeks"
+    },
+    "tierGrowth": {
+      "name": "Growth",
+      "price": 1000,
+      "findingIds": [
+        "0d2a95b3-a117-46c5-8b04-726347eba594",
+        "dd834f46-33e4-4393-9689-5ff607332be9",
+        "0f1893fb-8b44-41fd-aed4-5d57a0e9ae9e"
+      ],
+      "description": "Essentials + competitive improvements. Close the gap with top competitors.",
+      "deliveryTime": "3-4 weeks"
+    },
+    "tierPremium": {
+      "name": "Premium",
+      "price": 2000,
+      "findingIds": [
+        "0d2a95b3-a117-46c5-8b04-726347eba594",
+        "dd834f46-33e4-4393-9689-5ff607332be9",
+        "0f1893fb-8b44-41fd-aed4-5d57a0e9ae9e"
+      ],
+      "description": "Full optimization. Everything in Growth + long-term positioning.",
+      "deliveryTime": "6-8 weeks"
+    },
+    "pricing": {
+      "growth": 1000,
+      "premium": 2000,
+      "currency": "USD",
+      "essentials": 450
+    },
+    "assumptions": [
+      "Joes Plumbing will provide necessary access to accounts (Google Business Profile, website analytics)",
+      "Implementation timeline assumes standard business hours and reasonable response times",
+      "Pricing is based on the scope outlined in each tier; additional work may incur extra fees",
+      "Monthly reporting and ongoing support not included (available as add-on)"
+    ],
+    "disclaimers": [
+      "Audit data collected on the date of analysis; some metrics may change over time",
+      "Competitor data is based on publicly available information",
+      "Results may vary based on industry, location, and market conditions",
+      "SEO and ranking improvements can take 3-6 months to materialize"
+    ],
+    "nextSteps": [
+      "Review this proposal and select your preferred tier",
+      "Reply to this email or schedule a 15-minute call to discuss",
+      "We'll send a simple contract and invoice",
+      "Kickoff call within 3 business days of signing"
+    ],
+    "pdfUrl": null,
+    "webLinkToken": "972aa9c1-09b8-4728-8ce8-03824c11cd8a",
+    "sentAt": null,
+    "viewedAt": "2026-02-07T07:34:29.372Z",
+    "createdAt": "2026-02-07T07:27:18.531Z"
+  },
+  {
+    "id": "bedc5a6c-c9af-4670-a18e-355b1065ec73",
+    "auditId": "9cc88c6c-f767-410b-9c6a-69308d3d57bc",
+    "version": 1,
+    "status": "DRAFT",
+    "executiveSummary": "Joes Plumbing is currently missing significant revenue opportunities due to a subpar online presence, a critical issue identified in our audit. To address this urgent problem and the 2 other growth opportunities we uncovered, we propose a targeted audit to improve your digital footprint and user experience. This will allow Joes Plumbing to compete effectively, capture lost market share, and ultimately drive increased profitability. Our plan will provide actionable steps to transform your online presence into a powerful lead generation engine.",
+    "painClusters": [
+      {
+        "id": "cluster-1",
+        "severity": "high",
+        "narrative": "The business's online presence needs improvement to match competitors and ensure a positive user experience.",
+        "rootCause": "The business's online presence needs improvement to match competitors and ensure a positive user experience.",
+        "findingIds": [
+          "9fd6954d-75b5-4e87-80ff-02ca7a7a7ed1",
+          "9a15d50c-b09f-4ab1-ae5e-25628d3a7a14",
+          "6e67d8af-2337-45db-929b-1eed81bc74d5"
+        ]
+      }
+    ],
+    "tierEssentials": {
+      "name": "Essentials",
+      "price": 450,
+      "findingIds": [
+        "9a15d50c-b09f-4ab1-ae5e-25628d3a7a14",
+        "6e67d8af-2337-45db-929b-1eed81bc74d5"
+      ],
+      "description": "Quick wins. Fix the things actively costing you money.",
+      "deliveryTime": "1-2 weeks"
+    },
+    "tierGrowth": {
+      "name": "Growth",
+      "price": 1000,
+      "findingIds": [
+        "9a15d50c-b09f-4ab1-ae5e-25628d3a7a14",
+        "6e67d8af-2337-45db-929b-1eed81bc74d5",
+        "9fd6954d-75b5-4e87-80ff-02ca7a7a7ed1"
+      ],
+      "description": "Essentials + competitive improvements. Close the gap with top competitors.",
+      "deliveryTime": "3-4 weeks"
+    },
+    "tierPremium": {
+      "name": "Premium",
+      "price": 2000,
+      "findingIds": [
+        "9a15d50c-b09f-4ab1-ae5e-25628d3a7a14",
+        "6e67d8af-2337-45db-929b-1eed81bc74d5",
+        "9fd6954d-75b5-4e87-80ff-02ca7a7a7ed1"
+      ],
+      "description": "Full optimization. Everything in Growth + long-term positioning.",
+      "deliveryTime": "6-8 weeks"
+    },
+    "pricing": {
+      "growth": 1000,
+      "premium": 2000,
+      "currency": "USD",
+      "essentials": 450
+    },
+    "assumptions": [
+      "Joes Plumbing will provide necessary access to accounts (Google Business Profile, website analytics)",
+      "Implementation timeline assumes standard business hours and reasonable response times",
+      "Pricing is based on the scope outlined in each tier; additional work may incur extra fees",
+      "Monthly reporting and ongoing support not included (available as add-on)"
+    ],
+    "disclaimers": [
+      "Audit data collected on the date of analysis; some metrics may change over time",
+      "Competitor data is based on publicly available information",
+      "Results may vary based on industry, location, and market conditions",
+      "SEO and ranking improvements can take 3-6 months to materialize"
+    ],
+    "nextSteps": [
+      "Review this proposal and select your preferred tier",
+      "Reply to this email or schedule a 15-minute call to discuss",
+      "We'll send a simple contract and invoice",
+      "Kickoff call within 3 business days of signing"
+    ],
+    "pdfUrl": null,
+    "webLinkToken": "101db358-7972-4ccd-91eb-f558a556bc99",
+    "sentAt": null,
+    "viewedAt": null,
+    "createdAt": "2026-02-07T07:44:20.219Z"
+  },
+  {
+    "id": "aa2543e0-6001-45da-942b-c80be18dfd6e",
+    "auditId": "fd1df3d7-bb03-40f5-b988-d481b91fa39c",
+    "version": 1,
+    "status": "DRAFT",
+    "executiveSummary": "Main Street Dental's current online presence is significantly weaker than competitors, representing an urgent issue with potential revenue loss. This lack of visibility directly impacts patient acquisition and trust, hindering growth opportunities. Our audit will provide a clear roadmap to strengthen your digital footprint, ensuring you capture a larger share of the market and build a thriving practice. We'll focus on addressing this critical need first, paving the way for sustainable growth and long-term success.",
+    "painClusters": [
+      {
+        "id": "cluster-1",
+        "severity": "high",
+        "narrative": "The business has a weak online presence compared to competitors, impacting visibility and trust.",
+        "rootCause": "The business has a weak online presence compared to competitors, impacting visibility and trust.",
+        "findingIds": [
+          "5056fb04-cbe2-41b7-921f-3d340e05c0b1",
+          "c0e024eb-e654-4203-89fe-6f7c4c64991b"
+        ]
+      }
+    ],
+    "tierEssentials": {
+      "name": "Essentials",
+      "price": 450,
+      "findingIds": [
+        "5056fb04-cbe2-41b7-921f-3d340e05c0b1",
+        "c0e024eb-e654-4203-89fe-6f7c4c64991b"
+      ],
+      "description": "Quick wins. Fix the things actively costing you money.",
+      "deliveryTime": "1-2 weeks"
+    },
+    "tierGrowth": {
+      "name": "Growth",
+      "price": 1000,
+      "findingIds": [
+        "5056fb04-cbe2-41b7-921f-3d340e05c0b1",
+        "c0e024eb-e654-4203-89fe-6f7c4c64991b"
+      ],
+      "description": "Essentials + competitive improvements. Close the gap with top competitors.",
+      "deliveryTime": "3-4 weeks"
+    },
+    "tierPremium": {
+      "name": "Premium",
+      "price": 2000,
+      "findingIds": [
+        "5056fb04-cbe2-41b7-921f-3d340e05c0b1",
+        "c0e024eb-e654-4203-89fe-6f7c4c64991b"
+      ],
+      "description": "Full optimization. Everything in Growth + long-term positioning.",
+      "deliveryTime": "6-8 weeks"
+    },
+    "pricing": {
+      "growth": 1000,
+      "premium": 2000,
+      "currency": "USD",
+      "essentials": 450
+    },
+    "assumptions": [
+      "Main Street Dental will provide necessary access to accounts (Google Business Profile, website analytics)",
+      "Implementation timeline assumes standard business hours and reasonable response times",
+      "Pricing is based on the scope outlined in each tier; additional work may incur extra fees",
+      "Monthly reporting and ongoing support not included (available as add-on)"
+    ],
+    "disclaimers": [
+      "Audit data collected on the date of analysis; some metrics may change over time",
+      "Competitor data is based on publicly available information",
+      "Results may vary based on industry, location, and market conditions",
+      "SEO and ranking improvements can take 3-6 months to materialize"
+    ],
+    "nextSteps": [
+      "Review this proposal and select your preferred tier",
+      "Reply to this email or schedule a 15-minute call to discuss",
+      "We'll send a simple contract and invoice",
+      "Kickoff call within 3 business days of signing"
+    ],
+    "pdfUrl": null,
+    "webLinkToken": "74343bc2-b2fa-4554-adb2-063d19fe135c",
+    "sentAt": null,
+    "viewedAt": null,
+    "createdAt": "2026-02-07T07:44:26.678Z"
+  },
+  {
+    "id": "9688e9d0-82a1-4ede-b03e-fdc82453a25c",
+    "auditId": "d90e2b8d-bb17-4447-814f-56975f3c745d",
+    "version": 2,
+    "status": "VIEWED",
+    "executiveSummary": "Joes Plumbing faces a critical challenge: a weaker online presence and lower customer trust compared to competitors, directly impacting customer acquisition and potentially leading to lost revenue. This urgent issue requires immediate attention to prevent further erosion of market share. By prioritizing strategies to enhance online visibility and build trust, Joes Plumbing can recapture lost ground and position itself for sustainable growth in a competitive market.",
+    "painClusters": [
+      {
+        "id": "cluster-1",
+        "severity": "critical",
+        "narrative": "The business has a weaker online presence and lower customer trust compared to competitors.",
+        "rootCause": "The business has a weaker online presence and lower customer trust compared to competitors.",
+        "findingIds": [
+          "55bba5ab-98cf-41ca-a31f-8673cd7d7363"
+        ]
+      }
+    ],
+    "tierEssentials": {
+      "name": "Essentials",
+      "price": 450,
+      "findingIds": [
+        "55bba5ab-98cf-41ca-a31f-8673cd7d7363"
+      ],
+      "description": "Quick wins. Fix the things actively costing you money.",
+      "deliveryTime": "1-2 weeks"
+    },
+    "tierGrowth": {
+      "name": "Growth",
+      "price": 1000,
+      "findingIds": [
+        "55bba5ab-98cf-41ca-a31f-8673cd7d7363"
+      ],
+      "description": "Essentials + competitive improvements. Close the gap with top competitors.",
+      "deliveryTime": "3-4 weeks"
+    },
+    "tierPremium": {
+      "name": "Premium",
+      "price": 2000,
+      "findingIds": [
+        "55bba5ab-98cf-41ca-a31f-8673cd7d7363"
+      ],
+      "description": "Full optimization. Everything in Growth + long-term positioning.",
+      "deliveryTime": "6-8 weeks"
+    },
+    "pricing": {
+      "growth": 1000,
+      "premium": 2000,
+      "currency": "USD",
+      "essentials": 450
+    },
+    "assumptions": [
+      "Joes Plumbing will provide necessary access to accounts (Google Business Profile, website analytics)",
+      "Implementation timeline assumes standard business hours and reasonable response times",
+      "Pricing is based on the scope outlined in each tier; additional work may incur extra fees",
+      "Monthly reporting and ongoing support not included (available as add-on)"
+    ],
+    "disclaimers": [
+      "Audit data collected on the date of analysis; some metrics may change over time",
+      "Competitor data is based on publicly available information",
+      "Results may vary based on industry, location, and market conditions",
+      "SEO and ranking improvements can take 3-6 months to materialize"
+    ],
+    "nextSteps": [
+      "Review this proposal and select your preferred tier",
+      "Reply to this email or schedule a 15-minute call to discuss",
+      "We'll send a simple contract and invoice",
+      "Kickoff call within 3 business days of signing"
+    ],
+    "pdfUrl": null,
+    "webLinkToken": "e4f9baa3-cf8a-45c9-a89d-568d4fb177f2",
+    "sentAt": null,
+    "viewedAt": "2026-02-07T07:45:10.240Z",
+    "createdAt": "2026-02-07T07:44:55.865Z"
+  },
+  {
+    "id": "a60bffba-648e-4a6d-9358-3925745729fe",
+    "auditId": "ff79d400-4415-4a3c-9adc-a9d5bd932148",
+    "version": 1,
+    "status": "DRAFT",
+    "executiveSummary": "Sushi Village is currently facing a critical challenge: a weak online presence compared to competitors, significantly hindering visibility and potentially impacting revenue. This urgent issue, alongside identified growth opportunities, requires immediate attention to avoid further loss of market share. This audit will provide actionable strategies to strengthen Sushi Village's online presence, capitalize on missed opportunities, and ultimately drive increased revenue and customer acquisition.",
+    "painClusters": [
+      {
+        "id": "cluster-1",
+        "severity": "high",
+        "narrative": "The business has a weak online presence compared to competitors, impacting visibility and trust.",
+        "rootCause": "The business has a weak online presence compared to competitors, impacting visibility and trust.",
+        "findingIds": [
+          "a63627e8-7c80-4af9-97cb-a9dfe5d55b0c",
+          "97697d26-2cbd-44a5-8a71-40edd2f003d5"
+        ]
+      }
+    ],
+    "tierEssentials": {
+      "name": "Essentials",
+      "price": 450,
+      "findingIds": [
+        "a63627e8-7c80-4af9-97cb-a9dfe5d55b0c",
+        "97697d26-2cbd-44a5-8a71-40edd2f003d5"
+      ],
+      "description": "Quick wins. Fix the things actively costing you money.",
+      "deliveryTime": "1-2 weeks"
+    },
+    "tierGrowth": {
+      "name": "Growth",
+      "price": 1000,
+      "findingIds": [
+        "a63627e8-7c80-4af9-97cb-a9dfe5d55b0c",
+        "97697d26-2cbd-44a5-8a71-40edd2f003d5"
+      ],
+      "description": "Essentials + competitive improvements. Close the gap with top competitors.",
+      "deliveryTime": "3-4 weeks"
+    },
+    "tierPremium": {
+      "name": "Premium",
+      "price": 2000,
+      "findingIds": [
+        "a63627e8-7c80-4af9-97cb-a9dfe5d55b0c",
+        "97697d26-2cbd-44a5-8a71-40edd2f003d5"
+      ],
+      "description": "Full optimization. Everything in Growth + long-term positioning.",
+      "deliveryTime": "6-8 weeks"
+    },
+    "pricing": {
+      "growth": 1000,
+      "premium": 2000,
+      "currency": "USD",
+      "essentials": 450
+    },
+    "assumptions": [
+      "Sushi Village Restaurant will provide necessary access to accounts (Google Business Profile, website analytics)",
+      "Implementation timeline assumes standard business hours and reasonable response times",
+      "Pricing is based on the scope outlined in each tier; additional work may incur extra fees",
+      "Monthly reporting and ongoing support not included (available as add-on)"
+    ],
+    "disclaimers": [
+      "Audit data collected on the date of analysis; some metrics may change over time",
+      "Competitor data is based on publicly available information",
+      "Results may vary based on industry, location, and market conditions",
+      "SEO and ranking improvements can take 3-6 months to materialize"
+    ],
+    "nextSteps": [
+      "Review this proposal and select your preferred tier",
+      "Reply to this email or schedule a 15-minute call to discuss",
+      "We'll send a simple contract and invoice",
+      "Kickoff call within 3 business days of signing"
+    ],
+    "pdfUrl": null,
+    "webLinkToken": "9b8e85a6-0ef5-46c7-832c-403b41c5feca",
+    "sentAt": null,
+    "viewedAt": null,
+    "createdAt": "2026-02-07T07:49:27.601Z"
+  },
+  {
+    "id": "ae0275f6-51c5-44c8-9c01-408518e80c18",
+    "auditId": "53ba67a3-7e9f-40f7-9aea-3597725ab48f",
+    "version": 1,
+    "status": "DRAFT",
+    "executiveSummary": "Joe's Plumbing is currently at a disadvantage compared to competitors due to a weaker online presence, specifically reflected in a lower number of customer reviews. This directly impacts perceived trustworthiness and translates to lost revenue as potential customers opt for competitors with stronger social proof. Addressing this urgent issue is critical; by strategically building a positive online reputation, Joe's Plumbing can capture a larger market share and secure sustainable growth.",
+    "painClusters": [
+      {
+        "id": "cluster-1",
+        "severity": "high",
+        "narrative": "The business has a weaker online presence and perceived trustworthiness compared to competitors due to a lower number of customer reviews.",
+        "rootCause": "The business has a weaker online presence and perceived trustworthiness compared to competitors due to a lower number of customer reviews.",
+        "findingIds": [
+          "9a15c5df-0acb-4734-9e00-467ccce3cd19"
+        ]
+      }
+    ],
+    "tierEssentials": {
+      "name": "Essentials",
+      "price": 450,
+      "findingIds": [
+        "9a15c5df-0acb-4734-9e00-467ccce3cd19"
+      ],
+      "description": "Quick wins. Fix the things actively costing you money.",
+      "deliveryTime": "1-2 weeks"
+    },
+    "tierGrowth": {
+      "name": "Growth",
+      "price": 1000,
+      "findingIds": [
+        "9a15c5df-0acb-4734-9e00-467ccce3cd19"
+      ],
+      "description": "Essentials + competitive improvements. Close the gap with top competitors.",
+      "deliveryTime": "3-4 weeks"
+    },
+    "tierPremium": {
+      "name": "Premium",
+      "price": 2000,
+      "findingIds": [
+        "9a15c5df-0acb-4734-9e00-467ccce3cd19"
+      ],
+      "description": "Full optimization. Everything in Growth + long-term positioning.",
+      "deliveryTime": "6-8 weeks"
+    },
+    "pricing": {
+      "growth": 1000,
+      "premium": 2000,
+      "essentials": 450
+    },
+    "assumptions": [
+      "Joe's Plumbing will provide necessary access to accounts (Google Business Profile, website analytics)",
+      "Implementation timeline assumes standard business hours and reasonable response times",
+      "Pricing is based on the scope outlined in each tier; additional work may incur extra fees",
+      "Monthly reporting and ongoing support not included (available as add-on)"
+    ],
+    "disclaimers": [
+      "Audit data collected on the date of analysis; some metrics may change over time",
+      "Competitor data is based on publicly available information",
+      "Results may vary based on industry, location, and market conditions",
+      "SEO and ranking improvements can take 3-6 months to materialize"
+    ],
+    "nextSteps": [
+      "Review this proposal and select your preferred tier",
+      "Reply to this email or schedule a 15-minute call to discuss",
+      "We'll send a simple contract and invoice",
+      "Kickoff call within 3 business days of signing"
+    ],
+    "pdfUrl": null,
+    "webLinkToken": "a5093fb3-f009-480b-b840-237687981c4b",
+    "sentAt": null,
+    "viewedAt": null,
+    "createdAt": "2026-02-07T08:07:19.724Z"
+  },
+  {
+    "id": "785a7fd0-d430-404d-b9e9-d46c91c95caa",
+    "auditId": "db16f9cd-2820-41a5-aef3-e19725e33fa1",
+    "version": 1,
+    "status": "DRAFT",
+    "executiveSummary": "Main Street Dental is currently missing significant opportunities for growth due to a weak online presence, representing a critical issue that requires immediate attention. Our audit revealed that this deficiency directly impacts patient acquisition and trust, potentially leading to lost revenue and hindering your ability to compete effectively in the modern market. By addressing this urgent need with a targeted online strategy, Main Street Dental can enhance its visibility, attract new patients, and solidify its position as a leading provider in the community.",
+    "painClusters": [
+      {
+        "id": "cluster-1",
+        "severity": "high",
+        "narrative": "The business has a weak online presence and is not effectively leveraging online platforms to build trust and visibility.",
+        "rootCause": "The business has a weak online presence and is not effectively leveraging online platforms to build trust and visibility.",
+        "findingIds": [
+          "2b866bb6-aaed-4892-9d2d-1e26b48b9cf7",
+          "3a516060-55c6-408c-bdb0-a9ce55932eb2"
+        ]
+      }
+    ],
+    "tierEssentials": {
+      "name": "Essentials",
+      "price": 450,
+      "findingIds": [
+        "2b866bb6-aaed-4892-9d2d-1e26b48b9cf7",
+        "3a516060-55c6-408c-bdb0-a9ce55932eb2"
+      ],
+      "description": "Quick wins. Fix the things actively costing you money.",
+      "deliveryTime": "1-2 weeks"
+    },
+    "tierGrowth": {
+      "name": "Growth",
+      "price": 1000,
+      "findingIds": [
+        "2b866bb6-aaed-4892-9d2d-1e26b48b9cf7",
+        "3a516060-55c6-408c-bdb0-a9ce55932eb2"
+      ],
+      "description": "Essentials + competitive improvements. Close the gap with top competitors.",
+      "deliveryTime": "3-4 weeks"
+    },
+    "tierPremium": {
+      "name": "Premium",
+      "price": 2000,
+      "findingIds": [
+        "2b866bb6-aaed-4892-9d2d-1e26b48b9cf7",
+        "3a516060-55c6-408c-bdb0-a9ce55932eb2"
+      ],
+      "description": "Full optimization. Everything in Growth + long-term positioning.",
+      "deliveryTime": "6-8 weeks"
+    },
+    "pricing": {
+      "growth": 1000,
+      "premium": 2000,
+      "essentials": 450
+    },
+    "assumptions": [
+      "Main Street Dental will provide necessary access to accounts (Google Business Profile, website analytics)",
+      "Implementation timeline assumes standard business hours and reasonable response times",
+      "Pricing is based on the scope outlined in each tier; additional work may incur extra fees",
+      "Monthly reporting and ongoing support not included (available as add-on)"
+    ],
+    "disclaimers": [
+      "Audit data collected on the date of analysis; some metrics may change over time",
+      "Competitor data is based on publicly available information",
+      "Results may vary based on industry, location, and market conditions",
+      "SEO and ranking improvements can take 3-6 months to materialize"
+    ],
+    "nextSteps": [
+      "Review this proposal and select your preferred tier",
+      "Reply to this email or schedule a 15-minute call to discuss",
+      "We'll send a simple contract and invoice",
+      "Kickoff call within 3 business days of signing"
+    ],
+    "pdfUrl": null,
+    "webLinkToken": "ef4b1256-7016-4538-ab9a-eb84c9ae691d",
+    "sentAt": null,
+    "viewedAt": null,
+    "createdAt": "2026-02-07T08:07:34.933Z"
+  },
+  {
+    "id": "3a47a93d-fe4b-44cf-9051-f8cfd24357ea",
+    "auditId": "cf4df6be-8ee8-45b1-aae4-c95be2ace23e",
+    "version": 1,
+    "status": "DRAFT",
+    "executiveSummary": "Sushi Village is currently facing a critical challenge: a weak online presence compared to competitors, directly impacting customer acquisition and trust. This urgent issue, identified as a HIGH priority in our audit, is leading to missed revenue opportunities. Our proposed audit will provide actionable strategies to rapidly improve your online visibility, enhance customer engagement, and position Sushi Village for sustainable growth in the competitive restaurant market.",
+    "painClusters": [
+      {
+        "id": "cluster-1",
+        "severity": "high",
+        "narrative": "The business has a weak online presence compared to competitors, impacting visibility and trust.",
+        "rootCause": "The business has a weak online presence compared to competitors, impacting visibility and trust.",
+        "findingIds": [
+          "687dae0f-0481-4043-9f94-519607ae092c",
+          "b41cc203-6d56-41cf-889a-c9baa5c67a1c"
+        ]
+      }
+    ],
+    "tierEssentials": {
+      "name": "Essentials",
+      "price": 450,
+      "findingIds": [
+        "687dae0f-0481-4043-9f94-519607ae092c",
+        "b41cc203-6d56-41cf-889a-c9baa5c67a1c"
+      ],
+      "description": "Quick wins. Fix the things actively costing you money.",
+      "deliveryTime": "1-2 weeks"
+    },
+    "tierGrowth": {
+      "name": "Growth",
+      "price": 1000,
+      "findingIds": [
+        "687dae0f-0481-4043-9f94-519607ae092c",
+        "b41cc203-6d56-41cf-889a-c9baa5c67a1c"
+      ],
+      "description": "Essentials + competitive improvements. Close the gap with top competitors.",
+      "deliveryTime": "3-4 weeks"
+    },
+    "tierPremium": {
+      "name": "Premium",
+      "price": 2000,
+      "findingIds": [
+        "687dae0f-0481-4043-9f94-519607ae092c",
+        "b41cc203-6d56-41cf-889a-c9baa5c67a1c"
+      ],
+      "description": "Full optimization. Everything in Growth + long-term positioning.",
+      "deliveryTime": "6-8 weeks"
+    },
+    "pricing": {
+      "growth": 1000,
+      "premium": 2000,
+      "essentials": 450
+    },
+    "assumptions": [
+      "Sushi Village Restaurant will provide necessary access to accounts (Google Business Profile, website analytics)",
+      "Implementation timeline assumes standard business hours and reasonable response times",
+      "Pricing is based on the scope outlined in each tier; additional work may incur extra fees",
+      "Monthly reporting and ongoing support not included (available as add-on)"
+    ],
+    "disclaimers": [
+      "Audit data collected on the date of analysis; some metrics may change over time",
+      "Competitor data is based on publicly available information",
+      "Results may vary based on industry, location, and market conditions",
+      "SEO and ranking improvements can take 3-6 months to materialize"
+    ],
+    "nextSteps": [
+      "Review this proposal and select your preferred tier",
+      "Reply to this email or schedule a 15-minute call to discuss",
+      "We'll send a simple contract and invoice",
+      "Kickoff call within 3 business days of signing"
+    ],
+    "pdfUrl": null,
+    "webLinkToken": "7b0d9281-05f3-412c-a63a-902dc6a1620c",
+    "sentAt": null,
+    "viewedAt": null,
+    "createdAt": "2026-02-07T08:07:48.046Z"
+  },
+  {
+    "id": "1184c020-22bb-4874-aefc-b85a605ad26c",
+    "auditId": "0c2eb078-42fa-4101-914c-58d187a7a6d6",
+    "version": 1,
+    "status": "DRAFT",
+    "executiveSummary": "Quick Lube Auto Service is currently missing significant revenue opportunities due to a weak online presence, a critical finding from our audit. Compared to competitors, your limited visibility online is eroding customer trust and hindering new customer acquisition. Addressing this urgent issue will immediately improve your market reach and drive revenue growth, paving the way for us to then leverage the second identified opportunity to further optimize your business for long-term success.",
+    "painClusters": [
+      {
+        "id": "cluster-1",
+        "severity": "high",
+        "narrative": "The business has a weak online presence compared to competitors, impacting visibility and trust.",
+        "rootCause": "The business has a weak online presence compared to competitors, impacting visibility and trust.",
+        "findingIds": [
+          "74addb55-f6ce-42a8-8250-fee1af998757",
+          "979fd1a0-bfee-41a3-8ad8-841d8eba5d3e"
+        ]
+      }
+    ],
+    "tierEssentials": {
+      "name": "Essentials",
+      "price": 450,
+      "findingIds": [
+        "74addb55-f6ce-42a8-8250-fee1af998757",
+        "979fd1a0-bfee-41a3-8ad8-841d8eba5d3e"
+      ],
+      "description": "Quick wins. Fix the things actively costing you money.",
+      "deliveryTime": "1-2 weeks"
+    },
+    "tierGrowth": {
+      "name": "Growth",
+      "price": 1000,
+      "findingIds": [
+        "74addb55-f6ce-42a8-8250-fee1af998757",
+        "979fd1a0-bfee-41a3-8ad8-841d8eba5d3e"
+      ],
+      "description": "Essentials + competitive improvements. Close the gap with top competitors.",
+      "deliveryTime": "3-4 weeks"
+    },
+    "tierPremium": {
+      "name": "Premium",
+      "price": 2000,
+      "findingIds": [
+        "74addb55-f6ce-42a8-8250-fee1af998757",
+        "979fd1a0-bfee-41a3-8ad8-841d8eba5d3e"
+      ],
+      "description": "Full optimization. Everything in Growth + long-term positioning.",
+      "deliveryTime": "6-8 weeks"
+    },
+    "pricing": {
+      "growth": 1000,
+      "premium": 2000,
+      "essentials": 450
+    },
+    "assumptions": [
+      "Quick Lube Auto Service will provide necessary access to accounts (Google Business Profile, website analytics)",
+      "Implementation timeline assumes standard business hours and reasonable response times",
+      "Pricing is based on the scope outlined in each tier; additional work may incur extra fees",
+      "Monthly reporting and ongoing support not included (available as add-on)"
+    ],
+    "disclaimers": [
+      "Audit data collected on the date of analysis; some metrics may change over time",
+      "Competitor data is based on publicly available information",
+      "Results may vary based on industry, location, and market conditions",
+      "SEO and ranking improvements can take 3-6 months to materialize"
+    ],
+    "nextSteps": [
+      "Review this proposal and select your preferred tier",
+      "Reply to this email or schedule a 15-minute call to discuss",
+      "We'll send a simple contract and invoice",
+      "Kickoff call within 3 business days of signing"
+    ],
+    "pdfUrl": null,
+    "webLinkToken": "6ea3a5a9-41a2-43ea-bdf5-b86007864251",
+    "sentAt": null,
+    "viewedAt": null,
+    "createdAt": "2026-02-07T08:08:06.331Z"
+  },
+  {
+    "id": "496d2976-757d-415e-9a63-ee55f3526940",
+    "auditId": "6cbc8746-bbbb-4546-9394-ff354614f258",
+    "version": 1,
+    "status": "DRAFT",
+    "executiveSummary": "Sunrise Yoga Studio faces a critical challenge: a weak online presence compared to competitors, directly impacting visibility and potentially costing revenue. This urgent issue, alongside identified growth opportunities, necessitates immediate action. By strengthening your digital footprint, we can not only address this revenue leakage but also unlock significant potential for attracting new clients and solidifying Sunrise Yoga's position in the market. Our audit will provide a clear roadmap to revitalize your online presence and pave the way for sustainable growth.",
+    "painClusters": [
+      {
+        "id": "cluster-1",
+        "severity": "high",
+        "narrative": "The business has a weak online presence compared to competitors, impacting visibility and trust.",
+        "rootCause": "The business has a weak online presence compared to competitors, impacting visibility and trust.",
+        "findingIds": [
+          "8f48bd6b-7a9a-4e33-b9d1-105f486d1851",
+          "e62fef73-d075-48d6-b1bc-ab05959437b8"
+        ]
+      }
+    ],
+    "tierEssentials": {
+      "name": "Essentials",
+      "price": 450,
+      "findingIds": [
+        "8f48bd6b-7a9a-4e33-b9d1-105f486d1851",
+        "e62fef73-d075-48d6-b1bc-ab05959437b8"
+      ],
+      "description": "Quick wins. Fix the things actively costing you money.",
+      "deliveryTime": "1-2 weeks"
+    },
+    "tierGrowth": {
+      "name": "Growth",
+      "price": 1000,
+      "findingIds": [
+        "8f48bd6b-7a9a-4e33-b9d1-105f486d1851",
+        "e62fef73-d075-48d6-b1bc-ab05959437b8"
+      ],
+      "description": "Essentials + competitive improvements. Close the gap with top competitors.",
+      "deliveryTime": "3-4 weeks"
+    },
+    "tierPremium": {
+      "name": "Premium",
+      "price": 2000,
+      "findingIds": [
+        "8f48bd6b-7a9a-4e33-b9d1-105f486d1851",
+        "e62fef73-d075-48d6-b1bc-ab05959437b8"
+      ],
+      "description": "Full optimization. Everything in Growth + long-term positioning.",
+      "deliveryTime": "6-8 weeks"
+    },
+    "pricing": {
+      "growth": 1000,
+      "premium": 2000,
+      "essentials": 450
+    },
+    "assumptions": [
+      "Sunrise Yoga Studio will provide necessary access to accounts (Google Business Profile, website analytics)",
+      "Implementation timeline assumes standard business hours and reasonable response times",
+      "Pricing is based on the scope outlined in each tier; additional work may incur extra fees",
+      "Monthly reporting and ongoing support not included (available as add-on)"
+    ],
+    "disclaimers": [
+      "Audit data collected on the date of analysis; some metrics may change over time",
+      "Competitor data is based on publicly available information",
+      "Results may vary based on industry, location, and market conditions",
+      "SEO and ranking improvements can take 3-6 months to materialize"
+    ],
+    "nextSteps": [
+      "Review this proposal and select your preferred tier",
+      "Reply to this email or schedule a 15-minute call to discuss",
+      "We'll send a simple contract and invoice",
+      "Kickoff call within 3 business days of signing"
+    ],
+    "pdfUrl": null,
+    "webLinkToken": "42f05f7f-7419-45ff-a298-910aa85d0fcc",
+    "sentAt": null,
+    "viewedAt": null,
+    "createdAt": "2026-02-07T08:08:24.803Z"
+  },
+  {
+    "id": "ddb811dc-fa8a-4da7-b613-0ff2e8979173",
+    "auditId": "4a2800c7-543c-4132-9652-f2311dc75bb9",
+    "version": 1,
+    "status": "DRAFT",
+    "executiveSummary": "Joe's Plumbing is currently facing a critical challenge: lagging behind competitors in online reviews, a factor that directly impacts customer trust and potentially leads to lost revenue. Our audit revealed this as the most urgent issue requiring immediate attention. Without a proactive strategy to improve online reputation, Joe's Plumbing risks losing potential customers to competitors with stronger online validation. We propose a targeted solution to bolster your online presence, build customer confidence, and ultimately drive business growth.",
+    "painClusters": [
+      {
+        "id": "cluster-1",
+        "severity": "high",
+        "narrative": "The business lags behind competitors in online reviews, potentially impacting customer trust and perceived credibility.",
+        "rootCause": "The business lags behind competitors in online reviews, potentially impacting customer trust and perceived credibility.",
+        "findingIds": [
+          "5170cfe8-bad0-4c72-af87-522d484f1ab0"
+        ]
+      }
+    ],
+    "tierEssentials": {
+      "name": "Essentials",
+      "price": 450,
+      "findingIds": [
+        "5170cfe8-bad0-4c72-af87-522d484f1ab0"
+      ],
+      "description": "Quick wins. Fix the things actively costing you money.",
+      "deliveryTime": "1-2 weeks"
+    },
+    "tierGrowth": {
+      "name": "Growth",
+      "price": 1000,
+      "findingIds": [
+        "5170cfe8-bad0-4c72-af87-522d484f1ab0"
+      ],
+      "description": "Essentials + competitive improvements. Close the gap with top competitors.",
+      "deliveryTime": "3-4 weeks"
+    },
+    "tierPremium": {
+      "name": "Premium",
+      "price": 2000,
+      "findingIds": [
+        "5170cfe8-bad0-4c72-af87-522d484f1ab0"
+      ],
+      "description": "Full optimization. Everything in Growth + long-term positioning.",
+      "deliveryTime": "6-8 weeks"
+    },
+    "pricing": {
+      "growth": 1000,
+      "premium": 2000,
+      "essentials": 450
+    },
+    "assumptions": [
+      "Joe's Plumbing will provide necessary access to accounts (Google Business Profile, website analytics)",
+      "Implementation timeline assumes standard business hours and reasonable response times",
+      "Pricing is based on the scope outlined in each tier; additional work may incur extra fees",
+      "Monthly reporting and ongoing support not included (available as add-on)"
+    ],
+    "disclaimers": [
+      "Audit data collected on the date of analysis; some metrics may change over time",
+      "Competitor data is based on publicly available information",
+      "Results may vary based on industry, location, and market conditions",
+      "SEO and ranking improvements can take 3-6 months to materialize"
+    ],
+    "nextSteps": [
+      "Review this proposal and select your preferred tier",
+      "Reply to this email or schedule a 15-minute call to discuss",
+      "We'll send a simple contract and invoice",
+      "Kickoff call within 3 business days of signing"
+    ],
+    "pdfUrl": null,
+    "webLinkToken": "9f972063-15bb-4ac5-bed1-ccb788ca8cf6",
+    "sentAt": null,
+    "viewedAt": null,
+    "createdAt": "2026-02-07T08:12:20.286Z"
+  },
+  {
+    "id": "1ad1b549-55c5-4a15-b7e1-677220758a71",
+    "auditId": "ef50e638-9cab-4407-b404-22ad60d2fda9",
+    "version": 1,
+    "status": "DRAFT",
+    "executiveSummary": "Main Street Dental's audit revealed a critical issue: a significantly weaker online presence compared to competitors, directly impacting patient acquisition and trust. This lack of visibility translates to missed opportunities and potential revenue loss in a competitive market. Addressing this urgent need with a strategic digital marketing overhaul will not only mitigate current losses but also unlock substantial growth potential for Main Street Dental.",
+    "painClusters": [
+      {
+        "id": "cluster-1",
+        "severity": "high",
+        "narrative": "The business has a weak online presence compared to competitors, impacting visibility and trust.",
+        "rootCause": "The business has a weak online presence compared to competitors, impacting visibility and trust.",
+        "findingIds": [
+          "e27db6e3-a8ed-46ab-825b-2d52861d3b6c",
+          "5a4c0d52-a780-4e98-b652-462a4749423f"
+        ]
+      }
+    ],
+    "tierEssentials": {
+      "name": "Essentials",
+      "price": 450,
+      "findingIds": [
+        "e27db6e3-a8ed-46ab-825b-2d52861d3b6c",
+        "5a4c0d52-a780-4e98-b652-462a4749423f"
+      ],
+      "description": "Quick wins. Fix the things actively costing you money.",
+      "deliveryTime": "1-2 weeks"
+    },
+    "tierGrowth": {
+      "name": "Growth",
+      "price": 1000,
+      "findingIds": [
+        "e27db6e3-a8ed-46ab-825b-2d52861d3b6c",
+        "5a4c0d52-a780-4e98-b652-462a4749423f"
+      ],
+      "description": "Essentials + competitive improvements. Close the gap with top competitors.",
+      "deliveryTime": "3-4 weeks"
+    },
+    "tierPremium": {
+      "name": "Premium",
+      "price": 2000,
+      "findingIds": [
+        "e27db6e3-a8ed-46ab-825b-2d52861d3b6c",
+        "5a4c0d52-a780-4e98-b652-462a4749423f"
+      ],
+      "description": "Full optimization. Everything in Growth + long-term positioning.",
+      "deliveryTime": "6-8 weeks"
+    },
+    "pricing": {
+      "growth": 1000,
+      "premium": 2000,
+      "essentials": 450
+    },
+    "assumptions": [
+      "Main Street Dental will provide necessary access to accounts (Google Business Profile, website analytics)",
+      "Implementation timeline assumes standard business hours and reasonable response times",
+      "Pricing is based on the scope outlined in each tier; additional work may incur extra fees",
+      "Monthly reporting and ongoing support not included (available as add-on)"
+    ],
+    "disclaimers": [
+      "Audit data collected on the date of analysis; some metrics may change over time",
+      "Competitor data is based on publicly available information",
+      "Results may vary based on industry, location, and market conditions",
+      "SEO and ranking improvements can take 3-6 months to materialize"
+    ],
+    "nextSteps": [
+      "Review this proposal and select your preferred tier",
+      "Reply to this email or schedule a 15-minute call to discuss",
+      "We'll send a simple contract and invoice",
+      "Kickoff call within 3 business days of signing"
+    ],
+    "pdfUrl": null,
+    "webLinkToken": "5cfb73be-37bf-46f4-bfef-bab795871eaf",
+    "sentAt": null,
+    "viewedAt": null,
+    "createdAt": "2026-02-07T08:12:29.626Z"
+  },
+  {
+    "id": "41174868-9da4-40cf-8f05-979999446ce7",
+    "auditId": "da2d2d31-70d1-40d1-95de-63702e92c602",
+    "version": 1,
+    "status": "DRAFT",
+    "executiveSummary": "Sushi Village Restaurant is currently facing a critical challenge: a weak online presence compared to competitors, representing a significant barrier to attracting new customers and building trust. This urgent issue is directly impacting revenue potential and hindering growth. Our audit proposes a targeted strategy to revitalize your online presence, transforming it into a powerful engine for customer acquisition and sustainable business growth.",
+    "painClusters": [
+      {
+        "id": "cluster-1",
+        "severity": "high",
+        "narrative": "The business has a weak online presence compared to competitors, impacting visibility and trust.",
+        "rootCause": "The business has a weak online presence compared to competitors, impacting visibility and trust.",
+        "findingIds": [
+          "6c108a72-c995-4911-910f-3983d82a899c",
+          "0ba8c7c4-5140-4e7e-bf17-92f62c79e493"
+        ]
+      }
+    ],
+    "tierEssentials": {
+      "name": "Essentials",
+      "price": 450,
+      "findingIds": [
+        "6c108a72-c995-4911-910f-3983d82a899c",
+        "0ba8c7c4-5140-4e7e-bf17-92f62c79e493"
+      ],
+      "description": "Quick wins. Fix the things actively costing you money.",
+      "deliveryTime": "1-2 weeks"
+    },
+    "tierGrowth": {
+      "name": "Growth",
+      "price": 1000,
+      "findingIds": [
+        "6c108a72-c995-4911-910f-3983d82a899c",
+        "0ba8c7c4-5140-4e7e-bf17-92f62c79e493"
+      ],
+      "description": "Essentials + competitive improvements. Close the gap with top competitors.",
+      "deliveryTime": "3-4 weeks"
+    },
+    "tierPremium": {
+      "name": "Premium",
+      "price": 2000,
+      "findingIds": [
+        "6c108a72-c995-4911-910f-3983d82a899c",
+        "0ba8c7c4-5140-4e7e-bf17-92f62c79e493"
+      ],
+      "description": "Full optimization. Everything in Growth + long-term positioning.",
+      "deliveryTime": "6-8 weeks"
+    },
+    "pricing": {
+      "growth": 1000,
+      "premium": 2000,
+      "essentials": 450
+    },
+    "assumptions": [
+      "Sushi Village Restaurant will provide necessary access to accounts (Google Business Profile, website analytics)",
+      "Implementation timeline assumes standard business hours and reasonable response times",
+      "Pricing is based on the scope outlined in each tier; additional work may incur extra fees",
+      "Monthly reporting and ongoing support not included (available as add-on)"
+    ],
+    "disclaimers": [
+      "Audit data collected on the date of analysis; some metrics may change over time",
+      "Competitor data is based on publicly available information",
+      "Results may vary based on industry, location, and market conditions",
+      "SEO and ranking improvements can take 3-6 months to materialize"
+    ],
+    "nextSteps": [
+      "Review this proposal and select your preferred tier",
+      "Reply to this email or schedule a 15-minute call to discuss",
+      "We'll send a simple contract and invoice",
+      "Kickoff call within 3 business days of signing"
+    ],
+    "pdfUrl": null,
+    "webLinkToken": "f00809e3-3c9b-40b8-b795-daf10df2bd00",
+    "sentAt": null,
+    "viewedAt": null,
+    "createdAt": "2026-02-07T08:12:37.552Z"
+  },
+  {
+    "id": "d91d6d8f-cace-42e5-b38f-975667239d22",
+    "auditId": "a6323594-7320-44f9-b1fd-3fe12aaf23eb",
+    "version": 1,
+    "status": "DRAFT",
+    "executiveSummary": "Quick Lube Auto Service is currently underperforming its potential due to a weak online presence, a critical issue highlighted in our findings. With limited social proof compared to competitors, Quick Lube is missing opportunities to attract new customers and capture market share, directly impacting revenue. Our audit will provide actionable strategies to rapidly build a robust online presence, turning this urgent problem into a significant growth engine for the business.",
+    "painClusters": [
+      {
+        "id": "cluster-1",
+        "severity": "high",
+        "narrative": "The business has a weak online presence and lacks sufficient social proof compared to competitors.",
+        "rootCause": "The business has a weak online presence and lacks sufficient social proof compared to competitors.",
+        "findingIds": [
+          "aed97af7-a711-4e24-ab30-11911e8d653f",
+          "4c29f082-84d5-4594-83f6-8e8ef0dab807"
+        ]
+      }
+    ],
+    "tierEssentials": {
+      "name": "Essentials",
+      "price": 450,
+      "findingIds": [
+        "aed97af7-a711-4e24-ab30-11911e8d653f",
+        "4c29f082-84d5-4594-83f6-8e8ef0dab807"
+      ],
+      "description": "Quick wins. Fix the things actively costing you money.",
+      "deliveryTime": "1-2 weeks"
+    },
+    "tierGrowth": {
+      "name": "Growth",
+      "price": 1000,
+      "findingIds": [
+        "aed97af7-a711-4e24-ab30-11911e8d653f",
+        "4c29f082-84d5-4594-83f6-8e8ef0dab807"
+      ],
+      "description": "Essentials + competitive improvements. Close the gap with top competitors.",
+      "deliveryTime": "3-4 weeks"
+    },
+    "tierPremium": {
+      "name": "Premium",
+      "price": 2000,
+      "findingIds": [
+        "aed97af7-a711-4e24-ab30-11911e8d653f",
+        "4c29f082-84d5-4594-83f6-8e8ef0dab807"
+      ],
+      "description": "Full optimization. Everything in Growth + long-term positioning.",
+      "deliveryTime": "6-8 weeks"
+    },
+    "pricing": {
+      "growth": 1000,
+      "premium": 2000,
+      "essentials": 450
+    },
+    "assumptions": [
+      "Quick Lube Auto Service will provide necessary access to accounts (Google Business Profile, website analytics)",
+      "Implementation timeline assumes standard business hours and reasonable response times",
+      "Pricing is based on the scope outlined in each tier; additional work may incur extra fees",
+      "Monthly reporting and ongoing support not included (available as add-on)"
+    ],
+    "disclaimers": [
+      "Audit data collected on the date of analysis; some metrics may change over time",
+      "Competitor data is based on publicly available information",
+      "Results may vary based on industry, location, and market conditions",
+      "SEO and ranking improvements can take 3-6 months to materialize"
+    ],
+    "nextSteps": [
+      "Review this proposal and select your preferred tier",
+      "Reply to this email or schedule a 15-minute call to discuss",
+      "We'll send a simple contract and invoice",
+      "Kickoff call within 3 business days of signing"
+    ],
+    "pdfUrl": null,
+    "webLinkToken": "73b6dc49-d4d4-41ed-90f9-02d7ff189df3",
+    "sentAt": null,
+    "viewedAt": null,
+    "createdAt": "2026-02-07T08:12:46.002Z"
+  },
+  {
+    "id": "81cef1c9-f6ce-40fa-9923-572119085944",
+    "auditId": "f12b46d3-8aca-4527-bef2-9a0328133a96",
+    "version": 1,
+    "status": "DRAFT",
+    "executiveSummary": "Sunrise Yoga Studio's current weak online presence, a critical finding from our audit, is significantly hindering growth and potentially costing revenue. Compared to competitors, the lack of a robust online presence impacts visibility and trust, leading to missed opportunities to attract new clients. This audit will provide actionable strategies to rapidly improve your online presence, capture market share, and position Sunrise Yoga Studio for sustained success.",
+    "painClusters": [
+      {
+        "id": "cluster-1",
+        "severity": "high",
+        "narrative": "The business has a weak online presence compared to competitors, impacting visibility and trust.",
+        "rootCause": "The business has a weak online presence compared to competitors, impacting visibility and trust.",
+        "findingIds": [
+          "dbd6d49a-ddf3-4f8a-ade7-bd3f54c03f08",
+          "c977c47c-be6b-40e6-9f5a-da79addca290"
+        ]
+      }
+    ],
+    "tierEssentials": {
+      "name": "Essentials",
+      "price": 450,
+      "findingIds": [
+        "dbd6d49a-ddf3-4f8a-ade7-bd3f54c03f08",
+        "c977c47c-be6b-40e6-9f5a-da79addca290"
+      ],
+      "description": "Quick wins. Fix the things actively costing you money.",
+      "deliveryTime": "1-2 weeks"
+    },
+    "tierGrowth": {
+      "name": "Growth",
+      "price": 1000,
+      "findingIds": [
+        "dbd6d49a-ddf3-4f8a-ade7-bd3f54c03f08",
+        "c977c47c-be6b-40e6-9f5a-da79addca290"
+      ],
+      "description": "Essentials + competitive improvements. Close the gap with top competitors.",
+      "deliveryTime": "3-4 weeks"
+    },
+    "tierPremium": {
+      "name": "Premium",
+      "price": 2000,
+      "findingIds": [
+        "dbd6d49a-ddf3-4f8a-ade7-bd3f54c03f08",
+        "c977c47c-be6b-40e6-9f5a-da79addca290"
+      ],
+      "description": "Full optimization. Everything in Growth + long-term positioning.",
+      "deliveryTime": "6-8 weeks"
+    },
+    "pricing": {
+      "growth": 1000,
+      "premium": 2000,
+      "essentials": 450
+    },
+    "assumptions": [
+      "Sunrise Yoga Studio will provide necessary access to accounts (Google Business Profile, website analytics)",
+      "Implementation timeline assumes standard business hours and reasonable response times",
+      "Pricing is based on the scope outlined in each tier; additional work may incur extra fees",
+      "Monthly reporting and ongoing support not included (available as add-on)"
+    ],
+    "disclaimers": [
+      "Audit data collected on the date of analysis; some metrics may change over time",
+      "Competitor data is based on publicly available information",
+      "Results may vary based on industry, location, and market conditions",
+      "SEO and ranking improvements can take 3-6 months to materialize"
+    ],
+    "nextSteps": [
+      "Review this proposal and select your preferred tier",
+      "Reply to this email or schedule a 15-minute call to discuss",
+      "We'll send a simple contract and invoice",
+      "Kickoff call within 3 business days of signing"
+    ],
+    "pdfUrl": null,
+    "webLinkToken": "9f8a7598-65be-4b56-9774-fa5e35e95094",
+    "sentAt": null,
+    "viewedAt": null,
+    "createdAt": "2026-02-07T08:12:54.093Z"
+  },
+  {
+    "id": "75074215-3f8c-4af6-9cb4-47fe2c375ab3",
+    "auditId": "215d1e70-2d02-4b84-a326-982dc34e7e97",
+    "version": 1,
+    "status": "DRAFT",
+    "executiveSummary": "Downtown Pizza Co. is currently facing a critical challenge: a significantly weaker online presence compared to competitors, representing an urgent threat to visibility and customer trust. This directly translates to lost revenue and missed opportunities to capture a larger share of the local market. Our audit proposal addresses this pressing issue head-on, alongside identifying key growth opportunities, and outlines a clear path to enhance your digital footprint, attract more customers, and ultimately, boost your bottom line.",
+    "painClusters": [
+      {
+        "id": "cluster-1",
+        "severity": "high",
+        "narrative": "The business has a weak online presence compared to competitors, impacting visibility and trust.",
+        "rootCause": "The business has a weak online presence compared to competitors, impacting visibility and trust.",
+        "findingIds": [
+          "ba9c8d11-046d-480c-8e08-90e9a66174bb",
+          "0ea63a89-927c-4699-bf01-bfffaa5698b2"
+        ]
+      }
+    ],
+    "tierEssentials": {
+      "name": "Essentials",
+      "price": 450,
+      "findingIds": [
+        "ba9c8d11-046d-480c-8e08-90e9a66174bb",
+        "0ea63a89-927c-4699-bf01-bfffaa5698b2"
+      ],
+      "description": "Quick wins. Fix the things actively costing you money.",
+      "deliveryTime": "1-2 weeks"
+    },
+    "tierGrowth": {
+      "name": "Growth",
+      "price": 1000,
+      "findingIds": [
+        "ba9c8d11-046d-480c-8e08-90e9a66174bb",
+        "0ea63a89-927c-4699-bf01-bfffaa5698b2"
+      ],
+      "description": "Essentials + competitive improvements. Close the gap with top competitors.",
+      "deliveryTime": "3-4 weeks"
+    },
+    "tierPremium": {
+      "name": "Premium",
+      "price": 2000,
+      "findingIds": [
+        "ba9c8d11-046d-480c-8e08-90e9a66174bb",
+        "0ea63a89-927c-4699-bf01-bfffaa5698b2"
+      ],
+      "description": "Full optimization. Everything in Growth + long-term positioning.",
+      "deliveryTime": "6-8 weeks"
+    },
+    "pricing": {
+      "growth": 1000,
+      "premium": 2000,
+      "essentials": 450
+    },
+    "assumptions": [
+      "Downtown Pizza Co will provide necessary access to accounts (Google Business Profile, website analytics)",
+      "Implementation timeline assumes standard business hours and reasonable response times",
+      "Pricing is based on the scope outlined in each tier; additional work may incur extra fees",
+      "Monthly reporting and ongoing support not included (available as add-on)"
+    ],
+    "disclaimers": [
+      "Audit data collected on the date of analysis; some metrics may change over time",
+      "Competitor data is based on publicly available information",
+      "Results may vary based on industry, location, and market conditions",
+      "SEO and ranking improvements can take 3-6 months to materialize"
+    ],
+    "nextSteps": [
+      "Review this proposal and select your preferred tier",
+      "Reply to this email or schedule a 15-minute call to discuss",
+      "We'll send a simple contract and invoice",
+      "Kickoff call within 3 business days of signing"
+    ],
+    "pdfUrl": null,
+    "webLinkToken": "43be6bf4-c031-48ec-acba-41730b5e6f58",
+    "sentAt": null,
+    "viewedAt": null,
+    "createdAt": "2026-02-07T08:13:02.757Z"
+  },
+  {
+    "id": "471be458-2fd9-461e-9c03-1a7617a61a63",
+    "auditId": "69dc5f22-8ccd-4412-a838-4e84a74c9804",
+    "version": 1,
+    "status": "DRAFT",
+    "executiveSummary": "Green Leaf Landscaping's audit revealed a critical need to bolster its online reputation. While other areas are performing well, the lack of sufficient online reviews compared to competitors is potentially hindering customer acquisition and revenue growth. Addressing this urgent issue will immediately improve customer trust and attract new business. We propose a targeted strategy to generate positive reviews and enhance your online presence, solidifying Green Leaf Landscaping's position as the preferred choice in the market.",
+    "painClusters": [
+      {
+        "id": "cluster-1",
+        "severity": "low",
+        "narrative": "The business lacks sufficient online reviews compared to competitors, potentially impacting customer trust and acquisition.",
+        "rootCause": "The business lacks sufficient online reviews compared to competitors, potentially impacting customer trust and acquisition.",
+        "findingIds": [
+          "3c744178-3f07-46eb-8769-c9b0e586f04c"
+        ]
+      }
+    ],
+    "tierEssentials": {
+      "name": "Essentials",
+      "price": 450,
+      "findingIds": [
+        "3c744178-3f07-46eb-8769-c9b0e586f04c"
+      ],
+      "description": "Quick wins. Fix the things actively costing you money.",
+      "deliveryTime": "1-2 weeks"
+    },
+    "tierGrowth": {
+      "name": "Growth",
+      "price": 1000,
+      "findingIds": [
+        "3c744178-3f07-46eb-8769-c9b0e586f04c"
+      ],
+      "description": "Essentials + competitive improvements. Close the gap with top competitors.",
+      "deliveryTime": "3-4 weeks"
+    },
+    "tierPremium": {
+      "name": "Premium",
+      "price": 2000,
+      "findingIds": [
+        "3c744178-3f07-46eb-8769-c9b0e586f04c"
+      ],
+      "description": "Full optimization. Everything in Growth + long-term positioning.",
+      "deliveryTime": "6-8 weeks"
+    },
+    "pricing": {
+      "growth": 1000,
+      "premium": 2000,
+      "essentials": 450
+    },
+    "assumptions": [
+      "Green Leaf Landscaping will provide necessary access to accounts (Google Business Profile, website analytics)",
+      "Implementation timeline assumes standard business hours and reasonable response times",
+      "Pricing is based on the scope outlined in each tier; additional work may incur extra fees",
+      "Monthly reporting and ongoing support not included (available as add-on)"
+    ],
+    "disclaimers": [
+      "Audit data collected on the date of analysis; some metrics may change over time",
+      "Competitor data is based on publicly available information",
+      "Results may vary based on industry, location, and market conditions",
+      "SEO and ranking improvements can take 3-6 months to materialize"
+    ],
+    "nextSteps": [
+      "Review this proposal and select your preferred tier",
+      "Reply to this email or schedule a 15-minute call to discuss",
+      "We'll send a simple contract and invoice",
+      "Kickoff call within 3 business days of signing"
+    ],
+    "pdfUrl": null,
+    "webLinkToken": "5f208e9f-e0a9-4646-82ad-590e0c1a415a",
+    "sentAt": null,
+    "viewedAt": null,
+    "createdAt": "2026-02-07T08:13:13.000Z"
+  },
+  {
+    "id": "e782f81c-f720-410b-8b78-a5cf2b1dc16d",
+    "auditId": "f5438e1e-5b35-448f-9cb1-72578d91c83c",
+    "version": 1,
+    "status": "DRAFT",
+    "executiveSummary": "Smile Orthodontics is currently facing a critical challenge: a weak online presence compared to competitors, identified as a high-priority issue in our audit. This deficiency directly impacts patient acquisition and trust, potentially leading to lost revenue and missed opportunities in a competitive market. Our proposed audit will provide a clear roadmap to strengthen your digital footprint, attract new patients, and unlock significant growth potential for Smile Orthodontics.",
+    "painClusters": [
+      {
+        "id": "cluster-1",
+        "severity": "high",
+        "narrative": "The business has a weak online presence compared to competitors, impacting visibility and trust.",
+        "rootCause": "The business has a weak online presence compared to competitors, impacting visibility and trust.",
+        "findingIds": [
+          "41ed3fdc-70e6-4f32-9ebd-07d913dce597",
+          "50954ed7-0b1f-4875-93e8-4a97962caef4"
+        ]
+      }
+    ],
+    "tierEssentials": {
+      "name": "Essentials",
+      "price": 450,
+      "findingIds": [
+        "41ed3fdc-70e6-4f32-9ebd-07d913dce597",
+        "50954ed7-0b1f-4875-93e8-4a97962caef4"
+      ],
+      "description": "Quick wins. Fix the things actively costing you money.",
+      "deliveryTime": "1-2 weeks"
+    },
+    "tierGrowth": {
+      "name": "Growth",
+      "price": 1000,
+      "findingIds": [
+        "41ed3fdc-70e6-4f32-9ebd-07d913dce597",
+        "50954ed7-0b1f-4875-93e8-4a97962caef4"
+      ],
+      "description": "Essentials + competitive improvements. Close the gap with top competitors.",
+      "deliveryTime": "3-4 weeks"
+    },
+    "tierPremium": {
+      "name": "Premium",
+      "price": 2000,
+      "findingIds": [
+        "41ed3fdc-70e6-4f32-9ebd-07d913dce597",
+        "50954ed7-0b1f-4875-93e8-4a97962caef4"
+      ],
+      "description": "Full optimization. Everything in Growth + long-term positioning.",
+      "deliveryTime": "6-8 weeks"
+    },
+    "pricing": {
+      "growth": 1000,
+      "premium": 2000,
+      "essentials": 450
+    },
+    "assumptions": [
+      "Smile Orthodontics will provide necessary access to accounts (Google Business Profile, website analytics)",
+      "Implementation timeline assumes standard business hours and reasonable response times",
+      "Pricing is based on the scope outlined in each tier; additional work may incur extra fees",
+      "Monthly reporting and ongoing support not included (available as add-on)"
+    ],
+    "disclaimers": [
+      "Audit data collected on the date of analysis; some metrics may change over time",
+      "Competitor data is based on publicly available information",
+      "Results may vary based on industry, location, and market conditions",
+      "SEO and ranking improvements can take 3-6 months to materialize"
+    ],
+    "nextSteps": [
+      "Review this proposal and select your preferred tier",
+      "Reply to this email or schedule a 15-minute call to discuss",
+      "We'll send a simple contract and invoice",
+      "Kickoff call within 3 business days of signing"
+    ],
+    "pdfUrl": null,
+    "webLinkToken": "3d377349-a084-4357-b35b-b500da6170f2",
+    "sentAt": null,
+    "viewedAt": null,
+    "createdAt": "2026-02-07T08:13:27.912Z"
+  },
+  {
+    "id": "c223bcbd-7726-4017-97f8-2b4c4ff531bb",
+    "auditId": "33c11bd1-8b60-435f-aea9-4bbe12a8c7b6",
+    "version": 1,
+    "status": "DRAFT",
+    "executiveSummary": "Peak Roofing's current customer review volume significantly lags behind competitors, creating a critical risk to customer trust and potentially impacting lead conversion. This discrepancy directly affects revenue potential, as fewer reviews can translate to lost sales opportunities. Our audit will focus on developing a targeted strategy to rapidly increase positive customer feedback, bolstering your online reputation and driving sustainable business growth. By implementing effective review generation techniques, we aim to transform this challenge into a competitive advantage for Peak Roofing.",
+    "painClusters": [
+      {
+        "id": "cluster-1",
+        "severity": "high",
+        "narrative": "The business has a lower number of customer reviews compared to its competitors, potentially impacting customer trust and perceived credibility.",
+        "rootCause": "The business has a lower number of customer reviews compared to its competitors, potentially impacting customer trust and perceived credibility.",
+        "findingIds": [
+          "f04416d4-fe92-4791-bcd7-22a9b830c87f"
+        ]
+      }
+    ],
+    "tierEssentials": {
+      "name": "Essentials",
+      "price": 450,
+      "findingIds": [
+        "f04416d4-fe92-4791-bcd7-22a9b830c87f"
+      ],
+      "description": "Quick wins. Fix the things actively costing you money.",
+      "deliveryTime": "1-2 weeks"
+    },
+    "tierGrowth": {
+      "name": "Growth",
+      "price": 1000,
+      "findingIds": [
+        "f04416d4-fe92-4791-bcd7-22a9b830c87f"
+      ],
+      "description": "Essentials + competitive improvements. Close the gap with top competitors.",
+      "deliveryTime": "3-4 weeks"
+    },
+    "tierPremium": {
+      "name": "Premium",
+      "price": 2000,
+      "findingIds": [
+        "f04416d4-fe92-4791-bcd7-22a9b830c87f"
+      ],
+      "description": "Full optimization. Everything in Growth + long-term positioning.",
+      "deliveryTime": "6-8 weeks"
+    },
+    "pricing": {
+      "growth": 1000,
+      "premium": 2000,
+      "essentials": 450
+    },
+    "assumptions": [
+      "Peak Roofing will provide necessary access to accounts (Google Business Profile, website analytics)",
+      "Implementation timeline assumes standard business hours and reasonable response times",
+      "Pricing is based on the scope outlined in each tier; additional work may incur extra fees",
+      "Monthly reporting and ongoing support not included (available as add-on)"
+    ],
+    "disclaimers": [
+      "Audit data collected on the date of analysis; some metrics may change over time",
+      "Competitor data is based on publicly available information",
+      "Results may vary based on industry, location, and market conditions",
+      "SEO and ranking improvements can take 3-6 months to materialize"
+    ],
+    "nextSteps": [
+      "Review this proposal and select your preferred tier",
+      "Reply to this email or schedule a 15-minute call to discuss",
+      "We'll send a simple contract and invoice",
+      "Kickoff call within 3 business days of signing"
+    ],
+    "pdfUrl": null,
+    "webLinkToken": "00ef94a3-824b-4684-94c8-5f2f2c57a7e2",
+    "sentAt": null,
+    "viewedAt": null,
+    "createdAt": "2026-02-07T08:13:41.597Z"
+  },
+  {
+    "id": "2314073c-bdb1-4ff8-a428-61c867098a32",
+    "auditId": "a1b0934c-c21c-46e9-9edd-82987fb3f331",
+    "version": 1,
+    "status": "VIEWED",
+    "executiveSummary": "Fresh Start Cleaners is currently facing a critical challenge: a significant deficit in online reviews compared to competitors, as highlighted in our audit. This lack of social proof is likely impacting customer trust and hindering new customer acquisition, potentially leading to lost revenue. Addressing this urgent issue is paramount, and our proposed audit will provide a targeted strategy to rapidly generate positive reviews, enhance your online reputation, and drive sustainable business growth.",
+    "painClusters": [
+      {
+        "id": "cluster-1",
+        "severity": "high",
+        "narrative": "The business lacks sufficient online reviews compared to competitors, potentially impacting customer trust and acquisition.",
+        "rootCause": "The business lacks sufficient online reviews compared to competitors, potentially impacting customer trust and acquisition.",
+        "findingIds": [
+          "8f8f40a0-4eab-40e6-92bf-af1ff9635379"
+        ]
+      }
+    ],
+    "tierEssentials": {
+      "name": "Essentials",
+      "price": 450,
+      "findingIds": [
+        "8f8f40a0-4eab-40e6-92bf-af1ff9635379"
+      ],
+      "description": "Quick wins. Fix the things actively costing you money.",
+      "deliveryTime": "1-2 weeks"
+    },
+    "tierGrowth": {
+      "name": "Growth",
+      "price": 1000,
+      "findingIds": [
+        "8f8f40a0-4eab-40e6-92bf-af1ff9635379"
+      ],
+      "description": "Essentials + competitive improvements. Close the gap with top competitors.",
+      "deliveryTime": "3-4 weeks"
+    },
+    "tierPremium": {
+      "name": "Premium",
+      "price": 2000,
+      "findingIds": [
+        "8f8f40a0-4eab-40e6-92bf-af1ff9635379"
+      ],
+      "description": "Full optimization. Everything in Growth + long-term positioning.",
+      "deliveryTime": "6-8 weeks"
+    },
+    "pricing": {
+      "growth": 1000,
+      "premium": 2000,
+      "essentials": 450
+    },
+    "assumptions": [
+      "Fresh Start Cleaners will provide necessary access to accounts (Google Business Profile, website analytics)",
+      "Implementation timeline assumes standard business hours and reasonable response times",
+      "Pricing is based on the scope outlined in each tier; additional work may incur extra fees",
+      "Monthly reporting and ongoing support not included (available as add-on)"
+    ],
+    "disclaimers": [
+      "Audit data collected on the date of analysis; some metrics may change over time",
+      "Competitor data is based on publicly available information",
+      "Results may vary based on industry, location, and market conditions",
+      "SEO and ranking improvements can take 3-6 months to materialize"
+    ],
+    "nextSteps": [
+      "Review this proposal and select your preferred tier",
+      "Reply to this email or schedule a 15-minute call to discuss",
+      "We'll send a simple contract and invoice",
+      "Kickoff call within 3 business days of signing"
+    ],
+    "pdfUrl": null,
+    "webLinkToken": "70b8b09f-2e92-4f02-b895-acbc0ec0d632",
+    "sentAt": null,
+    "viewedAt": "2026-02-07T08:14:00.508Z",
+    "createdAt": "2026-02-07T08:13:51.790Z"
+  },
+  {
+    "id": "a6286ef0-f80f-4e48-b8d3-cb3431a9a987",
+    "auditId": "03e0c817-34ce-4e20-be62-bc50a5e1654f",
+    "version": 1,
+    "status": "DRAFT",
+    "executiveSummary": "ReMax Hallmark Realty is currently missing significant growth opportunities due to an under-optimized Google Business Profile (GBP), specifically a lack of sufficient visual content. This single finding, while not an urgent operational issue, directly impacts your online visibility and potential lead generation, translating to missed revenue. By prioritizing a strategic enhancement of your GBP profile with compelling visuals, we can unlock increased search rankings and attract a wider pool of potential clients, fueling substantial business growth.",
+    "painClusters": [
+      {
+        "id": "cluster-1",
+        "severity": "high",
+        "narrative": "GBP profile is not fully optimized for visibility due to insufficient visual content.",
+        "rootCause": "GBP profile is not fully optimized for visibility due to insufficient visual content.",
+        "findingIds": [
+          "f2bc39a7-ee08-4b29-a11c-fbd30f0e8993"
+        ]
+      }
+    ],
+    "tierEssentials": {
+      "name": "Essentials",
+      "price": 450,
+      "findingIds": [
+        "f2bc39a7-ee08-4b29-a11c-fbd30f0e8993"
+      ],
+      "description": "Quick wins. Fix the things actively costing you money.",
+      "deliveryTime": "1-2 weeks"
+    },
+    "tierGrowth": {
+      "name": "Growth",
+      "price": 1000,
+      "findingIds": [
+        "f2bc39a7-ee08-4b29-a11c-fbd30f0e8993"
+      ],
+      "description": "Essentials + competitive improvements. Close the gap with top competitors.",
+      "deliveryTime": "3-4 weeks"
+    },
+    "tierPremium": {
+      "name": "Premium",
+      "price": 2000,
+      "findingIds": [
+        "f2bc39a7-ee08-4b29-a11c-fbd30f0e8993"
+      ],
+      "description": "Full optimization. Everything in Growth + long-term positioning.",
+      "deliveryTime": "6-8 weeks"
+    },
+    "pricing": {
+      "growth": 1000,
+      "premium": 2000,
+      "essentials": 450
+    },
+    "assumptions": [
+      "ReMax Hallmark Realty will provide necessary access to accounts (Google Business Profile, website analytics)",
+      "Implementation timeline assumes standard business hours and reasonable response times",
+      "Pricing is based on the scope outlined in each tier; additional work may incur extra fees",
+      "Monthly reporting and ongoing support not included (available as add-on)"
+    ],
+    "disclaimers": [
+      "Audit data collected on the date of analysis; some metrics may change over time",
+      "Competitor data is based on publicly available information",
+      "Results may vary based on industry, location, and market conditions",
+      "SEO and ranking improvements can take 3-6 months to materialize"
+    ],
+    "nextSteps": [
+      "Review this proposal and select your preferred tier",
+      "Reply to this email or schedule a 15-minute call to discuss",
+      "We'll send a simple contract and invoice",
+      "Kickoff call within 3 business days of signing"
+    ],
+    "pdfUrl": null,
+    "webLinkToken": "171acae6-2445-42e9-b35c-6eb8999d1538",
+    "sentAt": null,
+    "viewedAt": null,
+    "createdAt": "2026-02-07T08:21:52.650Z"
+  },
+  {
+    "id": "7e60fdbe-8214-4290-b00a-f65252285a3c",
+    "auditId": "84747093-215e-4971-bc6c-90e5dc93126e",
+    "version": 1,
+    "status": "DRAFT",
+    "executiveSummary": "ReMax Hallmark Realty is currently missing out on potential clients due to a sub-optimally performing Google Business Profile. Our audit revealed this single, but significant, growth opportunity: a fully optimized GBP can dramatically increase visibility in local searches, driving more leads and ultimately boosting revenue. By prioritizing GBP optimization, we can quickly enhance your online presence and capture a larger share of the local real estate market, positioning ReMax Hallmark for continued success.",
+    "painClusters": [
+      {
+        "id": "cluster-1",
+        "severity": "high",
+        "narrative": "The Google Business Profile (GBP) is not fully optimized, leading to reduced visibility.",
+        "rootCause": "The Google Business Profile (GBP) is not fully optimized, leading to reduced visibility.",
+        "findingIds": [
+          "38c92c85-9176-47c4-a426-43fe08c9fb12"
+        ]
+      }
+    ],
+    "tierEssentials": {
+      "name": "Essentials",
+      "price": 600,
+      "findingIds": [
+        "38c92c85-9176-47c4-a426-43fe08c9fb12"
+      ],
+      "description": "Quick wins. Fix the things actively costing you money.",
+      "deliveryTime": "1-2 weeks"
+    },
+    "tierGrowth": {
+      "name": "Growth",
+      "price": 1500,
+      "findingIds": [
+        "38c92c85-9176-47c4-a426-43fe08c9fb12"
+      ],
+      "description": "Essentials + competitive improvements. Close the gap with top competitors.",
+      "deliveryTime": "3-4 weeks"
+    },
+    "tierPremium": {
+      "name": "Premium",
+      "price": 3000,
+      "findingIds": [
+        "38c92c85-9176-47c4-a426-43fe08c9fb12"
+      ],
+      "description": "Full optimization. Everything in Growth + long-term positioning.",
+      "deliveryTime": "6-8 weeks"
+    },
+    "pricing": {
+      "growth": 1500,
+      "premium": 3000,
+      "essentials": 600
+    },
+    "assumptions": [
+      "ReMax Hallmark Realty will provide necessary access to accounts (Google Business Profile, website analytics)",
+      "Implementation timeline assumes standard business hours and reasonable response times",
+      "Pricing is based on the scope outlined in each tier; additional work may incur extra fees",
+      "Monthly reporting and ongoing support not included (available as add-on)"
+    ],
+    "disclaimers": [
+      "Audit data collected on the date of analysis; some metrics may change over time",
+      "Competitor data is based on publicly available information",
+      "Results may vary based on industry, location, and market conditions",
+      "SEO and ranking improvements can take 3-6 months to materialize"
+    ],
+    "nextSteps": [
+      "Review this proposal and select your preferred tier",
+      "Reply to this email or schedule a 15-minute call to discuss",
+      "We'll send a simple contract and invoice",
+      "Kickoff call within 3 business days of signing"
+    ],
+    "pdfUrl": null,
+    "webLinkToken": "d49e9fa2-24d0-4e67-83ee-7d65b6092e8b",
+    "sentAt": null,
+    "viewedAt": null,
+    "createdAt": "2026-02-07T08:24:32.866Z"
+  }
+]

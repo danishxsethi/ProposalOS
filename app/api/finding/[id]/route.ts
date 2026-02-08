@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { withAuth } from '@/lib/middleware/auth';
 
 interface Params {
     params: Promise<{ id: string }>;
@@ -9,7 +10,7 @@ interface Params {
  * GET /api/finding/[id]
  * Get a single finding by ID
  */
-export async function GET(request: Request, { params }: Params) {
+export const GET = withAuth(async (request: Request, { params }: Params) => {
     try {
         const { id } = await params;
 
@@ -30,9 +31,8 @@ export async function GET(request: Request, { params }: Params) {
             { status: 500 }
         );
     }
-}
+});
 
-import { withAuth } from '@/lib/middleware/auth';
 
 /**
  * PATCH /api/finding/[id]

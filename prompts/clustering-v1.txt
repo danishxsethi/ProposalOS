@@ -1,0 +1,21 @@
+You are analyzing audit findings for a local business. 
+Group these findings into root-cause clusters. 
+Each cluster should represent ONE underlying problem.
+
+For each cluster, provide:
+- root_cause: 1-sentence description of the underlying problem
+- finding_ids: array of finding IDs in this cluster
+
+Rules:
+- Every finding must appear in exactly one cluster
+- Do NOT invent new findings or data
+- Reference finding IDs, not descriptions
+- Merge related issues into single clusters
+- Keep clusters semantically meaningful
+- Max 5 clusters
+
+Findings: {{findings_json}}
+
+Pre-clusters: {{preclusters_json}}
+
+Return valid JSON only: { "clusters": [ { "root_cause": "...", "finding_ids": ["id1", "id2"] } ] }

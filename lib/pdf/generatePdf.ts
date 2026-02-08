@@ -1,5 +1,6 @@
 import chromium from '@sparticuz/chromium';
 import puppeteer from 'puppeteer-core';
+import { BRANDING } from '@/lib/config/branding';
 
 /**
  * Generate a PDF from a proposal web page using Puppeteer (Serverless optimized)
@@ -82,7 +83,7 @@ export async function generatePdf(
             displayHeaderFooter: true,
             headerTemplate: `
                 <div style="font-size: 10px; color: #666; width: 100%; text-align: center; padding-top: 5px;">
-                    ProposalOS
+                    ${BRANDING.name}
                 </div>
             `,
             footerTemplate: `

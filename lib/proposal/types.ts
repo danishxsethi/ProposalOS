@@ -12,6 +12,11 @@ export interface TierConfig {
     findingIds: string[];
     deliveryTime: string; // e.g., "1-2 weeks"
     price?: number; // Will be set by pricing logic
+    recommended?: boolean;
+    roi?: {
+        monthlyValue: number;
+        ratio: number;
+    };
 }
 
 export interface ProposalPricing {

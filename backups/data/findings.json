@@ -1,0 +1,1767 @@
+[
+  {
+    "id": "42586da1-e705-4a18-9088-a0a0df88b2ec",
+    "auditId": "daffad26-f22e-42ce-9d5e-afe840c684d4",
+    "module": "competitor",
+    "category": "trust",
+    "type": "PAINKILLER",
+    "title": "Top competitors average 169 reviews",
+    "description": "Your competitors have more social proof. To compete, you need to close the review gap.",
+    "evidence": [
+      {
+        "name": "Main Street Dental Team",
+        "rating": 4.9,
+        "source": "SerpAPI",
+        "reviews": 118,
+        "position": 1
+      },
+      {
+        "name": "Main Street Dental",
+        "rating": 4.8,
+        "source": "SerpAPI",
+        "reviews": 341,
+        "position": 2
+      },
+      {
+        "name": "Dentistry On Main Street",
+        "rating": 4.4,
+        "source": "SerpAPI",
+        "reviews": 48,
+        "position": 3
+      }
+    ],
+    "metrics": {
+      "competitorAvgReviews": 169
+    },
+    "impactScore": 8,
+    "confidenceScore": 8,
+    "effortEstimate": "MEDIUM",
+    "recommendedFix": [
+      "Launch a systematic review request campaign",
+      "Follow up with every satisfied customer",
+      "Make leaving a review as easy as possible (QR codes, links)"
+    ],
+    "manuallyEdited": false,
+    "excluded": false,
+    "createdAt": "2026-02-07T07:03:23.190Z"
+  },
+  {
+    "id": "0f1893fb-8b44-41fd-aed4-5d57a0e9ae9e",
+    "auditId": "57d4dc8a-cf30-41f6-99e6-3c2d8a1db5b9",
+    "module": "website",
+    "category": "performance",
+    "type": "VITAMIN",
+    "title": "Page speed score is 87/100 on mobile",
+    "description": "Page speed could be improved to enhance user experience and SEO rankings.",
+    "evidence": [
+      {
+        "url": "https://www.google.com/",
+        "score": 87,
+        "source": "PageSpeed Insights"
+      }
+    ],
+    "metrics": {
+      "performanceScore": 87
+    },
+    "impactScore": 4,
+    "confidenceScore": 10,
+    "effortEstimate": "LOW",
+    "recommendedFix": [
+      "Optimize images (compress, use WebP)",
+      "Minimize CSS and JavaScript",
+      "Enable browser caching",
+      "Use a CDN for static assets"
+    ],
+    "manuallyEdited": false,
+    "excluded": false,
+    "createdAt": "2026-02-07T07:27:06.239Z"
+  },
+  {
+    "id": "0d2a95b3-a117-46c5-8b04-726347eba594",
+    "auditId": "57d4dc8a-cf30-41f6-99e6-3c2d8a1db5b9",
+    "module": "website",
+    "category": "trust",
+    "type": "VITAMIN",
+    "title": "Accessibility score is 80/100",
+    "description": "Your site may be difficult to use for people with disabilities, limiting your audience.",
+    "evidence": [
+      {
+        "score": 80,
+        "source": "PageSpeed Insights"
+      }
+    ],
+    "metrics": {
+      "accessibilityScore": 80
+    },
+    "impactScore": 4,
+    "confidenceScore": 9,
+    "effortEstimate": "MEDIUM",
+    "recommendedFix": [
+      "Add ARIA labels to interactive elements",
+      "Ensure sufficient color contrast",
+      "Make site keyboard-navigable"
+    ],
+    "manuallyEdited": false,
+    "excluded": false,
+    "createdAt": "2026-02-07T07:27:06.242Z"
+  },
+  {
+    "id": "dd834f46-33e4-4393-9689-5ff607332be9",
+    "auditId": "57d4dc8a-cf30-41f6-99e6-3c2d8a1db5b9",
+    "module": "competitor",
+    "category": "trust",
+    "type": "PAINKILLER",
+    "title": "Top competitors average 172 reviews",
+    "description": "Your competitors have more social proof. To compete, you need to close the review gap.",
+    "evidence": [
+      {
+        "name": "Joe's Plumbing",
+        "rating": 4.8,
+        "source": "SerpAPI",
+        "reviews": 29,
+        "position": 1
+      },
+      {
+        "name": "Joes plumbing LLC",
+        "rating": 4.9,
+        "source": "SerpAPI",
+        "reviews": 261,
+        "position": 2
+      },
+      {
+        "name": "Joe's Plumbing, Inc",
+        "rating": 4.9,
+        "source": "SerpAPI",
+        "reviews": 227,
+        "position": 3
+      }
+    ],
+    "metrics": {
+      "competitorAvgReviews": 172.3333333333333
+    },
+    "impactScore": 8,
+    "confidenceScore": 8,
+    "effortEstimate": "MEDIUM",
+    "recommendedFix": [
+      "Launch a systematic review request campaign",
+      "Follow up with every satisfied customer",
+      "Make leaving a review as easy as possible (QR codes, links)"
+    ],
+    "manuallyEdited": false,
+    "excluded": false,
+    "createdAt": "2026-02-07T07:27:06.244Z"
+  },
+  {
+    "id": "05e0744b-6b37-4fbe-ab1b-a61a00904292",
+    "auditId": "f8cf73d1-e868-4a49-adaf-c289cff38bcd",
+    "module": "gbp",
+    "category": "visibility",
+    "type": "VITAMIN",
+    "title": "Only 1 photos on GBP (recommend 10+)",
+    "description": "Businesses with more photos get more clicks and calls from Google Search.",
+    "evidence": [
+      {
+        "source": "Google Business Profile",
+        "photoCount": 1
+      }
+    ],
+    "metrics": {
+      "photoCount": 1
+    },
+    "impactScore": 5,
+    "confidenceScore": 8,
+    "effortEstimate": "LOW",
+    "recommendedFix": [
+      "Upload high-quality photos of your business, products, and team",
+      "Add photos monthly to keep your profile fresh"
+    ],
+    "manuallyEdited": false,
+    "excluded": false,
+    "createdAt": "2026-02-07T07:27:19.198Z"
+  },
+  {
+    "id": "6245eedc-c1e6-4bbb-ab11-c4e367c7fe78",
+    "auditId": "f8cf73d1-e868-4a49-adaf-c289cff38bcd",
+    "module": "competitor",
+    "category": "trust",
+    "type": "PAINKILLER",
+    "title": "Top competitors average 169 reviews",
+    "description": "Your competitors have more social proof. To compete, you need to close the review gap.",
+    "evidence": [
+      {
+        "name": "Main Street Dental Team",
+        "rating": 4.9,
+        "source": "SerpAPI",
+        "reviews": 118,
+        "position": 1
+      },
+      {
+        "name": "Main Street Dental",
+        "rating": 4.8,
+        "source": "SerpAPI",
+        "reviews": 341,
+        "position": 2
+      },
+      {
+        "name": "Dentistry On Main Street",
+        "rating": 4.4,
+        "source": "SerpAPI",
+        "reviews": 48,
+        "position": 3
+      }
+    ],
+    "metrics": {
+      "competitorAvgReviews": 169
+    },
+    "impactScore": 8,
+    "confidenceScore": 8,
+    "effortEstimate": "MEDIUM",
+    "recommendedFix": [
+      "Launch a systematic review request campaign",
+      "Follow up with every satisfied customer",
+      "Make leaving a review as easy as possible (QR codes, links)"
+    ],
+    "manuallyEdited": false,
+    "excluded": false,
+    "createdAt": "2026-02-07T07:27:19.201Z"
+  },
+  {
+    "id": "9fd6954d-75b5-4e87-80ff-02ca7a7a7ed1",
+    "auditId": "9cc88c6c-f767-410b-9c6a-69308d3d57bc",
+    "module": "website",
+    "category": "performance",
+    "type": "VITAMIN",
+    "title": "Page speed score is 89/100 on mobile",
+    "description": "Page speed could be improved to enhance user experience and SEO rankings.",
+    "evidence": [
+      {
+        "url": "https://www.google.com/",
+        "score": 89,
+        "source": "PageSpeed Insights"
+      }
+    ],
+    "metrics": {
+      "performanceScore": 89
+    },
+    "impactScore": 4,
+    "confidenceScore": 10,
+    "effortEstimate": "LOW",
+    "recommendedFix": [
+      "Optimize images (compress, use WebP)",
+      "Minimize CSS and JavaScript",
+      "Enable browser caching",
+      "Use a CDN for static assets"
+    ],
+    "manuallyEdited": false,
+    "excluded": false,
+    "createdAt": "2026-02-07T07:44:12.208Z"
+  },
+  {
+    "id": "9a15d50c-b09f-4ab1-ae5e-25628d3a7a14",
+    "auditId": "9cc88c6c-f767-410b-9c6a-69308d3d57bc",
+    "module": "website",
+    "category": "trust",
+    "type": "VITAMIN",
+    "title": "Accessibility score is 87/100",
+    "description": "Your site may be difficult to use for people with disabilities, limiting your audience.",
+    "evidence": [
+      {
+        "score": 87,
+        "source": "PageSpeed Insights"
+      }
+    ],
+    "metrics": {
+      "accessibilityScore": 87
+    },
+    "impactScore": 4,
+    "confidenceScore": 9,
+    "effortEstimate": "MEDIUM",
+    "recommendedFix": [
+      "Add ARIA labels to interactive elements",
+      "Ensure sufficient color contrast",
+      "Make site keyboard-navigable"
+    ],
+    "manuallyEdited": false,
+    "excluded": false,
+    "createdAt": "2026-02-07T07:44:12.212Z"
+  },
+  {
+    "id": "6e67d8af-2337-45db-929b-1eed81bc74d5",
+    "auditId": "9cc88c6c-f767-410b-9c6a-69308d3d57bc",
+    "module": "competitor",
+    "category": "trust",
+    "type": "PAINKILLER",
+    "title": "Top competitors average 172 reviews",
+    "description": "Your competitors have more social proof. To compete, you need to close the review gap.",
+    "evidence": [
+      {
+        "name": "Joe's Plumbing",
+        "rating": 4.8,
+        "source": "SerpAPI",
+        "reviews": 29,
+        "position": 1
+      },
+      {
+        "name": "Joes plumbing LLC",
+        "rating": 4.9,
+        "source": "SerpAPI",
+        "reviews": 261,
+        "position": 2
+      },
+      {
+        "name": "Joe's Plumbing, Inc",
+        "rating": 4.9,
+        "source": "SerpAPI",
+        "reviews": 227,
+        "position": 3
+      }
+    ],
+    "metrics": {
+      "competitorAvgReviews": 172.3333333333333
+    },
+    "impactScore": 8,
+    "confidenceScore": 8,
+    "effortEstimate": "MEDIUM",
+    "recommendedFix": [
+      "Launch a systematic review request campaign",
+      "Follow up with every satisfied customer",
+      "Make leaving a review as easy as possible (QR codes, links)"
+    ],
+    "manuallyEdited": false,
+    "excluded": false,
+    "createdAt": "2026-02-07T07:44:12.214Z"
+  },
+  {
+    "id": "5056fb04-cbe2-41b7-921f-3d340e05c0b1",
+    "auditId": "fd1df3d7-bb03-40f5-b988-d481b91fa39c",
+    "module": "gbp",
+    "category": "visibility",
+    "type": "VITAMIN",
+    "title": "Only 1 photos on GBP (recommend 10+)",
+    "description": "Businesses with more photos get more clicks and calls from Google Search.",
+    "evidence": [
+      {
+        "source": "Google Business Profile",
+        "photoCount": 1
+      }
+    ],
+    "metrics": {
+      "photoCount": 1
+    },
+    "impactScore": 5,
+    "confidenceScore": 8,
+    "effortEstimate": "LOW",
+    "recommendedFix": [
+      "Upload high-quality photos of your business, products, and team",
+      "Add photos monthly to keep your profile fresh"
+    ],
+    "manuallyEdited": false,
+    "excluded": false,
+    "createdAt": "2026-02-07T07:44:20.921Z"
+  },
+  {
+    "id": "c0e024eb-e654-4203-89fe-6f7c4c64991b",
+    "auditId": "fd1df3d7-bb03-40f5-b988-d481b91fa39c",
+    "module": "competitor",
+    "category": "trust",
+    "type": "PAINKILLER",
+    "title": "Top competitors average 169 reviews",
+    "description": "Your competitors have more social proof. To compete, you need to close the review gap.",
+    "evidence": [
+      {
+        "name": "Main Street Dental Team",
+        "rating": 4.9,
+        "source": "SerpAPI",
+        "reviews": 118,
+        "position": 1
+      },
+      {
+        "name": "Main Street Dental",
+        "rating": 4.8,
+        "source": "SerpAPI",
+        "reviews": 341,
+        "position": 2
+      },
+      {
+        "name": "Dentistry On Main Street",
+        "rating": 4.4,
+        "source": "SerpAPI",
+        "reviews": 48,
+        "position": 3
+      }
+    ],
+    "metrics": {
+      "competitorAvgReviews": 169
+    },
+    "impactScore": 8,
+    "confidenceScore": 8,
+    "effortEstimate": "MEDIUM",
+    "recommendedFix": [
+      "Launch a systematic review request campaign",
+      "Follow up with every satisfied customer",
+      "Make leaving a review as easy as possible (QR codes, links)"
+    ],
+    "manuallyEdited": false,
+    "excluded": false,
+    "createdAt": "2026-02-07T07:44:20.922Z"
+  },
+  {
+    "id": "55bba5ab-98cf-41ca-a31f-8673cd7d7363",
+    "auditId": "d90e2b8d-bb17-4447-814f-56975f3c745d",
+    "module": "competitor",
+    "category": "trust",
+    "type": "PAINKILLER",
+    "title": "[EDITED] Top competitors average 172 reviews",
+    "description": "Your competitors have more social proof. To compete, you need to close the review gap. [This finding was edited for testing]",
+    "evidence": [
+      {
+        "name": "Joe's Plumbing",
+        "rating": 4.8,
+        "source": "SerpAPI",
+        "reviews": 29,
+        "position": 1
+      },
+      {
+        "name": "Joes plumbing LLC",
+        "rating": 4.9,
+        "source": "SerpAPI",
+        "reviews": 261,
+        "position": 2
+      },
+      {
+        "name": "Joe's Plumbing, Inc",
+        "rating": 4.9,
+        "source": "SerpAPI",
+        "reviews": 227,
+        "position": 3
+      }
+    ],
+    "metrics": {
+      "competitorAvgReviews": 172.3333333333333
+    },
+    "impactScore": 10,
+    "confidenceScore": 8,
+    "effortEstimate": "MEDIUM",
+    "recommendedFix": [
+      "Launch a systematic review request campaign",
+      "Follow up with every satisfied customer",
+      "Make leaving a review as easy as possible (QR codes, links)"
+    ],
+    "manuallyEdited": true,
+    "excluded": false,
+    "createdAt": "2026-02-07T07:03:20.649Z"
+  },
+  {
+    "id": "a63627e8-7c80-4af9-97cb-a9dfe5d55b0c",
+    "auditId": "ff79d400-4415-4a3c-9adc-a9d5bd932148",
+    "module": "gbp",
+    "category": "visibility",
+    "type": "VITAMIN",
+    "title": "Only 1 photos on GBP (recommend 10+)",
+    "description": "Businesses with more photos get more clicks and calls from Google Search.",
+    "evidence": [
+      {
+        "source": "Google Business Profile",
+        "photoCount": 1
+      }
+    ],
+    "metrics": {
+      "photoCount": 1
+    },
+    "impactScore": 5,
+    "confidenceScore": 8,
+    "effortEstimate": "LOW",
+    "recommendedFix": [
+      "Upload high-quality photos of your business, products, and team",
+      "Add photos monthly to keep your profile fresh"
+    ],
+    "manuallyEdited": false,
+    "excluded": false,
+    "createdAt": "2026-02-07T07:49:11.131Z"
+  },
+  {
+    "id": "97697d26-2cbd-44a5-8a71-40edd2f003d5",
+    "auditId": "ff79d400-4415-4a3c-9adc-a9d5bd932148",
+    "module": "competitor",
+    "category": "trust",
+    "type": "PAINKILLER",
+    "title": "Top competitors average 542 reviews",
+    "description": "Your competitors have more social proof. To compete, you need to close the review gap.",
+    "evidence": [
+      {
+        "name": "Village Sushi Bar",
+        "rating": 4.5,
+        "source": "SerpAPI",
+        "reviews": 207,
+        "position": 1
+      },
+      {
+        "name": "Sushi Ville",
+        "rating": 4,
+        "source": "SerpAPI",
+        "reviews": 1100,
+        "position": 2
+      },
+      {
+        "name": "Village Sushi Restaurant",
+        "rating": 4.3,
+        "source": "SerpAPI",
+        "reviews": 319,
+        "position": 3
+      }
+    ],
+    "metrics": {
+      "competitorAvgReviews": 542
+    },
+    "impactScore": 8,
+    "confidenceScore": 8,
+    "effortEstimate": "MEDIUM",
+    "recommendedFix": [
+      "Launch a systematic review request campaign",
+      "Follow up with every satisfied customer",
+      "Make leaving a review as easy as possible (QR codes, links)"
+    ],
+    "manuallyEdited": false,
+    "excluded": false,
+    "createdAt": "2026-02-07T07:49:11.134Z"
+  },
+  {
+    "id": "e175912b-efa9-4ecd-a972-642255122028",
+    "auditId": "6aba5d1e-c1b5-4b19-b435-1db401863458",
+    "module": "gbp",
+    "category": "trust",
+    "type": "PAINKILLER",
+    "title": "GBP rating is 1/5 with 1 reviews",
+    "description": "Low ratings directly hurt customer trust. Most people won't call a business rated below 4.0.",
+    "evidence": [
+      {
+        "rating": 1,
+        "source": "Google Business Profile",
+        "reviewCount": 1
+      }
+    ],
+    "metrics": {
+      "rating": 1,
+      "reviewCount": 1
+    },
+    "impactScore": 9,
+    "confidenceScore": 10,
+    "effortEstimate": "MEDIUM",
+    "recommendedFix": [
+      "Ask satisfied customers to leave reviews",
+      "Respond to all existing reviews",
+      "Address negative feedback professionally"
+    ],
+    "manuallyEdited": false,
+    "excluded": false,
+    "createdAt": "2026-02-07T07:58:14.793Z"
+  },
+  {
+    "id": "942cfdf0-b8a1-4016-8453-c0ea48132d6f",
+    "auditId": "6aba5d1e-c1b5-4b19-b435-1db401863458",
+    "module": "gbp",
+    "category": "conversion",
+    "type": "PAINKILLER",
+    "title": "No website linked in Google Business Profile",
+    "description": "Customers searching for you on Google can't find your website, losing you potential business.",
+    "evidence": [
+      {
+        "source": "Google Business Profile",
+        "website": null
+      }
+    ],
+    "metrics": {
+      "hasWebsite": false
+    },
+    "impactScore": 8,
+    "confidenceScore": 10,
+    "effortEstimate": "LOW",
+    "recommendedFix": [
+      "Add your website URL to your GBP listing",
+      "If you don't have a website, create a simple one-page site"
+    ],
+    "manuallyEdited": false,
+    "excluded": false,
+    "createdAt": "2026-02-07T07:58:14.798Z"
+  },
+  {
+    "id": "a0da1606-79e6-4933-b516-6ae4ed80c645",
+    "auditId": "6aba5d1e-c1b5-4b19-b435-1db401863458",
+    "module": "gbp",
+    "category": "visibility",
+    "type": "VITAMIN",
+    "title": "Only 0 photos on GBP (recommend 10+)",
+    "description": "Businesses with more photos get more clicks and calls from Google Search.",
+    "evidence": [
+      {
+        "source": "Google Business Profile",
+        "photoCount": 0
+      }
+    ],
+    "metrics": {
+      "photoCount": 0
+    },
+    "impactScore": 7,
+    "confidenceScore": 8,
+    "effortEstimate": "LOW",
+    "recommendedFix": [
+      "Upload high-quality photos of your business, products, and team",
+      "Add photos monthly to keep your profile fresh"
+    ],
+    "manuallyEdited": false,
+    "excluded": false,
+    "createdAt": "2026-02-07T07:58:14.801Z"
+  },
+  {
+    "id": "8de2df7e-155a-4aec-bebe-9e492f3e1d0d",
+    "auditId": "6aba5d1e-c1b5-4b19-b435-1db401863458",
+    "module": "competitor",
+    "category": "trust",
+    "type": "PAINKILLER",
+    "title": "Top competitors average 1 reviews",
+    "description": "Your competitors have more social proof. To compete, you need to close the review gap.",
+    "evidence": [
+      {
+        "name": "Test Business",
+        "rating": 1,
+        "source": "SerpAPI",
+        "reviews": 1,
+        "position": 1
+      }
+    ],
+    "metrics": {
+      "competitorAvgReviews": 1
+    },
+    "impactScore": 4,
+    "confidenceScore": 8,
+    "effortEstimate": "MEDIUM",
+    "recommendedFix": [
+      "Launch a systematic review request campaign",
+      "Follow up with every satisfied customer",
+      "Make leaving a review as easy as possible (QR codes, links)"
+    ],
+    "manuallyEdited": false,
+    "excluded": false,
+    "createdAt": "2026-02-07T07:58:14.803Z"
+  },
+  {
+    "id": "9a15c5df-0acb-4734-9e00-467ccce3cd19",
+    "auditId": "53ba67a3-7e9f-40f7-9aea-3597725ab48f",
+    "module": "competitor",
+    "category": "trust",
+    "type": "PAINKILLER",
+    "title": "Top competitors average 102 reviews",
+    "description": "Your competitors have more social proof. To compete, you need to close the review gap.",
+    "evidence": [
+      {
+        "name": "Joe's Plumbing",
+        "rating": 4.8,
+        "source": "SerpAPI",
+        "reviews": 29,
+        "position": 1
+      },
+      {
+        "name": "Joe's Plumbing & Heating Ltd",
+        "rating": 4.1,
+        "source": "SerpAPI",
+        "reviews": 15,
+        "position": 2
+      },
+      {
+        "name": "Joes plumbing LLC",
+        "rating": 4.9,
+        "source": "SerpAPI",
+        "reviews": 261,
+        "position": 3
+      }
+    ],
+    "metrics": {
+      "competitorAvgReviews": 101.6666666666667
+    },
+    "impactScore": 8,
+    "confidenceScore": 8,
+    "effortEstimate": "MEDIUM",
+    "recommendedFix": [
+      "Launch a systematic review request campaign",
+      "Follow up with every satisfied customer",
+      "Make leaving a review as easy as possible (QR codes, links)"
+    ],
+    "manuallyEdited": false,
+    "excluded": false,
+    "createdAt": "2026-02-07T08:07:03.338Z"
+  },
+  {
+    "id": "2b866bb6-aaed-4892-9d2d-1e26b48b9cf7",
+    "auditId": "db16f9cd-2820-41a5-aef3-e19725e33fa1",
+    "module": "gbp",
+    "category": "visibility",
+    "type": "VITAMIN",
+    "title": "Only 1 photos on GBP (recommend 10+)",
+    "description": "Businesses with more photos get more clicks and calls from Google Search.",
+    "evidence": [
+      {
+        "source": "Google Business Profile",
+        "photoCount": 1
+      }
+    ],
+    "metrics": {
+      "photoCount": 1
+    },
+    "impactScore": 5,
+    "confidenceScore": 8,
+    "effortEstimate": "LOW",
+    "recommendedFix": [
+      "Upload high-quality photos of your business, products, and team",
+      "Add photos monthly to keep your profile fresh"
+    ],
+    "manuallyEdited": false,
+    "excluded": false,
+    "createdAt": "2026-02-07T08:07:27.386Z"
+  },
+  {
+    "id": "3a516060-55c6-408c-bdb0-a9ce55932eb2",
+    "auditId": "db16f9cd-2820-41a5-aef3-e19725e33fa1",
+    "module": "competitor",
+    "category": "trust",
+    "type": "PAINKILLER",
+    "title": "Top competitors average 169 reviews",
+    "description": "Your competitors have more social proof. To compete, you need to close the review gap.",
+    "evidence": [
+      {
+        "name": "Main Street Dental Team",
+        "rating": 4.9,
+        "source": "SerpAPI",
+        "reviews": 118,
+        "position": 1
+      },
+      {
+        "name": "Main Street Dental",
+        "rating": 4.8,
+        "source": "SerpAPI",
+        "reviews": 341,
+        "position": 2
+      },
+      {
+        "name": "Dentistry On Main Street",
+        "rating": 4.4,
+        "source": "SerpAPI",
+        "reviews": 48,
+        "position": 3
+      }
+    ],
+    "metrics": {
+      "competitorAvgReviews": 169
+    },
+    "impactScore": 8,
+    "confidenceScore": 8,
+    "effortEstimate": "MEDIUM",
+    "recommendedFix": [
+      "Launch a systematic review request campaign",
+      "Follow up with every satisfied customer",
+      "Make leaving a review as easy as possible (QR codes, links)"
+    ],
+    "manuallyEdited": false,
+    "excluded": false,
+    "createdAt": "2026-02-07T08:07:27.399Z"
+  },
+  {
+    "id": "687dae0f-0481-4043-9f94-519607ae092c",
+    "auditId": "cf4df6be-8ee8-45b1-aae4-c95be2ace23e",
+    "module": "gbp",
+    "category": "visibility",
+    "type": "VITAMIN",
+    "title": "Only 1 photos on GBP (recommend 10+)",
+    "description": "Businesses with more photos get more clicks and calls from Google Search.",
+    "evidence": [
+      {
+        "source": "Google Business Profile",
+        "photoCount": 1
+      }
+    ],
+    "metrics": {
+      "photoCount": 1
+    },
+    "impactScore": 5,
+    "confidenceScore": 8,
+    "effortEstimate": "LOW",
+    "recommendedFix": [
+      "Upload high-quality photos of your business, products, and team",
+      "Add photos monthly to keep your profile fresh"
+    ],
+    "manuallyEdited": false,
+    "excluded": false,
+    "createdAt": "2026-02-07T08:07:36.879Z"
+  },
+  {
+    "id": "b41cc203-6d56-41cf-889a-c9baa5c67a1c",
+    "auditId": "cf4df6be-8ee8-45b1-aae4-c95be2ace23e",
+    "module": "competitor",
+    "category": "trust",
+    "type": "PAINKILLER",
+    "title": "Top competitors average 542 reviews",
+    "description": "Your competitors have more social proof. To compete, you need to close the review gap.",
+    "evidence": [
+      {
+        "name": "Village Sushi Bar",
+        "rating": 4.5,
+        "source": "SerpAPI",
+        "reviews": 207,
+        "position": 1
+      },
+      {
+        "name": "Sushi Ville",
+        "rating": 4,
+        "source": "SerpAPI",
+        "reviews": 1100,
+        "position": 2
+      },
+      {
+        "name": "Village Sushi Restaurant",
+        "rating": 4.3,
+        "source": "SerpAPI",
+        "reviews": 319,
+        "position": 3
+      }
+    ],
+    "metrics": {
+      "competitorAvgReviews": 542
+    },
+    "impactScore": 8,
+    "confidenceScore": 8,
+    "effortEstimate": "MEDIUM",
+    "recommendedFix": [
+      "Launch a systematic review request campaign",
+      "Follow up with every satisfied customer",
+      "Make leaving a review as easy as possible (QR codes, links)"
+    ],
+    "manuallyEdited": false,
+    "excluded": false,
+    "createdAt": "2026-02-07T08:07:36.890Z"
+  },
+  {
+    "id": "74addb55-f6ce-42a8-8250-fee1af998757",
+    "auditId": "0c2eb078-42fa-4101-914c-58d187a7a6d6",
+    "module": "gbp",
+    "category": "visibility",
+    "type": "VITAMIN",
+    "title": "Only 1 photos on GBP (recommend 10+)",
+    "description": "Businesses with more photos get more clicks and calls from Google Search.",
+    "evidence": [
+      {
+        "source": "Google Business Profile",
+        "photoCount": 1
+      }
+    ],
+    "metrics": {
+      "photoCount": 1
+    },
+    "impactScore": 5,
+    "confidenceScore": 8,
+    "effortEstimate": "LOW",
+    "recommendedFix": [
+      "Upload high-quality photos of your business, products, and team",
+      "Add photos monthly to keep your profile fresh"
+    ],
+    "manuallyEdited": false,
+    "excluded": false,
+    "createdAt": "2026-02-07T08:07:54.938Z"
+  },
+  {
+    "id": "979fd1a0-bfee-41a3-8ad8-841d8eba5d3e",
+    "auditId": "0c2eb078-42fa-4101-914c-58d187a7a6d6",
+    "module": "competitor",
+    "category": "trust",
+    "type": "PAINKILLER",
+    "title": "Top competitors average 463 reviews",
+    "description": "Your competitors have more social proof. To compete, you need to close the review gap.",
+    "evidence": [
+      {
+        "name": "Quick Lube - Mobile Oil Change Service",
+        "rating": 4.8,
+        "source": "SerpAPI",
+        "reviews": 32,
+        "position": 1
+      },
+      {
+        "name": "Quick Lube- Mobile Oil Change Service",
+        "rating": 5,
+        "source": "SerpAPI",
+        "reviews": 58,
+        "position": 2
+      },
+      {
+        "name": "Lube Town + Tires",
+        "rating": 4.8,
+        "source": "SerpAPI",
+        "reviews": 1300,
+        "position": 3
+      }
+    ],
+    "metrics": {
+      "competitorAvgReviews": 463.3333333333333
+    },
+    "impactScore": 8,
+    "confidenceScore": 8,
+    "effortEstimate": "MEDIUM",
+    "recommendedFix": [
+      "Launch a systematic review request campaign",
+      "Follow up with every satisfied customer",
+      "Make leaving a review as easy as possible (QR codes, links)"
+    ],
+    "manuallyEdited": false,
+    "excluded": false,
+    "createdAt": "2026-02-07T08:07:54.941Z"
+  },
+  {
+    "id": "8f48bd6b-7a9a-4e33-b9d1-105f486d1851",
+    "auditId": "6cbc8746-bbbb-4546-9394-ff354614f258",
+    "module": "gbp",
+    "category": "visibility",
+    "type": "VITAMIN",
+    "title": "Only 1 photos on GBP (recommend 10+)",
+    "description": "Businesses with more photos get more clicks and calls from Google Search.",
+    "evidence": [
+      {
+        "source": "Google Business Profile",
+        "photoCount": 1
+      }
+    ],
+    "metrics": {
+      "photoCount": 1
+    },
+    "impactScore": 5,
+    "confidenceScore": 8,
+    "effortEstimate": "LOW",
+    "recommendedFix": [
+      "Upload high-quality photos of your business, products, and team",
+      "Add photos monthly to keep your profile fresh"
+    ],
+    "manuallyEdited": false,
+    "excluded": false,
+    "createdAt": "2026-02-07T08:08:17.175Z"
+  },
+  {
+    "id": "e62fef73-d075-48d6-b1bc-ab05959437b8",
+    "auditId": "6cbc8746-bbbb-4546-9394-ff354614f258",
+    "module": "competitor",
+    "category": "trust",
+    "type": "PAINKILLER",
+    "title": "Top competitors average 55 reviews",
+    "description": "Your competitors have more social proof. To compete, you need to close the review gap.",
+    "evidence": [
+      {
+        "name": "Green Room Yoga",
+        "rating": 4.9,
+        "source": "SerpAPI",
+        "reviews": 62,
+        "position": 1
+      },
+      {
+        "name": "Sun Bliss Yoga",
+        "rating": 5,
+        "source": "SerpAPI",
+        "reviews": 50,
+        "position": 2
+      },
+      {
+        "name": "Karma Teachers™️ Centre for Yoga and Meditation",
+        "rating": 4.6,
+        "source": "SerpAPI",
+        "reviews": 53,
+        "position": 3
+      }
+    ],
+    "metrics": {
+      "competitorAvgReviews": 55
+    },
+    "impactScore": 8,
+    "confidenceScore": 8,
+    "effortEstimate": "MEDIUM",
+    "recommendedFix": [
+      "Launch a systematic review request campaign",
+      "Follow up with every satisfied customer",
+      "Make leaving a review as easy as possible (QR codes, links)"
+    ],
+    "manuallyEdited": false,
+    "excluded": false,
+    "createdAt": "2026-02-07T08:08:17.178Z"
+  },
+  {
+    "id": "ca2ecfb4-c7f1-4ba7-8de4-8c87d2a5d147",
+    "auditId": "75ceaf21-1566-41d3-a4dc-eb24fea2279b",
+    "module": "gbp",
+    "category": "visibility",
+    "type": "VITAMIN",
+    "title": "Only 1 photos on GBP (recommend 10+)",
+    "description": "Businesses with more photos get more clicks and calls from Google Search.",
+    "evidence": [
+      {
+        "source": "Google Business Profile",
+        "photoCount": 1
+      }
+    ],
+    "metrics": {
+      "photoCount": 1
+    },
+    "impactScore": 5,
+    "confidenceScore": 8,
+    "effortEstimate": "LOW",
+    "recommendedFix": [
+      "Upload high-quality photos of your business, products, and team",
+      "Add photos monthly to keep your profile fresh"
+    ],
+    "manuallyEdited": false,
+    "excluded": false,
+    "createdAt": "2026-02-07T08:08:27.312Z"
+  },
+  {
+    "id": "ac0b10dd-c088-4c12-a601-de07ce72cf54",
+    "auditId": "75ceaf21-1566-41d3-a4dc-eb24fea2279b",
+    "module": "competitor",
+    "category": "trust",
+    "type": "PAINKILLER",
+    "title": "Top competitors average 972 reviews",
+    "description": "Your competitors have more social proof. To compete, you need to close the review gap.",
+    "evidence": [
+      {
+        "name": "Cosmic Pizza & Donair",
+        "rating": 4.2,
+        "source": "SerpAPI",
+        "reviews": 894,
+        "position": 1
+      },
+      {
+        "name": "Downtown Pizza Co",
+        "rating": 4.4,
+        "source": "SerpAPI",
+        "reviews": 1200,
+        "position": 2
+      },
+      {
+        "name": "Downtown Pizza Co",
+        "rating": 4.5,
+        "source": "SerpAPI",
+        "reviews": 823,
+        "position": 3
+      }
+    ],
+    "metrics": {
+      "competitorAvgReviews": 972.3333333333334
+    },
+    "impactScore": 8,
+    "confidenceScore": 8,
+    "effortEstimate": "MEDIUM",
+    "recommendedFix": [
+      "Launch a systematic review request campaign",
+      "Follow up with every satisfied customer",
+      "Make leaving a review as easy as possible (QR codes, links)"
+    ],
+    "manuallyEdited": false,
+    "excluded": false,
+    "createdAt": "2026-02-07T08:08:27.316Z"
+  },
+  {
+    "id": "5170cfe8-bad0-4c72-af87-522d484f1ab0",
+    "auditId": "4a2800c7-543c-4132-9652-f2311dc75bb9",
+    "module": "competitor",
+    "category": "trust",
+    "type": "PAINKILLER",
+    "title": "Top competitors average 102 reviews",
+    "description": "Your competitors have more social proof. To compete, you need to close the review gap.",
+    "evidence": [
+      {
+        "name": "Joe's Plumbing",
+        "rating": 4.8,
+        "source": "SerpAPI",
+        "reviews": 29,
+        "position": 1
+      },
+      {
+        "name": "Joe's Plumbing & Heating Ltd",
+        "rating": 4.1,
+        "source": "SerpAPI",
+        "reviews": 15,
+        "position": 2
+      },
+      {
+        "name": "Joes plumbing LLC",
+        "rating": 4.9,
+        "source": "SerpAPI",
+        "reviews": 261,
+        "position": 3
+      }
+    ],
+    "metrics": {
+      "competitorAvgReviews": 101.6666666666667
+    },
+    "impactScore": 8,
+    "confidenceScore": 8,
+    "effortEstimate": "MEDIUM",
+    "recommendedFix": [
+      "Launch a systematic review request campaign",
+      "Follow up with every satisfied customer",
+      "Make leaving a review as easy as possible (QR codes, links)"
+    ],
+    "manuallyEdited": false,
+    "excluded": false,
+    "createdAt": "2026-02-07T08:12:11.882Z"
+  },
+  {
+    "id": "e27db6e3-a8ed-46ab-825b-2d52861d3b6c",
+    "auditId": "ef50e638-9cab-4407-b404-22ad60d2fda9",
+    "module": "gbp",
+    "category": "visibility",
+    "type": "VITAMIN",
+    "title": "Only 1 photos on GBP (recommend 10+)",
+    "description": "Businesses with more photos get more clicks and calls from Google Search.",
+    "evidence": [
+      {
+        "source": "Google Business Profile",
+        "photoCount": 1
+      }
+    ],
+    "metrics": {
+      "photoCount": 1
+    },
+    "impactScore": 5,
+    "confidenceScore": 8,
+    "effortEstimate": "LOW",
+    "recommendedFix": [
+      "Upload high-quality photos of your business, products, and team",
+      "Add photos monthly to keep your profile fresh"
+    ],
+    "manuallyEdited": false,
+    "excluded": false,
+    "createdAt": "2026-02-07T08:12:21.868Z"
+  },
+  {
+    "id": "5a4c0d52-a780-4e98-b652-462a4749423f",
+    "auditId": "ef50e638-9cab-4407-b404-22ad60d2fda9",
+    "module": "competitor",
+    "category": "trust",
+    "type": "PAINKILLER",
+    "title": "Top competitors average 169 reviews",
+    "description": "Your competitors have more social proof. To compete, you need to close the review gap.",
+    "evidence": [
+      {
+        "name": "Main Street Dental Team",
+        "rating": 4.9,
+        "source": "SerpAPI",
+        "reviews": 118,
+        "position": 1
+      },
+      {
+        "name": "Main Street Dental",
+        "rating": 4.8,
+        "source": "SerpAPI",
+        "reviews": 341,
+        "position": 2
+      },
+      {
+        "name": "Dentistry On Main Street",
+        "rating": 4.4,
+        "source": "SerpAPI",
+        "reviews": 48,
+        "position": 3
+      }
+    ],
+    "metrics": {
+      "competitorAvgReviews": 169
+    },
+    "impactScore": 8,
+    "confidenceScore": 8,
+    "effortEstimate": "MEDIUM",
+    "recommendedFix": [
+      "Launch a systematic review request campaign",
+      "Follow up with every satisfied customer",
+      "Make leaving a review as easy as possible (QR codes, links)"
+    ],
+    "manuallyEdited": false,
+    "excluded": false,
+    "createdAt": "2026-02-07T08:12:21.870Z"
+  },
+  {
+    "id": "6c108a72-c995-4911-910f-3983d82a899c",
+    "auditId": "da2d2d31-70d1-40d1-95de-63702e92c602",
+    "module": "gbp",
+    "category": "visibility",
+    "type": "VITAMIN",
+    "title": "Only 1 photos on GBP (recommend 10+)",
+    "description": "Businesses with more photos get more clicks and calls from Google Search.",
+    "evidence": [
+      {
+        "source": "Google Business Profile",
+        "photoCount": 1
+      }
+    ],
+    "metrics": {
+      "photoCount": 1
+    },
+    "impactScore": 5,
+    "confidenceScore": 8,
+    "effortEstimate": "LOW",
+    "recommendedFix": [
+      "Upload high-quality photos of your business, products, and team",
+      "Add photos monthly to keep your profile fresh"
+    ],
+    "manuallyEdited": false,
+    "excluded": false,
+    "createdAt": "2026-02-07T08:12:31.128Z"
+  },
+  {
+    "id": "0ba8c7c4-5140-4e7e-bf17-92f62c79e493",
+    "auditId": "da2d2d31-70d1-40d1-95de-63702e92c602",
+    "module": "competitor",
+    "category": "trust",
+    "type": "PAINKILLER",
+    "title": "Top competitors average 542 reviews",
+    "description": "Your competitors have more social proof. To compete, you need to close the review gap.",
+    "evidence": [
+      {
+        "name": "Village Sushi Bar",
+        "rating": 4.5,
+        "source": "SerpAPI",
+        "reviews": 207,
+        "position": 1
+      },
+      {
+        "name": "Sushi Ville",
+        "rating": 4,
+        "source": "SerpAPI",
+        "reviews": 1100,
+        "position": 2
+      },
+      {
+        "name": "Village Sushi Restaurant",
+        "rating": 4.3,
+        "source": "SerpAPI",
+        "reviews": 319,
+        "position": 3
+      }
+    ],
+    "metrics": {
+      "competitorAvgReviews": 542
+    },
+    "impactScore": 8,
+    "confidenceScore": 8,
+    "effortEstimate": "MEDIUM",
+    "recommendedFix": [
+      "Launch a systematic review request campaign",
+      "Follow up with every satisfied customer",
+      "Make leaving a review as easy as possible (QR codes, links)"
+    ],
+    "manuallyEdited": false,
+    "excluded": false,
+    "createdAt": "2026-02-07T08:12:31.131Z"
+  },
+  {
+    "id": "aed97af7-a711-4e24-ab30-11911e8d653f",
+    "auditId": "a6323594-7320-44f9-b1fd-3fe12aaf23eb",
+    "module": "gbp",
+    "category": "visibility",
+    "type": "VITAMIN",
+    "title": "Only 1 photos on GBP (recommend 10+)",
+    "description": "Businesses with more photos get more clicks and calls from Google Search.",
+    "evidence": [
+      {
+        "source": "Google Business Profile",
+        "photoCount": 1
+      }
+    ],
+    "metrics": {
+      "photoCount": 1
+    },
+    "impactScore": 5,
+    "confidenceScore": 8,
+    "effortEstimate": "LOW",
+    "recommendedFix": [
+      "Upload high-quality photos of your business, products, and team",
+      "Add photos monthly to keep your profile fresh"
+    ],
+    "manuallyEdited": false,
+    "excluded": false,
+    "createdAt": "2026-02-07T08:12:39.160Z"
+  },
+  {
+    "id": "4c29f082-84d5-4594-83f6-8e8ef0dab807",
+    "auditId": "a6323594-7320-44f9-b1fd-3fe12aaf23eb",
+    "module": "competitor",
+    "category": "trust",
+    "type": "PAINKILLER",
+    "title": "Top competitors average 463 reviews",
+    "description": "Your competitors have more social proof. To compete, you need to close the review gap.",
+    "evidence": [
+      {
+        "name": "Quick Lube - Mobile Oil Change Service",
+        "rating": 4.8,
+        "source": "SerpAPI",
+        "reviews": 32,
+        "position": 1
+      },
+      {
+        "name": "Quick Lube- Mobile Oil Change Service",
+        "rating": 5,
+        "source": "SerpAPI",
+        "reviews": 58,
+        "position": 2
+      },
+      {
+        "name": "Lube Town + Tires",
+        "rating": 4.8,
+        "source": "SerpAPI",
+        "reviews": 1300,
+        "position": 3
+      }
+    ],
+    "metrics": {
+      "competitorAvgReviews": 463.3333333333333
+    },
+    "impactScore": 8,
+    "confidenceScore": 8,
+    "effortEstimate": "MEDIUM",
+    "recommendedFix": [
+      "Launch a systematic review request campaign",
+      "Follow up with every satisfied customer",
+      "Make leaving a review as easy as possible (QR codes, links)"
+    ],
+    "manuallyEdited": false,
+    "excluded": false,
+    "createdAt": "2026-02-07T08:12:39.162Z"
+  },
+  {
+    "id": "dbd6d49a-ddf3-4f8a-ade7-bd3f54c03f08",
+    "auditId": "f12b46d3-8aca-4527-bef2-9a0328133a96",
+    "module": "gbp",
+    "category": "visibility",
+    "type": "VITAMIN",
+    "title": "Only 1 photos on GBP (recommend 10+)",
+    "description": "Businesses with more photos get more clicks and calls from Google Search.",
+    "evidence": [
+      {
+        "source": "Google Business Profile",
+        "photoCount": 1
+      }
+    ],
+    "metrics": {
+      "photoCount": 1
+    },
+    "impactScore": 5,
+    "confidenceScore": 8,
+    "effortEstimate": "LOW",
+    "recommendedFix": [
+      "Upload high-quality photos of your business, products, and team",
+      "Add photos monthly to keep your profile fresh"
+    ],
+    "manuallyEdited": false,
+    "excluded": false,
+    "createdAt": "2026-02-07T08:12:47.464Z"
+  },
+  {
+    "id": "c977c47c-be6b-40e6-9f5a-da79addca290",
+    "auditId": "f12b46d3-8aca-4527-bef2-9a0328133a96",
+    "module": "competitor",
+    "category": "trust",
+    "type": "PAINKILLER",
+    "title": "Top competitors average 55 reviews",
+    "description": "Your competitors have more social proof. To compete, you need to close the review gap.",
+    "evidence": [
+      {
+        "name": "Green Room Yoga",
+        "rating": 4.9,
+        "source": "SerpAPI",
+        "reviews": 62,
+        "position": 1
+      },
+      {
+        "name": "Sun Bliss Yoga",
+        "rating": 5,
+        "source": "SerpAPI",
+        "reviews": 50,
+        "position": 2
+      },
+      {
+        "name": "Karma Teachers™️ Centre for Yoga and Meditation",
+        "rating": 4.6,
+        "source": "SerpAPI",
+        "reviews": 53,
+        "position": 3
+      }
+    ],
+    "metrics": {
+      "competitorAvgReviews": 55
+    },
+    "impactScore": 8,
+    "confidenceScore": 8,
+    "effortEstimate": "MEDIUM",
+    "recommendedFix": [
+      "Launch a systematic review request campaign",
+      "Follow up with every satisfied customer",
+      "Make leaving a review as easy as possible (QR codes, links)"
+    ],
+    "manuallyEdited": false,
+    "excluded": false,
+    "createdAt": "2026-02-07T08:12:47.465Z"
+  },
+  {
+    "id": "ba9c8d11-046d-480c-8e08-90e9a66174bb",
+    "auditId": "215d1e70-2d02-4b84-a326-982dc34e7e97",
+    "module": "gbp",
+    "category": "visibility",
+    "type": "VITAMIN",
+    "title": "Only 1 photos on GBP (recommend 10+)",
+    "description": "Businesses with more photos get more clicks and calls from Google Search.",
+    "evidence": [
+      {
+        "source": "Google Business Profile",
+        "photoCount": 1
+      }
+    ],
+    "metrics": {
+      "photoCount": 1
+    },
+    "impactScore": 5,
+    "confidenceScore": 8,
+    "effortEstimate": "LOW",
+    "recommendedFix": [
+      "Upload high-quality photos of your business, products, and team",
+      "Add photos monthly to keep your profile fresh"
+    ],
+    "manuallyEdited": false,
+    "excluded": false,
+    "createdAt": "2026-02-07T08:12:55.692Z"
+  },
+  {
+    "id": "0ea63a89-927c-4699-bf01-bfffaa5698b2",
+    "auditId": "215d1e70-2d02-4b84-a326-982dc34e7e97",
+    "module": "competitor",
+    "category": "trust",
+    "type": "PAINKILLER",
+    "title": "Top competitors average 972 reviews",
+    "description": "Your competitors have more social proof. To compete, you need to close the review gap.",
+    "evidence": [
+      {
+        "name": "Cosmic Pizza & Donair",
+        "rating": 4.2,
+        "source": "SerpAPI",
+        "reviews": 894,
+        "position": 1
+      },
+      {
+        "name": "Downtown Pizza Co",
+        "rating": 4.4,
+        "source": "SerpAPI",
+        "reviews": 1200,
+        "position": 2
+      },
+      {
+        "name": "Downtown Pizza Co",
+        "rating": 4.5,
+        "source": "SerpAPI",
+        "reviews": 823,
+        "position": 3
+      }
+    ],
+    "metrics": {
+      "competitorAvgReviews": 972.3333333333334
+    },
+    "impactScore": 8,
+    "confidenceScore": 8,
+    "effortEstimate": "MEDIUM",
+    "recommendedFix": [
+      "Launch a systematic review request campaign",
+      "Follow up with every satisfied customer",
+      "Make leaving a review as easy as possible (QR codes, links)"
+    ],
+    "manuallyEdited": false,
+    "excluded": false,
+    "createdAt": "2026-02-07T08:12:55.695Z"
+  },
+  {
+    "id": "3c744178-3f07-46eb-8769-c9b0e586f04c",
+    "auditId": "69dc5f22-8ccd-4412-a838-4e84a74c9804",
+    "module": "competitor",
+    "category": "trust",
+    "type": "PAINKILLER",
+    "title": "Top competitors average 0 reviews",
+    "description": "Your competitors have more social proof. To compete, you need to close the review gap.",
+    "evidence": [
+      {
+        "name": "Green Leaf Landscaping Services",
+        "source": "SerpAPI",
+        "position": 1
+      },
+      {
+        "name": "Green Leaf",
+        "source": "SerpAPI",
+        "position": 2
+      },
+      {
+        "name": "Greenleaf Landscape Services LLC",
+        "source": "SerpAPI",
+        "position": 3
+      }
+    ],
+    "metrics": {
+      "competitorAvgReviews": 0
+    },
+    "impactScore": 4,
+    "confidenceScore": 8,
+    "effortEstimate": "MEDIUM",
+    "recommendedFix": [
+      "Launch a systematic review request campaign",
+      "Follow up with every satisfied customer",
+      "Make leaving a review as easy as possible (QR codes, links)"
+    ],
+    "manuallyEdited": false,
+    "excluded": false,
+    "createdAt": "2026-02-07T08:13:04.984Z"
+  },
+  {
+    "id": "41ed3fdc-70e6-4f32-9ebd-07d913dce597",
+    "auditId": "f5438e1e-5b35-448f-9cb1-72578d91c83c",
+    "module": "gbp",
+    "category": "visibility",
+    "type": "VITAMIN",
+    "title": "Only 1 photos on GBP (recommend 10+)",
+    "description": "Businesses with more photos get more clicks and calls from Google Search.",
+    "evidence": [
+      {
+        "source": "Google Business Profile",
+        "photoCount": 1
+      }
+    ],
+    "metrics": {
+      "photoCount": 1
+    },
+    "impactScore": 5,
+    "confidenceScore": 8,
+    "effortEstimate": "LOW",
+    "recommendedFix": [
+      "Upload high-quality photos of your business, products, and team",
+      "Add photos monthly to keep your profile fresh"
+    ],
+    "manuallyEdited": false,
+    "excluded": false,
+    "createdAt": "2026-02-07T08:13:16.131Z"
+  },
+  {
+    "id": "50954ed7-0b1f-4875-93e8-4a97962caef4",
+    "auditId": "f5438e1e-5b35-448f-9cb1-72578d91c83c",
+    "module": "competitor",
+    "category": "trust",
+    "type": "PAINKILLER",
+    "title": "Top competitors average 59 reviews",
+    "description": "Your competitors have more social proof. To compete, you need to close the review gap.",
+    "evidence": [
+      {
+        "name": "Smile Creations Orthodontists",
+        "rating": 4.5,
+        "source": "SerpAPI",
+        "reviews": 20,
+        "position": 1
+      },
+      {
+        "name": "Yul Smile",
+        "rating": 4.7,
+        "source": "SerpAPI",
+        "reviews": 121,
+        "position": 2
+      },
+      {
+        "name": "Orthodontiste OrthoVille Montréal",
+        "rating": 4.9,
+        "source": "SerpAPI",
+        "reviews": 37,
+        "position": 3
+      }
+    ],
+    "metrics": {
+      "competitorAvgReviews": 59.33333333333334
+    },
+    "impactScore": 8,
+    "confidenceScore": 8,
+    "effortEstimate": "MEDIUM",
+    "recommendedFix": [
+      "Launch a systematic review request campaign",
+      "Follow up with every satisfied customer",
+      "Make leaving a review as easy as possible (QR codes, links)"
+    ],
+    "manuallyEdited": false,
+    "excluded": false,
+    "createdAt": "2026-02-07T08:13:16.136Z"
+  },
+  {
+    "id": "f04416d4-fe92-4791-bcd7-22a9b830c87f",
+    "auditId": "33c11bd1-8b60-435f-aea9-4bbe12a8c7b6",
+    "module": "competitor",
+    "category": "trust",
+    "type": "PAINKILLER",
+    "title": "Top competitors average 152 reviews",
+    "description": "Your competitors have more social proof. To compete, you need to close the review gap.",
+    "evidence": [
+      {
+        "name": "Peak Precision Roofing Winnipeg",
+        "rating": 4.5,
+        "source": "SerpAPI",
+        "reviews": 17,
+        "position": 1
+      },
+      {
+        "name": "Peak Roofing and Construction",
+        "rating": 4.9,
+        "source": "SerpAPI",
+        "reviews": 440,
+        "position": 2
+      },
+      {
+        "name": "Prairie Peak Roofing & Renovations",
+        "source": "SerpAPI",
+        "position": 3
+      }
+    ],
+    "metrics": {
+      "competitorAvgReviews": 152.3333333333333
+    },
+    "impactScore": 8,
+    "confidenceScore": 8,
+    "effortEstimate": "MEDIUM",
+    "recommendedFix": [
+      "Launch a systematic review request campaign",
+      "Follow up with every satisfied customer",
+      "Make leaving a review as easy as possible (QR codes, links)"
+    ],
+    "manuallyEdited": false,
+    "excluded": false,
+    "createdAt": "2026-02-07T08:13:34.915Z"
+  },
+  {
+    "id": "8f8f40a0-4eab-40e6-92bf-af1ff9635379",
+    "auditId": "a1b0934c-c21c-46e9-9edd-82987fb3f331",
+    "module": "competitor",
+    "category": "trust",
+    "type": "PAINKILLER",
+    "title": "Top competitors average 111 reviews",
+    "description": "Your competitors have more social proof. To compete, you need to close the review gap.",
+    "evidence": [
+      {
+        "name": "Fresh Start Cleaners",
+        "rating": 4.9,
+        "source": "SerpAPI",
+        "reviews": 325,
+        "position": 1
+      },
+      {
+        "name": "Fresh Start Cleaners",
+        "rating": 5,
+        "source": "SerpAPI",
+        "reviews": 6,
+        "position": 2
+      },
+      {
+        "name": "Fresh Start Cleaning CO.",
+        "rating": 5,
+        "source": "SerpAPI",
+        "reviews": 2,
+        "position": 3
+      }
+    ],
+    "metrics": {
+      "competitorAvgReviews": 111
+    },
+    "impactScore": 8,
+    "confidenceScore": 8,
+    "effortEstimate": "MEDIUM",
+    "recommendedFix": [
+      "Launch a systematic review request campaign",
+      "Follow up with every satisfied customer",
+      "Make leaving a review as easy as possible (QR codes, links)"
+    ],
+    "manuallyEdited": false,
+    "excluded": false,
+    "createdAt": "2026-02-07T08:13:45.192Z"
+  },
+  {
+    "id": "6fcc851c-6cd3-41aa-90b5-3f3ee5d41fc8",
+    "auditId": "8e06355e-0149-4b7c-8c5e-236c78ca48ad",
+    "module": "gbp",
+    "category": "visibility",
+    "type": "VITAMIN",
+    "title": "Only 0 photos on GBP (recommend 10+)",
+    "description": "Businesses with more photos get more clicks and calls from Google Search.",
+    "evidence": [
+      {
+        "source": "Google Business Profile",
+        "photoCount": 0
+      }
+    ],
+    "metrics": {
+      "photoCount": 0
+    },
+    "impactScore": 7,
+    "confidenceScore": 8,
+    "effortEstimate": "LOW",
+    "recommendedFix": [
+      "Upload high-quality photos of your business, products, and team",
+      "Add photos monthly to keep your profile fresh"
+    ],
+    "manuallyEdited": false,
+    "excluded": false,
+    "createdAt": "2026-02-07T08:19:13.328Z"
+  },
+  {
+    "id": "f2bc39a7-ee08-4b29-a11c-fbd30f0e8993",
+    "auditId": "03e0c817-34ce-4e20-be62-bc50a5e1654f",
+    "module": "gbp",
+    "category": "visibility",
+    "type": "VITAMIN",
+    "title": "Only 0 photos on GBP (recommend 10+)",
+    "description": "Businesses with more photos get more clicks and calls from Google Search.",
+    "evidence": [
+      {
+        "source": "Google Business Profile",
+        "photoCount": 0
+      }
+    ],
+    "metrics": {
+      "photoCount": 0
+    },
+    "impactScore": 7,
+    "confidenceScore": 8,
+    "effortEstimate": "LOW",
+    "recommendedFix": [
+      "Upload high-quality photos of your business, products, and team",
+      "Add photos monthly to keep your profile fresh"
+    ],
+    "manuallyEdited": false,
+    "excluded": false,
+    "createdAt": "2026-02-07T08:20:36.544Z"
+  },
+  {
+    "id": "38c92c85-9176-47c4-a426-43fe08c9fb12",
+    "auditId": "84747093-215e-4971-bc6c-90e5dc93126e",
+    "module": "gbp",
+    "category": "visibility",
+    "type": "VITAMIN",
+    "title": "Only 0 photos on GBP (recommend 10+)",
+    "description": "Businesses with more photos get more clicks and calls from Google Search.",
+    "evidence": [
+      {
+        "source": "Google Business Profile",
+        "photoCount": 0
+      }
+    ],
+    "metrics": {
+      "photoCount": 0
+    },
+    "impactScore": 7,
+    "confidenceScore": 8,
+    "effortEstimate": "LOW",
+    "recommendedFix": [
+      "Upload high-quality photos of your business, products, and team",
+      "Add photos monthly to keep your profile fresh"
+    ],
+    "manuallyEdited": false,
+    "excluded": false,
+    "createdAt": "2026-02-07T08:23:26.416Z"
+  }
+]

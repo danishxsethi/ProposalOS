@@ -1,42 +1,101 @@
-import { AuditModuleResult, WebsiteModuleInput } from './types';
+import { AuditModuleResult, WebsiteModuleInput, Finding } from './types';
 import { CostTracker } from '@/lib/costs/costTracker';
+import { cachedFetch } from '@/lib/cache/apiCache';
+import { runWebsiteCrawlerModule } from './websiteCrawlerModule';
+import { logger } from '@/lib/logger';
 
 const PSI_API_URL = 'https://www.googleapis.com/pagespeedonline/v5/runPagespeed';
 
 export async function runWebsiteModule(input: WebsiteModuleInput, tracker?: CostTracker): Promise<AuditModuleResult> {
-    console.log(`[WebsiteModule] Analyzing ${input.url}...`);
-    tracker?.addApiCall('PAGESPEED');
+    logger.info({ url: input.url }, '[WebsiteModule] Starting comprehensive website analysis');
 
+    try {
+        // Run comprehensive website crawler (up to 20 pages)
+        const crawlerResult = await runWebsiteCrawlerModule({
+            url: input.url,
+            businessName: input.businessName || 'Website'
+        });
+
+        // Also run PageSpeed on homepage for Core Web Vitals
+        tracker?.addApiCall('PAGESPEED');
+        const pagespeedFindings = await getPageSpeedFindings(input.url);
+
+        // Combine findings from crawler + PageSpeed
+        const allFindings = [
+            ...crawlerResult.findings,
+            ...pagespeedFindings
+        ];
+
+        logger.info({
+            totalFindings: allFindings.length,
+            crawlerFindings: crawlerResult.findings.length,
+            pagespeedFindings: pagespeedFindings.length
+        }, '[WebsiteModule] Analysis complete');
+
+        return {
+            findings: allFindings,
+            evidenceSnapshots: crawlerResult.evidenceSnapshots,
+        };
+
+    } catch (error) {
+        logger.error({ error }, '[WebsiteModule] Analysis failed');
+
+        // Fallback to basic PageSpeed if crawler fails
+        try {
+            tracker?.addApiCall('PAGESPEED');
+            const pagespeedFindings = await getPageSpeedFindings(input.url);
+
+            return {
+                findings: pagespeedFindings,
+                evidenceSnapshots: [],
+            };
+        } catch (fallbackError) {
+            // Return error finding
+            return {
+                findings: [{
+                    type: 'PAINKILLER',
+                    category: 'Technical SEO',
+                    title: 'Website Analysis Failed',
+                    description: `Unable to analyze website: ${error instanceof Error ? error.message : 'Unknown error'}`,
+                    impactScore: 3,
+                    confidenceScore: 50,
+                    evidence: [],
+                    metrics: {},
+                    effortEstimate: 'LOW',
+                    recommendedFix: ['Verify website is accessible and not blocking automated tools']
+                }],
+                evidenceSnapshots: [],
+            };
+        }
+    }
+}
+
+/**
+ * Get findings from PageSpeed Insights (Core Web Vitals)
+ */
+async function getPageSpeedFindings(url: string): Promise<Finding[]> {
     if (!process.env.GOOGLE_PAGESPEED_API_KEY) {
-        throw new Error('GOOGLE_PAGESPEED_API_KEY is missing');
+        logger.warn('[WebsiteModule] GOOGLE_PAGESPEED_API_KEY missing, skipping PageSpeed');
+        return [];
     }
 
     try {
         const categories = ['performance', 'accessibility', 'best-practices', 'seo'];
-        const strategies = ['mobile', 'desktop'];
-        const results: any = {};
 
-        // For MVP transparency/speed, we might just run mobile performance + seo
-        // But let's try to get mobile performance as the primary metric
-        const params = new URLSearchParams({
-            url: input.url,
-            key: process.env.GOOGLE_PAGESPEED_API_KEY,
-            strategy: 'mobile',
-        });
+        const params = new URLSearchParams();
+        params.append('url', url);
+        params.append('key', process.env.GOOGLE_PAGESPEED_API_KEY);
+        params.append('strategy', 'mobile');
+        categories.forEach(c => params.append('category', c));
 
-        // Add categories
-        categories.forEach(cat => params.append('category', cat));
+        const data = await cachedFetch('pagespeed', { url }, async () => {
+            const res = await fetch(`${PSI_API_URL}?${params.toString()}`);
+            if (!res.ok) {
+                throw new Error(`PSI API failed: ${res.status}`);
+            }
+            return await res.json();
+        }, { ttlHours: 24 });
 
-        const response = await fetch(`${PSI_API_URL}?${params.toString()}`);
-
-        if (!response.ok) {
-            const errorText = await response.text();
-            throw new Error(`PSI API failed: ${response.status} - ${errorText}`);
-        }
-
-        const data = await response.json();
-
-        // Extract key metrics for our findings
         const lighthouse = data.lighthouseResult;
         const scores = {
             performance: lighthouse.categories.performance?.score || 0,
@@ -45,34 +104,83 @@ export async function runWebsiteModule(input: WebsiteModuleInput, tracker?: Cost
             seo: lighthouse.categories.seo?.score || 0,
         };
 
-        // Extract Core Web Vitals (field data) if available
-        const loadingExperience = data.loadingExperience || {};
-        const coreWebVitals = {
-            fcp: loadingExperience.metrics?.FIRST_CONTENTFUL_PAINT_MS?.category || 'UNKNOWN',
-            lcp: loadingExperience.metrics?.LARGEST_CONTENTFUL_PAINT_MS?.category || 'UNKNOWN',
-            cls: loadingExperience.metrics?.CUMULATIVE_LAYOUT_SHIFT_SCORE?.category || 'UNKNOWN',
-        };
+        const findings: Finding[] = [];
 
-        return {
-            moduleId: 'website-performance',
-            status: 'success',
-            timestamp: new Date().toISOString(),
-            data: {
-                scores,
-                coreWebVitals,
-                finalUrl: lighthouse.finalUrl,
-                screenshot: lighthouse.audits?.['final-screenshot']?.details?.data, // Base64 image
-            }
-        };
+        // Performance finding
+        if (scores.performance < 0.5) {
+            findings.push({
+                type: 'PAINKILLER',
+                category: 'Performance',
+                title: 'Poor Mobile Performance Score',
+                description: `PageSpeed score is ${Math.round(scores.performance * 100)}/100. Slow sites lose visitors and rank lower in search.`,
+                impactScore: 8,
+                confidenceScore: 95,
+                evidence: [{
+                    type: 'metric',
+                    value: Math.round(scores.performance * 100),
+                    label: 'Performance Score'
+                }],
+                metrics: { performanceScore: scores.performance },
+                effortEstimate: 'HIGH',
+                recommendedFix: [
+                    'Optimize images (compress, use WebP)',
+                    'Minimize JavaScript and CSS',
+                    'Enable browser caching',
+                    'Use a CDN for static assets'
+                ]
+            });
+        } else if (scores.performance < 0.9) {
+            findings.push({
+                type: 'VITAMIN',
+                category: 'Performance',
+                title: 'Performance Could Be Improved',
+                description: `PageSpeed score is ${Math.round(scores.performance * 100)}/100. Room for optimization.`,
+                impactScore: 4,
+                confidenceScore: 90,
+                evidence: [{
+                    type: 'metric',
+                    value: Math.round(scores.performance * 100),
+                    label: 'Performance Score'
+                }],
+                metrics: { performanceScore: scores.performance },
+                effortEstimate: 'MEDIUM',
+                recommendedFix: [
+                    'Further optimize images and assets',
+                    'Implement lazy loading',
+                    'Consider code splitting'
+                ]
+            });
+        }
+
+        // Accessibility finding
+        if (scores.accessibility < 0.8) {
+            findings.push({
+                type: scores.accessibility < 0.5 ? 'PAINKILLER' : 'VITAMIN',
+                category: 'Accessibility',
+                title: 'Accessibility Issues Detected',
+                description: `Accessibility score is ${Math.round(scores.accessibility * 100)}/100. Affects users with disabilities and potential legal compliance.`,
+                impactScore: scores.accessibility < 0.5 ? 7 : 5,
+                confidenceScore: 90,
+                evidence: [{
+                    type: 'metric',
+                    value: Math.round(scores.accessibility * 100),
+                    label: 'Accessibility Score'
+                }],
+                metrics: { accessibilityScore: scores.accessibility },
+                effortEstimate: 'MEDIUM',
+                recommendedFix: [
+                    'Add alt text to all images',
+                    'Ensure proper heading hierarchy',
+                    'Improve color contrast ratios',
+                    'Add ARIA labels where needed'
+                ]
+            });
+        }
+
+        return findings;
 
     } catch (error) {
-        console.error('[WebsiteModule] Error:', error);
-        return {
-            moduleId: 'website-performance',
-            status: 'failed',
-            timestamp: new Date().toISOString(),
-            data: null,
-            error: error instanceof Error ? error.message : 'Unknown error'
-        };
+        logger.warn({ error }, '[WebsiteModule] PageSpeed failed, skipping');
+        return [];
     }
 }
