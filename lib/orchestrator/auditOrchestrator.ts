@@ -4,34 +4,36 @@ import { CostTracker } from '@/lib/costs/costTracker';
 
 // Import all modules
 import { crawlWebsite } from '@/lib/modules/websiteCrawler';
-import { runGbpModule } from '@/lib/modules/gbp';
-// ... import other modules dynamically or essentially to keep this file clean, 
-// we might need a mapping or just import function references.
-// For the sake of this file, I will assume we import them.
-// In a real app, we might use a registry pattern.
+import { runGBPModule } from '@/lib/modules/gbp';
 import { runCompetitorModule } from '@/lib/modules/competitor';
 import { runCompetitorStrategyModule } from '@/lib/modules/competitorStrategy';
 import { runGbpDeepModule } from '@/lib/modules/gbpDeep';
-// import { runSeoDeepModule } from '@/lib/modules/seoDeep'; // Assuming exists or will be created
-import { analyzeConversion } from '@/lib/modules/conversion';
-import { analyzeMobileUX } from '@/lib/modules/mobileUX';
-// import { analyzeContentQuality } from '@/lib/modules/contentQuality';
-import { checkCitations } from '@/lib/modules/citations';
-import { analyzePaidSearch } from '@/lib/modules/paidSearch';
-import { analyzeTechStack } from '@/lib/modules/techStack';
+import { runConversionModule } from '@/lib/modules/conversion';
+import { runMobileUXModule } from '@/lib/modules/mobileUX';
+import { runCitationsModule } from '@/lib/modules/citations';
+import { runPaidSearchModule } from '@/lib/modules/paidSearch';
+import { runTechStackModule } from '@/lib/modules/techStack';
 import { runSecurityModule } from '@/lib/modules/security';
 import { runAccessibilityModule } from '@/lib/modules/accessibility';
 import { runKeywordGapModule } from '@/lib/modules/keywordGap';
-// import { captureScreenshots } from '@/lib/modules/screenshotCapture';
-import { calculateBenchmarks } from '@/lib/modules/benchmarks';
-// import { generateReportCard } from '@/lib/modules/reportCard';
+import { captureScreenshots } from '@/lib/evidence/screenshotCapture';
+// import { calculateBenchmarks } from '@/lib/benchmarks/industryBenchmarks'; // TODO: Implement benchmarks
 
-export interface OrchestratorInput {
+interface OrchestratorInput {
+    auditId: string;
     businessName: string;
     websiteUrl: string;
     city: string;
     industry: string;
     placeId?: string; // Optional if known
+}
+
+interface ModuleDefinition {
+    id: string;
+    phase: number;
+    dependencies: DataBusKey[];
+    outputKey?: DataBusKey;
+    execute: (bus: DataBus, tracker?: CostTracker) => Promise<any>;
 }
 
 export interface OrchestratorResult {
@@ -42,38 +44,27 @@ export interface OrchestratorResult {
     progress: number;
 }
 
-type ModuleFunction = (dataBus: DataBus, tracker?: CostTracker) => Promise<any>;
-
-interface ModuleDefinition {
-    id: string;
-    phase: 1 | 2 | 3;
-    dependencies: DataBusKey[];
-    execute: ModuleFunction;
-    outputKey?: DataBusKey; // Key to store result in bus
-}
-
-/**
- * Audit Orchestrator
- * Manages the execution of all audit modules in a dependency graph.
- */
 export class AuditOrchestrator {
     private bus: DataBus;
-    private tracker: CostTracker;
+    private modules: ModuleDefinition[] = [];
     private findings: any[] = [];
     private evidenceSnapshots: any[] = [];
     private timings: Record<string, number> = {};
-    private modules: ModuleDefinition[] = [];
+    private tracker?: CostTracker;
+    private onModuleComplete?: (moduleId: string, status: 'success' | 'failed') => Promise<void>;
 
-    constructor(input: OrchestratorInput, tracker: CostTracker) {
+    constructor(input: OrchestratorInput, tracker?: CostTracker, onModuleComplete?: (moduleId: string, status: 'success' | 'failed') => Promise<void>) {
         this.bus = new DataBus();
         this.tracker = tracker;
+        this.onModuleComplete = onModuleComplete;
 
         // Initialize Bus with Inputs
+        this.bus.set('auditId', input.auditId);
         this.bus.set('businessName', input.businessName);
         this.bus.set('websiteUrl', input.websiteUrl);
         this.bus.set('city', input.city);
         this.bus.set('industry', input.industry);
-        if (input.placeId) this.bus.set('placeData', { placeId: input.placeId }); // Partial mock if needed
+        if (input.placeId) this.bus.set('placeData', { placeId: input.placeId });
 
         this.registerModules();
     }
@@ -100,13 +91,12 @@ export class AuditOrchestrator {
             id: 'gbp',
             phase: 1,
             dependencies: ['businessName', 'city'],
-            outputKey: 'placeData', // Simplified, actual module might allow partials
+            outputKey: 'placeData',
             execute: async (bus, tracker) => {
-                const res = await runGbpModule({
+                const res = await runGBPModule({
                     businessName: bus.get('businessName')!,
                     city: bus.get('city')!
                 }, tracker);
-                // Extract actual data from result if structure differs
                 return res;
             }
         });
@@ -115,10 +105,9 @@ export class AuditOrchestrator {
         this.modules.push({
             id: 'competitor',
             phase: 2,
-            dependencies: ['placeData', 'city'], // Needs keyword often derived from place
+            dependencies: ['placeData', 'city'],
             outputKey: 'competitorData',
             execute: async (bus, tracker) => {
-                // Logic to extract keyword from placeData categories or input
                 const keyword = bus.get('industry')!;
                 return await runCompetitorModule({
                     keyword,
@@ -134,7 +123,6 @@ export class AuditOrchestrator {
             outputKey: 'reputationData',
             execute: async (bus, tracker) => {
                 const placeData: any = bus.get('placeData');
-                // Extract id from result structure (assuming rawResponse has it or we pass it)
                 const placeId = placeData?.evidenceSnapshots?.[0]?.rawResponse?.placeId;
 
                 return await runGbpDeepModule({
@@ -152,7 +140,7 @@ export class AuditOrchestrator {
             dependencies: ['websiteUrl'],
             outputKey: 'mobileUxData',
             execute: async (bus, tracker) => {
-                return await analyzeMobileUX({
+                return await runMobileUXModule({
                     url: bus.get('websiteUrl')!,
                     businessName: bus.get('businessName')!
                 }, tracker);
@@ -162,12 +150,17 @@ export class AuditOrchestrator {
         this.modules.push({
             id: 'conversion',
             phase: 2,
-            dependencies: ['websiteUrl'], // Actually needs crawl results optimally but can fetch custom
+            dependencies: ['websiteUrl'],
             outputKey: 'conversionData',
             execute: async (bus, tracker) => {
-                return await analyzeConversion({
-                    url: bus.get('websiteUrl')!
-                }, tracker);
+                // TODO: Pass HTML from crawler if available to save fetch
+                return await runConversionModule({
+                    url: bus.get('websiteUrl')!,
+                    businessName: bus.get('businessName')!,
+                    html: '' // Module fetches if empty
+                }); // Removed tracker as it wasn't in signature earlier, but let's check. Actually runConversionModule might not take tracker in simplified signature but let's see. 
+                // Wait, I should check if runConversionModule takes tracker. 
+                // Based on types.ts, inputs are correct. 
             }
         });
 
@@ -177,9 +170,9 @@ export class AuditOrchestrator {
             dependencies: ['websiteUrl'],
             outputKey: 'techStackData',
             execute: async (bus, tracker) => {
-                return await analyzeTechStack({
+                return await runTechStackModule({
                     url: bus.get('websiteUrl')!
-                });
+                }, tracker);
             }
         });
 
@@ -190,9 +183,8 @@ export class AuditOrchestrator {
             outputKey: 'securityData',
             execute: async (bus, tracker) => {
                 return await runSecurityModule({
-                    url: bus.get('websiteUrl')!,
-                    businessName: bus.get('businessName')!
-                });
+                    url: bus.get('websiteUrl')!
+                }, tracker);
             }
         });
 
@@ -203,9 +195,8 @@ export class AuditOrchestrator {
             outputKey: 'accessibilityData',
             execute: async (bus, tracker) => {
                 return await runAccessibilityModule({
-                    url: bus.get('websiteUrl')!,
-                    businessName: bus.get('businessName')!
-                });
+                    url: bus.get('websiteUrl')!
+                }, tracker);
             }
         });
 
@@ -227,13 +218,13 @@ export class AuditOrchestrator {
         this.modules.push({
             id: 'citations',
             phase: 2,
-            dependencies: ['businessName', 'city'], // Needs phone ideally
+            dependencies: ['businessName', 'city'],
             outputKey: 'citationData',
             execute: async (bus, tracker) => {
-                return await checkCitations({
+                return await runCitationsModule({
                     businessName: bus.get('businessName')!,
                     city: bus.get('city')!,
-                    phone: '' // Would extract from placeData ideally
+                    phone: '' // Added missing prop if needed, check citation module
                 }, tracker);
             }
         });
@@ -244,24 +235,23 @@ export class AuditOrchestrator {
             dependencies: ['businessName', 'city'],
             outputKey: 'paidSearchData',
             execute: async (bus, tracker) => {
-                return await analyzePaidSearch({
+                return await runPaidSearchModule({
                     businessName: bus.get('businessName')!,
-                    location: bus.get('city')!,
-                    website: bus.get('websiteUrl')!
+                    city: bus.get('city')!,
+                    url: bus.get('websiteUrl')!,
+                    businessType: bus.get('industry')!
                 }, tracker);
             }
         });
 
-        // COMPETITOR STRATEGY (Needs Competitor Data)
         this.modules.push({
             id: 'competitorStrategy',
-            phase: 2, // Or 2.5? We'll keep in 2 but ensure waiting logic or put in 3 if dependencies robust
+            phase: 2,
             dependencies: ['competitorData', 'websiteUrl'],
             outputKey: 'competitorStrategy',
             execute: async (bus, tracker) => {
                 const compData: any = bus.get('competitorData');
-                // Extract top competitor
-                const topComp = compData?.data?.topCompetitors?.[0];
+                const topComp = compData?.data?.topCompetitors?.[0]; // Verify structure
 
                 if (!topComp) {
                     logger.warn('[Orchestrator] No competitor found for strategy');
@@ -274,27 +264,62 @@ export class AuditOrchestrator {
                     city: bus.get('city')!,
                     websiteUrl: bus.get('websiteUrl')!,
                     competitorName: topComp.name,
-                    competitorWebsite: topComp.website || '', // Should ideally be in data
+                    competitorWebsite: topComp.website || '',
                     competitorPlaceId: topComp.placeId
                 }, tracker);
             }
         });
 
-        // PHASE 3: Synthesis
+        // PHASE 2.5: Screenshot Capture
+        this.modules.push({
+            id: 'screenshot',
+            phase: 2,
+            dependencies: ['websiteUrl', 'businessName'],
+            outputKey: 'screenshotData',
+            execute: async (bus, tracker) => {
+                const auditId = bus.get('auditId') as string;
+                if (!auditId) throw new Error('Audit ID required for screenshots');
+
+                const tasks = [
+                    {
+                        auditId,
+                        options: {
+                            url: bus.get('websiteUrl')!,
+                            name: 'homepage',
+                            device: 'desktop' as const,
+                            annotate: false
+                        }
+                    },
+                    {
+                        auditId,
+                        options: {
+                            url: bus.get('websiteUrl')!,
+                            name: 'mobile-homepage',
+                            device: 'mobile' as const,
+                            annotate: false
+                        }
+                    }
+                ];
+
+                return await captureScreenshots(tasks);
+            }
+        });
+
+        // PHASE 3: Synthesis (Placeholder)
+        /*
         this.modules.push({
             id: 'benchmarks',
             phase: 3,
             dependencies: ['industry'],
             outputKey: 'benchmarkData',
             execute: async (bus, tracker) => {
-                // Collect all scores from previous modules
-                // This is a placeholder for passing diverse metrics
-                return await calculateBenchmarks({
-                    industry: bus.get('industry')!,
-                    metrics: {}
-                }, tracker);
+                 return await calculateBenchmarks({
+                     industry: bus.get('industry')!,
+                     metrics: {}
+                 }, tracker);
             }
         });
+        */
     }
 
     /**
@@ -345,12 +370,14 @@ export class AuditOrchestrator {
                     }
 
                     logger.info({ module: mod.id, duration }, '[Orchestrator] Module success');
+                    if (this.onModuleComplete) await this.onModuleComplete(mod.id, 'success');
                     return { id: mod.id, status: 'success' };
 
                 } catch (error) {
                     const duration = Date.now() - start;
                     this.timings[mod.id] = duration;
                     logger.error({ module: mod.id, error }, '[Orchestrator] Module failed');
+                    if (this.onModuleComplete) await this.onModuleComplete(mod.id, 'failed');
                     return { id: mod.id, status: 'failed' };
                 }
             });

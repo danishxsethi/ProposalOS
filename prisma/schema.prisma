@@ -111,6 +111,8 @@ model Proposal {
   followUps ProposalFollowUp[]
   outreach  ProposalOutreach[]
   acceptance ProposalAcceptance? // One acceptance per proposal
+  conversations ChatConversation[]
+
 
   @@index([auditId])
   @@index([webLinkToken])
@@ -487,4 +489,104 @@ model EmailBlocklist {
   createdAt DateTime @default(now())
   
   @@index([email])
+}
+model UsageRecord {
+  id             String   @id @default(uuid())
+  tenantId       String
+  tenant         Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  
+  event          String   // 'audit.created', 'batch.item'
+  credits        Int      @default(1)
+  
+  stripeUsageRecordId String? // ID from Stripe if reported
+  
+  timestamp      DateTime @default(now())
+  
+  @@index([tenantId])
+  @@index([timestamp])
+}
+model BenchmarkStats {
+  id             String   @id @default(uuid())
+  industry       String
+  city           String?  // Optional: hierarchical benchmarks
+  
+  sampleSize     Int      @default(0)
+  
+  // Aggregate Metrics (JSON to be flexible)
+  // { avgScore: 45, p90Score: 78, avgLoadTime: 2.3, ... }
+  metrics        Json     @default("{}")
+  
+  lastUpdated    DateTime @default(now())
+  
+  @@unique([industry, city]) // One benchmark per industry/city combo
+}
+
+model FindingEffectiveness {
+  id             String   @id @default(uuid())
+  findingType    String   // e.g. "SLOW_MOBILE_LOAD"
+  
+  totalOccurrences Int    @default(0)
+  acceptedCount    Int    @default(0) // How many times a proposal with this finding was accepted
+  rejectedCount    Int    @default(0)
+  
+  conversionPower  Float  @default(0.0) // Cached calculation: accepted / total
+  
+  updatedAt      DateTime @updatedAt
+  
+  @@unique([findingType])
+}
+
+model PromptPerformance {
+  id             String   @id @default(uuid())
+  promptId       String   // "intro-v1" or "intro-v2" (from A/B)
+  
+  uses           Int      @default(0)
+  avgQaScore     Float    @default(0) // Internal QA
+  acceptanceRate Float    @default(0) // External Success
+  
+  updatedAt      DateTime @updatedAt
+  
+  @@unique([promptId])
+}
+// Client Portal Models
+model FindingStatus {
+  id        String   @id @default(uuid())
+  auditId   String
+  findingId String
+  
+  status    String   @default("not_started") // not_started, in_progress, fixed, wont_fix
+  notes     String?
+  updatedBy String?  // User ID (Operator)
+  updatedAt DateTime @updatedAt
+
+  audit     Audit    @relation(fields: [auditId], references: [id], onDelete: Cascade)
+  finding   Finding  @relation(fields: [findingId], references: [id], onDelete: Cascade)
+
+  @@unique([auditId, findingId])
+  @@index([auditId])
+}
+
+model ClientMessage {
+  id        String   @id @default(uuid())
+  auditId   String
+  sender    String   // 'client' | 'operator'
+  message   String   @db.Text
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  audit     Audit    @relation(fields: [auditId], references: [id], onDelete: Cascade)
+  
+  @@index([auditId])
+}
+
+model ReviewSnapshot {
+  id        String   @id @default(uuid())
+  auditId   String
+  audit     Audit    @relation(fields: [auditId], references: [id], onDelete: Cascade)
+  date      DateTime @default(now())
+  rating    Float
+  count     Int
+  source    String   // 'google', 'facebook', etc.
+  
+  @@index([auditId])
 }
