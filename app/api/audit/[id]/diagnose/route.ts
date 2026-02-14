@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { runDiagnosisPipeline } from '@/lib/diagnosis';
+import { getTenantId } from '@/lib/tenant/context';
 
 /**
  * POST /api/audit/[id]/diagnose
@@ -8,14 +9,22 @@ import { runDiagnosisPipeline } from '@/lib/diagnosis';
  */
 export async function POST(
     req: Request,
-    { params }: { params: { id: string } }
+    { params }: { params: Promise<{ id: string }> }
 ) {
     try {
-        const auditId = params.id;
+        const { id: auditId } = await params;
+        const tenantId = await getTenantId();
+
+        if (!tenantId) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
 
         // Fetch audit with findings
-        const audit = await prisma.audit.findUnique({
-            where: { id: auditId },
+        const audit = await prisma.audit.findFirst({
+            where: {
+                id: auditId,
+                tenantId
+            },
             include: {
                 findings: true,
             },

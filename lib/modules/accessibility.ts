@@ -59,9 +59,9 @@ export async function runAccessibilityModule(
         // In production, inject the shared browser instance
         browser = await puppeteer.launch({
             args: chromium.args,
-            defaultViewport: chromium.defaultViewport,
+            defaultViewport: { width: 1920, height: 1080, deviceScaleFactor: 1 },
             executablePath: await chromium.executablePath(),
-            headless: chromium.headless,
+            headless: true,
         });
 
         const pagesToAnalyze = [input.url, ...(input.crawledPages?.slice(0, 4).map(p => p.url) || [])];
@@ -362,7 +362,7 @@ function generateAccessibilityFindings(analysis: AccessibilityAnalysis): Finding
     // POSITIVE: Accessible Site
     if (analysis.totalViolations < 3) {
         findings.push({
-            type: 'POSITIVE',
+            type: 'VITAMIN',
             category: 'Compliance',
             title: 'Website is Accessible',
             description: `Excellent work! Only found ${analysis.totalViolations} accessibility issues. Your site is more accessible than 85% of local businesses.`,

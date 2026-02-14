@@ -153,10 +153,10 @@ export async function orchestrateScreenshots(
         }
 
         // 6. Competitor comparisons (side-by-side)
-        if (evidence.homepage.desktop && evidence.competitors.length > 0) {
+        if (evidence.homepage.desktop && evidence.competitors.length > 0 && (input.competitorUrls?.length ?? 0) > 0) {
             evidence.competitorComparisons = [];
 
-            for (let i = 0; i < Math.min(evidence.competitors.length, 2); i++) {
+            for (let i = 0; i < Math.min(evidence.competitors.length, input.competitorUrls!.length, 2); i++) {
                 const competitor = evidence.competitors[i];
                 const competitorUrl = input.competitorUrls![i];
 
@@ -175,10 +175,10 @@ export async function orchestrateScreenshots(
             }
 
             // Mobile comparison with top competitor
-            if (evidence.homepage.mobile && input.competitorUrls.length > 0) {
+            if (evidence.homepage.mobile && (input.competitorUrls?.length ?? 0) > 0) {
                 const mobileComparison = await captureComparisonScreenshot(
                     input.businessUrl,
-                    input.competitorUrls[0],
+                    input.competitorUrls![0],
                     input.auditId,
                     'vs-competitor-mobile',
                     'mobile'

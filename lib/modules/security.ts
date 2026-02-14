@@ -357,7 +357,7 @@ function generateSecurityFindings(analysis: SecurityAnalysis, input: SecurityMod
     // POSITIVE: Secure Headers
     if (analysis.headers.score >= 5) {
         findings.push({
-            type: 'POSITIVE',
+            type: 'VITAMIN',
             category: 'Compliance',
             title: 'Strong Security Configuration',
             description: 'Your website uses modern security headers to protect visitors. Great job!',

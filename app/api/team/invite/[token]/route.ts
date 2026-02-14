@@ -5,9 +5,9 @@ import { nanoid } from 'nanoid';
 
 export async function GET(
     req: Request,
-    { params }: { params: { token: string } }
+    { params }: { params: Promise<{ token: string }> }
 ) {
-    const token = params.token;
+    const { token } = await params;
 
     const invitation = await prisma.invitation.findUnique({
         where: { token },

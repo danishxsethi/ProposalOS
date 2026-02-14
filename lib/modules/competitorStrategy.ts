@@ -200,7 +200,7 @@ function generateStrategyFindings(analysis: StrategicAnalysis, input: Competitor
     // POSITIVE: Our Advantages
     if (analysis.ourAdvantages.length > 0) {
         findings.push({
-            type: 'POSITIVE',
+            type: 'VITAMIN',
             category: 'Competitive',
             title: 'Your Competitive Advantage',
             description: `You have an edge over ${input.competitorName} in these areas: ${analysis.ourAdvantages.join(', ')}.`,

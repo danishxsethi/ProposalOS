@@ -194,7 +194,7 @@ async function findYouTubeChannel(name: string, city: string, tracker?: CostTrac
         `youtube_search_${name}_${city}`,
         { query },
         async () => {
-            const apiKey = process.env.SERPAPI_KEY;
+            const apiKey = process.env.SERP_API_KEY;
             if (!apiKey) return null;
 
             const url = `https://serpapi.com/search.json?engine=google&q=${encodeURIComponent(query)}&api_key=${apiKey}&num=5`;

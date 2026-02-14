@@ -76,29 +76,75 @@ export async function runAudit(auditId: string) {
         const allFindings: any[] = [];
 
         // Process Website Module
-        if (websiteResult.status === 'fulfilled' && websiteResult.value.status === 'success') {
-            modulesCompleted.push('website');
-            const findings = generateWebsiteFindings(websiteResult.value.data);
-            allFindings.push(...findings);
+        // Handle both formats: { status, data } (legacy) and { findings, evidenceSnapshots } (direct)
+        if (websiteResult.status === 'fulfilled') {
+            const value = websiteResult.value as any;
+            const isLegacySuccess = value.status === 'success' && value.data;
+            const isDirectSuccess = Array.isArray(value.findings);
 
-            // Store evidence
-            await prisma.evidenceSnapshot.create({
-                data: {
+            if (isLegacySuccess || isDirectSuccess) {
+                modulesCompleted.push('website');
+                Metrics.increment('modules_total');
+                logger.info({
+                    event: 'module.complete',
                     auditId: audit.id,
                     module: 'website',
-                    source: 'PageSpeed Insights API',
-                    rawResponse: websiteResult.value.data,
-                },
-            });
+                }, 'Website module complete');
+
+                let findings: any[] = [];
+                if (isDirectSuccess) {
+                    // Ensure each finding has module: 'website' for Prisma
+                    findings = value.findings.map((f: any) => ({ ...f, module: f.module || 'website' }));
+                } else {
+                    findings = generateWebsiteFindings(value.data);
+                }
+                allFindings.push(...findings);
+
+                // Store evidence
+                const rawResponse = isDirectSuccess ? value : value.data;
+                const snapshots = value.evidenceSnapshots || [];
+                if (snapshots.length > 0) {
+                    for (const snap of snapshots) {
+                        await prisma.evidenceSnapshot.create({
+                            data: {
+                                auditId: audit.id,
+                                module: 'website',
+                                source: snap.source || 'Website Crawler',
+                                rawResponse: snap.rawResponse ?? snap,
+                                tenantId: audit.tenantId,
+                            },
+                        });
+                    }
+                } else {
+                    await prisma.evidenceSnapshot.create({
+                        data: {
+                            auditId: audit.id,
+                            module: 'website',
+                            source: 'PageSpeed Insights API',
+                            rawResponse: rawResponse,
+                            tenantId: audit.tenantId,
+                        },
+                    });
+                }
+            } else {
+                const err = value?.error || 'Unknown error';
+                modulesFailed.push({ module: 'website', error: err });
+                Metrics.increment('modules_failed');
+                logger.error({
+                    event: 'module.failed',
+                    auditId: audit.id,
+                    module: 'website',
+                    error: err
+                }, 'Website module failed');
+            }
         } else {
-            const err = websiteResult.status === 'fulfilled' ? websiteResult.value.error : 'Promise rejected';
-            modulesFailed.push({ module: 'website', error: err });
+            modulesFailed.push({ module: 'website', error: 'Promise rejected' });
             Metrics.increment('modules_failed');
             logger.error({
                 event: 'module.failed',
                 auditId: audit.id,
                 module: 'website',
-                error: err
+                error: 'Promise rejected'
             }, 'Website module failed');
         }
 
@@ -121,6 +167,7 @@ export async function runAudit(auditId: string) {
                     module: 'gbp',
                     source: 'Google Places API',
                     rawResponse: gbpResult.value.data,
+                    tenantId: audit.tenantId,
                 },
             });
         } else {
@@ -154,6 +201,7 @@ export async function runAudit(auditId: string) {
                     module: 'competitor',
                     source: 'SerpAPI',
                     rawResponse: competitorResult.value.data,
+                    tenantId: audit.tenantId,
                 },
             });
         } else {
@@ -194,6 +242,7 @@ export async function runAudit(auditId: string) {
                         module: 'reputation',
                         source: 'Gemini AI + Google Reviews',
                         rawResponse: reputationResult.data,
+                        tenantId: audit.tenantId,
                     },
                 });
             } else if (reputationResult.status === 'failed') {
@@ -233,6 +282,7 @@ export async function runAudit(auditId: string) {
                         module: 'social',
                         source: 'Website HTML',
                         rawResponse: socialResult.data,
+                        tenantId: audit.tenantId,
                     },
                 });
             } else if (socialResult.status === 'failed') {
@@ -247,13 +297,16 @@ export async function runAudit(auditId: string) {
             }
         }
 
-        // Create Finding records in DB
-        for (const finding of allFindings) {
-            await prisma.finding.create({
-                data: {
+        // Create Finding records in DB (Batch Insert)
+        if (allFindings.length > 0) {
+            await prisma.finding.createMany({
+                data: allFindings.map(f => ({
+                    ...f,
                     auditId: audit.id,
-                    ...finding,
-                },
+                    tenantId: audit.tenantId, // Ensure tenant consistency
+                    manuallyEdited: false,
+                    excluded: false
+                }))
             });
         }
 
@@ -305,7 +358,10 @@ export async function runAudit(auditId: string) {
             auditId: audit.id,
             status: finalStatus,
             modulesCompleted,
-            findingsCount: allFindings.length
+            modulesFailed,
+            findingsCount: allFindings.length,
+            costCents: totalCostCents,
+            duration_ms,
         };
 
     } catch (error) {

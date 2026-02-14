@@ -1,6 +1,7 @@
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { getTenantId } from '@/lib/tenant/context';
 
 import { withAuth } from '@/lib/middleware/auth';
 
@@ -10,17 +11,27 @@ export const GET = withAuth(async (
 ) => {
     try {
         const id = params.id;
+        const tenantId = await getTenantId();
 
-        const audit = await prisma.audit.findUnique({
-            where: { id },
+        if (!tenantId) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+
+        // Use findFirst so we can filter by tenantId (findUnique requires unique constraint)
+        const audit = await prisma.audit.findFirst({
+            where: {
+                id,
+                tenantId
+            },
             include: {
-                findings: true, // simplified for now
+                findings: true,
+                proposals: { select: { id: true, webLinkToken: true } },
             },
         });
 
         if (!audit) {
             return NextResponse.json(
-                { error: 'Audit not found' },
+                { error: 'Audit not found or access denied' },
                 { status: 404 }
             );
         }

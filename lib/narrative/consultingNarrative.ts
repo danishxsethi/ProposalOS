@@ -1,5 +1,4 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import { traceable } from 'langsmith/traceable';
 import { logger } from '@/lib/logger';
 import { Finding } from '@/lib/modules/types';
 import fs from 'fs';
@@ -82,8 +81,7 @@ export async function generateConsultingNarrative(
 /**
  * Generate executive overview
  */
-const generateExecutiveOverview = traceable(
-    async (model: any, input: NarrativeInput): Promise<string> => {
+async function generateExecutiveOverview(model: any, input: NarrativeInput): Promise<string> {
         // Load prompt template
         const promptTemplate = loadPromptTemplate('exec-overview-v2.txt');
 
@@ -115,15 +113,12 @@ const generateExecutiveOverview = traceable(
 
         // Add inline evidence references
         return addEvidenceReferences(text, input);
-    },
-    { name: 'generate_executive_overview', run_type: 'llm' }
-);
+}
 
 /**
  * Generate cluster deep dives
  */
-const generateClusterDeepDives = traceable(
-    async (model: any, input: NarrativeInput): Promise<Array<{ clusterName: string; narrative: string }>> => {
+async function generateClusterDeepDives(model: any, input: NarrativeInput): Promise<Array<{ clusterName: string; narrative: string }>> {
         const promptTemplate = loadPromptTemplate('cluster-deep-dive-v2.txt');
 
         // Group findings by category (cluster)
@@ -162,15 +157,12 @@ const generateClusterDeepDives = traceable(
         }
 
         return deepDives;
-    },
-    { name: 'generate_cluster_deep_dives', run_type: 'llm' }
-);
+}
 
 /**
  * Generate competitive positioning summary
  */
-const generateCompetitivePositioning = traceable(
-    async (model: any, input: NarrativeInput): Promise<string> => {
+async function generateCompetitivePositioning(model: any, input: NarrativeInput): Promise<string> {
         const promptTemplate = loadPromptTemplate('competitive-summary-v2.txt');
 
         const competitors = input.competitorData?.competitors || [];
@@ -190,15 +182,12 @@ const generateCompetitivePositioning = traceable(
 
         const result = await model.generateContent(prompt);
         return result.response.text().trim();
-    },
-    { name: 'generate_competitive_positioning', run_type: 'llm' }
-);
+}
 
 /**
  * Generate opportunity summary
  */
-const generateOpportunitySummary = traceable(
-    async (model: any, input: NarrativeInput): Promise<string> => {
+async function generateOpportunitySummary(model: any, input: NarrativeInput): Promise<string> {
         const promptTemplate = loadPromptTemplate('opportunity-summary-v2.txt');
 
         // Calculate total estimated value
@@ -235,9 +224,7 @@ const generateOpportunitySummary = traceable(
         const text = result.response.text().trim();
 
         return addEvidenceReferences(text, input);
-    },
-    { name: 'generate_opportunity_summary', run_type: 'llm' }
-);
+}
 
 /**
  * Load prompt template from file

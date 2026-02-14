@@ -1,6 +1,5 @@
-import { describe, it, expect, vi, beforeAll, afterAll } from 'vitest';
-import { createMocks } from 'node-mocks-http';
-import { POST } from '../audit/[id]/propose/route'; // Importing the route handler directly if possible, or mocking fetch
+import { describe, it, expect, vi } from 'vitest';
+import { POST } from '../audit/[id]/propose/route';
 import { prisma } from '@/lib/prisma';
 
 // Mock Prisma

@@ -15,7 +15,6 @@ export default async function ClientDashboard({
         where: { webLinkToken: token },
         include: {
             audit: true,
-            tenant: true,
             acceptance: true
         }
     });

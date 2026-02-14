@@ -25,7 +25,7 @@ const EXPERIMENTS: Record<ExperimentName, ExperimentConfig> = {
     },
     'clustering-strategy': {
         control: 'clustering-v1.txt',
-        variant: 'clustering-v1.txt', // No variant yet
+        variant: 'clustering-v1.txt', // TODO: Create clustering-v2.txt variant for real A/B testing
         traffic: 0.0,
         active: false,
     },

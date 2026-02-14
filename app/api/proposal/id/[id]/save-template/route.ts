@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { withAuth } from '@/lib/middleware/auth';
+import type { Prisma } from '@prisma/client';
 
 interface Params {
     params: { id: string };
@@ -29,7 +30,12 @@ export const POST = withAuth(async (req: Request, { params }: Params) => {
             );
         }
 
-        // Create template from proposal
+        // Create template from proposal (cast Json fields for Prisma compatibility)
+        const tierSettingsVal =
+            (proposal.tierEssentials != null || proposal.tierGrowth != null || proposal.tierPremium != null)
+                ? { essentials: proposal.tierEssentials ?? {}, growth: proposal.tierGrowth ?? {}, premium: proposal.tierPremium ?? {} }
+                : undefined;
+
         const template = await prisma.proposalTemplate.create({
             data: {
                 name,
@@ -38,12 +44,8 @@ export const POST = withAuth(async (req: Request, { params }: Params) => {
                 assumptions: proposal.assumptions,
                 disclaimers: proposal.disclaimers,
                 nextSteps: proposal.nextSteps,
-                pricing: proposal.pricing,
-                tierSettings: {
-                    essentials: proposal.tierEssentials,
-                    growth: proposal.tierGrowth,
-                    premium: proposal.tierPremium,
-                },
+                pricing: (proposal.pricing ?? {}) as Prisma.InputJsonValue,
+                tierSettings: tierSettingsVal as Prisma.InputJsonValue | undefined,
             },
         });
 

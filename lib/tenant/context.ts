@@ -1,11 +1,24 @@
+import { AsyncLocalStorage } from 'async_hooks';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { headers } from 'next/headers';
 
-export async function getTenantId(): Promise<string | null> {
-    const headerList = await headers();
+const tenantStorage = new AsyncLocalStorage<string>();
 
-    // 1. Check internal header set by API Key Middleware
+export function runWithTenant<T>(tenantId: string, fn: () => T): T {
+    return tenantStorage.run(tenantId, fn);
+}
+
+export async function runWithTenantAsync<T>(tenantId: string, fn: () => Promise<T>): Promise<T> {
+    return tenantStorage.run(tenantId, fn);
+}
+
+export async function getTenantId(): Promise<string | null> {
+    // 1. Check context set by API Key middleware (avoids Request clone issues)
+    const stored = tenantStorage.getStore();
+    if (stored) return stored;
+
+    const headerList = await headers();
     const apiKeyTenant = headerList.get('x-tenant-id');
     if (apiKeyTenant) return apiKeyTenant;
 
@@ -23,9 +36,9 @@ export async function getTenantId(): Promise<string | null> {
  * Extended Prisma Client with Automatic Tenant Scoping
  */
 export function createScopedPrisma(tenantId: string | undefined) {
-    if (!tenantId) return globalPrisma; // Return unscoped if no tenant (e.g. admin or system tasks)
+    if (!tenantId) return prisma; // Return unscoped if no tenant (e.g. admin or system tasks)
 
-    return globalPrisma.$extends({
+    return prisma.$extends({
         query: {
             audit: {
                 async findMany({ args, query }) {
@@ -44,14 +57,14 @@ export function createScopedPrisma(tenantId: string | undefined) {
 
                     // Transformation:
                     if (args.where.id) {
-                        return (globalPrisma as any).audit.findFirst({
+                        return (prisma as any).audit.findFirst({
                             where: { ...args.where, tenantId }
                         });
                     }
                     return query(args);
                 },
                 async create({ args, query }) {
-                    args.data = { ...args.data, tenantId };
+                    args.data = { ...(args.data as any), tenantId };
                     return query(args);
                 }
             },
@@ -62,7 +75,7 @@ export function createScopedPrisma(tenantId: string | undefined) {
                     return query(args);
                 },
                 async create({ args, query }) {
-                    args.data = { ...args.data, tenantId }; // Auto-set tenantId
+                    args.data = { ...(args.data as any), tenantId }; // Auto-set tenantId
                     return query(args);
                 }
             },
@@ -72,7 +85,7 @@ export function createScopedPrisma(tenantId: string | undefined) {
                     return query(args);
                 },
                 async create({ args, query }) {
-                    args.data = { ...args.data, tenantId };
+                    args.data = { ...(args.data as any), tenantId };
                     return query(args);
                 }
             }

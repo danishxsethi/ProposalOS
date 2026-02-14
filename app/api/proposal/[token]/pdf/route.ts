@@ -4,20 +4,14 @@ import { generatePdf } from '@/lib/pdf/generatePdf';
 import { uploadPdfToGCS } from '@/lib/pdf/uploadPdf';
 import { logger } from '@/lib/logger';
 
-interface Params {
-    params: {
-        token: string;
-    };
-}
-
 /**
  * GET /api/proposal/[token]/pdf
  * Generates and downloads the proposal PDF
  * Caches PDF to GCS for repeat downloads
  */
-export async function GET(request: Request, { params }: Params) {
+export async function GET(request: Request, { params }: { params: Promise<{ token: string }> }) {
     try {
-        const { token } = params;
+        const { token } = await params;
 
         const proposal = await prisma.proposal.findUnique({
             where: { webLinkToken: token },

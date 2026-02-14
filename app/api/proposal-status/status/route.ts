@@ -1,19 +1,19 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 
-interface Params {
-    params: Promise<{ id: string }>;
-}
-
 /**
- * PATCH /api/proposal/[id]/status
+ * PATCH /api/proposal-status/status
  * Update proposal status (draft → ready → sent → viewed → accepted/rejected)
+ * Expects { id, status } in request body.
  */
-export async function PATCH(request: Request, { params }: Params) {
+export async function PATCH(request: Request) {
     try {
-        const { id } = await params;
         const body = await request.json();
-        const { status } = body;
+        const { id, status } = body;
+
+        if (!id) {
+            return NextResponse.json({ error: 'Missing proposal id' }, { status: 400 });
+        }
 
         // Validate status
         const validStatuses = ['draft', 'ready', 'sent', 'viewed', 'accepted', 'rejected'];

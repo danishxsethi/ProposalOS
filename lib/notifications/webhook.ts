@@ -3,7 +3,7 @@ import { logger } from '@/lib/logger';
 
 const WEBHOOK_URL = process.env.WEBHOOK_URL;
 
-export type WebhookEvent = 'audit.complete' | 'proposal.ready' | 'proposal.viewed' | 'batch.complete';
+export type WebhookEvent = 'audit.complete' | 'audit.completed' | 'audit.failed' | 'proposal.ready' | 'proposal.viewed' | 'batch.complete';
 
 export async function sendWebhook(event: WebhookEvent, payload: Record<string, any>) {
     if (!WEBHOOK_URL) {

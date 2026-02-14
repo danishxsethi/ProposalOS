@@ -20,7 +20,7 @@ const SYSTEM_PLUGINS: Record<string, any> = {
 export async function runPlugin(pluginId: string, inputData: Omit<PluginInput, 'tools' | 'config'>, tenantId: string): Promise<PluginOutput | null> {
     try {
         // 1. Get Installation & Config
-        const installation = await prisma.pluginInstallation.findUnique({
+        const installation = await (prisma as any).pluginInstallation.findUnique({
             where: {
                 pluginId_tenantId: {
                     pluginId,

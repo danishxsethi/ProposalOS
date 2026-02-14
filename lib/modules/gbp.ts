@@ -1,11 +1,12 @@
-import { AuditModuleResult, GBPModuleInput } from './types';
+import { LegacyAuditModuleResult, GBPModuleInput } from './types';
 import { CostTracker } from '@/lib/costs/costTracker';
 import { cachedFetch } from '@/lib/cache/apiCache';
+import { logger } from '@/lib/logger';
 
 const PLACES_API_BASE = 'https://places.googleapis.com/v1';
 
-export async function runGBPModule(input: GBPModuleInput, tracker?: CostTracker): Promise<AuditModuleResult> {
-    console.log(`[GBPModule] Analyzing ${input.businessName} in ${input.city}...`);
+export async function runGBPModule(input: GBPModuleInput, tracker?: CostTracker): Promise<LegacyAuditModuleResult> {
+    logger.info({ businessName: input.businessName, city: input.city }, '[GBPModule] Analyzing');
 
     if (!process.env.GOOGLE_PLACES_API_KEY) {
         throw new Error('GOOGLE_PLACES_API_KEY is missing');
@@ -83,7 +84,7 @@ export async function runGBPModule(input: GBPModuleInput, tracker?: CostTracker)
         };
 
     } catch (error) {
-        console.error('[GBPModule] Error:', error);
+        logger.error({ err: error, businessName: input.businessName, city: input.city }, '[GBPModule] Error');
         return {
             moduleId: 'gbp-audit',
             status: 'failed',

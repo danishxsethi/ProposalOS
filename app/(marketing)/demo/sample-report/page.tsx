@@ -1,7 +1,6 @@
 'use client';
 
 import Link from 'next/link';
-import { ProposalViewer } from '@/components/ProposalViewer'; // Assuming we have this or similar structure from proposal page work
 
 // Mock Data for Demo
 const MOCK_PROPOSAL = {

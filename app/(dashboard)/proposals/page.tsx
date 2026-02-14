@@ -47,7 +47,7 @@ export default function ProposalsPage() {
         e.preventDefault();
         setSending(true);
         try {
-            const res = await fetch(`/api/proposal/${selectedProposal.id}/send`, {
+            const res = await fetch(`/api/proposal/id/${selectedProposal.id}/send`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(emailForm)

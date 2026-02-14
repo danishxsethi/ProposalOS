@@ -2,17 +2,18 @@ import { describe, it, expect, vi } from 'vitest';
 import { runDiagnosisPipeline } from '../diagnosis';
 import { CostTracker } from '../costs/costTracker';
 
-// Mock dependencies
-vi.mock('../llm/diagnosis', () => ({
-    clusterFindings: vi.fn().mockResolvedValue([
+// Mock LLM clustering
+vi.mock('../diagnosis/llmCluster', () => ({
+    llmClusterFindings: vi.fn().mockResolvedValue([
         {
-            title: 'SEO Issues',
-            findings: [],
-            painPoint: 'Low Visibility',
-            whyItMatters: 'Lost Revenue',
-            urgency: 'HIGH'
+            id: 'cluster-1',
+            rootCause: 'SEO Issues',
+            severity: 'high' as const,
+            findingIds: ['1'],
+            narrative: 'Low visibility affects revenue'
         }
-    ])
+    ]),
+    generateNarratives: vi.fn().mockImplementation((clusters: any[]) => Promise.resolve(clusters))
 }));
 
 describe('Diagnosis Pipeline', () => {
@@ -27,7 +28,7 @@ describe('Diagnosis Pipeline', () => {
 
         expect(result).toBeDefined();
         expect(result.clusters).toHaveLength(1);
-        expect(result.clusters[0].title).toBe('SEO Issues');
+        expect(result.clusters[0].rootCause).toBe('SEO Issues');
     });
 
     it('should handle empty findings gracefully', async () => {

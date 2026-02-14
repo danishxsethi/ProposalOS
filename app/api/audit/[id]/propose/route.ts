@@ -22,10 +22,12 @@ import { withAuth } from '@/lib/middleware/auth';
  */
 export const POST = withAuth(async (
     req: Request,
-    { params }: { params: { id: string } }
+    { params }: { params: Promise<{ id: string }> }
 ) => {
+    let auditId: string | undefined;
     try {
-        const auditId = params.id;
+        const resolved = await params;
+        auditId = resolved.id;
         const startTime = Date.now();
 
         // Start parent trace
@@ -172,6 +174,18 @@ export const POST = withAuth(async (
             warnings: qaStatus.warnings
         }, 'QA Check Complete');
 
+        // Auto-READY: high QA score (>=60%) and no needsReview → READY; else DRAFT
+        const proposalStatus = (qaStatus.score >= 60 && !qaStatus.needsReview) ? 'READY' : 'DRAFT';
+        logger.info({
+            event: 'proposal.status.decided',
+            auditId,
+            qaScore: qaStatus.score,
+            passedChecks: qaStatus.passedChecks,
+            totalChecks: qaStatus.totalChecks,
+            needsReview: qaStatus.needsReview,
+            status: proposalStatus
+        }, 'Proposal status decided');
+
         // Step 3: Save proposal to database (serialize to JSON)
         const proposal = await prisma.proposal.create({
             data: {
@@ -187,7 +201,7 @@ export const POST = withAuth(async (
                 assumptions: proposalResult.assumptions,
                 disclaimers: proposalResult.disclaimers,
                 nextSteps: proposalResult.nextSteps,
-                status: 'DRAFT',
+                status: proposalStatus,
                 // QA Results
                 qaScore: qaStatus.score,
                 qaResults: JSON.parse(JSON.stringify(qaStatus))
@@ -202,7 +216,7 @@ export const POST = withAuth(async (
             },
         });
 
-        console.log(`[Propose] Proposal saved: ${proposal.id} (QA Score: ${qaStatus.score}%)`);
+        console.log(`[Propose] Proposal saved: ${proposal.id} (QA Score: ${qaStatus.score}%, status: ${proposalStatus})`);
 
         const duration_ms = Date.now() - startTime;
 
@@ -220,13 +234,14 @@ export const POST = withAuth(async (
             auditId,
             proposalId: proposal.id,
             webLinkToken: proposal.webLinkToken,
+            status: proposalStatus,
             proposal: proposalResult,
             costCents: tracker.getTotalCents(),
             duration_ms
         });
 
     } catch (error) {
-        logError('Error generating proposal', error, { auditId: params.id });
+        logError('Error generating proposal', error, { auditId: auditId ?? 'unknown' });
         return NextResponse.json(
             { error: 'Internal Server Error', details: String(error) },
             { status: 500 }

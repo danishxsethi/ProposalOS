@@ -5,6 +5,7 @@ const REQUIRED_ENV_VARS = [
     'GOOGLE_PLACES_API_KEY',
     'SERP_API_KEY',
     'GCP_PROJECT_ID',
+    'GOOGLE_AI_API_KEY', // Used by competitorStrategy, actionPlan, keywordGap, reviewResponses, gbpDeep, consultingNarrative, contentQuality
 ] as const;
 
 const OPTIONAL_ENV_VARS = [
@@ -14,6 +15,8 @@ const OPTIONAL_ENV_VARS = [
     'WEBHOOK_URL',
     'REDIS_URL',
     'GCS_BUCKET_NAME',
+    'GCP_REGION',
+    'DEFAULT_TENANT_ID',
 ] as const;
 
 export function validateEnv() {

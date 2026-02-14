@@ -1,8 +1,17 @@
-import { AuditModuleResult } from './types';
+import { LegacyAuditModuleResult } from './types';
 import { CostTracker } from '@/lib/costs/costTracker';
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { VertexAI } from '@google-cloud/vertexai';
 import { traceLlmCall } from '@/lib/tracing';
 import { RunTree } from 'langsmith';
+
+function getVertexAI() {
+    const projectId = process.env.GCP_PROJECT_ID;
+    const location = process.env.GCP_REGION || 'us-central1';
+    if (!projectId) {
+        throw new Error('GCP_PROJECT_ID not found in environment variables');
+    }
+    return new VertexAI({ project: projectId, location });
+}
 
 export interface ReputationModuleInput {
     reviews: any[]; // Reviews from GBP module
@@ -38,7 +47,7 @@ export async function runReputationModule(
     input: ReputationModuleInput,
     tracker?: CostTracker,
     parentTrace?: RunTree
-): Promise<AuditModuleResult> {
+): Promise<LegacyAuditModuleResult> {
     console.log(`[ReputationModule] Analyzing reviews for ${input.businessName}...`);
 
     // Gracefully skip if no reviews
@@ -55,25 +64,15 @@ export async function runReputationModule(
         };
     }
 
-    const apiKey = process.env.GOOGLE_PLACES_API_KEY; // Gemini uses same key
-    if (!apiKey) {
-        return {
-            moduleId: 'reputation-analysis',
-            status: 'failed',
-            timestamp: new Date().toISOString(),
-            data: null,
-            error: 'API key not configured',
-        };
-    }
-
     try {
         tracker?.addLlmCall('GEMINI_FLASH', 500, 200); // Estimate ~500 input, 200 output tokens
 
-        const genAI = new GoogleGenerativeAI(apiKey);
-        const model = genAI.getGenerativeModel({
-            model: 'gemini-1.5-flash',
+        const vertexAI = getVertexAI();
+        const model = vertexAI.getGenerativeModel({
+            model: 'gemini-2.0-flash', // Match diagnosis pipeline (llmCluster)
             generationConfig: {
                 temperature: 0,
+                maxOutputTokens: 2048,
                 responseMimeType: 'application/json',
             },
         });
@@ -118,7 +117,8 @@ Return JSON in this exact format:
             parent: parentTrace
         }, async () => {
             const result = await model.generateContent(prompt);
-            const responseText = result.response.text();
+            const response = result.response;
+            const responseText = response.candidates?.[0]?.content?.parts?.[0]?.text || '';
             const analysis = JSON.parse(responseText);
 
             // Calculate metrics
@@ -178,7 +178,7 @@ Return JSON in this exact format:
             // Wait, I removed the tracker logic in previous file, but here I should keep it?
             // Yes, I should keep the tracker logic inside the wrapper.
             // And tracing logic handles the rest.
-            return { prompt: 0, completion: 0, model: 'gemini-1.5-flash' };
+            return { prompt: 0, completion: 0, model: 'gemini-2.0-flash' };
         });
     } catch (error) {
         console.error('[ReputationModule] Error:', error);

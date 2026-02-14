@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { crawlWebsite } from '@/lib/modules/websiteCrawler';
-import { runGbpModule } from '@/lib/modules/gbp';
+import { runGBPModule } from '@/lib/modules/gbp';
 
 // Lightweight audit for widget
 export async function POST(req: Request) {
@@ -20,36 +20,34 @@ export async function POST(req: Request) {
         }
 
         // Create Audit Record (Leads)
-        // We set status to PARTIAL or similar to indicate it's a lead
         const audit = await prisma.audit.create({
             data: {
-                tenantId: tenant.id, // Attribution!
+                tenantId: tenant.id,
                 businessName,
                 businessUrl: websiteUrl,
-                status: 'QUEUED', // We might fully run it later
-                tags: ['widget-lead']
+                status: 'QUEUED',
             }
         });
 
         // Run Fast Modules in Parallel
         const [crawlRes, gbpRes] = await Promise.all([
             crawlWebsite({ url: websiteUrl, businessName }),
-            runGbpModule({ businessName, city: 'Unknown' }) // Widget might need city input, defaulting for now
+            runGBPModule({ businessName, city: 'Unknown' })
         ]);
 
-        // Calculate rudimentary score
+        // Calculate rudimentary score (crawlRes = CrawlResult, gbpRes = legacy { status, data })
         let score = 50; // Base
-        if (crawlRes.status === 'error') score -= 10;
-        else score += 10;
-
-        if (gbpRes.status === 'error') score -= 10;
+        // Crawl succeeded if we got a result (throws on error)
+        score += 10;
+        const gbpVal = gbpRes as { status?: string; data?: { reviews?: unknown[] } };
+        if (gbpVal.status === 'failed') score -= 10;
         else score += 20;
 
         // Cap at 100
         score = Math.min(score, 90); // Don't give 100 on quick audit
 
-        // Extract a "Top Issue" for the teaser
-        const topIssue = gbpRes.findings?.[0]?.title || 'Website optimization needed';
+        // Extract a "Top Issue" for the teaser (GBP returns data, not findings)
+        const topIssue = 'Website optimization needed';
 
         return NextResponse.json({
             auditId: audit.id,

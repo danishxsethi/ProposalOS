@@ -127,6 +127,7 @@ async function getProfile(url: string, name: string, city: string, tracker?: Cos
         const linkQuery = `link:${domain}`;
         const data = await cachedFetch('se_link:' + domain, {}, async () => {
             const res = await fetch(`https://serpapi.com/search.json?q=${encodeURIComponent(linkQuery)}&api_key=${serpApiKey}`);
+            return await res.json();
         });
         profile.estimatedLinks = data.search_information?.total_results || 0;
     } catch (e) { }

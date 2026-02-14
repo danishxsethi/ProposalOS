@@ -1,24 +1,10 @@
-import { VertexAI } from '@google-cloud/vertexai';
 import { PainCluster } from '../diagnosis/types';
 import { Finding } from '@prisma/client';
 import { CostTracker } from '@/lib/costs/costTracker';
 import { traceLlmCall } from '@/lib/tracing';
 import { RunTree } from 'langsmith';
 import { getPromptVariant, fillTemplate } from '../experiments/promptAB';
-
-/**
- * Initialize Vertex AI client
- */
-function getVertexAI() {
-    const projectId = process.env.GCP_PROJECT_ID;
-    const location = process.env.GCP_REGION || 'us-central1';
-
-    if (!projectId) {
-        throw new Error('GCP_PROJECT_ID not found in environment variables');
-    }
-
-    return new VertexAI({ project: projectId, location });
-}
+import { getGeminiModel } from '@/lib/llm/gemini';
 
 /**
  * Generate executive summary using Gemini 1.5 Pro
@@ -30,15 +16,9 @@ export async function generateExecutiveSummary(
     tracker?: CostTracker,
     parentTrace?: RunTree
 ): Promise<string> {
-    const vertexAI = getVertexAI();
-    // Switched to Pro as per user request ("Proposal: track Gemini Pro call")
-    // and ensuring quality for executive summary
-    const model = vertexAI.getGenerativeModel({
-        model: 'gemini-1.5-pro',
-        generationConfig: {
-            temperature: 0.4,
-            maxOutputTokens: 512,
-        },
+    const model = getGeminiModel('gemini-2.5-flash', {
+        temperature: 0.4,
+        maxOutputTokens: 512,
     });
 
     // Prepare cluster summaries
@@ -84,12 +64,13 @@ export async function generateExecutiveSummary(
     }, async () => {
         try {
             const result = await model.generateContent(prompt);
-            const text = result.response.candidates?.[0].content.parts[0].text;
+            const response = result.response as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>; usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number } };
+            const text = response.candidates?.[0]?.content?.parts?.[0]?.text;
 
-            if (tracker && result.response.usageMetadata) {
+            if (tracker && response.usageMetadata) {
                 tracker.addLlmCall('GEMINI_PRO',
-                    result.response.usageMetadata.promptTokenCount || 0,
-                    result.response.usageMetadata.candidatesTokenCount || 0
+                    response.usageMetadata.promptTokenCount || 0,
+                    response.usageMetadata.candidatesTokenCount || 0
                 );
             }
 

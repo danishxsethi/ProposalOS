@@ -1,22 +1,18 @@
-
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { processBatch } from '@/lib/audit/batchProcessor';
 import { logger } from '@/lib/logger';
 import { v4 as uuidv4 } from 'uuid';
 import { withAuth } from '@/lib/middleware/auth';
-import type { NextRequest } from 'next/server';
-// import { waitUntil } from '@vercel/functions'; // Assuming this might be available or we use workaround
-
-// Helper to determine if we can use waitUntil (Next.js 15 has unstable_after, Vercel has waitUntil)
-// For generic Next.js 14 on Cloud Run, we simply don't await the promise.
-// Note: On Cloud Run, this requires "CPU always allocated" for reliability, or we accept risk.
-// For MVP, user explicitly said: "Use a simple approach: respond immediately, then process via fetch() to self" OR "waitUntil"
-// Since we are inside the same process, calling the function without await is the simplest "background" task.
-// To make it slightly more robust, we can use a detached promise structure.
+import { getTenantId } from '@/lib/tenant/context';
 
 export const POST = withAuth(async (req: Request) => {
     try {
+        const tenantId = await getTenantId();
+        if (!tenantId) {
+            return NextResponse.json({ error: 'Unauthorized: No Tenant' }, { status: 401 });
+        }
+
         const body = await req.json();
         const { businesses } = body;
 
@@ -37,7 +33,7 @@ export const POST = withAuth(async (req: Request) => {
         const batchId = uuidv4();
         const auditIds: string[] = [];
 
-        // Create all Audit records immediately
+        // Create all Audit records immediately (tenant-scoped)
         for (const business of businesses) {
             // Basic validation
             if (!business.name || !business.city) {
@@ -46,6 +42,7 @@ export const POST = withAuth(async (req: Request) => {
 
             const audit = await prisma.audit.create({
                 data: {
+                    tenantId,
                     businessName: business.name || 'Unknown',
                     businessCity: business.city,
                     businessUrl: business.url,

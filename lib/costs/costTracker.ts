@@ -19,7 +19,24 @@ export const COSTS = {
 // "GEMINI_FLASH_PER_1K_INPUT_CENTS = 0.01 (essentially free)"
 // "GEMINI_PRO_PER_1K_INPUT_CENTS = 0.07"
 
-export type ApiType = 'PAGESPEED' | 'PLACES_TEXT_SEARCH' | 'PLACES_DETAILS' | 'SERP_API';
+export type ApiType =
+    | 'PAGESPEED'
+    | 'PLACES_TEXT_SEARCH'
+    | 'PLACES_DETAILS'
+    | 'SERP_API'
+    | 'SERP'
+    | 'PLACES_DETAILS_DEEP'
+    | 'GEMINI_FLASH'
+    | 'GEMINI_PRO'
+    | 'GEMINI'
+    | 'GEMINI_STRATEGY'
+    | 'GEMINI_KEYWORD_GEN'
+    | 'GEMINI_PHOTO_ANALYSIS'
+    | 'SERP_API_SEARCH'
+    | 'CRAWLER_COMPETITOR'
+    | 'GBP_COMPETITOR'
+    | 'GEMINI_ACTION_PLAN'
+    | 'GEMINI_REVIEW_RESPONSE';
 export type LlmModel = 'GEMINI_FLASH' | 'GEMINI_PRO';
 
 export class CostTracker {
@@ -44,6 +61,7 @@ export class CostTracker {
                 costPerCall = COSTS.PLACES_DETAILS_CENTS;
                 break;
             case 'SERP_API':
+            case 'SERP':
                 costPerCall = COSTS.SERP_API_CENTS;
                 break;
         }

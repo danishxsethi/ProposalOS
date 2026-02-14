@@ -6,6 +6,7 @@ import { ProposalResult } from '../lib/proposal/types';
 const findings: Finding[] = [
     {
         id: 'f1',
+        tenantId: null,
         auditId: 'audit1',
         module: 'website',
         category: 'performance',
@@ -24,6 +25,7 @@ const findings: Finding[] = [
     },
     {
         id: 'f2',
+        tenantId: null,
         auditId: 'audit1',
         module: 'gbp',
         category: 'visibility',
@@ -42,6 +44,7 @@ const findings: Finding[] = [
     },
     {
         id: 'f3',
+        tenantId: null,
         auditId: 'audit1',
         module: 'competitor',
         category: 'ranking',

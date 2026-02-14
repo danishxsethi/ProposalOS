@@ -17,8 +17,23 @@ export interface QAStatus {
     needsReview: boolean;
 }
 
+/** Evidence has valid identifying data. Prefers standardized format (pointer + collected_at). */
+function hasValidEvidence(e: any): boolean {
+    if (!e) return false;
+    // Standardized format: pointer (required) and collected_at (required)
+    if (e.pointer && typeof e.pointer === 'string' && e.pointer.length > 0 && e.collected_at) {
+        return true;
+    }
+    // Backward compatibility: legacy formats
+    return !!(
+        e.url || e.source || e.raw ||
+        e.type || e.value || e.label ||
+        (typeof e === 'string' && e.length > 0)
+    );
+}
+
 /**
- * Run Automated QA on a generated proposal
+ * Run Automated QA on a generated proposal (13 checks)
  */
 export function runAutoQA(
     proposal: ProposalResult,
@@ -30,10 +45,10 @@ export function runAutoQA(
 
     // --- 1. Finding Quality ---
 
-    // Check evidence pointers
+    // Check 1: Evidence pointers (accepts url, source, raw, pointer, type/value/label, etc.)
     const findingsWithEvidence = findings.filter(f => {
         const evidence = f.evidence as any[];
-        return evidence && evidence.length > 0 && evidence.some((e: any) => e.url || e.source || e.raw);
+        return evidence && evidence.length > 0 && evidence.some(hasValidEvidence);
     });
     results.push({
         category: 'Finding Quality',
@@ -151,6 +166,19 @@ export function runAutoQA(
         check: 'No Wrong Business Name',
         passed: summary.toLowerCase().includes(businessName.toLowerCase()),
         details: 'Ensures summary is about this business'
+    });
+
+    // --- 4. Citation Quality ---
+
+    // Check 13: Executive summary cites specific metrics (numbers, %, scores, $, etc.)
+    const hasMetrics = /\d+(\.\d+)?(%|\s*(seconds?|ms|score|rating|reviews?|\$|points?|\/100))/.test(summary);
+    results.push({
+        category: 'Proposal Quality',
+        check: 'Summary Cites Specific Metrics',
+        passed: hasMetrics,
+        details: hasMetrics
+            ? 'Executive summary references specific metrics'
+            : 'Executive summary is generic — should cite specific findings data'
     });
 
     // --- Scoring ---
