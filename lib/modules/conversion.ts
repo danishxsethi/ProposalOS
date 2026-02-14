@@ -134,7 +134,7 @@ function detectConversionElements($: cheerio.CheerioAPI, html: string): Conversi
         const isCTA = ctaKeywords.some(keyword => text.includes(keyword));
 
         if (isCTA && text.length > 0 && text.length < 50) {
-            const position = $(el).offset()?.top || 0;
+            const position = (($(el) as { offset?: () => { top?: number } }).offset?.()?.top) ?? 0;
             ctaElements.push({ text: $(el).text().trim(), href, position });
         }
     });

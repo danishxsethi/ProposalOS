@@ -1,16 +1,21 @@
-
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { withAuth } from '@/lib/middleware/auth';
+import { getTenantId } from '@/lib/tenant/context';
 
 export const GET = withAuth(async (
     req: Request,
-    { params }: { params: { batchId: string } }
+    { params }: { params: Promise<{ batchId: string }> }
 ) => {
-    const { batchId } = params;
+    const tenantId = await getTenantId();
+    if (!tenantId) {
+        return NextResponse.json({ error: 'Unauthorized: No Tenant' }, { status: 401 });
+    }
+
+    const { batchId } = await params;
 
     const audits = await prisma.audit.findMany({
-        where: { batchId },
+        where: { batchId, tenantId },
         select: {
             id: true,
             businessName: true,

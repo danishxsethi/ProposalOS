@@ -350,7 +350,7 @@ function generateKeywordFindings(analysis: KeywordGapAnalysis, input: KeywordGap
     const topRanks = rankings.filter(r => r.rank !== null && r.rank <= 3);
     if (topRanks.length > 0) {
         findings.push({
-            type: 'POSITIVE',
+            type: 'VITAMIN',
             category: 'Visibility',
             title: 'Top Ranking for Key Terms',
             description: `Excellent work! You are ranking in the top 3 for ${topRanks.length} priority keywords.`,

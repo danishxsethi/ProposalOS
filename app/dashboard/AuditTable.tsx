@@ -51,7 +51,7 @@ export default function AuditTable() {
 
         setResending(proposalId);
         try {
-            const res = await fetch(`/api/proposal/${proposalId}/resend`, {
+            const res = await fetch(`/api/proposal/id/${proposalId}/resend`, {
                 method: 'POST',
             });
 

@@ -1,18 +1,34 @@
+import { timingSafeEqual } from 'crypto';
 import { NextResponse } from 'next/server';
 import { clearCache } from '@/lib/cache/apiCache';
 import { logger } from '@/lib/logger';
 
+function secureCompare(a: string, b: string): boolean {
+    const bufA = Buffer.from(a, 'utf8');
+    const bufB = Buffer.from(b, 'utf8');
+    if (bufA.length !== bufB.length) return false;
+    return timingSafeEqual(bufA, bufB);
+}
+
 export async function POST(request: Request) {
     try {
-        const authHeader = request.headers.get('x-admin-key');
-        // Simple admin protection for now, or rely on internal network
-        // For MVP, we'll just check for a secret if env var is set, or proceed
-        if (process.env.ADMIN_SECRET && authHeader !== process.env.ADMIN_SECRET) {
+        const adminSecret = process.env.ADMIN_SECRET;
+        if (!adminSecret) {
+            return NextResponse.json(
+                { error: 'Admin endpoint not configured' },
+                { status: 503 }
+            );
+        }
+
+        const providedKey = request.headers.get('x-admin-key') ?? request.headers.get('x-admin-secret');
+        const bearerToken = request.headers.get('Authorization')?.replace(/^Bearer\s+/i, '').trim();
+        const effectiveKey = providedKey || bearerToken;
+        if (!effectiveKey || !secureCompare(effectiveKey, adminSecret)) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
         await clearCache();
-        logger.info('Cache cleared via API');
+        logger.warn({ clearedBy: 'admin' }, 'cache.cleared');
 
         return NextResponse.json({ success: true, message: 'Cache cleared successfully' });
     } catch (error) {

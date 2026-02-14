@@ -1,5 +1,6 @@
-import { AuditModuleResult } from './types';
+import { LegacyAuditModuleResult } from './types';
 import { CostTracker } from '@/lib/costs/costTracker';
+import { logger } from '@/lib/logger';
 
 export interface SocialModuleInput {
     websiteUrl: string;
@@ -27,13 +28,13 @@ const SOCIAL_PLATFORMS = [
 export async function runSocialModule(
     input: SocialModuleInput,
     tracker?: CostTracker
-): Promise<AuditModuleResult> {
-    console.log(`[SocialModule] Analyzing social presence for ${input.websiteUrl}...`);
+): Promise<LegacyAuditModuleResult> {
+    logger.info({ websiteUrl: input.websiteUrl }, '[SocialModule] Analyzing social presence');
 
     // No cost for this module (just HTML fetch)
 
     if (!input.websiteUrl) {
-        console.log('[SocialModule] No website URL provided, skipping...');
+        logger.info('[SocialModule] No website URL provided, skipping');
         return {
             moduleId: 'social-presence',
             status: 'success',
@@ -46,9 +47,9 @@ export async function runSocialModule(
     }
 
     try {
-        // Fetch homepage HTML (with timeout)
+        // Fetch homepage HTML (with timeout — spec: <3s, 3000ms)
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 5000); // 5s timeout
+        const timeoutId = setTimeout(() => controller.abort(), 3000);
 
         const response = await fetch(input.websiteUrl, {
             signal: controller.signal,
@@ -106,9 +107,10 @@ export async function runSocialModule(
         };
 
     } catch (error) {
-        console.error('[SocialModule] Error:', error);
+        const msg = error instanceof Error ? error.message : 'Unknown error';
+        logger.warn({ error: msg, websiteUrl: input.websiteUrl }, '[SocialModule] Fetch failed, skipping');
 
-        // Don't treat fetch errors as failures - just means we couldn't check
+        // Don't treat fetch errors as failures - just means we couldn't check (timeout, network, etc.)
         return {
             moduleId: 'social-presence',
             status: 'success',

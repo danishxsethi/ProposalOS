@@ -43,9 +43,9 @@ export const GET = withAuth(async (req: Request) => {
         // Proposal model has 'value'.
         const revenueAgg = await prisma.proposal.aggregate({
             where: { tenantId, status: 'ACCEPTED', createdAt: { gte: startDate, lte: endDate } },
-            _sum: { value: true }
+            _sum: { dealValue: true }
         });
-        const totalRevenue = revenueAgg._sum.value || 0;
+        const totalRevenue = Number(revenueAgg._sum?.dealValue ?? 0);
 
         // Cost Analysis
         const costAgg = await prisma.audit.aggregate({
@@ -71,17 +71,18 @@ export const GET = withAuth(async (req: Request) => {
 
         const audits = await prisma.audit.findMany({
             where: { tenantId, createdAt: { gte: startDate, lte: endDate } },
-            select: { createdAt: true, qaScore: true }
+            select: { createdAt: true, proposals: { select: { qaScore: true } } }
         });
 
         const trendsMap = new Map<string, { audits: number, qaScoreSum: number, qaCount: number }>();
 
-        audits.forEach(a => {
+        audits.forEach((a: { createdAt: Date; proposals: { qaScore: number | null }[] }) => {
             const week = format(startOfWeek(a.createdAt), 'yyyy-MM-dd');
             const curr = trendsMap.get(week) || { audits: 0, qaScoreSum: 0, qaCount: 0 };
             curr.audits++;
-            if (a.qaScore) {
-                curr.qaScoreSum += a.qaScore;
+            const qa = a.proposals[0]?.qaScore;
+            if (qa != null) {
+                curr.qaScoreSum += qa;
                 curr.qaCount++;
             }
             trendsMap.set(week, curr);
@@ -129,18 +130,22 @@ export const GET = withAuth(async (req: Request) => {
         }));
 
 
-        // 5. Top Findings (Group by title)
-        // This can be heavy. Limit to top 50 findings most common.
-        // Group by title.
-        const topFindings = await prisma.finding.groupBy({
-            by: ['title', 'type'],
+        // 5. Top Findings (Group by title) - use findMany + reduce to avoid Prisma groupBy signature issues
+        const allFindings = await prisma.finding.findMany({
             where: { audit: { tenantId, createdAt: { gte: startDate, lte: endDate } } },
-            _count: { title: true },
-            orderBy: {
-                _count: { title: 'desc' }
-            },
-            take: 10
+            select: { title: true, type: true }
         });
+        const titleCounts = new Map<string, { title: string; type: string; count: number }>();
+        for (const f of allFindings) {
+            const key = `${f.title}|${f.type}`;
+            const curr = titleCounts.get(key) || { title: f.title, type: f.type, count: 0 };
+            curr.count++;
+            titleCounts.set(key, curr);
+        }
+        const topFindings = Array.from(titleCounts.values())
+            .sort((a, b) => b.count - a.count)
+            .slice(0, 10)
+            .map(f => ({ title: f.title, type: f.type, count: f.count }));
 
         return NextResponse.json({
             overview: {
@@ -154,11 +159,7 @@ export const GET = withAuth(async (req: Request) => {
             funnel,
             trends,
             modulePerformance,
-            topFindings: topFindings.map(f => ({
-                title: f.title,
-                type: f.type,
-                count: f._count.title
-            })),
+            topFindings,
             costAnalysis: {
                 totalCostCents,
                 totalCostUSD: totalCostCents / 100

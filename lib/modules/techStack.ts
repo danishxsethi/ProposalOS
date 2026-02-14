@@ -307,13 +307,13 @@ function generateTechFindings(stack: TechStack): Finding[] {
 
     if (isModern) {
         findings.push({
-            type: 'POSITIVE',
+            type: 'VITAMIN',
             category: 'Performance',
             title: 'Modern Technology Stack',
             description: 'Your website uses modern technologies (React/Vue/Cloud Hosting) which enables excellent performance and user experience potential.',
             impactScore: 3,
             confidenceScore: 90,
-            evidence: stack.frameworks.filter(f => ['React', 'Vue.js'].includes(f)).map(f => ({ type: 'text', value: f, label: 'Framework' })),
+            evidence: stack.frameworks.filter(f => ['React', 'Vue.js'].includes(f)).map(f => ({ type: 'text' as const, value: f, label: 'Framework' })),
             metrics: {},
             effortEstimate: 'LOW',
             recommendedFix: ['Maintain package updates']
@@ -323,15 +323,15 @@ function generateTechFindings(stack: TechStack): Finding[] {
     // POSITIVE: Strong Tooling (Analytics + Marketing + Widgets)
     if (stack.analytics.length > 0 && stack.marketing.length > 0 && stack.widgets.length > 0) {
         findings.push({
-            type: 'POSITIVE',
+            type: 'VITAMIN',
             category: 'Conversion',
             title: 'Comprehensive Digital Tooling',
             description: 'You have a solid suite of tools for analytics, marketing, and customer interaction. This indicates a high level of digital maturity.',
             impactScore: 2,
             confidenceScore: 90,
             evidence: [
-                ...stack.analytics.map(t => ({ type: 'text', value: t, label: 'Analytics' })),
-                ...stack.marketing.map(t => ({ type: 'text', value: t, label: 'Marketing' }))
+                ...stack.analytics.map(t => ({ type: 'text' as const, value: t, label: 'Analytics' })),
+                ...stack.marketing.map(t => ({ type: 'text' as const, value: t, label: 'Marketing' }))
             ],
             metrics: {},
             effortEstimate: 'LOW',

@@ -312,8 +312,8 @@ export function generateBenchmarkRadarData(
     // Extract real scores from findings/metrics (simplified logic)
     // In a real app, you'd aggregate scores from specific modules
     findings.forEach(f => {
-        if (f.category === 'Performance' && f.type === 'POSITIVE') scores.Website += 10;
-        if (f.category === 'SEO' && f.type === 'POSITIVE') scores.SEO += 10;
+        if (f.category === 'Performance' && f.type === 'VITAMIN') scores.Website += 10;
+        if (f.category === 'SEO' && f.type === 'VITAMIN') scores.SEO += 10;
         // ... more logic to build actual scores
     });
 

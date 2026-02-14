@@ -10,6 +10,8 @@ export const POST = withAuth(async (
 ) => {
     try {
         const tenantId = await getTenantId();
+        if (!tenantId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
         const proposalId = params.id;
         const body = await req.json();
 

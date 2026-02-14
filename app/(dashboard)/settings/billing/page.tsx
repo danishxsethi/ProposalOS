@@ -4,10 +4,11 @@ import { getUsageStats } from '@/lib/billing/metering';
 
 export default async function BillingPage() {
     const session = await auth();
-    if (!session?.user?.tenantId) return <div>Auth required</div>;
+    const tenantId = session?.user && 'tenantId' in session.user ? (session.user as { tenantId?: string }).tenantId : undefined;
+    if (!tenantId) return <div>Auth required</div>;
 
     const tenant = await prisma.tenant.findUnique({
-        where: { id: session.user.tenantId }
+        where: { id: tenantId }
     });
 
     if (!tenant) return <div>Tenant not found</div>;

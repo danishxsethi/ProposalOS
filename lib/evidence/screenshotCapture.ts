@@ -63,9 +63,9 @@ async function getBrowser(): Promise<Browser> {
         // Production - use Chromium from @sparticuz/chromium
         browserInstance = await puppeteer.launch({
             args: chromium.args,
-            defaultViewport: chromium.defaultViewport,
+            defaultViewport: { width: 1920, height: 1080, deviceScaleFactor: 1 },
             executablePath: await chromium.executablePath(),
-            headless: chromium.headless,
+            headless: true,
         });
     }
 
@@ -192,13 +192,14 @@ async function captureScreenshot(
         });
 
         // Wait a moment for any animations
-        await page.waitForTimeout(1000);
+        await new Promise(r => setTimeout(r, 1000));
 
         // Capture main screenshot
-        const screenshotBuffer = await page.screenshot({
+        const screenshotData = await page.screenshot({
             type: 'png',
             fullPage: false, // Above the fold only
         });
+        const screenshotBuffer = Buffer.isBuffer(screenshotData) ? screenshotData : Buffer.from(screenshotData);
 
         // Upload to GCS
         const mainFileName = `screenshots/${auditId}/${options.name}.png`;
@@ -218,12 +219,13 @@ async function captureScreenshot(
         // Capture annotated version if requested
         if (options.annotate && options.annotationConfig) {
             await injectAnnotations(page, options.annotationConfig);
-            await page.waitForTimeout(500); // Let styles apply
+            await new Promise(r => setTimeout(r, 500)); // Let styles apply
 
-            const annotatedBuffer = await page.screenshot({
+            const annotatedData = await page.screenshot({
                 type: 'png',
                 fullPage: false,
             });
+            const annotatedBuffer = Buffer.isBuffer(annotatedData) ? annotatedData : Buffer.from(annotatedData);
 
             const annotatedFileName = `screenshots/${auditId}/${options.name}-annotated.png`;
             annotatedUrl = await uploadToGCS(annotatedBuffer, annotatedFileName);
@@ -321,13 +323,15 @@ export async function captureComparisonScreenshot(
 
         // Capture left side
         await page.goto(leftUrl, { waitUntil: 'networkidle2', timeout: 10000 });
-        await page.waitForTimeout(500);
-        const leftBuffer = await page.screenshot({ type: 'png', fullPage: false });
+        await new Promise(r => setTimeout(r, 500));
+        const leftData = await page.screenshot({ type: 'png', fullPage: false });
+        const leftBuffer = Buffer.isBuffer(leftData) ? leftData : Buffer.from(leftData);
 
         // Capture right side
         await page.goto(rightUrl, { waitUntil: 'networkidle2', timeout: 10000 });
-        await page.waitForTimeout(500);
-        const rightBuffer = await page.screenshot({ type: 'png', fullPage: false });
+        await new Promise(r => setTimeout(r, 500));
+        const rightData = await page.screenshot({ type: 'png', fullPage: false });
+        const rightBuffer = Buffer.isBuffer(rightData) ? rightData : Buffer.from(rightData);
 
         // Combine side by side using sharp
         const left = sharp(leftBuffer);
@@ -410,17 +414,19 @@ export async function captureGBPScreenshot(
         await page.goto(mapsUrl, { waitUntil: 'networkidle2', timeout: 15000 });
 
         // Wait for map to load
-        await page.waitForTimeout(3000);
+        await new Promise(r => setTimeout(r, 3000));
 
         // Try to click on the first result to show details
         try {
-            await page.click('[role="article"]', { timeout: 2000 });
-            await page.waitForTimeout(2000);
+            await page.waitForSelector('[role="article"]', { timeout: 2000 });
+            await page.click('[role="article"]');
+            await new Promise(r => setTimeout(r, 2000));
         } catch {
             // If clicking fails, just proceed with map view
         }
 
-        const screenshotBuffer = await page.screenshot({ type: 'png', fullPage: false });
+        const screenshotData = await page.screenshot({ type: 'png', fullPage: false });
+        const screenshotBuffer = Buffer.isBuffer(screenshotData) ? screenshotData : Buffer.from(screenshotData);
 
         // Upload
         const fileName = `screenshots/${auditId}/gbp-listing.png`;

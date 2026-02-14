@@ -40,6 +40,7 @@ model Audit {
   @@index([status])
   @@index([createdAt])
   @@index([tenantId])
+  @@index([batchId])
 }
 
 model Finding {
@@ -281,9 +282,26 @@ model Tenant {
   playbooks      Playbook[]
   auditSchedules AuditSchedule[]
   UsageRecord    UsageRecord[]
+  invitations    Invitation[]
 
   @@index([domain])
   @@index([isActive])
+}
+
+model Invitation {
+  id         String    @id @default(uuid())
+  email      String
+  role       String    @default("member")
+  token      String    @unique
+  tenantId   String
+  invitedBy  String?
+  expiresAt  DateTime
+  acceptedAt DateTime?
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([token])
 }
 
 model Playbook {

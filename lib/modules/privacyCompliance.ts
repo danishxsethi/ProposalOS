@@ -250,7 +250,7 @@ export async function runPrivacyModule(
                 description: `Your policy scored ${policyAnalysis.completenessScore}/10. It is likely a generic template and misses key business-specific disclosures.`,
                 impactScore: 5,
                 confidenceScore: 90,
-                evidence: [{ type: 'link', value: policyAnalysis.url || '', label: 'Current Policy' }],
+                evidence: [{ type: 'url' as const, value: policyAnalysis.url || '', label: 'Current Policy' }],
                 metrics: { score: policyAnalysis.completenessScore },
                 effortEstimate: 'MEDIUM',
                 recommendedFix: ['Update policy to include: ' + policyAnalysis.missingElements.join(', ')]
@@ -313,9 +313,9 @@ async function launchBrowser() {
     } else {
         return await puppeteer.launch({
             args: chromium.args,
-            defaultViewport: chromium.defaultViewport,
+            defaultViewport: { width: 1920, height: 1080, deviceScaleFactor: 1 },
             executablePath: await chromium.executablePath(),
-            headless: chromium.headless,
+            headless: true,
         });
     }
 }

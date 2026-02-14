@@ -24,6 +24,7 @@ export async function runAuditOrchestrator(auditId: string) {
 
     // 3. Initialize Orchestrator
     const orchestrator = new AuditOrchestrator({
+        auditId: audit.id,
         businessName: audit.businessName,
         websiteUrl: audit.businessUrl || '', // Should validate before
         city: audit.businessCity || 'Unknown',
@@ -50,11 +51,12 @@ export async function runAuditOrchestrator(auditId: string) {
         // 4. Run
         const result: OrchestratorResult = await orchestrator.run();
 
-        // 5. Save Final Results
+        // 5. Save Final Results (map DEGRADED to PARTIAL for Prisma enum)
+        const dbStatus = result.status === 'DEGRADED' ? 'PARTIAL' : result.status;
         await prisma.audit.update({
             where: { id: auditId },
             data: {
-                status: result.status,
+                status: dbStatus,
                 completedAt: new Date(),
                 findings: {
                     create: result.findings.map(f => ({

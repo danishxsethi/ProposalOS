@@ -20,8 +20,6 @@ export async function runSeoDeepModule(input: SeoDeepInput, tracker?: CostTracke
         return {
             findings: [],
             evidenceSnapshots: [],
-            moduleId: 'seo-deep',
-            status: 'skipped'
         };
     }
 
@@ -40,7 +38,7 @@ export async function runSeoDeepModule(input: SeoDeepInput, tracker?: CostTracke
             hasRobotsTxt: robotsStatus === 200,
             hasSitemap: sitemapStatus === 200,
             url: input.url
-        });
+        }) as Finding[];
 
         // Evidence Snapshot
         const evidenceSnapshots = [{
@@ -55,9 +53,6 @@ export async function runSeoDeepModule(input: SeoDeepInput, tracker?: CostTracke
         return {
             findings,
             evidenceSnapshots,
-            moduleId: 'seo-deep',
-            status: 'success',
-            timestamp: new Date().toISOString()
         };
 
     } catch (error) {
@@ -76,9 +71,6 @@ export async function runSeoDeepModule(input: SeoDeepInput, tracker?: CostTracke
                 recommendedFix: ['Ensure website is accessible']
             }],
             evidenceSnapshots: [],
-            moduleId: 'seo-deep',
-            status: 'failed',
-            error: error instanceof Error ? error.message : 'Unknown error'
         };
     }
 }

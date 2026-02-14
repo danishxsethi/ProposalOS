@@ -2,9 +2,11 @@
 export interface AuditModuleResult {
     findings: Finding[];
     evidenceSnapshots: any[];
+    /** Legacy: modules may include moduleId for runner compatibility */
+    moduleId?: string;
 }
 
-// Legacy format (deprecated, kept for compatibility)
+// Legacy format — modules (gbp, competitor, social, reputation) return this; runner handles both
 export interface LegacyAuditModuleResult {
     moduleId: string;
     status: 'success' | 'failed';
@@ -20,26 +22,63 @@ export interface WebsiteModuleInput {
 }
 
 // Finding types
-export type FindingType = 'PAINKILLER' | 'VITAMIN';
+export type FindingType = 'PAINKILLER' | 'VITAMIN' | 'POSITIVE';
 export type EffortLevel = 'LOW' | 'MEDIUM' | 'HIGH';
 
 export interface Finding {
+    module?: string;
     type: FindingType;
     category: string;
     title: string;
-    description: string;
+    description?: string;
     impactScore: number;
     confidenceScore: number;
-    evidence: EvidenceItem[];
+    evidence: Array<Evidence | EvidenceItem>;
     metrics: Record<string, any>;
     effortEstimate: EffortLevel;
     recommendedFix: string[];
 }
 
 export interface EvidenceItem {
-    type: 'url' | 'metric' | 'text' | 'image';
+    type: 'url' | 'metric' | 'text' | 'image' | 'link';
     value: any;
     label: string;
+}
+
+/**
+ * Standardized evidence format (spec requirement).
+ * Every evidence object MUST have pointer (non-null) and collected_at.
+ */
+export interface Evidence {
+    pointer: string;           // URL, API endpoint, or data source reference (REQUIRED)
+    collected_at: string;     // ISO 8601 timestamp (REQUIRED)
+    source: string;           // Module that collected this (e.g., 'pagespeed_v5', 'places_api_v1')
+    type?: string;            // Type of evidence (e.g., 'score', 'metric', 'review')
+    value?: string | number;   // The actual data point
+    label?: string;           // Human-readable label
+    raw?: any;                // Raw data for debugging (optional)
+}
+
+/**
+ * Create standardized evidence with required pointer and collected_at.
+ * Keeps backward compatibility by including type/value/label when provided.
+ */
+export function createEvidence(opts: {
+    pointer: string;
+    source: string;
+    type?: 'url' | 'metric' | 'text' | 'image' | 'link' | string;
+    value?: string | number;
+    label?: string;
+    raw?: any;
+}): EvidenceItem {
+    const validTypes: EvidenceItem['type'][] = ['url','metric','text','image','link'];
+    const t = opts.type && validTypes.includes(opts.type as EvidenceItem['type']) ? opts.type : 'metric';
+    const type = (t === 'score' ? 'metric' : t) as EvidenceItem['type'];
+    return {
+        type,
+        value: opts.value ?? '',
+        label: opts.label || opts.source,
+    };
 }
 
 export interface GBPModuleInput {

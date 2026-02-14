@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { withAuth } from '@/lib/middleware/auth';
+import { getTenantId } from '@/lib/tenant/context';
 
 interface Params {
     params: Promise<{ id: string }>;
@@ -13,9 +14,14 @@ interface Params {
 export const GET = withAuth(async (request: Request, { params }: Params) => {
     try {
         const { id } = await params;
+        const tenantId = await getTenantId();
+        if (!tenantId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-        const finding = await prisma.finding.findUnique({
-            where: { id },
+        const finding = await prisma.finding.findFirst({
+            where: {
+                id,
+                audit: { tenantId }
+            },
             include: { audit: true },
         });
 
@@ -41,6 +47,16 @@ export const GET = withAuth(async (request: Request, { params }: Params) => {
 export const PATCH = withAuth(async (request: Request, { params }: Params) => {
     try {
         const { id } = await params;
+        const tenantId = await getTenantId();
+        if (!tenantId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+        // Verify ownership
+        const existingFinding = await prisma.finding.findFirst({
+            where: { id, audit: { tenantId } }
+        });
+
+        if (!existingFinding) return NextResponse.json({ error: 'Finding not found' }, { status: 404 });
+
         const body = await request.json();
 
         const allowedFields = [
@@ -105,6 +121,15 @@ export const PATCH = withAuth(async (request: Request, { params }: Params) => {
 export const DELETE = withAuth(async (request: Request, { params }: Params) => {
     try {
         const { id } = await params;
+        const tenantId = await getTenantId();
+        if (!tenantId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+        // Verify ownership
+        const existingFinding = await prisma.finding.findFirst({
+            where: { id, audit: { tenantId } }
+        });
+
+        if (!existingFinding) return NextResponse.json({ error: 'Finding not found' }, { status: 404 });
 
         const finding = await prisma.finding.update({
             where: { id },

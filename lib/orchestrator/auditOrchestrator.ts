@@ -42,6 +42,7 @@ export interface OrchestratorResult {
     evidenceSnapshots: any[];
     moduleTimings: Record<string, number>;
     progress: number;
+    modulesCompleted?: string[];
 }
 
 export class AuditOrchestrator {
@@ -409,12 +410,14 @@ export class AuditOrchestrator {
         else if (successCount < totalModules * 0.5) status = 'DEGRADED';
         else if (successCount < totalModules) status = 'PARTIAL';
 
+        const modulesCompleted = Object.keys(this.timings);
         return {
             status,
             findings: this.findings,
             evidenceSnapshots: this.evidenceSnapshots,
             moduleTimings: this.timings,
-            progress: 100
+            progress: 100,
+            modulesCompleted
         };
     }
 }

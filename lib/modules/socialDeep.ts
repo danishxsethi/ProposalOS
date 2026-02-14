@@ -101,7 +101,7 @@ export async function runSocialDeepModule(
                 description: `${unlinked.length} profiles are missing a link back to your website. You are losing traffic.`,
                 impactScore: 4,
                 confidenceScore: 95,
-                evidence: unlinked.map(p => ({ type: 'link', value: p.url, label: capitalize(p.platform) })),
+                evidence: unlinked.map(p => ({ type: 'url' as const, value: p.url, label: capitalize(p.platform) })),
                 metrics: { unlinkedCount: unlinked.length },
                 effortEstimate: 'LOW',
                 recommendedFix: ['Add website URL to all social bios']

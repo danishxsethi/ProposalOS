@@ -8,12 +8,13 @@ async function validate(req: Request) {
     return await getTenantFromApiKey(authHeader.split(' ')[1]);
 }
 
-export async function GET(req: Request, { params }: { params: { id: string } }) {
+export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
     const tenant = await validate(req);
     if (!tenant) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
+    const { id } = await params;
     const audit = await prisma.audit.findUnique({
-        where: { id: params.id },
+        where: { id },
         include: { findings: true }
     });
 

@@ -1,4 +1,4 @@
-import { AuditModuleResult, CompetitorModuleInput, CompetitorComparisonMatrix, MatchedBusinessData, ComparisonGap } from './types';
+import { LegacyAuditModuleResult, CompetitorModuleInput, CompetitorComparisonMatrix, MatchedBusinessData, ComparisonGap } from './types';
 import { CostTracker } from '@/lib/costs/costTracker';
 import { cachedFetch } from '@/lib/cache/apiCache';
 
@@ -6,7 +6,7 @@ const SERP_API_BASE = 'https://serpapi.com/search';
 const PLACES_API_BASE = 'https://places.googleapis.com/v1';
 const PSI_API_URL = 'https://www.googleapis.com/pagespeedonline/v5/runPagespeed';
 
-export async function runCompetitorModule(input: CompetitorModuleInput, tracker?: CostTracker): Promise<AuditModuleResult> {
+export async function runCompetitorModule(input: CompetitorModuleInput, tracker?: CostTracker): Promise<LegacyAuditModuleResult> {
     console.log(`[CompetitorModule] Searching for '${input.keyword}' in ${input.location}...`);
 
     if (!process.env.SERP_API_KEY || !process.env.GOOGLE_PLACES_API_KEY || !process.env.GOOGLE_PAGESPEED_API_KEY) {

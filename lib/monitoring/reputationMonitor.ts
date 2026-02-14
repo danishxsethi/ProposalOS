@@ -14,8 +14,8 @@ export async function monitorReputation() {
     // For MVP, we'll check audits updated in last 30 days
     const audits = await prisma.audit.findMany({
         where: {
-            status: 'COMPLETED',
-            updatedAt: { gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) }
+            status: 'COMPLETE',
+            completedAt: { not: null, gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) }
         },
         take: 50 // Batch
     });

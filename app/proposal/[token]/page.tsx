@@ -105,5 +105,5 @@ export default async function Page({ params }: Props) {
         });
     }
 
-    return <ProposalPage proposal={proposal} branding={branding} />;
+    return <ProposalPage proposal={proposal} />;
 }

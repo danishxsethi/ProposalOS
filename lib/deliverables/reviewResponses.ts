@@ -1,5 +1,4 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import { traceable } from 'langsmith/traceable';
 import { logger } from '@/lib/logger';
 import { CostTracker } from '@/lib/costs/costTracker';
 
@@ -79,43 +78,40 @@ export async function generateReviewResponses(
 /**
  * Generate single response using Gemini
  */
-const generateSingleResponse = traceable(
-    async (model: any, review: Review, context: ReviewResponseInput): Promise<string> => {
-        const isPositive = review.rating >= 4;
+async function generateSingleResponse(model: any, review: Review, context: ReviewResponseInput): Promise<string> {
+    const isPositive = review.rating >= 4;
 
-        const instructions = isPositive
-            ? `POSITIVE REVIEW STRATEGY:
-               - Thank them by name (if valid name)
-               - Reference specific details they mentioned
-               - Reinforce our strengths
-               - Warm, genuine tone (not corporate)
-               - Invite them back`
-            : `NEGATIVE REVIEW STRATEGY:
-               - Acknowledge frustration
-               - Apologize without admitting legal fault
-               - Take conversation offline ("Please call us at...")
-               - Professional, empathetic, solution-oriented tone
-               - NEVER argue or blame`;
+    const instructions = isPositive
+        ? `POSITIVE REVIEW STRATEGY:
+           - Thank them by name (if valid name)
+           - Reference specific details they mentioned
+           - Reinforce our strengths
+           - Warm, genuine tone (not corporate)
+           - Invite them back`
+        : `NEGATIVE REVIEW STRATEGY:
+           - Acknowledge frustration
+           - Apologize without admitting legal fault
+           - Take conversation offline ("Please call us at...")
+           - Professional, empathetic, solution-oriented tone
+           - NEVER argue or blame`;
 
-        const prompt = `You are the owner of ${context.businessName}, a ${context.industry} in ${context.city}.
-        Write a response to this Google review.
+    const prompt = `You are the owner of ${context.businessName}, a ${context.industry} in ${context.city}.
+    Write a response to this Google review.
 
-        REVIEWER: ${review.authorName}
-        RATING: ${review.rating} stars
-        TEXT: "${review.text}"
+    REVIEWER: ${review.authorName}
+    RATING: ${review.rating} stars
+    TEXT: "${review.text}"
 
-        ${instructions}
+    ${instructions}
 
-        RULES:
-        - Max 3 sentences
-        - No emojis
-        - No placeholders like "[Phone Number]" (just say "call our office")
-        - Genuine human voice
-        
-        DRAFT RESPONSE:`;
+    RULES:
+    - Max 3 sentences
+    - No emojis
+    - No placeholders like "[Phone Number]" (just say "call our office")
+    - Genuine human voice
+    
+    DRAFT RESPONSE:`;
 
-        const result = await model.generateContent(prompt);
-        return result.response.text().trim();
-    },
-    { name: 'generate_review_response', run_type: 'llm' }
-);
+    const result = await model.generateContent(prompt);
+    return result.response.text().trim();
+}

@@ -1,18 +1,15 @@
-
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { FollowUpScheduler } from '@/lib/followup/scheduler';
-import { getBinding } from '@/lib/config/branding'; // Typo in original import in another file, assuming getBranding is correct or we fix it. 
-// Actually, let's use the standard prisma, but wait, this is a public route (proposal token based).
-// So no auth middleware needed, but we validate token.
 
-export async function POST(req: Request, { params }: { params: { token: string } }) {
+export async function POST(req: Request, { params }: { params: Promise<{ token: string }> }) {
     try {
+        const { token } = await params;
         const { tier, name, email, phone, message } = await req.json();
 
         // 1. Find Proposal by Token
         const proposal = await prisma.proposal.findUnique({
-            where: { webLinkToken: params.token },
+            where: { webLinkToken: token },
             include: { audit: true }
         });
 

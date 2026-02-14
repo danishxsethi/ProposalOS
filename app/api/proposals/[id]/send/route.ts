@@ -12,6 +12,15 @@ export const POST = withAuth(async (req: Request, { params }: { params: { id: st
 
         const { email } = await req.json();
 
+        // Check ownership first
+        const existingProposal = await prisma.proposal.findFirst({
+            where: { id: params.id, tenantId }
+        });
+
+        if (!existingProposal) {
+            return NextResponse.json({ error: 'Proposal not found' }, { status: 404 });
+        }
+
         // Update Proposal
         const proposal = await prisma.proposal.update({
             where: { id: params.id },

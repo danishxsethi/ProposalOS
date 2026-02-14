@@ -52,6 +52,7 @@ export const POST = withAuth(async (req: Request) => {
                     email,
                     role,
                     token,
+                    tenantId,
                     expiresAt,
                     invitedBy: 'current-user-id', // TODO: Get actual ID
                 },

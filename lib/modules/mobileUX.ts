@@ -122,7 +122,7 @@ async function analyzeMobileUX(url: string, tracker?: CostTracker): Promise<Mobi
         await page.goto(url, { waitUntil: 'networkidle2', timeout: 15000 });
 
         // Wait for any animations/transitions
-        await page.waitForTimeout(2000);
+        await new Promise(r => setTimeout(r, 2000));
 
         // Analyze layout
         const layoutMetrics = await page.evaluate(() => {
@@ -338,9 +338,9 @@ async function launchBrowser() {
     } else {
         return await puppeteer.launch({
             args: chromium.args,
-            defaultViewport: chromium.defaultViewport,
+            defaultViewport: { width: 1920, height: 1080, deviceScaleFactor: 1 },
             executablePath: await chromium.executablePath(),
-            headless: chromium.headless,
+            headless: true,
         });
     }
 }

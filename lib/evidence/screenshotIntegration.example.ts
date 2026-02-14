@@ -33,10 +33,19 @@ export async function runWebsiteModuleWithScreenshots(input: {
         competitorUrls: input.competitorUrls,
     });
 
-    // 3. Attach screenshots to findings
-    const findingsWithScreenshots = crawlerResult.findings.map(finding =>
-        attachScreenshotsToFinding(finding, screenshotEvidence.allScreenshots)
-    );
+    // 3. Attach screenshots to findings (helper - injects screenshot URLs into finding evidence)
+    const findingsWithScreenshots = crawlerResult.findings.map(finding => ({
+        ...finding,
+        evidence: [
+            ...(finding.evidence || []),
+            ...(screenshotEvidence.allScreenshots || []).slice(0, 3).map((s: { url: string; thumbnailUrl?: string; name?: string }) => ({
+                type: 'image' as const,
+                value: s.url,
+                label: (s as any).name || 'Screenshot',
+                ...(s.thumbnailUrl && { thumbnailUrl: s.thumbnailUrl })
+            }))
+        ]
+    }));
 
     // 4. Store screenshot evidence in EvidenceSnapshot
     const screenshotSnapshot = {

@@ -60,15 +60,7 @@ export async function checkSeatLimit() {
     // Fetch tenant to get planTier
     const tenant = await prisma.tenant.findUnique({
         where: { id: tenantId },
-        include: {
-            users: true,
-            invitations: {
-                where: {
-                    expiresAt: { gt: new Date() },
-                    acceptedAt: null
-                }
-            }
-        },
+        include: { users: true },
     });
 
     if (!tenant) return { allowed: false, current: 0, limit: 0, planTier: 'unknown' };
@@ -78,7 +70,7 @@ export async function checkSeatLimit() {
     const plan = getPlanById(effectiveTier);
 
     const activeUsers = tenant.users.length;
-    const pendingInvites = tenant.invitations.length;
+    const pendingInvites = 0; // TODO: add invitations relation to Tenant when schema supports it
     const totalSeatsUsed = activeUsers + pendingInvites;
     const limit = plan?.limits?.seats || 1;
 

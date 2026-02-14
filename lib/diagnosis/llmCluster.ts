@@ -1,25 +1,11 @@
-import { VertexAI } from '@google-cloud/vertexai';
 import { Finding, PreCluster, PainCluster } from './types';
 import { scoreCluster } from './validation';
 import { CostTracker } from '@/lib/costs/costTracker';
 import { traceLlmCall } from '@/lib/tracing';
 import { RunTree } from 'langsmith';
+import { getGeminiModel } from '@/lib/llm/gemini';
 // Import A/B testing system
 import { getPromptVariant, fillTemplate } from '../experiments/promptAB';
-
-/**
- * Initialize Vertex AI client
- */
-function getVertexAI() {
-    const projectId = process.env.GCP_PROJECT_ID;
-    const location = process.env.GCP_REGION || 'us-central1';
-
-    if (!projectId) {
-        throw new Error('GCP_PROJECT_ID not found in environment variables');
-    }
-
-    return new VertexAI({ project: projectId, location });
-}
 
 /**
  * Use Gemini 1.5 Flash to refine pre-clusters into semantic pain clusters
@@ -30,13 +16,10 @@ export async function llmClusterFindings(
     tracker?: CostTracker,
     parentTrace?: RunTree
 ): Promise<PainCluster[]> {
-    const vertexAI = getVertexAI();
-    const model = vertexAI.getGenerativeModel({
-        model: 'gemini-2.0-flash',
-        generationConfig: {
-            temperature: 0, // Deterministic for consistency
-            maxOutputTokens: 2048,
-        },
+    // Using Gemini 2.0 Flash (upgraded from spec's 1.5 Flash for better JSON output)
+    const model = getGeminiModel(process.env.CLUSTERING_MODEL || 'gemini-2.5-flash', {
+        temperature: 0,
+        maxOutputTokens: 2048,
     });
 
     // Prepare findings for LLM
@@ -79,7 +62,7 @@ export async function llmClusterFindings(
     }, async () => {
         try {
             const result = await model.generateContent(prompt);
-            const response = result.response;
+            const response = result.response as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>; usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number } };
             const text = response.candidates?.[0]?.content?.parts?.[0]?.text || '';
 
             // Extract JSON from response (handle markdown code blocks if present)
@@ -132,13 +115,9 @@ export async function generateNarratives(
     tracker?: CostTracker,
     parentTrace?: RunTree
 ): Promise<PainCluster[]> {
-    const vertexAI = getVertexAI();
-    const model = vertexAI.getGenerativeModel({
-        model: 'gemini-1.5-pro',
-        generationConfig: {
-            temperature: 0.3, // Slight creativity for better readability
-            maxOutputTokens: 512,
-        },
+    const model = getGeminiModel('gemini-2.5-flash', {
+        temperature: 0.3,
+        maxOutputTokens: 512,
     });
 
     // Get Audit ID for deterministic A/B testing
@@ -179,7 +158,7 @@ export async function generateNarratives(
         }, async () => {
             try {
                 const result = await model.generateContent(prompt);
-                const response = result.response;
+                const response = result.response as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>; usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number } };
                 const narrative = (response.candidates?.[0]?.content?.parts?.[0]?.text || cluster.rootCause).trim();
 
                 if (tracker && response.usageMetadata) {

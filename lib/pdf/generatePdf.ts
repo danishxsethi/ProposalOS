@@ -15,44 +15,44 @@ export async function generatePdf(
     let browser;
 
     try {
-        // Configure Chromium for serverless
-        // Use local Chrome in development if available
-        let executablePath = await chromium.executablePath();
+        // Prefer local Chrome on macOS/development (sparticuz binary can cause ENOEXEC on Mac)
+        const fs = require('fs');
+        const localPaths = [
+            process.env.CHROME_EXECUTABLE_PATH,
+            '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+            '/Applications/Chromium.app/Contents/MacOS/Chromium',
+            '/usr/bin/google-chrome',
+            '/usr/bin/chromium-browser',
+        ].filter(Boolean) as string[];
 
-        if (process.env.NODE_ENV === 'development') {
-            // Fallback for local mac dev if sparticuz doesn't find it
-            // puppeteer-core needs an executable. 
-            // Common paths:
-            const fs = require('fs');
-            const localPaths = [
-                '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-                '/Applications/Google Chrome Canary.app/Contents/MacOS/Google Chrome Canary',
-                '/usr/bin/google-chrome',
-                '/usr/bin/chromium-browser'
-            ];
+        let executablePath: string | undefined;
+        for (const p of localPaths) {
+            if (p && fs.existsSync(p)) {
+                executablePath = p;
+                break;
+            }
+        }
 
-            // If sparticuz returns valid path use it, otherwise check local
-            if (!executablePath) {
-                for (const path of localPaths) {
-                    if (fs.existsSync(path)) {
-                        executablePath = path;
-                        break;
-                    }
-                }
+        // Fallback: sparticuz (for Lambda/serverless environments)
+        if (!executablePath) {
+            try {
+                executablePath = await chromium.executablePath();
+            } catch {
+                // Ignore - use local paths only
             }
         }
 
         if (!executablePath) {
-            throw new Error('Chromium executable not found. Please set CHROME_EXECUTABLE_PATH or install Chrome.');
+            throw new Error('Chromium not found. Install Chrome or set CHROME_EXECUTABLE_PATH.');
         }
 
         browser = await puppeteer.launch({
-            args: (chromium as any).args,
-            defaultViewport: (chromium as any).defaultViewport,
-            executablePath: executablePath,
-            headless: (chromium as any).headless,
+            args: ['--no-sandbox', '--disable-setuid-sandbox'],
+            defaultViewport: { width: 1920, height: 1080, deviceScaleFactor: 1 },
+            executablePath,
+            headless: true,
             ignoreHTTPSErrors: true,
-        } as any);
+        });
 
         const page = await browser.newPage();
 

@@ -5,12 +5,12 @@ import bcrypt from 'bcryptjs';
 
 export async function POST(
     req: Request,
-    { params }: { params: { token: string } }
+    { params }: { params: Promise<{ token: string }> }
 ) {
     try {
+        const { token } = await params;
         const body = await req.json();
         const { name, password } = body;
-        const token = params.token;
 
         if (!name || !password) {
             return NextResponse.json({ error: 'Missing fields' }, { status: 400 });

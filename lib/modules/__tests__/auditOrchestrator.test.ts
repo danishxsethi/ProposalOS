@@ -19,6 +19,7 @@ describe('AuditOrchestrator', () => {
     beforeEach(() => {
         tracker = new CostTracker();
         orchestrator = new AuditOrchestrator({
+            auditId: 'test-audit-id',
             businessName: 'Test Biz',
             websiteUrl: 'https://example.com',
             city: 'Austin',

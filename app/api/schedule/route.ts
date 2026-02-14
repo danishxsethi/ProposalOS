@@ -1,10 +1,6 @@
-
 import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
 import { getTenantId, createScopedPrisma } from '@/lib/tenant/context';
 import { withAuth } from '@/lib/middleware/auth';
-import { getServerSession } from 'next-auth'; // Assuming next-auth
-import { authOptions } from '@/lib/auth'; // Adjust import if needed
 
 // GET: List Schedules
 export const GET = withAuth(async (req: Request) => {
