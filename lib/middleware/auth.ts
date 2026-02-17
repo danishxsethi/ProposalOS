@@ -6,16 +6,18 @@ import { prisma } from '@/lib/prisma';
 import { runWithTenantAsync } from '@/lib/tenant/context';
 
 // Middleware to check authentication (Session OR API Key)
+// API key can be passed via Authorization: Bearer <key> OR X-API-Key header (for Cloud Run + identity token)
 export function withAuth(handler: Function) {
     return async (req: Request, ...args: any[]) => {
         const authHeader = req.headers.get('Authorization');
+        const xApiKey = req.headers.get('x-api-key')?.trim();
+        const token = xApiKey || (authHeader?.startsWith('Bearer ') ? authHeader.slice(7).trim() : null);
 
-        // 1. Check for Bearer token (API Key)
-        if (authHeader?.startsWith('Bearer ')) {
-            const token = authHeader.slice(7).trim();
+        // 1. Check for API Key (from X-API-Key or Bearer)
+        if (token) {
 
-            // 1a. Database API key (pe_live_*) — primary, tenant-scoped
-            if (token.startsWith('pe_live_')) {
+        // 1a. Database API key (pe_live_*) — primary, tenant-scoped
+        if (token.startsWith('pe_live_')) {
                 const validation = await validateApiKey(token);
 
                 if (!validation) {
@@ -29,11 +31,11 @@ export function withAuth(handler: Function) {
                 const tenantId = validation.tenantId ?? '';
                 logger.info({ authMethod: 'api_key', tenantId }, 'Auth: database API key');
 
-                return runWithTenantAsync(tenantId, () => handler(req, ...args));
-            }
+            return runWithTenantAsync(tenantId, () => handler(req, ...args));
+        }
 
-            // 1b. Env API key fallback — server-to-server, single-tenant
-            if (process.env.API_KEY && token === process.env.API_KEY) {
+        // 1b. Env API key fallback — server-to-server, single-tenant
+        if (process.env.API_KEY && token === process.env.API_KEY) {
                 const headerTenant = req.headers.get('x-tenant-id')?.trim();
                 let tenantId: string | null =
                     (headerTenant || process.env.DEFAULT_TENANT_ID || null) as string | null;
@@ -59,8 +61,8 @@ export function withAuth(handler: Function) {
 
                 logger.info({ authMethod: 'env_key', tenantId }, 'Auth: env API key');
 
-                return runWithTenantAsync(tenantId, () => handler(req, ...args));
-            }
+            return runWithTenantAsync(tenantId, () => handler(req, ...args));
+        }
         }
 
         // 2. Fallback to Session Auth

@@ -1,11 +1,33 @@
-Generate a short, persuasive narrative for this group of issues.
+Generate a short, persuasive narrative for this cluster of audit findings.
+{{industry_context}}
+
+Your output must follow these 6 rules:
+
+1. SPECIFIC DATA: Every sentence must cite actual data from the findings — numbers, URLs, missing elements. ZERO generic statements like "Your website could be improved."
+2. BEFORE/AFTER FRAMING: Use this format for each finding: "Current: [actual value] → Best Practice: [benchmark] → Our Fix: [target value]."
+3. INDUSTRY BENCHMARKS: Where possible, cite sources (e.g., "Google reports 53% of mobile users abandon sites loading >3s" or "Deloitte 2023: 100ms delay = 7% conversion drop").
+4. BUSINESS IMPACT: Include a dollar or percentage impact estimate (e.g., "~480 lost potential customers per month").
+5. EVIDENCE-BACKED: Cite the data source (e.g., "Source: PageSpeed API" or "Source: Google Business Profile").
+6. ACTIONABLE: End with ONE specific, concrete next step — not vague advice.
+
+BAD example (generic filler):
+"Your website could be faster. Slow websites lose visitors. Consider improving performance."
+
+GOOD example (specific, before/after, benchmark):
+"Your homepage loads in 6.8 seconds (PageSpeed score: 34/100). Current: LCP 4.2s → Best Practice: under 2.5s (Google) → Our Fix: target <2s. Google reports 53% of mobile users abandon sites loading >3s. At ~1,200 monthly visitors, ~40% bounce before seeing content — that's ~480 lost potential customers per month. Source: PageSpeed Insights API. Next step: Compress the hero image to WebP (target <200KB) — takes ~15 minutes and could cut load time by 40%."
+
 Root Cause: {{root_cause}}
 
-Issues:
+Findings (use the metrics and recommendedFix from these — cite actual numbers, URLs, missing elements):
 {{findings_detail}}
 
 Requirements:
-- 2-3 sentences max
-- Focus on the business impact
-- Use "concerns" or "risks" language
-- Explain WHY this matters to the business owner
+- 2-4 sentences max
+- CRITICAL: Use the exact numbers from findings_detail (performanceScore, lcp_ms, rating, reviewCount, etc.) — at least 2 specific numbers per narrative
+- Include before/after framing: Current → Best Practice → Our Fix
+- Include at least one industry benchmark source where applicable
+- Include at least one impact estimate (%, customers lost, revenue at risk)
+- End with a specific next step from recommendedFix
+- Tone: Authoritative, like a senior consultant. No hedging.
+
+Write the narrative now:

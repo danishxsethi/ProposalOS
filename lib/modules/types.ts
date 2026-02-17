@@ -4,6 +4,8 @@ export interface AuditModuleResult {
     evidenceSnapshots: any[];
     /** Legacy: modules may include moduleId for runner compatibility */
     moduleId?: string;
+    /** Normalized data for finding generator compatibility (scores, coreWebVitals, finalUrl, schemaAnalysis, conversionAnalysis) */
+    data?: { scores?: Record<string, number>; coreWebVitals?: any; finalUrl?: string; schemaAnalysis?: unknown; conversionAnalysis?: unknown };
 }
 
 // Legacy format — modules (gbp, competitor, social, reputation) return this; runner handles both
@@ -70,20 +72,24 @@ export function createEvidence(opts: {
     value?: string | number;
     label?: string;
     raw?: any;
-}): EvidenceItem {
+}): EvidenceItem & { raw?: unknown } {
     const validTypes: EvidenceItem['type'][] = ['url','metric','text','image','link'];
     const t = opts.type && validTypes.includes(opts.type as EvidenceItem['type']) ? opts.type : 'metric';
     const type = (t === 'score' ? 'metric' : t) as EvidenceItem['type'];
-    return {
+    const item: EvidenceItem & { raw?: unknown } = {
         type,
         value: opts.value ?? '',
         label: opts.label || opts.source,
     };
+    if (opts.raw !== undefined) item.raw = opts.raw;
+    return item;
 }
 
 export interface GBPModuleInput {
     businessName: string;
     city: string;
+    /** Optional website URL for name/phone consistency checks */
+    websiteUrl?: string;
 }
 
 export interface CompetitorModuleInput {
@@ -101,11 +107,24 @@ export interface MatchedBusinessData {
     name: string;
     rating: number;
     reviewCount: number;
+    website?: string;
     websiteSpeed?: number;
     photosCount?: number;
     hasHours?: boolean;
     inLocalPack?: boolean;
     placeId?: string;
+    /** Google Business category (e.g. "Dental clinic") */
+    category?: string;
+    /** PageSpeed performance score 0-100 */
+    performanceScore?: number;
+    /** PageSpeed SEO score 0-100 */
+    seoScore?: number;
+    /** PageSpeed accessibility score 0-100 */
+    accessibilityScore?: number;
+    /** Mobile performance (same as performance when strategy=mobile) */
+    mobileScore?: number;
+    /** Page load time in seconds (FCP or LCP) */
+    loadTimeSeconds?: number;
 }
 
 export interface ComparisonGap {

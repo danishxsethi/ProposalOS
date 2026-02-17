@@ -7,10 +7,12 @@ const prisma = new PrismaClient();
 async function main() {
     console.log('🌱 Seeding data...');
 
-    // 1. Create Tenant
+    // 1. Create or get Tenant
     const tenantName = 'Acme Agencies';
-    const tenant = await prisma.tenant.create({
-        data: {
+    const tenant = await prisma.tenant.upsert({
+        where: { domain: 'acme.com' },
+        update: {},
+        create: {
             name: tenantName,
             planTier: 'agency',
             status: 'active',
@@ -18,11 +20,14 @@ async function main() {
         },
     });
     console.log(`✅ Created Tenant: ${tenant.name}`);
+    console.log(`TENANT_ID=${tenant.id}`);
 
-    // 2. Create User
+    // 2. Create or get User
     const passwordHash = await bcrypt.hash('password123', 10);
-    const user = await prisma.user.create({
-        data: {
+    const user = await prisma.user.upsert({
+        where: { email: 'demo@acme.com' },
+        update: { passwordHash, role: 'owner', tenantId: tenant.id },
+        create: {
             name: 'Demo User',
             email: 'demo@acme.com',
             passwordHash,
@@ -132,24 +137,26 @@ async function main() {
         },
     ];
 
-    for (const pb of playbooks) {
-        await prisma.playbook.upsert({
-            where: { tenantId_industry: { tenantId: null as any, industry: pb.industry } }, // Cast null to any to satisfy type if needed, or rely on schema
-            // Actually composite unique key is [tenantId, industry]. Prisma treating null as distinct in unique index depends on DB. 
-            // Prisma optional fields are nullable. 
-            // Workaround: We might need to query first or just create if not exists.
-            // Simplified: check match
-            update: {},
-            create: {
-                industry: pb.industry,
-                name: pb.name,
-                description: pb.description,
-                pricingConfig: pb.pricingConfig,
-                proposalLanguage: pb.proposalLanguage,
-                promptOverrides: pb.promptOverrides,
-                isDefault: true,
-            }
-        });
+    try {
+        for (const pb of playbooks) {
+            await prisma.playbook.upsert({
+                where: { tenantId_industry: { tenantId: tenant.id, industry: pb.industry } },
+                update: {},
+                create: {
+                    tenantId: tenant.id,
+                    industry: pb.industry,
+                    name: pb.name,
+                    description: pb.description,
+                    pricingConfig: pb.pricingConfig,
+                    proposalLanguage: pb.proposalLanguage,
+                    promptOverrides: pb.promptOverrides,
+                    isDefault: true,
+                }
+            });
+        }
+        console.log('✅ Seeded playbooks');
+    } catch (e) {
+        console.warn('⚠️ Playbook seeding skipped (table may not exist):', (e as Error).message);
     }
 
     console.log('Seeding finished.');

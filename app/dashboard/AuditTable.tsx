@@ -104,7 +104,7 @@ export default function AuditTable() {
                             <th className="pb-3 font-medium">Status</th>
                             <th className="pb-3 font-medium">Findings</th>
                             <th className="pb-3 font-medium">Cost</th>
-                            <th className="pb-3 font-medium">QA</th>
+                            <th className="pb-3 font-medium">Client Score</th>
                             <th className="pb-3 font-medium">Created</th>
                             <th className="pb-3 font-medium">Actions</th>
                         </tr>
@@ -133,13 +133,13 @@ export default function AuditTable() {
                             ))
                         ) : error ? (
                             <tr>
-                                <td colSpan={5} className="py-8 text-center text-red-400">
+                                <td colSpan={7} className="py-8 text-center text-red-400">
                                     Failed to load audits
                                 </td>
                             </tr>
                         ) : data?.audits?.length === 0 ? (
                             <tr>
-                                <td colSpan={5} className="py-8 text-center text-[var(--color-text-secondary)]">
+                                <td colSpan={7} className="py-8 text-center text-[var(--color-text-secondary)]">
                                     No audits found
                                 </td>
                             </tr>
@@ -183,15 +183,18 @@ export default function AuditTable() {
                                         </div>
                                     </td>
                                     <td className="py-4 text-sm">
-                                        {audit.qaScore !== undefined && audit.qaScore !== null ? (
-                                            <span className={`px-2 py-1 rounded text-xs font-medium ${audit.qaScore >= 80 ? 'bg-green-500/20 text-green-400' :
-                                                audit.qaScore >= 60 ? 'bg-yellow-500/20 text-yellow-400' :
+                                        {(audit.clientScore ?? audit.qaScore) !== undefined && (audit.clientScore ?? audit.qaScore) !== null ? (
+                                            <span className={`px-2 py-1 rounded text-xs font-medium ${(audit.clientScore ?? audit.qaScore) >= 80 ? 'bg-green-500/20 text-green-400' :
+                                                (audit.clientScore ?? audit.qaScore) >= 60 ? 'bg-yellow-500/20 text-yellow-400' :
                                                     'bg-red-500/20 text-red-400'
                                                 }`}>
-                                                {audit.qaScore}%
+                                                {audit.clientScore ?? audit.qaScore}%
                                             </span>
                                         ) : (
                                             <span className="text-[var(--color-text-muted)]">-</span>
+                                        )}
+                                        {audit.requiresHumanReview && (
+                                            <div className="text-[11px] text-amber-300 mt-1">Needs human closeability review</div>
                                         )}
                                     </td>
                                     <td className="py-4 text-sm text-[var(--color-text-secondary)]">

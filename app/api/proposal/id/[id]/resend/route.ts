@@ -7,16 +7,12 @@ import { logger } from '@/lib/logger';
 
 const RESEND_COOLDOWN_MS = 5 * 60 * 1000; // 5 minutes
 
-interface Params {
-    params: { id: string };
-}
-
 /**
- * POST /api/proposal/[id]/resend
+ * POST /api/proposal/id/[id]/resend
  * Resend proposal email to the prospect (client).
  * Requires tenant auth. Rate limited: cannot resend within 5 minutes of last send.
  */
-export const POST = withAuth(async (request: Request, { params }: Params) => {
+export const POST = withAuth(async (request: Request, { params }: { params: Promise<{ id: string }> }) => {
     try {
         const tenantId = await getTenantId();
         if (!tenantId) {

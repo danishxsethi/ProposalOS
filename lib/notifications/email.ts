@@ -96,6 +96,57 @@ export async function sendProposalViewed(
     }
 }
 
+/**
+ * Send "Proposal Interest" notification when a lead submits the CTA form
+ */
+export async function sendProposalInterest(
+    businessName: string,
+    proposalUrl: string,
+    data: { name: string; email: string; phone?: string | null; preferredTier?: string | null; bestTime?: string | null; message?: string | null }
+) {
+    const resend = getResend();
+    if (!OPERATOR_EMAIL || !resend) {
+        logger.warn('Skipping interest email: OPERATOR_EMAIL or RESEND_API_KEY not set');
+        return;
+    }
+
+    try {
+        const tier = data.preferredTier ? data.preferredTier.charAt(0).toUpperCase() + data.preferredTier.slice(1) : '—';
+        const { data: result, error } = await resend.emails.send({
+            from: FROM_EMAIL,
+            to: OPERATOR_EMAIL,
+            subject: `🎯 Lead: ${businessName} — Interested in ${tier}`,
+            html: `
+                <div style="font-family: sans-serif; padding: 20px;">
+                    <h1>New Lead Interested! 🎯</h1>
+                    <p><strong>${businessName}</strong> submitted the interest form.</p>
+                    <table style="border-collapse: collapse; margin: 16px 0;">
+                        <tr><td style="padding: 8px 12px; border: 1px solid #e5e7eb;"><strong>Name</strong></td><td style="padding: 8px 12px; border: 1px solid #e5e7eb;">${data.name}</td></tr>
+                        <tr><td style="padding: 8px 12px; border: 1px solid #e5e7eb;"><strong>Email</strong></td><td style="padding: 8px 12px; border: 1px solid #e5e7eb;"><a href="mailto:${data.email}">${data.email}</a></td></tr>
+                        <tr><td style="padding: 8px 12px; border: 1px solid #e5e7eb;"><strong>Phone</strong></td><td style="padding: 8px 12px; border: 1px solid #e5e7eb;">${data.phone || '—'}</td></tr>
+                        <tr><td style="padding: 8px 12px; border: 1px solid #e5e7eb;"><strong>Preferred Tier</strong></td><td style="padding: 8px 12px; border: 1px solid #e5e7eb;">${tier}</td></tr>
+                        <tr><td style="padding: 8px 12px; border: 1px solid #e5e7eb;"><strong>Best Time</strong></td><td style="padding: 8px 12px; border: 1px solid #e5e7eb;">${data.bestTime || '—'}</td></tr>
+                        ${data.message ? `<tr><td style="padding: 8px 12px; border: 1px solid #e5e7eb;"><strong>Message</strong></td><td style="padding: 8px 12px; border: 1px solid #e5e7eb;">${data.message}</td></tr>` : ''}
+                    </table>
+                    <p>
+                        <a href="${proposalUrl}" style="background-color: ${BRANDING.colors.primary}; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; display: inline-block;">
+                            View Proposal
+                        </a>
+                    </p>
+                </div>
+            `
+        });
+
+        if (error) {
+            logger.error({ error }, 'Failed to send Proposal Interest email');
+        } else {
+            logger.info({ emailId: result?.id }, 'Sent Proposal Interest email');
+        }
+    } catch (e) {
+        logger.error({ error: e }, 'Exception sending Proposal Interest email');
+    }
+}
+
 interface BatchResult {
     total: number;
     completed: number;

@@ -1,512 +1,399 @@
-import { AuditModuleResult, Finding } from './types';
+/**
+ * Conversion Element Detection Module
+ * Uses Puppeteer to analyze homepage + /contact for sales/lead-gen elements.
+ * Frames missing elements as lost revenue.
+ */
+import { Browser } from 'puppeteer-core';
+import puppeteer from 'puppeteer-core';
+import chromium from '@sparticuz/chromium';
+import { LegacyAuditModuleResult } from './types';
+import type { CostTracker } from '@/lib/costs/costTracker';
 import { logger } from '@/lib/logger';
-import * as cheerio from 'cheerio';
+
+export interface ConversionResult {
+    status: 'success' | 'error';
+    data: {
+        score: number;
+        elements: {
+            ctas: { count: number; aboveFold: number; texts: string[] };
+            phone: { present: boolean; clickToCall: boolean; number: string | null };
+            contactForm: { present: boolean; onHomepage: boolean; fields: string[] };
+            chat: { present: boolean; provider: string | null };
+            booking: { present: boolean; provider: string | null };
+            emailCapture: { present: boolean; type: string | null };
+            socialProof: { testimonials: boolean; reviews: boolean; trustBadges: boolean };
+            maps: { present: boolean; provider: string | null };
+        };
+        missing: string[];
+        recommendations: string[];
+    };
+}
 
 export interface ConversionModuleInput {
     url: string;
-    html: string;
-    businessName: string;
+    businessName?: string;
+    /** Industry/vertical for scoring weights (e.g. dental, medical, retail) */
+    industry?: string;
 }
 
-interface ConversionElements {
-    // Contact methods
-    hasPhoneNumber: boolean;
-    phoneNumbers: string[];
-    hasClickToCall: boolean;
-    hasEmail: boolean;
-    emails: string[];
-    hasContactForm: boolean;
-    hasContactPageLink: boolean;
-    hasPhysicalAddress: boolean;
+/** Verticals where booking is critical vs less important */
+const BOOKING_CRITICAL = ['dental', 'medical', 'spa', 'salon', 'fitness', 'yoga', 'legal'];
+const BOOKING_LESS_CRITICAL = ['retail', 'restaurant', 'cafe'];
+
+interface PageAnalysis {
+    ctas: { count: number; aboveFold: number; texts: string[] };
+    phone: { present: boolean; clickToCall: boolean; number: string | null };
+    contactForm: { present: boolean; fields: string[] };
+    chat: { present: boolean; provider: string | null };
+    booking: { present: boolean; provider: string | null };
+    emailCapture: { present: boolean; type: string | null };
+    socialProof: { testimonials: boolean; reviews: boolean; trustBadges: boolean };
+    maps: { present: boolean; provider: string | null };
+}
+
+async function launchBrowser(): Promise<Browser> {
+    const fs = require('fs');
+    const localPaths = [
+        process.env.CHROME_EXECUTABLE_PATH,
+        '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+        '/Applications/Chromium.app/Contents/MacOS/Chromium',
+        '/usr/bin/google-chrome',
+        '/usr/bin/chromium-browser',
+    ].filter(Boolean) as string[];
+
+    let executablePath: string | undefined;
+    for (const p of localPaths) {
+        if (p && fs.existsSync(p)) {
+            executablePath = p;
+            break;
+        }
+    }
+    if (!executablePath) {
+        try {
+            executablePath = await chromium.executablePath();
+        } catch {
+            // Ignore
+        }
+    }
+    if (!executablePath) {
+        throw new Error('Chromium not found. Install Chrome or set CHROME_EXECUTABLE_PATH.');
+    }
+
+    return puppeteer.launch({
+        args: ['--no-sandbox', '--disable-setuid-sandbox'],
+        defaultViewport: { width: 375, height: 812, deviceScaleFactor: 1 },
+        executablePath,
+        headless: true,
+    });
+}
+
+function analyzePage(): PageAnalysis {
+    const CTA_PAT = /\b(book now|get quote|schedule|buy|order|contact|call|request|appointment|consultation|free quote|start|sign up|register)\b/i;
+    const CHAT = ['intercom', 'drift', 'tawk.to', 'livechat', 'zendesk', 'hubspot', 'crisp', 'tidio', 'olark', 'pure chat'];
+    const BOOKING = ['calendly', 'acuity', 'square appointments', 'booksy', 'vagaro', 'mindbody', 'setmore', 'appointy', 'genbook', 'schedulicity', 'fresha'];
+
+    const viewportHeight = window.innerHeight;
+    const result: PageAnalysis = {
+        ctas: { count: 0, aboveFold: 0, texts: [] },
+        phone: { present: false, clickToCall: false, number: null },
+        contactForm: { present: false, fields: [] },
+        chat: { present: false, provider: null },
+        booking: { present: false, provider: null },
+        emailCapture: { present: false, type: null },
+        socialProof: { testimonials: false, reviews: false, trustBadges: false },
+        maps: { present: false, provider: null },
+    };
+
+    const html = document.documentElement.outerHTML.toLowerCase();
+    const bodyText = document.body?.innerText?.toLowerCase() || '';
 
     // CTAs
-    ctaElements: Array<{ text: string; href?: string; position: number }>;
-    hasCTAAboveFold: boolean;
-    ctaCount: number;
+    const buttons = document.querySelectorAll('a, button, [role="button"]');
+    buttons.forEach((el) => {
+        const text = (el.textContent || '').trim();
+        if (text && CTA_PAT.test(text) && text.length < 80) {
+            result.ctas.count++;
+            result.ctas.texts.push(text.slice(0, 50));
+            const rect = el.getBoundingClientRect();
+            if (rect.top < viewportHeight && rect.top >= 0) result.ctas.aboveFold++;
+        }
+    });
+    result.ctas.texts = [...new Set(result.ctas.texts)].slice(0, 10);
 
-    // Trust signals
-    hasTestimonials: boolean;
-    hasTrustBadges: boolean;
-    hasYearsInBusiness: boolean;
-    hasTeamSection: boolean;
-    hasLicenseNumber: boolean;
-    hasInsuranceMention: boolean;
-    hasPrivacyPolicy: boolean;
-    hasTermsOfService: boolean;
+    // Phone
+    const telLinks = document.querySelectorAll('a[href^="tel:"]');
+    const phoneNumbers = document.body?.innerText?.match(/(\+?1[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}/g) || [];
+    result.phone.present = phoneNumbers.length > 0;
+    result.phone.clickToCall = telLinks.length > 0;
+    result.phone.number = telLinks.length > 0 ? (telLinks[0] as HTMLAnchorElement).href.replace('tel:', '') : (phoneNumbers[0] || null);
+
+    // Contact form
+    const forms = document.querySelectorAll('form');
+    forms.forEach((form) => {
+        const inputs = form.querySelectorAll('input, textarea, select');
+        const fieldNames: string[] = [];
+        inputs.forEach((inp) => {
+            const name = (inp.getAttribute('name') || inp.getAttribute('placeholder') || inp.getAttribute('type') || '').toLowerCase();
+            if (name && !fieldNames.includes(name)) fieldNames.push(name);
+            const type = (inp.getAttribute('type') || '').toLowerCase();
+            if (['email', 'tel', 'text'].includes(type)) fieldNames.push(type);
+        });
+        if (fieldNames.some((f) => ['email', 'message', 'contact', 'name', 'phone'].some((k) => f.includes(k)))) {
+            result.contactForm.present = true;
+            result.contactForm.fields = [...new Set(fieldNames)].slice(0, 8);
+        }
+    });
+
+    // Chat
+    for (const p of CHAT) {
+        if (html.includes(p) || document.querySelector(`[class*="${p}"], [id*="${p}"]`)) {
+            result.chat.present = true;
+            result.chat.provider = p;
+            break;
+        }
+    }
 
     // Booking
-    hasOnlineBooking: boolean;
-    bookingProviders: string[];
+    for (const p of BOOKING) {
+        if (html.includes(p)) {
+            result.booking.present = true;
+            result.booking.provider = p;
+            break;
+        }
+    }
 
-    // Live engagement
-    hasLiveChat: boolean;
-    chatProviders: string[];
+    // Email capture
+    const emailForms = document.querySelectorAll('form input[type="email"], form input[name*="email"], [class*="newsletter"], [class*="subscribe"]');
+    if (emailForms.length > 0) {
+        result.emailCapture.present = true;
+        result.emailCapture.type = document.querySelector('[class*="popup"], [class*="modal"]') ? 'popup' : 'inline';
+    }
+    if (!result.emailCapture.present && (html.includes('mailchimp') || html.includes('convertkit') || html.includes('klaviyo'))) {
+        result.emailCapture.present = true;
+        result.emailCapture.type = 'embedded';
+    }
+
+    // Social proof
+    result.socialProof.testimonials = /testimonial|testimony|customer says|client feedback|review/i.test(bodyText) ||
+        !!document.querySelector('[class*="testimonial"], [class*="review"]');
+    result.socialProof.reviews = !!document.querySelector('[class*="review"], [class*="rating"], iframe[src*="google"]') ||
+        html.includes('aggregaterating') || html.includes('yelp') || html.includes('trustpilot');
+    result.socialProof.trustBadges = /bbb|accredited|certified|award|as seen in/i.test(bodyText);
+
+    // Maps
+    const mapEmbeds = document.querySelectorAll('iframe[src*="google.com/maps"], iframe[src*="maps.google"], a[href*="maps.google"], a[href*="google.com/maps"], a[href*="directions"]');
+    result.maps.present = mapEmbeds.length > 0 || html.includes('maps.google') || html.includes('google.com/maps');
+    result.maps.provider = result.maps.present ? 'google' : null;
+
+    return result;
 }
 
-/**
- * Analyze conversion elements on the homepage
- */
-export async function runConversionModule(input: ConversionModuleInput): Promise<AuditModuleResult> {
-    logger.info({ url: input.url }, '[Conversion] Analyzing conversion elements');
-
-    const $ = cheerio.load(input.html);
-    const elements = detectConversionElements($, input.html);
-
-    const findings = generateConversionFindings(elements, input.url, input.businessName);
-
-    // Store analysis in evidence
-    const evidenceSnapshot = {
-        module: 'conversion',
-        source: 'html_analysis',
-        rawResponse: elements,
-        collectedAt: new Date(),
-    };
-
-    logger.info({
-        url: input.url,
-        findingsCount: findings.length,
-        hasPhone: elements.hasPhoneNumber,
-        hasCTA: elements.hasCTAAboveFold,
-        ctaCount: elements.ctaCount,
-    }, '[Conversion] Analysis complete');
-
+function mergeResults(home: PageAnalysis, contact: PageAnalysis | null): ConversionResult['data']['elements'] {
     return {
-        findings,
-        evidenceSnapshots: [evidenceSnapshot],
+        ctas: {
+            count: home.ctas.count + (contact?.ctas.count ?? 0),
+            aboveFold: Math.max(home.ctas.aboveFold, contact?.ctas.aboveFold ?? 0),
+            texts: [...new Set([...home.ctas.texts, ...(contact?.ctas.texts ?? [])])].slice(0, 10),
+        },
+        phone: home.phone.present || contact?.phone.present
+            ? { present: true, clickToCall: home.phone.clickToCall || (contact?.phone.clickToCall ?? false), number: home.phone.number || contact?.phone.number || null }
+            : home.phone,
+        contactForm: {
+            present: home.contactForm.present || (contact?.contactForm.present ?? false),
+            onHomepage: home.contactForm.present,
+            fields: home.contactForm.fields.length > 0 ? home.contactForm.fields : (contact?.contactForm.fields ?? []),
+        },
+        chat: home.chat.present ? home.chat : (contact?.chat ?? home.chat),
+        booking: home.booking.present ? home.booking : (contact?.booking ?? home.booking),
+        emailCapture: home.emailCapture.present ? home.emailCapture : (contact?.emailCapture ?? home.emailCapture),
+        socialProof: {
+            testimonials: home.socialProof.testimonials || (contact?.socialProof.testimonials ?? false),
+            reviews: home.socialProof.reviews || (contact?.socialProof.reviews ?? false),
+            trustBadges: home.socialProof.trustBadges || (contact?.socialProof.trustBadges ?? false),
+        },
+        maps: home.maps.present ? home.maps : (contact?.maps ?? home.maps),
     };
 }
 
 /**
- * Detect all conversion elements from HTML
+ * Run conversion element detection module
  */
-function detectConversionElements($: cheerio.CheerioAPI, html: string): ConversionElements {
-    const bodyText = $('body').text();
-    const bodyHtml = $('body').html() || '';
+export async function runConversionModule(
+    input: ConversionModuleInput,
+    _tracker?: CostTracker
+): Promise<LegacyAuditModuleResult> {
+    const { url, industry } = input;
 
-    // Phone number detection
-    const phoneRegex = /(\+?1[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}/g;
-    const phoneMatches = bodyText.match(phoneRegex) || [];
-    const hasPhoneNumber = phoneMatches.length > 0;
+    if (!url) {
+        return {
+            moduleId: 'conversion',
+            status: 'success',
+            timestamp: new Date().toISOString(),
+            data: {
+                status: 'error',
+                data: {
+                    score: 0,
+                    elements: {
+                        ctas: { count: 0, aboveFold: 0, texts: [] },
+                        phone: { present: false, clickToCall: false, number: null },
+                        contactForm: { present: false, onHomepage: false, fields: [] },
+                        chat: { present: false, provider: null },
+                        booking: { present: false, provider: null },
+                        emailCapture: { present: false, type: null },
+                        socialProof: { testimonials: false, reviews: false, trustBadges: false },
+                        maps: { present: false, provider: null },
+                    },
+                    missing: ['No URL provided'],
+                    recommendations: ['No URL provided for conversion analysis.'],
+                },
+            },
+        };
+    }
 
-    // Click-to-call detection
-    const clickToCallLinks = $('a[href^="tel:"]');
-    const hasClickToCall = clickToCallLinks.length > 0;
+    let browser: Browser | null = null;
 
-    // Email detection
-    const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
-    const emailMatches = bodyText.match(emailRegex) || [];
-    const hasEmail = emailMatches.length > 0;
+    try {
+        browser = await launchBrowser();
+        const page = await browser.newPage();
 
-    // Contact form detection
-    const forms = $('form');
-    const hasContactForm = forms.toArray().some((form) => {
-        const formHtml = $(form).html()?.toLowerCase() || '';
-        return (
-            formHtml.includes('email') ||
-            formHtml.includes('message') ||
-            formHtml.includes('contact')
-        );
-    });
+        const baseUrl = url.startsWith('http') ? url : `https://${url}`;
+        const parsed = new URL(baseUrl);
+        const contactUrl = `${parsed.origin}/contact`;
 
-    // Contact page link
-    const contactLinks = $('a').filter((_, el) => {
-        const href = $(el).attr('href')?.toLowerCase() || '';
-        const text = $(el).text().toLowerCase();
-        return href.includes('contact') || text.includes('contact');
-    });
-    const hasContactPageLink = contactLinks.length > 0;
+        await page.goto(baseUrl, { waitUntil: 'domcontentloaded', timeout: 20000 });
+        const homeResult = await page.evaluate(analyzePage);
 
-    // Physical address detection (simplified)
-    const addressKeywords = ['street', 'avenue', 'road', 'suite', 'floor', 'building'];
-    const hasPhysicalAddress = addressKeywords.some(keyword =>
-        bodyText.toLowerCase().includes(keyword)
-    ) && /\d{5}/.test(bodyText); // Has ZIP code
-
-    // CTA detection
-    const ctaKeywords = ['call', 'book', 'schedule', 'get quote', 'contact', 'free', 'start', 'request', 'order', 'buy'];
-    const ctaElements: Array<{ text: string; href?: string; position: number }> = [];
-
-    $('button, a').each((_, el) => {
-        const text = $(el).text().toLowerCase().trim();
-        const href = $(el).attr('href');
-
-        // Check if text contains CTA keywords
-        const isCTA = ctaKeywords.some(keyword => text.includes(keyword));
-
-        if (isCTA && text.length > 0 && text.length < 50) {
-            const position = (($(el) as { offset?: () => { top?: number } }).offset?.()?.top) ?? 0;
-            ctaElements.push({ text: $(el).text().trim(), href, position });
+        let contactResult: PageAnalysis | null = null;
+        try {
+            const contactRes = await page.goto(contactUrl, { waitUntil: 'domcontentloaded', timeout: 10000 });
+            if (contactRes && contactRes.status() === 200) {
+                contactResult = await page.evaluate(analyzePage);
+            }
+        } catch {
+            // Contact page may not exist
         }
-    });
 
-    const hasCTAAboveFold = ctaElements.some(cta => cta.position < 600);
-    const ctaCount = ctaElements.length;
+        const elements = mergeResults(homeResult, contactResult);
 
-    // Trust signals
-    const testimonialKeywords = ['testimonial', 'review', 'customer says', 'client feedback', 'what our customers'];
-    const hasTestimonials = testimonialKeywords.some(keyword =>
-        bodyHtml.toLowerCase().includes(keyword)
-    );
+        let score = 0;
+        const missing: string[] = [];
+        const recommendations: string[] = [];
 
-    const trustBadgeKeywords = ['bbb', 'accredited', 'certified', 'award', 'Top rated', 'best of'];
-    const hasTrustBadges = trustBadgeKeywords.some(keyword =>
-        bodyText.toLowerCase().includes(keyword)
-    );
-
-    const yearsRegex = /(\d{1,2})\+?\s*(years?|decades?)\s*(of\s*)?(experience|in business|serving)/i;
-    const hasYearsInBusiness = yearsRegex.test(bodyText);
-
-    const teamKeywords = ['our team', 'about us', 'meet the team', 'our staff'];
-    const hasTeamSection = teamKeywords.some(keyword =>
-        bodyText.toLowerCase().includes(keyword)
-    );
-
-    const licenseRegex = /license[d]?\s*#?\s*\d+/i;
-    const hasLicenseNumber = licenseRegex.test(bodyText);
-
-    const insuranceKeywords = ['insured', 'bonded', 'insurance', 'liability coverage'];
-    const hasInsuranceMention = insuranceKeywords.some(keyword =>
-        bodyText.toLowerCase().includes(keyword)
-    );
-
-    const privacyLinks = $('a').filter((_, el) => {
-        const href = $(el).attr('href')?.toLowerCase() || '';
-        const text = $(el).text().toLowerCase();
-        return href.includes('privacy') || text.includes('privacy');
-    });
-    const hasPrivacyPolicy = privacyLinks.length > 0;
-
-    const termsLinks = $('a').filter((_, el) => {
-        const href = $(el).attr('href')?.toLowerCase() || '';
-        const text = $(el).text().toLowerCase();
-        return href.includes('terms') || text.includes('terms') || text.includes('t&c') || text.includes('tos');
-    });
-    const hasTermsOfService = termsLinks.length > 0;
-
-    // Booking widget detection
-    const bookingProviders = ['calendly', 'acuity', 'booksy', 'square appointments', 'setmore', 'schedulicity'];
-    const detectedBookingProviders: string[] = [];
-
-    bookingProviders.forEach(provider => {
-        if (bodyHtml.toLowerCase().includes(provider)) {
-            detectedBookingProviders.push(provider);
+        if (elements.ctas.aboveFold > 0) {
+            score += 15;
+        } else if (elements.ctas.count > 0) {
+            score += 5;
+            missing.push('CTA above the fold');
+            recommendations.push('Add a prominent CTA (Book Now, Get Quote, Call) above the fold — capture intent before visitors scroll away');
+        } else {
+            missing.push('Clear CTA buttons');
+            recommendations.push('Add CTAs (Book Now, Schedule, Call, Get Quote) — visitors need a clear next step');
         }
-    });
 
-    const bookingKeywords = ['book now', 'schedule appointment', 'book appointment', 'reserve'];
-    const hasBookingButton = bookingKeywords.some(keyword =>
-        bodyText.toLowerCase().includes(keyword)
-    );
-
-    const hasOnlineBooking = detectedBookingProviders.length > 0 || hasBookingButton;
-
-    // Live chat detection
-    const chatProviders = ['intercom', 'drift', 'tidio', 'facebook messenger', 'whatsapp', 'livechat', 'zendesk', 'crisp'];
-    const detectedChatProviders: string[] = [];
-
-    chatProviders.forEach(provider => {
-        if (bodyHtml.toLowerCase().includes(provider)) {
-            detectedChatProviders.push(provider);
+        if (elements.phone.clickToCall) {
+            score += 15;
+        } else if (elements.phone.present) {
+            score += 5;
+            missing.push('Click-to-call phone link');
+            recommendations.push('Without a click-to-call button, mobile visitors (60% of traffic) can\'t easily reach you. Wrap your phone in <a href="tel:+1234567890">');
+        } else {
+            missing.push('Phone number');
+            recommendations.push('Add a prominent phone number with click-to-call — mobile visitors are your highest-intent traffic');
         }
-    });
 
-    // Check for chat bubble icon/widget
-    const chatSelectors = [
-        '[class*="chat"]',
-        '[id*="chat"]',
-        '[class*="messenger"]',
-        '[id*="intercom"]',
-        '[class*="drift"]',
-    ];
+        if (elements.contactForm.present) {
+            score += elements.contactForm.onHomepage ? 15 : 10;
+        } else {
+            missing.push('Contact form');
+            recommendations.push('Add a contact form with email, phone, and message fields — visitors ready to inquire need an easy way to reach you');
+        }
 
-    const hasChatWidget = chatSelectors.some(selector => $(selector).length > 0);
-    const hasLiveChat = detectedChatProviders.length > 0 || hasChatWidget;
+        if (elements.chat.present) {
+            score += 10;
+        } else {
+            missing.push('Chat widget');
+            recommendations.push('Consider a chat widget (Intercom, Tidio, Tawk.to) — capture leads who prefer instant messaging');
+        }
 
-    return {
-        hasPhoneNumber,
-        phoneNumbers: phoneMatches,
-        hasClickToCall,
-        hasEmail,
-        emails: emailMatches,
-        hasContactForm,
-        hasContactPageLink,
-        hasPhysicalAddress,
-        ctaElements,
-        hasCTAAboveFold,
-        ctaCount,
-        hasTestimonials,
-        hasTrustBadges,
-        hasYearsInBusiness,
-        hasTeamSection,
-        hasLicenseNumber,
-        hasInsuranceMention,
-        hasPrivacyPolicy,
-        hasTermsOfService,
-        hasOnlineBooking,
-        bookingProviders: detectedBookingProviders,
-        hasLiveChat,
-        chatProviders: detectedChatProviders,
-    };
-}
+        const normIndustry = industry?.toLowerCase().replace(/\s+/g, '_') ?? '';
+        const bookingWeight = BOOKING_CRITICAL.some(v => normIndustry.includes(v)) ? 20
+            : BOOKING_LESS_CRITICAL.some(v => normIndustry.includes(v)) ? 5
+            : 15;
+        if (elements.booking.present) {
+            score += bookingWeight;
+        } else {
+            missing.push('Booking/scheduling');
+            const msg = normIndustry && BOOKING_CRITICAL.some(v => normIndustry.includes(v))
+                ? 'Online booking is critical for your industry — add Calendly, Acuity, or Square Appointments'
+                : 'Add online booking (Calendly, Acuity, Square) — 67% of customers prefer to book online vs calling';
+            recommendations.push(msg);
+        }
 
-/**
- * Generate findings from conversion analysis
- */
-function generateConversionFindings(
-    elements: ConversionElements,
-    url: string,
-    businessName: string
-): Finding[] {
-    const findings: Finding[] = [];
+        if (elements.socialProof.testimonials || elements.socialProof.reviews || elements.socialProof.trustBadges) {
+            score += 10;
+        } else {
+            missing.push('Social proof');
+            recommendations.push('Add testimonials, review widgets, or trust badges — 92% of consumers read reviews before deciding');
+        }
 
-    // PAINKILLER: No phone number on homepage
-    if (!elements.hasPhoneNumber) {
-        findings.push({
-            type: 'PAINKILLER',
-            category: 'Conversion',
-            title: 'No Phone Number on Homepage',
-            description: 'The homepage does not display a phone number. Customers cannot easily call you, which significantly reduces conversion rates, especially for local service businesses.',
-            impactScore: 9,
-            confidenceScore: 95,
-            evidence: [{
-                type: 'text',
-                value: 'No phone numbers detected',
-                label: 'Phone Detection'
-            }],
-            metrics: {
-                hasPhoneNumber: false,
+        if (elements.emailCapture.present) {
+            score += 10;
+        } else {
+            missing.push('Email capture');
+            recommendations.push('Add newsletter signup or lead magnet — build a list for follow-up');
+        }
+
+        if (elements.maps.present) {
+            score += 10;
+        } else {
+            missing.push('Maps/directions');
+            recommendations.push('Add Google Maps embed or "Get Directions" link — local businesses benefit from easy navigation');
+        }
+
+        const result: ConversionResult = {
+            status: 'success',
+            data: {
+                score: Math.min(100, score),
+                elements,
+                missing,
+                recommendations: recommendations.length > 0 ? recommendations : ['No major conversion elements missing. Maintain current standards.'],
             },
-            effortEstimate: 'LOW',
-            recommendedFix: [
-                'Add phone number prominently in header',
-                'Include phone number in footer',
-                'Make phone number click-to-call on mobile',
-                'Consider adding phone number in multiple locations'
-            ]
-        });
-    }
+        };
 
-    // PAINKILLER: No CTA above the fold
-    if (!elements.hasCTAAboveFold) {
-        findings.push({
-            type: 'PAINKILLER',
-            category: 'Conversion',
-            title: 'No Call-to-Action Above the Fold',
-            description: 'There is no clear CTA (Call, Book, Schedule, Get Quote) visible when the page first loads. Visitors need immediate direction on what action to take.',
-            impactScore: 8,
-            confidenceScore: 90,
-            evidence: [{
-                type: 'metric',
-                value: elements.ctaCount,
-                label: 'Total CTAs Found'
-            }],
-            metrics: {
-                ctaCount: elements.ctaCount,
-                hasCTAAboveFold: false,
+        logger.info({ url, score: result.data.score }, '[Conversion] Analysis complete');
+
+        return {
+            moduleId: 'conversion',
+            status: 'success',
+            timestamp: new Date().toISOString(),
+            data: result,
+        };
+    } catch (error) {
+        logger.error({ error, url }, '[Conversion] Analysis failed');
+        return {
+            moduleId: 'conversion',
+            status: 'success',
+            timestamp: new Date().toISOString(),
+            data: {
+                status: 'error',
+                data: {
+                    score: 0,
+                    elements: {
+                        ctas: { count: 0, aboveFold: 0, texts: [] },
+                        phone: { present: false, clickToCall: false, number: null },
+                        contactForm: { present: false, onHomepage: false, fields: [] },
+                        chat: { present: false, provider: null },
+                        booking: { present: false, provider: null },
+                        emailCapture: { present: false, type: null },
+                        socialProof: { testimonials: false, reviews: false, trustBadges: false },
+                        maps: { present: false, provider: null },
+                    },
+                    missing: ['Analysis failed'],
+                    recommendations: [`Conversion analysis failed: ${error instanceof Error ? error.message : 'Unknown error'}. Ensure the URL is accessible.`],
+                },
             },
-            effortEstimate: 'LOW',
-            recommendedFix: [
-                'Add prominent CTA button in hero section',
-                'Use action-oriented language ("Call Now", "Get Free Quote")',
-                'Make CTA button visually distinct (contrasting color)',
-                'Place CTA within first 600px of page'
-            ]
-        });
+        };
+    } finally {
+        if (browser) await browser.close();
     }
-
-    // PAINKILLER: No contact form AND no phone number
-    if (!elements.hasContactForm && !elements.hasPhoneNumber) {
-        findings.push({
-            type: 'PAINKILLER',
-            category: 'Conversion',
-            title: 'No Contact Methods Available',
-            description: 'Website has neither a contact form nor a phone number. Visitors have no clear way to reach you, causing immediate loss of potential customers.',
-            impactScore: 9,
-            confidenceScore: 95,
-            evidence: [{
-                type: 'text',
-                value: 'No contact form or phone number found',
-                label: 'Contact Methods'
-            }],
-            metrics: {
-                hasContactForm: false,
-                hasPhoneNumber: false,
-            },
-            effortEstimate: 'MEDIUM',
-            recommendedFix: [
-                'Add contact form with name, email, phone, message fields',
-                'Display phone number prominently',
-                'Add email address as backup contact method',
-                'Link to dedicated contact page from navigation'
-            ]
-        });
-    }
-
-    // PAINKILLER: Phone number not click-to-call
-    if (elements.hasPhoneNumber && !elements.hasClickToCall) {
-        findings.push({
-            type: 'PAINKILLER',
-            category: 'Conversion',
-            title: 'Phone Number Not Click-to-Call',
-            description: `Phone number is displayed but not clickable on mobile. ${Math.round(60)}% of traffic is mobile — make it easy for them to call with one tap.`,
-            impactScore: 7,
-            confidenceScore: 90,
-            evidence: [{
-                type: 'text',
-                value: elements.phoneNumbers.join(', '),
-                label: 'Phone Numbers Found'
-            }],
-            metrics: {
-                hasPhoneNumber: true,
-                hasClickToCall: false,
-                phoneNumbers: elements.phoneNumbers,
-            },
-            effortEstimate: 'LOW',
-            recommendedFix: [
-                'Wrap phone numbers in <a href="tel:+1234567890"> tags',
-                'Test click-to-call functionality on mobile devices',
-                'Ensure all instances of phone number are clickable'
-            ]
-        });
-    }
-
-    // VITAMIN: No online booking/scheduling
-    if (!elements.hasOnlineBooking) {
-        findings.push({
-            type: 'VITAMIN',
-            category: 'Conversion',
-            title: 'No Online Booking or Scheduling',
-            description: 'Website does not offer online booking. 67% of customers prefer to book online vs calling. Adding scheduling increases conversions by 30-40%.',
-            impactScore: 6,
-            confidenceScore: 85,
-            evidence: [{
-                type: 'text',
-                value: 'No booking widgets detected',
-                label: 'Booking Detection'
-            }],
-            metrics: {
-                hasOnlineBooking: false,
-            },
-            effortEstimate: 'MEDIUM',
-            recommendedFix: [
-                'Integrate online booking system (Calendly, Acuity, Square)',
-                'Add "Book Now" or "Schedule Appointment" button',
-                'Show real-time availability',
-                'Send automatic confirmation emails'
-            ]
-        });
-    }
-
-    // VITAMIN: No trust signals
-    if (!elements.hasTestimonials && !elements.hasTrustBadges) {
-        findings.push({
-            type: 'VITAMIN',
-            category: 'Conversion',
-            title: 'No Trust Signals or Social Proof',
-            description: 'Homepage lacks testimonials, reviews, or trust badges. 92% of consumers read reviews before making a decision. Social proof increases conversions by 15-20%.',
-            impactScore: 6,
-            confidenceScore: 85,
-            evidence: [{
-                type: 'text',
-                value: 'No testimonials or trust badges found',
-                label: 'Trust Signals'
-            }],
-            metrics: {
-                hasTestimonials: false,
-                hasTrustBadges: false,
-            },
-            effortEstimate: 'MEDIUM',
-            recommendedFix: [
-                'Add customer testimonials with photos',
-                'Display Google/Yelp review widget',
-                'Show trust badges (BBB, industry certifications)',
-                'Include "As Featured In" or "Awards Won" section',
-                'Add years in business if >5 years'
-            ]
-        });
-    }
-
-    // VITAMIN: No live chat
-    if (!elements.hasLiveChat) {
-        findings.push({
-            type: 'VITAMIN',
-            category: 'Conversion',
-            title: 'No Live Chat Available',
-            description: 'No live chat widget detected. 41% of customers expect live chat on websites. Adding chat can increase conversions by 10-15% by answering questions instantly.',
-            impactScore: 4,
-            confidenceScore: 90,
-            evidence: [{
-                type: 'text',
-                value: 'No chat widgets detected',
-                label: 'Chat Detection'
-            }],
-            metrics: {
-                hasLiveChat: false,
-            },
-            effortEstimate: 'LOW',
-            recommendedFix: [
-                'Add live chat widget (Intercom, Drift, Tidio)',
-                'Set up automated responses for common questions',
-                'Offer chat during business hours',
-                'Use chatbot for after-hours inquiries'
-            ]
-        });
-    }
-
-    // VITAMIN: No privacy policy
-    if (!elements.hasPrivacyPolicy) {
-        findings.push({
-            type: 'VITAMIN',
-            category: 'Conversion',
-            title: 'No Privacy Policy Link',
-            description: 'No privacy policy link found. This is required by law for data collection and builds trust with visitors. Also affects legal compliance and SEO.',
-            impactScore: 5,
-            confidenceScore: 90,
-            evidence: [{
-                type: 'text',
-                value: 'No privacy policy link detected',
-                label: 'Privacy Policy'
-            }],
-            metrics: {
-                hasPrivacyPolicy: false,
-            },
-            effortEstimate: 'LOW',
-            recommendedFix: [
-                'Create privacy policy page',
-                'Link to privacy policy in footer',
-                'Include policy compliance (GDPR, CCPA if applicable)',
-                'Use privacy policy generator tool if needed'
-            ]
-        });
-    }
-
-    // VITAMIN: Too many CTAs (cluttered)
-    if (elements.ctaCount > 5) {
-        findings.push({
-            type: 'VITAMIN',
-            category: 'Conversion',
-            title: 'Too Many CTAs on Homepage',
-            description: `Found ${elements.ctaCount} CTAs on homepage. Too many choices confuse visitors and reduce conversions. Focus on 1-3 primary actions.`,
-            impactScore: 3,
-            confidenceScore: 80,
-            evidence: [{
-                type: 'metric',
-                value: elements.ctaCount,
-                label: 'CTA Count'
-            }],
-            metrics: {
-                ctaCount: elements.ctaCount,
-                ctas: elements.ctaElements.map(c => c.text).slice(0, 10),
-            },
-            effortEstimate: 'LOW',
-            recommendedFix: [
-                'Reduce to 1-3 primary CTAs',
-                'Remove redundant or low-priority action buttons',
-                'Make primary CTA most prominent',
-                'Secondary CTAs should be less visually dominant'
-            ]
-        });
-    }
-
-    return findings;
 }

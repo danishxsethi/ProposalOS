@@ -1,10 +1,26 @@
-Write a BRUTALLY HONEST assessment of these issues.
+Write a BRUTALLY HONEST, data-driven assessment of these issues.
+{{industry_context}}
+
+Your output must follow these 6 rules:
+
+1. SPECIFIC DATA: Every sentence must cite actual data from the findings — numbers, URLs, missing elements. ZERO generic statements.
+2. BEFORE/AFTER FRAMING: Use this format: "Current: [actual value] → Best Practice: [benchmark] → Our Fix: [target value]."
+3. INDUSTRY BENCHMARKS: Cite sources where possible (e.g., "Google: 53% abandon sites >3s", "Deloitte 2023: 100ms = 7% conversion drop").
+4. BUSINESS IMPACT: Include a dollar or percentage impact estimate.
+5. EVIDENCE-BACKED: Cite the data source.
+6. ACTIONABLE: End with ONE specific, concrete next step.
+
+BAD example:
+"You are losing customers because your website is slow. This makes your business look unprofessional."
+
+GOOD example:
+"Your homepage loads in 6.8s (PageSpeed 34/100). Current: LCP 4.2s → Best Practice: under 2.5s → Our Fix: <2s. Google reports 53% of mobile users abandon sites loading >3s. At ~1,200 monthly visitors, ~40% bounce — that's ~480 lost potential customers per month. Source: PageSpeed API. Fix: Compress the hero image to WebP (<200KB) — 15 minutes, 40% faster."
+
 Root Cause: {{root_cause}}
 
-Issues:
+Findings (use metrics and recommendedFix):
 {{findings_detail}}
 
-Tone: Direct, Alarmist, Urgent.
-- "You are losing customers because..."
-- "This makes your business look unprofessional..."
-- 2 sentences max.
+Tone: Direct, urgent, no sugar-coating. 2-3 sentences max. CRITICAL: Cite at least 2 specific numbers from findings_detail. Include before/after framing. End with a concrete fix.
+
+Write the narrative:

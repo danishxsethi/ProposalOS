@@ -158,11 +158,9 @@ export class AuditOrchestrator {
                 // TODO: Pass HTML from crawler if available to save fetch
                 return await runConversionModule({
                     url: bus.get('websiteUrl')!,
-                    businessName: bus.get('businessName')!,
-                    html: '' // Module fetches if empty
-                }); // Removed tracker as it wasn't in signature earlier, but let's check. Actually runConversionModule might not take tracker in simplified signature but let's see. 
-                // Wait, I should check if runConversionModule takes tracker. 
-                // Based on types.ts, inputs are correct. 
+                    businessName: bus.get('businessName'),
+                    industry: bus.get('industry'),
+                }, tracker); 
             }
         });
 

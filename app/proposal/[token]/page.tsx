@@ -11,52 +11,64 @@ interface Props {
     params: Promise<{ token: string }>;
 }
 
+function extractScoresForMeta(findings: { metrics?: unknown }[]): { performance: number; seo: number } {
+    let p = 0, s = 0, pC = 0, sC = 0;
+    for (const f of findings) {
+        const m = (f.metrics || {}) as Record<string, number>;
+        if (typeof m.performanceScore === 'number') { p += m.performanceScore; pC++; }
+        if (typeof m.seoScore === 'number') { s += m.seoScore; sC++; }
+    }
+    return {
+        performance: pC ? Math.round(p / pC) : 0,
+        seo: sC ? Math.round(s / sC) : 0,
+    };
+}
+
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
     const { token } = await params;
     const proposal = await prisma.proposal.findUnique({
         where: { webLinkToken: token },
-        include: { audit: true },
+        include: { audit: { include: { findings: true } } },
     });
 
     if (!proposal) {
         return { title: 'Proposal Not Found' };
     }
 
-    // Fetch branding to update title if needed, though usually standard is fine
     const branding = await getBranding(proposal.tenantId);
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://proposalengine.com';
+    const shareUrl = `${baseUrl}/proposal/${token}`;
 
-    const shareUrl = `${process.env.NEXT_PUBLIC_BASE_URL || 'https://proposalengine.com'}/proposal/${token}`;
-    const shareTitle = `${branding.name} Proposal for ${proposal.audit.businessName}`;
-    const shareDescription = proposal.executiveSummary?.slice(0, 160) ||
-        `Comprehensive digital marketing audit and growth proposal for ${proposal.audit.businessName}`;
+    const scores = extractScoresForMeta(proposal.audit.findings);
+    const findingsCount = proposal.audit.findings.length;
+
+    const ogTitle = `Website Audit for ${proposal.audit.businessName}`;
+    const ogDescription = `Performance: ${scores.performance}/100 | SEO: ${scores.seo}/100 | ${findingsCount} opportunities found`;
+
+    const ogImages = branding.logoUrl
+        ? [{ url: branding.logoUrl, width: 1200, height: 630, alt: `${branding.name} Logo` }]
+        : [];
 
     return {
-        title: shareTitle,
-        description: shareDescription,
+        title: ogTitle,
+        description: ogDescription,
         icons: branding.logoUrl ? { icon: branding.logoUrl } : undefined,
 
-        // Open Graph Tags for Facebook, LinkedIn
         openGraph: {
-            title: shareTitle,
-            description: shareDescription,
+            title: ogTitle,
+            description: ogDescription,
             url: shareUrl,
             siteName: branding.name,
             type: 'website',
-            images: branding.logoUrl ? [{
-                url: branding.logoUrl,
-                width: 1200,
-                height: 630,
-                alt: `${branding.name} Logo`
-            }] : [],
+            images: ogImages,
         },
 
-        // Twitter Card
         twitter: {
-            card: 'summary_large_image',
-            title: shareTitle,
-            description: shareDescription,
+            card: ogImages.length ? 'summary_large_image' : 'summary',
+            title: ogTitle,
+            description: ogDescription,
             images: branding.logoUrl ? [branding.logoUrl] : [],
-        }
+        },
     };
 }
 
@@ -105,5 +117,5 @@ export default async function Page({ params }: Props) {
         });
     }
 
-    return <ProposalPage proposal={proposal} />;
+    return <ProposalPage proposal={proposal} branding={branding} />;
 }

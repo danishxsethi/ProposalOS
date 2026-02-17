@@ -2,7 +2,11 @@ import { Resend } from 'resend';
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+function getResend(): Resend | null {
+    const key = process.env.RESEND_API_KEY;
+    if (!key) return null;
+    return new Resend(key);
+}
 
 interface SendProposalOptions {
     proposalId: string;
@@ -60,6 +64,10 @@ export async function sendProposalEmail({
         `;
 
         // 4. Send via Resend
+        const resend = getResend();
+        if (!resend) {
+            throw new Error('RESEND_API_KEY is required to send emails');
+        }
         const data = await resend.emails.send({
             from: `${brandName} <${fromEmail}>`,
             to: recipientEmail,

@@ -74,11 +74,12 @@ export function generateDisclaimers(): string[] {
 /**
  * Generate next steps
  */
-export function generateNextSteps(): string[] {
-    return [
+export function generateNextSteps(topActionLines: string[] = []): string[] {
+    const base = [
         'Review this proposal and select your preferred tier',
         'Reply to this email or schedule a 15-minute call to discuss',
         'We\'ll send a simple contract and invoice',
         'Kickoff call within 3 business days of signing',
     ];
+    return topActionLines.length > 0 ? [...topActionLines, ...base] : base;
 }

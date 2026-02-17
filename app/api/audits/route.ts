@@ -49,8 +49,11 @@ export const GET = withAuth(async (req: Request) => {
                             id: true,
                             status: true,
                             webLinkToken: true,
+                            sentAt: true,
                             viewedAt: true,
-                            qaScore: true
+                            qaScore: true,
+                            clientScore: true,
+                            clientScoreResults: true,
                         }
                     }
                 }
@@ -69,6 +72,13 @@ export const GET = withAuth(async (req: Request) => {
             cost: audit.apiCostCents,
             costStatus: getCostStatus(audit.apiCostCents),
             proposal: audit.proposals[0] || null,
+            qaScore: audit.proposals[0]?.qaScore ?? null,
+            clientScore: audit.proposals[0]?.clientScore ?? null,
+            requiresHumanReview:
+                (
+                    (audit.proposals[0]?.clientScoreResults as { requiresHumanReview?: unknown } | undefined)
+                        ?.requiresHumanReview
+                ) === true,
             createdAt: audit.createdAt.toISOString(),
             completedAt: audit.completedAt,
         }));

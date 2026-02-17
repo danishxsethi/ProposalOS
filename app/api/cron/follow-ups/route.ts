@@ -3,8 +3,11 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { Resend } from 'resend';
 
-// Keep this outside handler to avoid re-init
-const resend = new Resend(process.env.RESEND_API_KEY || 're_123'); // Fallback for safety
+function getResend() {
+    const key = process.env.RESEND_API_KEY;
+    if (!key) return null;
+    return new Resend(key);
+}
 
 export async function GET(req: Request) {
     // Basic security for Cron (e.g. check for a secret header if needed)
@@ -93,18 +96,20 @@ export async function GET(req: Request) {
                 }
 
                 if (toEmail) {
-                    await resend.emails.send({
-                        from: `${senderName} <${senderEmail}>`,
-                        to: toEmail,
-                        subject: item.emailSubject,
-                        text: item.emailBody, // Plain text for now
-                    });
-
+                    const resend = getResend();
+                    if (resend) {
+                        await resend.emails.send({
+                            from: `${senderName} <${senderEmail}>`,
+                            to: toEmail,
+                            subject: item.emailSubject,
+                            text: item.emailBody, // Plain text for now
+                        });
+                    }
                     await prisma.proposalFollowUp.update({
                         where: { id: item.id },
-                        data: { status: 'sent', sentAt: new Date() }
+                        data: resend ? { status: 'sent', sentAt: new Date() } : { status: 'failed_no_resend' }
                     });
-                    results.push({ id: item.id, status: 'sent', to: toEmail });
+                    results.push({ id: item.id, status: resend ? 'sent' : 'skipped', to: toEmail });
                 } else {
                     // Missing email, maybe mark as failed or skip
                     await prisma.proposalFollowUp.update({
