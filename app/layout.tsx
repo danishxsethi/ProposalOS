@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 
-// Validate environment on server startup
-if (typeof window === 'undefined' && process.env.NODE_ENV !== 'test') {
+// Validate environment on server startup (skip during Docker build — vars provided at runtime)
+if (typeof window === 'undefined' && process.env.NODE_ENV !== 'test' && process.env.SKIP_ENV_VALIDATION !== 'true') {
     const { validateEnv } = require('@/lib/config/validateEnv');
     validateEnv();
 }

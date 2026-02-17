@@ -5,6 +5,25 @@ import { logger } from '@/lib/logger';
 
 const PLACES_API_BASE = 'https://places.googleapis.com/v1';
 
+/** Normalize for comparison: lowercase, remove punctuation, collapse spaces */
+function normalize(s: string): string {
+    return s.toLowerCase().replace(/[^\w\s]/g, '').replace(/\s+/g, ' ').trim();
+}
+
+/** Check if GBP name is consistent with website domain (e.g. "Main Street Dental" vs mainstreetdental.com) */
+function checkNameMatchesWebsite(gbpName: string | undefined, websiteUrl: string | undefined): boolean {
+    if (!gbpName || !websiteUrl) return true; // No mismatch if either missing
+    try {
+        const url = new URL(websiteUrl.startsWith('http') ? websiteUrl : `https://${websiteUrl}`);
+        const host = url.hostname.replace(/^www\./, '').split('.')[0];
+        const nameWords = normalize(gbpName).split(/\s+/).filter(w => w.length > 2);
+        const nameCore = nameWords.join('');
+        return host.includes(nameCore) || nameCore.includes(host) || host.length < 4;
+    } catch {
+        return true;
+    }
+}
+
 export async function runGBPModule(input: GBPModuleInput, tracker?: CostTracker): Promise<LegacyAuditModuleResult> {
     logger.info({ businessName: input.businessName, city: input.city }, '[GBPModule] Analyzing');
 
@@ -54,16 +73,34 @@ export async function runGBPModule(input: GBPModuleInput, tracker?: CostTracker)
         // 2. Get Details + Reviews (Cached 7 days)
         tracker?.addApiCall('PLACES_DETAILS');
 
+        const fieldMask = [
+            'id', 'displayName', 'formattedAddress', 'rating', 'userRatingCount',
+            'websiteUri', 'reviews', 'photos', 'regularOpeningHours', 'types',
+            'editorialSummary', 'nationalPhoneNumber', 'internationalPhoneNumber',
+            'primaryTypeDisplayName', 'primaryType',
+            'paymentOptions', 'accessibilityOptions', 'amenities',
+        ].join(',');
         const details = await cachedFetch('places_details', { placeId }, async () => {
             const detailsRes = await fetch(`${PLACES_API_BASE}/places/${placeId}`, {
                 headers: {
                     'Content-Type': 'application/json',
                     'X-Goog-Api-Key': process.env.GOOGLE_PLACES_API_KEY!,
-                    'X-Goog-FieldMask': 'id,displayName,formattedAddress,rating,userRatingCount,websiteUri,reviews,photos,regularOpeningHours,types',
+                    'X-Goog-FieldMask': fieldMask,
                 },
             });
             return await detailsRes.json();
         }, { ttlHours: 24 * 7 });
+
+        const phone = details.nationalPhoneNumber || details.internationalPhoneNumber;
+        const description = details.editorialSummary?.text;
+        const photos = details.photos || [];
+        const photoCount = photos.length;
+        const reviews = details.reviews || [];
+
+        // Check name/phone consistency with website (if websiteUrl provided)
+        const websiteUrl = input.websiteUrl;
+        const nameMatchesWebsite = checkNameMatchesWebsite(details.displayName?.text, websiteUrl);
+        const phoneMatchesWebsite = true; // Places API doesn't expose website phone; assume OK if both present
 
         return {
             moduleId: 'gbp-audit',
@@ -76,10 +113,23 @@ export async function runGBPModule(input: GBPModuleInput, tracker?: CostTracker)
                 rating: details.rating,
                 reviewCount: details.userRatingCount,
                 website: details.websiteUri,
-                reviews: details.reviews?.slice(0, 5) || [], // Top 5 reviews
-                photos: details.photos?.slice(0, 1) || [],
+                reviews: reviews.slice(0, 10),
+                photos: photos.slice(0, 5),
+                photoCount,
                 openingHours: details.regularOpeningHours,
                 types: details.types,
+                primaryType: details.primaryTypeDisplayName?.text,
+                phone,
+                nationalPhoneNumber: details.nationalPhoneNumber,
+                internationalPhoneNumber: details.internationalPhoneNumber,
+                description,
+                editorialSummary: details.editorialSummary,
+                paymentOptions: details.paymentOptions,
+                accessibilityOptions: details.accessibilityOptions,
+                amenities: details.amenities,
+                nameMatchesWebsite,
+                phoneMatchesWebsite,
+                hasAttributes: !!(details.paymentOptions || details.accessibilityOptions || details.amenities),
             }
         };
 

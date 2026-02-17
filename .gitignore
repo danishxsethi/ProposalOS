@@ -38,3 +38,4 @@ next-env.d.ts
 
 # gcp
 service-account.json
+.db_password_temp

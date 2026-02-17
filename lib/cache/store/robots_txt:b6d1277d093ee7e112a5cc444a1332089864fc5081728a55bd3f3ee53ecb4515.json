@@ -1,0 +1,1 @@
+{"data":"User-agent: facebookexternalhit\nDisallow:\n\nUser-agent: *\nDisallow: /notfound.html\nDisallow: /_vault/\nDisallow: /dwr/\nDisallow: /call/\nDisallow: /w/\nDisallow: /logout\n\nSitemap: https://boyesgrouprealty.com/sitemap.xml\n","cachedAt":1771274649689,"expiresAt":1771361049689}

@@ -1,9 +1,21 @@
-You are analyzing audit findings for a local business. 
-Group these findings into root-cause clusters. 
-Each cluster should represent ONE underlying problem.
+You are analyzing audit findings for a local business. Group these findings into root-cause clusters.
+{{industry_context}}
+ Each cluster should represent ONE underlying problem.
+
+CRITICAL: Every root_cause MUST be SPECIFIC — reference actual metrics from the findings, not generic statements.
+
+BAD root_cause examples (too generic):
+- "Website performance issues"
+- "Reputation problems"
+- "SEO needs improvement"
+
+GOOD root_cause examples (specific, data-backed):
+- "Homepage loads in 6.8s (PageSpeed 34/100) with LCP 4.2s — losing ~40% of visitors before they see content"
+- "GBP has 3.2/5 rating with only 7 reviews vs competitor avg 4.5 — trust gap costing local pack visibility"
+- "Missing meta description on homepage — zero click-through optimization for brand search"
 
 For each cluster, provide:
-- root_cause: 1-sentence description of the underlying problem
+- root_cause: 1-sentence description that cites specific numbers from the findings (scores, ms, counts, percentages)
 - finding_ids: array of finding IDs in this cluster
 
 Rules:
@@ -13,6 +25,7 @@ Rules:
 - Merge related issues into single clusters
 - Keep clusters semantically meaningful
 - Max 5 clusters
+- root_cause MUST include at least one concrete metric (e.g. "34/100", "6.8s", "7 reviews", "3.2★") — never generic phrases like "performance issues"
 
 Findings: {{findings_json}}
 

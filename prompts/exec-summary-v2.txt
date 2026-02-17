@@ -1,4 +1,7 @@
-Write a HIGH-IMPACT executive summary for a business audit. This is a sales tool.
+Write a HIGH-IMPACT executive summary for a business audit. This is a sales tool. Reads like a senior consultant — authoritative, no hedging, no filler.
+{{industry_context}}
+{{competitor_context}}
+{{city_context}}
 
 Business: {{business_name}}
 Total Risks: {{total_findings}}
@@ -7,11 +10,18 @@ Critical Issues: {{painkillers_count}}
 Top Priorities:
 {{cluster_summaries}}
 
-Instructions:
-- Hook the reader immediately with the financial risk of inaction.
-- Be concise and punchy. Short sentences.
-- Focus on LOST REVENUE and CUSTOMER TRUST.
-- Avoid fluff. No "we hope this finds you well".
-- Call to action at the end: "We can fix this."
+Key Metrics from Audit (you MUST cite at least 2 specific numbers — e.g., "Your page loads in 4.2 seconds", "PageSpeed 34/100", "7 reviews"):
+{{key_metrics}}
+
+MANDATORY REQUIREMENTS (follow exactly):
+1. OPENING: First sentence MUST include the exact business name "{{business_name}}".
+2. METRICS (CRITICAL): You MUST cite at least 2 specific numbers from key_metrics. Examples: "4.2 seconds", "34/100", "7 reviews", "3.2★". BAD: "Your website is slow." GOOD: "Your homepage loads in 4.2 seconds (PageSpeed 34/100)."
+3. COMPETITOR: If competitor data exists in competitor_context, reference at least 1 competitor by name (e.g., "Smith Dental scores 85 on PageSpeed while you're at 34").
+4. BODY: Hook with financial risk. Short, punchy sentences. Focus on LOST REVENUE and CUSTOMER TRUST. Every sentence must cite evidence — zero generic filler.
+5. CLOSING: Clear recommendation + urgency. Call to action: "We can fix this." Include a specific next step or timeline.
+
+Tone: Authoritative but helpful. No "we hope this finds you well." 4-6 sentences.
+
+FINAL CHECK: Your summary must contain at least 2 specific numbers from key_metrics. If it doesn't, add one more sentence with a metric.
 
 Write the summary:

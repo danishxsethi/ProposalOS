@@ -101,7 +101,7 @@ Return JSON in this exact format:
     }
   ],
   "commonThemes": ["most frequent theme 1", "most frequent theme 2"],
-  "negativeThemesSummary": "Brief summary of what negative reviews complain about, or null if no negative reviews"
+  "negativeThemesSummary": "SPECIFIC summary for negative reviews only. Must include: (1) exact theme/category (e.g. 'wait time', 'staff rudeness'), (2) count (e.g. '3 of 5 negative reviews mention X'), (3) one concrete recommended action. Example: 'Wait time mentioned in 3 of 5 negative reviews — consider adding estimated wait times or a queue system.' Or null if no negative reviews."
 }`;
 
         // Create wrapper for the LLM call

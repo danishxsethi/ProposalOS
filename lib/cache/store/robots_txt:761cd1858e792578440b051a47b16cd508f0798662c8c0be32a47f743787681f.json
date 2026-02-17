@@ -1,0 +1,1 @@
+{"data":"User-agent: *\nDisallow: /wp/wp-admin/\nAllow: /wp/wp-admin/admin-ajax.php\n\nSitemap: https://scharfsteinlaw.com/sitemap_index.xml\n","cachedAt":1771270449704,"expiresAt":1771356849704}

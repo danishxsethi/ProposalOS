@@ -1,0 +1,1 @@
+{"data":"User-agent: *\nDisallow: /wp-admin/\nAllow: /wp-admin/admin-ajax.php\n\nSitemap: https://sladerealestate.ca/wp-sitemap.xml\n","cachedAt":1771274895999,"expiresAt":1771361295999}

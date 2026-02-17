@@ -1,0 +1,1 @@
+{"data":"User-agent: *\r\nDisallow: /us-global-data/*\r\nDisallow: /*/us-global-data/*\r\nDisallow: /*/know-your-pet\r\nDisallow: /login?r=\r\nDisallow: /*/search-results","cachedAt":1771275757595,"expiresAt":1771362157595}

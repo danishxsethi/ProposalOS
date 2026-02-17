@@ -225,7 +225,7 @@ async function analyzeProfile(platform: string, url: string, tracker?: CostTrack
 }
 
 async function analyzeContentQuality(posts: string[], industry: string, city: string, tracker?: CostTracker): Promise<ContentAnalysis | null> {
-    const apiKey = process.env.GOOGLE_PLACES_API_KEY; // Using generic key
+    const apiKey = process.env.GOOGLE_AI_API_KEY;
     if (!apiKey || posts.length === 0) return null;
 
     try {

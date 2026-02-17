@@ -1,7 +1,7 @@
-
 import { prisma } from '@/lib/prisma';
 import { runDiagnosisPipeline } from '@/lib/diagnosis';
 import { runProposalPipeline } from '@/lib/proposal';
+import { generateComparison } from '@/lib/analysis/competitorComparison';
 import { CostTracker } from '@/lib/costs/costTracker';
 import { logger, logError } from '@/lib/logger';
 import { Metrics } from '@/lib/metrics';
@@ -25,6 +25,11 @@ export async function generateProposal(auditId: string) {
         where: { id: auditId },
         include: {
             findings: true,
+            evidence: {
+                where: { module: 'competitor' },
+                orderBy: { collectedAt: 'desc' },
+                take: 1,
+            },
         },
     });
 
@@ -62,15 +67,31 @@ export async function generateProposal(auditId: string) {
             duration_ms: Date.now() - startTime
         }, 'Diagnosis complete');
 
+        // Build comparison report from competitor evidence
+        let comparisonReport = null;
+        const competitorEvidence = audit.evidence?.[0]?.rawResponse as { comparisonMatrix?: { business?: unknown; competitors?: unknown[] } } | undefined;
+        if (competitorEvidence?.comparisonMatrix?.business && competitorEvidence.comparisonMatrix.competitors?.length) {
+            const { business, competitors } = competitorEvidence.comparisonMatrix;
+            comparisonReport = generateComparison(
+                business as Parameters<typeof generateComparison>[0],
+                competitors as Parameters<typeof generateComparison>[1],
+                audit.businessIndustry || undefined
+            );
+        }
+
         // Step 2: Generate proposal
-        const proposalResult = await runProposalPipeline(
+        const pipelineResult = await runProposalPipeline(
             audit.businessName,
             audit.businessIndustry || undefined,
             diagnosisResult.clusters,
             audit.findings,
             tracker,
-            parentTrace
+            parentTrace,
+            undefined,
+            comparisonReport,
+            audit.businessCity
         );
+        const { normalizedFindings: _nf, ...proposalResult } = pipelineResult;
 
         // Step 3: Save proposal to database (serialize to JSON)
         const proposal = await prisma.proposal.create({
@@ -85,6 +106,7 @@ export async function generateProposal(auditId: string) {
                 assumptions: proposalResult.assumptions,
                 disclaimers: proposalResult.disclaimers,
                 nextSteps: proposalResult.nextSteps,
+                comparisonReport: comparisonReport ? JSON.parse(JSON.stringify(comparisonReport)) : undefined,
                 status: 'DRAFT',
             },
         });

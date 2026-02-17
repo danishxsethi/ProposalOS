@@ -230,6 +230,31 @@ function generateFindingsFromCrawl(crawlResult: CrawlResult, businessUrl: string
         });
     }
 
+    // 8a. PAINKILLER: All pages failed to load (blocked or JS-heavy) — use PageSpeed fallback
+    const successfulPages = crawlResult.crawledPages.filter(p => p.status === 200);
+    if (crawlResult.crawledPages.length > 0 && successfulPages.length === 0) {
+        findings.push({
+            type: 'PAINKILLER',
+            category: 'Technical SEO',
+            title: 'Limited Data: Site May Block Crawlers or Be JavaScript-Heavy',
+            description: 'Could not retrieve full page content. Analysis uses PageSpeed API data only. Consider adding a sitemap and ensuring critical content is server-rendered.',
+            impactScore: 6,
+            confidenceScore: 75,
+            evidence: [{
+                type: 'text',
+                value: 'Crawler returned no successful pages',
+                label: 'Limited Data'
+            }],
+            metrics: { pagesAttempted: crawlResult.crawledPages.length },
+            effortEstimate: 'MEDIUM',
+            recommendedFix: [
+                'Ensure site is accessible to search engines',
+                'Consider server-side rendering for key content',
+                'Check robots.txt and firewall rules'
+            ]
+        });
+    }
+
     // 8. VITAMIN: <5 internal pages (thin site)
     if (crawlResult.totalPagesFound < 5) {
         findings.push({

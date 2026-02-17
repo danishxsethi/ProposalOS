@@ -1,4 +1,7 @@
-Write a compelling executive summary for a business audit proposal.
+Write a compelling executive summary for a business audit proposal. This reads like a senior consultant wrote it — authoritative, no hedging, no filler.
+{{industry_context}}
+{{competitor_context}}
+{{city_context}}
 
 Business: {{business_name}}
 Total Findings: {{total_findings}} ({{painkillers_count}} urgent issues, {{vitamins_count}} growth opportunities)
@@ -6,12 +9,18 @@ Total Findings: {{total_findings}} ({{painkillers_count}} urgent issues, {{vitam
 Key Issues Identified:
 {{cluster_summaries}}
 
-Requirements:
-- Start with the most urgent problem (painkillers first)
-- Reference specific numbers from the findings
-- Explain the business impact (lost revenue, missed opportunities)
-- End with a forward-looking statement about the solution
-- Keep it to 3-4 sentences
-- Tone: Direct but empathetic, business-focused
+Key Metrics from Audit (you MUST cite at least 2 specific numbers from this data — e.g., "Your page loads in 4.2 seconds", "PageSpeed 34/100", "7 reviews", "3.2★ rating"):
+{{key_metrics}}
+
+MANDATORY REQUIREMENTS (follow exactly):
+1. OPENING: The first sentence MUST include the exact business name "{{business_name}}". Example: "{{business_name}} has a strong reputation but is losing customers due to a slow, outdated website."
+2. METRICS (CRITICAL): You MUST cite at least 2 specific numbers from key_metrics. Every number counts: "4.2 seconds", "34/100", "7 reviews", "3.2★", "15%", "$500". BAD: "Your page is slow." GOOD: "Your page loads in 4.2 seconds (PageSpeed 34/100)."
+3. COMPETITOR: If competitor data exists in competitor_context, reference at least 1 competitor by name (e.g., "ABC Dental scores 85 on PageSpeed while you're at 34").
+4. BODY: Explain business impact using the cited metrics. No generic filler like "could be improved" — every sentence must cite evidence.
+5. CLOSING: Clear recommendation and urgency. Example: "Addressing the top 3 issues in the next 30 days could recover an estimated 20-30% of lost traffic. We recommend starting with [specific fix]."
+
+Tone: Authoritative — like a senior consultant. Direct, no hedging ("might", "could potentially"), no filler. 4-6 sentences total.
+
+FINAL CHECK before submitting: Count the numbers in your summary. You must have at least 2 (e.g. "4.2 seconds", "34/100", "7 reviews"). If you have fewer, add one more sentence citing a specific metric from key_metrics.
 
 Write the executive summary now:

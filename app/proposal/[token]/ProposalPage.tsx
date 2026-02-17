@@ -1,38 +1,27 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import { useProposalViewTracking } from './ProposalViewTracker';
+import { ProposalShareButton } from '@/components/ProposalShareButton';
 
+const NAVY = '#1a1a2e';
+const BLUE = '#4361ee';
+const WHITE = '#ffffff';
+const ACCENT = '#22c55e'; // Green for CTA
+
+interface FindingShape {
+    id: string;
+    impactScore: number;
+    title: string;
+    description?: string | null;
+    recommendedFix?: unknown;
+    evidence?: unknown;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 interface ProposalProps {
-    proposal: {
-        id: string;
-        executiveSummary: string | null;
-        painClusters: unknown;
-        tierEssentials: unknown;
-        tierGrowth: unknown;
-        tierPremium: unknown;
-        pricing: unknown;
-        assumptions: string[];
-        disclaimers: string[];
-        nextSteps: string[];
-        webLinkToken: string;
-        createdAt: Date;
-        audit: {
-            businessName: string;
-            businessCity: string | null;
-            businessIndustry: string | null;
-            findings: Array<{
-                id: string;
-                title: string;
-                description: string | null;
-                type: string;
-                impactScore: number;
-                module: string;
-                metrics: any;
-                recommendedFix: any;
-                [key: string]: any;
-            }>;
-        };
-    };
+    proposal: any;
+    branding?: { name: string; logoUrl?: string | null };
 }
 
 interface Pricing {
@@ -45,945 +34,603 @@ interface Tier {
     name?: string;
     description?: string;
     findings?: string[];
+    findingIds?: string[];
     deliveryTime?: string;
+    features?: string[];
+    badge?: string;
 }
 
-// Animation hook using Intersection Observer
+function formatScore(score: number | undefined | null): string {
+    if (score == null) return '—';
+    const s = Math.round(score);
+    const emoji = s >= 90 ? '🟢' : s >= 70 ? '🟡' : s >= 50 ? '🟠' : '🔴';
+    return `${s} ${emoji}`;
+}
+
+function extractScores(findings: { metrics?: Record<string, number> | null }[]): { performance: number; seo: number; accessibility: number } {
+    let p = 0, s = 0, a = 0;
+    let pC = 0, sC = 0, aC = 0;
+    for (const f of findings) {
+        const m = f.metrics || {};
+        if (typeof m.performanceScore === 'number') { p += m.performanceScore; pC++; }
+        if (typeof m.seoScore === 'number') { s += m.seoScore; sC++; }
+        if (typeof m.accessibilityScore === 'number') { a += m.accessibilityScore; aC++; }
+    }
+    return {
+        performance: pC ? Math.round(p / pC) : 0,
+        seo: sC ? Math.round(s / sC) : 0,
+        accessibility: aC ? Math.round(a / aC) : 0,
+    };
+}
+
 function useFadeIn() {
     const [isVisible, setIsVisible] = useState(false);
     const ref = useRef<HTMLDivElement>(null);
-
     useEffect(() => {
-        const observer = new IntersectionObserver(
-            ([entry]) => {
-                if (entry.isIntersecting) {
-                    setIsVisible(true);
-                }
-            },
-            { threshold: 0.1 }
-        );
-
-        if (ref.current) {
-            observer.observe(ref.current);
-        }
-
-        return () => {
-            if (ref.current) {
-                observer.unobserve(ref.current);
-            }
-        };
+        const el = ref.current;
+        if (!el) return;
+        const ob = new IntersectionObserver(([e]) => e.isIntersecting && setIsVisible(true), { threshold: 0.1 });
+        ob.observe(el);
+        return () => ob.disconnect();
     }, []);
-
     return { ref, isVisible };
 }
-import { BRANDING, getBrandColor } from '@/lib/config/branding';
-import { ProposalShareButton } from '@/components/ProposalShareButton';
 
-// ... (imports remain)
+function AnimatedGauge({ score, label, delay = 0 }: { score: number; label: string; delay?: number }) {
+    const [display, setDisplay] = useState(0);
+    const ref = useRef<HTMLDivElement>(null);
+    const [mounted, setMounted] = useState(false);
 
-export default function ProposalPage({ proposal }: ProposalProps) {
-    // ... (state and logic remain)
-
-    // Dynamic styles for branding
-    const primaryStyle = { color: BRANDING.colors.primary };
-    const bgPrimaryStyle = { backgroundColor: BRANDING.colors.primary };
-    const borderPrimaryStyle = { borderColor: BRANDING.colors.primary };
-    const gradientText = {
-        backgroundImage: `linear-gradient(to right, ${BRANDING.colors.primary}, ${BRANDING.colors.accent})`,
-        WebkitBackgroundClip: 'text',
-        WebkitTextFillColor: 'transparent',
-    };
-
-    // Template Logic
-    const template = (proposal as any).template;
-
-    // Custom CSS
     useEffect(() => {
-        if (template?.customCss) {
-            const style = document.createElement('style');
-            style.innerHTML = template.customCss;
-            document.head.appendChild(style);
-            return () => {
-                document.head.removeChild(style);
+        const el = ref.current;
+        if (!el) return;
+        const ob = new IntersectionObserver(([e]) => {
+            if (e.isIntersecting && !mounted) setMounted(true);
+        }, { threshold: 0.3 });
+        ob.observe(el);
+        return () => ob.disconnect();
+    }, [mounted]);
+
+    useEffect(() => {
+        if (!mounted) return;
+        const t = setTimeout(() => {
+            const dur = 1200;
+            const step = 16;
+            let t0 = Date.now();
+            const tick = () => {
+                const elapsed = Date.now() - t0;
+                const pct = Math.min(1, elapsed / dur);
+                const eased = 1 - Math.pow(1 - pct, 2);
+                setDisplay(Math.round(score * eased));
+                if (pct < 1) requestAnimationFrame(tick);
             };
-        }
-    }, [template]);
+            requestAnimationFrame(tick);
+        }, delay);
+        return () => clearTimeout(t);
+    }, [mounted, score, delay]);
 
-    // Content Overrides
-    const replaceVariables = (text: string | null) => {
-        if (!text) return null;
+    const color = score >= 80 ? '#22c55e' : score >= 60 ? '#eab308' : score >= 40 ? '#f97316' : '#ef4444';
+    const circumference = 2 * Math.PI * 45;
+    const offset = circumference * (1 - (mounted ? display : 0) / 100);
 
-        const findingsCount = proposal.audit.findings.length;
-        const painkillerCount = proposal.audit.findings.filter(f => f.type === 'PAINKILLER').length;
-        const topIssue = proposal.audit.findings.sort((a, b) => b.impactScore - a.impactScore)[0]?.title || 'Critical Issue';
+    return (
+        <div ref={ref} className="flex flex-col items-center">
+            <div className="relative w-32 h-32 sm:w-40 sm:h-40">
+                <svg className="w-full h-full -rotate-90" viewBox="0 0 100 100">
+                    <circle cx="50" cy="50" r="45" fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth="8" />
+                    <circle
+                        cx="50" cy="50" r="45"
+                        fill="none" stroke={color} strokeWidth="8" strokeLinecap="round"
+                        strokeDasharray={circumference} strokeDashoffset={offset}
+                        style={{ transition: 'stroke-dashoffset 0.1s linear' }}
+                    />
+                </svg>
+                <div className="absolute inset-0 flex flex-col items-center justify-center">
+                    <span className="text-3xl sm:text-4xl font-bold" style={{ color }}>{display}</span>
+                    <span className="text-xs text-white/60 mt-0.5">{label}</span>
+                </div>
+            </div>
+        </div>
+    );
+}
 
-        const price = proposal.pricing as any;
+const BEST_TIME_OPTIONS = [
+    'Morning (9am–12pm)',
+    'Afternoon (12pm–5pm)',
+    'Evening (5pm–8pm)',
+    'Anytime',
+];
 
-        return text
-            .replace(/{businessName}/g, proposal.audit.businessName)
-            .replace(/{city}/g, proposal.audit.businessCity || 'your city')
-            .replace(/{findingsCount}/g, findingsCount.toString())
-            .replace(/{painkillerCount}/g, painkillerCount.toString())
-            .replace(/{topIssue}/g, topIssue)
-            .replace(/{essentialsPrice}/g, `$${price?.essentials || 450}`)
-            .replace(/{growthPrice}/g, `$${price?.growth || 1000}`)
-            .replace(/{premiumPrice}/g, `$${price?.premium || 2000}`);
-    };
+export default function ProposalPage({ proposal, branding }: ProposalProps) {
+    const [expandedFinding, setExpandedFinding] = useState<string | null>(null);
+    const [isContactModalOpen, setIsContactModalOpen] = useState(false);
+    const [urgencyBannerDismissed, setUrgencyBannerDismissed] = useState(false);
+    const [tocOpen, setTocOpen] = useState(false);
+    const [contactForm, setContactForm] = useState({ name: '', email: '', phone: '', preferredTier: '', bestTime: '', message: '' });
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [contactSuccess, setContactSuccess] = useState(false);
 
-    const introText = replaceVariables(template?.introText); // If null, use default logic
-    const outroText = replaceVariables(template?.outroText);
-    const ctaText = template?.ctaText || 'Schedule Strategy Call';
-    const ctaUrl = template?.ctaUrl || BRANDING.contact.website || '#';
+    const { trackCta, trackExpand } = useProposalViewTracking(proposal.webLinkToken);
 
-    const showFindings = template?.showFindings ?? true;
-    const showCompetitorMatrix = template?.showCompetitorMatrix ?? true;
-    const showRoi = template?.showRoi ?? true;
+    const pricing = (proposal.pricing || { essentials: 497, growth: 1497, premium: 2997 }) as Pricing;
+    const tierEssentials = (proposal.tierEssentials || {}) as Tier;
+    const tierGrowth = (proposal.tierGrowth || {}) as Tier;
+    const tierPremium = (proposal.tierPremium || {}) as Tier;
 
-    const [selectedTier, setSelectedTier] = useState<string | null>('growth');
-    const [expandedVitamin, setExpandedVitamin] = useState<string | null>(null);
-
-    const pricing = proposal.pricing as Pricing;
-    const tierEssentials = proposal.tierEssentials as Tier;
-    const tierGrowth = proposal.tierGrowth as Tier;
-    const tierPremium = proposal.tierPremium as Tier;
-
+    const tierFindings = (t: Tier) => t?.findingIds || t?.findings || [];
     const tiers = [
-        {
-            id: 'essentials',
-            name: 'Essentials',
-            price: pricing?.essentials || 450,
-            description: tierEssentials?.description || 'Fix the most critical issues affecting your business right now',
-            deliveryTime: tierEssentials?.deliveryTime || '1-2 weeks',
-            findings: tierEssentials?.findings || [],
-            features: [
-                'Fix top 3 critical issues',
-                'Performance optimization',
-                'Mobile responsiveness',
-                'Basic SEO improvements',
-                '2 weeks support',
-            ],
-        },
-        {
-            id: 'growth',
-            name: 'Growth',
-            price: pricing?.growth || 1000,
-            description: tierGrowth?.description || 'Comprehensive improvements that drive sustainable growth',
-            deliveryTime: tierGrowth?.deliveryTime || '3-4 weeks',
-            findings: tierGrowth?.findings || [],
-            features: [
-                'Everything in Essentials',
-                'Social media integration',
-                'Review management setup',
-                'Conversion optimization',
-                'Competitor analysis',
-                '30 days support',
-            ],
-            recommended: true,
-        },
-        {
-            id: 'premium',
-            name: 'Premium',
-            price: pricing?.premium || 2000,
-            description: tierPremium?.description || 'Complete digital transformation for maximum impact',
-            deliveryTime: tierPremium?.deliveryTime || '6-8 weeks',
-            findings: tierPremium?.findings || [],
-            features: [
-                'Everything in Growth',
-                'Content strategy & creation',
-                'Advanced analytics setup',
-                'Marketing automation',
-                'Ongoing optimization',
-                '60 days priority support',
-            ],
-        },
+        { id: 'essentials', name: tierEssentials?.name || 'Starter', price: pricing?.essentials || 497, description: tierEssentials?.description || 'Quick wins only.', deliveryTime: tierEssentials?.deliveryTime || '5 business days', features: (tierEssentials as Tier)?.features || [], recommended: false, badge: (tierEssentials as Tier)?.badge },
+        { id: 'growth', name: tierGrowth?.name || 'Growth', price: pricing?.growth || 1497, description: tierGrowth?.description || 'The full transformation — best value.', deliveryTime: tierGrowth?.deliveryTime || '10 business days', features: (tierGrowth as Tier)?.features || [], recommended: true, badge: (tierGrowth as Tier)?.badge || 'BEST VALUE' },
+        { id: 'premium', name: tierPremium?.name || 'Premium', price: pricing?.premium || 2997, description: tierPremium?.description || 'Ongoing partnership.', deliveryTime: tierPremium?.deliveryTime || '15 business days', features: (tierPremium as Tier)?.features || [], recommended: false, badge: (tierPremium as Tier)?.badge },
     ];
 
-    const painkillers = proposal.audit.findings
-        .filter(f => f.type === 'PAINKILLER')
-        .sort((a, b) => b.impactScore - a.impactScore)
-        .slice(0, 5); // Top 5 most impactful
+    const findings = proposal?.audit?.findings ?? [];
+    const scores = extractScores(findings);
+    const healthScore = findings.length
+        ? Math.max(0, Math.min(100, Math.round(100 - (findings.reduce((s: number, f: { impactScore: number }) => s + f.impactScore, 0) / findings.length) * 8)))
+        : 85;
 
-    const vitamins = proposal.audit.findings
-        .filter(f => f.type === 'VITAMIN')
-        .sort((a, b) => b.impactScore - a.impactScore);
+    const comparisonReport = proposal.comparisonReport as {
+        prospect: { name: string; performanceScore?: number; seoScore?: number; accessibilityScore?: number; mobileScore?: number; loadTimeSeconds?: number; rating?: number; reviewCount?: number };
+        competitors: Array<{ name: string; performanceScore?: number; seoScore?: number; accessibilityScore?: number; mobileScore?: number; loadTimeSeconds?: number; rating?: number; reviewCount?: number }>;
+        prospectRank: number;
+        winningCategories: string[];
+        losingCategories: string[];
+        biggestGap: { category: string; prospectScore: number; bestCompetitorScore: number; competitorName: string; gap: number } | null;
+        summaryStatement: string;
+        positiveStatement: string;
+        urgencyStatement: string;
+        quickWins: Array<{ action: string; effortEstimate: string; expectedImpact: string }>;
+        comparisonTableRows?: Array<{ metric: string; prospectValue: string | number; prospectStatus: string; competitorValues: Array<{ name: string; value: string | number; status: string }> }>;
+        summaryRow?: string;
+        whereAhead?: string[];
+        whereBehind?: string[];
+    } | null;
 
-    // Calculate overall health score (0-100)
-    const calculateHealthScore = () => {
-        const allFindings = proposal.audit.findings;
-        if (allFindings.length === 0) return 85;
+    type MatrixRow = { name: string; performanceScore?: number; seoScore?: number; mobileScore?: number; loadTimeSeconds?: number; rating?: number; reviewCount?: number; websiteSpeed?: number };
+    const matrixData = (() => {
+        if (comparisonReport) {
+            return {
+                business: comparisonReport.prospect as MatrixRow,
+                competitors: comparisonReport.competitors as MatrixRow[],
+            };
+        }
+        const f = findings.find((x: { evidence?: unknown[] }) => (x.evidence as Array<{ matrix?: unknown; raw?: { matrix?: unknown } }>)?.some?.((e) => e.matrix || e.raw?.matrix));
+        const firstEvidence = (f?.evidence as Array<{ matrix?: { business: MatrixRow; competitors: MatrixRow[] }; raw?: { matrix?: { business: MatrixRow; competitors: MatrixRow[] } } }>)?.[0];
+        const m = firstEvidence?.matrix || firstEvidence?.raw?.matrix;
+        return m;
+    })();
 
-        const avgImpact = allFindings.reduce((sum, f) => sum + f.impactScore, 0) / allFindings.length;
-        // Invert: higher impact = lower health score
-        return Math.max(0, Math.min(100, Math.round(100 - (avgImpact * 8))));
+    const auditDurationSeconds = (() => {
+        const a = proposal.audit as { startedAt?: Date; completedAt?: Date | null };
+        if (a.completedAt && a.startedAt) {
+            return Math.round((new Date(a.completedAt).getTime() - new Date(a.startedAt).getTime()) / 1000);
+        }
+        return 45; // fallback
+    })();
+
+    const formatDate = (d: Date) => new Date(d).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+
+    const openContactModal = () => {
+        trackCta();
+        setIsContactModalOpen(true);
     };
 
-    const healthScore = calculateHealthScore();
-
-    // Health score color
-    const getHealthColor = (score: number) => {
-        if (score >= 80) return 'text-green-400';
-        if (score >= 60) return 'text-yellow-400';
-        if (score >= 40) return 'text-orange-400';
-        return 'text-red-400';
-    };
-
-    const scrollToContact = () => {
-        document.getElementById('contact')?.scrollIntoView({ behavior: 'smooth' });
-    };
-
-    const heroFade = useFadeIn();
-    const urgencyFade = useFadeIn();
-    const opportunityFade = useFadeIn();
-    const pricingFade = useFadeIn();
-    const socialProofFade = useFadeIn();
-    const ctaFade = useFadeIn();
-
-    const formatDate = (date: Date) => {
-        return new Date(date).toLocaleDateString('en-US', {
-            month: 'long',
-            day: 'numeric',
-            year: 'numeric',
-        });
-    };
-
-    // State for Acceptance
-    const [isAcceptModalOpen, setIsAcceptModalOpen] = useState(false);
-    const [acceptSelectedTier, setAcceptSelectedTier] = useState<string | null>(null);
-    const [formState, setFormState] = useState({ name: '', email: '', phone: '', message: '' });
-    const [isSubmitting, setIsSubmitting] = useState(false);
-    const [isSuccess, setIsSuccess] = useState(false);
-
-    const handleAccept = (tier: string) => {
-        setAcceptSelectedTier(tier);
-        setIsAcceptModalOpen(true);
-    };
-
-    const submitAcceptance = async (e: React.FormEvent) => {
+    const submitContact = async (e: React.FormEvent) => {
         e.preventDefault();
         setIsSubmitting(true);
         try {
-            const res = await fetch(`/api/proposal/${proposal.webLinkToken}/accept`, {
+            const res = await fetch(`/api/proposal/${proposal.webLinkToken}/contact`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    tier: acceptSelectedTier,
-                    ...formState
-                })
+                    name: contactForm.name.trim(),
+                    email: contactForm.email.trim(),
+                    phone: contactForm.phone.trim() || undefined,
+                    preferredTier: contactForm.preferredTier || undefined,
+                    bestTime: contactForm.bestTime || undefined,
+                    message: contactForm.message.trim() || undefined,
+                }),
             });
-
-            if (res.ok) {
-                setIsSuccess(true);
-                // Optional: Confetti or redirect
-            } else {
-                alert('Something went wrong. Please try again.');
-            }
-        } catch (err) {
-            console.error(err);
-            alert('Error submitting proposal.');
+            if (res.ok) setContactSuccess(true);
+            else alert('Something went wrong. Please try again.');
+        } catch {
+            alert('Error submitting. Please try again.');
         } finally {
             setIsSubmitting(false);
         }
     };
 
-    if (isSuccess) {
+    const toggleFinding = (id: string) => {
+        const next = expandedFinding === id ? null : id;
+        setExpandedFinding(next);
+        if (next) trackExpand(next);
+    };
+
+    const heroRef = useFadeIn();
+    const execRef = useFadeIn();
+    const scoresRef = useFadeIn();
+    const findingsRef = useFadeIn();
+    const competitorRef = useFadeIn();
+    const pricingRef = useFadeIn();
+    const nextStepsRef = useFadeIn();
+    const ctaRef = useFadeIn();
+
+    const sectionClass = (ref: { ref: React.RefObject<HTMLDivElement>; isVisible: boolean }) =>
+        `py-12 sm:py-16 px-4 sm:px-6 transition-all duration-700 ${ref.isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-6'}`;
+
+    if (contactSuccess) {
         return (
-            <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4">
-                <div className="bg-slate-800 p-8 rounded-2xl max-w-md w-full text-center border border-slate-700">
-                    <div className="w-16 h-16 bg-green-500/20 text-green-400 rounded-full flex items-center justify-center mx-auto mb-6 text-3xl">
-                        🎉
-                    </div>
-                    <h1 className="text-2xl font-bold text-white mb-2">You're All Set!</h1>
-                    <p className="text-slate-400 mb-6">
-                        Thanks for accepting the proposal. We've received your details and will be in touch shortly to kick off the project.
-                    </p>
-                    <button
-                        onClick={() => window.location.reload()}
-                        className="bg-slate-700 text-white px-6 py-2 rounded-lg hover:bg-slate-600 transition"
-                    >
-                        View Proposal Again
-                    </button>
+            <div className="min-h-screen flex items-center justify-center p-4" style={{ backgroundColor: NAVY }}>
+                <div className="bg-white/5 border border-white/10 rounded-2xl p-8 max-w-md w-full text-center">
+                    <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-6 text-3xl" style={{ backgroundColor: `${ACCENT}20`, color: ACCENT }}>✓</div>
+                    <h1 className="text-2xl font-bold text-white mb-2">Thanks for Reaching Out!</h1>
+                    <p className="text-white/70 mb-6">We&apos;ve received your details and will be in touch shortly.</p>
+                    <button onClick={() => { setContactSuccess(false); setIsContactModalOpen(false); setContactForm({ name: '', email: '', phone: '', preferredTier: '', bestTime: '', message: '' }); }} className="px-6 py-3 rounded-xl font-semibold text-white" style={{ backgroundColor: ACCENT }}>Back to Proposal</button>
                 </div>
             </div>
         );
     }
 
     return (
-        <main className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-white">
-            {/* Modal */}
-            {isAcceptModalOpen && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-                    <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden relative animate-in fade-in zoom-in duration-300">
-                        <button
-                            onClick={() => setIsAcceptModalOpen(false)}
-                            className="absolute top-4 right-4 text-slate-500 hover:text-white"
-                        >
-                            ✕
-                        </button>
+        <main className="min-h-screen text-white" style={{ backgroundColor: NAVY }}>
+            <style>{`
+                html { scroll-behavior: smooth; }
+                .proposal-gauge-anim { animation: gauge-fill 1.2s ease-out forwards; }
+                @keyframes gauge-fill { from { stroke-dashoffset: 283; } to { stroke-dashoffset: var(--offset); } }
+            `}</style>
 
-                        <div className="p-6 md:p-8">
-                            <h2 className="text-2xl font-bold text-white mb-1">Let's Get Started!</h2>
-                            <p className="text-slate-400 text-sm mb-6">
-                                You are accepting the <span className="text-indigo-400 font-semibold uppercase">{acceptSelectedTier}</span> plan.
-                            </p>
-
-                            <form onSubmit={submitAcceptance} className="space-y-4">
+            {/* Contact Modal */}
+            {isContactModalOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+                    <div className="bg-[#16213e] border border-white/10 rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden">
+                        <div className="p-6 sm:p-8">
+                            <div className="flex justify-between items-start mb-6">
+                                <h2 className="text-xl sm:text-2xl font-bold text-white">Let&apos;s Talk</h2>
+                                <button onClick={() => setIsContactModalOpen(false)} className="text-white/60 hover:text-white text-2xl leading-none">×</button>
+                            </div>
+                            <form onSubmit={submitContact} className="space-y-4">
                                 <div>
-                                    <label className="block text-xs font-medium text-slate-400 mb-1 uppercase">Full Name</label>
-                                    <input
-                                        required
-                                        type="text"
-                                        className="w-full bg-slate-800 border border-slate-700 rounded p-3 text-white focus:outline-none focus:border-indigo-500"
-                                        placeholder="John Doe"
-                                        value={formState.name}
-                                        onChange={e => setFormState({ ...formState, name: e.target.value })}
-                                    />
+                                    <label className="block text-xs font-medium text-white/60 mb-1">Name *</label>
+                                    <input required type="text" placeholder="Your name" value={contactForm.name} onChange={e => setContactForm({ ...contactForm, name: e.target.value })} className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white placeholder-white/40 focus:outline-none focus:border-[#4361ee] min-h-[44px]" />
                                 </div>
                                 <div>
-                                    <label className="block text-xs font-medium text-slate-400 mb-1 uppercase">Work Email</label>
-                                    <input
-                                        required
-                                        type="email"
-                                        className="w-full bg-slate-800 border border-slate-700 rounded p-3 text-white focus:outline-none focus:border-indigo-500"
-                                        placeholder="john@example.com"
-                                        value={formState.email}
-                                        onChange={e => setFormState({ ...formState, email: e.target.value })}
-                                    />
+                                    <label className="block text-xs font-medium text-white/60 mb-1">Email *</label>
+                                    <input required type="email" placeholder="you@company.com" value={contactForm.email} onChange={e => setContactForm({ ...contactForm, email: e.target.value })} className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white placeholder-white/40 focus:outline-none focus:border-[#4361ee] min-h-[44px]" />
                                 </div>
                                 <div>
-                                    <label className="block text-xs font-medium text-slate-400 mb-1 uppercase">Phone (Optional)</label>
-                                    <input
-                                        type="tel"
-                                        className="w-full bg-slate-800 border border-slate-700 rounded p-3 text-white focus:outline-none focus:border-indigo-500"
-                                        placeholder="(555) 123-4567"
-                                        value={formState.phone}
-                                        onChange={e => setFormState({ ...formState, phone: e.target.value })}
-                                    />
+                                    <label className="block text-xs font-medium text-white/60 mb-1">Phone (optional)</label>
+                                    <input type="tel" placeholder="(555) 123-4567" value={contactForm.phone} onChange={e => setContactForm({ ...contactForm, phone: e.target.value })} className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white placeholder-white/40 focus:outline-none focus:border-[#4361ee] min-h-[44px]" />
                                 </div>
                                 <div>
-                                    <label className="block text-xs font-medium text-slate-400 mb-1 uppercase">Message / Questions (Optional)</label>
-                                    <textarea
-                                        className="w-full bg-slate-800 border border-slate-700 rounded p-3 text-white focus:outline-none focus:border-indigo-500 h-24"
-                                        placeholder="Any specific requests?"
-                                        value={formState.message}
-                                        onChange={e => setFormState({ ...formState, message: e.target.value })}
-                                    />
+                                    <label className="block text-xs font-medium text-white/60 mb-1">Preferred tier</label>
+                                    <select value={contactForm.preferredTier} onChange={e => setContactForm({ ...contactForm, preferredTier: e.target.value })} className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-[#4361ee] min-h-[44px]">
+                                        <option value="">Select...</option>
+                                        <option value="starter" className="bg-[#16213e]">Starter</option>
+                                        <option value="growth" className="bg-[#16213e]">Growth</option>
+                                        <option value="premium" className="bg-[#16213e]">Premium</option>
+                                    </select>
                                 </div>
-
-                                <button
-                                    type="submit"
-                                    disabled={isSubmitting}
-                                    className="w-full bg-green-600 hover:bg-green-500 text-white font-bold py-4 rounded-xl mt-4 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                                >
-                                    {isSubmitting ? 'Processing...' : 'Confirm Acceptance'}
+                                <div>
+                                    <label className="block text-xs font-medium text-white/60 mb-1">Best time to reach you</label>
+                                    <select value={contactForm.bestTime} onChange={e => setContactForm({ ...contactForm, bestTime: e.target.value })} className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-[#4361ee] min-h-[44px]">
+                                        <option value="">Select...</option>
+                                        {BEST_TIME_OPTIONS.map(o => <option key={o} value={o} className="bg-[#16213e]">{o}</option>)}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-medium text-white/60 mb-1">Message (optional)</label>
+                                    <textarea placeholder="Any questions?" value={contactForm.message} onChange={e => setContactForm({ ...contactForm, message: e.target.value })} rows={3} className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white placeholder-white/40 focus:outline-none focus:border-[#4361ee] resize-none" />
+                                </div>
+                                <button type="submit" disabled={isSubmitting} className="w-full py-4 rounded-xl font-bold text-white transition-opacity disabled:opacity-50 min-h-[44px]" style={{ backgroundColor: ACCENT }}>
+                                    {isSubmitting ? 'Sending...' : "I'm Interested — Let's Talk"}
                                 </button>
-
-                                <p className="text-center text-xs text-slate-500 mt-4">
-                                    By clicking confirm, you agree to move forward with this proposal. No payment is taken today.
-                                </p>
                             </form>
                         </div>
                     </div>
                 </div>
             )}
-            {/* Header */}
-            <header className="border-b border-slate-700/50 bg-slate-900/95 backdrop-blur-md sticky top-0 z-50">
-                <div className="max-w-6xl mx-auto px-4 sm:px-6 py-4 flex justify-between items-center">
-                    <div className="flex items-center gap-3">
-                        {BRANDING.logoUrl && (
-                            <img src={BRANDING.logoUrl} alt={BRANDING.name} className="h-8 w-auto object-contain" />
-                        )}
-                        <h1 className="text-lg sm:text-xl font-bold" style={BRANDING.logoUrl ? {} : gradientText}>
-                            {BRANDING.name}
-                        </h1>
-                    </div>
-                    <a
-                        href={`/api/proposal/${proposal.webLinkToken}/pdf`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="px-3 sm:px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 hover:opacity-90"
-                        style={{ backgroundColor: BRANDING.colors.primary }}
-                    >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                        </svg>
-                        <span className="hidden sm:inline">Download PDF</span>
-                        <span className="sm:hidden">PDF</span>
-                    </a>
-                </div>
-            </header>
 
-            {/* HERO SECTION */}
-            <section ref={heroFade.ref} className={`py-12 sm:py-20 px-4 sm:px-6 transition-all duration-1000 ${heroFade.isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}>
-                <div className="max-w-5xl mx-auto">
-                    <div className="text-center mb-8 sm:mb-12">
-                        <h2 className="text-3xl sm:text-5xl md:text-6xl font-bold mb-4 sm:mb-6">
-                            {proposal.audit.businessName}
-                        </h2>
-                        <p className="text-lg sm:text-xl text-slate-300 mb-2">{BRANDING.tagline}</p>
-                        <p className="text-sm text-slate-400">
-                            Prepared for {proposal.audit.businessName} on {formatDate(proposal.createdAt)}
+            {/* Sticky header area: urgency banner + nav */}
+            <div className="sticky top-0 z-40 bg-[#1a1a2e]/95 backdrop-blur-md">
+                {!urgencyBannerDismissed && (
+                    <div className="flex items-center justify-between gap-4 px-4 py-3 bg-amber-500/15 border-b border-amber-500/30 text-amber-100/95 text-sm">
+                        <p>
+                            This audit reflects <strong>{proposal.audit.businessName}</strong>&apos;s website as of {formatDate((proposal.audit as { completedAt?: Date })?.completedAt || proposal.createdAt)}. Findings may change as competitors update their sites.
                         </p>
+                        <button onClick={() => setUrgencyBannerDismissed(true)} className="flex-shrink-0 p-1 rounded hover:bg-amber-500/20 min-w-[44px] min-h-[44px] flex items-center justify-center" aria-label="Dismiss">×</button>
                     </div>
+                )}
+                <header className="border-b border-white/10">
+                    <div className="max-w-5xl mx-auto px-4 sm:px-6 py-4 flex justify-between items-center">
+                    <span className="text-lg font-bold text-white">{branding?.name ?? 'ProposalOS'}</span>
+                    <div className="flex items-center gap-2">
+                        <a href={`/api/proposal/${proposal.webLinkToken}/pdf`} target="_blank" rel="noopener noreferrer" className="px-4 py-2 rounded-lg text-sm font-medium text-white flex items-center gap-2 min-h-[44px] min-w-[44px] justify-center" style={{ backgroundColor: BLUE }}>
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                            <span className="hidden sm:inline">Download PDF</span>
+                        </a>
+                    </div>
+                </div>
+                </header>
+                <nav className="border-b border-white/5 py-3 px-4">
+                    <div className="max-w-5xl mx-auto flex flex-col sm:flex-row sm:flex-wrap sm:justify-center gap-2 sm:gap-4 text-sm">
+                        <button onClick={() => setTocOpen(!tocOpen)} className="sm:hidden flex items-center gap-2 text-white/70 hover:text-white min-h-[44px] px-2" aria-expanded={tocOpen}>
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>
+                            {tocOpen ? 'Hide' : 'Contents'}
+                        </button>
+                        {tocOpen && (
+                            <div className="flex flex-wrap gap-2 sm:hidden">
+                                {['executive-summary', 'scores', 'findings', 'competitors', 'pricing', 'next-steps', 'contact'].map(id => (
+                                    <a key={id} href={`#${id}`} onClick={() => setTocOpen(false)} className="text-white/70 hover:text-white hover:underline px-2 py-1 rounded min-h-[44px] flex items-center">{id.replace(/-/g, ' ')}</a>
+                                ))}
+                            </div>
+                        )}
+                        <div className="hidden sm:flex flex-wrap justify-center gap-2 sm:gap-4">
+                            {['executive-summary', 'scores', 'findings', 'competitors', 'pricing', 'next-steps', 'contact'].map(id => (
+                                <a key={id} href={`#${id}`} className="text-white/70 hover:text-white hover:underline px-2 py-1 rounded min-h-[44px] flex items-center">{id.replace(/-/g, ' ')}</a>
+                            ))}
+                        </div>
+                    </div>
+                </nav>
+            </div>
 
-                    {/* Health Score Gauge */}
-                    <div className="flex flex-col items-center mb-8">
-                        <div className="relative w-48 h-48 sm:w-64 sm:h-64">
-                            <svg className="transform -rotate-90 w-full h-full">
-                                <circle
-                                    cx="50%"
-                                    cy="50%"
-                                    r="45%"
-                                    stroke="currentColor"
-                                    strokeWidth="8"
-                                    fill="transparent"
-                                    className="text-slate-700"
-                                />
-                                <circle
-                                    cx="50%"
-                                    cy="50%"
-                                    r="45%"
-                                    stroke="currentColor"
-                                    strokeWidth="8"
-                                    fill="transparent"
-                                    strokeDasharray={`${2 * Math.PI * 45} ${2 * Math.PI * 45}`}
-                                    strokeDashoffset={2 * Math.PI * 45 * (1 - healthScore / 100)}
-                                    className={`transition-all duration-1000 ease-out ${healthScore >= 80 ? 'text-green-400' : healthScore >= 60 ? 'text-yellow-400' : healthScore >= 40 ? 'text-orange-400' : 'text-red-400'}`}
-                                    strokeLinecap="round"
-                                />
+            {/* Hero */}
+            <section ref={heroRef.ref} id="hero" className={`py-16 sm:py-24 px-4 sm:px-6 ${sectionClass(heroRef)}`}>
+                <div className="max-w-5xl mx-auto text-center">
+                    <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold mb-4">{proposal.audit.businessName}</h1>
+                    <p className="text-white/70 text-lg mb-8">Digital Presence Audit</p>
+                    <div className="flex justify-center">
+                        <div className="relative w-48 h-48 sm:w-56 sm:h-56">
+                            <svg className="w-full h-full -rotate-90" viewBox="0 0 100 100">
+                                <circle cx="50" cy="50" r="45" fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth="8" />
+                                <circle cx="50" cy="50" r="45" fill="none" stroke={BLUE} strokeWidth="8" strokeLinecap="round" strokeDasharray={2 * Math.PI * 45} strokeDashoffset={2 * Math.PI * 45 * (1 - healthScore / 100)} style={{ transition: 'stroke-dashoffset 1.2s ease-out' }} />
                             </svg>
                             <div className="absolute inset-0 flex flex-col items-center justify-center">
-                                <span className={`text-5xl sm:text-6xl font-bold ${getHealthColor(healthScore)}`}>
-                                    {healthScore}
-                                </span>
-                                <span className="text-sm sm:text-base text-slate-400 mt-1">Health Score</span>
+                                <span className="text-5xl sm:text-6xl font-bold" style={{ color: BLUE }}>{healthScore}</span>
+                                <span className="text-sm text-white/60 mt-1">Overall Score</span>
                             </div>
                         </div>
                     </div>
-
-                    {/* Location/Industry */}
                     {(proposal.audit.businessCity || proposal.audit.businessIndustry) && (
-                        <div className="text-center text-slate-400 text-sm sm:text-base">
-                            {proposal.audit.businessCity && `${proposal.audit.businessCity}`}
-                            {proposal.audit.businessCity && proposal.audit.businessIndustry && ' • '}
-                            {proposal.audit.businessIndustry && proposal.audit.businessIndustry}
-                        </div>
+                        <p className="text-white/50 text-sm mt-4">
+                            {proposal.audit.businessCity}{proposal.audit.businessCity && proposal.audit.businessIndustry && ' • '}{proposal.audit.businessIndustry}
+                        </p>
                     )}
                 </div>
             </section>
 
-            {/* URGENCY SECTION (Painkillers) */}
-            {painkillers.length > 0 && (
-                <section
-                    ref={urgencyFade.ref}
-                    className={`py-12 sm:py-16 px-4 sm:px-6 bg-gradient-to-br from-red-900/20 via-orange-900/20 to-red-900/20 border-y border-red-500/20 transition-all duration-1000 delay-200 ${urgencyFade.isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}
-                >
+            {/* Executive Summary */}
+            {proposal.executiveSummary && (
+                <section ref={execRef.ref} id="executive-summary" className={sectionClass(execRef)}>
                     <div className="max-w-5xl mx-auto">
-                        <div className="text-center mb-8 sm:mb-12">
-                            <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold mb-3 text-red-400">
-                                ⚠️ Issues Costing You Customers Right Now
-                            </h2>
-                            <p className="text-slate-300 text-sm sm:text-base">
-                                These critical problems are actively hurting your business
-                            </p>
-                        </div>
-
-                        <div className="grid gap-4 sm:gap-6">
-                            {painkillers.map((finding, index) => {
-                                // Extract key metric from metrics object
-                                const getKeyMetric = () => {
-                                    if (!finding.metrics) return null;
-                                    const metrics = finding.metrics as any;
-
-                                    if (metrics.performanceScore !== undefined) return `Page Speed: ${metrics.performanceScore}/100`;
-                                    if (metrics.seoScore !== undefined) return `SEO: ${metrics.seoScore}/100`;
-                                    if (metrics.rating !== undefined) return `Rating: ${metrics.rating}/5`;
-                                    if (metrics.reviewCount !== undefined) return `Reviews: ${metrics.reviewCount}`;
-                                    if (metrics.negativeRatio !== undefined) return `Negative: ${Math.round(metrics.negativeRatio * 100)}%`;
-
-                                    return null;
-                                };
-
-                                const keyMetric = getKeyMetric();
-                                const recommendedFix = Array.isArray(finding.recommendedFix)
-                                    ? finding.recommendedFix
-                                    : [];
-                                const topFix = recommendedFix[0] || 'Immediate action required';
-
-                                return (
-                                    <div
-                                        key={finding.id}
-                                        className="bg-slate-800/80 rounded-xl p-4 sm:p-6 border border-red-500/30 hover:border-red-500/50 transition-all"
-                                        style={{ animationDelay: `${index * 100}ms` }}
-                                    >
-                                        <div className="flex flex-col sm:flex-row sm:items-start gap-4">
-                                            <div className="flex-1">
-                                                <div className="flex flex-wrap items-center gap-2 mb-3">
-                                                    <span className="px-2 py-1 bg-slate-700/50 rounded text-xs text-slate-400 uppercase">
-                                                        {finding.module}
-                                                    </span>
-                                                    {keyMetric && (
-                                                        <span className="px-2 py-1 bg-red-500/20 rounded text-xs text-red-300 font-semibold">
-                                                            {keyMetric}
-                                                        </span>
-                                                    )}
-                                                </div>
-                                                <h3 className="text-lg sm:text-xl font-semibold text-white mb-2">{finding.title}</h3>
-                                                <p className="text-slate-300 text-sm sm:text-base mb-3">{finding.description}</p>
-                                                <div className="flex items-start gap-2 text-sm text-amber-300">
-                                                    <svg className="w-4 h-4 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                                                    </svg>
-                                                    <span className="font-medium">Quick fix: {topFix}</span>
-                                                </div>
-                                            </div>
-                                            <div className="flex sm:flex-col items-center sm:items-end gap-2">
-                                                {/* Impact Bar */}
-                                                <div className="flex-1 sm:flex-initial">
-                                                    <div className="text-xs text-slate-400 mb-1 text-right">Impact</div>
-                                                    <div className="w-24 h-2 bg-slate-700 rounded-full overflow-hidden">
-                                                        <div
-                                                            className="h-full bg-gradient-to-r from-orange-500 to-red-500 rounded-full transition-all duration-1000"
-                                                            style={{ width: `${(finding.impactScore / 10) * 100}%` }}
-                                                        />
-                                                    </div>
-                                                    <div className="text-right text-xs text-red-400 font-bold mt-1">
-                                                        {finding.impactScore}/10
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                );
-                            })}
-                        </div>
+                        <h2 className="text-2xl sm:text-3xl font-bold mb-6" style={{ color: BLUE }}>Executive Summary</h2>
+                        <p className="text-white/80 text-lg leading-relaxed">{proposal.executiveSummary}</p>
                     </div>
                 </section>
             )}
 
-            {/* COMPETITOR ANALYSIS SECTION */}
-            {proposal.audit.findings.some(f => f.evidence?.some((e: any) => e.matrix)) && (
-                <section className="py-12 sm:py-16 px-4 sm:px-6 bg-slate-800/20 border-y border-slate-700/50">
-                    <div className="max-w-5xl mx-auto">
-                        <div className="text-center mb-8 sm:mb-12">
-                            <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold mb-3 text-blue-400">
-                                ⚔️ Competitive Landscape
-                            </h2>
-                            <p className="text-slate-300 text-sm sm:text-base">
-                                See how you stack up against top local competitors
-                            </p>
-                        </div>
-
-                        <div className="bg-slate-900/50 rounded-xl border border-slate-700 overflow-hidden">
-                            {(() => {
-                                const matrixFinding = proposal.audit.findings.find(f => f.evidence?.some((e: any) => e.matrix));
-                                const matrix = matrixFinding?.evidence?.find((e: any) => e.matrix)?.matrix;
-
-                                if (!matrix) return null;
-                                const { business, competitors, gaps } = matrix;
-
-                                return (
-                                    <div className="overflow-x-auto">
-                                        <table className="w-full text-sm sm:text-base">
-                                            <thead>
-                                                <tr className="bg-slate-800/50 text-slate-300">
-                                                    <th className="p-4 text-left font-semibold">Metric</th>
-                                                    <th className="p-4 text-center font-bold text-white border-l border-slate-700 bg-blue-500/10">
-                                                        {business.name} (You)
-                                                    </th>
-                                                    {competitors.map((comp: any, i: number) => (
-                                                        <th key={i} className="p-4 text-center font-semibold border-l border-slate-700 opacity-70">
-                                                            {comp.name}
-                                                        </th>
-                                                    ))}
-                                                </tr>
-                                            </thead>
-                                            <tbody className="divide-y divide-slate-700/50">
-                                                {/* Reviews */}
-                                                <tr>
-                                                    <td className="p-4 text-slate-300 font-medium">Reviews</td>
-                                                    <td className="p-4 text-center font-bold bg-blue-500/5 border-l border-slate-700 text-white">
-                                                        {business.reviewCount}
-                                                    </td>
-                                                    {competitors.map((comp: any, i: number) => (
-                                                        <td key={i} className="p-4 text-center text-slate-400 border-l border-slate-700">
-                                                            {comp.reviewCount}
-                                                        </td>
-                                                    ))}
-                                                </tr>
-                                                {/* Rating */}
-                                                <tr>
-                                                    <td className="p-4 text-slate-300 font-medium">Rating</td>
-                                                    <td className="p-4 text-center font-bold bg-blue-500/5 border-l border-slate-700 text-white">
-                                                        {business.rating} ★
-                                                    </td>
-                                                    {competitors.map((comp: any, i: number) => (
-                                                        <td key={i} className="p-4 text-center text-slate-400 border-l border-slate-700">
-                                                            {comp.rating} ★
-                                                        </td>
-                                                    ))}
-                                                </tr>
-                                                {/* Website Speed */}
-                                                <tr>
-                                                    <td className="p-4 text-slate-300 font-medium">Mobile Speed</td>
-                                                    <td className="p-4 text-center font-bold bg-blue-500/5 border-l border-slate-700 text-white">
-                                                        {business.websiteSpeed ? `${Math.round(business.websiteSpeed)}/100` : 'N/A'}
-                                                    </td>
-                                                    {competitors.map((comp: any, i: number) => (
-                                                        <td key={i} className="p-4 text-center text-slate-400 border-l border-slate-700">
-                                                            {comp.websiteSpeed ? `${Math.round(comp.websiteSpeed)}/100` : 'N/A'}
-                                                        </td>
-                                                    ))}
-                                                </tr>
-                                                {/* Photos */}
-                                                <tr>
-                                                    <td className="p-4 text-slate-300 font-medium">Photos</td>
-                                                    <td className="p-4 text-center font-bold bg-blue-500/5 border-l border-slate-700 text-white">
-                                                        {business.photosCount || 0}
-                                                    </td>
-                                                    {competitors.map((comp: any, i: number) => (
-                                                        <td key={i} className="p-4 text-center text-slate-400 border-l border-slate-700">
-                                                            {comp.photosCount || 0}
-                                                        </td>
-                                                    ))}
-                                                </tr>
-                                            </tbody>
-                                        </table>
-
-                                        {/* Gaps Summary */}
-                                        {gaps && gaps.length > 0 && (
-                                            <div className="p-4 border-t border-slate-700 bg-slate-800/30">
-                                                <h4 className="text-sm font-bold text-slate-300 mb-2">Analysis:</h4>
-                                                <div className="flex flex-wrap gap-2">
-                                                    {gaps.map((gap: any, i: number) => (
-                                                        <span key={i} className={`text-xs px-2 py-1 rounded border ${gap.gap < 0 ? 'bg-red-500/10 border-red-500/30 text-red-300' : 'bg-green-500/10 border-green-500/30 text-green-300'}`}>
-                                                            {gap.metric}: {gap.gap > 0 ? '+' : ''}{gap.gap} vs Avg
-                                                        </span>
-                                                    ))}
-                                                </div>
-                                            </div>
-                                        )}
-                                    </div>
-                                );
-                            })()}
-                        </div>
-                    </div>
-                </section>
-            )}
-
-            {/* OPPORTUNITY SECTION (Vitamins) */}
-            {vitamins.length > 0 && (
-                <section
-                    ref={opportunityFade.ref}
-                    className={`py-12 sm:py-16 px-4 sm:px-6 bg-gradient-to-br from-green-900/10 via-blue-900/10 to-green-900/10 transition-all duration-1000 delay-300 ${opportunityFade.isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}
-                >
-                    <div className="max-w-5xl mx-auto">
-                        <div className="text-center mb-8 sm:mb-12">
-                            <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold mb-3 text-green-400">
-                                📈 Growth Opportunities
-                            </h2>
-                            <p className="text-slate-300 text-sm sm:text-base">
-                                Improvements that will help you stand out from competitors
-                            </p>
-                        </div>
-
-                        <div className="space-y-2">
-                            {vitamins.map((finding) => {
-                                const isExpanded = expandedVitamin === finding.id;
-
-                                return (
-                                    <div
-                                        key={finding.id}
-                                        className="bg-slate-800/50 rounded-lg border border-green-500/20 hover:border-green-500/40 transition-all overflow-hidden"
-                                    >
-                                        <button
-                                            onClick={() => setExpandedVitamin(isExpanded ? null : finding.id)}
-                                            className="w-full px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between gap-4 text-left"
-                                        >
-                                            <div className="flex-1">
-                                                <div className="flex flex-wrap items-center gap-2 mb-1">
-                                                    <span className="px-2 py-0.5 bg-slate-700/50 rounded text-xs text-slate-400 uppercase">
-                                                        {finding.module}
-                                                    </span>
-                                                    <span className="px-2 py-0.5 bg-green-500/20 rounded text-xs text-green-400 font-semibold">
-                                                        Impact: {finding.impactScore}/10
-                                                    </span>
-                                                </div>
-                                                <h3 className="text-base sm:text-lg font-semibold text-white">{finding.title}</h3>
-                                            </div>
-                                            <svg
-                                                className={`w-5 h-5 text-green-400 transition-transform flex-shrink-0 ${isExpanded ? 'rotate-180' : ''}`}
-                                                fill="none"
-                                                stroke="currentColor"
-                                                viewBox="0 0 24 24"
-                                            >
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                                            </svg>
-                                        </button>
-
-                                        {isExpanded && (
-                                            <div className="px-4 sm:px-6 pb-4 border-t border-green-500/10">
-                                                <p className="text-slate-300 text-sm sm:text-base mb-3 mt-3">{finding.description}</p>
-                                                {(() => {
-                                                    const recommendedFix = Array.isArray(finding.recommendedFix)
-                                                        ? finding.recommendedFix
-                                                        : [];
-                                                    return recommendedFix.length > 0 && (
-                                                        <div className="mt-3">
-                                                            <p className="text-xs text-slate-400 mb-2 font-semibold">Recommended Actions:</p>
-                                                            <ul className="space-y-1">
-                                                                {recommendedFix.map((fix: string, i: number) => (
-                                                                    <li key={i} className="flex items-start gap-2 text-sm text-slate-300">
-                                                                        <span className="text-green-400 mt-0.5">→</span>
-                                                                        <span>{fix}</span>
-                                                                    </li>
-                                                                ))}
-                                                            </ul>
-                                                        </div>
-                                                    );
-                                                })()}
-                                            </div>
-                                        )}
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    </div>
-                </section>
-            )}
-
-            {/* FINDINGS SECTION */}
-            {showFindings && (
-                <div className="mb-12">
-                    <h2 className="text-2xl font-bold text-slate-900 mb-6 flex items-center gap-2">
-                        <span className="text-3xl">🔍</span> Key Findings
-                    </h2>
-                    <div className="space-y-4">
-                        {proposal.audit.findings.slice(0, 5).map((finding, idx) => (
-                            <div key={idx} className="bg-white border border-slate-200 p-6 rounded-xl shadow-sm hover:shadow-md transition-shadow">
-                                <div className="flex justify-between items-start mb-2">
-                                    <div className="flex items-center gap-3">
-                                        <span className={`px-2 py-1 rounded text-xs font-bold ${finding.type === 'PAINKILLER' ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'
-                                            }`}>
-                                            {finding.type}
-                                        </span>
-                                        <h3 className="font-bold text-slate-800">{finding.title}</h3>
-                                    </div>
-                                    <div className="text-red-500 font-bold bg-red-50 px-2 rounded">
-                                        Impact: {finding.impactScore}/10
-                                    </div>
-                                </div>
-                                <p className="text-slate-600 text-sm mb-3">
-                                    {finding.description}
-                                </p>
-                                <div className="bg-slate-50 p-3 rounded text-sm text-slate-700 flex gap-2">
-                                    <span>💡</span>
-                                    <strong>Fix:</strong>
-                                    {finding.recommendedFix && (finding.recommendedFix as any)[0] ? (finding.recommendedFix as any)[0] : 'Expert optimization required.'}
-                                </div>
-                            </div>
-                        ))}
+            {/* Scores */}
+            <section ref={scoresRef.ref} id="scores" className={sectionClass(scoresRef)}>
+                <div className="max-w-5xl mx-auto">
+                    <h2 className="text-2xl sm:text-3xl font-bold mb-8 text-center">Performance Scores</h2>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8 sm:gap-6">
+                        <AnimatedGauge score={healthScore} label="Health" delay={0} />
+                        <AnimatedGauge score={scores.performance || 0} label="Performance" delay={100} />
+                        <AnimatedGauge score={scores.seo || 0} label="SEO" delay={200} />
+                        <AnimatedGauge score={scores.accessibility || 0} label="Accessibility" delay={300} />
                     </div>
                 </div>
-            )}
-            {/* PRICING SECTION */}
-            <section
-                ref={pricingFade.ref}
-                className={`py-12 sm:py-20 px-4 sm:px-6 bg-gradient-to-b from-slate-800/30 to-transparent transition-all duration-1000 delay-400 ${pricingFade.isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}
-            >
-                <div className="max-w-6xl mx-auto">
-                    <div className="text-center mb-8 sm:mb-12">
-                        <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold mb-3 sm:mb-4">Choose Your Package</h2>
-                        <p className="text-slate-400 max-w-2xl mx-auto text-sm sm:text-base">
-                            Select the package that best fits your goals. All packages include ongoing support.
-                        </p>
-                        <p className="text-sm mt-2 font-semibold" style={{ color: BRANDING.colors.accent }}>
-                            💰 Save 20% compared to hiring individual specialists
-                        </p>
+            </section>
+
+            {/* Findings */}
+            <section ref={findingsRef.ref} id="findings" className={sectionClass(findingsRef)}>
+                <div className="max-w-5xl mx-auto">
+                    <h2 className="text-2xl sm:text-3xl font-bold mb-8">Findings</h2>
+                    <div className="space-y-3">
+                        {findings.map((f: FindingShape) => {
+                            const isExpanded = expandedFinding === f.id;
+                            const severity = f.impactScore >= 8 ? 'Critical' : f.impactScore >= 6 ? 'High' : f.impactScore >= 4 ? 'Medium' : 'Low';
+                            const severityColor = f.impactScore >= 8 ? '#ef4444' : f.impactScore >= 6 ? '#f97316' : f.impactScore >= 4 ? '#eab308' : '#22c55e';
+                            return (
+                                <div key={f.id} className="rounded-xl border border-white/10 bg-white/5 overflow-hidden">
+                                    <button onClick={() => toggleFinding(f.id)} className="w-full px-4 sm:px-6 py-4 flex items-center justify-between gap-4 text-left min-h-[44px]">
+                                        <div className="flex-1 min-w-0">
+                                            <span className="inline-block px-2 py-0.5 rounded text-xs font-semibold mb-2" style={{ backgroundColor: `${severityColor}30`, color: severityColor }}>{severity}</span>
+                                            <h3 className="font-semibold text-white truncate">{f.title}</h3>
+                                        </div>
+                                        <svg className={`w-5 h-5 flex-shrink-0 text-white/60 transition-transform ${isExpanded ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                                    </button>
+                                    {isExpanded && (
+                                        <div className="px-4 sm:px-6 pb-4 border-t border-white/10">
+                                            <p className="text-white/80 text-sm mt-4">{f.description}</p>
+                                            {Array.isArray(f.recommendedFix) && f.recommendedFix.length > 0 && (
+                                                <div className="mt-4">
+                                                    <p className="text-xs font-semibold text-white/60 mb-2">Recommended actions</p>
+                                                    <ul className="space-y-1">
+                                                        {(f.recommendedFix as string[]).map((fix, i) => <li key={i} className="flex gap-2 text-sm text-white/80"><span style={{ color: BLUE }}>→</span>{fix}</li>)}
+                                                    </ul>
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        })}
                     </div>
+                </div>
+            </section>
 
-                    <div className="grid md:grid-cols-3 gap-4 sm:gap-6">
-                        {tiers.map((tier) => (
-                            <div
-                                key={tier.id}
-                                className={`relative bg-slate-800/50 rounded-2xl p-5 sm:p-8 border transition-all ${tier.recommended
-                                    ? 'md:scale-105 shadow-xl'
-                                    : 'border-slate-700/50 hover:border-slate-600'
-                                    }`}
-                                style={tier.recommended ? { borderColor: BRANDING.colors.primary, boxShadow: `0 20px 25px -5px ${getBrandColor(BRANDING.colors.primary, 0.1)}` } : {}}
-                            >
-                                {tier.recommended && (
-                                    <div
-                                        className="absolute -top-3 left-1/2 -translate-x-1/2 px-4 py-1 rounded-full text-xs font-bold uppercase tracking-wide text-white"
-                                        style={{ background: `linear-gradient(to right, ${BRANDING.colors.primary}, ${BRANDING.colors.accent})` }}
-                                    >
-                                        Recommended
-                                    </div>
+            {/* Competitor Comparison */}
+            {(matrixData || comparisonReport) && (
+                <section ref={competitorRef.ref} id="competitors" className={sectionClass(competitorRef)}>
+                    <div className="max-w-5xl mx-auto space-y-8">
+                        <h2 className="text-2xl sm:text-3xl font-bold">Competitive Intelligence</h2>
+
+                        {comparisonReport && (
+                            <div className="rounded-xl border border-white/10 bg-white/5 p-6">
+                                <p className="text-lg font-semibold text-white mb-2">
+                                    You rank #{comparisonReport.prospectRank} out of {comparisonReport.competitors.length + 1} {proposal.audit.businessIndustry || 'business'}s in your area
+                                </p>
+                                <p className="text-white/80">{comparisonReport.summaryStatement}</p>
+                                {comparisonReport.summaryRow && <p className="text-white font-semibold mt-2">{comparisonReport.summaryRow}</p>}
+                            </div>
+                        )}
+
+                        {(comparisonReport?.comparisonTableRows?.length || matrixData) && (
+                            <div className="rounded-xl border border-white/10 bg-white/5 overflow-hidden">
+                                <div className="overflow-x-auto">
+                                    <table className="w-full text-sm">
+                                        <thead>
+                                            <tr className="border-b border-white/10">
+                                                <th className="p-4 text-left text-white/60 font-medium">Metric</th>
+                                                <th className="p-4 text-center font-bold text-white" style={{ backgroundColor: `${BLUE}20` }}>{(comparisonReport?.prospect?.name || matrixData?.business?.name || proposal.audit.businessName) as string} (You)</th>
+                                                {(comparisonReport?.comparisonTableRows?.[0]?.competitorValues?.map((c) => c.name) ?? matrixData?.competitors?.slice(0, 3).map((c: { name?: string }) => c.name) ?? []).map((name: string | undefined, i: number) => <th key={i} className="p-4 text-center text-white/70 font-medium border-l border-white/10">{name || `Competitor ${i + 1}`}</th>)}
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-white/5">
+                                            {comparisonReport?.comparisonTableRows?.map((row, i) => {
+                                                const cellBg = (s: string) => s === 'win' ? 'rgba(34,197,94,0.2)' : s === 'lose' ? 'rgba(239,68,68,0.2)' : 'rgba(234,179,8,0.15)';
+                                                return (
+                                                    <tr key={i} className="group">
+                                                        <td className="p-4 text-white/70" title={row.metric}>{row.metric}</td>
+                                                        <td className="p-4 text-center font-bold border-l border-white/5 transition-colors group-hover:bg-white/5" style={{ backgroundColor: `${BLUE}10`, ...(cellBg(row.prospectStatus) ? { backgroundColor: cellBg(row.prospectStatus) } : {}) }} title={`You: ${row.prospectValue}`}>{row.prospectValue}</td>
+                                                        {row.competitorValues.map((cv, j) => <td key={j} className="p-4 text-center text-white/60 border-l border-white/5 transition-colors hover:bg-white/5" style={{ backgroundColor: cellBg(cv.status) }} title={`${cv.name}: ${cv.value}`}>{cv.value}</td>)}
+                                                    </tr>
+                                                );
+                                            })}
+                                            {!comparisonReport?.comparisonTableRows?.length && matrixData && (
+                                                <>
+                                                    <tr><td className="p-4 text-white/70">PageSpeed</td><td className="p-4 text-center font-bold" style={{ backgroundColor: `${BLUE}10` }}>{formatScore(matrixData.business.performanceScore ?? matrixData.business.websiteSpeed)}</td>{matrixData.competitors.slice(0, 3).map((c: { performanceScore?: number; websiteSpeed?: number }, i: number) => <td key={i} className="p-4 text-center text-white/60 border-l border-white/5">{formatScore(c.performanceScore ?? c.websiteSpeed)}</td>)}</tr>
+                                                    <tr><td className="p-4 text-white/70">Mobile Score</td><td className="p-4 text-center font-bold" style={{ backgroundColor: `${BLUE}10` }}>{formatScore(matrixData.business.mobileScore ?? matrixData.business.performanceScore)}</td>{matrixData.competitors.slice(0, 3).map((c: { mobileScore?: number; performanceScore?: number }, i: number) => <td key={i} className="p-4 text-center text-white/60 border-l border-white/5">{formatScore(c.mobileScore ?? c.performanceScore)}</td>)}</tr>
+                                                    <tr><td className="p-4 text-white/70">Load Time</td><td className="p-4 text-center font-bold" style={{ backgroundColor: `${BLUE}10` }}>{matrixData.business.loadTimeSeconds != null ? `${matrixData.business.loadTimeSeconds}s` : '—'}</td>{matrixData.competitors.slice(0, 3).map((c: { loadTimeSeconds?: number }, i: number) => <td key={i} className="p-4 text-center text-white/60 border-l border-white/5">{c.loadTimeSeconds != null ? `${c.loadTimeSeconds}s` : '—'}</td>)}</tr>
+                                                    <tr><td className="p-4 text-white/70">Google Rating</td><td className="p-4 text-center font-bold" style={{ backgroundColor: `${BLUE}10` }}>{matrixData.business.rating ?? '—'}★</td>{matrixData.competitors.slice(0, 3).map((c: { rating?: number }, i: number) => <td key={i} className="p-4 text-center text-white/60 border-l border-white/5">{c.rating ?? '—'}★</td>)}</tr>
+                                                    <tr><td className="p-4 text-white/70">Reviews</td><td className="p-4 text-center font-bold" style={{ backgroundColor: `${BLUE}10` }}>{matrixData.business.reviewCount ?? '—'}</td>{matrixData.competitors.slice(0, 3).map((c: { reviewCount?: number }, i: number) => <td key={i} className="p-4 text-center text-white/60 border-l border-white/5">{c.reviewCount ?? '—'}</td>)}</tr>
+                                                </>
+                                            )}
+                                        </tbody>
+                                    </table>
+                                </div>
+                                <div className="px-4 py-2 flex gap-4 text-xs text-white/50">
+                                    <span><span className="inline-block w-3 h-3 rounded mr-1" style={{ backgroundColor: 'rgba(34,197,94,0.5)' }} /> Winning</span>
+                                    <span><span className="inline-block w-3 h-3 rounded mr-1" style={{ backgroundColor: 'rgba(234,179,8,0.5)' }} /> Close</span>
+                                    <span><span className="inline-block w-3 h-3 rounded mr-1" style={{ backgroundColor: 'rgba(239,68,68,0.5)' }} /> Behind</span>
+                                </div>
+                            </div>
+                        )}
+
+                        {comparisonReport && (comparisonReport.whereAhead?.length ?? comparisonReport.winningCategories?.length ?? 0) > 0 && (
+                            <div className="rounded-xl border border-green-500/20 bg-green-500/5 p-6">
+                                <h3 className="text-lg font-semibold text-green-400 mb-3">Where You&apos;re Ahead</h3>
+                                {(comparisonReport.whereAhead?.length ?? 0) > 0 ? (
+                                    <ul className="mt-2 space-y-2 text-white/90">
+                                        {comparisonReport.whereAhead!.map((s, i) => <li key={i} className="flex items-center gap-2"><span className="text-green-400">✓</span>{s}</li>)}
+                                    </ul>
+                                ) : (
+                                    <>
+                                        <p className="text-white/90">{comparisonReport.positiveStatement}</p>
+                                        <ul className="mt-2 space-y-1 text-white/80">
+                                            {comparisonReport.winningCategories.map((cat, i) => <li key={i} className="flex items-center gap-2"><span className="text-green-400">✓</span>{cat}</li>)}
+                                        </ul>
+                                    </>
                                 )}
+                            </div>
+                        )}
 
-                                <h3 className="text-xl sm:text-2xl font-bold mb-2">{tier.name}</h3>
-                                <div className="flex items-baseline gap-1 mb-4">
-                                    <span className="text-3xl sm:text-4xl font-bold">${tier.price.toLocaleString()}</span>
-                                    <span className="text-slate-400 text-sm">/project</span>
-                                </div>
-                                <p className="text-slate-400 text-sm mb-4">{tier.description}</p>
-                                <div className="text-xs text-slate-500 mb-6">
-                                    ⏱️ Delivery: {tier.deliveryTime}
-                                </div>
+                        {comparisonReport && (comparisonReport.whereBehind?.length ?? comparisonReport.losingCategories?.length ?? 0) > 0 && (
+                            <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-6">
+                                <h3 className="text-lg font-semibold text-amber-400 mb-3">Where They&apos;re Beating You</h3>
+                                {(comparisonReport.whereBehind?.length ?? 0) > 0 ? (
+                                    <ul className="mt-2 space-y-2 text-white/90">
+                                        {comparisonReport.whereBehind!.map((s, i) => <li key={i} className="flex items-center gap-2"><span className="text-amber-400">→</span>{s}</li>)}
+                                    </ul>
+                                ) : (
+                                    <>
+                                        <p className="text-white/90">{comparisonReport.urgencyStatement}</p>
+                                        <ul className="mt-2 space-y-1 text-white/80">
+                                            {comparisonReport.losingCategories.map((cat, i) => <li key={i} className="flex items-center gap-2"><span className="text-amber-400">→</span>{cat}</li>)}
+                                        </ul>
+                                    </>
+                                )}
+                            </div>
+                        )}
 
-                                <ul className="space-y-2 mb-6">
-                                    {tier.features?.map((feature, i) => (
-                                        <li key={i} className="flex items-start gap-2 text-sm text-slate-300">
-                                            <svg className="w-5 h-5 flex-shrink-0 mt-0.5" style={{ color: BRANDING.colors.accent }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                                            </svg>
-                                            <span>{feature}</span>
+                        {comparisonReport && comparisonReport.quickWins.length > 0 && (
+                            <div className="rounded-xl border border-white/10 bg-white/5 p-6">
+                                <h3 className="text-lg font-semibold text-white mb-4">Quick Wins to Overtake</h3>
+                                <ul className="space-y-3">
+                                    {comparisonReport.quickWins.map((qw, i) => (
+                                        <li key={i} className="flex flex-col gap-1">
+                                            <span className="text-white font-medium">{qw.action}</span>
+                                            <span className="text-white/60 text-sm">Effort: {qw.effortEstimate} • {qw.expectedImpact}</span>
                                         </li>
                                     ))}
                                 </ul>
+                            </div>
+                        )}
+                    </div>
+                </section>
+            )}
 
-                                <button
-                                    onClick={scrollToContact}
-                                    className={`w-full py-3 rounded-xl font-semibold transition-all text-white`}
-                                    style={
-                                        tier.recommended
-                                            ? { background: `linear-gradient(to right, ${BRANDING.colors.primary}, ${BRANDING.colors.accent})` }
-                                            : { backgroundColor: '#334155' } // slate-700
-                                    }
-                                >
-                                    Get Started
-                                </button>
+            {/* Pricing */}
+            <section ref={pricingRef.ref} id="pricing" className={sectionClass(pricingRef)}>
+                <div className="max-w-5xl mx-auto">
+                    <h2 className="text-2xl sm:text-3xl font-bold mb-8 text-center">Choose Your Package</h2>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6">
+                        {tiers.map(t => (
+                            <div key={t.id} className={`rounded-2xl p-6 sm:p-8 border transition-all ${t.recommended ? 'border-[#4361ee] shadow-lg scale-[1.02] md:scale-105' : 'border-white/10 bg-white/5'}`}>
+                                {(t.badge || (t.recommended && !t.badge)) && <div className="text-center -mt-8 mb-4"><span className="px-4 py-1 rounded-full text-xs font-bold uppercase" style={{ backgroundColor: BLUE }}>{t.badge || 'Recommended'}</span></div>}
+                                <h3 className="text-xl font-bold text-white">{t.name}</h3>
+                                <div className="mt-2 mb-4"><span className="text-3xl font-bold" style={{ color: BLUE }}>${t.price.toLocaleString()}</span><span className="text-white/50 text-sm">/project</span></div>
+                                <p className="text-white/70 text-sm mb-4">{t.description}</p>
+                                <p className="text-white/50 text-xs mb-6">Delivery: {t.deliveryTime}</p>
+                                <ul className="space-y-2 mb-6">
+                                    {t.features?.slice(0, 5).map((f, i) => <li key={i} className="flex gap-2 text-sm text-white/80"><span style={{ color: BLUE }}>✓</span>{f}</li>)}
+                                </ul>
+                                <button onClick={openContactModal} className="w-full py-4 rounded-xl font-bold text-white min-h-[44px]" style={{ backgroundColor: t.recommended ? ACCENT : 'rgba(255,255,255,0.15)' }}>Get Started</button>
                             </div>
                         ))}
                     </div>
                 </div>
             </section>
 
-            {/* SOCIAL PROOF SECTION */}
-            <section
-                ref={socialProofFade.ref}
-                className={`py-12 sm:py-16 px-4 sm:px-6 bg-slate-800/20 transition-all duration-1000 delay-500 ${socialProofFade.isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}
-            >
-                <div className="max-w-6xl mx-auto">
-                    <div className="text-center mb-8 sm:mb-12">
-                        <p className="font-semibold mb-2 text-sm sm:text-base" style={{ color: BRANDING.colors.accent }}>Trusted by 50+ local businesses</p>
-                        <h2 className="text-xl sm:text-2xl md:text-3xl font-bold">What Our Clients Say</h2>
+            {/* Next Steps */}
+            {Array.isArray(proposal.nextSteps) && proposal.nextSteps.length > 0 && (
+                <section ref={nextStepsRef.ref} id="next-steps" className={sectionClass(nextStepsRef)}>
+                    <div className="max-w-5xl mx-auto">
+                        <h2 className="text-2xl sm:text-3xl font-bold mb-6">Next Steps</h2>
+                        <ol className="list-decimal list-inside space-y-3 text-white/80">
+                            {proposal.nextSteps.map((s: string, i: number) => <li key={i}>{s}</li>)}
+                        </ol>
                     </div>
+                </section>
+            )}
 
-                    <div className="grid md:grid-cols-3 gap-4 sm:gap-6">
-                        {[
-                            {
-                                name: 'Sarah Johnson',
-                                business: 'Urban Coffee Co.',
-                                text: 'Our website traffic increased 150% in just two months. The team identified issues we didn\'t even know existed.',
-                                rating: 5,
-                            },
-                            {
-                                name: 'Mike Chen',
-                                business: 'Chen\'s Auto Repair',
-                                text: 'Finally showing up on Google! We went from invisible to the top 3 local results. Phone is ringing off the hook.',
-                                rating: 5,
-                            },
-                            {
-                                name: 'Jennifer Martinez',
-                                business: 'Bella Salon & Spa',
-                                text: 'The social media integration alone paid for itself. We\'re now getting 5-10 new bookings per week from Instagram.',
-                                rating: 5,
-                            },
-                        ].map((testimonial, i) => (
-                            <div key={i} className="bg-slate-800/50 rounded-xl p-5 sm:p-6 border border-slate-700/50">
-                                <div className="flex gap-1 mb-3">
-                                    {[...Array(testimonial.rating)].map((_, i) => (
-                                        <svg key={i} className="w-5 h-5" style={{ color: BRANDING.colors.accent }} fill="currentColor" viewBox="0 0 20 20">
-                                            <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                                        </svg>
-                                    ))}
-                                </div>
-                                <p className="text-slate-300 mb-4 text-sm sm:text-base">"{testimonial.text}"</p>
-                                <div>
-                                    <p className="font-semibold text-white text-sm">{testimonial.name}</p>
-                                    <p className="text-slate-400 text-xs">{testimonial.business}</p>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
+            {/* CTA Section */}
+            <section ref={ctaRef.ref} id="contact" className={`py-16 sm:py-24 px-4 sm:px-6 ${sectionClass(ctaRef)}`} style={{ background: `linear-gradient(180deg, transparent, ${BLUE}15)` }}>
+                <div className="max-w-2xl mx-auto text-center">
+                    <h2 className="text-2xl sm:text-3xl font-bold mb-4">Ready to Get Started?</h2>
+                    <p className="text-white/80 mb-8">Let&apos;s turn these findings into results for your business.</p>
+                    <button onClick={openContactModal} className="px-8 py-4 rounded-xl font-bold text-white text-lg min-h-[44px]" style={{ backgroundColor: ACCENT }}>I&apos;m Interested — Let&apos;s Talk</button>
                 </div>
             </section>
 
-            {/* CONTACT/CTA SECTION */}
-            <section
-                id="contact"
-                ref={ctaFade.ref}
-                className={`py-12 sm:py-20 px-4 sm:px-6 transition-all duration-1000 delay-600 ${ctaFade.isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}
-                style={{ background: `linear-gradient(to bottom right, ${getBrandColor(BRANDING.colors.primary, 0.2)}, ${getBrandColor(BRANDING.colors.accent, 0.2)}, ${getBrandColor(BRANDING.colors.primary, 0.2)})` }}
-            >
-                <div className="max-w-4xl mx-auto text-center">
-                    <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold mb-4 sm:mb-6">
-                        Ready to Fix These Issues?
-                    </h2>
-                    <p className="text-lg sm:text-xl text-slate-300 mb-8 sm:mb-10">
-                        Let's turn these findings into results for your business
-                    </p>
-
-                    <div className="flex flex-col sm:flex-row gap-4 justify-center mb-8">
-                        <a
-                            href={BRANDING.contact.website || "https://calendly.com"}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="px-6 sm:px-8 py-3 sm:py-4 rounded-xl font-bold text-base sm:text-lg transition-all shadow-lg hover:shadow-xl text-white"
-                            style={{ background: `linear-gradient(to right, ${BRANDING.colors.primary}, ${BRANDING.colors.accent})` }}
-                        >
-                            📅 Schedule a 15-Minute Call
-                        </a>
-                        <a
-                            href={`mailto:${BRANDING.contact.email || 'hello@proposalengine.com'}?subject=Proposal for ${proposal.audit.businessName}`}
-                            className="px-6 sm:px-8 py-3 sm:py-4 bg-slate-700 hover:bg-slate-600 rounded-xl font-semibold text-base sm:text-lg transition-all border border-slate-600"
-                        >
-                            ✉️ Reply to This Email
-                        </a>
-                    </div>
-
-                    {BRANDING.contact.phone && (
-                        <p className="text-slate-400 text-sm sm:text-base">
-                            Or call us: <a href={`tel:${BRANDING.contact.phone}`} className="hover:underline font-semibold" style={{ color: BRANDING.colors.accent }}>{BRANDING.contact.phone}</a>
-                        </p>
-                    )}
-                </div>
-            </section>
-
-            {/* FOOTER */}
-            <footer className="py-8 px-4 sm:px-6 border-t border-slate-800 text-center">
-                <div className="max-w-4xl mx-auto space-y-4">
-                    <p className="text-slate-500 text-xs sm:text-sm">
-                        This report was generated on {formatDate(proposal.createdAt)}. Data may change over time.
-                    </p>
-                    {proposal.disclaimers.length > 0 && (
-                        <p className="text-slate-600 text-xs">
-                            Findings are based on publicly available data and automated analysis.
-                            {proposal.disclaimers.join(' ')}
-                        </p>
-                    )}
-                    <p className="text-slate-600 text-xs">
-                        {BRANDING.footerText}
-                    </p>
-                    {BRANDING.contact.website && (
-                        <p>
-                            <a href={BRANDING.contact.website} className="text-slate-600 text-xs hover:text-slate-400">
-                                {BRANDING.contact.website}
-                            </a>
-                        </p>
-                    )}
-                    <div className="mt-20 text-center text-gray-500 dark:text-gray-400 text-sm">
-                        © {new Date().getFullYear()} {BRANDING.name}. All rights reserved.
-                    </div>
+            {/* Footer */}
+            <footer className="py-8 px-4 border-t border-white/10">
+                <div className="max-w-5xl mx-auto text-center space-y-4">
+                    <p className="text-white/50 text-sm">This audit was performed on {formatDate(proposal.createdAt)}. Website conditions may have changed since then.</p>
+                    <p className="text-white/40 text-xs">This audit was generated in {auditDurationSeconds} seconds using AI-powered analysis.</p>
+                    {Array.isArray(proposal.disclaimers) && proposal.disclaimers.length > 0 && <p className="text-white/40 text-xs">{proposal.disclaimers.join(' ')}</p>}
+                    <p className="text-white/30 text-xs">© {new Date().getFullYear()} ProposalOS. All rights reserved.</p>
                 </div>
             </footer>
 
-            {/* Viral Sharing Button */}
-            <ProposalShareButton
-                proposalId={proposal.id}
-                businessName={proposal.audit.businessName}
-                token={proposal.webLinkToken}
-            />
+            {/* Sticky Mobile CTA */}
+            <div className="md:hidden fixed bottom-0 left-0 right-0 z-50 p-4 bg-[#1a1a2e]/98 border-t border-white/10">
+                <button onClick={openContactModal} className="w-full py-4 rounded-xl font-bold text-white min-h-[44px]" style={{ backgroundColor: ACCENT }}>I&apos;m Interested — Let&apos;s Talk</button>
+            </div>
+            <div className="md:hidden h-20" />
+
+            <ProposalShareButton proposalId={proposal.id} businessName={proposal.audit.businessName} token={proposal.webLinkToken} />
         </main>
     );
 }

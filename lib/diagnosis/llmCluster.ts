@@ -9,12 +9,14 @@ import { getPromptVariant, fillTemplate } from '../experiments/promptAB';
 
 /**
  * Use Gemini 1.5 Flash to refine pre-clusters into semantic pain clusters
+ * @param playbook Optional vertical playbook — priorityFindings influence clustering context
  */
 export async function llmClusterFindings(
     preClusters: PreCluster[],
     allFindings: Finding[],
     tracker?: CostTracker,
-    parentTrace?: RunTree
+    parentTrace?: RunTree,
+    playbook?: { priorityFindings?: string[]; proposalLanguage?: { urgencyHook?: string } }
 ): Promise<PainCluster[]> {
     // Using Gemini 2.0 Flash (upgraded from spec's 1.5 Flash for better JSON output)
     const model = getGeminiModel(process.env.CLUSTERING_MODEL || 'gemini-2.5-flash', {
@@ -42,10 +44,14 @@ export async function llmClusterFindings(
     // Get prompt variant
     const promptConfig = getPromptVariant('clustering-strategy', auditId);
 
-    const prompt = fillTemplate(promptConfig.template, {
+    const templateVars: Record<string, string> = {
         findings_json: JSON.stringify(findingsJson, null, 2),
-        preclusters_json: JSON.stringify(preClustersJson, null, 2)
-    });
+        preclusters_json: JSON.stringify(preClustersJson, null, 2),
+        industry_context: playbook?.proposalLanguage?.urgencyHook
+            ? `Industry context: ${playbook.proposalLanguage.urgencyHook}\n`
+            : '',
+    };
+    const prompt = fillTemplate(promptConfig.template, templateVars);
 
     return traceLlmCall({
         name: "clustering",
@@ -73,7 +79,19 @@ export async function llmClusterFindings(
                 jsonText = jsonText.replace(/```\n?/, '').replace(/\n?```$/, '');
             }
 
-            const parsed = JSON.parse(jsonText);
+            // Harden JSON parsing — Gemini sometimes returns malformed JSON (trailing commas, truncation)
+            let parsed: { clusters?: Array<{ root_cause?: string; finding_ids?: string[] }> };
+            try {
+                parsed = JSON.parse(jsonText);
+            } catch (parseErr) {
+                // Attempt to fix trailing commas (common LLM output issue)
+                const fixed = jsonText.replace(/,(\s*[}\]])/g, '$1');
+                try {
+                    parsed = JSON.parse(fixed);
+                } catch {
+                    throw parseErr; // rethrow to trigger fallback
+                }
+            }
             const rawClusters = parsed.clusters || [];
 
             // Convert to PainCluster format and score
@@ -108,12 +126,14 @@ export async function llmClusterFindings(
 
 /**
  * Use Gemini 1.5 Pro to generate human-readable narratives for clusters
+ * @param playbook Optional vertical playbook — proposalLanguage influences narrative tone
  */
 export async function generateNarratives(
     clusters: PainCluster[],
     findings: Finding[],
     tracker?: CostTracker,
-    parentTrace?: RunTree
+    parentTrace?: RunTree,
+    playbook?: { proposalLanguage?: { painPoints?: string[]; urgencyHook?: string } }
 ): Promise<PainCluster[]> {
     const model = getGeminiModel('gemini-2.5-flash', {
         temperature: 0.3,
@@ -133,15 +153,21 @@ export async function generateNarratives(
 
         const findingsDetail = clusterFindings.map((f) => ({
             title: f.title,
+            description: f.description,
             impactScore: f.impactScore,
             confidenceScore: f.confidenceScore,
             metrics: f.metrics,
+            recommendedFix: (f as any).recommendedFix,
         }));
 
-        const prompt = fillTemplate(promptConfig.template, {
+        const templateVars: Record<string, string> = {
             root_cause: cluster.rootCause,
-            findings_detail: JSON.stringify(findingsDetail, null, 2)
-        });
+            findings_detail: JSON.stringify(findingsDetail, null, 2),
+            industry_context: playbook?.proposalLanguage?.urgencyHook
+                ? `Industry context: ${playbook.proposalLanguage.urgencyHook}\n`
+                : '',
+        };
+        const prompt = fillTemplate(promptConfig.template, templateVars);
 
         await traceLlmCall({
             name: "narrative_gen",

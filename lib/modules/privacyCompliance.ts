@@ -6,7 +6,7 @@ import chromium from '@sparticuz/chromium';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import * as cheerio from 'cheerio';
 
-const genAI = new GoogleGenerativeAI(process.env.GOOGLE_PLACES_API_KEY!);
+const genAI = new GoogleGenerativeAI(process.env.GOOGLE_AI_API_KEY!);
 
 export interface PrivacyModuleInput {
     url: string;

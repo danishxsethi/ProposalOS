@@ -1,388 +1,411 @@
-import { AuditModuleResult, Finding } from './types';
-import { logger } from '@/lib/logger';
-import { CostTracker } from '@/lib/costs/costTracker';
-import { Browser, Page } from 'puppeteer-core';
+/**
+ * Accessibility Quick Scan Module
+ * Uses Puppeteer + axe-core for WCAG checks, supplemented with custom checks.
+ * Frames findings as: legal risk (ADA), SEO benefit, UX improvement.
+ */
+import { Browser } from 'puppeteer-core';
 import { AxePuppeteer } from '@axe-core/puppeteer';
 import puppeteer from 'puppeteer-core';
 import chromium from '@sparticuz/chromium';
+import { LegacyAuditModuleResult } from './types';
+import type { CostTracker } from '@/lib/costs/costTracker';
+import { logger } from '@/lib/logger';
+
+export interface AccessibilityResult {
+    status: 'success' | 'error';
+    data: {
+        score: number;
+        wcagLevel: 'A' | 'AA' | 'AAA' | 'Fail';
+        totalIssues: number;
+        criticalIssues: number;
+        issuesByCategory: {
+            altText: { total: number; withAlt: number; percentage: number };
+            headings: { h1Count: number; skipLevels: boolean; structure: string[] };
+            contrast: { failCount: number; worstRatio: number };
+            forms: { totalInputs: number; labeled: number; percentage: number };
+            links: { genericCount: number; examples: string[] };
+        };
+        topIssues: Array<{
+            severity: string;
+            description: string;
+            element: string;
+            recommendation: string;
+        }>;
+        recommendations: string[];
+    };
+}
 
 export interface AccessibilityModuleInput {
     url: string;
-    crawledPages?: Array<{ url: string; html: string; }>;
 }
 
-interface Violation {
-    id: string;
-    impact: 'minor' | 'moderate' | 'serious' | 'critical' | null;
-    tags: string[];
-    description: string;
-    help: string;
-    nodes: Array<{
-        html: string;
-        target: string[];
-        failureSummary?: string;
-    }>;
+interface CustomCheckResult {
+    altText: { total: number; withAlt: number };
+    headings: { h1Count: number; levels: number[]; structure: string[] };
+    forms: { totalInputs: number; labeled: number };
+    links: { genericCount: number; examples: string[] };
+    hasLang: boolean;
+    hasViewport: boolean;
+    hasFocusStyles: boolean;
 }
 
-interface PageAccessibilityResult {
-    url: string;
-    score: number;
-    violations: Violation[];
-    criticalCount: number;
-    seriousCount: number;
-    moderateCount: number;
-    minorCount: number;
-}
+async function launchBrowser(): Promise<Browser> {
+    const fs = require('fs');
+    const localPaths = [
+        process.env.CHROME_EXECUTABLE_PATH,
+        '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+        '/Applications/Chromium.app/Contents/MacOS/Chromium',
+        '/usr/bin/google-chrome',
+        '/usr/bin/chromium-browser',
+    ].filter(Boolean) as string[];
 
-interface AccessibilityAnalysis {
-    pages: PageAccessibilityResult[];
-    totalViolations: number;
-    totalCritical: number;
-    totalSerious: number;
-    commonViolations: Array<{ id: string; description: string; count: number }>;
-    overallScore: number;
+    let executablePath: string | undefined;
+    for (const p of localPaths) {
+        if (p && fs.existsSync(p)) {
+            executablePath = p;
+            break;
+        }
+    }
+
+    if (!executablePath) {
+        try {
+            executablePath = await chromium.executablePath();
+        } catch {
+            // Ignore
+        }
+    }
+
+    if (!executablePath) {
+        throw new Error('Chromium not found. Install Chrome or set CHROME_EXECUTABLE_PATH.');
+    }
+
+    return puppeteer.launch({
+        args: ['--no-sandbox', '--disable-setuid-sandbox'],
+        defaultViewport: { width: 1920, height: 1080, deviceScaleFactor: 1 },
+        executablePath,
+        headless: true,
+    });
 }
 
 /**
- * Run accessibility analysis module
+ * Run custom accessibility checks in the page context
+ */
+async function runCustomChecks(page: { evaluate: (fn: () => CustomCheckResult) => Promise<CustomCheckResult> }): Promise<CustomCheckResult> {
+    return page.evaluate(() => {
+        const result: CustomCheckResult = {
+            altText: { total: 0, withAlt: 0 },
+            headings: { h1Count: 0, levels: [], structure: [] },
+            forms: { totalInputs: 0, labeled: 0 },
+            links: { genericCount: 0, examples: [] },
+            hasLang: false,
+            hasViewport: false,
+            hasFocusStyles: true,
+        };
+
+        const imgs = document.querySelectorAll('img');
+        result.altText.total = imgs.length;
+        imgs.forEach((img) => {
+            const alt = img.getAttribute('alt');
+            if (alt !== null && alt !== undefined) result.altText.withAlt++;
+        });
+
+        const headings = document.querySelectorAll('h1, h2, h3, h4, h5, h6');
+        const levels: number[] = [];
+        headings.forEach((h) => {
+            const match = h.tagName.match(/h(\d)/i);
+            if (match) {
+                const level = parseInt(match[1], 10);
+                levels.push(level);
+                result.headings.structure.push(`${h.tagName}: ${(h.textContent || '').trim().slice(0, 40)}`);
+            }
+        });
+        result.headings.h1Count = levels.filter((l) => l === 1).length;
+        result.headings.levels = levels;
+
+        const inputs = document.querySelectorAll('input:not([type="hidden"]), select, textarea');
+        result.forms.totalInputs = inputs.length;
+        inputs.forEach((input) => {
+            const id = input.id;
+            const hasLabel = id ? document.querySelector(`label[for="${id}"]`) : input.closest('label');
+            const hasAria = input.getAttribute('aria-label') || input.getAttribute('aria-labelledby');
+            if (hasLabel || hasAria) result.forms.labeled++;
+        });
+
+        const links = document.querySelectorAll('a[href]');
+        const genericPattern = /\b(click here|read more|learn more)\b/i;
+        links.forEach((a) => {
+            const text = (a.textContent || '').trim();
+            if (text && genericPattern.test(text)) {
+                result.links.genericCount++;
+                if (result.links.examples.length < 5) {
+                    result.links.examples.push(text.slice(0, 50));
+                }
+            }
+        });
+
+        result.hasLang = !!document.documentElement.getAttribute('lang');
+        result.hasViewport = !!document.querySelector('meta[name="viewport"]');
+
+        const styleSheets = document.styleSheets;
+        try {
+            for (let i = 0; i < styleSheets.length; i++) {
+                const sheet = styleSheets[i];
+                try {
+                    const rules = sheet.cssRules || sheet.rules;
+                    if (rules) {
+                        for (let j = 0; j < rules.length; j++) {
+                            const rule = rules[j] as CSSStyleRule;
+                            if (rule.selectorText && /:focus/.test(rule.selectorText)) {
+                                const outline = rule.style?.outline;
+                                if (outline === 'none' || outline === '0') {
+                                    result.hasFocusStyles = false;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                } catch {
+                    // CORS may block access to external stylesheets
+                }
+            }
+        } catch {
+            // Ignore
+        }
+
+        const globalStyle = document.querySelector('style');
+        if (globalStyle?.textContent?.includes('outline:none') || globalStyle?.textContent?.includes('outline: none')) {
+            result.hasFocusStyles = false;
+        }
+
+        return result;
+    });
+}
+
+/**
+ * Check for heading level skips (e.g. H1 -> H3 without H2)
+ */
+function hasHeadingSkipLevels(levels: number[]): boolean {
+    if (levels.length < 2) return false;
+    for (let i = 1; i < levels.length; i++) {
+        if (levels[i] - levels[i - 1] > 1) return true;
+    }
+    return false;
+}
+
+/**
+ * Run accessibility module
  */
 export async function runAccessibilityModule(
     input: AccessibilityModuleInput,
-    tracker?: CostTracker
-): Promise<AuditModuleResult> {
-    logger.info({ url: input.url }, '[Accessibility] Starting accessibility analysis');
+    _tracker?: CostTracker
+): Promise<LegacyAuditModuleResult> {
+    const { url } = input;
+
+    if (!url) {
+        return {
+            moduleId: 'accessibility',
+            status: 'success',
+            timestamp: new Date().toISOString(),
+            data: {
+                status: 'error',
+                data: {
+                    score: 0,
+                    wcagLevel: 'Fail',
+                    totalIssues: 0,
+                    criticalIssues: 0,
+                    issuesByCategory: {
+                        altText: { total: 0, withAlt: 0, percentage: 0 },
+                        headings: { h1Count: 0, skipLevels: false, structure: [] },
+                        contrast: { failCount: 0, worstRatio: 0 },
+                        forms: { totalInputs: 0, labeled: 0, percentage: 0 },
+                        links: { genericCount: 0, examples: [] },
+                    },
+                    topIssues: [],
+                    recommendations: ['No URL provided for accessibility scan.'],
+                },
+            },
+        };
+    }
 
     let browser: Browser | null = null;
 
     try {
-        // Launch browser (reusing existing setup if possible, but for simplicity launching new here)
-        // In production, inject the shared browser instance
-        browser = await puppeteer.launch({
-            args: chromium.args,
-            defaultViewport: { width: 1920, height: 1080, deviceScaleFactor: 1 },
-            executablePath: await chromium.executablePath(),
-            headless: true,
-        });
+        browser = await launchBrowser();
+        const page = await browser.newPage();
 
-        const pagesToAnalyze = [input.url, ...(input.crawledPages?.slice(0, 4).map(p => p.url) || [])];
-        const pageResults: PageAccessibilityResult[] = [];
+        await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 20000 });
 
-        // Analyze pages sequentially to save resources
-        for (const url of pagesToAnalyze) {
-            try {
-                const pageResult = await analyzePageAccessibility(browser, url);
-                if (pageResult) {
-                    pageResults.push(pageResult);
+        const custom = await runCustomChecks(page);
+
+        const axeResults = await new AxePuppeteer(page)
+            .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
+            .analyze();
+
+        const violations = axeResults.violations || [];
+        let criticalCount = 0;
+        let contrastFailCount = 0;
+        let worstRatio = 0;
+
+        const topIssues: AccessibilityResult['data']['topIssues'] = [];
+        const recommendations: string[] = [];
+
+        for (const v of violations) {
+            const count = v.nodes?.length ?? 0;
+            if (v.impact === 'critical') criticalCount += count;
+
+            if (v.id === 'color-contrast') {
+                contrastFailCount += count;
+                for (const node of v.nodes || []) {
+                    const anyData = (node as { any?: Array<{ data?: { contrastRatio?: number } }> })?.any;
+                    const ratio = anyData?.[0]?.data?.contrastRatio;
+                    if (typeof ratio === 'number' && (worstRatio === 0 || ratio < worstRatio)) {
+                        worstRatio = ratio;
+                    }
                 }
-            } catch (error) {
-                logger.warn({ error, url }, '[Accessibility] Page analysis failed');
+            }
+
+            if (topIssues.length < 8) {
+                const node = v.nodes?.[0];
+                const el = node?.html?.slice(0, 80) ?? node?.target?.[0] ?? 'element';
+                topIssues.push({
+                    severity: v.impact || 'moderate',
+                    description: v.description || v.help,
+                    element: el,
+                    recommendation: v.helpUrl ? `See ${v.helpUrl}` : v.help || 'Fix accessibility issue',
+                });
             }
         }
 
-        if (pageResults.length === 0) {
-            throw new Error('No accessibility results collected');
+        const totalIssues =
+            violations.reduce((sum, v) => sum + (v.nodes?.length ?? 0), 0) +
+            (custom.altText.total > 0 && custom.altText.withAlt < custom.altText.total ? 1 : 0) +
+            (custom.headings.h1Count !== 1 ? 1 : 0) +
+            (hasHeadingSkipLevels(custom.headings.levels) ? 1 : 0) +
+            (custom.forms.totalInputs > 0 && custom.forms.labeled < custom.forms.totalInputs ? 1 : 0) +
+            custom.links.genericCount +
+            (custom.hasLang ? 0 : 1) +
+            (custom.hasViewport ? 0 : 1) +
+            (custom.hasFocusStyles ? 0 : 1);
+
+        const altPct = custom.altText.total > 0 ? Math.round((custom.altText.withAlt / custom.altText.total) * 100) : 100;
+        const formPct = custom.forms.totalInputs > 0 ? Math.round((custom.forms.labeled / custom.forms.totalInputs) * 100) : 100;
+
+        if (altPct < 100 && custom.altText.total > 0) {
+            recommendations.push(`Add alt text to ${custom.altText.total - custom.altText.withAlt} images (${altPct}% have alt text).`);
+        }
+        if (custom.headings.h1Count !== 1) {
+            recommendations.push(custom.headings.h1Count === 0 ? 'Add exactly one H1 heading to the page.' : 'Ensure only one H1 exists per page.');
+        }
+        if (hasHeadingSkipLevels(custom.headings.levels)) {
+            recommendations.push('Fix heading hierarchy — do not skip levels (e.g. H1 to H3 without H2).');
+        }
+        if (contrastFailCount > 0) {
+            recommendations.push(`Fix ${contrastFailCount} color contrast issues. Aim for 4.5:1 (normal text) or 3:1 (large text).`);
+        }
+        if (formPct < 100 && custom.forms.totalInputs > 0) {
+            recommendations.push(`Add labels or aria-label to ${custom.forms.totalInputs - custom.forms.labeled} form inputs.`);
+        }
+        if (custom.links.genericCount > 0) {
+            recommendations.push(`Replace generic link text ("click here", "read more") with descriptive text. Found ${custom.links.genericCount} examples.`);
+        }
+        if (!custom.hasLang) {
+            recommendations.push('Add lang="en" (or appropriate language) to the <html> tag.');
+        }
+        if (!custom.hasViewport) {
+            recommendations.push('Add viewport meta tag for mobile accessibility: <meta name="viewport" content="width=device-width, initial-scale=1">');
+        }
+        if (!custom.hasFocusStyles) {
+            recommendations.push('Ensure focus indicators are visible. Avoid outline:none without an alternative.');
         }
 
-        // Aggregate results
-        const analysis = aggregateAccessibilityResults(pageResults);
+        const deduction =
+            criticalCount * 8 +
+            contrastFailCount * 3 +
+            (altPct < 100 ? 15 : 0) +
+            (custom.headings.h1Count !== 1 ? 10 : 0) +
+            (hasHeadingSkipLevels(custom.headings.levels) ? 5 : 0) +
+            (formPct < 100 && custom.forms.totalInputs > 0 ? 5 : 0) +
+            custom.links.genericCount * 2 +
+            (!custom.hasLang ? 5 : 0) +
+            (!custom.hasViewport ? 5 : 0) +
+            (!custom.hasFocusStyles ? 3 : 0);
 
-        // Generate findings
-        const findings = generateAccessibilityFindings(analysis);
+        const score = Math.max(0, Math.min(100, 100 - deduction));
+        let wcagLevel: 'A' | 'AA' | 'AAA' | 'Fail' = 'Fail';
+        if (score >= 90 && criticalCount === 0) wcagLevel = 'AA';
+        else if (score >= 80 && criticalCount === 0) wcagLevel = 'A';
+        else if (score >= 95) wcagLevel = 'AAA';
 
-        const evidenceSnapshot = {
-            module: 'accessibility',
-            source: 'axe_core',
-            rawResponse: analysis,
-            collectedAt: new Date(),
+        const result: AccessibilityResult = {
+            status: 'success',
+            data: {
+                score,
+                wcagLevel,
+                totalIssues,
+                criticalIssues: criticalCount,
+                issuesByCategory: {
+                    altText: {
+                        total: custom.altText.total,
+                        withAlt: custom.altText.withAlt,
+                        percentage: altPct,
+                    },
+                    headings: {
+                        h1Count: custom.headings.h1Count,
+                        skipLevels: hasHeadingSkipLevels(custom.headings.levels),
+                        structure: custom.headings.structure.slice(0, 10),
+                    },
+                    contrast: { failCount: contrastFailCount, worstRatio },
+                    forms: {
+                        totalInputs: custom.forms.totalInputs,
+                        labeled: custom.forms.labeled,
+                        percentage: formPct,
+                    },
+                    links: {
+                        genericCount: custom.links.genericCount,
+                        examples: custom.links.examples,
+                    },
+                },
+                topIssues,
+                recommendations: recommendations.length > 0 ? recommendations : ['No major issues found. Maintain current standards.'],
+            },
         };
 
-        logger.info({
-            url: input.url,
-            pagesAnalyzed: pageResults.length,
-            overallScore: analysis.overallScore,
-            criticalViolations: analysis.totalCritical,
-        }, '[Accessibility] Analysis complete');
+        logger.info({ url, score, criticalIssues: criticalCount }, '[Accessibility] Scan complete');
 
         return {
-            findings,
-            evidenceSnapshots: [evidenceSnapshot],
+            moduleId: 'accessibility',
+            status: 'success',
+            timestamp: new Date().toISOString(),
+            data: result,
         };
-
     } catch (error) {
-        logger.error({ error, url: input.url }, '[Accessibility] Analysis failed');
-
+        const errMsg = error instanceof Error ? error.message : String(error);
+        const errStack = error instanceof Error ? error.stack : undefined;
+        logger.error({ url, errorMessage: errMsg, errorStack: errStack }, '[Accessibility] Scan failed');
         return {
-            findings: [{
-                type: 'VITAMIN',
-                category: 'Compliance',
-                title: 'Accessibility Analysis Unavailable',
-                description: 'Unable to run automated accessibility checks. This may be due to browser or timeout issues.',
-                impactScore: 1,
-                confidenceScore: 50,
-                evidence: [],
-                metrics: {},
-                effortEstimate: 'LOW',
-                recommendedFix: ['Try running accessibility analysis again later'],
-            }],
-            evidenceSnapshots: [],
+            moduleId: 'accessibility',
+            status: 'success',
+            timestamp: new Date().toISOString(),
+            data: {
+                status: 'error',
+                data: {
+                    score: 0,
+                    wcagLevel: 'Fail',
+                    totalIssues: 0,
+                    criticalIssues: 0,
+                    issuesByCategory: {
+                        altText: { total: 0, withAlt: 0, percentage: 0 },
+                        headings: { h1Count: 0, skipLevels: false, structure: [] },
+                        contrast: { failCount: 0, worstRatio: 0 },
+                        forms: { totalInputs: 0, labeled: 0, percentage: 0 },
+                        links: { genericCount: 0, examples: [] },
+                    },
+                    topIssues: [],
+                    recommendations: [`Accessibility scan failed: ${error instanceof Error ? error.message : 'Unknown error'}. Ensure the URL is accessible.`],
+                },
+            },
         };
     } finally {
         if (browser) await browser.close();
     }
-}
-
-/**
- * Analyze a single page with axe-core
- */
-async function analyzePageAccessibility(browser: Browser, url: string): Promise<PageAccessibilityResult | null> {
-    const page = await browser.newPage();
-
-    try {
-        await page.goto(url, { waitUntil: 'networkidle0', timeout: 30000 });
-
-        // Run axe-core
-        const results = await new AxePuppeteer(page)
-            .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']) // WCAG 2.1 Level AA
-            .analyze();
-
-        const violations = results.violations as Violation[];
-
-        // Count violations by impact
-        let critical = 0;
-        let serious = 0;
-        let moderate = 0;
-        let minor = 0;
-
-        violations.forEach(v => {
-            const count = v.nodes.length;
-            if (v.impact === 'critical') critical += count;
-            else if (v.impact === 'serious') serious += count;
-            else if (v.impact === 'moderate') moderate += count;
-            else minor += count;
-        });
-
-        // Calculate page score (0-100)
-        // Deduct points based on violation counts and severity
-        // 100 - (critical * 10) - (serious * 5) - (moderate * 2) - (minor * 1)
-        const deduction = (critical * 10) + (serious * 5) + (moderate * 2) + minor;
-        const score = Math.max(0, 100 - deduction);
-
-        return {
-            url,
-            score,
-            violations,
-            criticalCount: critical,
-            seriousCount: serious,
-            moderateCount: moderate,
-            minorCount: minor,
-        };
-
-    } catch (error) {
-        logger.warn({ error, url }, '[Accessibility] Axe-core failed');
-        return null;
-    } finally {
-        await page.close();
-    }
-}
-
-/**
- * Aggregate results from multiple pages
- */
-function aggregateAccessibilityResults(results: PageAccessibilityResult[]): AccessibilityAnalysis {
-    let totalScore = 0;
-    let totalViolations = 0;
-    let totalCritical = 0;
-    let totalSerious = 0;
-    const violationMap = new Map<string, { description: string; count: number }>();
-
-    results.forEach(res => {
-        totalScore += res.score;
-        totalViolations += (res.criticalCount + res.seriousCount + res.moderateCount + res.minorCount);
-        totalCritical += res.criticalCount;
-        totalSerious += res.seriousCount;
-
-        res.violations.forEach(v => {
-            const current = violationMap.get(v.id) || { description: v.description, count: 0 };
-            current.count += v.nodes.length;
-            violationMap.set(v.id, current);
-        });
-    });
-
-    const commonViolations = Array.from(violationMap.entries())
-        .map(([id, data]) => ({ id, description: data.description, count: data.count }))
-        .sort((a, b) => b.count - a.count)
-        .slice(0, 5);
-
-    return {
-        pages: results,
-        totalViolations,
-        totalCritical,
-        totalSerious,
-        commonViolations,
-        overallScore: Math.round(totalScore / results.length),
-    };
-}
-
-/**
- * Generate findings from accessibility analysis
- */
-function generateAccessibilityFindings(analysis: AccessibilityAnalysis): Finding[] {
-    const findings: Finding[] = [];
-
-    // PAINKILLER: Critical violations (Legal Risk)
-    if (analysis.totalCritical > 5) {
-        findings.push({
-            type: 'PAINKILLER',
-            category: 'Compliance',
-            title: 'Critical Accessibility Violations (Legal Risk)',
-            description: `Your website has ${analysis.totalCritical} critical accessibility violations. Under ADA Title III, businesses face lawsuits of $10,000-$75,000 for inaccessible websites. These issues prevent users with disabilities from using your site.`,
-            impactScore: 9,
-            confidenceScore: 100,
-            evidence: analysis.commonViolations.slice(0, 3).map(v => ({
-                type: 'text',
-                value: `${v.count} instances of "${v.description}"`,
-                label: 'Violation'
-            })),
-            metrics: {
-                criticalViolations: analysis.totalCritical,
-                overallScore: analysis.overallScore,
-            },
-            effortEstimate: 'HIGH',
-            recommendedFix: [
-                'Fix "missing alt text" on images immediately',
-                'Ensure all form fields have labels',
-                'Fix color contrast issues',
-                'Consult with an accessibility specialist',
-            ]
-        });
-    }
-
-    // PAINKILLER: Missing Alt Text
-    const altTextViolation = analysis.commonViolations.find(v => v.id === 'image-alt');
-    if (altTextViolation && altTextViolation.count > 5) {
-        findings.push({
-            type: 'PAINKILLER',
-            category: 'Compliance',
-            title: 'Images Missing Alt Text',
-            description: `Found ${altTextViolation.count} images missing "alt" text description. Screen readers cannot describe these images to blind users, a major ADA compliance failure.`,
-            impactScore: 8,
-            confidenceScore: 100,
-            evidence: [{
-                type: 'metric',
-                value: altTextViolation.count,
-                label: 'Images Without Alt Text'
-            }],
-            metrics: {
-                missingAltTextCount: altTextViolation.count,
-            },
-            effortEstimate: 'MEDIUM',
-            recommendedFix: [
-                'Add descriptive alt text to every image',
-                'Mark decorative images with alt=""',
-                'Ensure alt text conveys the image meaning',
-            ]
-        });
-    }
-
-    // PAINKILLER: Color Contrast
-    const contrastViolation = analysis.commonViolations.find(v => v.id === 'color-contrast');
-    if (contrastViolation && contrastViolation.count > 5) {
-        findings.push({
-            type: 'PAINKILLER',
-            category: 'Compliance',
-            title: 'Poor Color Contrast',
-            description: `Found ${contrastViolation.count} text elements with insufficient color contrast. Users with visual impairments cannot read this text.`,
-            impactScore: 7,
-            confidenceScore: 100,
-            evidence: [{
-                type: 'metric',
-                value: contrastViolation.count,
-                label: 'Contrast Violations'
-            }],
-            metrics: {
-                contrastViolations: contrastViolation.count,
-            },
-            effortEstimate: 'MEDIUM',
-            recommendedFix: [
-                'Darken text color or lighten background',
-                'Aim for 4.5:1 contrast ratio for normal text',
-                'Aim for 3:1 contrast ratio for large text',
-            ]
-        });
-    }
-
-    // VITAMIN: Serious Violations
-    if (analysis.totalSerious > 10) {
-        findings.push({
-            type: 'VITAMIN',
-            category: 'Compliance',
-            title: 'Multiple Serious Accessibility Issues',
-            description: `Detected ${analysis.totalSerious} serious accessibility issues (e.g., heading hierarchy, missing language attribute). These create a frustrating experience for assistive technology users.`,
-            impactScore: 6,
-            confidenceScore: 95,
-            evidence: [],
-            metrics: {
-                seriousViolations: analysis.totalSerious,
-            },
-            effortEstimate: 'MEDIUM',
-            recommendedFix: [
-                'Fix heading order (h1 -> h2 -> h3)',
-                'Add lang="en" to html tag',
-                'Ensure all links have concise text',
-            ]
-        });
-    }
-
-    // Vitamin: Missing Form Labels
-    const labelViolation = analysis.commonViolations.find(v => v.id === 'label');
-    if (labelViolation) {
-        findings.push({
-            type: 'VITAMIN',
-            category: 'Compliance',
-            title: 'Missing Form Labels',
-            description: 'Form inputs are missing labels. Screen reader users won\'t know what to type in these fields.',
-            impactScore: 5,
-            confidenceScore: 100,
-            evidence: [{
-                type: 'metric',
-                value: labelViolation.count,
-                label: 'Unlabeled Inputs'
-            }],
-            metrics: {
-                unlabeledInputs: labelViolation.count,
-            },
-            effortEstimate: 'LOW',
-            recommendedFix: [
-                'Add <label> elements for all inputs',
-                'Use aria-label if visual label is not possible',
-            ]
-        });
-    }
-
-    // POSITIVE: Accessible Site
-    if (analysis.totalViolations < 3) {
-        findings.push({
-            type: 'VITAMIN',
-            category: 'Compliance',
-            title: 'Website is Accessible',
-            description: `Excellent work! Only found ${analysis.totalViolations} accessibility issues. Your site is more accessible than 85% of local businesses.`,
-            impactScore: 2,
-            confidenceScore: 100,
-            evidence: [{
-                type: 'metric',
-                value: analysis.overallScore,
-                label: 'Accessibility Score'
-            }],
-            metrics: {
-                score: analysis.overallScore,
-            },
-            effortEstimate: 'LOW',
-            recommendedFix: [
-                'Maintain high standards',
-                'Check accessibility when adding new content',
-            ]
-        });
-    }
-
-    return findings;
 }

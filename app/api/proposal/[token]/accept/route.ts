@@ -17,6 +17,21 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
             return NextResponse.json({ error: 'Proposal not found' }, { status: 404 });
         }
 
+        const normalizedTier = typeof tier === 'string' ? tier.trim().toLowerCase() : '';
+        const tierAlias: Record<string, string> = {
+            essentials: 'starter',
+            starter: 'starter',
+            growth: 'growth',
+            premium: 'premium',
+        };
+        const chosenTier = tierAlias[normalizedTier];
+        if (!chosenTier) {
+            return NextResponse.json(
+                { error: 'Valid tier is required (starter, growth, premium)' },
+                { status: 400 }
+            );
+        }
+
         // 2. Create Acceptance Record
         // Check if already accepted? 
         if (proposal.status === 'ACCEPTED') {
@@ -25,13 +40,14 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
 
         // Get IP from headers if possible (for audit)
         const ip = req.headers.get('x-forwarded-for') || 'unknown';
+        const now = new Date();
 
         await prisma.$transaction(async (tx) => {
             // Create Acceptance
             await tx.proposalAcceptance.create({
                 data: {
                     proposalId: proposal.id,
-                    tier,
+                    tier: chosenTier,
                     contactName: name,
                     contactEmail: email,
                     contactPhone: phone,
@@ -47,8 +63,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
                 data: {
                     status: 'ACCEPTED',
                     outcome: 'WON',
-                    closedAt: new Date(),
-                    // We could store acceptedTier in JSON or add a field, but we have the relation now.
+                    closedAt: now,
+                    tierChosen: chosenTier,
+                    replyReceivedAt: proposal.replyReceivedAt ?? now,
+                    meetingBookedAt: proposal.meetingBookedAt ?? now,
                 }
             });
         });
@@ -62,7 +80,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
         // Notify Operator
         // Notify Client
 
-        return NextResponse.json({ success: true });
+        return NextResponse.json({
+            success: true,
+            tierChosen: chosenTier,
+            acceptedAt: now.toISOString(),
+        });
 
     } catch (error) {
         console.error('Accept Proposal Error:', error);

@@ -1,0 +1,1 @@
+{"data":"User-agent: *\nDisallow: /wp-admin/\nAllow: /wp-admin/admin-ajax.php\n\nSitemap: https://wlaw.com/sitemap_index.xml\n","cachedAt":1771270666346,"expiresAt":1771357066346}

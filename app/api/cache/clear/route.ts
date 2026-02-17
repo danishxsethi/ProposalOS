@@ -15,7 +15,7 @@ export async function POST(request: Request) {
         const adminSecret = process.env.ADMIN_SECRET;
         if (!adminSecret) {
             return NextResponse.json(
-                { error: 'Admin endpoint not configured' },
+                { error: 'Cache clear endpoint not configured' },
                 { status: 503 }
             );
         }

@@ -2,7 +2,8 @@
 
 generator client {
   provider      = "prisma-client-js"
-  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
+  // native=local dev; linux-musl-*=Alpine Docker (Cloud Run). Alpine 3.17+ needs openssl-3.
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x", "linux-musl-arm64-openssl-3.0.x"]
 }
 
 datasource db {
@@ -11,20 +12,21 @@ datasource db {
 }
 
 model Audit {
-  id               String      @id @default(uuid())
-  businessName     String
-  businessCity     String?
-  businessUrl      String?
-  businessIndustry String?
-  status           AuditStatus @default(QUEUED)
-  modulesCompleted String[]    @default([])
-  modulesFailed    Json        @default("[]")
-  overallScore     Int?
-  apiCostCents     Int         @default(0)
-  startedAt        DateTime    @default(now())
-  completedAt      DateTime?
-  createdAt        DateTime    @default(now())
-  batchId          String?
+  id                 String      @id @default(uuid())
+  businessName       String
+  businessCity       String?
+  businessUrl        String?
+  businessIndustry   String?
+  verticalPlaybookId String? // e.g., 'dentist', 'law-firm' — from playbook detection
+  status             AuditStatus @default(QUEUED)
+  modulesCompleted   String[]    @default([])
+  modulesFailed      Json        @default("[]")
+  overallScore       Int?
+  apiCostCents       Int         @default(0)
+  startedAt          DateTime    @default(now())
+  completedAt        DateTime?
+  createdAt          DateTime    @default(now())
+  batchId            String?
 
   // Multi-Tenancy
   tenantId String
@@ -87,6 +89,7 @@ model Proposal {
   assumptions      String[]       @default([])
   disclaimers      String[]       @default([])
   nextSteps        String[]       @default([])
+  comparisonReport Json? // Competitor comparison (ranking, winning/losing, quick wins)
   pdfUrl           String?
   pdfGeneratedAt   DateTime?
   webLinkToken     String         @unique @default(uuid())
@@ -102,29 +105,39 @@ model Proposal {
   template   ProposalTemplate? @relation(fields: [templateId], references: [id])
 
   // QA Fields
-  qaScore   Int? @default(0)
-  qaResults Json @default("{}")
+  qaScore                Int?   @default(0)
+  qaResults              Json   @default("{}")
+  clientScore            Int?   @default(0)
+  clientScoreResults     Json   @default("{}")
+  humanCloseabilityScore Float?
 
   // Win/Loss Tracking (Feature #5)
-  outcome    ProposalOutcome?
-  closedAt   DateTime?
-  dealValue  Decimal?         @db.Decimal(10, 2)
-  lostReason String?
-  notes      String?
+  outcome         ProposalOutcome?
+  closedAt        DateTime?
+  dealValue       Decimal?         @db.Decimal(10, 2)
+  lostReason      String?
+  notes           String?
+  replyReceivedAt DateTime?
+  meetingBookedAt DateTime?
+  tierChosen      String?
 
   // Viral Sharing
   shareCount Int @default(0)
 
-  audit      Audit               @relation(fields: [auditId], references: [id], onDelete: Cascade)
-  followUps  ProposalFollowUp[]
-  outreach   ProposalOutreach[]
-  acceptance ProposalAcceptance? // One acceptance per proposal
-  // conversations ChatConversation[] // TODO: Implement ChatConversation model
+  audit           Audit               @relation(fields: [auditId], references: [id], onDelete: Cascade)
+  followUps       ProposalFollowUp[]
+  outreach        ProposalOutreach[]
+  acceptance      ProposalAcceptance? // One acceptance per proposal
+  views           ProposalView[]
+  contactRequests ContactRequest[]
 
   @@index([auditId])
   @@index([webLinkToken])
   @@index([status])
   @@index([tenantId])
+  @@index([clientScore])
+  @@index([replyReceivedAt])
+  @@index([meetingBookedAt])
 }
 
 model ProposalAcceptance {
@@ -141,6 +154,41 @@ model ProposalAcceptance {
   acceptedAt DateTime @default(now())
 
   proposal Proposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+}
+
+model ProposalView {
+  id                String   @id @default(uuid())
+  proposalId        String
+  sessionId         String // Random UUID per session
+  viewedAt          DateTime @default(now())
+  scrollDepth       Int      @default(0) // 0, 25, 50, 75, 100
+  timeOnPageSeconds Int      @default(0)
+  ctaClicked        Boolean  @default(false)
+  expandedSections  Json     @default("[]") // Array of section IDs
+  userAgent         String?  @db.Text
+  referrer          String?  @db.Text
+  ipHash            String? // SHA256 hash of IP for privacy
+
+  proposal Proposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+
+  @@index([proposalId])
+  @@index([sessionId])
+}
+
+model ContactRequest {
+  id            String   @id @default(uuid())
+  proposalId    String
+  name          String
+  email         String?
+  phone         String?
+  bestTime      String? // Dropdown value
+  preferredTier String? // starter, growth, premium
+  message       String?  @db.Text
+  createdAt     DateTime @default(now())
+
+  proposal Proposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+
+  @@index([proposalId])
 }
 
 model ProposalFollowUp {
@@ -275,14 +323,21 @@ model Tenant {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  users          User[]
-  audits         Audit[]
-  brandingConfig TenantBranding?
-  apiKeys        ApiKey[]
-  playbooks      Playbook[]
-  auditSchedules AuditSchedule[]
-  UsageRecord    UsageRecord[]
-  invitations    Invitation[]
+  users                  User[]
+  audits                 Audit[]
+  brandingConfig         TenantBranding?
+  apiKeys                ApiKey[]
+  playbooks              Playbook[]
+  auditSchedules         AuditSchedule[]
+  UsageRecord            UsageRecord[]
+  invitations            Invitation[]
+  prospectDiscoveryJobs  ProspectDiscoveryJob[]
+  prospectLeads          ProspectLead[]
+  prospectEnrichmentRuns ProspectEnrichmentRun[]
+  outreachSendingDomains OutreachSendingDomain[]
+  outreachDomainDailyStats OutreachDomainDailyStat[]
+  outreachEmails         OutreachEmail[]
+  outreachEmailEvents    OutreachEmailEvent[]
 
   @@index([domain])
   @@index([isActive])
@@ -354,6 +409,268 @@ model AuditSchedule {
   @@index([tenantId])
   @@index([nextRunAt])
   @@index([isActive])
+}
+
+// Target list for validation blitz / sales pipeline
+model AuditTarget {
+  id           String   @id @default(uuid())
+  businessName String
+  businessCity String?
+  businessUrl  String
+  placeId      String?
+  phone        String?
+  address      String?
+  rating       Float?
+  reviewCount  Int?
+  category     String?
+  vertical     String // e.g. dentist, law-firm, hvac
+  source       String   @default("saskatoon-validation")
+  createdAt    DateTime @default(now())
+
+  @@index([placeId])
+  @@index([vertical])
+  @@index([source])
+}
+
+model ProspectDiscoveryJob {
+  id       String @id @default(uuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  city     String
+  state    String?
+  metro    String?
+  vertical String
+
+  targetLeads   Int  @default(200)
+  painThreshold Int  @default(60)
+  sourceConfig  Json @default("{\"googlePlaces\":true,\"yelp\":true,\"directories\":true}")
+
+  status      ProspectDiscoveryJobStatus @default(QUEUED)
+  runAttempts Int                        @default(0)
+
+  discoveredCount Int @default(0)
+  qualifiedCount  Int @default(0)
+  enrichedCount   Int @default(0)
+
+  lastError   String?
+  nextRunAt   DateTime  @default(now())
+  startedAt   DateTime?
+  completedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  leads ProspectLead[]
+
+  @@index([tenantId, status, nextRunAt])
+  @@index([city, vertical])
+  @@index([createdAt])
+}
+
+model ProspectLead {
+  id       String @id @default(uuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  discoveryJobId String?
+  discoveryJob   ProspectDiscoveryJob? @relation(fields: [discoveryJobId], references: [id], onDelete: SetNull)
+
+  source           String
+  sourceExternalId String
+  sourceUrl        String?
+
+  businessName String
+  city         String
+  state        String?
+  vertical     String
+  category     String?
+  address      String?
+  phone        String?
+  website      String?
+  rating       Float?
+  reviewCount  Int?
+
+  status        ProspectLeadStatus @default(DISCOVERED)
+  painScore     Int?
+  painThreshold Int                @default(60)
+  painBreakdown Json               @default("{}")
+  topFindings   Json               @default("[]")
+
+  auditSummarySnippet   String?
+  qualificationEvidence Json      @default("{}")
+  qualifiedAt           DateTime?
+  disqualifiedReason    String?
+
+  decisionMakerName        String?
+  decisionMakerTitle       String?
+  decisionMakerLinkedin    String?
+  decisionMakerEmail       String?
+  decisionMakerEmailStatus String?
+  enrichmentState          Json    @default("{}")
+  estimatedCostCents       Int     @default(0)
+
+  outreachStage            OutreachLeadStage @default(READY)
+  outreachAttempts         Int               @default(0)
+  outreachOpenCount        Int               @default(0)
+  outreachClickCount       Int               @default(0)
+  outreachReplyCount       Int               @default(0)
+  outreachLastContactedAt  DateTime?
+  outreachNextActionAt     DateTime?
+  outreachDroppedAt        DateTime?
+  outreachDropReason       String?
+  scorecardToken           String?           @unique
+  scorecardFirstViewedAt   DateTime?
+  scorecardLastViewedAt    DateTime?
+  scorecardTotalViewSeconds Int              @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  enrichmentRuns ProspectEnrichmentRun[]
+  outreachEmails OutreachEmail[]
+  outreachEvents OutreachEmailEvent[]
+
+  @@unique([tenantId, source, sourceExternalId])
+  @@index([tenantId, status])
+  @@index([city, vertical])
+  @@index([painScore])
+  @@index([discoveryJobId])
+  @@index([createdAt])
+  @@index([tenantId, outreachStage, outreachNextActionAt])
+}
+
+model ProspectEnrichmentRun {
+  id       String @id @default(uuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  leadId String
+  lead   ProspectLead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  provider ProspectEnrichmentProvider
+  status   ProspectEnrichmentStatus   @default(PENDING)
+
+  requestPayload  Json    @default("{}")
+  responsePayload Json    @default("{}")
+  costCents       Int     @default(0)
+  errorMessage    String?
+
+  startedAt   DateTime  @default(now())
+  completedAt DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([tenantId, provider, status])
+  @@index([leadId, createdAt])
+}
+
+model OutreachSendingDomain {
+  id       String @id @default(uuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  domain    String
+  fromEmail String
+  fromName  String?
+  dailyLimit Int    @default(50)
+  isActive  Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  emails     OutreachEmail[]
+  dailyStats OutreachDomainDailyStat[]
+
+  @@unique([tenantId, fromEmail])
+  @@index([tenantId, isActive])
+}
+
+model OutreachDomainDailyStat {
+  id       String @id @default(uuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  domainId String
+  domain   OutreachSendingDomain @relation(fields: [domainId], references: [id], onDelete: Cascade)
+
+  day        DateTime
+  sentCount  Int @default(0)
+  openCount  Int @default(0)
+  clickCount Int @default(0)
+  replyCount Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([domainId, day])
+  @@index([tenantId, day])
+}
+
+model OutreachEmail {
+  id       String @id @default(uuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  leadId String
+  lead   ProspectLead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  domainId String?
+  domain   OutreachSendingDomain? @relation(fields: [domainId], references: [id], onDelete: SetNull)
+
+  type   OutreachEmailType   @default(INITIAL)
+  status OutreachEmailStatus @default(PENDING)
+
+  subject String
+  body    String @db.Text
+
+  qualityScore     Int   @default(0)
+  readabilityGrade Float @default(0)
+  wordCount        Int   @default(0)
+  spamRisk         Int   @default(0)
+  findingsUsed     Json  @default("[]")
+
+  scorecardUrl      String?
+  proposalUrl       String?
+  trackingPixelUrl  String?
+  trackingClickBaseUrl String?
+
+  providerMessageId String?
+  errorMessage      String?
+
+  sentAt    DateTime?
+  openedAt  DateTime?
+  clickedAt DateTime?
+  repliedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  events OutreachEmailEvent[]
+
+  @@index([tenantId, status, createdAt])
+  @@index([leadId, createdAt])
+  @@index([domainId, createdAt])
+  @@index([type, status])
+}
+
+model OutreachEmailEvent {
+  id       String @id @default(uuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  leadId String
+  lead   ProspectLead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  emailId String?
+  email   OutreachEmail? @relation(fields: [emailId], references: [id], onDelete: SetNull)
+
+  type     OutreachEventType
+  metadata Json      @default("{}")
+  occurredAt DateTime @default(now())
+  createdAt DateTime  @default(now())
+
+  @@index([tenantId, type, occurredAt])
+  @@index([leadId, occurredAt])
+  @@index([emailId, occurredAt])
 }
 
 model ApiKey {
@@ -485,6 +802,80 @@ enum SubscriptionTier {
   ENTERPRISE
 }
 
+enum ProspectDiscoveryJobStatus {
+  QUEUED
+  RUNNING
+  PARTIAL
+  COMPLETE
+  FAILED
+}
+
+enum ProspectLeadStatus {
+  DISCOVERED
+  QUALIFIED
+  DISQUALIFIED
+  ENRICH_PENDING
+  ENRICHED
+  ENRICH_FAILED
+}
+
+enum ProspectEnrichmentProvider {
+  APOLLO
+  HUNTER
+  PROXYCURL
+  CLEARBIT
+}
+
+enum ProspectEnrichmentStatus {
+  PENDING
+  SUCCESS
+  FAILED
+  SKIPPED
+}
+
+enum OutreachLeadStage {
+  READY
+  EMAIL_SENT
+  OPENED
+  CLICKED
+  PROPOSAL_QUEUED
+  PROPOSAL_SENT
+  HOT
+  REPLIED
+  DROPPED
+}
+
+enum OutreachEmailType {
+  INITIAL
+  FOLLOWUP_COMPETITOR
+  FOLLOWUP_PROPOSAL
+  FOLLOWUP_GBP
+  FOLLOWUP_RETRY
+}
+
+enum OutreachEmailStatus {
+  PENDING
+  SENT
+  OPENED
+  CLICKED
+  REPLIED
+  FAILED
+  SUPPRESSED
+}
+
+enum OutreachEventType {
+  EMAIL_SENT
+  EMAIL_OPEN
+  EMAIL_CLICK
+  SCORECARD_VIEW
+  SCORECARD_CLICK
+  SCORECARD_DWELL_2M
+  REPLY_RECEIVED
+  PROPOSAL_SENT
+  PROPOSAL_VIEW_2M
+  LEAD_DROPPED
+}
+
 model ProposalOutreach {
   id             String   @id @default(uuid())
   proposalId     String
@@ -502,6 +893,25 @@ model ProposalOutreach {
 
   proposal Proposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)
 
+  @@index([proposalId])
+  @@index([recipientEmail])
+  @@index([tenantId])
+}
+
+// Follow-up email sequence (post-meeting: Day 0, Day 3, Day 7)
+model FollowUpEmailSend {
+  id             String   @id @default(uuid())
+  auditId        String
+  proposalId     String
+  step           Int // 1, 2, or 3
+  recipientEmail String
+  recipientName  String?
+  emailSubject   String
+  emailBody      String   @db.Text
+  sentAt         DateTime @default(now())
+  tenantId       String?
+
+  @@index([auditId])
   @@index([proposalId])
   @@index([recipientEmail])
   @@index([tenantId])

@@ -10,7 +10,23 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "e2e:full-audit": "node scripts/e2e-full-audit.js"
+    "e2e:full-audit": "node scripts/e2e-full-audit.js",
+    "build-targets": "npx tsx scripts/build-target-list.ts",
+    "sync-targets-to-data": "npx tsx scripts/sync-targets-to-data.ts",
+    "populate-targets": "npx tsx scripts/populate-targets-from-build.ts",
+    "blitz": "npx tsx scripts/batch-audit-blitz.ts",
+    "qa-review": "npx tsx scripts/qa-review.ts",
+    "test:vertical-playbooks": "npx tsx scripts/run-vertical-playbook-tests.ts",
+    "test:cold-email": "npx tsx scripts/test-cold-email-generate.ts",
+    "batch-audit": "npx tsx scripts/batch-audit.ts",
+    "sprint2-seed-jobs": "npx tsx scripts/sprint2-seed-jobs.ts",
+    "assert-agency-grade": "npx tsx scripts/assert-agency-grade.ts",
+    "target-list": "npx tsx scripts/target-list.ts",
+    "rerun-failures": "npx tsx scripts/rerun-failures.ts",
+    "regen-proposal-summaries": "npx tsx scripts/regenerate-proposal-summaries.ts",
+    "weekly-client-feedback": "npx tsx scripts/weekly-client-perfect-feedback.ts",
+    "final-audit": "npx tsx scripts/final-audit.ts",
+    "build-portfolio": "npx tsx scripts/build-portfolio.ts"
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.11.1",
@@ -62,6 +78,7 @@
     "node-mocks-http": "^1.17.2",
     "prettier": "^3.8.1",
     "prisma": "^5.20.0",
+    "tsx": "^4.19.0",
     "typescript": "^5",
     "vitest": "^4.0.18"
   }

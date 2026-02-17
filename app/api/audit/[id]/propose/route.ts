@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { runDiagnosisPipeline } from '@/lib/diagnosis';
 import { runProposalPipeline } from '@/lib/proposal';
+import { getPlaybook, detectVertical } from '@/lib/playbooks';
+import { generateComparison } from '@/lib/analysis/competitorComparison';
 import { CostTracker } from '@/lib/costs/costTracker';
 import { logger, logError } from '@/lib/logger';
 import { Metrics } from '@/lib/metrics';
@@ -51,6 +53,11 @@ export const POST = withAuth(async (
             where: { id: auditId },
             include: {
                 findings: true,
+                evidence: {
+                    where: { module: 'competitor' },
+                    orderBy: { collectedAt: 'desc' },
+                    take: 1,
+                },
             },
         });
 
@@ -139,33 +146,73 @@ export const POST = withAuth(async (
         // Let's modify `runDiagnosisPipeline` and `runProposalPipeline` signatures in next steps.
         // For now, I'll just initialize it here.
 
+        // Resolve vertical playbook (from audit.verticalPlaybookId or detect from industry)
+        const verticalId =
+            (audit as { verticalPlaybookId?: string | null }).verticalPlaybookId ??
+            detectVertical({
+                businessName: audit.businessName,
+                businessIndustry: audit.businessIndustry,
+                businessCity: audit.businessCity,
+            });
+        const playbook = getPlaybook(verticalId);
+
         // Step 1: Run diagnosis to get clusters
-        // TODO: Pass parentTrace
-        const diagnosisResult = await runDiagnosisPipeline(audit.findings, tracker, parentTrace);
+        const diagnosisResult = await runDiagnosisPipeline(
+            audit.findings,
+            tracker,
+            parentTrace,
+            playbook ?? undefined
+        );
 
         logger.info({
             event: 'diagnosis.complete',
             auditId,
             clusterCount: diagnosisResult.clusters.length,
+            verticalPlaybook: playbook?.id ?? 'general',
             duration_ms: Date.now() - startTime
         }, 'Diagnosis complete');
 
+        // Build comparison report from competitor evidence
+        let comparisonReport = null;
+        const competitorEvidence = audit.evidence?.[0]?.rawResponse as { comparisonMatrix?: { business?: unknown; competitors?: unknown[] } } | undefined;
+        if (competitorEvidence?.comparisonMatrix?.business && competitorEvidence.comparisonMatrix.competitors?.length) {
+            const { business, competitors } = competitorEvidence.comparisonMatrix;
+            comparisonReport = generateComparison(
+                business as Parameters<typeof generateComparison>[0],
+                competitors as Parameters<typeof generateComparison>[1],
+                audit.businessIndustry || undefined
+            );
+        }
+
         // Step 2: Generate proposal
-        const proposalResult = await runProposalPipeline(
+        const pipelineResult = await runProposalPipeline(
             audit.businessName,
             audit.businessIndustry || undefined,
             diagnosisResult.clusters,
             audit.findings,
             tracker,
-            parentTrace
+            parentTrace,
+            playbook ?? undefined,
+            comparisonReport,
+            audit.businessCity
         );
+        const { normalizedFindings, ...proposalResult } = pipelineResult;
         console.log(`[Propose] Proposal generated`);
 
         // Log costs
         // console.log(`[Propose] Cost: ${tracker.getTotalCents()} cents`, tracker.getReport());
 
-        // Step 2.5: Run Automated QA
-        const qaStatus = runAutoQA(proposalResult, audit.findings, audit.businessName, audit.businessCity);
+        // Step 2.5: Run Automated QA (use same normalized findings the proposal was built from)
+        const qaStatus = runAutoQA(
+            proposalResult,
+            normalizedFindings,
+            audit.businessName,
+            audit.businessCity,
+            {
+                industry: audit.businessIndustry,
+                comparisonReport: comparisonReport ?? undefined,
+            }
+        );
         logger.info({
             event: 'qa.complete',
             auditId,
@@ -173,9 +220,19 @@ export const POST = withAuth(async (
             passed: qaStatus.passedChecks,
             warnings: qaStatus.warnings
         }, 'QA Check Complete');
+        if (qaStatus.score < 90) {
+            const failedChecks = qaStatus.results.filter((r) => !r.passed).map((r) => ({ check: r.check, details: r.details }));
+            logger.warn({ event: 'qa.below_agency_grade', auditId, score: qaStatus.score, failedChecks }, 'QA below 90% — failed checks');
+        }
 
-        // Auto-READY: high QA score (>=60%) and no needsReview → READY; else DRAFT
-        const proposalStatus = (qaStatus.score >= 60 && !qaStatus.needsReview) ? 'READY' : 'DRAFT';
+        // Auto-READY logic with client-perfect gating and hard-fails.
+        const hasHardFails = qaStatus.clientPerfect.hardFails.length > 0;
+        const proposalStatus =
+            hasHardFails || qaStatus.clientPerfect.requiresHumanReview
+                ? 'DRAFT'
+                : (qaStatus.score >= 90 || (qaStatus.score >= 60 && !qaStatus.needsReview))
+                    ? 'READY'
+                    : 'DRAFT';
         logger.info({
             event: 'proposal.status.decided',
             auditId,
@@ -201,10 +258,13 @@ export const POST = withAuth(async (
                 assumptions: proposalResult.assumptions,
                 disclaimers: proposalResult.disclaimers,
                 nextSteps: proposalResult.nextSteps,
+                comparisonReport: comparisonReport ? JSON.parse(JSON.stringify(comparisonReport)) : undefined,
                 status: proposalStatus,
                 // QA Results
                 qaScore: qaStatus.score,
-                qaResults: JSON.parse(JSON.stringify(qaStatus))
+                clientScore: qaStatus.clientPerfect.score,
+                qaResults: JSON.parse(JSON.stringify(qaStatus)),
+                clientScoreResults: JSON.parse(JSON.stringify(qaStatus.clientPerfect)),
             },
         });
 
@@ -235,6 +295,10 @@ export const POST = withAuth(async (
             proposalId: proposal.id,
             webLinkToken: proposal.webLinkToken,
             status: proposalStatus,
+            qaScore: qaStatus.score,
+            clientScore: qaStatus.clientPerfect.score,
+            hardFails: qaStatus.clientPerfect.hardFails,
+            requiresHumanReview: qaStatus.clientPerfect.requiresHumanReview,
             proposal: proposalResult,
             costCents: tracker.getTotalCents(),
             duration_ms

@@ -41,8 +41,8 @@ interface WebsiteCrawlerInput {
 
 const MAX_PAGES = 20;
 const MAX_DEPTH = 3;
-const PAGE_TIMEOUT_MS = 5000;
-const TOTAL_TIMEOUT_MS = 30000;
+const PAGE_TIMEOUT_MS = 45000;
+const TOTAL_TIMEOUT_MS = 45000;
 
 /**
  * Normalize URL for comparison and deduplication
@@ -120,7 +120,9 @@ async function analyzePage(url: string): Promise<PageMetrics> {
         const response = await fetch(url, {
             signal: controller.signal,
             headers: {
-                'User-Agent': 'ProposalOSBot/1.0 (SEO Audit Crawler)',
+                'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                'Accept-Language': 'en-US,en;q=0.9',
             },
         });
 
@@ -285,9 +287,15 @@ export async function crawlWebsite(input: WebsiteCrawlerInput): Promise<CrawlRes
         // Extract links only from successful pages
         if (metrics.status === 200 && depth < MAX_DEPTH) {
             try {
+                const controller = new AbortController();
+                const timeout = setTimeout(() => controller.abort(), PAGE_TIMEOUT_MS);
                 const response = await fetch(url, {
-                    signal: AbortSignal.timeout(PAGE_TIMEOUT_MS),
+                    signal: controller.signal,
+                    headers: {
+                        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                    },
                 });
+                clearTimeout(timeout);
                 const html = await response.text();
                 const links = extractInternalLinks(html, baseUrl);
 

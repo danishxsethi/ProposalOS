@@ -256,9 +256,11 @@ async function main() {
     console.log(`  ✓ Findings: ${batchFindings.length}`);
 
     console.log('\n  📝 Generate proposal for batch audit...');
-    await runPropose(firstCompletedId);
-
-    const batchToken = await getProposalTokenForAudit(firstCompletedId);
+    const proposeData = await runPropose(firstCompletedId);
+    const batchToken = proposeData.proposal?.webLinkToken || proposeData.webLinkToken;
+    if (!batchToken) {
+      throw new Error('No webLinkToken in proposal response');
+    }
     console.log(`\n  📄 Fetch batch proposal PDF...`);
     const batchPdfSize = await fetchPdf(batchToken);
     console.log(`  ✓ PDF size: ${batchPdfSize} bytes`);

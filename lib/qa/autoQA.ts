@@ -1,5 +1,6 @@
-import { Finding, Proposal } from '@prisma/client';
+import { Finding } from '@prisma/client';
 import { ProposalResult } from '@/lib/proposal';
+import { ComparisonReport } from '@/lib/proposal/types';
 
 export interface QAResult {
     category: string;
@@ -8,197 +9,386 @@ export interface QAResult {
     details?: string;
 }
 
-export interface QAStatus {
+export interface HumanCloseabilityInput {
+    tone: number; // 1-10
+    trust: number; // 1-10
+    buyability: number; // 1-10
+    notes?: string;
+}
+
+export interface ClientPerfectGate {
+    weight: number;
     score: number;
+    passedChecks: number;
+    totalChecks: number;
+    checks: QAResult[];
+}
+
+export interface ClientPerfectStatus {
+    score: number;
+    hardFails: Array<{
+        code:
+            | 'WRONG_BUSINESS_OR_CITY'
+            | 'UNCITED_CRITICAL_CLAIMS'
+            | 'GENERIC_SUMMARY_NO_IMPACT'
+            | 'TIER_MAPPING_INVALID';
+        details: string;
+    }>;
+    gates: {
+        truth: ClientPerfectGate;
+        fit: ClientPerfectGate;
+        decision: ClientPerfectGate;
+    };
+    requiresHumanReview: boolean;
+    humanCloseability: {
+        provided: boolean;
+        score: number | null; // 1-10
+        passed: boolean | null;
+        notes?: string;
+    };
+}
+
+export interface QAStatus {
+    score: number; // kept for backward compatibility, now mirrors clientPerfect.score
     passedChecks: number;
     totalChecks: number;
     results: QAResult[];
     warnings: string[];
     needsReview: boolean;
+    clientPerfect: ClientPerfectStatus;
 }
 
-/** Evidence has valid identifying data. Prefers standardized format (pointer + collected_at). */
-function hasValidEvidence(e: any): boolean {
+export interface QAContext {
+    industry?: string | null;
+    comparisonReport?: ComparisonReport | null;
+    humanCloseability?: HumanCloseabilityInput | null;
+}
+
+const METRIC_PATTERN = /\d+(\.\d+)?(%|\/100|\s*(?:seconds?|ms|scores?|rating|reviews?|\$|points?|findings?|issues?|critical|painkillers?|load|speed|LCP|FCP|CLS|index|MB|kb|stars?|hours?|days?|minutes?|of|out\s+of|visitors?|customers?|bounce|traffic|conversion|percent|percentage))/gi;
+const IMPACT_LANGUAGE_PATTERN = /(revenue|conversion|lead|booking|pipeline|deal|loss|increase|decrease|roi|close rate|reply rate|meeting)/i;
+const CTA_PATTERN = /(reply|schedule|book|call|start|get started|send it|approve|accept)/i;
+
+/** Evidence has valid identifying data. Accepts formats our modules actually produce. */
+function hasValidEvidence(e: unknown): boolean {
     if (!e) return false;
-    // Standardized format: pointer (required) and collected_at (required)
-    if (e.pointer && typeof e.pointer === 'string' && e.pointer.length > 0 && e.collected_at) {
-        return true;
+    if (typeof e === 'string') return e.trim().length > 0;
+    if (typeof e !== 'object') return false;
+    const obj = e as Record<string, unknown>;
+    if (typeof obj.pointer === 'string' && obj.pointer.length > 0 && obj.collected_at) return true;
+    if (obj.type && (obj.value !== undefined || obj.label)) return true;
+    return !!(obj.url || obj.source || obj.raw);
+}
+
+function computeGate(weight: number, checks: QAResult[]): ClientPerfectGate {
+    const passedChecks = checks.filter((c) => c.passed).length;
+    const totalChecks = checks.length || 1;
+    const score = Math.round((passedChecks / totalChecks) * 100);
+    return { weight, score, passedChecks, totalChecks, checks };
+}
+
+function scoreHumanCloseability(input?: HumanCloseabilityInput | null): {
+    provided: boolean;
+    score: number | null;
+    passed: boolean | null;
+    notes?: string;
+} {
+    if (!input) {
+        return { provided: false, score: null, passed: null };
     }
-    // Backward compatibility: legacy formats
-    return !!(
-        e.url || e.source || e.raw ||
-        e.type || e.value || e.label ||
-        (typeof e === 'string' && e.length > 0)
-    );
+    const tone = Math.max(1, Math.min(10, Number(input.tone) || 0));
+    const trust = Math.max(1, Math.min(10, Number(input.trust) || 0));
+    const buyability = Math.max(1, Math.min(10, Number(input.buyability) || 0));
+    const avg = Number(((tone + trust + buyability) / 3).toFixed(1));
+    return {
+        provided: true,
+        score: avg,
+        passed: avg >= 8,
+        notes: input.notes,
+    };
 }
 
 /**
- * Run Automated QA on a generated proposal (13 checks)
+ * Run client-perfect QA on a generated proposal.
+ * 3 weighted gates:
+ * - Truth (40%): traceability and factual integrity
+ * - Fit (35%): business/vertical/competitive specificity
+ * - Decision (25%): ROI clarity, actionability, CTA
  */
 export function runAutoQA(
     proposal: ProposalResult,
     findings: Finding[],
     businessName: string,
-    city: string | null
+    city: string | null,
+    context?: QAContext
 ): QAStatus {
     const results: QAResult[] = [];
-
-    // --- 1. Finding Quality ---
-
-    // Check 1: Evidence pointers (accepts url, source, raw, pointer, type/value/label, etc.)
-    const findingsWithEvidence = findings.filter(f => {
-        const evidence = f.evidence as any[];
-        return evidence && evidence.length > 0 && evidence.some(hasValidEvidence);
-    });
-    results.push({
-        category: 'Finding Quality',
-        check: 'Evidence Check',
-        passed: findingsWithEvidence.length === findings.length,
-        details: `${findingsWithEvidence.length}/${findings.length} findings have valid evidence`
-    });
-
-    // Check impact scores (Basic range check)
-    const validImpact = findings.every(f => f.impactScore >= 1 && f.impactScore <= 10);
-    results.push({
-        category: 'Finding Quality',
-        check: 'Impact Score Range',
-        passed: validImpact,
-        details: validImpact ? 'All scores valid' : 'Some scores out of range'
-    });
-
-    // Check duplicates (Title + Module)
-    const uniqueKeys = new Set(findings.map(f => `${f.module}:${f.title}`));
-    results.push({
-        category: 'Finding Quality',
-        check: 'No Duplicates',
-        passed: uniqueKeys.size === findings.length,
-        details: uniqueKeys.size === findings.length ? 'No duplicates found' : `Found ${findings.length - uniqueKeys.size} duplicates`
-    });
-
-    // Minimum counts
-    results.push({
-        category: 'Finding Quality',
-        check: 'Min 3 Findings',
-        passed: findings.length >= 3,
-        details: `Found ${findings.length} findings`
-    });
-
-    const painkillers = findings.filter(f => f.type === 'PAINKILLER');
-    results.push({
-        category: 'Finding Quality',
-        check: 'At least 1 Painkiller',
-        passed: painkillers.length >= 1,
-        details: `Found ${painkillers.length} painkillers`
-    });
-
-    // --- 2. Proposal Quality ---
-
-    // Executive Summary
     const summary = proposal.executiveSummary || '';
-    results.push({
-        category: 'Proposal Quality',
-        check: 'Summary Mentions Business',
-        passed: summary.toLowerCase().includes(businessName.toLowerCase()),
-        details: 'Checked case-insensitive match'
-    });
+    const summaryLower = summary.toLowerCase();
+    const industry = (context?.industry || '').toLowerCase();
 
-    if (city) {
-        results.push({
-            category: 'Proposal Quality',
-            check: 'Summary Mentions City',
-            passed: summary.toLowerCase().includes(city.toLowerCase()),
-            details: 'Checked case-insensitive match'
-        });
-    }
-
-    // Length check (approximate sentence count by periods)
-    const sentences = summary.split(/[.!?]+/).filter(s => s.trim().length > 0).length;
-    results.push({
-        category: 'Proposal Quality',
-        check: 'Summary Length (2-6 sentences)',
-        passed: sentences >= 2 && sentences <= 6,
-        details: `Found ${sentences} sentences`
-    });
-
-    // Tier Counts
-    const tierCounts = [
-        proposal.tiers.essentials.findingIds.length,
-        proposal.tiers.growth.findingIds.length,
-        proposal.tiers.premium.findingIds.length
-    ];
-    results.push({
-        category: 'Proposal Quality',
-        check: 'Tiers have 2+ items',
-        passed: tierCounts.every(c => c >= 2),
-        details: `Counts: ${tierCounts.join(', ')}`
-    });
-
-    // Valid Finding IDs in Tiers
-    const allFindingIds = new Set(findings.map(f => f.id));
+    const allFindingIds = new Set(findings.map((f) => f.id));
     const allTierIds = [
         ...proposal.tiers.essentials.findingIds,
         ...proposal.tiers.growth.findingIds,
-        ...proposal.tiers.premium.findingIds
+        ...proposal.tiers.premium.findingIds,
     ];
-    const invalidIds = allTierIds.filter(id => !allFindingIds.has(id));
-    results.push({
-        category: 'Proposal Quality',
-        check: 'Valid Finding IDs in Tiers',
-        passed: invalidIds.length === 0,
-        details: invalidIds.length === 0 ? 'All IDs valid' : `Found ${invalidIds.length} invalid IDs`
+    const invalidTierIds = allTierIds.filter((id) => !allFindingIds.has(id));
+
+    const findingsWithEvidence = findings.filter((f) => {
+        const evidence = (f.evidence as unknown[]) || [];
+        return evidence.some(hasValidEvidence);
+    });
+    const criticalFindings = findings.filter((f) => f.impactScore >= 8 || f.type === 'PAINKILLER');
+    const uncitedCritical = criticalFindings.filter((f) => {
+        const evidence = (f.evidence as unknown[]) || [];
+        return !evidence.some(hasValidEvidence);
     });
 
-    // Pricing Sanity Check (Simple heuristic based on existing logic)
-    // Essentials < Growth < Premium
-    const { essentials, growth, premium } = proposal.pricing;
-    results.push({
-        category: 'Proposal Quality',
-        check: 'Pricing Logic (E < G < P)',
-        passed: essentials < growth && growth < premium,
-        details: `${essentials} < ${growth} < ${premium}`
+    const metricMatches = summary.match(METRIC_PATTERN) || [];
+    const hasQuantifiedImpactLanguage = metricMatches.length >= 3 && IMPACT_LANGUAGE_PATTERN.test(summary);
+
+    const summaryMentionsBusiness = summaryLower.includes(businessName.toLowerCase());
+    const summaryMentionsCity = city ? summaryLower.includes(city.toLowerCase()) : true;
+
+    const dedupeKeyCount = new Set(findings.map((f) => `${f.module}:${f.title}`)).size;
+    const impactScoreRangeValid = findings.every((f) => f.impactScore >= 1 && f.impactScore <= 10);
+
+    const tierCounts = [
+        proposal.tiers.essentials.findingIds.length,
+        proposal.tiers.growth.findingIds.length,
+        proposal.tiers.premium.findingIds.length,
+    ];
+
+    const pricingLogic = proposal.pricing.essentials < proposal.pricing.growth && proposal.pricing.growth < proposal.pricing.premium;
+
+    const competitorNames = (context?.comparisonReport?.competitors || [])
+        .map((c) => c.name || '')
+        .filter((n) => n.trim().length > 0);
+    const mentionsCompetitorByName =
+        competitorNames.length > 0 &&
+        competitorNames.some((name) => summaryLower.includes(name.toLowerCase()));
+
+    const industryTokens = industry
+        .split(/[^a-z0-9]+/)
+        .map((t) => t.trim())
+        .filter((t) => t.length >= 4);
+    const mentionsIndustry = industryTokens.length > 0
+        ? industryTokens.some((token) => summaryLower.includes(token))
+        : true;
+
+    const topActionRows = (proposal.nextSteps || []).filter((s) =>
+        /impact:/i.test(s) && /effort:/i.test(s) && /timeline:/i.test(s)
+    );
+    const hasTop3ActionPlan = topActionRows.length >= 3;
+
+    const tiersWithRoi = [proposal.tiers.essentials, proposal.tiers.growth, proposal.tiers.premium];
+    const hasRoiScenarios = tiersWithRoi.every((tier) => {
+        const s = tier.roi?.scenarios;
+        return !!(
+            s &&
+            typeof s.best === 'number' &&
+            typeof s.base === 'number' &&
+            typeof s.worst === 'number' &&
+            s.best >= s.base &&
+            s.base >= s.worst &&
+            Array.isArray(s.assumptions) &&
+            s.assumptions.length >= 2
+        );
     });
+    const hasRoiAssumptions = (proposal.assumptions || []).length >= 2;
+    const clearCta = (proposal.nextSteps || []).some((line) => CTA_PATTERN.test(line));
 
-    // --- 3. Anti-Hallucination ---
+    // --- Truth Gate (40%) ---
+    const truthChecks: QAResult[] = [
+        {
+            category: 'Truth',
+            check: 'Evidence Check',
+            passed: findingsWithEvidence.length === findings.length,
+            details: `${findingsWithEvidence.length}/${findings.length} findings have valid evidence`,
+        },
+        {
+            category: 'Truth',
+            check: 'Critical Findings Cited',
+            passed: uncitedCritical.length === 0,
+            details:
+                uncitedCritical.length === 0
+                    ? `All ${criticalFindings.length} critical findings have evidence`
+                    : `${uncitedCritical.length}/${criticalFindings.length} critical findings missing evidence`,
+        },
+        {
+            category: 'Truth',
+            check: 'Impact Score Range',
+            passed: impactScoreRangeValid,
+            details: impactScoreRangeValid ? 'All scores valid (1-10)' : 'Some impact scores out of range',
+        },
+        {
+            category: 'Truth',
+            check: 'No Duplicates',
+            passed: dedupeKeyCount === findings.length,
+            details:
+                dedupeKeyCount === findings.length
+                    ? 'No duplicate findings detected'
+                    : `Found ${findings.length - dedupeKeyCount} duplicate findings`,
+        },
+        {
+            category: 'Truth',
+            check: 'Tier Mapping Valid',
+            passed: invalidTierIds.length === 0,
+            details:
+                invalidTierIds.length === 0
+                    ? 'All tier IDs map to real findings'
+                    : `Found ${invalidTierIds.length} tier IDs not present in findings`,
+        },
+    ];
 
-    // Business Name Match (Redundant with Summary check but explicitly for hallucination category)
-    results.push({
-        category: 'Anti-Hallucination',
-        check: 'No Wrong Business Name',
-        passed: summary.toLowerCase().includes(businessName.toLowerCase()),
-        details: 'Ensures summary is about this business'
-    });
+    // --- Fit Gate (35%) ---
+    const fitChecks: QAResult[] = [
+        {
+            category: 'Fit',
+            check: 'Summary Mentions Business',
+            passed: summaryMentionsBusiness,
+            details: 'Case-insensitive exact business-name check',
+        },
+        {
+            category: 'Fit',
+            check: 'Summary Mentions City',
+            passed: summaryMentionsCity,
+            details: city ? `Expected city mention: ${city}` : 'City not provided; check skipped',
+        },
+        {
+            category: 'Fit',
+            check: 'Industry/Vertical Context',
+            passed: mentionsIndustry,
+            details:
+                industryTokens.length > 0
+                    ? `Industry tokens checked: ${industryTokens.join(', ')}`
+                    : 'Industry not provided; check skipped',
+        },
+        {
+            category: 'Fit',
+            check: 'Competitor By Name Comparison',
+            passed: mentionsCompetitorByName,
+            details:
+                competitorNames.length > 0
+                    ? `Competitors considered: ${competitorNames.slice(0, 3).join(', ')}`
+                    : 'No competitor context provided',
+        },
+    ];
 
-    // --- 4. Citation Quality ---
+    // --- Decision Gate (25%) ---
+    const decisionChecks: QAResult[] = [
+        {
+            category: 'Decision',
+            check: 'Summary Cites Specific Metrics (≥3)',
+            passed: metricMatches.length >= 3,
+            details: `Found ${metricMatches.length} quantified metrics`,
+        },
+        {
+            category: 'Decision',
+            check: 'Top 3 Actions With Impact/Effort/Timeline',
+            passed: hasTop3ActionPlan,
+            details: `Found ${topActionRows.length} structured action lines`,
+        },
+        {
+            category: 'Decision',
+            check: 'ROI Scenarios (Best/Base/Worst) Per Tier',
+            passed: hasRoiScenarios,
+            details: hasRoiScenarios ? 'All tiers include valid ROI scenarios' : 'One or more tiers missing ROI scenario block',
+        },
+        {
+            category: 'Decision',
+            check: 'ROI Assumptions Present',
+            passed: hasRoiAssumptions,
+            details: `Proposal has ${(proposal.assumptions || []).length} assumptions`,
+        },
+        {
+            category: 'Decision',
+            check: 'Pricing Logic (E < G < P)',
+            passed: pricingLogic,
+            details: `${proposal.pricing.essentials} < ${proposal.pricing.growth} < ${proposal.pricing.premium}`,
+        },
+        {
+            category: 'Decision',
+            check: 'Clear CTA / Low-Friction Next Step',
+            passed: clearCta,
+            details: clearCta ? 'At least one CTA detected in next steps' : 'No clear CTA found in next steps',
+        },
+    ];
 
-    // Check 13: Executive summary cites specific metrics (numbers, %, scores, $, etc.)
-    const hasMetrics = /\d+(\.\d+)?(%|\s*(seconds?|ms|score|rating|reviews?|\$|points?|\/100))/.test(summary);
-    results.push({
-        category: 'Proposal Quality',
-        check: 'Summary Cites Specific Metrics',
-        passed: hasMetrics,
-        details: hasMetrics
-            ? 'Executive summary references specific metrics'
-            : 'Executive summary is generic — should cite specific findings data'
-    });
+    // Aggregate all checks for legacy compatibility
+    results.push(...truthChecks, ...fitChecks, ...decisionChecks);
 
-    // --- Scoring ---
+    // Hard-fail conditions
+    const hardFails: ClientPerfectStatus['hardFails'] = [];
+    if (!summaryMentionsBusiness || !summaryMentionsCity) {
+        hardFails.push({
+            code: 'WRONG_BUSINESS_OR_CITY',
+            details: `Business mention: ${summaryMentionsBusiness}, city mention: ${summaryMentionsCity}`,
+        });
+    }
+    if (uncitedCritical.length > 0) {
+        hardFails.push({
+            code: 'UNCITED_CRITICAL_CLAIMS',
+            details: `${uncitedCritical.length} critical findings have no valid evidence`,
+        });
+    }
+    if (!hasQuantifiedImpactLanguage) {
+        hardFails.push({
+            code: 'GENERIC_SUMMARY_NO_IMPACT',
+            details: `Requires >=3 metrics plus impact language. Metrics found: ${metricMatches.length}`,
+        });
+    }
+    if (invalidTierIds.length > 0 || tierCounts.some((c) => c < 2)) {
+        hardFails.push({
+            code: 'TIER_MAPPING_INVALID',
+            details: `Invalid IDs: ${invalidTierIds.length}, tier counts: ${tierCounts.join(', ')}`,
+        });
+    }
 
-    const passed = results.filter(r => r.passed).length;
-    const total = results.length;
-    const score = Math.round((passed / total) * 100);
+    const truth = computeGate(0.4, truthChecks);
+    const fit = computeGate(0.35, fitChecks);
+    const decision = computeGate(0.25, decisionChecks);
+
+    let weightedScore = Math.round(
+        truth.score * truth.weight + fit.score * fit.weight + decision.score * decision.weight
+    );
+
+    const humanCloseability = scoreHumanCloseability(context?.humanCloseability);
+    const isTopProposal = weightedScore >= 90;
+    const requiresHumanReview = isTopProposal && !humanCloseability.provided;
+
+    if (humanCloseability.provided && humanCloseability.score != null) {
+        // Blend in 15% reviewer signal once provided (2-minute pass for tone/trust/buyability).
+        weightedScore = Math.round(weightedScore * 0.85 + humanCloseability.score * 10 * 0.15);
+    }
+
+    if (hardFails.length > 0) {
+        weightedScore = 0;
+    }
 
     const warnings: string[] = [];
-    if (score < 80) warnings.push('QA Score below 80%');
+    if (hardFails.length > 0) warnings.push('Hard-fail triggered: client score forced to 0');
+    if (requiresHumanReview) warnings.push('Top proposal requires 2-minute human closeability review');
+    if (weightedScore < 90) warnings.push('Client-perfect score below 90');
+    if (!mentionsCompetitorByName) warnings.push('Missing competitor-by-name comparison in summary');
 
-    // Critical failure conditions
-    const needsReview = score < 60;
+    const passedChecks = results.filter((r) => r.passed).length;
+    const totalChecks = results.length;
+    const needsReview = hardFails.length > 0 || weightedScore < 60;
 
     return {
-        score,
-        passedChecks: passed,
-        totalChecks: total,
+        score: weightedScore,
+        passedChecks,
+        totalChecks,
         results,
         warnings,
-        needsReview
+        needsReview,
+        clientPerfect: {
+            score: weightedScore,
+            hardFails,
+            gates: { truth, fit, decision },
+            requiresHumanReview,
+            humanCloseability,
+        },
     };
 }

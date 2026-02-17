@@ -2,15 +2,21 @@ import chromium from '@sparticuz/chromium';
 import puppeteer from 'puppeteer-core';
 import { BRANDING } from '@/lib/config/branding';
 
+export type PdfFormat = 'A4' | 'Letter';
+
 /**
- * Generate a PDF from a proposal web page using Puppeteer (Serverless optimized)
+ * Generate a PDF from the premium PDF template using Puppeteer
  * @param token - The proposal web link token
  * @param baseUrl - Base URL of the application
+ * @param businessName - Optional, for footer "Prepared for [Business Name]"
+ * @param format - Page size: A4 (210×297mm) or Letter (215.9×279.4mm)
  * @returns PDF as Buffer
  */
 export async function generatePdf(
     token: string,
-    baseUrl: string = process.env.BASE_URL || 'http://localhost:3000'
+    baseUrl: string = process.env.BASE_URL || 'http://localhost:3000',
+    businessName?: string,
+    format: PdfFormat = 'A4'
 ): Promise<Buffer> {
     let browser;
 
@@ -52,46 +58,66 @@ export async function generatePdf(
             executablePath,
             headless: true,
             ignoreHTTPSErrors: true,
-        });
+        } as Parameters<typeof puppeteer.launch>[0]);
 
         const page = await browser.newPage();
 
-        // Navigate to proposal page
-        const url = `${baseUrl}/proposal/${token}`;
+        // Navigate to PDF template page (premium agency design)
+        const url = `${baseUrl}/proposal/${token}/pdf`;
         console.log(`Generating PDF for: ${url}`);
 
+        // Use 'load' instead of 'networkidle0' — networkidle0 often never fires on SPAs
         await page.goto(url, {
-            waitUntil: 'networkidle0',
-            timeout: 30000,
+            waitUntil: 'load',
+            timeout: 45000,
         });
 
-        // Wait for content to render (look for main which contains the content)
-        // ProposalPage uses <main> tag now
-        await page.waitForSelector('main', { timeout: 30000 });
+        // Allow React to hydrate
+        await new Promise(r => setTimeout(r, 2000));
 
-        // Generate PDF
+        // Wait for PDF template (pdf-root or data-pdf-ready)
+        const selector = '[data-pdf-ready], .pdf-root, main';
+        try {
+            await page.waitForSelector(selector, { timeout: 10000 });
+        } catch {
+            const hasBody = await page.$('body');
+            if (!hasBody) throw new Error('Page failed to render');
+        }
+
+        // Generate PDF — A4 portrait, premium margins (min 19mm), professional footer
+        const safeName = businessName
+            ? String(businessName)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;')
+            : '';
+        const footerLeft = 'Proposal Engine | Confidential';
+        const footerCenter = 'Page <span class="pageNumber"></span> of <span class="totalPages"></span>';
+        const contactEmail = process.env.BRAND_CONTACT_EMAIL || BRANDING.contact?.email;
+        const footerRight = contactEmail ? `Questions? ${contactEmail}` : 'proposalengine.com';
+
         const pdfBuffer = await page.pdf({
-            format: 'A4',
-            landscape: true, // Requested: landscape
-            printBackground: true, // Requested: true (for dark theme)
+            format: format === 'Letter' ? 'Letter' : 'A4',
+            landscape: false,
+            printBackground: true,
             margin: {
-                top: '0.5in',
-                right: '0.5in',
-                bottom: '0.5in',
-                left: '0.5in',
+                top: '2.5cm',
+                right: '2cm',
+                bottom: '2.5cm',
+                left: '2cm',
             },
             displayHeaderFooter: true,
-            headerTemplate: `
-                <div style="font-size: 10px; color: #666; width: 100%; text-align: center; padding-top: 5px;">
-                    ${BRANDING.name}
-                </div>
-            `,
+            headerTemplate: '<div></div>',
             footerTemplate: `
-                <div style="font-size: 10px; color: #666; width: 100%; text-align: center; padding-bottom: 5px;">
-                    Page <span class="pageNumber"></span> of <span class="totalPages"></span>
+                <div style="font-size: 9px; color: #6c757d; width: 100%; padding: 8px 2cm 0; border-top: 1px solid #e5e7eb; display: flex; justify-content: space-between; align-items: center; box-sizing: border-box;">
+                    <span>${footerLeft}</span>
+                    <span>${footerCenter}</span>
+                    <span>${footerRight}</span>
                 </div>
             `,
-            preferCSSPageSize: false,
+            preferCSSPageSize: true,
         });
 
         return Buffer.from(pdfBuffer);

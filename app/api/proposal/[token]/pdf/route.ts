@@ -50,28 +50,32 @@ export async function GET(request: Request, { params }: { params: Promise<{ toke
             'Generating PDF'
         );
 
-        const pdfBuffer = await generatePdf(token);
+        const pdfBuffer = await generatePdf(token, undefined, proposal.audit.businessName);
 
-        // Upload to GCS and cache URL
-        const pdfUrl = await uploadPdfToGCS(proposal.id, pdfBuffer);
-
-        // Update database with cached URL
-        await prisma.proposal.update({
-            where: { id: proposal.id },
-            data: {
-                pdfUrl,
-                pdfGeneratedAt: new Date(),
-            },
-        });
-
-        logger.info(
-            {
-                event: 'pdf.cached',
-                proposalId: proposal.id,
-                pdfUrl,
-            },
-            'PDF generated and cached'
-        );
+        // Upload to GCS and cache URL (optional - if upload fails, still return PDF)
+        try {
+            const pdfUrl = await uploadPdfToGCS(proposal.id, pdfBuffer);
+            await prisma.proposal.update({
+                where: { id: proposal.id },
+                data: {
+                    pdfUrl,
+                    pdfGeneratedAt: new Date(),
+                },
+            });
+            logger.info(
+                { event: 'pdf.cached', proposalId: proposal.id, pdfUrl },
+                'PDF generated and cached'
+            );
+        } catch (uploadError) {
+            logger.warn(
+                {
+                    event: 'pdf.upload_skipped',
+                    proposalId: proposal.id,
+                    error: uploadError instanceof Error ? uploadError.message : String(uploadError),
+                },
+                'GCS upload failed, returning PDF without caching'
+            );
+        }
 
         // Return PDF buffer
         const filename = `proposal-${proposal.audit.businessName.replace(/[^a-z0-9]/gi, '_').toLowerCase()}-${token.substring(0, 8)}.pdf`;

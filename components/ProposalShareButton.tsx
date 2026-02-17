@@ -11,16 +11,17 @@ interface ProposalShareButtonProps {
 export function ProposalShareButton({ proposalId, businessName, token }: ProposalShareButtonProps) {
     const [isOpen, setIsOpen] = useState(false);
     const [copied, setCopied] = useState(false);
+    const [toastVisible, setToastVisible] = useState(false);
 
-    // Share to landing page with referral tracking (drives new signups)
-    const shareUrl = `${typeof window !== 'undefined' ? window.location.origin : ''}/free-audit?ref=${proposalId}`;
-    const shareText = `Just received my custom ${businessName} digital marketing proposal! Get yours free:`;
+    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+    const proposalUrl = `${origin}/proposal/${token}`;
+    const shareSubject = `${businessName} — Digital Presence Audit`;
+    const shareBody = `I wanted to share this digital presence audit for ${businessName} with you:\n\n${proposalUrl}`;
+    const mailtoUrl = `mailto:?subject=${encodeURIComponent(shareSubject)}&body=${encodeURIComponent(shareBody)}`;
 
-    const shareLinks = {
-        twitter: `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(shareUrl)}`,
-        linkedin: `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(shareUrl)}`,
-        facebook: `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl)}`,
-        email: `mailto:?subject=Check out this proposal&body=${encodeURIComponent(shareText + ' ' + shareUrl)}`
+    const showToast = () => {
+        setToastVisible(true);
+        setTimeout(() => setToastVisible(false), 2500);
     };
 
     const trackShare = async (platform: string) => {
@@ -39,9 +40,10 @@ export function ProposalShareButton({ proposalId, businessName, token }: Proposa
         if (typeof window === 'undefined') return;
 
         try {
-            await navigator.clipboard.writeText(shareUrl);
+            await navigator.clipboard.writeText(proposalUrl);
             setCopied(true);
-            setTimeout(() => setCopied(false), 2000);
+            showToast();
+            setTimeout(() => setCopied(false), 2500);
             await trackShare('copy');
         } catch (error) {
             console.error('Failed to copy:', error);
@@ -54,24 +56,31 @@ export function ProposalShareButton({ proposalId, businessName, token }: Proposa
 
     if (!isOpen) {
         return (
-            <button
-                onClick={() => setIsOpen(true)}
-                className="fixed bottom-6 right-6 z-50 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-full p-4 shadow-lg hover:scale-110 transition-transform duration-200 flex items-center gap-2"
-                aria-label="Share proposal"
-            >
+            <>
+                <button
+                    onClick={() => setIsOpen(true)}
+                    className="fixed bottom-20 md:bottom-6 right-4 md:right-6 z-50 bg-[#4361ee] hover:bg-[#3b52d4] text-white rounded-full p-4 shadow-lg hover:scale-105 transition-transform duration-200 flex items-center gap-2 min-h-[44px] min-w-[44px]"
+                    aria-label="Share this report"
+                >
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
                 </svg>
-                <span className="font-medium">Share</span>
+                <span className="font-medium hidden sm:inline">Share This Report</span>
             </button>
+                {toastVisible && (
+                    <div className="fixed bottom-24 md:bottom-16 right-4 md:right-6 z-[60] px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg shadow-lg">
+                        Link copied to clipboard!
+                    </div>
+                )}
+            </>
         );
     }
 
     return (
-        <div className="fixed bottom-6 right-6 z-50">
-            <div className="bg-slate-900 border border-slate-700 rounded-xl shadow-2xl p-6 mb-4 w-80">
+        <div className="fixed bottom-20 md:bottom-6 right-4 md:right-6 z-50">
+            <div className="bg-[#1a1a2e] border border-white/10 rounded-xl shadow-2xl p-6 mb-4 w-80 max-w-[calc(100vw-2rem)]">
                 <div className="flex justify-between items-center mb-4">
-                    <h3 className="text-white font-bold text-lg">Share Proposal</h3>
+                    <h3 className="text-white font-bold text-lg">Share This Report</h3>
                     <button
                         onClick={() => setIsOpen(false)}
                         className="text-slate-400 hover:text-white transition"
@@ -83,13 +92,34 @@ export function ProposalShareButton({ proposalId, businessName, token }: Proposa
                     </button>
                 </div>
 
-                <p className="text-slate-400 text-sm mb-4">
-                    Help others get their free audit too 🚀
+                <p className="text-white/60 text-sm mb-4">
+                    Copy the link or share via email
                 </p>
 
                 <div className="flex flex-col gap-2">
+                    <button
+                        onClick={copyToClipboard}
+                        className="bg-[#4361ee] hover:bg-[#3b52d4] text-white px-4 py-3 rounded-lg font-medium transition flex items-center gap-3 min-h-[44px]"
+                    >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                        </svg>
+                        {copied ? '✓ Copied!' : 'Copy Link'}
+                    </button>
                     <a
-                        href={shareLinks.twitter}
+                        href={mailtoUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={() => trackShare('email')}
+                        className="bg-white/10 hover:bg-white/15 text-white px-4 py-3 rounded-lg font-medium transition flex items-center gap-3 min-h-[44px]"
+                    >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                        </svg>
+                        Share via Email
+                    </a>
+                    <a
+                        href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(shareSubject)}&url=${encodeURIComponent(proposalUrl)}`}
                         target="_blank"
                         rel="noopener noreferrer"
                         onClick={() => handlePlatformClick('twitter')}
@@ -102,7 +132,7 @@ export function ProposalShareButton({ proposalId, businessName, token }: Proposa
                     </a>
 
                     <a
-                        href={shareLinks.linkedin}
+                        href={`https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(proposalUrl)}`}
                         target="_blank"
                         rel="noopener noreferrer"
                         onClick={() => handlePlatformClick('linkedin')}
@@ -115,7 +145,7 @@ export function ProposalShareButton({ proposalId, businessName, token }: Proposa
                     </a>
 
                     <a
-                        href={shareLinks.facebook}
+                        href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(proposalUrl)}`}
                         target="_blank"
                         rel="noopener noreferrer"
                         onClick={() => handlePlatformClick('facebook')}
@@ -127,20 +157,13 @@ export function ProposalShareButton({ proposalId, businessName, token }: Proposa
                         Share on Facebook
                     </a>
 
-                    <button
-                        onClick={copyToClipboard}
-                        className="bg-slate-800 hover:bg-slate-700 text-white px-4 py-3 rounded-lg font-medium transition flex items-center gap-3"
-                    >
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                        </svg>
-                        {copied ? '✓ Copied!' : 'Copy Link'}
-                    </button>
                 </div>
 
-                <p className="text-xs text-slate-500 mt-4 text-center">
-                    Sharing helps us grow and keep this service free 💙
-                </p>
+                {toastVisible && (
+                    <div className="mt-4 px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg text-center">
+                        Link copied to clipboard!
+                    </div>
+                )}
             </div>
         </div>
     );

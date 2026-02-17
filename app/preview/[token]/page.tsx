@@ -1,9 +1,10 @@
 import { prisma } from '@/lib/prisma';
 import { notFound } from 'next/navigation';
 import ProposalPage from '../../proposal/[token]/ProposalPage';
+import { getBranding } from '@/lib/config/branding';
 
 interface PageProps {
-    params: { token: string };
+    params: Promise<{ token: string }>;
 }
 
 export default async function PreviewPage({ params }: PageProps) {
@@ -18,14 +19,18 @@ export default async function PreviewPage({ params }: PageProps) {
                         where: { excluded: false },
                         orderBy: { impactScore: 'desc' },
                     },
+                    evidence: true,
                 },
             },
+            template: true,
         },
     });
 
     if (!proposal) {
         notFound();
     }
+
+    const branding = await getBranding(proposal.tenantId);
 
     return (
         <>
@@ -64,7 +69,7 @@ export default async function PreviewPage({ params }: PageProps) {
             </div>
 
             {/* Actual Proposal Content */}
-            <ProposalPage proposal={proposal} />
+            <ProposalPage proposal={proposal} branding={branding} />
         </>
     );
 }

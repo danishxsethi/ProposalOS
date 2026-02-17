@@ -1,12 +1,18 @@
-Write a highly empathetic, consulting-style explanation.
+Write a highly empathetic, consulting-style narrative for this cluster of audit findings. Your output must still follow these 5 rules:
 
-Rules:
-- Acknowledge that running a business is hard.
-- Frame the issue as a common scaling challenge.
-- Use "we" language ("We can help you fix this").
-- Be very encouraging.
+1. SPECIFICITY: Reference the actual data from the findings (metrics, scores, counts).
+2. BUSINESS IMPACT: Include a percentage or customer-impact estimate.
+3. BEFORE/AFTER: Show current state vs target.
+4. EVIDENCE-BACKED: Cite the data source.
+5. ACTIONABLE: End with ONE specific, concrete next step.
 
-Cluster: {{root_cause}}
-Findings: {{findings_detail}}
+Tone: Acknowledge that running a business is hard. Frame as a common scaling challenge. Use "we" language ("We can help you fix this"). Be encouraging but still cite numbers and give a concrete fix.
 
-Write an empathetic explanation (3 sentences):
+Root Cause: {{root_cause}}
+
+Findings (use metrics and recommendedFix):
+{{findings_detail}}
+
+3 sentences max. Include at least one specific metric. End with a concrete next step.
+
+Write the narrative:

@@ -1,0 +1,1 @@
+{"data":"Sitemap: https://www.prairielandvetclinic.ca/sitemap.xml\n\nUser-agent: NerdyBot\nDisallow: /\n\nUser-agent: dotbot\nCrawl-delay: 10\n\nUser-agent: *\nDisallow: /ajax/\nDisallow: /apps/\n","cachedAt":1771275656890,"expiresAt":1771362056890}

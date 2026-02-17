@@ -18,7 +18,8 @@ const auditSchema = z.object({
 /**
  * POST /api/audit
  * Create and run a single audit. Uses lib/audit/runner.ts as the canonical execution path.
- * Modules: website, gbp, competitor, reputation, social (5 total per spec).
+ * Modules: CANONICAL_MODULES = ['website', 'gbp', 'competitor', 'reputation', 'social', 'schemaMarkup', 'accessibility', 'security']
+ * (Same as batch - single source of truth in lib/audit/modules.ts)
  */
 export const POST = withAuth(async (req: Request) => {
     try {
