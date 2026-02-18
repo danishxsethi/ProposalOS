@@ -1,10 +1,13 @@
 /**
  * POST /api/proposal/[token]/track
  * First-party analytics: view, scroll depth, time on page, CTA click, expanded sections.
+ * Also feeds engagement data to Deal Closer for hot lead scoring.
  */
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { createHash } from 'crypto';
+import { recordEvent } from '@/lib/pipeline/dealCloser';
+import type { EngagementEvent } from '@/lib/pipeline/types';
 
 export async function POST(req: Request, { params }: { params: Promise<{ token: string }> }) {
     try {
@@ -13,6 +16,13 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
 
         const proposal = await prisma.proposal.findUnique({
             where: { webLinkToken: token },
+            include: {
+                audit: {
+                    include: {
+                        prospectLead: true,
+                    },
+                },
+            },
         });
 
         if (!proposal) {
@@ -25,6 +35,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
         const referrer = req.headers.get('referer') || body.referrer || null;
 
         const { event, sessionId, scrollDepth, timeOnPageSeconds, ctaClicked, expandedSections } = body;
+
+        // Get the associated prospect lead for engagement tracking
+        const prospectLead = proposal.audit?.prospectLead?.[0];
 
         if (event === 'view') {
             // First view: create ProposalView record
@@ -42,6 +55,26 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
                     ipHash,
                 },
             });
+
+            // Record engagement event in Deal Closer
+            if (prospectLead) {
+                try {
+                    const engagementEvent: EngagementEvent = {
+                        leadId: prospectLead.id,
+                        eventType: 'proposal_view',
+                        timestamp: new Date(),
+                        metadata: {
+                            proposalId: proposal.id,
+                            sessionId: sessionId || crypto.randomUUID(),
+                        },
+                    };
+                    await recordEvent(prospectLead.id, engagementEvent);
+                } catch (error) {
+                    console.error('Failed to record engagement event:', error);
+                    // Don't fail the request if engagement tracking fails
+                }
+            }
+
             return NextResponse.json({ success: true });
         }
 
@@ -68,6 +101,25 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
             }
             if (event === 'cta') {
                 updates.ctaClicked = true;
+
+                // Record tier interaction in Deal Closer
+                if (prospectLead) {
+                    try {
+                        const engagementEvent: EngagementEvent = {
+                            leadId: prospectLead.id,
+                            eventType: 'tier_interaction',
+                            timestamp: new Date(),
+                            metadata: {
+                                proposalId: proposal.id,
+                                sessionId: body.sessionId,
+                                ctaClicked: true,
+                            },
+                        };
+                        await recordEvent(prospectLead.id, engagementEvent);
+                    } catch (error) {
+                        console.error('Failed to record engagement event:', error);
+                    }
+                }
             }
             if (event === 'expand' && Array.isArray(expandedSections)) {
                 const merged = [...new Set([...(existing.expandedSections as string[]), ...expandedSections])];
@@ -79,6 +131,26 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
                     where: { id: existing.id },
                     data: updates,
                 });
+            }
+
+            // Record dwell time and scroll depth in Deal Closer for significant engagement
+            if (prospectLead && (event === 'time' || event === 'scroll')) {
+                try {
+                    const engagementEvent: EngagementEvent = {
+                        leadId: prospectLead.id,
+                        eventType: 'proposal_view',
+                        timestamp: new Date(),
+                        metadata: {
+                            proposalId: proposal.id,
+                            sessionId: body.sessionId,
+                            dwellSeconds: timeOnPageSeconds,
+                            scrollDepth: scrollDepth,
+                        },
+                    };
+                    await recordEvent(prospectLead.id, engagementEvent);
+                } catch (error) {
+                    console.error('Failed to record engagement event:', error);
+                }
             }
 
             return NextResponse.json({ success: true });

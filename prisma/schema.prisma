@@ -338,6 +338,7 @@ model Tenant {
   outreachDomainDailyStats OutreachDomainDailyStat[]
   outreachEmails         OutreachEmail[]
   outreachEmailEvents    OutreachEmailEvent[]
+  pipelineConfig         PipelineConfig?
 
   @@index([domain])
   @@index([isActive])
@@ -523,12 +524,20 @@ model ProspectLead {
   scorecardLastViewedAt    DateTime?
   scorecardTotalViewSeconds Int              @default(0)
 
+  // Pipeline orchestrator fields
+  pipelineStatus  String  @default("discovered")
+  auditId         String?
+  proposalId      String?
+  engagementScore Int     @default(0)
+  lastEngagementAt DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  enrichmentRuns ProspectEnrichmentRun[]
-  outreachEmails OutreachEmail[]
-  outreachEvents OutreachEmailEvent[]
+  enrichmentRuns       ProspectEnrichmentRun[]
+  outreachEmails       OutreachEmail[]
+  outreachEvents       OutreachEmailEvent[]
+  stateTransitions     ProspectStateTransition[]
 
   @@unique([tenantId, source, sourceExternalId])
   @@index([tenantId, status])
@@ -537,6 +546,8 @@ model ProspectLead {
   @@index([discoveryJobId])
   @@index([createdAt])
   @@index([tenantId, outreachStage, outreachNextActionAt])
+  @@index([pipelineStatus])
+  @@index([engagementScore])
 }
 
 model ProspectEnrichmentRun {
@@ -760,6 +771,261 @@ model VerificationToken {
   expires    DateTime
 
   @@unique([identifier, token])
+}
+
+// Prospect state transition history
+model ProspectStateTransition {
+  id         String   @id @default(uuid())
+  tenantId   String
+  leadId     String
+  fromStatus String
+  toStatus   String
+  stage      String   // Pipeline stage that triggered the transition
+  metadata   Json     @default("{}")
+  createdAt  DateTime @default(now())
+
+  lead ProspectLead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@index([leadId, createdAt])
+  @@index([tenantId, createdAt])
+}
+
+// Delivery tasks for fulfilled proposals
+model DeliveryTask {
+  id         String @id @default(uuid())
+  tenantId   String
+  proposalId String
+  findingId  String
+  agentType  String // 'speed_optimization', 'seo_fix', 'accessibility', 'security_hardening', 'content_generation'
+  status     String @default("queued") // 'queued', 'in_progress', 'completed', 'verified', 'failed', 'escalated'
+
+  estimatedCompletionDate DateTime
+  completedAt             DateTime?
+  verificationAuditId     String?
+  beforeAfterComparison   Json?
+  errorMessage            String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tenantId, status])
+  @@index([proposalId])
+  @@index([estimatedCompletionDate])
+}
+
+// Pipeline stage configuration per tenant
+model PipelineConfig {
+  id       String @id @default(uuid())
+  tenantId String @unique
+
+  concurrencyLimit    Int     @default(10)
+  batchSize           Int     @default(50)
+  painScoreThreshold  Int     @default(60)
+  dailyVolumeLimit    Int     @default(200)
+  spendingLimitCents  Int     @default(100000) // $1000 default
+  hotLeadPercentile   Int     @default(95)
+  emailMinQualityScore Int    @default(90)
+  maxEmailsPerDomainPerDay Int @default(50)
+
+  // Follow-up schedule (days after initial send)
+  followUpSchedule Json @default("[3, 7, 14]")
+
+  // Stage-level pause flags
+  pausedStages Json @default("[]")
+
+  // Country/language config
+  country  String @default("US")
+  language String @default("en")
+  currency String @default("USD")
+
+  // Pricing multiplier
+  pricingMultiplier Float @default(1.0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+}
+
+// Pipeline error log for observability
+model PipelineErrorLog {
+  id         String   @id @default(uuid())
+  tenantId   String
+  stage      String
+  prospectId String?
+  errorType  String
+  errorMessage String @db.Text
+  stackTrace String?  @db.Text
+  metadata   Json     @default("{}")
+  createdAt  DateTime @default(now())
+
+  @@index([tenantId, stage, createdAt])
+  @@index([createdAt])
+}
+
+// Outreach template performance tracking
+model OutreachTemplatePerformance {
+  id         String @id @default(uuid())
+  templateId String
+  vertical   String
+  city       String?
+
+  totalSent      Int   @default(0)
+  openCount      Int   @default(0)
+  clickCount     Int   @default(0)
+  replyCount     Int   @default(0)
+  conversionCount Int  @default(0)
+
+  openRate       Float @default(0)
+  clickRate      Float @default(0)
+  replyRate      Float @default(0)
+  conversionRate Float @default(0)
+
+  updatedAt DateTime @updatedAt
+
+  @@unique([templateId, vertical, city])
+  @@index([vertical])
+}
+
+// Win/loss tracking with reason codes
+model WinLossRecord {
+  id         String @id @default(uuid())
+  tenantId   String
+  proposalId String
+  leadId     String
+  vertical   String
+  city       String?
+
+  outcome           String  // 'won', 'lost', 'ghosted'
+  tierChosen        String?
+  dealValue         Decimal? @db.Decimal(10, 2)
+  lostReason        String?
+  objectionsRaised  Json    @default("[]")
+  competitorMentioned String?
+
+  createdAt DateTime @default(now())
+
+  @@index([tenantId, vertical, outcome])
+  @@index([createdAt])
+}
+
+// Pre-warming actions for multi-channel engagement
+model PreWarmingAction {
+  id       String @id @default(uuid())
+  tenantId String
+  leadId   String
+
+  platform   String // 'gbp', 'facebook', 'instagram'
+  actionType String // 'question', 'like', 'comment', 'follow', 'post_interaction'
+  status     String @default("scheduled") // 'scheduled', 'completed', 'failed', 'skipped'
+
+  scheduledAt DateTime
+  executedAt  DateTime?
+  errorMessage String?
+
+  createdAt DateTime @default(now())
+
+  @@index([tenantId, platform, scheduledAt])
+  @@index([leadId])
+}
+
+// Detected signals for signal-based selling
+model DetectedSignal {
+  id       String @id @default(uuid())
+  tenantId String
+  leadId   String?
+
+  signalType String // 'bad_review', 'website_change', 'competitor_upgrade', 'new_business_license', 'hiring_spike'
+  priority   String @default("medium") // 'high', 'medium', 'low'
+  sourceData Json   @default("{}")
+
+  outreachTriggered Boolean @default(false)
+  outreachEmailId   String?
+
+  detectedAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+
+  @@unique([tenantId, leadId, signalType, detectedAt])
+  @@index([tenantId, signalType, detectedAt])
+  @@index([leadId])
+}
+
+// AI Sales Chat conversations
+model ChatConversation {
+  id         String @id @default(uuid())
+  tenantId   String
+  proposalId String
+  sessionId  String
+
+  messages Json    @default("[]") // Array of ChatMessage
+  outcome  String? // 'converted', 'escalated', 'abandoned'
+  objections Json  @default("[]") // Array of objection strings
+
+  startedAt   DateTime  @default(now())
+  completedAt DateTime?
+
+  @@index([tenantId, proposalId])
+  @@index([sessionId])
+}
+
+// Agency partner accounts
+model AgencyPartner {
+  id       String @id @default(uuid())
+
+  name     String
+  contactEmail String
+  contactName  String?
+
+  verticals   Json @default("[]")   // Array of target verticals
+  geographies Json @default("[]")   // Array of target geographies
+  monthlyVolume Int @default(50)
+
+  pricingModel     String  // 'per_lead', 'subscription'
+  perLeadPriceCents Int?
+  subscriptionPriceCents Int?
+
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  deliveredLeads PartnerDeliveredLead[]
+
+  @@index([isActive])
+}
+
+// Leads delivered to agency partners
+model PartnerDeliveredLead {
+  id        String @id @default(uuid())
+  partnerId String
+  leadId    String
+
+  packagedData Json // Full lead package (audit, proposal, pain score, contact)
+  status       String @default("delivered") // 'delivered', 'viewed', 'contacted', 'converted', 'rejected'
+
+  deliveredAt DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  partner AgencyPartner @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+
+  @@index([partnerId, status])
+  @@index([leadId])
+}
+
+// Cross-tenant anonymized intelligence model
+model SharedIntelligenceModel {
+  id      String @id @default(uuid())
+  version String @unique
+
+  patterns Json // Array of AnonymizedPattern
+  metadata Json @default("{}")
+
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  @@index([version])
+  @@index([isActive])
 }
 
 enum AuditStatus {
