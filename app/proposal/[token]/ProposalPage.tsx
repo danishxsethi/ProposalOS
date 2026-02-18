@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useProposalViewTracking } from './ProposalViewTracker';
 import { ProposalShareButton } from '@/components/ProposalShareButton';
+import { ProposalChatWidget } from '@/components/chat/ProposalChatWidget';
 
 const NAVY = '#1a1a2e';
 const BLUE = '#4361ee';
@@ -631,6 +632,9 @@ export default function ProposalPage({ proposal, branding }: ProposalProps) {
             <div className="md:hidden h-20" />
 
             <ProposalShareButton proposalId={proposal.id} businessName={proposal.audit.businessName} token={proposal.webLinkToken} />
+            
+            {/* AI Sales Chat Widget */}
+            <ProposalChatWidget proposalId={proposal.id} />
         </main>
     );
 }
