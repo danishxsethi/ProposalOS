@@ -3,6 +3,7 @@ import { POST } from '../route';
 import { onboardPartner, deliverLead } from '@/lib/pipeline/partnerPortal';
 import { prisma } from '@/lib/db';
 import { NextRequest } from 'next/server';
+import { cleanupDb } from '@/lib/__tests__/utils/cleanup';
 
 describe('Partner Matching Cron', () => {
   let tenantId: string;
@@ -31,10 +32,7 @@ describe('Partner Matching Cron', () => {
   });
 
   afterEach(async () => {
-    await prisma.partnerDeliveredLead.deleteMany({});
-    await prisma.agencyPartner.deleteMany({});
-    await prisma.prospectLead.deleteMany({});
-    await prisma.tenant.deleteMany({});
+    await cleanupDb(prisma);
   });
 
   it('should require valid cron secret', async () => {
@@ -73,7 +71,9 @@ describe('Partner Matching Cron', () => {
           decisionMakerName: 'Dr. Smith',
           decisionMakerTitle: 'Owner',
           decisionMakerEmail: 'dr.smith@dental.com',
-          status: 'proposed',
+          status: 'QUALIFIED',
+          source: 'test',
+          sourceExternalId: 'test-2',
         },
       }),
       prisma.prospectLead.create({
@@ -94,10 +94,12 @@ describe('Partner Matching Cron', () => {
             competitorsOutperforming: 10,
             accessibilityViolations: 0,
           },
-          decisionMakerName: 'Bob',
+          decisionMakerName: 'John Doe',
           decisionMakerTitle: 'Owner',
-          decisionMakerEmail: 'bob@hvac.com',
-          status: 'proposed',
+          decisionMakerEmail: 'john@plumbing.com',
+          status: 'QUALIFIED',
+          source: 'test',
+          sourceExternalId: 'test-3',
         },
       }),
     ]);

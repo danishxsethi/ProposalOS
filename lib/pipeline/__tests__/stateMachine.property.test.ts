@@ -1,3 +1,4 @@
+import { cleanupDb } from '@/lib/__tests__/utils/cleanup';
 /**
  * Property-Based Tests for Prospect State Machine
  * 
@@ -31,7 +32,7 @@ import { PipelineStage } from '../types';
 const prospectStatusArb = fc.constantFrom<ProspectStatus>(
   'discovered',
   'audited',
-  'proposed',
+  'QUALIFIED',
   'outreach_sent',
   'hot_lead',
   'closing',
@@ -189,13 +190,7 @@ async function createTestProspect(
 async function cleanupTestData(prospectIds: string[]) {
   if (prospectIds.length === 0) return;
   
-  await prisma.prospectStateTransition.deleteMany({
-    where: { leadId: { in: prospectIds } },
-  });
-  
-  await prisma.prospectLead.deleteMany({
-    where: { id: { in: prospectIds } },
-  });
+    await cleanupDb(prisma);
 }
 
 /**
@@ -391,7 +386,7 @@ describe('State Machine Property Tests', () => {
 
             // Perform a sequence of transitions: discovered -> audited -> proposed
             await transition(prospectId, 'audited', PipelineStage.AUDIT);
-            await transition(prospectId, 'proposed', PipelineStage.PROPOSAL);
+            await transition(prospectId, 'QUALIFIED', PipelineStage.PROPOSAL);
 
             // Get the history
             const history = await getHistory(prospectId);
@@ -403,7 +398,7 @@ describe('State Machine Property Tests', () => {
             expect(history[0].from).toBe('discovered');
             expect(history[0].to).toBe('audited');
             expect(history[1].from).toBe('audited');
-            expect(history[1].to).toBe('proposed');
+            expect(history[1].to).toBe('QUALIFIED');
 
             // Verify timestamps are in order
             expect(history[0].timestamp.getTime()).toBeLessThanOrEqual(

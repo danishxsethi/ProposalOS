@@ -1,7 +1,7 @@
 /**
  * Unit tests for Pipeline Outreach Cron Endpoint
  * 
- * Tests the cron endpoint that processes "proposed" prospects and sends
+ * Tests the cron endpoint that processes "QUALIFIED" prospects and sends
  * outreach emails in batches.
  * 
  * Requirements: 4.1, 4.6
@@ -77,7 +77,7 @@ function createMockProspect(overrides: any = {}) {
     id: 'prospect-1',
     tenantId: 'tenant-1',
     businessName: 'Test Business',
-    pipelineStatus: 'proposed',
+    pipelineStatus: 'QUALIFIED',
     vertical: 'dentist',
     painBreakdown: {
       websiteSpeed: 18,
@@ -250,7 +250,7 @@ describe('Pipeline Outreach Cron Endpoint', () => {
   // ==========================================================================
 
   describe('No Prospects', () => {
-    it('should return success when tenant has no prospects in "proposed" status', async () => {
+    it('should return success when tenant has no prospects in "QUALIFIED" status', async () => {
       const req = createMockRequest('Bearer test-secret');
       
       const configs = [createMockConfig()];
@@ -304,7 +304,7 @@ describe('Pipeline Outreach Cron Endpoint', () => {
       });
       vi.mocked(outreach.scheduleFollowUps).mockResolvedValue(undefined);
       vi.mocked(stateMachine.transition).mockResolvedValue({
-        from: 'proposed',
+        from: 'QUALIFIED',
         to: 'outreach_sent',
         timestamp: new Date(),
         stage: PipelineStage.OUTREACH,
@@ -377,7 +377,7 @@ describe('Pipeline Outreach Cron Endpoint', () => {
       });
       vi.mocked(outreach.scheduleFollowUps).mockResolvedValue(undefined);
       vi.mocked(stateMachine.transition).mockResolvedValue({
-        from: 'proposed',
+        from: 'QUALIFIED',
         to: 'outreach_sent',
         timestamp: new Date(),
         stage: PipelineStage.OUTREACH,
@@ -599,7 +599,7 @@ describe('Pipeline Outreach Cron Endpoint', () => {
       });
       vi.mocked(outreach.scheduleFollowUps).mockResolvedValue(undefined);
       vi.mocked(stateMachine.transition).mockResolvedValue({
-        from: 'proposed',
+        from: 'QUALIFIED',
         to: 'outreach_sent',
         timestamp: new Date(),
         stage: PipelineStage.OUTREACH,

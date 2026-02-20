@@ -65,7 +65,7 @@ export async function getMetrics(
   const proposedCount = await prisma.prospectLead.count({
     where: {
       tenantId,
-      pipelineStatus: 'proposed',
+      pipelineStatus: 'QUALIFIED',
       updatedAt: { gte: start, lte: end },
     },
   });

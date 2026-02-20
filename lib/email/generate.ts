@@ -2,7 +2,7 @@
  * Cold email generation pipeline — personalized outreach from audit data.
  * Uses Gemini to generate 3 variants, scores them, rejects <70.
  */
-import { generateWithGemini } from '@/lib/llm/gemini';
+import { generateWithGemini } from '@/lib/llm/provider';
 import { getEmailTemplate } from '@/lib/email-templates';
 import { fillEmailTemplate } from '@/lib/email-templates';
 import { scoreEmail, isEmailAcceptable, type EmailScoreBreakdown } from '@/lib/email/score';

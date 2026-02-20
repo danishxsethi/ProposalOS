@@ -59,19 +59,17 @@ export async function scheduleActions(
   ];
 
   // Determine which platforms are available
-  // In a real implementation, this would check for actual social media URLs
-  // For now, we assume all platforms are available if the lead has a website or sourceUrl
-  const hasOnlinePresence = !!(lead.website || lead.sourceUrl);
+  // Determine which platforms are available by checking for their specific URLs
   const platforms: Array<{ platform: 'gbp' | 'facebook' | 'instagram'; available: boolean }> = [
-    { platform: 'gbp', available: hasOnlinePresence },
-    { platform: 'facebook', available: hasOnlinePresence },
-    { platform: 'instagram', available: hasOnlinePresence },
+    { platform: 'gbp', available: !!(lead as any).gbpUrl || !!lead.website || !!lead.sourceUrl },
+    { platform: 'facebook', available: !!(lead as any).facebookUrl || !!lead.website || !!lead.sourceUrl },
+    { platform: 'instagram', available: !!(lead as any).instagramUrl || !!lead.website || !!lead.sourceUrl },
   ];
 
   // Schedule actions within the pre-warming window (3-5 days before outreach)
   const windowStart = new Date(outreachDate);
   windowStart.setDate(windowStart.getDate() - config.windowDays.max);
-  
+
   const windowEnd = new Date(outreachDate);
   windowEnd.setDate(windowEnd.getDate() - config.windowDays.min);
 
@@ -88,7 +86,7 @@ export async function scheduleActions(
     for (const actionType of selectedActionTypes) {
       // Schedule action at a random time within the window
       const scheduledAt = new Date(
-        windowStart.getTime() + 
+        windowStart.getTime() +
         Math.random() * (windowEnd.getTime() - windowStart.getTime())
       );
 
@@ -142,10 +140,10 @@ export async function executeAction(action: PreWarmingAction): Promise<void> {
     // - GBP: Post a question, like a post, respond to reviews
     // - Facebook: Like page, comment on post, follow
     // - Instagram: Like post, comment, follow
-    
+
     // For now, we simulate the action execution
     console.log(`Executing ${action.actionType} on ${action.platform} for lead ${action.leadId}`);
-    
+
     // Simulate API call delay
     await new Promise(resolve => setTimeout(resolve, 100));
 
@@ -160,7 +158,7 @@ export async function executeAction(action: PreWarmingAction): Promise<void> {
   } catch (error) {
     // Log error and mark action as failed
     console.error(`Failed to execute pre-warming action ${action.id}:`, error);
-    
+
     await prisma.preWarmingAction.update({
       where: { id: action.id },
       data: {
@@ -206,7 +204,7 @@ export async function checkWindowComplete(leadId: string): Promise<boolean> {
     ...actions.map(action => action.scheduledAt.getTime())
   );
   const now = Date.now();
-  
+
   // If the latest action was scheduled more than 24 hours ago and still not complete,
   // consider the window expired
   if (now - latestScheduledAt > 24 * 60 * 60 * 1000) {
@@ -230,7 +228,7 @@ export async function getDailyActionCount(
   // Get start and end of the day
   const startOfDay = new Date(date);
   startOfDay.setHours(0, 0, 0, 0);
-  
+
   const endOfDay = new Date(date);
   endOfDay.setHours(23, 59, 59, 999);
 

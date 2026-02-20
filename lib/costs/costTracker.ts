@@ -12,6 +12,8 @@ export const COSTS = {
     GEMINI_FLASH_PER_1K_OUTPUT_CENTS: 0.03,
     GEMINI_PRO_PER_1K_INPUT_CENTS: 0.07,
     GEMINI_PRO_PER_1K_OUTPUT_CENTS: 0.21,
+    GEMINI_31_PRO_PER_1K_INPUT_CENTS: 0.125, // $1.25 / 1M = 0.125 cents / 1K
+    GEMINI_31_PRO_PER_1K_OUTPUT_CENTS: 0.50, // $5.00 / 1M = 0.50 cents / 1K
 };
 
 // User only specified input costs. I will stick to their request for input primarily
@@ -36,8 +38,9 @@ export type ApiType =
     | 'CRAWLER_COMPETITOR'
     | 'GBP_COMPETITOR'
     | 'GEMINI_ACTION_PLAN'
-    | 'GEMINI_REVIEW_RESPONSE';
-export type LlmModel = 'GEMINI_FLASH' | 'GEMINI_PRO';
+    | 'GEMINI_REVIEW_RESPONSE'
+    | 'GEMINI_31_PRO';
+export type LlmModel = 'GEMINI_FLASH' | 'GEMINI_PRO' | 'GEMINI_31_PRO';
 
 export class CostTracker {
     private totalCents: number = 0;
@@ -74,7 +77,7 @@ export class CostTracker {
     /**
      * Add cost for LLM usage
      */
-    addLlmCall(model: LlmModel, inputTokens: number, outputTokens: number = 0) {
+    addLlmCall(model: LlmModel, inputTokens: number, outputTokens: number = 0, thoughtsTokenCount: number = 0) {
         let inputCostPer1k = 0;
         let outputCostPer1k = 0;
 
@@ -86,6 +89,10 @@ export class CostTracker {
             case 'GEMINI_PRO':
                 inputCostPer1k = COSTS.GEMINI_PRO_PER_1K_INPUT_CENTS;
                 outputCostPer1k = COSTS.GEMINI_PRO_PER_1K_OUTPUT_CENTS;
+                break;
+            case 'GEMINI_31_PRO':
+                inputCostPer1k = COSTS.GEMINI_31_PRO_PER_1K_INPUT_CENTS;
+                outputCostPer1k = COSTS.GEMINI_31_PRO_PER_1K_OUTPUT_CENTS;
                 break;
         }
 
@@ -99,16 +106,28 @@ export class CostTracker {
         this.usage[key] = (this.usage[key] || 0) + 1;
         this.usage[`${key}_INPUT_TOKENS`] = (this.usage[`${key}_INPUT_TOKENS`] || 0) + inputTokens;
         this.usage[`${key}_OUTPUT_TOKENS`] = (this.usage[`${key}_OUTPUT_TOKENS`] || 0) + outputTokens;
+        if (thoughtsTokenCount > 0) {
+            this.usage[`${key}_THOUGHTS_TOKENS`] = (this.usage[`${key}_THOUGHTS_TOKENS`] || 0) + thoughtsTokenCount;
+        }
 
         logger.info({
             event: 'llm.call',
             model,
             inputTokens,
             outputTokens,
+            thoughtsTokenCount,
             inputCost_cents: inputCost,
             outputCost_cents: outputCost,
             total_cost_cents: cost
         }, 'LLM call tracked');
+
+        if (this.totalCents > 100 && !this.usage['ALERT_HUNDRED_CENTS_EMITTED']) {
+            logger.warn({
+                totalCents: this.totalCents,
+                usage: this.usage
+            }, 'HARD CAP ALERT: Single audit exceeded $1.00 hard cap threshold.');
+            this.usage['ALERT_HUNDRED_CENTS_EMITTED'] = 1;
+        }
     }
 
     /**

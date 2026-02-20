@@ -66,7 +66,7 @@ async function detectBadReviews(tenantId: string): Promise<DetectedSignal[]> {
   const prospects = await prisma.prospectLead.findMany({
     where: {
       tenantId,
-      status: { in: ['discovered', 'audited', 'proposed'] },
+      status: { in: ['discovered', 'audited', 'QUALIFIED'] },
       gbpPlaceId: { not: null },
     },
     select: {
@@ -113,7 +113,7 @@ async function detectWebsiteChanges(tenantId: string): Promise<DetectedSignal[]>
   const prospects = await prisma.prospectLead.findMany({
     where: {
       tenantId,
-      status: { in: ['discovered', 'audited', 'proposed'] },
+      status: { in: ['discovered', 'audited', 'QUALIFIED'] },
       websiteUrl: { not: null },
     },
     select: {
@@ -159,7 +159,7 @@ async function detectCompetitorUpgrades(tenantId: string): Promise<DetectedSigna
   const prospects = await prisma.prospectLead.findMany({
     where: {
       tenantId,
-      status: { in: ['discovered', 'audited', 'proposed'] },
+      status: { in: ['discovered', 'audited', 'QUALIFIED'] },
     },
     select: {
       id: true,
@@ -245,7 +245,7 @@ async function detectHiringSpikes(tenantId: string): Promise<DetectedSignal[]> {
   const prospects = await prisma.prospectLead.findMany({
     where: {
       tenantId,
-      status: { in: ['discovered', 'audited', 'proposed'] },
+      status: { in: ['discovered', 'audited', 'QUALIFIED'] },
     },
     select: {
       id: true,

@@ -2,7 +2,8 @@
  * Follow-up email generator — 3-email sequence after in-person meeting.
  * For Saskatoon door-to-door: business owner gave consent, CASL compliant.
  */
-import { getGeminiModel } from '@/lib/llm/gemini';
+import { generateWithGemini } from '@/lib/llm/provider';
+import { MODEL_CONFIG } from '@/lib/config/models';
 import type {
   AuditForEmail,
   ProposalForEmail,
@@ -79,11 +80,6 @@ export async function generateFollowUpSequence(
   input: FollowUpInput,
   tracker?: CostTracker
 ): Promise<FollowUpSequence> {
-  const model = getGeminiModel('gemini-2.5-flash', {
-    temperature: 0.5,
-    maxOutputTokens: 2048,
-  });
-
   const context = buildFollowUpContext(input);
   const proposalUrl = `${BASE_URL}/proposal/${input.proposal.webLinkToken}`;
 
@@ -119,14 +115,18 @@ Generate exactly 3 emails. Return valid JSON only:
 Replace [link] with: ${proposalUrl}
 Return ONLY the JSON object.`;
 
-  const result = await model.generateContent(prompt);
-  const text =
-    (result.response as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> })?.candidates?.[0]
-      ?.content?.parts?.[0]?.text ?? '';
+  const result = await generateWithGemini({
+    model: MODEL_CONFIG.flash.model,
+    input: prompt,
+    temperature: 0.5,
+    maxOutputTokens: 2048,
+    metadata: { node: 'follow_up_generator' }
+  });
+  const text = result.text || '';
 
-  if (tracker && (result as { usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number } }).usageMetadata) {
-    const usage = (result as { usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number } }).usageMetadata;
-    tracker.addLlmCall('GEMINI_FLASH', usage?.promptTokenCount ?? 0, usage?.candidatesTokenCount ?? 0);
+  if (tracker && result.usageMetadata) {
+    const usage = result.usageMetadata;
+    tracker.addLlmCall('GEMINI_FLASH', usage.promptTokenCount ?? 0, usage.candidatesTokenCount ?? 0, usage.thoughtsTokenCount ?? 0);
   }
 
   const jsonMatch = text.match(/\{[\s\S]*\}/);

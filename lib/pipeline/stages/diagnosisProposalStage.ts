@@ -4,7 +4,7 @@
  * Processes prospects in "audited" status by running the Diagnosis Engine
  * to cluster findings, then generating proposals with the Proposal Generator.
  * Assigns unique web link tokens, applies tenant pricing multiplier, and
- * transitions to "proposed" or "low_value" (if zero clusters).
+ * transitions to "QUALIFIED" or "low_value" (if zero clusters).
  *
  * Requirements: 3.1, 3.2, 3.3, 3.4, 3.5, 3.6
  */
@@ -12,12 +12,14 @@
 import { prisma } from '@/lib/prisma';
 import { transition } from '../stateMachine';
 import { logStageFailure } from '../metrics';
-import { runDiagnosisPipeline } from '@/lib/diagnosis/index';
-import { runProposalPipeline } from '@/lib/proposal/index';
+import { diagnosisGraph } from '@/lib/graph/diagnosis-graph';
+import { proposalGraph } from '@/lib/graph/proposal-graph';
 import { CostTracker } from '@/lib/costs/costTracker';
 import { detectVertical, getPlaybook } from '@/lib/playbooks/registry';
 import { PipelineStage, type StageResult } from '../types';
 import crypto from 'crypto';
+import { FEATURE_FLAGS } from '@/lib/config/feature-flags';
+import { aggregateContext } from '@/lib/context/aggregator';
 
 /**
  * Process a batch of prospects in "audited" status through the diagnosis & proposal stage.
@@ -30,7 +32,7 @@ import crypto from 'crypto';
  * 5. Creates a Proposal record with unique web link token
  * 6. Applies tenant pricing multiplier from PipelineConfig
  * 7. Links proposalId to ProspectLead
- * 8. Transitions to "proposed"
+ * 8. Transitions to "QUALIFIED"
  *
  * Individual failures do not stop the batch.
  */
@@ -97,7 +99,7 @@ export async function processOneDiagnosisProposal(prospectId: string): Promise<S
   // 1. Fetch the linked audit with findings
   const audit = await prisma.audit.findUnique({
     where: { id: prospect.auditId },
-    include: { findings: true },
+    include: { findings: true, evidence: true },
   });
 
   if (!audit) {
@@ -114,13 +116,19 @@ export async function processOneDiagnosisProposal(prospectId: string): Promise<S
   });
   const playbook = getPlaybook(vertical);
 
-  // 2. Run diagnosis pipeline
-  const diagnosisResult = await runDiagnosisPipeline(
-    audit.findings,
-    costTracker,
-    undefined,
-    playbook
-  );
+  // 2. Run diagnosis pipeline via LangGraph
+  // Build context if Single-Pass is enabled
+  let aggregatedContext;
+  if (FEATURE_FLAGS.SINGLE_PASS_DIAGNOSIS) {
+    aggregatedContext = await aggregateContext(audit as any);
+  }
+
+  const diagnosisResult = await diagnosisGraph.invoke({
+    findings: audit.findings,
+    tenantId,
+    mode: FEATURE_FLAGS.SINGLE_PASS_DIAGNOSIS ? 'SINGLE_PASS' : 'MULTI_STEP',
+    aggregatedContext
+  });
 
   const costCents = costTracker.getTotalCents();
 
@@ -143,18 +151,13 @@ export async function processOneDiagnosisProposal(prospectId: string): Promise<S
     };
   }
 
-  // 4. Run proposal pipeline
-  const proposalResult = await runProposalPipeline(
-    audit.businessName,
-    audit.businessIndustry ?? undefined,
-    diagnosisResult.clusters,
-    audit.findings,
-    costTracker,
-    undefined,
-    playbook,
-    null,
-    audit.businessCity
-  );
+  // 4. Run proposal pipeline via LangGraph
+  const proposalResult = await proposalGraph.invoke({
+    businessName: audit.businessName,
+    businessIndustry: audit.businessIndustry ?? undefined,
+    clusters: diagnosisResult.clusters,
+    findings: audit.findings,
+  });
 
   // 5. Get tenant pricing multiplier
   const pipelineConfig = await prisma.pipelineConfig.findUnique({
@@ -179,16 +182,16 @@ export async function processOneDiagnosisProposal(prospectId: string): Promise<S
       tenantId,
       status: 'DRAFT',
       executiveSummary: proposalResult.executiveSummary,
-      painClusters: JSON.parse(JSON.stringify(proposalResult.painClusters)),
+      painClusters: JSON.parse(JSON.stringify(proposalResult.clusters)),
       tierEssentials: JSON.parse(JSON.stringify(proposalResult.tiers.essentials)),
       tierGrowth: JSON.parse(JSON.stringify(proposalResult.tiers.growth)),
       tierPremium: JSON.parse(JSON.stringify(proposalResult.tiers.premium)),
       pricing: JSON.parse(JSON.stringify(adjustedPricing)),
-      assumptions: proposalResult.assumptions,
-      disclaimers: proposalResult.disclaimers,
-      nextSteps: proposalResult.nextSteps,
-      comparisonReport: proposalResult.comparisonReport
-        ? JSON.parse(JSON.stringify(proposalResult.comparisonReport))
+      assumptions: proposalResult.proposalDef.assumptions,
+      disclaimers: proposalResult.proposalDef.disclaimers,
+      nextSteps: proposalResult.proposalDef.nextSteps,
+      comparisonReport: proposalResult.proposalDef.comparisonReport
+        ? JSON.parse(JSON.stringify(proposalResult.proposalDef.comparisonReport))
         : undefined,
       webLinkToken,
     },
@@ -200,8 +203,8 @@ export async function processOneDiagnosisProposal(prospectId: string): Promise<S
     data: { proposalId: proposal.id },
   });
 
-  // 8. Transition to "proposed"
-  await transition(prospectId, 'proposed', PipelineStage.PROPOSAL);
+  // 8. Transition to "QUALIFIED"
+  await transition(prospectId, 'QUALIFIED', PipelineStage.PROPOSAL);
 
   // Record cost against tenant
   const totalCostCents = costTracker.getTotalCents();
@@ -211,7 +214,7 @@ export async function processOneDiagnosisProposal(prospectId: string): Promise<S
     success: true,
     prospectId,
     fromStatus: 'audited',
-    toStatus: 'proposed',
+    toStatus: 'QUALIFIED',
     costCents: totalCostCents,
     metadata: {
       auditId: audit.id,

@@ -32,6 +32,8 @@ export interface ScreenshotResult {
     height: number;
     device: 'desktop' | 'mobile';
     capturedAt: Date;
+    base64?: string;
+    mimeType?: string;
 }
 
 interface ScreenshotTask {
@@ -242,6 +244,8 @@ async function captureScreenshot(
             height: viewport.height,
             device: options.device || 'desktop',
             capturedAt: new Date(),
+            base64: screenshotBuffer.toString('base64'),
+            mimeType: 'image/png'
         };
 
     } catch (error) {
@@ -381,6 +385,8 @@ export async function captureComparisonScreenshot(
             height,
             device,
             capturedAt: new Date(),
+            base64: combined.toString('base64'),
+            mimeType: 'image/png'
         };
 
     } catch (error) {
@@ -451,6 +457,8 @@ export async function captureGBPScreenshot(
             height: 900,
             device: 'desktop',
             capturedAt: new Date(),
+            base64: screenshotBuffer.toString('base64'),
+            mimeType: 'image/png'
         };
 
     } catch (error) {

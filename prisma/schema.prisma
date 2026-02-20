@@ -131,6 +131,11 @@ model Proposal {
   views           ProposalView[]
   contactRequests ContactRequest[]
 
+  // Sprint 9: Conversational Closing
+  conversationState ConversationState?
+  objectionLogs     ObjectionLog[]
+  emailSequence     EmailSequence?
+
   @@index([auditId])
   @@index([webLinkToken])
   @@index([status])
@@ -309,6 +314,7 @@ model User {
 model Tenant {
   id     String  @id @default(uuid())
   name   String
+  slug   String? @unique
   domain String? @unique
 
   // Billing
@@ -538,6 +544,7 @@ model ProspectLead {
   outreachEmails       OutreachEmail[]
   outreachEvents       OutreachEmailEvent[]
   stateTransitions     ProspectStateTransition[]
+  deliveredLeads       PartnerDeliveredLead[]
 
   @@unique([tenantId, source, sourceExternalId])
   @@index([tenantId, status])
@@ -1000,6 +1007,7 @@ model PartnerDeliveredLead {
   id        String @id @default(uuid())
   partnerId String
   leadId    String
+  lead      ProspectLead @relation(fields: [leadId], references: [id], onDelete: Cascade)
 
   packagedData Json // Full lead package (audit, proposal, pain score, contact)
   status       String @default("delivered") // 'delivered', 'viewed', 'contacted', 'converted', 'rejected'
@@ -1039,6 +1047,9 @@ enum AuditStatus {
 enum FindingType {
   PAINKILLER
   VITAMIN
+  VISUAL_UX
+  VISUAL_DESIGN
+  VISUAL_COMPARISON
 }
 
 enum ProposalStatus {
@@ -1293,4 +1304,66 @@ model ReviewSnapshot {
   source  String // 'google', 'facebook', etc.
 
   @@index([auditId])
+}
+
+model FeatureFlag {
+  id        String   @id @default(uuid())
+  key       String   @unique
+  value     String
+  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+}
+
+// --- Sprint 9: Conversational Closing ---
+
+model ConversationState {
+  id              String   @id @default(uuid())
+  proposalId      String   @unique
+  sessionId       String // Generic prospect session identifier
+  history         Json     @default("[]") // Array of { role: 'user'|'agent', text: string, timestamp: string }
+  objectionsRaised String[] @default([])
+  questionsAsked  Int      @default(0)
+  sentimentScore  Float    @default(0) // -1.0 to 1.0 trajectory
+  engagementScore Int      @default(0)
+  escalated       Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  proposal        Proposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+
+  @@index([proposalId])
+  @@index([sessionId])
+}
+
+model ObjectionLog {
+  id              String   @id @default(uuid())
+  proposalId      String
+  category        String   // 'price', 'timing', 'trust', 'scope', 'competition'
+  prospectText    String   @db.Text
+  agentResponse   String   @db.Text
+  escalated       Boolean  @default(false)
+  createdAt       DateTime @default(now())
+
+  proposal        Proposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+
+  @@index([proposalId])
+  @@index([category])
+}
+
+// --- Sprint 9: Email Intelligence ---
+
+model EmailSequence {
+  id              String   @id @default(uuid())
+  proposalId      String   @unique
+  industry        String?
+  role            String?
+  sizeScope       String?
+  emails          Json     @default("[]") // Array of { step: number, subject: string, body: string, status: 'draft'|'sent' }
+  analytics       Json     @default("{}") // { openRates: {...}, clickRates: {...}, replyRates: {...} }
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  proposal        Proposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+
+  @@index([proposalId])
 }

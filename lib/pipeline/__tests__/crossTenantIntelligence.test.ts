@@ -1,3 +1,4 @@
+import { cleanupDb } from '@/lib/__tests__/utils/cleanup';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import {
   aggregatePatterns,
@@ -12,8 +13,8 @@ import { prisma } from '@/lib/db';
 
 describe('Cross-Tenant Intelligence', () => {
   afterEach(async () => {
-    await prisma.sharedIntelligenceModel.deleteMany({});
-  });
+    await cleanupDb(prisma);
+});
 
   describe('aggregatePatterns', () => {
     it('should create intelligence model from win/loss outcomes', async () => {
@@ -130,9 +131,8 @@ describe('Cross-Tenant Intelligence', () => {
     });
 
     it('should return neutral prediction when no model exists', async () => {
-      await prisma.sharedIntelligenceModel.deleteMany({});
-
-      const prospect: ProspectContext = {
+    await cleanupDb(prisma);
+const prospect: ProspectContext = {
         vertical: 'dentistry',
         painScore: 75,
         geoRegion: 'New York',

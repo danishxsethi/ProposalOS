@@ -1,3 +1,4 @@
+import { cleanupDb } from '@/lib/__tests__/utils/cleanup';
 /**
  * Unit Tests for Human Review Queue
  * 
@@ -24,29 +25,13 @@ describe('Human Review Queue', () => {
 
   beforeEach(async () => {
     // Clean up test data
-    await prisma.pipelineErrorLog.deleteMany({
-      where: { tenantId: testTenantId },
-    });
-    await prisma.prospectStateTransition.deleteMany({
-      where: { tenantId: testTenantId },
-    });
-    await prisma.prospectLead.deleteMany({
-      where: { id: { in: testProspectIds } },
-    });
-  });
+    await cleanupDb(prisma);
+});
 
   afterEach(async () => {
     // Clean up test data
-    await prisma.pipelineErrorLog.deleteMany({
-      where: { tenantId: testTenantId },
-    });
-    await prisma.prospectStateTransition.deleteMany({
-      where: { tenantId: testTenantId },
-    });
-    await prisma.prospectLead.deleteMany({
-      where: { id: { in: testProspectIds } },
-    });
-  });
+    await cleanupDb(prisma);
+});
 
   describe('Routing Logic', () => {
     it('should route prospect to review queue', async () => {
@@ -60,7 +45,7 @@ describe('Human Review Queue', () => {
           vertical: 'dental',
           source: 'google_maps',
           sourceExternalId: 'test-123',
-          pipelineStatus: 'proposed',
+          pipelineStatus: 'QUALIFIED',
           painScoreBreakdown: { websiteSpeed: 20, mobileBroken: 15 },
           engagementScore: 85,
         },

@@ -1,3 +1,4 @@
+import { cleanupDb } from '@/lib/__tests__/utils/cleanup';
 /**
  * Property-Based Tests for Signal Detector
  * 
@@ -98,16 +99,12 @@ const signalArrayWithDuplicatesArb = fc.array(detectedSignalArb, { minLength: 1,
 
 beforeEach(async () => {
   // Clean up test data before each test
-  await prisma.detectedSignal.deleteMany({});
-  await prisma.prospectLead.deleteMany({});
-  await prisma.tenant.deleteMany({});
+    await cleanupDb(prisma);
 });
 
 afterEach(async () => {
   // Clean up test data after each test
-  await prisma.detectedSignal.deleteMany({});
-  await prisma.prospectLead.deleteMany({});
-  await prisma.tenant.deleteMany({});
+    await cleanupDb(prisma);
 });
 
 // ============================================================================
