@@ -17,8 +17,8 @@ import type { ProspectStatus, StateTransition, PipelineStage } from './types';
  */
 export const VALID_TRANSITIONS: Record<ProspectStatus, ProspectStatus[]> = {
   discovered: ['audited', 'unqualified', 'audit_failed'],
-  audited: ['proposed', 'low_value'],
-  proposed: ['outreach_sent'],
+  audited: ['QUALIFIED', 'low_value'],
+  QUALIFIED: ['outreach_sent'],
   outreach_sent: ['hot_lead', 'closed_lost'],
   hot_lead: ['closing', 'closed_lost'],
   closing: ['closed_won', 'closed_lost'],
@@ -39,7 +39,7 @@ export const VALID_TRANSITIONS: Record<ProspectStatus, ProspectStatus[]> = {
  * @returns true if the transition is valid, false otherwise
  */
 export function canTransition(from: ProspectStatus, to: ProspectStatus): boolean {
-  const validNextStates = VALID_TRANSITIONS[from];
+  const validNextStates = VALID_TRANSITIONS[from] || [];
   return validNextStates.includes(to);
 }
 
@@ -80,10 +80,10 @@ export async function transition(
   if (!canTransition(from, to)) {
     const errorMessage = `Invalid transition from ${from} to ${to}`;
     const error = new Error(errorMessage);
-    
+
     // Log to PipelineErrorLog
     await logInvalidTransition(prospectId, from, to, stage, errorMessage, tenantId);
-    
+
     throw error;
   }
 
@@ -175,7 +175,7 @@ export function serializeHistory(transitions: StateTransition[]): string {
  */
 export function deserializeHistory(json: string): StateTransition[] {
   const parsed = JSON.parse(json);
-  
+
   if (!Array.isArray(parsed)) {
     throw new Error('Invalid JSON: expected array');
   }

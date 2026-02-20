@@ -1,3 +1,4 @@
+import { cleanupDb } from '@/lib/__tests__/utils/cleanup';
 /**
  * Property-Based Tests for Pipeline Orchestrator
  * 
@@ -29,7 +30,7 @@ import { PipelineStage, type ProspectStatus } from '../types';
 const prospectStatusArb = fc.constantFrom<ProspectStatus>(
   'discovered',
   'audited',
-  'proposed',
+  'QUALIFIED',
   'outreach_sent',
   'hot_lead',
   'closing',
@@ -158,23 +159,13 @@ async function createPipelineConfig(
  */
 async function cleanupTestData() {
   if (createdProspectIds.length > 0) {
-    await prisma.prospectStateTransition.deleteMany({
-      where: { leadId: { in: createdProspectIds } },
-    });
-    
-    await prisma.prospectLead.deleteMany({
-      where: { id: { in: createdProspectIds } },
-    });
-    
-    createdProspectIds.length = 0;
+    await cleanupDb(prisma);
+createdProspectIds.length = 0;
   }
   
   if (createdTenantIds.length > 0) {
-    await prisma.pipelineConfig.deleteMany({
-      where: { tenantId: { in: createdTenantIds } },
-    });
-    
-    // Delete tenants one by one to handle errors gracefully
+    await cleanupDb(prisma);
+// Delete tenants one by one to handle errors gracefully
     for (const tenantId of createdTenantIds) {
       try {
         await prisma.tenant.delete({
@@ -507,11 +498,8 @@ describe('Pipeline Orchestrator Property Tests', () => {
           fc.integer({ min: 3, max: 10 }),
           async (prospectCount) => {
             // Clean up any existing prospects for this tenant first
-            await prisma.prospectLead.deleteMany({
-              where: { tenantId: testTenantId },
-            });
-            
-            // Create pipeline config
+    await cleanupDb(prisma);
+// Create pipeline config
             await createPipelineConfig(testTenantId, {
               batchSize: prospectCount,
             });
@@ -598,11 +586,8 @@ describe('Pipeline Orchestrator Property Tests', () => {
           ).filter((dates) => dates.every((d) => !isNaN(d.getTime()))), // Filter out invalid dates
           async (dates) => {
             // Clean up any existing prospects for this tenant first
-            await prisma.prospectLead.deleteMany({
-              where: { tenantId: testTenantId },
-            });
-            
-            // Create pipeline config
+    await cleanupDb(prisma);
+// Create pipeline config
             await createPipelineConfig(testTenantId, {
               batchSize: dates.length,
             });
@@ -826,8 +811,8 @@ describe('Pipeline Orchestrator Property Tests', () => {
       const { logStageFailure } = await import('../metrics');
       
       const stage = PipelineStage.OUTREACH;
-      const prospect1 = await createTestProspect(testTenantId, 'proposed');
-      const prospect2 = await createTestProspect(testTenantId, 'proposed');
+      const prospect1 = await createTestProspect(testTenantId, 'QUALIFIED');
+      const prospect2 = await createTestProspect(testTenantId, 'QUALIFIED');
       
       // Log multiple failures
       await logStageFailure(stage, prospect1, new Error('Error 1'), testTenantId);
@@ -856,9 +841,8 @@ describe('Pipeline Orchestrator Property Tests', () => {
       }
       
       // Clean up
-      await prisma.pipelineErrorLog.deleteMany({
-        where: {
-          id: { in: recentLogs.map(l => l.id) },
+    await cleanupDb(prisma);
+},
         },
       });
     });
@@ -983,20 +967,8 @@ describe('Pipeline Orchestrator Property Tests', () => {
             expect(adminAlerts[0].errorMessage).toContain(stage);
             
             // Clean up error logs and state transitions from this test
-            await prisma.pipelineErrorLog.deleteMany({
-              where: {
-                tenantId: testTenantId,
-                stage,
-              },
-            });
-            
-            await prisma.prospectStateTransition.deleteMany({
-              where: {
-                tenantId: testTenantId,
-                stage,
-              },
-            });
-          }
+    await cleanupDb(prisma);
+}
         ),
         { numRuns: 100 }
       );
@@ -1075,20 +1047,8 @@ describe('Pipeline Orchestrator Property Tests', () => {
             expect(pausedStages).not.toContain(stage);
             
             // Clean up
-            await prisma.pipelineErrorLog.deleteMany({
-              where: {
-                tenantId: testTenantId,
-                stage,
-              },
-            });
-            
-            await prisma.prospectStateTransition.deleteMany({
-              where: {
-                tenantId: testTenantId,
-                stage,
-              },
-            });
-          }
+    await cleanupDb(prisma);
+}
         ),
         { numRuns: 100 }
       );
@@ -1134,13 +1094,13 @@ describe('Pipeline Orchestrator Property Tests', () => {
       
       // Create operations for healthy stage (5% error rate)
       for (let i = 0; i < 20; i++) {
-        const prospectId = await createTestProspect(testTenantId, 'proposed');
+        const prospectId = await createTestProspect(testTenantId, 'QUALIFIED');
         
         await prisma.prospectStateTransition.create({
           data: {
             tenantId: testTenantId,
             leadId: prospectId,
-            fromStatus: 'proposed',
+            fromStatus: 'QUALIFIED',
             toStatus: 'outreach_sent',
             stage: healthyStage,
             createdAt: new Date(now.getTime() - 30 * 60 * 1000),
@@ -1176,10 +1136,8 @@ describe('Pipeline Orchestrator Property Tests', () => {
       expect(pausedStages).not.toContain(healthyStage);
       
       // Clean up
-      await prisma.pipelineErrorLog.deleteMany({
-        where: { tenantId: testTenantId },
-      });
-    });
+    await cleanupDb(prisma);
+});
 
     it('circuit breaker uses rolling one-hour window', async () => {
       const { checkCircuitBreaker, logStageFailure } = await import('../metrics');
@@ -1203,7 +1161,7 @@ describe('Pipeline Orchestrator Property Tests', () => {
             tenantId: testTenantId,
             leadId: prospectId,
             fromStatus: 'audited',
-            toStatus: 'proposed',
+            toStatus: 'QUALIFIED',
             stage,
             createdAt: twoHoursAgo,
           },
@@ -1232,7 +1190,7 @@ describe('Pipeline Orchestrator Property Tests', () => {
             tenantId: testTenantId,
             leadId: prospectId,
             fromStatus: 'audited',
-            toStatus: 'proposed',
+            toStatus: 'QUALIFIED',
             stage,
             createdAt: thirtyMinutesAgo,
           },
@@ -1262,10 +1220,8 @@ describe('Pipeline Orchestrator Property Tests', () => {
       expect(pausedStages).not.toContain(stage);
       
       // Clean up
-      await prisma.pipelineErrorLog.deleteMany({
-        where: { tenantId: testTenantId },
-      });
-    });
+    await cleanupDb(prisma);
+});
 
     it('circuit breaker handles zero operations gracefully', async () => {
       const { checkCircuitBreaker } = await import('../metrics');

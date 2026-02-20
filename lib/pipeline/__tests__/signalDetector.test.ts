@@ -60,7 +60,7 @@ describe('Signal Detector', () => {
       expect(prisma.prospectLead.findMany).toHaveBeenCalledWith({
         where: {
           tenantId: 'tenant-1',
-          status: { in: ['discovered', 'audited', 'proposed'] },
+          status: { in: ['discovered', 'audited', 'QUALIFIED'] },
           gbpPlaceId: { not: null },
         },
         select: {
@@ -101,7 +101,7 @@ describe('Signal Detector', () => {
       expect(prisma.prospectLead.findMany).toHaveBeenCalledWith({
         where: {
           tenantId: 'tenant-1',
-          status: { in: ['discovered', 'audited', 'proposed'] },
+          status: { in: ['discovered', 'audited', 'QUALIFIED'] },
           websiteUrl: { not: null },
         },
         select: {

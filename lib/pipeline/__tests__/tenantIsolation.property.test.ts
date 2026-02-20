@@ -1,3 +1,4 @@
+import { cleanupDb } from '@/lib/__tests__/utils/cleanup';
 /**
  * Property-Based Tests for Tenant Isolation
  * 
@@ -24,23 +25,13 @@ describe('Feature: autonomous-proposal-engine - Tenant Isolation Properties', ()
 
   beforeEach(async () => {
     // Clean up test data
-    await prisma.pipelineConfig.deleteMany({
-      where: { tenantId: { in: testTenantIds } },
-    });
-    await prisma.tenantBranding.deleteMany({
-      where: { tenantId: { in: testTenantIds } },
-    });
-  });
+    await cleanupDb(prisma);
+});
 
   afterEach(async () => {
     // Clean up test data
-    await prisma.pipelineConfig.deleteMany({
-      where: { tenantId: { in: testTenantIds } },
-    });
-    await prisma.tenantBranding.deleteMany({
-      where: { tenantId: { in: testTenantIds } },
-    });
-  });
+    await cleanupDb(prisma);
+});
 
   /**
    * Property 26: Tenant data isolation

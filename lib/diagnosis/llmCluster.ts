@@ -1,9 +1,12 @@
 import { Finding, PreCluster, PainCluster } from './types';
+import { AggregatedContext } from '../context/aggregator';
 import { scoreCluster } from './validation';
 import { CostTracker } from '@/lib/costs/costTracker';
 import { traceLlmCall } from '@/lib/tracing';
 import { RunTree } from 'langsmith';
-import { getGeminiModel } from '@/lib/llm/gemini';
+import { generateWithGemini } from '@/lib/llm/provider';
+import { getThinkingBudgetForNode } from '@/lib/config/thinking-budgets';
+import { MODEL_CONFIG } from '@/lib/config/models';
 // Import A/B testing system
 import { getPromptVariant, fillTemplate } from '../experiments/promptAB';
 
@@ -18,12 +21,6 @@ export async function llmClusterFindings(
     parentTrace?: RunTree,
     playbook?: { priorityFindings?: string[]; proposalLanguage?: { urgencyHook?: string } }
 ): Promise<PainCluster[]> {
-    // Using Gemini 2.0 Flash (upgraded from spec's 1.5 Flash for better JSON output)
-    const model = getGeminiModel(process.env.CLUSTERING_MODEL || 'gemini-2.5-flash', {
-        temperature: 0,
-        maxOutputTokens: 2048,
-    });
-
     // Prepare findings for LLM
     const findingsJson = allFindings.map((f) => ({
         id: f.id,
@@ -67,9 +64,25 @@ export async function llmClusterFindings(
         }
     }, async () => {
         try {
-            const result = await model.generateContent(prompt);
-            const response = result.response as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>; usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number } };
-            const text = response.candidates?.[0]?.content?.parts?.[0]?.text || '';
+            const result = await generateWithGemini({
+                model: MODEL_CONFIG.diagnosis.model,
+                input: prompt,
+                thinkingBudget: getThinkingBudgetForNode('cluster_root_causes'),
+                temperature: 0,
+                maxOutputTokens: 2048,
+                metadata: { node: 'cluster_root_causes', auditId }
+            });
+            const text = result.text || '';
+            const usage = result.usageMetadata;
+
+            if (tracker && usage) {
+                tracker.addLlmCall(
+                    'GEMINI_31_PRO', // Or PRO baseline
+                    usage.promptTokenCount || 0,
+                    usage.candidatesTokenCount || 0,
+                    usage.thoughtsTokenCount || 0
+                );
+            }
 
             // Extract JSON from response (handle markdown code blocks if present)
             let jsonText = text.trim();
@@ -125,6 +138,102 @@ export async function llmClusterFindings(
 }
 
 /**
+ * Use Gemini 3.1 Pro (1M Context) + Thinking Budget to deduce Pain Clusters in a single massive inference pass.
+ */
+export async function llmSinglePassClustering(
+    context: AggregatedContext,
+    allFindings: Finding[],
+    tracker?: CostTracker,
+    parentTrace?: RunTree
+): Promise<PainCluster[]> {
+    const auditId = allFindings[0]?.auditId || 'unknown_audit';
+
+    const prompt = `You are a world-class digital agency strategist and conversion rate optimization expert.
+    
+Analyze the following massive audit context, which includes raw crawls, PageSpeed metrics, GBP scores, competitor rankings, and screenshots.
+
+YOUR TASK:
+Identify the 3-5 core "root causes" (Pain Clusters) that are actually causing the business to lose revenue. Do not just list findings. Synthesize them.
+A single root cause might explain poor speed, bad mobile layout, and high bounce rate: e.g., "Legacy non-responsive WordPress theme causing severe mobile friction."
+
+Return the clusters as ONLY a valid JSON object matching this schema exactly:
+{
+  "clusters": [
+    {
+      "root_cause": "1 sentence explanation of the root cause.",
+      "finding_ids": ["id-1", "id-2"]
+    }
+  ]
+}
+
+Make sure every finding ID you list actually exists in the provided context. Do NOT use markdown code blocks (\`\`\`json). Just return the JSON object.`;
+
+    return traceLlmCall({
+        name: "single_pass_clustering",
+        run_type: "chain",
+        inputs: { auditId },
+        parent: parentTrace,
+        tags: ["clustering", "gemini-3.1-pro", "single-pass"]
+    }, async () => {
+        try {
+            const result = await generateWithGemini({
+                model: MODEL_CONFIG.diagnosis.model, // We'll assume the environment feature flag overrides 3.1
+                input: [
+                    { type: 'text', data: prompt },
+                    { type: 'text', data: context.text },
+                    ...context.images
+                ],
+                thinkingBudget: getThinkingBudgetForNode('cluster_root_causes') || 16384, // Heavy reasoning assigned here
+                temperature: 0,
+                maxOutputTokens: 2048,
+                metadata: { node: 'cluster_root_causes', auditId }
+            });
+
+            const text = result.text || '';
+            const usage = result.usageMetadata;
+
+            if (tracker && usage) {
+                tracker.addLlmCall(
+                    'GEMINI_31_PRO',
+                    usage.promptTokenCount || 0,
+                    usage.candidatesTokenCount || 0,
+                    usage.thoughtsTokenCount || 0
+                );
+            }
+
+            let jsonText = text.trim();
+            if (jsonText.startsWith('```json')) jsonText = jsonText.replace(/```json\n?/, '').replace(/\n?```$/, '');
+            else if (jsonText.startsWith('```')) jsonText = jsonText.replace(/```\n?/, '').replace(/\n?```$/, '');
+
+            const parsed = JSON.parse(jsonText);
+            const rawClusters = parsed.clusters || [];
+
+            const painClusters: PainCluster[] = rawClusters.map((rc: any, idx: number) => {
+                const findingsInCluster = allFindings.filter((f) => rc.finding_ids.includes(f.id));
+                const severity = scoreCluster(findingsInCluster);
+                return {
+                    id: `cluster-${idx + 1}`,
+                    rootCause: rc.root_cause,
+                    severity,
+                    findingIds: rc.finding_ids,
+                };
+            });
+
+            return painClusters;
+        } catch (error) {
+            console.error('[LLM Single-Pass Clustering] Error:', error);
+            // Fallback gracefully to basic severity bucket if massive fail
+            return [{
+                id: 'cluster-1',
+                rootCause: 'General issues detected across the audit',
+                severity: 'medium',
+                findingIds: allFindings.map(f => f.id)
+            }];
+        }
+    });
+}
+
+/**
  * Use Gemini 1.5 Pro to generate human-readable narratives for clusters
  * @param playbook Optional vertical playbook — proposalLanguage influences narrative tone
  */
@@ -135,11 +244,6 @@ export async function generateNarratives(
     parentTrace?: RunTree,
     playbook?: { proposalLanguage?: { painPoints?: string[]; urgencyHook?: string } }
 ): Promise<PainCluster[]> {
-    const model = getGeminiModel('gemini-2.5-flash', {
-        temperature: 0.3,
-        maxOutputTokens: 512,
-    });
-
     // Get Audit ID for deterministic A/B testing
     const auditId = findings[0]?.auditId || 'unknown_audit';
 
@@ -183,15 +287,24 @@ export async function generateNarratives(
             }
         }, async () => {
             try {
-                const result = await model.generateContent(prompt);
-                const response = result.response as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>; usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number } };
-                const narrative = (response.candidates?.[0]?.content?.parts?.[0]?.text || cluster.rootCause).trim();
+                const result = await generateWithGemini({
+                    model: MODEL_CONFIG.diagnosis.model,
+                    input: prompt,
+                    thinkingBudget: getThinkingBudgetForNode('generate_narrative'),
+                    temperature: 0.3,
+                    maxOutputTokens: 512,
+                    metadata: { node: 'generate_narrative', auditId }
+                });
 
-                if (tracker && response.usageMetadata) {
+                const narrative = (result.text || cluster.rootCause).trim();
+                const usage = result.usageMetadata;
+
+                if (tracker && usage) {
                     tracker.addLlmCall(
-                        'GEMINI_PRO', // Narratives use Pro
-                        response.usageMetadata.promptTokenCount || 0,
-                        response.usageMetadata.candidatesTokenCount || 0
+                        'GEMINI_31_PRO',
+                        usage.promptTokenCount || 0,
+                        usage.candidatesTokenCount || 0,
+                        usage.thoughtsTokenCount || 0
                     );
                 }
 

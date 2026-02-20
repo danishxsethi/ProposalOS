@@ -34,6 +34,8 @@
     "@google-cloud/storage": "^7.19.0",
     "@google-cloud/vertexai": "^1.7.0",
     "@google/generative-ai": "^0.24.1",
+    "@langchain/core": "^1.1.26",
+    "@langchain/langgraph": "^1.1.5",
     "@prisma/client": "^5.20.0",
     "@sparticuz/chromium": "^143.0.4",
     "@stripe/stripe-js": "^8.7.0",

@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/db';
 import { PainScoreBreakdown } from './types';
+import { ProspectLeadStatus } from '@prisma/client';
 
 export interface PartnerConfig {
   name: string;
@@ -81,7 +82,7 @@ export async function matchLeadsToPartner(partnerId: string): Promise<PackagedLe
   // Find prospects matching partner's verticals and geographies
   const matchingProspects = await prisma.prospectLead.findMany({
     where: {
-      status: 'proposed', // Only deliver proposed prospects
+      status: ProspectLeadStatus.QUALIFIED, // Only deliver QUALIFIED prospects
       vertical: { in: partner.verticals as string[] },
       city: { in: partner.geographies as string[] },
       // Exclude already delivered leads
@@ -91,10 +92,6 @@ export async function matchLeadsToPartner(partnerId: string): Promise<PackagedLe
         },
       },
     },
-    include: {
-      audit: true,
-      proposal: true,
-    },
     take: partner.monthlyVolume,
   });
 
@@ -102,10 +99,10 @@ export async function matchLeadsToPartner(partnerId: string): Promise<PackagedLe
   const packagedLeads: PackagedLead[] = matchingProspects.map((prospect) => ({
     leadId: prospect.id,
     businessName: prospect.businessName,
-    auditSummary: prospect.audit?.summary || {},
-    proposalSummary: prospect.proposal?.summary || {},
+    auditSummary: prospect.auditSummarySnippet ? JSON.parse(prospect.auditSummarySnippet) : {},
+    proposalSummary: typeof prospect.qualificationEvidence === 'object' && prospect.qualificationEvidence ? prospect.qualificationEvidence as Record<string, unknown> : {},
     painScore: prospect.painScore || 0,
-    painBreakdown: prospect.painBreakdown as PainScoreBreakdown,
+    painBreakdown: prospect.painBreakdown as unknown as PainScoreBreakdown,
     decisionMaker: {
       name: prospect.decisionMakerName || 'Unknown',
       title: prospect.decisionMakerTitle || 'Unknown',
@@ -132,10 +129,6 @@ export async function deliverLead(partnerId: string, leadId: string): Promise<Pa
 
   const prospect = await prisma.prospectLead.findUnique({
     where: { id: leadId },
-    include: {
-      audit: true,
-      proposal: true,
-    },
   });
 
   if (!prospect) {
@@ -146,10 +139,10 @@ export async function deliverLead(partnerId: string, leadId: string): Promise<Pa
   const packagedData = {
     leadId: prospect.id,
     businessName: prospect.businessName,
-    auditSummary: prospect.audit?.summary || {},
-    proposalSummary: prospect.proposal?.summary || {},
+    auditSummary: prospect.auditSummarySnippet ? JSON.parse(prospect.auditSummarySnippet) : {},
+    proposalSummary: typeof prospect.qualificationEvidence === 'object' && prospect.qualificationEvidence ? prospect.qualificationEvidence as Record<string, unknown> : {},
     painScore: prospect.painScore || 0,
-    painBreakdown: prospect.painBreakdown,
+    painBreakdown: prospect.painBreakdown as unknown as PainScoreBreakdown,
     decisionMaker: {
       name: prospect.decisionMakerName || 'Unknown',
       title: prospect.decisionMakerTitle || 'Unknown',

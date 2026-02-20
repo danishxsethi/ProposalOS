@@ -1,3 +1,4 @@
+import { cleanupDb } from '@/lib/__tests__/utils/cleanup';
 /**
  * Unit Tests for Tenant Configuration
  * 
@@ -27,23 +28,13 @@ describe('Tenant Configuration', () => {
 
   beforeEach(async () => {
     // Clean up test data
-    await prisma.pipelineConfig.deleteMany({
-      where: { tenantId: testTenantId },
-    });
-    await prisma.tenantBranding.deleteMany({
-      where: { tenantId: testTenantId },
-    });
-  });
+    await cleanupDb(prisma);
+});
 
   afterEach(async () => {
     // Clean up test data
-    await prisma.pipelineConfig.deleteMany({
-      where: { tenantId: testTenantId },
-    });
-    await prisma.tenantBranding.deleteMany({
-      where: { tenantId: testTenantId },
-    });
-  });
+    await cleanupDb(prisma);
+});
 
   describe('Default Configuration Generation', () => {
     it('should create default configuration for new tenant', async () => {

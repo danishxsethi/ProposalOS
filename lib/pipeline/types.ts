@@ -16,7 +16,7 @@
 export type ProspectStatus =
   | 'discovered'
   | 'audited'
-  | 'proposed'
+  | 'QUALIFIED'
   | 'outreach_sent'
   | 'hot_lead'
   | 'closing'

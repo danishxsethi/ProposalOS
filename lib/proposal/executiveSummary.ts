@@ -4,7 +4,9 @@ import { CostTracker } from '@/lib/costs/costTracker';
 import { traceLlmCall } from '@/lib/tracing';
 import { RunTree } from 'langsmith';
 import { getPromptVariant, fillTemplate } from '../experiments/promptAB';
-import { getGeminiModel } from '@/lib/llm/gemini';
+import { generateWithGemini } from '@/lib/llm/provider';
+import { getThinkingBudgetForNode } from '@/lib/config/thinking-budgets';
+import { MODEL_CONFIG } from '@/lib/config/models';
 import type { VerticalPlaybook } from '@/lib/playbooks/types';
 import { hardenExecutiveSummaryForQA, QA_METRIC_PATTERN } from './executiveSummaryQa';
 
@@ -33,11 +35,6 @@ export async function generateExecutiveSummary(
         summaryRow?: string;
     } | null
 ): Promise<string> {
-    const model = getGeminiModel('gemini-2.5-flash', {
-        temperature: 0.2,
-        maxOutputTokens: 512,
-    });
-
     // Prepare cluster summaries
     const clusterSummaries = clusters.map((c) => ({
         rootCause: c.rootCause,
@@ -79,11 +76,11 @@ export async function generateExecutiveSummary(
         keyMetrics.length > 0
             ? JSON.stringify(keyMetrics, null, 2)
             : 'Key findings:\n' +
-              findings
-                  .slice(0, 5)
-                  .map((f) => `- ${f.title}${f.description ? `: ${f.description}` : ''}`)
-                  .join('\n') ||
-              'No metrics available.';
+            findings
+                .slice(0, 5)
+                .map((f) => `- ${f.title}${f.description ? `: ${f.description}` : ''}`)
+                .join('\n') ||
+            'No metrics available.';
 
     // Count painkillers vs vitamins
     const painkillers = findings.filter((f) => f.type === 'PAINKILLER').length;
@@ -144,14 +141,23 @@ export async function generateExecutiveSummary(
         }
     }, async () => {
         try {
-            const result = await model.generateContent(prompt);
-            const response = result.response as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>; usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number } };
-            let text = response.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
+            const result = await generateWithGemini({
+                model: MODEL_CONFIG.proposal.model,
+                input: prompt,
+                thinkingBudget: getThinkingBudgetForNode('draft_proposal'),
+                temperature: 0.2,
+                maxOutputTokens: 512,
+                metadata: { node: 'draft_proposal', auditId }
+            });
 
-            if (tracker && response.usageMetadata) {
-                tracker.addLlmCall('GEMINI_PRO',
-                    response.usageMetadata.promptTokenCount || 0,
-                    response.usageMetadata.candidatesTokenCount || 0
+            let text = result.text?.trim() || '';
+            const usage = result.usageMetadata;
+
+            if (tracker && usage) {
+                tracker.addLlmCall('GEMINI_31_PRO',
+                    usage.promptTokenCount || 0,
+                    usage.candidatesTokenCount || 0,
+                    usage.thoughtsTokenCount || 0
                 );
             }
 

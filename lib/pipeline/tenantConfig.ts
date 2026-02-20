@@ -87,7 +87,7 @@ export async function upsertPipelineConfig(
 
   // Prepare data for upsert
   const data: any = {};
-  
+
   if (input.concurrencyLimit !== undefined) data.concurrencyLimit = input.concurrencyLimit;
   if (input.batchSize !== undefined) data.batchSize = input.batchSize;
   if (input.painScoreThreshold !== undefined) data.painScoreThreshold = input.painScoreThreshold;
@@ -242,22 +242,22 @@ export function applyBrandingToEmail(
 
   // Replace brand name placeholder
   if (branding.brandName) {
-    branded = branded.replace(/\{\{brandName\}\}/g, branding.brandName);
+    branded = branded.replace(/\{\{brandName\}\}/g, () => branding.brandName as string);
   }
 
   // Replace contact email placeholder
   if (branding.contactEmail) {
-    branded = branded.replace(/\{\{contactEmail\}\}/g, branding.contactEmail);
+    branded = branded.replace(/\{\{contactEmail\}\}/g, () => branding.contactEmail as string);
   }
 
   // Replace contact phone placeholder
   if (branding.contactPhone) {
-    branded = branded.replace(/\{\{contactPhone\}\}/g, branding.contactPhone);
+    branded = branded.replace(/\{\{contactPhone\}\}/g, () => branding.contactPhone as string);
   }
 
   // Replace website URL placeholder
   if (branding.websiteUrl) {
-    branded = branded.replace(/\{\{websiteUrl\}\}/g, branding.websiteUrl);
+    branded = branded.replace(/\{\{websiteUrl\}\}/g, () => branding.websiteUrl as string);
   }
 
   return branded;
@@ -304,7 +304,7 @@ export async function checkSpendingLimit(tenantId: string): Promise<{
   limitCents: number;
 }> {
   const config = await getPipelineConfig(tenantId);
-  
+
   if (!config) {
     throw new Error(`Pipeline config not found for tenant ${tenantId}`);
   }
@@ -332,13 +332,13 @@ export async function checkSpendingLimit(tenantId: string): Promise<{
  */
 export async function pauseStage(tenantId: string, stage: string): Promise<PipelineConfig> {
   const config = await getPipelineConfig(tenantId);
-  
+
   if (!config) {
     throw new Error(`Pipeline config not found for tenant ${tenantId}`);
   }
 
   const pausedStages = (config.pausedStages as string[]) || [];
-  
+
   if (!pausedStages.includes(stage)) {
     pausedStages.push(stage);
   }
@@ -355,7 +355,7 @@ export async function pauseStage(tenantId: string, stage: string): Promise<Pipel
  */
 export async function resumeStage(tenantId: string, stage: string): Promise<PipelineConfig> {
   const config = await getPipelineConfig(tenantId);
-  
+
   if (!config) {
     throw new Error(`Pipeline config not found for tenant ${tenantId}`);
   }
@@ -374,7 +374,7 @@ export async function resumeStage(tenantId: string, stage: string): Promise<Pipe
  */
 export async function isStagePaused(tenantId: string, stage: string): Promise<boolean> {
   const config = await getPipelineConfig(tenantId);
-  
+
   if (!config) {
     return false;
   }

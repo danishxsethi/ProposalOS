@@ -1,3 +1,4 @@
+import { cleanupDb } from '@/lib/__tests__/utils/cleanup';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import fc from 'fast-check';
 import { onboardPartner, deliverLead, updateLeadStatus, getPartnerMetrics } from '../partnerPortal';
@@ -17,11 +18,8 @@ describe('Partner Portal - Property Tests', () => {
   });
 
   afterEach(async () => {
-    await prisma.partnerDeliveredLead.deleteMany({});
-    await prisma.agencyPartner.deleteMany({});
-    await prisma.prospectLead.deleteMany({});
-    await prisma.tenant.deleteMany({});
-  });
+    await cleanupDb(prisma);
+});
 
   /**
    * Property 38: Partner lead isolation
@@ -79,7 +77,7 @@ describe('Partner Portal - Property Tests', () => {
                   decisionMakerName: 'Owner',
                   decisionMakerTitle: 'Owner',
                   decisionMakerEmail: `owner${idx}@business.com`,
-                  status: 'proposed',
+                  status: 'QUALIFIED',
                 },
               })
             )
@@ -152,7 +150,7 @@ describe('Partner Portal - Property Tests', () => {
                   decisionMakerName: 'Owner',
                   decisionMakerTitle: 'Owner',
                   decisionMakerEmail: `owner${idx}@business.com`,
-                  status: 'proposed',
+                  status: 'QUALIFIED',
                 },
               })
             )
@@ -236,7 +234,7 @@ describe('Partner Portal - Property Tests', () => {
               decisionMakerName: prospectData.decisionMakerName,
               decisionMakerTitle: prospectData.decisionMakerTitle,
               decisionMakerEmail: prospectData.decisionMakerEmail,
-              status: 'proposed',
+              status: 'QUALIFIED',
             },
           });
 

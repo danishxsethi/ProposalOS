@@ -160,7 +160,7 @@ describe('Diagnosis & Proposal Stage', () => {
     mockProposalCreate.mockResolvedValue({ id: 'proposal-1', webLinkToken: 'test-uuid-token' });
     mockTransition.mockResolvedValue({
       from: 'audited',
-      to: 'proposed',
+      to: 'QUALIFIED',
       timestamp: new Date(),
       stage: 'proposal',
       tenantId: 'tenant-1',
@@ -171,7 +171,7 @@ describe('Diagnosis & Proposal Stage', () => {
   });
 
   describe('processOneDiagnosisProposal', () => {
-    it('transitions to "proposed" when diagnosis produces clusters', async () => {
+    it('transitions to "QUALIFIED" when diagnosis produces clusters', async () => {
       mockFindUnique.mockResolvedValue(makeProspect());
       mockAuditFindUnique.mockResolvedValue(makeAudit());
       mockRunDiagnosisPipeline.mockResolvedValue(makeDiagnosisResult(2));
@@ -180,8 +180,8 @@ describe('Diagnosis & Proposal Stage', () => {
       const result = await processOneDiagnosisProposal('prospect-1');
 
       expect(result.success).toBe(true);
-      expect(result.toStatus).toBe('proposed');
-      expect(mockTransition).toHaveBeenCalledWith('prospect-1', 'proposed', 'proposal');
+      expect(result.toStatus).toBe('QUALIFIED');
+      expect(mockTransition).toHaveBeenCalledWith('prospect-1', 'QUALIFIED', 'proposal');
     });
 
     it('transitions to "low_value" when diagnosis produces zero clusters', async () => {

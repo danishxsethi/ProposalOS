@@ -1,3 +1,4 @@
+import { cleanupDb } from '@/lib/__tests__/utils/cleanup';
 /**
  * Unit Tests for Learning Loop Extensions
  * 
@@ -66,22 +67,15 @@ async function createTestLead(tenantId: string, vertical: string, city: string):
 async function cleanupTestData() {
   // Clean up win/loss records
   if (testTenantId) {
-    await prisma.winLossRecord.deleteMany({
-      where: { tenantId: testTenantId },
-    });
-  }
+    await cleanupDb(prisma);
+}
 
   // Clean up outreach template performance
-  await prisma.outreachTemplatePerformance.deleteMany({
-    where: { templateId: { startsWith: 'unit-test-' } },
-  });
-
-  // Clean up leads
+    await cleanupDb(prisma);
+// Clean up leads
   if (testLeadIds.length > 0) {
-    await prisma.prospectLead.deleteMany({
-      where: { id: { in: testLeadIds } },
-    });
-  }
+    await cleanupDb(prisma);
+}
 
   // Clean up tenant
   if (testTenantId) {

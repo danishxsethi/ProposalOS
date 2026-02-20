@@ -335,11 +335,25 @@ export default async function PdfTemplate({ proposal, branding }: PdfTemplatePro
                             const severity = f.impactScore >= 8 ? 'CRITICAL' : f.impactScore >= 6 ? 'HIGH' : f.impactScore >= 4 ? 'MEDIUM' : 'LOW';
                             const metrics = f.metrics || {};
                             const fix = Array.isArray(f.recommendedFix) ? f.recommendedFix[0] : null;
+                            const imageEvidence = f.evidence?.filter((e: any) => e.type === 'image' && e.value) || [];
+
                             return (
                                 <div key={f.id} className="pdf-finding-card">
                                     <span className="pdf-finding-badge" style={{ backgroundColor: getSeverityColor(severity) }}>{severity}</span>
                                     <h3 className="pdf-finding-title">{f.title}</h3>
                                     {f.description && <p className="pdf-finding-desc">{f.description}</p>}
+                                    {imageEvidence.length > 0 && (
+                                        <div className="pdf-finding-screenshots" style={{ display: 'flex', gap: '8px', marginTop: '12px', marginBottom: '12px' }}>
+                                            {imageEvidence.map((img: any, i: number) => (
+                                                <img
+                                                    key={i}
+                                                    src={img.value}
+                                                    alt={img.label || 'Screenshot Evidence'}
+                                                    style={{ maxWidth: '100%', maxHeight: '400px', objectFit: 'contain', borderRadius: '4px', border: '1px solid #e5e7eb' }}
+                                                />
+                                            ))}
+                                        </div>
+                                    )}
                                     {Object.keys(metrics).length > 0 && (
                                         <p className="pdf-finding-state">
                                             <strong>Current:</strong> {JSON.stringify(metrics).replace(/[{}"]/g, '').slice(0, 80)}…

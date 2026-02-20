@@ -9,6 +9,7 @@
 
 import { prisma } from '@/lib/prisma';
 import { transition } from './stateMachine';
+import { FEATURE_FLAGS } from '@/lib/config/feature-flags';
 import {
   PipelineStage,
   type ProspectStatus,
@@ -38,14 +39,14 @@ export async function processStage(
 ): Promise<StageResult[]> {
   // Fetch tenant pipeline config
   const config = await getPipelineConfig(tenantId);
-  
+
   // Check if stage is paused
   const pausedStages = (config.pausedStages as string[]) || [];
   if (pausedStages.includes(stage)) {
     console.log(`Stage ${stage} is paused for tenant ${tenantId}`);
     return [];
   }
-  
+
   // Check tenant spending limit
   const canProceed = await checkSpendingLimit(tenantId, config.spendingLimitCents);
   if (!canProceed) {
@@ -53,23 +54,29 @@ export async function processStage(
     await pauseAllStages(tenantId);
     return [];
   }
-  
+
   // Fetch prospects for this stage (FIFO ordering by createdAt)
   const prospects = await getProspectsForStage(stage, tenantId, batchSize);
-  
+
   if (prospects.length === 0) {
     return [];
   }
-  
+
   // Process with concurrency limit using Promise pool pattern
+  let dynamicConcurrentLimit = config.concurrencyLimit;
+  if (FEATURE_FLAGS.GEMINI_31_PRO_TRAFFIC_PCT > 0) {
+    // Gemini 3.1 Pro has significantly lower quota bounds out of the box
+    dynamicConcurrentLimit = Math.min(dynamicConcurrentLimit, 5);
+  }
+
   const results = await processWithConcurrencyLimit(
     prospects,
-    config.concurrencyLimit,
+    dynamicConcurrentLimit,
     async (prospect) => {
       return await processProspect(prospect, stage, tenantId);
     }
   );
-  
+
   return results;
 }
 
@@ -87,7 +94,7 @@ export async function transitionProspect(
 ): Promise<void> {
   // Determine the stage based on the target status
   const stage = getStageForStatus(toStatus);
-  
+
   // Delegate to state machine
   await transition(prospectId, toStatus, stage);
 }
@@ -101,7 +108,7 @@ export async function transitionProspect(
 export async function getMetrics(tenantId: string): Promise<PipelineMetrics> {
   const now = new Date();
   const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-  
+
   // Count prospects by status in the last 24 hours
   const discoveredCount = await prisma.prospectLead.count({
     where: {
@@ -110,7 +117,7 @@ export async function getMetrics(tenantId: string): Promise<PipelineMetrics> {
       createdAt: { gte: oneDayAgo },
     },
   });
-  
+
   const auditedCount = await prisma.prospectLead.count({
     where: {
       tenantId,
@@ -118,15 +125,15 @@ export async function getMetrics(tenantId: string): Promise<PipelineMetrics> {
       updatedAt: { gte: oneDayAgo },
     },
   });
-  
+
   const proposedCount = await prisma.prospectLead.count({
     where: {
       tenantId,
-      pipelineStatus: 'proposed',
+      pipelineStatus: 'QUALIFIED',
       updatedAt: { gte: oneDayAgo },
     },
   });
-  
+
   // Count outreach emails sent in the last 24 hours
   const emailsSent = await prisma.outreachEmail.count({
     where: {
@@ -134,7 +141,7 @@ export async function getMetrics(tenantId: string): Promise<PipelineMetrics> {
       createdAt: { gte: oneDayAgo },
     },
   });
-  
+
   // Calculate open rate, reply rate, conversion rate
   const emailEvents = await prisma.outreachEmailEvent.groupBy({
     by: ['type'],
@@ -144,13 +151,13 @@ export async function getMetrics(tenantId: string): Promise<PipelineMetrics> {
     },
     _count: true,
   });
-  
-  const openCount = emailEvents.find(e => e.type === 'EMAIL_OPEN')?._count || 0;
-  const replyCount = emailEvents.find(e => e.type === 'REPLY_RECEIVED')?._count || 0;
-  
+
+  const openCount = emailEvents.find((e: any) => e.type === 'EMAIL_OPEN')?._count || 0;
+  const replyCount = emailEvents.find((e: any) => e.type === 'REPLY_RECEIVED')?._count || 0;
+
   const openRate = emailsSent > 0 ? openCount / emailsSent : 0;
   const replyRate = emailsSent > 0 ? replyCount / emailsSent : 0;
-  
+
   // Count conversions (closed_won)
   const conversions = await prisma.prospectLead.count({
     where: {
@@ -159,15 +166,15 @@ export async function getMetrics(tenantId: string): Promise<PipelineMetrics> {
       updatedAt: { gte: oneDayAgo },
     },
   });
-  
+
   const conversionRate = emailsSent > 0 ? conversions / emailsSent : 0;
-  
+
   // Calculate stage error rates
   const stageErrorRates = await calculateStageErrorRates(tenantId, oneDayAgo, now);
-  
+
   // Calculate total cost
   const totalCost = await calculateTotalCost(tenantId, oneDayAgo, now);
-  
+
   // Calculate human touch rate (prospects in human review queue)
   const humanTouchCount = await prisma.prospectLead.count({
     where: {
@@ -176,13 +183,13 @@ export async function getMetrics(tenantId: string): Promise<PipelineMetrics> {
       engagementScore: { gte: 95 }, // Top 5% by default
     },
   });
-  
+
   const totalProspects = await prisma.prospectLead.count({
     where: { tenantId },
   });
-  
+
   const humanTouchRate = totalProspects > 0 ? humanTouchCount / totalProspects : 0;
-  
+
   return {
     tenantId,
     period: { start: oneDayAgo, end: now },
@@ -212,16 +219,16 @@ export async function pauseStage(
   const config = await prisma.pipelineConfig.findUnique({
     where: { tenantId },
   });
-  
+
   if (!config) {
     throw new Error(`Pipeline config not found for tenant ${tenantId}`);
   }
-  
+
   const pausedStages = (config.pausedStages as string[]) || [];
-  
+
   if (!pausedStages.includes(stage)) {
     pausedStages.push(stage);
-    
+
     await prisma.pipelineConfig.update({
       where: { tenantId },
       data: { pausedStages },
@@ -242,14 +249,14 @@ export async function resumeStage(
   const config = await prisma.pipelineConfig.findUnique({
     where: { tenantId },
   });
-  
+
   if (!config) {
     throw new Error(`Pipeline config not found for tenant ${tenantId}`);
   }
-  
+
   const pausedStages = (config.pausedStages as string[]) || [];
   const filteredStages = pausedStages.filter(s => s !== stage);
-  
+
   await prisma.pipelineConfig.update({
     where: { tenantId },
     data: { pausedStages: filteredStages },
@@ -267,14 +274,14 @@ async function getPipelineConfig(tenantId: string): Promise<PipelineConfig & { p
   let config = await prisma.pipelineConfig.findUnique({
     where: { tenantId },
   });
-  
+
   if (!config) {
     // Create default config
     config = await prisma.pipelineConfig.create({
       data: { tenantId },
     });
   }
-  
+
   return {
     tenantId,
     concurrencyLimit: config.concurrencyLimit,
@@ -297,10 +304,10 @@ async function checkSpendingLimit(
   // Get current billing cycle start (first day of current month)
   const now = new Date();
   const cycleStart = new Date(now.getFullYear(), now.getMonth(), 1);
-  
+
   // Sum up all costs for this tenant in current cycle
   const totalCost = await calculateTotalCost(tenantId, cycleStart, now);
-  
+
   return totalCost < limitCents;
 }
 
@@ -320,7 +327,7 @@ async function calculateTotalCost(
     },
     _sum: { estimatedCostCents: true },
   });
-  
+
   // Sum audit costs (apiCostCents field)
   const auditCosts = await prisma.audit.aggregate({
     where: {
@@ -329,10 +336,10 @@ async function calculateTotalCost(
     },
     _sum: { apiCostCents: true },
   });
-  
+
   const prospectTotal = prospectCosts._sum.estimatedCostCents || 0;
   const auditTotal = auditCosts._sum.apiCostCents || 0;
-  
+
   return prospectTotal + auditTotal;
 }
 
@@ -341,7 +348,7 @@ async function calculateTotalCost(
  */
 async function pauseAllStages(tenantId: string): Promise<void> {
   const allStages = Object.values(PipelineStage);
-  
+
   await prisma.pipelineConfig.update({
     where: { tenantId },
     data: { pausedStages: allStages },
@@ -357,7 +364,7 @@ async function getProspectsForStage(
   batchSize: number
 ): Promise<any[]> {
   const statusForStage = getStatusForStage(stage);
-  
+
   return await prisma.prospectLead.findMany({
     where: {
       tenantId,
@@ -377,11 +384,11 @@ function getStatusForStage(stage: PipelineStage): ProspectStatus {
     [PipelineStage.AUDIT]: 'discovered',
     [PipelineStage.DIAGNOSIS]: 'audited',
     [PipelineStage.PROPOSAL]: 'audited',
-    [PipelineStage.OUTREACH]: 'proposed',
+    [PipelineStage.OUTREACH]: 'QUALIFIED',
     [PipelineStage.CLOSING]: 'outreach_sent',
     [PipelineStage.DELIVERY]: 'closed_won',
   };
-  
+
   return statusMap[stage];
 }
 
@@ -404,7 +411,7 @@ function getStageForStatus(status: ProspectStatus): PipelineStage {
     low_value: PipelineStage.DIAGNOSIS,
     closed_lost: PipelineStage.CLOSING,
   };
-  
+
   return stageMap[status];
 }
 
@@ -421,9 +428,9 @@ async function processProspect(
   // This is a placeholder implementation
   // In a real implementation, this would delegate to stage-specific handlers
   // For now, we'll just return a success result
-  
+
   const fromStatus = prospect.pipelineStatus as ProspectStatus;
-  
+
   return {
     success: true,
     prospectId: prospect.id,
@@ -450,7 +457,7 @@ async function processWithConcurrencyLimit<T, R>(
 ): Promise<R[]> {
   const results: R[] = [];
   const executing: Set<Promise<void>> = new Set();
-  
+
   for (const item of items) {
     // Create a promise for this item
     const promise = processor(item)
@@ -465,18 +472,18 @@ async function processWithConcurrencyLimit<T, R>(
         // Remove from executing set when done
         executing.delete(promise);
       });
-    
+
     executing.add(promise);
-    
+
     // If we've reached the limit, wait for one to complete
     if (executing.size >= limit) {
       await Promise.race(executing);
     }
   }
-  
+
   // Wait for all remaining promises to complete
   await Promise.all(Array.from(executing));
-  
+
   return results;
 }
 
@@ -497,7 +504,7 @@ async function calculateStageErrorRates(
     [PipelineStage.CLOSING]: 0,
     [PipelineStage.DELIVERY]: 0,
   };
-  
+
   // Get error counts by stage
   const errorCounts = await prisma.pipelineErrorLog.groupBy({
     by: ['stage'],
@@ -507,7 +514,7 @@ async function calculateStageErrorRates(
     },
     _count: true,
   });
-  
+
   // Get total operation counts by stage (from state transitions)
   const totalCounts = await prisma.prospectStateTransition.groupBy({
     by: ['stage'],
@@ -517,14 +524,14 @@ async function calculateStageErrorRates(
     },
     _count: true,
   });
-  
+
   // Calculate error rates
   for (const stage of Object.values(PipelineStage)) {
-    const errorCount = errorCounts.find(e => e.stage === stage)?._count || 0;
-    const totalCount = totalCounts.find(t => t.stage === stage)?._count || 0;
-    
+    const errorCount = errorCounts.find((e: any) => e.stage === stage)?._count || 0;
+    const totalCount = totalCounts.find((t: any) => t.stage === stage)?._count || 0;
+
     errorRates[stage] = totalCount > 0 ? errorCount / totalCount : 0;
   }
-  
+
   return errorRates;
 }

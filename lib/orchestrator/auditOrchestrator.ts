@@ -17,6 +17,7 @@ import { runSecurityModule } from '@/lib/modules/security';
 import { runAccessibilityModule } from '@/lib/modules/accessibility';
 import { runKeywordGapModule } from '@/lib/modules/keywordGap';
 import { captureScreenshots } from '@/lib/evidence/screenshotCapture';
+import { runVisionModule } from '@/lib/modules/vision';
 // import { calculateBenchmarks } from '@/lib/benchmarks/industryBenchmarks'; // TODO: Implement benchmarks
 
 interface OrchestratorInput {
@@ -160,7 +161,7 @@ export class AuditOrchestrator {
                     url: bus.get('websiteUrl')!,
                     businessName: bus.get('businessName'),
                     industry: bus.get('industry'),
-                }, tracker); 
+                }, tracker);
             }
         });
 
@@ -309,7 +310,29 @@ export class AuditOrchestrator {
                     }
                 ];
 
-                return await captureScreenshots(tasks);
+                const results = await captureScreenshots(tasks);
+
+                // Pass screenshots to the Native Vision Module (Prompt 20)
+                const visionResult = await runVisionModule({
+                    auditId,
+                    businessName: bus.get('businessName') as string,
+                    industry: bus.get('industry') as string,
+                    screenshots: results
+                }, tracker);
+
+                // We combine the raw screenshots (for Single-Pass context) with the natively generated visual findings
+                return {
+                    findings: visionResult.findings,
+                    evidenceSnapshots: [
+                        {
+                            module: 'vision',
+                            source: 'screenshot',
+                            rawResponse: { screenshots: results },
+                            collectedAt: new Date()
+                        },
+                        ...visionResult.evidenceSnapshots
+                    ]
+                };
             }
         });
 

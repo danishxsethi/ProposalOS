@@ -7,7 +7,8 @@
  * Requirements: 15.1, 15.2, 15.3, 15.4, 15.5, 15.6
  */
 
-import { getGeminiModel } from '@/lib/llm/gemini';
+import { generateWithGemini } from '@/lib/llm/provider';
+import { MODEL_CONFIG } from '@/lib/config/models';
 import { prisma } from '@/lib/prisma';
 import type {
   ChatContext,
@@ -65,7 +66,7 @@ const DEFAULT_OBJECTION_PLAYBOOK: ObjectionEntry[] = [
  */
 export async function detectIntent(
   message: string
-): Promise<{ intent: string; confidence: number }> {
+): Promise<{ intent: 'question' | 'objection' | 'purchase_intent' | 'general'; confidence: number }> {
   const lowerMessage = message.toLowerCase();
 
   // High-confidence keyword matching for purchase intent
@@ -119,8 +120,6 @@ export async function detectIntent(
 
   // Fallback to LLM classification for ambiguous cases
   try {
-    const model = getGeminiModel('gemini-2.0-flash-exp', { temperature: 0.2, maxOutputTokens: 100 });
-    
     const prompt = `Classify the intent of this message from a prospect viewing a proposal:
 
 Message: "${message}"
@@ -134,15 +133,22 @@ Intent definitions:
 - purchase_intent: Ready to move forward, asking about next steps or how to proceed
 - general: Casual conversation or unclear intent`;
 
-    const result = await model.generateContent(prompt);
-    const text = result.response.candidates?.[0]?.content?.parts?.[0]?.text || '';
-    
+    const result = await generateWithGemini({
+      model: MODEL_CONFIG.flash.model,
+      input: prompt,
+      temperature: 0.2,
+      maxOutputTokens: 100,
+      metadata: { node: 'intent_detection' }
+    });
+
+    const text = result.text || '';
+
     // Extract JSON from response
     const jsonMatch = text.match(/\{[^}]+\}/);
     if (jsonMatch) {
       const parsed = JSON.parse(jsonMatch[0]);
       return {
-        intent: parsed.intent || 'general',
+        intent: (parsed.intent as 'question' | 'objection' | 'purchase_intent' | 'general') || 'general',
         confidence: Math.max(0, Math.min(1, parsed.confidence || 0.5)),
       };
     }
@@ -218,8 +224,6 @@ export async function handleMessage(
 
   // Generate response using LLM
   try {
-    const model = getGeminiModel('gemini-2.0-flash-exp', { temperature: 0.7, maxOutputTokens: 300 });
-
     const prompt = `You are a helpful sales assistant for a digital marketing agency. A prospect is viewing their website audit proposal and has a question.
 
 CONTEXT:
@@ -240,12 +244,18 @@ INSTRUCTIONS:
 
 RESPONSE:`;
 
-    const result = await model.generateContent(prompt);
-    const responseText = result.response.candidates?.[0]?.content?.parts?.[0]?.text || 
-      'I\'m here to help! Could you rephrase your question?';
+    const result = await generateWithGemini({
+      model: MODEL_CONFIG.flash.model,
+      input: prompt,
+      temperature: 0.7,
+      maxOutputTokens: 300,
+      metadata: { node: 'chat_response' }
+    });
+
+    const responseText = result.text || 'I\'m here to help! Could you rephrase your question?';
 
     const elapsedTime = Date.now() - startTime;
-    
+
     // Log if response took longer than 5 seconds (requirement 15.2)
     if (elapsedTime > 5000) {
       console.warn(`[AI Sales Chat] Response took ${elapsedTime}ms (>5s threshold)`);
@@ -260,7 +270,7 @@ RESPONSE:`;
     };
   } catch (error) {
     console.error('[AI Sales Chat] Error generating response:', error);
-    
+
     // Fallback response
     return {
       role: 'assistant',
@@ -329,7 +339,7 @@ export async function recordOutcome(
         select: { tenantId: true },
       });
 
-      if (proposal) {
+      if (proposal && proposal.tenantId) {
         await prisma.chatConversation.create({
           data: {
             tenantId: proposal.tenantId,
@@ -396,7 +406,7 @@ function findObjectionResponse(
   playbook: ObjectionEntry[]
 ): string | null {
   const lowerMessage = message.toLowerCase();
-  
+
   // Merge default playbook with custom playbook
   const fullPlaybook = [...DEFAULT_OBJECTION_PLAYBOOK, ...playbook];
 

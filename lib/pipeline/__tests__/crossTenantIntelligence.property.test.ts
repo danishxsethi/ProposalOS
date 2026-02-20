@@ -1,3 +1,4 @@
+import { cleanupDb } from '@/lib/__tests__/utils/cleanup';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import fc from 'fast-check';
 import {
@@ -12,8 +13,8 @@ import { prisma } from '@/lib/db';
 
 describe('Cross-Tenant Intelligence - Property Tests', () => {
   afterEach(async () => {
-    await prisma.sharedIntelligenceModel.deleteMany({});
-  });
+    await cleanupDb(prisma);
+});
 
   /**
    * Property 39: Cross-tenant intelligence contains no PII

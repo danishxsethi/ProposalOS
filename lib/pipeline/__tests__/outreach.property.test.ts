@@ -1,3 +1,4 @@
+import { cleanupDb } from '@/lib/__tests__/utils/cleanup';
 /**
  * Property-Based Tests for Outreach Agent
  * 
@@ -90,21 +91,12 @@ const generatedEmailArb = fc.record({
 
 beforeEach(async () => {
   // Clean up test data before each test
-  await prisma.outreachEmailEvent.deleteMany({});
-  await prisma.outreachEmail.deleteMany({});
-  await prisma.outreachDomainDailyStat.deleteMany({});
-  await prisma.outreachSendingDomain.deleteMany({});
-  await prisma.prospectLead.deleteMany({});
+    await cleanupDb(prisma);
 });
 
 afterEach(async () => {
   // Clean up test data after each test
-  await prisma.outreachEmailEvent.deleteMany({});
-  await prisma.outreachEmail.deleteMany({});
-  await prisma.outreachDomainDailyStat.deleteMany({});
-  await prisma.outreachSendingDomain.deleteMany({});
-  await prisma.prospectLead.deleteMany({});
-  await prisma.tenant.deleteMany({});
+    await cleanupDb(prisma);
 });
 
 // ============================================================================

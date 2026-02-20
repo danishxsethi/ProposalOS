@@ -1,4 +1,6 @@
 import '@testing-library/jest-dom';
+import { loadEnvConfig } from '@next/env';
+loadEnvConfig(process.cwd());
 import { beforeAll, afterAll, afterEach } from 'vitest';
 import { setupServer } from 'msw/node';
 import { HttpResponse, http } from 'msw';

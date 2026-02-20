@@ -66,11 +66,11 @@ export async function GET(req: Request) {
       try {
         const batchSize = config.batchSize || DEFAULT_BATCH_SIZE;
 
-        // Find prospects in "proposed" status for this tenant
+        // Find prospects in "QUALIFIED" status for this tenant
         const prospects = await prisma.prospectLead.findMany({
           where: {
             tenantId: config.tenantId,
-            pipelineStatus: 'proposed',
+            pipelineStatus: 'QUALIFIED',
           },
           take: batchSize,
           orderBy: { createdAt: 'asc' },
@@ -90,7 +90,7 @@ export async function GET(req: Request) {
               event: 'cron.pipeline_outreach.no_prospects',
               tenantId: config.tenantId,
             },
-            `No prospects in "proposed" status for tenant ${config.tenantId}`
+            `No prospects in "QUALIFIED" status for tenant ${config.tenantId}`
           );
 
           results.push({

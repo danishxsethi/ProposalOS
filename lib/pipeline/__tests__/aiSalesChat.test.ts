@@ -23,7 +23,7 @@ vi.mock('@/lib/prisma', () => ({
 }));
 
 // Mock Gemini LLM
-vi.mock('@/lib/llm/gemini', () => ({
+vi.mock('@/lib/llm/provider', () => ({
   getGeminiModel: vi.fn(() => ({
     generateContent: vi.fn().mockResolvedValue({
       response: {

@@ -1,3 +1,4 @@
+import { cleanupDb } from '@/lib/__tests__/utils/cleanup';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import {
   onboardPartner,
@@ -46,6 +47,8 @@ describe('Partner Portal', () => {
         city: 'New York',
         vertical: 'dentistry',
         painScore: 75,
+        source: 'test_source',
+        sourceExternalId: 'test_external_id',
         painBreakdown: {
           websiteSpeed: 15,
           mobileBroken: 10,
@@ -59,7 +62,7 @@ describe('Partner Portal', () => {
         decisionMakerName: 'Dr. Smith',
         decisionMakerTitle: 'Owner',
         decisionMakerEmail: 'dr.smith@testdental.com',
-        status: 'proposed',
+        status: 'QUALIFIED',
       },
     });
     leadId = prospect.id;
@@ -67,10 +70,7 @@ describe('Partner Portal', () => {
 
   afterEach(async () => {
     // Cleanup
-    await prisma.partnerDeliveredLead.deleteMany({});
-    await prisma.agencyPartner.deleteMany({});
-    await prisma.prospectLead.deleteMany({});
-    await prisma.tenant.deleteMany({});
+    await cleanupDb(prisma);
   });
 
   describe('onboardPartner', () => {
@@ -209,6 +209,8 @@ describe('Partner Portal', () => {
           city: 'Los Angeles',
           vertical: 'hvac',
           painScore: 65,
+          source: 'test',
+          sourceExternalId: 'test-123',
           painBreakdown: {
             websiteSpeed: 10,
             mobileBroken: 8,
@@ -222,7 +224,7 @@ describe('Partner Portal', () => {
           decisionMakerName: 'Bob Johnson',
           decisionMakerTitle: 'Manager',
           decisionMakerEmail: 'bob@hvac.com',
-          status: 'proposed',
+          status: 'QUALIFIED',
         },
       });
 
@@ -286,6 +288,8 @@ describe('Partner Portal', () => {
           city: 'Los Angeles',
           vertical: 'hvac',
           painScore: 70,
+          source: 'test',
+          sourceExternalId: 'test-hvac-1',
           painBreakdown: {
             websiteSpeed: 12,
             mobileBroken: 10,
@@ -299,7 +303,7 @@ describe('Partner Portal', () => {
           decisionMakerName: 'Alice',
           decisionMakerTitle: 'Owner',
           decisionMakerEmail: 'alice@hvac.com',
-          status: 'proposed',
+          status: 'QUALIFIED',
         },
       });
 
@@ -312,6 +316,8 @@ describe('Partner Portal', () => {
           city: 'Chicago',
           vertical: 'dentistry',
           painScore: 75,
+          source: 'test',
+          sourceExternalId: 'test-dental-2',
           painBreakdown: {
             websiteSpeed: 15,
             mobileBroken: 10,
@@ -325,7 +331,7 @@ describe('Partner Portal', () => {
           decisionMakerName: 'Charlie',
           decisionMakerTitle: 'Owner',
           decisionMakerEmail: 'charlie@dental.com',
-          status: 'proposed',
+          status: 'QUALIFIED',
         },
       });
     });
