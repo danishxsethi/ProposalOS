@@ -61,6 +61,7 @@ model Finding {
   recommendedFix  Json         @default("[]")
   manuallyEdited  Boolean      @default(false)
   excluded        Boolean      @default(false)
+  confidenceLevel String?      // 'HIGH', 'MEDIUM', 'LOW' — set by Confidence Scorer
   createdAt       DateTime     @default(now())
 
   // Multi-Tenancy (Denormalized)
@@ -812,6 +813,11 @@ model DeliveryTask {
   beforeAfterComparison   Json?
   errorMessage            String?
 
+  // Sprint 10: Delivery Agent fields
+  artifactId      String?   // FK to GeneratedArtifact
+  bundleId        String?   // FK to DeliveryBundle
+  confidenceLevel String?   // 'HIGH', 'MEDIUM', 'LOW'
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -1366,4 +1372,95 @@ model EmailSequence {
   proposal        Proposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)
 
   @@index([proposalId])
+}
+
+// --- Sprint 10: Agentic Delivery + QA Hardening ---
+
+model GeneratedArtifact {
+  id           String   @id @default(uuid())
+  tenantId     String
+  proposalId   String
+  findingId    String
+  artifactType String   // 'json_ld', 'html_meta', 'speed_script', 'gbp_draft', 'content_brief', 'aria_fix', 'wp_plugin'
+  content      String   @db.Text
+  status       String   @default("pending") // 'pending', 'validated', 'failed_validation', 'packaged'
+  validationResults Json @default("[]")     // ValidationCheckResult[]
+  confidenceLevel   String? // 'HIGH', 'MEDIUM', 'LOW'
+  estimatedImpact   String?
+  installationInstructions String? @db.Text
+  beforePreview    String? @db.Text
+  afterPreview     String? @db.Text
+  wordpressPlugin  String? @db.Text         // .php content if applicable
+  humanReviewFlag  Boolean @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([tenantId, proposalId])
+  @@index([findingId])
+  @@index([status])
+}
+
+model DeliveryBundle {
+  id           String   @id @default(uuid())
+  tenantId     String
+  proposalId   String   @unique
+  zipUrl       String?  // GCS URL
+  readmeContent String? @db.Text
+  artifactCount Int     @default(0)
+  status       String   @default("assembling") // 'assembling', 'ready', 'failed'
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([tenantId])
+  @@index([proposalId])
+}
+
+model AdversarialQARun {
+  id           String   @id @default(uuid())
+  tenantId     String
+  auditId      String?
+  proposalId   String?
+  runType      String   // 'diagnosis', 'proposal'
+  hallucinationFlags Json @default("[]")
+  consistencyFlags   Json @default("[]")
+  competitorFlags    Json @default("[]")
+  totalClaimsChecked Int  @default(0)
+  totalFlagged       Int  @default(0)
+  hardenedContent    String? @db.Text
+  createdAt    DateTime @default(now())
+
+  @@index([tenantId, auditId])
+  @@index([proposalId])
+  @@index([createdAt])
+}
+
+model HallucinationLog {
+  id           String   @id @default(uuid())
+  tenantId     String
+  auditId      String?
+  proposalId   String?
+  category     String   // 'data_fabrication', 'metric_inflation', 'false_competitor_claim', 'unsupported_recommendation'
+  flaggedText  String   @db.Text
+  location     String
+  weekStart    DateTime // Truncated to Monday for weekly aggregation
+  createdAt    DateTime @default(now())
+
+  @@index([tenantId, weekStart])
+  @@index([auditId])
+  @@index([category])
+}
+
+model HumanReviewFlag {
+  id           String   @id @default(uuid())
+  tenantId     String
+  artifactId   String
+  findingId    String
+  reason       String   @db.Text
+  status       String   @default("pending") // 'pending', 'approved', 'rejected'
+  reviewedBy   String?
+  reviewedAt   DateTime?
+  createdAt    DateTime @default(now())
+
+  @@index([tenantId, status])
+  @@index([artifactId])
 }

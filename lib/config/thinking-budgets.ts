@@ -19,6 +19,13 @@ export const THINKING_BUDGETS: Record<string, number> = {
     draft_proposal: 8192, // Complex multi-section document
     generate_roi_model: 4096, // Financial reasoning
     validate_claims: 4096, // Fact-checking requires deliberate reasoning
+
+    // Sprint 10: Delivery Agent & Adversarial QA
+    generate_artifact: 16384, // Complex code generation
+    adversarial_qa: 8192, // Deliberate fact-checking
+    hallucination_sweep: 8192, // Hallucination detection
+    consistency_check: 8192, // Consistency verification
+    competitor_fairness: 8192, // Competitor claim verification
 };
 
 /**
