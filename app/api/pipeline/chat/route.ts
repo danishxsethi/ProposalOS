@@ -43,13 +43,8 @@ export async function POST(request: NextRequest) {
           include: {
             findings: {
               take: 10, // Top 10 findings for context
-              orderBy: { severity: 'desc' },
+              orderBy: { impactScore: 'desc' },
             },
-          },
-        },
-        tenant: {
-          include: {
-            branding: true,
           },
         },
       },
@@ -84,7 +79,7 @@ export async function POST(request: NextRequest) {
       proposalTiers,
       industryBenchmarks,
       objectionPlaybook: [], // Use default playbook from aiSalesChat
-      tenantBranding: proposal.tenant.branding || {
+      tenantBranding: {
         name: 'Our Team',
         brandName: 'Our Team',
       },
@@ -103,7 +98,7 @@ export async function POST(request: NextRequest) {
     const response = await handleMessage(context, history, message);
 
     // Store conversation in database
-    await storeConversation(proposalId, sessionId, fullHistory, response, proposal.tenantId);
+    await storeConversation(proposalId, sessionId, fullHistory, response, proposal.audit.tenantId);
 
     // Return response
     return NextResponse.json({

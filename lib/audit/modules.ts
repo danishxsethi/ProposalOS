@@ -8,10 +8,6 @@ export const CANONICAL_MODULES = [
     'competitor',
     'reputation',
     'social',
-    'schemaMarkup',
-    'accessibility',
-    'security',
-    'conversion',
 ] as const;
 
 export type CanonicalModuleId = (typeof CANONICAL_MODULES)[number];

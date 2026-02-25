@@ -90,7 +90,7 @@ export async function runMobileUXModule(
                 title: 'Mobile Analysis Unavailable',
                 description: 'Unable to complete mobile UX analysis. This may indicate browser issues or network problems.',
                 impactScore: 1,
-                confidenceScore: 50,
+                confidenceScore: normalizeConfidence(50, '0-100'),
                 evidence: [],
                 metrics: {},
                 effortEstimate: 'LOW',
@@ -400,7 +400,7 @@ function generateMobileFindings(
             title: 'No Mobile Viewport Meta Tag',
             description: 'Website is missing the mobile viewport meta tag. This causes broken layouts on mobile devices. Over 60% of traffic is mobile.',
             impactScore: 9,
-            confidenceScore: 100,
+            confidenceScore: normalizeConfidence(100, '0-100'),
             evidence: [{
                 type: 'text',
                 value: 'Meta tag missing: <meta name="viewport" content="width=device-width, initial-scale=1">',
@@ -426,7 +426,7 @@ function generateMobileFindings(
             title: 'Mobile Layout Broken (Horizontal Scrolling)',
             description: 'Content overflows horizontally on mobile, requiring side-scrolling. This is a critical mobile UX failure that frustrates users.',
             impactScore: 9,
-            confidenceScore: 100,
+            confidenceScore: normalizeConfidence(100, '0-100'),
             evidence: [{
                 type: 'text',
                 value: 'Content width exceeds viewport width',
@@ -453,7 +453,7 @@ function generateMobileFindings(
             title: 'Critical Mobile Performance Issues',
             description: `Mobile performance score is ${analysis.mobilePerformanceScore}/100. Slow mobile sites lose 53% of visitors within 3 seconds.`,
             impactScore: 8,
-            confidenceScore: 95,
+            confidenceScore: normalizeConfidence(95, '0-100'),
             evidence: [{
                 type: 'metric',
                 value: analysis.mobilePerformanceScore,
@@ -483,7 +483,7 @@ function generateMobileFindings(
             title: 'Phone Number Not Tap-to-Call on Mobile',
             description: '60% of site traffic is mobile. Make it easy for mobile users to call you with one tap by wrapping phone numbers in tel: links.',
             impactScore: 7,
-            confidenceScore: 95,
+            confidenceScore: normalizeConfidence(95, '0-100'),
             evidence: [{
                 type: 'text',
                 value: 'No tel: links detected',
@@ -509,7 +509,7 @@ function generateMobileFindings(
             title: 'Multiple Touch Target Violations',
             description: `Found ${analysis.touchTargetViolations.length} touch target issues. Buttons and links should be at least 44x44px with 8px spacing for easy tapping.`,
             impactScore: 6,
-            confidenceScore: 90,
+            confidenceScore: normalizeConfidence(90, '0-100'),
             evidence: analysis.touchTargetViolations.slice(0, 5).map(v => ({
                 type: 'text',
                 value: `${v.element}: ${v.width}x${v.height}px - ${v.issue}`,
@@ -539,7 +539,7 @@ function generateMobileFindings(
             title: 'Mobile Performance Much Worse Than Desktop',
             description: `Mobile score (${analysis.mobilePerformanceScore}) is ${analysis.desktopPerformanceScore - analysis.mobilePerformanceScore} points lower than desktop (${analysis.desktopPerformanceScore}). Mobile users get a significantly worse experience.`,
             impactScore: 5,
-            confidenceScore: 95,
+            confidenceScore: normalizeConfidence(95, '0-100'),
             evidence: [{
                 type: 'metric',
                 value: `Mobile: ${analysis.mobilePerformanceScore}, Desktop: ${analysis.desktopPerformanceScore}`,
@@ -568,7 +568,7 @@ function generateMobileFindings(
             title: 'No Sticky Mobile CTA Bar',
             description: 'Mobile sites with sticky bottom CTAs ("Call Now", "Book") see 15-25% higher conversion rates. Make it easy for users to take action.',
             impactScore: 4,
-            confidenceScore: 85,
+            confidenceScore: normalizeConfidence(85, '0-100'),
             evidence: [{
                 type: 'text',
                 value: 'No sticky bottom CTA detected',
@@ -595,7 +595,7 @@ function generateMobileFindings(
             title: 'No Directions Link to Google Maps',
             description: 'Mobile users often look for directions. Adding a "Get Directions" link increases foot traffic for local businesses.',
             impactScore: 4,
-            confidenceScore: 90,
+            confidenceScore: normalizeConfidence(90, '0-100'),
             evidence: [{
                 type: 'text',
                 value: 'No Google Maps or Apple Maps links found',
@@ -622,7 +622,7 @@ function generateMobileFindings(
             title: 'Text Too Small on Mobile',
             description: `Found ${analysis.smallTextCount} elements with text smaller than 12px on mobile. This hurts readability and accessibility.`,
             impactScore: 3,
-            confidenceScore: 90,
+            confidenceScore: normalizeConfidence(90, '0-100'),
             evidence: [{
                 type: 'metric',
                 value: analysis.smallTextCount,

@@ -88,8 +88,40 @@ export async function runProposalPipeline(
     const tierMapping = mapToTiers(clusters, normalizedFindings);
     console.log(`[ProposalPipeline] Mapped findings to tiers`);
 
+    // Helper: Determine business size from findings
+    // We look for review count metrics, usually in reputation findings
+    let detectedBusinessSize: 'small' | 'medium' | 'large' | 'unknown' = 'unknown';
+    let maxReviewCount = 0;
+
+    for (const f of normalizedFindings) {
+        if (f.metrics && typeof f.metrics === 'object' && !Array.isArray(f.metrics) && 'reviewCount' in f.metrics) {
+            maxReviewCount = Math.max(maxReviewCount, Number((f.metrics as any).reviewCount));
+        }
+    }
+
+    // Fallback comparison report check if metrics missing from findings directly
+    if (comparisonReport && comparisonReport.prospect && typeof comparisonReport.prospect === 'object' && 'reviewCount' in comparisonReport.prospect) {
+        maxReviewCount = Math.max(maxReviewCount, Number(comparisonReport.prospect.reviewCount) || 0);
+    }
+
+    if (maxReviewCount > 0) {
+        if (maxReviewCount < 50) {
+            detectedBusinessSize = 'small';
+        } else if (maxReviewCount <= 200) {
+            detectedBusinessSize = 'medium';
+        } else {
+            detectedBusinessSize = 'large';
+        }
+    }
+    console.log(`[ProposalPipeline] Detected business size: ${detectedBusinessSize} (Max reviews: ${maxReviewCount})`);
+
     // Step 2: Get pricing (apply playbook multiplier if present)
-    const industryPricing = getPricing(businessIndustry);
+    const industryPricing = getPricing({
+        industry: businessIndustry || null,
+        businessSize: detectedBusinessSize as any,
+        location: city || undefined
+    } as any);
+
     const multiplier = playbook?.pricingMultiplier ?? 1.0;
     const pricing = {
         essentials: Math.round(industryPricing.essentials * multiplier),

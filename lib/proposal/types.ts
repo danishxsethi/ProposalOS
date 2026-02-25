@@ -26,6 +26,12 @@ export interface TierConfig {
             assumptions: string[];
         };
     };
+    visualEvidence?: {
+        screenshotUrl: string;
+        annotationText: string;
+        findingRef: string;
+        severity: number;
+    }[];
 }
 
 export interface ProposalPricing {

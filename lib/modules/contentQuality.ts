@@ -108,7 +108,7 @@ export async function runContentQualityModule(
                 title: 'Content Analysis Unavailable',
                 description: 'Unable to complete content quality analysis. This may indicate API issues or missing page content.',
                 impactScore: 1,
-                confidenceScore: 50,
+                confidenceScore: normalizeConfidence(50, '0-100'),
                 evidence: [],
                 metrics: {},
                 effortEstimate: 'LOW',
@@ -302,7 +302,7 @@ function generateContentFindings(
             title: 'Unclear Value Proposition',
             description: `Homepage fails to clearly communicate what the business does within 5 seconds (clarity score: ${homepageAnalysis.clarity}/10). Confused visitors leave immediately.`,
             impactScore: 8,
-            confidenceScore: 90,
+            confidenceScore: normalizeConfidence(90, '0-100'),
             evidence: [{
                 type: 'text',
                 value: `AI-detected value prop: "${analysis.primaryValueProp}"`,
@@ -333,7 +333,7 @@ function generateContentFindings(
             title: 'Homepage Content Too Thin',
             description: `Homepage has only ${homepage.text.split(/\s+/).length} words. Thin content provides no value to visitors and hurts SEO rankings.`,
             impactScore: 7,
-            confidenceScore: 100,
+            confidenceScore: normalizeConfidence(100, '0-100'),
             evidence: [{
                 type: 'metric',
                 value: homepage.text.split(/\s+/).length,
@@ -360,7 +360,7 @@ function generateContentFindings(
             title: 'No Local Relevance on Homepage',
             description: `Homepage barely mentions ${input.city} or local service area (local relevance score: ${homepageAnalysis.localRelevance}/10). Critical for local SEO and building trust.`,
             impactScore: 7,
-            confidenceScore: 90,
+            confidenceScore: normalizeConfidence(90, '0-100'),
             evidence: [{
                 type: 'metric',
                 value: homepageAnalysis.localRelevance,
@@ -388,7 +388,7 @@ function generateContentFindings(
             title: 'Content Too Complex for General Audience',
             description: `Reading level is grade ${analysis.readabilityMetrics.fleschKincaidGrade} (college level). Local business content should be grade 6-8 for maximum accessibility.`,
             impactScore: 5,
-            confidenceScore: 95,
+            confidenceScore: normalizeConfidence(95, '0-100'),
             evidence: [{
                 type: 'metric',
                 value: analysis.readabilityMetrics.fleschKincaidGrade,
@@ -429,7 +429,7 @@ function generateContentFindings(
             title: 'Services Not Clearly Listed',
             description: 'Website lacks a dedicated services page or does not clearly list all services offered. Customers can\'t find what they need.',
             impactScore: 6,
-            confidenceScore: 85,
+            confidenceScore: normalizeConfidence(85, '0-100'),
             evidence: analysis.contentGaps.filter(g => g.toLowerCase().includes('service')).slice(0, 2).map(gap => ({
                 type: 'text',
                 value: gap,
@@ -461,7 +461,7 @@ function generateContentFindings(
             title: 'No About or Team Page',
             description: 'Website lacks an About page. Customers want to know who they\'re working with — this builds trust and credibility.',
             impactScore: 4,
-            confidenceScore: 90,
+            confidenceScore: normalizeConfidence(90, '0-100'),
             evidence: [{
                 type: 'text',
                 value: 'No About/Team page detected',
@@ -491,7 +491,7 @@ function generateContentFindings(
             title: 'Missing Credentials and Trust Signals',
             description: `Content lacks trust-building elements (average trust score: ${Math.round(avgTrustScore)}/10). No mention of licenses, certifications, experience, or guarantees.`,
             impactScore: 5,
-            confidenceScore: 85,
+            confidenceScore: normalizeConfidence(85, '0-100'),
             evidence: [{
                 type: 'metric',
                 value: Math.round(avgTrustScore),
@@ -521,7 +521,7 @@ function generateContentFindings(
             title: 'Critical Content Gaps Detected',
             description: `AI identified ${analysis.contentGaps.length} important content gaps. Customers can't find key information they need to make a decision.`,
             impactScore: analysis.contentGaps.length > 3 ? 6 : 4,
-            confidenceScore: 85,
+            confidenceScore: normalizeConfidence(85, '0-100'),
             evidence: topGaps.map(gap => ({
                 type: 'text',
                 value: gap,

@@ -7,10 +7,10 @@ import { withAuth } from '@/lib/middleware/auth';
 
 export const GET = withAuth(async (
     req: Request,
-    { params }: { params: { id: string } }
+    { params }: { params: Promise<{ id: string }> }
 ) => {
     try {
-        const id = params.id;
+        const { id } = await params;
         const tenantId = await getTenantId();
 
         if (!tenantId) {

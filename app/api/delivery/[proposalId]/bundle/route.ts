@@ -5,16 +5,17 @@ import { auth } from '@/lib/auth';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { proposalId: string } }
+  { params }: { params: Promise<{ proposalId: string }> }
 ) {
   try {
+    const { proposalId } = await params;
     const session = await auth();
     if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const proposal = await prisma.proposal.findUnique({
-      where: { id: params.proposalId },
+      where: { id: proposalId },
       include: { audit: true },
     });
 
@@ -23,7 +24,7 @@ export async function GET(
     }
 
     const bundle = await prisma.deliveryBundle.findUnique({
-      where: { proposalId: params.proposalId },
+      where: { proposalId: proposalId },
     });
 
     return NextResponse.json({
@@ -40,16 +41,17 @@ export async function GET(
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { proposalId: string } }
+  { params }: { params: Promise<{ proposalId: string }> }
 ) {
   try {
+    const { proposalId } = await params;
     const session = await auth();
     if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const proposal = await prisma.proposal.findUnique({
-      where: { id: params.proposalId },
+      where: { id: proposalId },
       include: {
         audit: {
           include: {
@@ -81,7 +83,7 @@ export async function POST(
         rejectionRate: 0,
       },
       tenantId: proposal.audit.tenantId,
-      proposalId: params.proposalId,
+      proposalId: proposalId,
     });
 
     return NextResponse.json({

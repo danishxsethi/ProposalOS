@@ -118,7 +118,7 @@ export class LocaleConfigManager {
         'SELECT locale FROM locale_configs ORDER BY locale'
       );
 
-      const locales = result.rows.map((row) => row.locale);
+      const locales = result.rows.map((row: any) => row.locale);
       this.supportedLocalesCache = locales;
 
       return [...locales];

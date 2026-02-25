@@ -6,6 +6,8 @@
 import { Browser } from 'puppeteer-core';
 import puppeteer from 'puppeteer-core';
 import chromium from '@sparticuz/chromium';
+// @ts-ignore
+import rs from 'text-readability';
 import { LegacyAuditModuleResult } from './types';
 import type { CostTracker } from '@/lib/costs/costTracker';
 import { logger } from '@/lib/logger';
@@ -23,6 +25,11 @@ export interface ConversionResult {
             emailCapture: { present: boolean; type: string | null };
             socialProof: { testimonials: boolean; reviews: boolean; trustBadges: boolean };
             maps: { present: boolean; provider: string | null };
+        };
+        content?: {
+            readabilityScore: number;
+            gradeLevel: number;
+            keywords: Array<{ word: string; count: number; density: number }>;
         };
         missing: string[];
         recommendations: string[];
@@ -49,6 +56,7 @@ interface PageAnalysis {
     emailCapture: { present: boolean; type: string | null };
     socialProof: { testimonials: boolean; reviews: boolean; trustBadges: boolean };
     maps: { present: boolean; provider: string | null };
+    text: string;
 }
 
 async function launchBrowser(): Promise<Browser> {
@@ -102,10 +110,12 @@ function analyzePage(): PageAnalysis {
         emailCapture: { present: false, type: null },
         socialProof: { testimonials: false, reviews: false, trustBadges: false },
         maps: { present: false, provider: null },
+        text: '',
     };
 
     const html = document.documentElement.outerHTML.toLowerCase();
     const bodyText = document.body?.innerText?.toLowerCase() || '';
+    result.text = document.body?.innerText || '';
 
     // CTAs
     const buttons = document.querySelectorAll('a, button, [role="button"]');
@@ -212,6 +222,7 @@ function mergeResults(home: PageAnalysis, contact: PageAnalysis | null): Convers
             trustBadges: home.socialProof.trustBadges || (contact?.socialProof.trustBadges ?? false),
         },
         maps: home.maps.present ? home.maps : (contact?.maps ?? home.maps),
+        text: (home.text || '') + ' ' + (contact?.text || ''),
     };
 }
 
@@ -275,6 +286,32 @@ export async function runConversionModule(
 
         const elements = mergeResults(homeResult, contactResult);
 
+        // Content Analysis
+        const textToAnalyze = (elements as any).text.replace(/\s+/g, ' ').trim();
+        const readabilityScore = rs.fleschReadingEase(textToAnalyze);
+        const gradeLevel = Math.round(rs.fleschKincaidGrade(textToAnalyze));
+
+        const words = textToAnalyze.toLowerCase().match(/\b[a-z]{3,}\b/g) || [];
+        const stopWords = new Set(['the', 'and', 'for', 'that', 'with', 'you', 'this', 'but', 'his', 'from', 'they', 'we', 'say', 'her', 'she', 'or', 'an', 'will', 'my', 'one', 'all', 'would', 'there', 'their', 'what', 'so', 'up', 'out', 'if', 'about', 'who', 'get', 'which', 'go', 'me', 'when', 'make', 'can', 'like', 'time', 'no', 'just', 'him', 'know', 'take', 'people', 'into', 'year', 'your', 'good', 'some', 'could', 'them', 'see', 'other', 'than', 'then', 'now', 'look', 'only', 'come', 'its', 'over', 'think', 'also', 'back', 'after', 'use', 'two', 'how', 'our', 'work', 'first', 'well', 'way', 'even', 'new', 'want', 'because', 'any', 'these', 'give', 'day', 'most', 'us', 'are', 'has', 'have', 'had', 'been', 'was', 'were', 'not', 'did', 'does']);
+
+        const counts: Record<string, number> = {};
+        let totalValuableWords = 0;
+        for (const w of words) {
+            if (!stopWords.has(w)) {
+                counts[w] = (counts[w] || 0) + 1;
+                totalValuableWords++;
+            }
+        }
+
+        const sortedKeywords = Object.entries(counts)
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 10)
+            .map(([word, count]) => ({
+                word,
+                count,
+                density: totalValuableWords > 0 ? Number(((count / totalValuableWords) * 100).toFixed(2)) : 0
+            }));
+
         let score = 0;
         const missing: string[] = [];
         const recommendations: string[] = [];
@@ -318,7 +355,7 @@ export async function runConversionModule(
         const normIndustry = industry?.toLowerCase().replace(/\s+/g, '_') ?? '';
         const bookingWeight = BOOKING_CRITICAL.some(v => normIndustry.includes(v)) ? 20
             : BOOKING_LESS_CRITICAL.some(v => normIndustry.includes(v)) ? 5
-            : 15;
+                : 15;
         if (elements.booking.present) {
             score += bookingWeight;
         } else {
@@ -355,6 +392,11 @@ export async function runConversionModule(
             data: {
                 score: Math.min(100, score),
                 elements,
+                content: {
+                    readabilityScore,
+                    gradeLevel,
+                    keywords: sortedKeywords
+                },
                 missing,
                 recommendations: recommendations.length > 0 ? recommendations : ['No major conversion elements missing. Maintain current standards.'],
             },

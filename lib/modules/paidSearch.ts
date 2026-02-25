@@ -97,7 +97,7 @@ export async function runPaidSearchModule(
                 title: 'Paid Search Analysis Unavailable',
                 description: 'Unable to complete paid search analysis. This may indicate API issues or network problems.',
                 impactScore: 1,
-                confidenceScore: 50,
+                confidenceScore: normalizeConfidence(50, '0-100'),
                 evidence: [],
                 metrics: {},
                 effortEstimate: 'LOW',
@@ -324,7 +324,7 @@ function generatePaidSearchFindings(
             title: 'Competitors Bidding on Your Business Name',
             description: `${analysis.businessNameAds.competitorAds.length} competitor(s) are running Google Ads when people search for "${input.businessName}". This means potential customers looking specifically for YOU are seeing competitor ads first and potentially choosing them instead.`,
             impactScore: 8,
-            confidenceScore: 85,
+            confidenceScore: normalizeConfidence(85, '0-100'),
             evidence: topCompetitors.map(ad => ({
                 type: 'text',
                 value: `${ad.title} - ${ad.displayLink || ad.link}`,
@@ -352,7 +352,7 @@ function generatePaidSearchFindings(
             title: 'Not Running Paid Search Ads',
             description: `You're not running any Google Ads for "${analysis.primaryKeywordAds.keyword}". ${analysis.primaryKeywordAds.totalAds} competitor(s) are appearing above you in search results.`,
             impactScore: 5,
-            confidenceScore: 80,
+            confidenceScore: normalizeConfidence(80, '0-100'),
             evidence: [{
                 type: 'metric',
                 value: analysis.primaryKeywordAds.totalAds,
@@ -381,7 +381,7 @@ function generatePaidSearchFindings(
             title: 'No Analytics Tracking Installed',
             description: 'Your website has no Google Analytics. You have zero visibility into who visits your site, where they come from, or what they do. Flying blind.',
             impactScore: 6,
-            confidenceScore: 95,
+            confidenceScore: normalizeConfidence(95, '0-100'),
             evidence: [{
                 type: 'text',
                 value: 'No GA4 or Universal Analytics detected',
@@ -410,7 +410,7 @@ function generatePaidSearchFindings(
             title: 'No Facebook Pixel Installed',
             description: 'No Facebook Pixel detected. Can\'t run retargeting ads or build custom audiences from website visitors.',
             impactScore: 4,
-            confidenceScore: 95,
+            confidenceScore: normalizeConfidence(95, '0-100'),
             evidence: [{
                 type: 'text',
                 value: 'No Facebook Pixel detected',
@@ -437,7 +437,7 @@ function generatePaidSearchFindings(
             title: 'Active Paid Search Campaign Detected',
             description: `Business is running Google Ads for "${analysis.primaryKeywordAds.keyword}". This shows marketing investment and intent.`,
             impactScore: 2,
-            confidenceScore: 85,
+            confidenceScore: normalizeConfidence(85, '0-100'),
             evidence: [{
                 type: 'text',
                 value: 'Business detected in Google Ads for primary keywords',
@@ -466,7 +466,7 @@ function generatePaidSearchFindings(
             title: 'Google Analytics 4 Installed',
             description: 'GA4 is properly installed. Website traffic and conversions are being tracked.',
             impactScore: 2,
-            confidenceScore: 95,
+            confidenceScore: normalizeConfidence(95, '0-100'),
             evidence: [{
                 type: 'text',
                 value: 'GA4 tracking code detected',

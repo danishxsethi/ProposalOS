@@ -1,0 +1,68 @@
+// Add this to your Prisma schema.prisma file before running prisma generate
+
+// NPS Survey Model for Sprint 9
+model NPSSurvey {
+  id           String   @id @default(uuid())
+  proposalId   String
+  tenantId     String
+  surveyType   String   // 'DAY_30', 'DAY_90'
+  score        Int?     // 0-10 NPS score
+  feedback     String?  @db.Text
+  sentAt       DateTime?
+  respondedAt  DateTime?
+  surveyToken  String?  @unique // For survey link
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  proposal     Proposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+
+  @@index([proposalId])
+  @@index([surveyType])
+  @@index([sentAt])
+}
+
+// Competitor Signal Model for Sprint 9
+model CompetitorSignal {
+  id           String   @id @default(uuid())
+  tenantId     String
+  leadId       String?  // Can be tied to a prospect lead
+  
+  signalType   String   // 'competitor_new_review', 'competitor_rating_change', 'competitor_website_update', 'competitor_new_listing'
+  priority     String   @default("medium") // 'high', 'medium', 'low'
+  
+  competitorName String
+  competitorUrl  String?
+  signalData    Json     @default("{}") // Raw data from detection
+  detectedAt    DateTime @default(now())
+  
+  // Outreach triggered by this signal
+  outreachTriggered Boolean @default(false)
+  upsellProposalId  String?
+  
+  createdAt    DateTime @default(now())
+
+  @@index([tenantId, signalType, detectedAt])
+  @@index([leadId])
+  @@index([outreachTriggered])
+}
+
+// Scheduled Audit Run Log
+model ScheduledAuditRun {
+  id            String   @id @default(uuid())
+  tenantId      String
+  scheduleId    String   // Reference to AuditSchedule
+  auditId       String?  // The audit that was run
+  
+  status        String   // 'queued', 'running', 'completed', 'failed'
+  previousAuditId String? // For comparison
+  comparisonReport Json?  // Generated comparison report
+  
+  errorMessage  String?
+  startedAt     DateTime @default(now())
+  completedAt   DateTime?
+  
+  createdAt     DateTime @default(now())
+
+  @@index([tenantId, scheduleId])
+  @@index([status])
+}

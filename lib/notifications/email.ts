@@ -3,13 +3,48 @@ import { logger } from '@/lib/logger';
 import { BRANDING, getBrandColor } from '@/lib/config/branding';
 
 // Initialize Resend with API key from env
-// const resend = new Resend(process.env.RESEND_API_KEY); // Moved to lazy instantiation
 const OPERATOR_EMAIL = process.env.OPERATOR_EMAIL;
-const FROM_EMAIL = `${BRANDING.name} <notifications@resend.dev>`; // Default, user can change if they have domain
+const FROM_EMAIL = `${BRANDING.name} <notifications@resend.dev>`;
 
 function getResend() {
     if (!process.env.RESEND_API_KEY) return null;
     return new Resend(process.env.RESEND_API_KEY);
+}
+
+/**
+ * Send a generic email
+ */
+export async function sendEmail({
+    to,
+    subject,
+    body,
+}: {
+    to: string;
+    subject: string;
+    body: string;
+}): Promise<void> {
+    const resend = getResend();
+    if (!resend) {
+        logger.warn('Skipping email: RESEND_API_KEY not set');
+        return;
+    }
+
+    try {
+        const { data, error } = await resend.emails.send({
+            from: FROM_EMAIL,
+            to,
+            subject,
+            html: body,
+        });
+
+        if (error) {
+            logger.error({ error }, 'Failed to send email');
+        } else {
+            logger.info({ emailId: data?.id }, 'Sent email');
+        }
+    } catch (e) {
+        logger.error({ error: e }, 'Exception sending email');
+    }
 }
 
 /**

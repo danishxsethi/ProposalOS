@@ -131,6 +131,7 @@ model Proposal {
   acceptance      ProposalAcceptance? // One acceptance per proposal
   views           ProposalView[]
   contactRequests ContactRequest[]
+  project         Project?
 
   // Sprint 9: Conversational Closing
   conversationState ConversationState?
@@ -346,6 +347,7 @@ model Tenant {
   outreachEmails         OutreachEmail[]
   outreachEmailEvents    OutreachEmailEvent[]
   pipelineConfig         PipelineConfig?
+  projects               Project[]
 
   @@index([domain])
   @@index([isActive])
@@ -659,6 +661,8 @@ model OutreachEmail {
   openedAt  DateTime?
   clickedAt DateTime?
   repliedAt DateTime?
+  scheduledAt DateTime?
+  sequencePosition Int?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -669,6 +673,7 @@ model OutreachEmail {
   @@index([leadId, createdAt])
   @@index([domainId, createdAt])
   @@index([type, status])
+  @@index([scheduledAt, status])
 }
 
 model OutreachEmailEvent {
@@ -1064,6 +1069,7 @@ enum ProposalStatus {
   SENT
   VIEWED
   ACCEPTED
+  PAID
   REJECTED
 }
 
@@ -1464,3 +1470,119 @@ model HumanReviewFlag {
   @@index([tenantId, status])
   @@index([artifactId])
 }
+
+enum ProjectStatus {
+  KICKOFF
+  IN_PROGRESS
+  DELIVERED
+  NEEDS_REVIEW
+  COMPLETE
+}
+
+// Sprint 9: Post-Payment Auto-Onboarding
+model Project {
+  id             String        @id @default(uuid())
+  proposalId     String       @unique
+  tenantId       String
+  status         ProjectStatus @default(KICKOFF)
+  completedAt    DateTime?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  proposal       Proposal      @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+  tenant         Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  npsSurveys     NPSSurvey[]
+
+  @@index([tenantId])
+  @@index([status])
+}
+
+// Task 4: NPS Automation
+model NPSSurvey {
+  id           String             @id @default(uuid())
+  projectId    String
+  tenantId     String
+  score        Int?
+  feedback     String?
+  surveyDay    Int                // 30 or 90
+  status       NPSSurveyStatus    @default(PENDING)
+  sentAt       DateTime           @default(now())
+  respondedAt  DateTime?
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+
+  project      Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@index([tenantId])
+  @@index([surveyDay, status])
+}
+
+enum NPSSurveyStatus {
+  PENDING
+  SENT
+  RESPONDED
+  FLAGGED_DETRACTOR /// score <= 6 — manual outreach needed
+  REFERRAL_SENT     /// score >= 9 — referral email triggered
+}
+
+// Task 3: QA Telemetry (Adversarial QA monitoring)
+model QATelemetry {
+  id                 String   @id @default(uuid())
+  runId              String   @unique @default(uuid())
+  graphName          String   // "diagnosis" | "proposal"
+  inputHash          String
+  qaScore            Float    // 0.0–1.0 (0 = clean, 1 = heavily flagged)
+  hallucinationCount Int
+  unsupportedCount   Int
+  consistencyCount   Int
+  hallucinations     Json     // HallucinationFlag[]
+  unsupportedClaims  Json     // ConsistencyFlag[]
+  retryTriggered     Boolean  @default(false)
+  retryCount         Int      @default(0)
+  tenantId           String?
+  auditId            String?
+  proposalId         String?
+  createdAt          DateTime @default(now())
+
+  @@index([graphName, createdAt])
+  @@index([tenantId])
+  @@index([qaScore])
+}
+
+// Task 2: Prompt auto-promotion audit trail
+model PromptPromotionLog {
+  id                    String   @id @default(uuid())
+  promptId              String   // ExperimentName from promptAB.ts
+  winnerVariantId       String   // 'control' | 'variant'
+  loserVariantId        String
+  winnerAvgQuality      Float
+  loserAvgQuality       Float
+  qualityDeltaPct       Float    // (winner - loser) / loser * 100
+  winnerAvgLatencyMs    Float
+  loserAvgLatencyMs     Float
+  latencyIncreasePct    Float
+  winnerSampleSize      Int
+  loserSampleSize       Int
+  promotedAt            DateTime @default(now())
+  note                  String?
+
+  @@index([promptId])
+  @@index([promotedAt])
+}
+
+// Task 3: Persistent Metrics Storage (Pipeline 17)
+model Metric {
+  id        String   @id @default(uuid())
+  name      String   // e.g. "llm_calls_total", "llm_cost_total"
+  value     Float
+  labels    Json     @default("{}")  // { model, node, tenantId, ... }
+  timestamp DateTime @default(now())
+
+  @@index([name, timestamp])
+  @@index([name])
+}
+
+
+
+

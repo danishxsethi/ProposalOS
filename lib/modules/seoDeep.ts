@@ -64,7 +64,7 @@ export async function runSeoDeepModule(input: SeoDeepInput, tracker?: CostTracke
                 title: 'SEO Analysis Failed',
                 description: 'Could not complete deep SEO analysis due to a technical error.',
                 impactScore: 3,
-                confidenceScore: 100,
+                confidenceScore: normalizeConfidence(100, '0-100'),
                 evidence: [],
                 metrics: {},
                 effortEstimate: 'LOW',

@@ -7,7 +7,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
+import { getServerSession } from '@/lib/auth';
 import { authOptions } from '@/lib/auth';
 import { onboardTenant } from '@/lib/pipeline/tenantConfig';
 
@@ -17,7 +17,7 @@ import { onboardTenant } from '@/lib/pipeline/tenantConfig';
  */
 export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
+    const session = await getServerSession();
 
     if (!session?.user?.tenantId) {
       return NextResponse.json(

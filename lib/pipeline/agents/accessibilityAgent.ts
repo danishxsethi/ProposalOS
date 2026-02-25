@@ -52,7 +52,7 @@ export class AccessibilityAgent extends BaseAgent {
       const metrics = {
         ariaLabelsAdded: 23,
         contrastViolationsFixed: 12,
-        wcagComplianceLevel: 'AA',
+        wcagComplianceLevel: 2, // 1=A, 2=AA, 3=AAA
         keyboardNavigationScore: 100,
       };
 

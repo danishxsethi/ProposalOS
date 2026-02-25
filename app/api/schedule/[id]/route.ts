@@ -4,8 +4,9 @@ import { prisma } from '@/lib/prisma';
 import { getTenantId, createScopedPrisma } from '@/lib/tenant/context';
 import { withAuth } from '@/lib/middleware/auth';
 
-export const DELETE = withAuth(async (req: Request, { params }: { params: { id: string } }) => {
+export const DELETE = withAuth(async (req: Request, { params }: { params: Promise<{ id: string }> }) => {
     try {
+        const { id } = await params;
         const tenantId = await getTenantId();
         if (!tenantId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
@@ -18,7 +19,7 @@ export const DELETE = withAuth(async (req: Request, { params }: { params: { id: 
 
         await prisma.auditSchedule.delete({
             where: {
-                id: params.id,
+                id: id,
                 tenantId // Ensure ownership
             }
         });
@@ -30,15 +31,16 @@ export const DELETE = withAuth(async (req: Request, { params }: { params: { id: 
     }
 });
 
-export const PATCH = withAuth(async (req: Request, { params }: { params: { id: string } }) => {
+export const PATCH = withAuth(async (req: Request, { params }: { params: Promise<{ id: string }> }) => {
     try {
+        const { id } = await params;
         const tenantId = await getTenantId();
         if (!tenantId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
         const body = await req.json();
 
         await prisma.auditSchedule.update({
-            where: { id: params.id, tenantId },
+            where: { id: id, tenantId },
             data: body // simplified, validate specific fields in prod
         });
 

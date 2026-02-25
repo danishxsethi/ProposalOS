@@ -37,6 +37,7 @@ export interface EnrichmentResult {
     runs: ProviderRunResult[];
     emailVerification: EmailVerificationResult;
     totalCostCents: number;
+    status?: 'SUCCESS' | 'FAILED' | 'no_decision_maker';
 }
 
 function normalizeWebsite(website: string | null | undefined): string | null {
@@ -471,10 +472,36 @@ async function verifyEmail(email: string | null | undefined): Promise<EmailVerif
 export async function runEnrichmentWaterfall(lead: EnrichmentLeadInput): Promise<EnrichmentResult> {
     const runners = [runApollo, runHunter, runProxycurl, runClearbit];
     const runs: ProviderRunResult[] = [];
+    const allGenericPrefixes = [
+        'info', 'contact', 'hello', 'support', 'sales', 'admin',
+        'team', 'office', 'help', 'enquiry', 'enquiries',
+        'billing', 'noreply', 'no-reply'
+    ];
+    let allCandidatesWereGeneric = true; // Assume all are generic until a non-generic is found
+    let anyCandidatesFound = false;
     let mergedContact: EnrichedContact | null = null;
 
     for (const runner of runners) {
         const result = await runner(lead);
+
+        // Filter out generic role-based emails
+        if (result.contact?.email) {
+            anyCandidatesFound = true;
+            const emailPrefix = result.contact.email.split('@')[0].toLowerCase();
+            if (allGenericPrefixes.includes(emailPrefix)) {
+                logger.info({ email: result.contact.email }, 'Rejected generic email address from provider');
+                result.contact.email = null;
+                // If the contact is basically empty now, set it to failed to trigger next provider
+                if (!result.contact.name && !result.contact.linkedin) {
+                    result.status = 'FAILED';
+                    result.error = 'Rejected generic email address';
+                    result.contact = null;
+                }
+            } else {
+                allCandidatesWereGeneric = false; // At least one non-generic candidate found
+            }
+        }
+
         runs.push(result);
         mergedContact = mergeContact(mergedContact, result.contact);
 
@@ -485,6 +512,17 @@ export async function runEnrichmentWaterfall(lead: EnrichmentLeadInput): Promise
 
     const emailVerification = await verifyEmail(mergedContact?.email ?? null);
     const totalCostCents = runs.reduce((sum, run) => sum + run.costCents, 0);
+
+    // If all providers returned only generic emails, mark as no_decision_maker (if no valid email found)
+    let finalStatus: 'SUCCESS' | 'FAILED' | 'no_decision_maker' = 'SUCCESS';
+    if (!mergedContact?.email) {
+        if (anyCandidatesFound && allCandidatesWereGeneric) {
+            finalStatus = 'no_decision_maker';
+            logger.warn({ businessName: lead.businessName }, 'All email candidates were generic, marked as no_decision_maker');
+        } else {
+            finalStatus = 'FAILED';
+        }
+    }
 
     logger.info({
         event: 'outreach.enrichment.complete',
@@ -501,5 +539,6 @@ export async function runEnrichmentWaterfall(lead: EnrichmentLeadInput): Promise
         runs,
         emailVerification,
         totalCostCents,
+        status: finalStatus,
     };
 }

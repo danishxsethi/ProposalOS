@@ -5,6 +5,7 @@ import { logger } from '@/lib/logger';
 import { AuditOrchestrator } from '@/lib/orchestrator/auditOrchestrator';
 import { CostTracker } from '@/lib/costs/costTracker';
 import { sendWebhook } from '@/lib/notifications/webhook';
+import { detectCompetitorImprovement, triggerUpsellProposal } from '@/lib/retention/upsellTrigger';
 
 export async function GET(req: Request) {
     // 1. Security Check (CRON_SECRET)
@@ -152,6 +153,27 @@ export async function GET(req: Request) {
                                     Math.round((result.modulesCompleted?.length || 0) / 15 * 100) : undefined
                             }
                         });
+
+                        // Task 3: Upsell trigger — compare competitor signals against previous audit
+                        if (result.status === 'COMPLETE' && schedule.lastAuditId) {
+                            try {
+                                const { triggered, reason } = await detectCompetitorImprovement(
+                                    schedule.lastAuditId,
+                                    audit.id
+                                );
+                                if (triggered) {
+                                    await triggerUpsellProposal(schedule.tenantId, audit.id, reason);
+                                    logger.info({
+                                        event: 'cron.scheduled_audits.upsell_triggered',
+                                        auditId: audit.id,
+                                        scheduleId: schedule.id,
+                                        reason
+                                    }, 'Upsell proposal auto-generated from competitor improvement');
+                                }
+                            } catch (upsellErr) {
+                                logger.error({ err: upsellErr, auditId: audit.id }, 'Upsell trigger check failed');
+                            }
+                        }
 
                         // Send webhook notification
                         await sendWebhook('audit.completed', {

@@ -86,7 +86,7 @@ export async function runCitationsModule(
                 title: 'Citation Analysis Unavailable',
                 description: 'Unable to check business listings across directories. This may indicate API issues or network problems.',
                 impactScore: 1,
-                confidenceScore: 50,
+                confidenceScore: normalizeConfidence(50, '0-100'),
                 evidence: [],
                 metrics: {},
                 effortEstimate: 'LOW',
@@ -499,7 +499,7 @@ function generateCitationFindings(
             title: 'Not Listed on Yelp',
             description: 'Business is not found on Yelp. Over 50% of consumers check Yelp before choosing a local business. Missing this listing costs you customers.',
             impactScore: 7,
-            confidenceScore: 90,
+            confidenceScore: normalizeConfidence(90, '0-100'),
             evidence: [{
                 type: 'text',
                 value: 'Not found on Yelp',
@@ -526,7 +526,7 @@ function generateCitationFindings(
             title: 'NAP Inconsistencies Detected',
             description: `Found ${analysis.napConsistency.inconsistencies.length} inconsistencies in Name, Address, or Phone across directories. This confuses search engines and damages local SEO rankings.`,
             impactScore: 8,
-            confidenceScore: 95,
+            confidenceScore: normalizeConfidence(95, '0-100'),
             evidence: analysis.napConsistency.inconsistencies.slice(0, 5).map(inc => ({
                 type: 'text',
                 value: inc,
@@ -554,7 +554,7 @@ function generateCitationFindings(
             title: 'Not Listed on BBB',
             description: 'Business is not found on Better Business Bureau. BBB accreditation builds trust and improves local search visibility.',
             impactScore: 4,
-            confidenceScore: 85,
+            confidenceScore: normalizeConfidence(85, '0-100'),
             evidence: [{
                 type: 'text',
                 value: 'Not found on BBB',
@@ -580,7 +580,7 @@ function generateCitationFindings(
             title: 'Not Listed on Yellow Pages',
             description: 'Business is not found on Yellow Pages. While less critical than Yelp, it is still a trusted directory that drives local traffic.',
             impactScore: 3,
-            confidenceScore: 85,
+            confidenceScore: normalizeConfidence(85, '0-100'),
             evidence: [{
                 type: 'text',
                 value: 'Not found on Yellow Pages',
@@ -606,7 +606,7 @@ function generateCitationFindings(
             title: 'Limited Directory Presence',
             description: `Business is only listed on ${analysis.totalFound} out of ${analysis.totalChecked} checked directories. More citations improve local SEO and make you easier to find.`,
             impactScore: 6,
-            confidenceScore: 90,
+            confidenceScore: normalizeConfidence(90, '0-100'),
             evidence: [{
                 type: 'metric',
                 value: analysis.totalFound,
@@ -634,7 +634,7 @@ function generateCitationFindings(
             title: 'No Facebook Business Page',
             description: 'Business does not have a Facebook page. With 2.9 billion users, Facebook is critical for local visibility and customer engagement.',
             impactScore: 5,
-            confidenceScore: 90,
+            confidenceScore: normalizeConfidence(90, '0-100'),
             evidence: [{
                 type: 'text',
                 value: 'Facebook page not found',
@@ -662,7 +662,7 @@ function generateCitationFindings(
             title: 'Strong Citation Consistency',
             description: `Excellent NAP consistency (${analysis.napConsistency.consistencyScore}% match) across ${analysis.totalFound} directories. This strengthens local SEO.`,
             impactScore: 2,
-            confidenceScore: 95,
+            confidenceScore: normalizeConfidence(95, '0-100'),
             evidence: [{
                 type: 'metric',
                 value: analysis.napConsistency.consistencyScore,

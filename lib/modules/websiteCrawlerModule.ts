@@ -21,7 +21,7 @@ function generateFindingsFromCrawl(crawlResult: CrawlResult, businessUrl: string
             title: `${crawlResult.brokenLinks.length} Broken Links Detected`,
             description: `Found ${crawlResult.brokenLinks.length} pages returning 4xx or 5xx errors. Broken links damage SEO rankings and user experience.`,
             impactScore: 8,
-            confidenceScore: 95,
+            confidenceScore: normalizeConfidence(95, '0-100'),
             evidence: crawlResult.brokenLinks.slice(0, 10).map(url => ({
                 type: 'url' as const,
                 value: url,
@@ -50,7 +50,7 @@ function generateFindingsFromCrawl(crawlResult: CrawlResult, businessUrl: string
             title: 'Homepage Has Thin Content',
             description: `Homepage only has ${homepage.wordCount} words. Search engines may view this as low-quality content, harming SEO rankings.`,
             impactScore: 7,
-            confidenceScore: 90,
+            confidenceScore: normalizeConfidence(90, '0-100'),
             evidence: [{
                 type: 'metric',
                 value: homepage.wordCount,
@@ -82,7 +82,7 @@ function generateFindingsFromCrawl(crawlResult: CrawlResult, businessUrl: string
             title: `${Math.round(missingTitlesPct)}% of Pages Missing Title Tags`,
             description: `${crawlResult.pagesMissingTitles.length} out of ${crawlResult.crawledPages.length} pages are missing title tags. This severely impacts SEO visibility.`,
             impactScore: 8,
-            confidenceScore: 95,
+            confidenceScore: normalizeConfidence(95, '0-100'),
             evidence: crawlResult.pagesMissingTitles.slice(0, 5).map(url => ({
                 type: 'url',
                 value: url,
@@ -114,7 +114,7 @@ function generateFindingsFromCrawl(crawlResult: CrawlResult, businessUrl: string
             title: `${crawlResult.duplicateTitles.size} Duplicate Title Tags Found`,
             description: `${duplicateCount} pages share the same title tags. Each page should have a unique title for better SEO performance.`,
             impactScore: 5,
-            confidenceScore: 90,
+            confidenceScore: normalizeConfidence(90, '0-100'),
             evidence: Array.from(crawlResult.duplicateTitles.entries()).slice(0, 3).map(([title, urls]) => ({
                 type: 'text',
                 value: `"${title}" (${urls.length} pages)`,
@@ -145,7 +145,7 @@ function generateFindingsFromCrawl(crawlResult: CrawlResult, businessUrl: string
             title: 'Pages Are Too Large',
             description: `Average page size is ${avgPageSizeMB.toFixed(2)}MB. Large pages slow down load times and hurt user experience, especially on mobile.`,
             impactScore: 5,
-            confidenceScore: 85,
+            confidenceScore: normalizeConfidence(85, '0-100'),
             evidence: [{
                 type: 'metric',
                 value: avgPageSizeMB.toFixed(2),
@@ -174,7 +174,7 @@ function generateFindingsFromCrawl(crawlResult: CrawlResult, businessUrl: string
             title: 'No Structured Data Detected',
             description: `None of the ${crawlResult.crawledPages.length} crawled pages have structured data (Schema.org). This limits rich snippet opportunities in search results.`,
             impactScore: 6,
-            confidenceScore: 90,
+            confidenceScore: normalizeConfidence(90, '0-100'),
             evidence: [{
                 type: 'text',
                 value: '0% schema coverage',
@@ -207,7 +207,7 @@ function generateFindingsFromCrawl(crawlResult: CrawlResult, businessUrl: string
             title: `${Math.round(missingAltPct)}% of Images Missing Alt Text`,
             description: `${totalImages - imagesWithAlt} out of ${totalImages} images lack alt text. This hurts accessibility and image SEO.`,
             impactScore: 4,
-            confidenceScore: 90,
+            confidenceScore: normalizeConfidence(90, '0-100'),
             evidence: [{
                 type: 'metric',
                 value: Math.round(missingAltPct),
@@ -239,7 +239,7 @@ function generateFindingsFromCrawl(crawlResult: CrawlResult, businessUrl: string
             title: 'Limited Data: Site May Block Crawlers or Be JavaScript-Heavy',
             description: 'Could not retrieve full page content. Analysis uses PageSpeed API data only. Consider adding a sitemap and ensuring critical content is server-rendered.',
             impactScore: 6,
-            confidenceScore: 75,
+            confidenceScore: normalizeConfidence(75, '0-100'),
             evidence: [{
                 type: 'text',
                 value: 'Crawler returned no successful pages',
@@ -263,7 +263,7 @@ function generateFindingsFromCrawl(crawlResult: CrawlResult, businessUrl: string
             title: 'Website Has Very Few Pages',
             description: `Only ${crawlResult.totalPagesFound} pages found. Search engines favor sites with more comprehensive content.`,
             impactScore: 5,
-            confidenceScore: 85,
+            confidenceScore: normalizeConfidence(85, '0-100'),
             evidence: [{
                 type: 'metric',
                 value: crawlResult.totalPagesFound,
@@ -343,7 +343,7 @@ export async function runWebsiteCrawlerModule(input: WebsiteCrawlerModuleInput):
                 title: 'Website Crawl Failed',
                 description: `Unable to crawl website: ${error instanceof Error ? error.message : 'Unknown error'}`,
                 impactScore: 3,
-                confidenceScore: 50,
+                confidenceScore: normalizeConfidence(50, '0-100'),
                 evidence: [{
                     type: 'text',
                     value: error instanceof Error ? error.message : 'Unknown error',

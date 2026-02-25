@@ -2,6 +2,7 @@
  * Cost tracking for external APIs and LLMs
  */
 import { logger } from '@/lib/logger';
+import { CostCapExceededError } from './errors';
 
 export const COSTS = {
     PAGESPEED_COST_CENTS: 0,
@@ -45,8 +46,14 @@ export type LlmModel = 'GEMINI_FLASH' | 'GEMINI_PRO' | 'GEMINI_31_PRO';
 export class CostTracker {
     private totalCents: number = 0;
     private usage: Record<string, number> = {};
+    /** Hard cap in cents (default 100 = $1.00). Throw CostCapExceededError when exceeded. */
+    private capCents: number;
+    private auditId?: string;
 
-    constructor() { }
+    constructor(options?: { capCents?: number; auditId?: string }) {
+        this.capCents = options?.capCents ?? 100; // default $1.00
+        this.auditId = options?.auditId;
+    }
 
     /**
      * Add cost for standard API calls
@@ -121,12 +128,15 @@ export class CostTracker {
             total_cost_cents: cost
         }, 'LLM call tracked');
 
-        if (this.totalCents > 100 && !this.usage['ALERT_HUNDRED_CENTS_EMITTED']) {
-            logger.warn({
+        if (this.totalCents > this.capCents) {
+            // Task 2 (Pipeline 16): Hard cap — throw to halt ALL remaining LLM calls
+            logger.error({
                 totalCents: this.totalCents,
-                usage: this.usage
-            }, 'HARD CAP ALERT: Single audit exceeded $1.00 hard cap threshold.');
-            this.usage['ALERT_HUNDRED_CENTS_EMITTED'] = 1;
+                capCents: this.capCents,
+                auditId: this.auditId,
+                usage: this.usage,
+            }, 'HARD CAP EXCEEDED — halting audit execution');
+            throw new CostCapExceededError(this.totalCents, this.capCents, this.auditId);
         }
     }
 

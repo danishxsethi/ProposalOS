@@ -11,12 +11,14 @@ export { SeoFixAgent, seoFixAgent } from './seoFixAgent';
 export { AccessibilityAgent, accessibilityAgent } from './accessibilityAgent';
 export { SecurityHardeningAgent, securityHardeningAgent } from './securityHardeningAgent';
 export { ContentGenerationAgent, contentGenerationAgent } from './contentGenerationAgent';
+export { PredictiveAgent, predictiveAgent } from './predictiveAgent';
 
 import { speedOptimizationAgent } from './speedOptimizationAgent';
 import { seoFixAgent } from './seoFixAgent';
 import { accessibilityAgent } from './accessibilityAgent';
 import { securityHardeningAgent } from './securityHardeningAgent';
 import { contentGenerationAgent } from './contentGenerationAgent';
+import { predictiveAgent } from './predictiveAgent';
 import type { ServiceAgent } from './baseAgent';
 
 /**
@@ -28,6 +30,7 @@ export const agentRegistry: Record<string, ServiceAgent> = {
   accessibility: accessibilityAgent,
   security_hardening: securityHardeningAgent,
   content_generation: contentGenerationAgent,
+  predictive_agent: predictiveAgent,
 };
 
 /**

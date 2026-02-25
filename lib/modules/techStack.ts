@@ -260,7 +260,7 @@ function generateTechFindings(stack: TechStack): Finding[] {
             title: `Website Built on ${usedBuilder}`,
             description: `Your website is built on ${usedBuilder}. While functional, this platform limits your ability to optimize for search engines and load speed compared to more flexible solutions like WordPress or custom code.`,
             impactScore: 5,
-            confidenceScore: 80,
+            confidenceScore: normalizeConfidence(80, '0-100'),
             evidence: [{ type: 'text', value: usedBuilder, label: 'Platform Detected' }],
             metrics: {},
             effortEstimate: 'HIGH', // Replatforming is hard
@@ -276,7 +276,7 @@ function generateTechFindings(stack: TechStack): Finding[] {
             title: 'No Analytics Tools Detected',
             description: 'We could not detect Google Analytics or similar tools. You are flying blind without data on visitor behavior.',
             impactScore: 6,
-            confidenceScore: 90,
+            confidenceScore: normalizeConfidence(90, '0-100'),
             evidence: [],
             metrics: {},
             effortEstimate: 'LOW',
@@ -292,7 +292,7 @@ function generateTechFindings(stack: TechStack): Finding[] {
             title: 'No Email Marketing Integration',
             description: 'You have no email marketing tools detected (e.g., Mailchimp, Klaviyo). You\'re missing the #1 ROI channel (avg $42 return per $1 spent).',
             impactScore: 5,
-            confidenceScore: 70, // Possibility of false negative
+            confidenceScore: normalizeConfidence(70, '0-100'), // Possibility of false negative
             evidence: [],
             metrics: {},
             effortEstimate: 'MEDIUM',
@@ -312,7 +312,7 @@ function generateTechFindings(stack: TechStack): Finding[] {
             title: 'Modern Technology Stack',
             description: 'Your website uses modern technologies (React/Vue/Cloud Hosting) which enables excellent performance and user experience potential.',
             impactScore: 3,
-            confidenceScore: 90,
+            confidenceScore: normalizeConfidence(90, '0-100'),
             evidence: stack.frameworks.filter(f => ['React', 'Vue.js'].includes(f)).map(f => ({ type: 'text' as const, value: f, label: 'Framework' })),
             metrics: {},
             effortEstimate: 'LOW',
@@ -328,7 +328,7 @@ function generateTechFindings(stack: TechStack): Finding[] {
             title: 'Comprehensive Digital Tooling',
             description: 'You have a solid suite of tools for analytics, marketing, and customer interaction. This indicates a high level of digital maturity.',
             impactScore: 2,
-            confidenceScore: 90,
+            confidenceScore: normalizeConfidence(90, '0-100'),
             evidence: [
                 ...stack.analytics.map(t => ({ type: 'text' as const, value: t, label: 'Analytics' })),
                 ...stack.marketing.map(t => ({ type: 'text' as const, value: t, label: 'Marketing' }))

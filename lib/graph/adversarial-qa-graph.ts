@@ -81,10 +81,6 @@ async function hallucination_sweep(state: typeof AdversarialQAState.State) {
     const model = genAI.getGenerativeModel({
       model: 'gemini-2.0-pro-exp-01-21',
       generationConfig: {
-        thinking: {
-          type: 'enabled',
-          budgetTokens: getThinkingBudgetForNode('hallucination_sweep'),
-        },
       },
     });
 
@@ -138,10 +134,6 @@ async function consistency_check(state: typeof AdversarialQAState.State) {
     const model = genAI.getGenerativeModel({
       model: 'gemini-2.0-pro-exp-01-21',
       generationConfig: {
-        thinking: {
-          type: 'enabled',
-          budgetTokens: getThinkingBudgetForNode('consistency_check'),
-        },
       },
     });
 
@@ -190,10 +182,6 @@ async function competitor_fairness(state: typeof AdversarialQAState.State) {
     const model = genAI.getGenerativeModel({
       model: 'gemini-2.0-pro-exp-01-21',
       generationConfig: {
-        thinking: {
-          type: 'enabled',
-          budgetTokens: getThinkingBudgetForNode('competitor_fairness'),
-        },
       },
     });
 

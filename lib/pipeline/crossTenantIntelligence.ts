@@ -113,7 +113,7 @@ export async function aggregatePatterns(
   await prisma.sharedIntelligenceModel.create({
     data: {
       version,
-      patterns: patternsArray,
+      patterns: patternsArray as any,
       isActive: true,
     },
   });
@@ -150,7 +150,7 @@ export async function predictCloseProb(prospect: ProspectContext): Promise<Predi
     };
   }
 
-  const patterns = model.patterns as AnonymizedPattern[];
+  const patterns = model.patterns as unknown as AnonymizedPattern[];
   const key = `${prospect.vertical}:${prospect.geoRegion}`;
 
   // Find matching pattern

@@ -4,11 +4,10 @@ import { withAuth } from '@/lib/middleware/auth';
 import { getTenantId } from '@/lib/tenant/context';
 import { prisma } from '@/lib/prisma';
 
-export const DELETE = withAuth(async (req: Request, { params }: { params: { id: string } }) => {
+export const DELETE = withAuth(async (req: Request, { params }: { params: Promise<{ id: string }> }) => {
+    const { id } = await params;
     const tenantId = await getTenantId();
     if (!tenantId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
-    const { id } = params;
 
     const apiKey = await prisma.apiKey.findUnique({
         where: { id },

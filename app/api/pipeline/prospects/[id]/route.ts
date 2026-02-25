@@ -7,8 +7,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { getServerSession } from '@/lib/auth';
 import { getProspectContext } from '@/lib/pipeline/humanReview';
 import { prisma } from '@/lib/db';
 
@@ -18,10 +17,11 @@ import { prisma } from '@/lib/db';
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const session = await getServerSession(authOptions);
+    const { id } = await params;
+    const session = await getServerSession();
 
     if (!session?.user?.tenantId) {
       return NextResponse.json(
@@ -32,7 +32,7 @@ export async function GET(
 
     // Verify prospect belongs to tenant
     const prospect = await prisma.prospectLead.findUnique({
-      where: { id: params.id },
+      where: { id: id },
       select: { tenantId: true },
     });
 
@@ -50,7 +50,7 @@ export async function GET(
       );
     }
 
-    const context = await getProspectContext(params.id);
+    const context = await getProspectContext(id);
 
     if (!context) {
       return NextResponse.json(
