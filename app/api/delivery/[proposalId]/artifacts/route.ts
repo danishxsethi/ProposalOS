@@ -4,16 +4,17 @@ import { auth } from '@/lib/auth';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { proposalId: string } }
+  { params }: { params: Promise<{ proposalId: string }> }
 ) {
   try {
+    const { proposalId } = await params;
     const session = await auth();
     if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const artifacts = await prisma.generatedArtifact.findMany({
-      where: { proposalId: params.proposalId },
+      where: { proposalId },
       select: {
         id: true,
         artifactType: true,

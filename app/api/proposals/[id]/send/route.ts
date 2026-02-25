@@ -4,8 +4,9 @@ import { withAuth } from '@/lib/middleware/auth';
 import { getTenantId, createScopedPrisma } from '@/lib/tenant/context';
 import { FollowUpScheduler } from '@/lib/followup/scheduler';
 
-export const POST = withAuth(async (req: Request, { params }: { params: { id: string } }) => {
+export const POST = withAuth(async (req: Request, { params }: { params: Promise<{ id: string }> }) => {
     try {
+        const { id } = await params;
         const tenantId = await getTenantId();
         if (!tenantId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         const prisma = createScopedPrisma(tenantId);
@@ -14,7 +15,7 @@ export const POST = withAuth(async (req: Request, { params }: { params: { id: st
 
         // Check ownership first
         const existingProposal = await prisma.proposal.findFirst({
-            where: { id: params.id, tenantId }
+            where: { id: id, tenantId }
         });
 
         if (!existingProposal) {
@@ -23,7 +24,7 @@ export const POST = withAuth(async (req: Request, { params }: { params: { id: st
 
         // Update Proposal
         const proposal = await prisma.proposal.update({
-            where: { id: params.id },
+            where: { id: id },
             data: {
                 status: 'SENT',
                 sentAt: new Date(),

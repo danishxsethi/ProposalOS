@@ -6,13 +6,12 @@ import { getTenantId } from '@/lib/tenant/context';
 
 export const POST = withAuth(async (
     req: Request,
-    { params }: { params: { id: string } }
+    { params }: { params: Promise<{ id: string }> }
 ) => {
     try {
+        const { id: proposalId } = await params;
         const tenantId = await getTenantId();
         if (!tenantId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
-        const proposalId = params.id;
         const body = await req.json();
 
         const { recipientEmail, subject, message, scheduledAt } = body;

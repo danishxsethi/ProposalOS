@@ -4,15 +4,16 @@ import { prisma } from '@/lib/prisma';
 import { getTenantId, createScopedPrisma } from '@/lib/tenant/context';
 import { withAuth } from '@/lib/middleware/auth';
 
-export const GET = withAuth(async (req: Request, { params }: { params: { id: string } }) => {
+export const GET = withAuth(async (req: Request, { params }: { params: Promise<{ id: string }> }) => {
     try {
+        const { id } = await params;
         const tenantId = await getTenantId();
         if (!tenantId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
         const prismaScoped = createScopedPrisma(tenantId);
 
         const template = await prismaScoped.proposalTemplate.findUnique({
-            where: { id: params.id }
+            where: { id: id }
         });
 
         if (!template) return NextResponse.json({ error: 'Not found' }, { status: 404 });
@@ -23,8 +24,9 @@ export const GET = withAuth(async (req: Request, { params }: { params: { id: str
     }
 });
 
-export const PATCH = withAuth(async (req: Request, { params }: { params: { id: string } }) => {
+export const PATCH = withAuth(async (req: Request, { params }: { params: Promise<{ id: string }> }) => {
     try {
+        const { id } = await params;
         const tenantId = await getTenantId();
         if (!tenantId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
@@ -32,7 +34,7 @@ export const PATCH = withAuth(async (req: Request, { params }: { params: { id: s
         const prismaScoped = createScopedPrisma(tenantId);
 
         const template = await prismaScoped.proposalTemplate.update({
-            where: { id: params.id },
+            where: { id: id },
             data: body
         });
 
@@ -52,14 +54,15 @@ export const PATCH = withAuth(async (req: Request, { params }: { params: { id: s
     }
 });
 
-export const DELETE = withAuth(async (req: Request, { params }: { params: { id: string } }) => {
+export const DELETE = withAuth(async (req: Request, { params }: { params: Promise<{ id: string }> }) => {
     try {
+        const { id } = await params;
         const tenantId = await getTenantId();
         if (!tenantId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
         const prismaScoped = createScopedPrisma(tenantId);
         await prismaScoped.proposalTemplate.delete({
-            where: { id: params.id }
+            where: { id: id }
         });
 
         return NextResponse.json({ success: true });

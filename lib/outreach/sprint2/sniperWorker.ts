@@ -6,27 +6,20 @@ import {
     OutreachEventType,
     ProspectLead,
     ProspectLeadStatus,
+    OutreachEmail,
 } from '@prisma/client';
 import { Resend } from 'resend';
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
-import { composeSniperEmail } from './emailComposer';
-import { checkSniperEmailQuality } from './emailQualityGate';
 import { ensureLeadScorecardToken, ensureBaseUrl, scorecardUrlForToken } from './scorecard';
 import { incrementDomainCounter, selectDomainForSend } from './domainRotation';
 import { runAuditOrchestrator } from '@/lib/orchestrator';
 import { generateProposal } from '@/lib/proposal/runner';
+import { generateEmailSequence } from './sequenceComposer';
+import { evaluateSequenceBranching, BranchingEventHistory } from './sequenceBranching';
 
 interface LeadWithOutreach extends ProspectLead {
-    outreachEmails: Array<{
-        id: string;
-        type: OutreachEmailType;
-        status: OutreachEmailStatus;
-        sentAt: Date | null;
-        openedAt: Date | null;
-        clickedAt: Date | null;
-        repliedAt: Date | null;
-    }>;
+    outreachEmails: OutreachEmail[];
 }
 
 export interface SniperWorkerOptions {
@@ -50,75 +43,11 @@ export interface SniperWorkerResult {
     }>;
 }
 
-type PlannedAction =
-    | { kind: 'send'; emailType: OutreachEmailType }
-    | { kind: 'drop'; reason: string }
-    | { kind: 'skip'; reason: string };
-
 function plusHours(hours: number, base = new Date()): Date {
     return new Date(base.getTime() + hours * 60 * 60 * 1000);
 }
 
-function plusDays(days: number, base = new Date()): Date {
-    return new Date(base.getTime() + days * 24 * 60 * 60 * 1000);
-}
-
-function resolveNextActionAt(type: OutreachEmailType, now = new Date()): Date {
-    switch (type) {
-        case OutreachEmailType.FOLLOWUP_PROPOSAL:
-            return plusHours(24, now);
-        case OutreachEmailType.FOLLOWUP_COMPETITOR:
-            return plusHours(36, now);
-        case OutreachEmailType.FOLLOWUP_GBP:
-            return plusDays(3, now);
-        case OutreachEmailType.FOLLOWUP_RETRY:
-            return plusDays(2, now);
-        case OutreachEmailType.INITIAL:
-        default:
-            return plusDays(2, now);
-    }
-}
-
-function decideAction(lead: LeadWithOutreach): PlannedAction {
-    if (lead.outreachReplyCount > 0 || lead.outreachStage === OutreachLeadStage.REPLIED) {
-        return { kind: 'skip', reason: 'Lead already replied' };
-    }
-    if (lead.outreachStage === OutreachLeadStage.DROPPED) {
-        return { kind: 'skip', reason: 'Lead is dropped' };
-    }
-
-    const attempts = lead.outreachAttempts;
-    const opens = lead.outreachOpenCount;
-    const clicks = lead.outreachClickCount;
-
-    if (clicks > 0) {
-        return { kind: 'send', emailType: OutreachEmailType.FOLLOWUP_PROPOSAL };
-    }
-
-    if (opens > 0 && clicks === 0) {
-        if (attempts >= 4) {
-            return { kind: 'drop', reason: 'Opened repeatedly but never replied' };
-        }
-        if (attempts >= 3) {
-            return { kind: 'send', emailType: OutreachEmailType.FOLLOWUP_GBP };
-        }
-        return { kind: 'send', emailType: OutreachEmailType.FOLLOWUP_COMPETITOR };
-    }
-
-    if (opens === 0) {
-        if (attempts >= 3) {
-            return { kind: 'drop', reason: 'Never opened after 3 attempts' };
-        }
-        if (attempts === 0) {
-            return { kind: 'send', emailType: OutreachEmailType.INITIAL };
-        }
-        return { kind: 'send', emailType: OutreachEmailType.FOLLOWUP_RETRY };
-    }
-
-    return { kind: 'skip', reason: 'No action for current state' };
-}
-
-async function findExistingProposalUrl(lead: LeadWithOutreach, baseUrl: string): Promise<string | null> {
+async function findExistingProposalUrl(lead: ProspectLead, baseUrl: string): Promise<string | null> {
     const proposal = await prisma.proposal.findFirst({
         where: {
             tenantId: lead.tenantId,
@@ -133,7 +62,7 @@ async function findExistingProposalUrl(lead: LeadWithOutreach, baseUrl: string):
     return `${baseUrl}/proposal/${proposal.webLinkToken}`;
 }
 
-async function ensureProposalUrlForLead(lead: LeadWithOutreach, baseUrl: string): Promise<string | null> {
+async function ensureProposalUrlForLead(lead: ProspectLead, baseUrl: string): Promise<string | null> {
     const existing = await findExistingProposalUrl(lead, baseUrl);
     if (existing) return existing;
 
@@ -288,23 +217,13 @@ async function fetchEligibleLeads(tenantId: string, limit: number): Promise<Lead
             outreachStage: { notIn: [OutreachLeadStage.REPLIED, OutreachLeadStage.DROPPED] },
             OR: [
                 { outreachStage: OutreachLeadStage.READY },
-                { outreachNextActionAt: null },
-                { outreachNextActionAt: { lte: now } },
+                // Or they have pending sequence emails scheduled for now or the past
+                { outreachEmails: { some: { status: OutreachEmailStatus.PENDING, scheduledAt: { lte: now } } } }
             ],
         },
         include: {
             outreachEmails: {
-                select: {
-                    id: true,
-                    type: true,
-                    status: true,
-                    sentAt: true,
-                    openedAt: true,
-                    clickedAt: true,
-                    repliedAt: true,
-                },
-                orderBy: { createdAt: 'desc' },
-                take: 10,
+                orderBy: { sequencePosition: 'asc' },
             },
         },
         orderBy: [
@@ -339,55 +258,168 @@ export async function processSniperOutreach(
         details: [],
     };
 
+    const now = new Date();
+
     for (const lead of leads) {
         result.processedLeads += 1;
-        const action = decideAction(lead);
 
-        if (action.kind === 'skip') {
+        // 1. If lead is exactly READY, we must generate and insert the entire 5-email sequence
+        if (lead.outreachStage === OutreachLeadStage.READY && lead.outreachEmails.length === 0) {
+            if (!dryRun) {
+                const scorecardToken = await ensureLeadScorecardToken(lead.id);
+                const scorecardUrl = scorecardUrlForToken(scorecardToken, baseUrl);
+
+                const sequence = generateEmailSequence({
+                    tenantId: lead.tenantId,
+                    leadId: lead.id,
+                    businessName: lead.businessName,
+                    city: lead.city,
+                    vertical: lead.vertical,
+                    painScore: lead.painScore,
+                    topFindings: lead.topFindings,
+                    painBreakdown: lead.painBreakdown,
+                    qualificationEvidence: lead.qualificationEvidence,
+                    scorecardUrl: scorecardUrl,
+                });
+
+                // Insert all 5 emails natively
+                for (const step of sequence) {
+                    const scheduledFor = plusHours(step.scheduledHoursOffset, now);
+
+                    const added = await prisma.outreachEmail.create({
+                        data: {
+                            id: randomUUID(),
+                            tenantId: lead.tenantId,
+                            leadId: lead.id,
+                            type: step.type,
+                            status: step.quality.pass ? OutreachEmailStatus.PENDING : OutreachEmailStatus.FAILED,
+                            subject: step.composed.subject,
+                            body: step.composed.body,
+                            qualityScore: step.quality.score,
+                            readabilityGrade: step.quality.readabilityGrade,
+                            wordCount: step.quality.wordCount,
+                            spamRisk: step.quality.spamRisk,
+                            findingsUsed: step.composed.findingsUsed,
+                            scorecardUrl: scorecardUrl,
+                            sequencePosition: step.sequencePosition,
+                            scheduledAt: scheduledFor,
+                            errorMessage: step.quality.pass ? null : step.quality.hardFails.join('; ')
+                        }
+                    });
+                    lead.outreachEmails.push(added); // append locally so we can evaluate it immediately
+                }
+
+                await prisma.prospectLead.update({
+                    where: { id: lead.id },
+                    data: { outreachStage: OutreachLeadStage.EMAIL_SENT } // Just flags it visually out of READY stage
+                });
+            }
+        }
+
+        // 2. Evaluate state branching based on history
+        // Construct history from local lead data
+        let lastOpenedAt: Date | null = null;
+        for (const e of lead.outreachEmails) {
+            if (e.openedAt && (!lastOpenedAt || e.openedAt > lastOpenedAt)) {
+                lastOpenedAt = e.openedAt;
+            }
+        }
+
+        const history: BranchingEventHistory = {
+            totalOpens: lead.outreachOpenCount,
+            totalClicks: lead.outreachClickCount,
+            totalReplies: lead.outreachReplyCount,
+            hasBounced: lead.outreachDropReason === 'Email bounced',
+            hasUnsubscribed: lead.outreachDropReason === 'Prospect unsubscribed',
+            lastOpenedAt
+        };
+
+        const branchDecision = evaluateSequenceBranching(lead.outreachStage, history, now);
+
+        if (branchDecision.kind === 'cancel_sequence' || branchDecision.kind === 'trigger_closing_agent' || branchDecision.kind === 'pause_for_review') {
+            if (!dryRun) {
+                // Determine new status
+                let newStage = OutreachLeadStage.DROPPED;
+                let reason = branchDecision.reason;
+
+                if (branchDecision.kind === 'trigger_closing_agent') {
+                    newStage = OutreachLeadStage.PROPOSAL_QUEUED; // The orchestrator or next loop handles actually creating it
+                    // Actually if it's trigger closing agent, let's proactively start generating the proposal right here if possible
+                    await ensureProposalUrlForLead(lead, baseUrl);
+                } else if (branchDecision.kind === 'pause_for_review') {
+                    newStage = OutreachLeadStage.REPLIED;
+                }
+
+                // Update lead and cancel remaining scheduled emails
+                await prisma.$transaction([
+                    prisma.prospectLead.update({
+                        where: { id: lead.id },
+                        data: {
+                            outreachStage: newStage,
+                            outreachDropReason: reason,
+                        }
+                    }),
+                    prisma.outreachEmail.updateMany({
+                        where: { leadId: lead.id, status: OutreachEmailStatus.PENDING },
+                        data: { status: OutreachEmailStatus.FAILED, errorMessage: 'Cancelled by behavioral branching' }
+                    })
+                ]);
+            }
+
             result.skipped += 1;
             result.details.push({
                 leadId: lead.id,
                 businessName: lead.businessName,
-                action: 'skip',
-                outcome: 'skipped',
-                reason: action.reason,
+                action: 'branching',
+                outcome: branchDecision.kind,
+                reason: branchDecision.reason,
             });
             continue;
         }
 
-        if (action.kind === 'drop') {
-            if (!dryRun) {
-                await markLeadDropped(lead.id, lead.tenantId, action.reason);
-            }
-            result.droppedLeads += 1;
+        if (branchDecision.kind === 'continue' && branchDecision.reason.includes('waiting')) {
+            // Evaluator says: wait 48h since open. We'll skip sending today.
+            result.skipped += 1;
             result.details.push({
                 leadId: lead.id,
                 businessName: lead.businessName,
-                action: 'drop',
-                outcome: dryRun ? 'dry-run' : 'dropped',
-                reason: action.reason,
+                action: 'branching',
+                outcome: 'delayed',
+                reason: branchDecision.reason,
             });
-            continue;
+            continue; // Break out of sending loop for this lead
         }
 
+        // 3. Find the exact next pending email schedule-ready for this sequence
+        const nextEmail = lead.outreachEmails.find(e =>
+            e.status === OutreachEmailStatus.PENDING &&
+            e.scheduledAt && e.scheduledAt <= now
+        );
+
+        if (!nextEmail) {
+            continue; // No emails scheduled to send right now for this lead
+        }
+
+        // 4. Send the nextEmail natively through Resend mappings
         const domainSelection = await selectDomainForSend(tenantId);
         if (!domainSelection) {
             result.domainCapReached = true;
             result.details.push({
                 leadId: lead.id,
                 businessName: lead.businessName,
-                action: action.emailType,
+                action: nextEmail.type,
                 outcome: 'blocked',
                 reason: 'Domain daily cap reached',
             });
             break;
         }
 
-        const scorecardToken = await ensureLeadScorecardToken(lead.id);
-        const scorecardUrl = scorecardUrlForToken(scorecardToken, baseUrl);
-
+        // Finalize Tracking Params & Proposal injection optionally
+        const emailId = nextEmail.id;
+        const scorecardUrl = nextEmail.scorecardUrl!; // Must exist
         let proposalUrl: string | null = null;
-        if (action.emailType === OutreachEmailType.FOLLOWUP_PROPOSAL) {
+
+        if (nextEmail.type === OutreachEmailType.FOLLOWUP_PROPOSAL) {
             proposalUrl = await ensureProposalUrlForLead(lead, baseUrl);
             if (!proposalUrl) {
                 if (!dryRun) {
@@ -395,7 +427,6 @@ export async function processSniperOutreach(
                         where: { id: lead.id },
                         data: {
                             outreachStage: OutreachLeadStage.PROPOSAL_QUEUED,
-                            outreachNextActionAt: plusHours(2),
                         },
                     });
                 }
@@ -403,7 +434,7 @@ export async function processSniperOutreach(
                 result.details.push({
                     leadId: lead.id,
                     businessName: lead.businessName,
-                    action: action.emailType,
+                    action: nextEmail.type,
                     outcome: dryRun ? 'dry-run' : 'proposal-queued',
                     reason: 'Proposal is being generated',
                 });
@@ -411,105 +442,42 @@ export async function processSniperOutreach(
             }
         }
 
-        let composed = composeSniperEmail({
-            businessName: lead.businessName,
-            city: lead.city,
-            vertical: lead.vertical,
-            painScore: lead.painScore,
-            topFindings: lead.topFindings,
-            painBreakdown: lead.painBreakdown,
-            qualificationEvidence: lead.qualificationEvidence,
-            scorecardUrl,
-            proposalUrl,
-            type: action.emailType,
-            attempt: 1,
-        });
-
-        let quality = checkSniperEmailQuality({
-            subject: composed.subject,
-            body: composed.body,
-            requiredFindingSnippets: composed.requiredFindingSnippets,
-        });
-
-        for (let attempt = 2; attempt <= 3 && !quality.pass; attempt += 1) {
-            composed = composeSniperEmail({
-                businessName: lead.businessName,
-                city: lead.city,
-                vertical: lead.vertical,
-                painScore: lead.painScore,
-                topFindings: lead.topFindings,
-                painBreakdown: lead.painBreakdown,
-                qualificationEvidence: lead.qualificationEvidence,
-                scorecardUrl,
-                proposalUrl,
-                type: action.emailType,
-                attempt,
-            });
-            quality = checkSniperEmailQuality({
-                subject: composed.subject,
-                body: composed.body,
-                requiredFindingSnippets: composed.requiredFindingSnippets,
-            });
-        }
-
-        if (!quality.pass) {
-            result.skipped += 1;
-            result.details.push({
-                leadId: lead.id,
-                businessName: lead.businessName,
-                action: action.emailType,
-                outcome: 'failed-quality-gate',
-                reason: quality.hardFails.join('; '),
-            });
-            continue;
-        }
-
-        const emailId = randomUUID();
         const trackedScorecardUrl = `${baseUrl}/api/outreach/track/click/${emailId}?kind=scorecard&url=${encodeURIComponent(scorecardUrl)}`;
         const trackedProposalUrl = proposalUrl
             ? `${baseUrl}/api/outreach/track/click/${emailId}?kind=proposal&url=${encodeURIComponent(proposalUrl)}`
             : null;
         const trackingPixelUrl = `${baseUrl}/api/outreach/track/open/${emailId}.png`;
 
-        const trackedBody = replaceUrl(
-            replaceUrl(composed.body, proposalUrl, trackedProposalUrl),
+        let trackedBody = replaceUrl(
+            replaceUrl(nextEmail.body, proposalUrl, trackedProposalUrl),
             scorecardUrl,
             trackedScorecardUrl,
         );
+
+        // Inject tracking pixel for read-receipts
+        // Inject tracking click URL mappings natively inside our generated html
+        await prisma.outreachEmail.update({
+            where: { id: emailId },
+            data: {
+                trackingPixelUrl,
+                proposalUrl,
+                trackingClickBaseUrl: `${baseUrl}/api/outreach/track/click/${emailId}`,
+                body: trackedBody,
+                domainId: domainSelection.domain.id
+            }
+        });
 
         if (dryRun) {
             result.sentEmails += 1;
             result.details.push({
                 leadId: lead.id,
                 businessName: lead.businessName,
-                action: action.emailType,
+                action: nextEmail.type,
                 outcome: 'dry-run',
-                reason: `quality ${quality.score}`,
+                reason: `quality ${nextEmail.qualityScore}`,
             });
             continue;
         }
-
-        await prisma.outreachEmail.create({
-            data: {
-                id: emailId,
-                tenantId: lead.tenantId,
-                leadId: lead.id,
-                domainId: domainSelection.domain.id,
-                type: action.emailType,
-                status: OutreachEmailStatus.PENDING,
-                subject: composed.subject,
-                body: trackedBody,
-                qualityScore: quality.score,
-                readabilityGrade: quality.readabilityGrade,
-                wordCount: quality.wordCount,
-                spamRisk: quality.spamRisk,
-                findingsUsed: composed.findingsUsed,
-                scorecardUrl,
-                proposalUrl,
-                trackingPixelUrl,
-                trackingClickBaseUrl: `${baseUrl}/api/outreach/track/click/${emailId}`,
-            },
-        });
 
         try {
             const html = renderHtmlBody(trackedBody, trackingPixelUrl);
@@ -517,7 +485,7 @@ export async function processSniperOutreach(
                 fromName: domainSelection.domain.fromName,
                 fromEmail: domainSelection.domain.fromEmail,
                 toEmail: lead.decisionMakerEmail!,
-                subject: composed.subject,
+                subject: nextEmail.subject,
                 html,
                 leadId: lead.id,
                 tenantId: lead.tenantId,
@@ -537,8 +505,7 @@ export async function processSniperOutreach(
                     data: {
                         outreachAttempts: { increment: 1 },
                         outreachLastContactedAt: new Date(),
-                        outreachNextActionAt: resolveNextActionAt(action.emailType),
-                        outreachStage: action.emailType === OutreachEmailType.FOLLOWUP_PROPOSAL
+                        outreachStage: nextEmail.type === OutreachEmailType.FOLLOWUP_PROPOSAL
                             ? OutreachLeadStage.PROPOSAL_SENT
                             : OutreachLeadStage.EMAIL_SENT,
                     },
@@ -550,9 +517,9 @@ export async function processSniperOutreach(
                         emailId,
                         type: OutreachEventType.EMAIL_SENT,
                         metadata: {
-                            emailType: action.emailType,
+                            emailType: nextEmail.type,
                             fromEmail: domainSelection.domain.fromEmail,
-                            qualityScore: quality.score,
+                            qualityScore: nextEmail.qualityScore,
                         },
                     },
                 }),
@@ -564,9 +531,9 @@ export async function processSniperOutreach(
             result.details.push({
                 leadId: lead.id,
                 businessName: lead.businessName,
-                action: action.emailType,
+                action: nextEmail.type,
                 outcome: 'sent',
-                reason: `quality ${quality.score}`,
+                reason: `quality ${nextEmail.qualityScore}`,
             });
         } catch (error) {
             await prisma.outreachEmail.update({
@@ -580,7 +547,7 @@ export async function processSniperOutreach(
             result.details.push({
                 leadId: lead.id,
                 businessName: lead.businessName,
-                action: action.emailType,
+                action: nextEmail.type,
                 outcome: 'send-failed',
                 reason: error instanceof Error ? error.message : String(error),
             });
@@ -600,4 +567,3 @@ export async function processSniperOutreach(
 
     return result;
 }
-

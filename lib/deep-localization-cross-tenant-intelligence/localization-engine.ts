@@ -13,26 +13,23 @@ import {
 } from './types';
 import { LocaleConfigManager } from './locale-config-manager';
 
+import { generateWithGemini } from '@/lib/llm/provider';
+
 /**
- * Mock Gemini API client for localization
- * In production, this would call the actual Gemini API
+ * Real Gemini API client for localization using standard provider
  */
 class GeminiClient {
   async callWithThinkingBudget(
     prompt: string,
     thinkingBudget: number = 4096
   ): Promise<string> {
-    // Mock implementation that simulates Gemini API behavior
-    // In production, this would call: https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-pro:generateContent
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        // Simulate a localized response
-        resolve(
-          `[THINKING: Using ${thinkingBudget} tokens for cultural adaptation]\n\n` +
-            `Localized prompt with cultural context adapted for the target market.`
-        );
-      }, 100);
+    const response = await generateWithGemini({
+      model: 'gemini-2.0-pro-exp-01-21',
+      input: prompt,
+      thinkingBudget: thinkingBudget,
+      metadata: { node: 'localization_engine' }
     });
+    return response.text;
   }
 }
 
@@ -45,6 +42,8 @@ export class LocalizationEngine {
   private localeConfigManager: LocaleConfigManager;
   private geminiClient: GeminiClient;
   private localeConfigs: Map<string, LocaleConfig> = new Map();
+  /** In-memory translation cache: key = sha256(content:locale), value = translated string */
+  private translationCache: Map<string, string> = new Map();
 
   constructor(localeConfigManager: LocaleConfigManager) {
     this.localeConfigManager = localeConfigManager;
@@ -281,13 +280,53 @@ and create a culturally appropriate prompt.`;
     return contextLines.join('\n').trim();
   }
 
+  /**
+   * Translates a text string to the target locale using Gemini Flash.
+   * Caches results in-memory to avoid redundant API calls.
+   * Falls back to original text on LLM error.
+   */
+  private async translateContent(text: string, targetLocale: string): Promise<string> {
+    if (!text || targetLocale === 'en-US') return text;
+
+    // Cache key: locale + first 200 chars of content (cheap and collision-resistant enough)
+    const cacheKey = `${targetLocale}:${text.slice(0, 200)}`;
+    const cached = this.translationCache.get(cacheKey);
+    if (cached !== undefined) return cached;
+
+    const systemPrompt = `You are a professional translator. Translate the following marketing/technical content to ${targetLocale}. Maintain the original tone, technical accuracy, and formatting. Do not add or remove information. Return ONLY the translated text, no preamble.`;
+    const fullPrompt = `${systemPrompt}\n\n${text}`;
+
+    try {
+      const response = await generateWithGemini({
+        model: process.env.GEMINI_FLASH_MODEL || 'gemini-2.0-flash',
+        input: fullPrompt,
+        temperature: 0.1,          // Low temperature for consistent translations
+        maxOutputTokens: 2048,
+        metadata: { node: 'localization_translate' },
+      });
+      const translated = response.text?.trim() || text;
+      // Cap cache at 5,000 entries to avoid unbounded memory growth
+      if (this.translationCache.size >= 5000) {
+        const firstKey = this.translationCache.keys().next().value;
+        if (firstKey) this.translationCache.delete(firstKey);
+      }
+      this.translationCache.set(cacheKey, translated);
+      return translated;
+    } catch (error) {
+      console.error(`[LocalizationEngine] Translation failed for locale ${targetLocale}:`, error);
+      return text; // Graceful fallback to original
+    }
+  }
+
   private async localizeFinding(findings: any[], locale: string): Promise<LocalizedFinding[]> {
-    return findings.map((finding) => ({
-      originalFinding: finding,
-      localizedText: this.adaptTextForLocale(finding.text || '', locale),
-      locale,
-      culturalContext: `Adapted for ${locale} market context`,
-    }));
+    return Promise.all(
+      findings.map(async (finding) => ({
+        originalFinding: finding,
+        localizedText: await this.translateContent(finding.text || finding.description || '', locale),
+        locale,
+        culturalContext: `Translated to ${locale} via Gemini Flash`,
+      }))
+    );
   }
 
   private async localizeRecommendations(
@@ -295,12 +334,14 @@ and create a culturally appropriate prompt.`;
     locale: string,
     regulatoryChecker?: any
   ): Promise<LocalizedRecommendation[]> {
-    return recommendations.map((rec) => ({
-      originalRecommendation: rec,
-      localizedText: this.adaptTextForLocale(rec.text || '', locale),
-      locale,
-      culturalContext: `Adapted for ${locale} market context`,
-    }));
+    return Promise.all(
+      recommendations.map(async (rec) => ({
+        originalRecommendation: rec,
+        localizedText: await this.translateContent(rec.text || rec.description || '', locale),
+        locale,
+        culturalContext: `Translated to ${locale} via Gemini Flash`,
+      }))
+    );
   }
 
   private localizeBenchmarks(benchmarks: any[], locale: string): LocalizedBenchmark[] {

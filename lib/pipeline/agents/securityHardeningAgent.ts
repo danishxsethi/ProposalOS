@@ -51,7 +51,7 @@ export class SecurityHardeningAgent extends BaseAgent {
       ];
 
       const metrics = {
-        sslRating: 'A+',
+        sslRating: 95,
         securityHeadersScore: 95,
         vulnerabilitiesPatched: 3,
         dependenciesUpdated: 7,

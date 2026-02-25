@@ -9,6 +9,16 @@ import { computeGbpCompleteness, type GbpCompletenessResult, type CompetitorGbpD
 import type { ConversionDetectionResult } from '@/lib/analysis/conversionDetector';
 import type { ConversionResult } from '@/lib/modules/conversion';
 
+export function normalizeConfidence(raw: number, sourceScale: '0-100' | '1-10' | 'pagespeed'): number {
+    if (sourceScale === '1-10') return Math.max(1, Math.min(10, Math.round(Math.abs(raw))));
+    if (sourceScale === '0-100') return Math.max(1, Math.min(10, Math.round(raw / 10)));
+    if (sourceScale === 'pagespeed') {
+        const val = raw > 10 ? raw / 10 : raw;
+        return Math.max(1, Math.min(10, Math.round(val)));
+    }
+    return Math.max(1, Math.min(10, Math.round(raw)));
+}
+
 const PSI_POINTER = 'https://www.googleapis.com/pagespeedonline/v5/runPagespeed';
 const PLACES_POINTER = 'https://places.googleapis.com';
 const SERPAPI_POINTER = 'https://serpapi.com';
@@ -79,7 +89,7 @@ function generateSchemaFindingsFromAnalysis(schema: SchemaAnalysis, pointer: str
                 evidence: [createEvidence({ pointer, source: 'schema_analysis', type: 'text', value: 'Missing', label: check.id })],
                 metrics: { schemaCheck: check.id, present: false },
                 impactScore: impactByCheck[check.id] ?? 5,
-                confidenceScore: 95,
+                confidenceScore: normalizeConfidence(9.5, '1-10'),
                 effortEstimate: 'MEDIUM',
                 recommendedFix: example ? [check.recommendation, example] : [check.recommendation],
             });
@@ -120,7 +130,7 @@ function generateCwvFindingsFromFull(cwvFull: CoreWebVitalsFull, pointer: string
             evidence: [createEvidence({ pointer, source: 'pagespeed_v5', type: 'metric', value, label })],
             metrics: { ...cwvMetrics },
             impactScore: impact,
-            confidenceScore: 95,
+            confidenceScore: normalizeConfidence(95, '0-100'),
             effortEstimate: type === 'PAINKILLER' ? 'HIGH' : 'MEDIUM',
             recommendedFix: fix,
         });
@@ -252,7 +262,7 @@ function generateCwvFindingsFromFull(cwvFull: CoreWebVitalsFull, pointer: string
             evidence: [createEvidence({ pointer, source: 'pagespeed_v5', type: 'metric', value: cwvFull.totalPageWeightMB.toFixed(2), label: 'Page Weight (MB)' })],
             metrics: { ...cwvMetrics, totalPageWeightMB: cwvFull.totalPageWeightMB },
             impactScore: 5,
-            confidenceScore: 90,
+            confidenceScore: normalizeConfidence(90, '0-100'),
             effortEstimate: 'MEDIUM',
             recommendedFix: ['Compress images (WebP)', 'Minify CSS/JS', 'Enable GZIP/Brotli', 'Lazy-load below-fold content'],
         });
@@ -267,7 +277,7 @@ function generateCwvFindingsFromFull(cwvFull: CoreWebVitalsFull, pointer: string
             evidence: [createEvidence({ pointer, source: 'pagespeed_v5', type: 'metric', value: cwvFull.renderBlockingCount, label: 'Render-blocking count' })],
             metrics: { ...cwvMetrics, renderBlockingCount: cwvFull.renderBlockingCount },
             impactScore: 5,
-            confidenceScore: 85,
+            confidenceScore: normalizeConfidence(85, '0-100'),
             effortEstimate: 'MEDIUM',
             recommendedFix: ['Inline critical CSS', 'Defer non-critical JavaScript', 'Use async/defer on script tags'],
         });
@@ -341,7 +351,7 @@ export function generateWebsiteFindings(data: any): Finding[] {
                     evidence: [createEvidence({ pointer, source: 'pagespeed_v5', type: 'metric', value: Math.round(lcpMs), label: 'LCP (ms)', raw: { lcp_ms: lcpMs } })],
                     metrics: cwvMetrics,
                     impactScore: 8,
-                    confidenceScore: 95,
+                    confidenceScore: normalizeConfidence(9.5, '1-10'),
                     effortEstimate: 'HIGH',
                     recommendedFix: ['Optimize server response', 'Preload LCP image', 'Remove render-blocking resources'],
                 });
@@ -355,7 +365,7 @@ export function generateWebsiteFindings(data: any): Finding[] {
                     evidence: [createEvidence({ pointer, source: 'pagespeed_v5', type: 'metric', value: Math.round(lcpMs), label: 'LCP (ms)', raw: { lcp_ms: lcpMs } })],
                     metrics: cwvMetrics,
                     impactScore: 5,
-                    confidenceScore: 90,
+                    confidenceScore: normalizeConfidence(9, '1-10'),
                     effortEstimate: 'MEDIUM',
                     recommendedFix: ['Preload critical resources', 'Reduce JavaScript execution time'],
                 });
@@ -373,7 +383,7 @@ export function generateWebsiteFindings(data: any): Finding[] {
                     evidence: [createEvidence({ pointer, source: 'pagespeed_v5', type: 'metric', value: Math.round(fcpMs), label: 'FCP (ms)', raw: { fcp_ms: fcpMs } })],
                     metrics: cwvMetrics,
                     impactScore: 7,
-                    confidenceScore: 95,
+                    confidenceScore: normalizeConfidence(9.5, '1-10'),
                     effortEstimate: 'HIGH',
                     recommendedFix: ['Eliminate render-blocking resources', 'Reduce server response time'],
                 });
@@ -387,7 +397,7 @@ export function generateWebsiteFindings(data: any): Finding[] {
                     evidence: [createEvidence({ pointer, source: 'pagespeed_v5', type: 'metric', value: Math.round(fcpMs), label: 'FCP (ms)', raw: { fcp_ms: fcpMs } })],
                     metrics: cwvMetrics,
                     impactScore: 4,
-                    confidenceScore: 90,
+                    confidenceScore: normalizeConfidence(9, '1-10'),
                     effortEstimate: 'MEDIUM',
                     recommendedFix: ['Optimize critical rendering path', 'Use browser caching'],
                 });
@@ -405,7 +415,7 @@ export function generateWebsiteFindings(data: any): Finding[] {
                     evidence: [createEvidence({ pointer, source: 'pagespeed_v5', type: 'metric', value: cls.toFixed(2), label: 'CLS', raw: { cls_score: cls } })],
                     metrics: cwvMetrics,
                     impactScore: 7,
-                    confidenceScore: 95,
+                    confidenceScore: normalizeConfidence(95, '0-100'),
                     effortEstimate: 'MEDIUM',
                     recommendedFix: ['Add size attributes to images', 'Reserve space for dynamic content'],
                 });
@@ -419,7 +429,7 @@ export function generateWebsiteFindings(data: any): Finding[] {
                     evidence: [createEvidence({ pointer, source: 'pagespeed_v5', type: 'metric', value: cls.toFixed(2), label: 'CLS', raw: { cls_score: cls } })],
                     metrics: cwvMetrics,
                     impactScore: 4,
-                    confidenceScore: 90,
+                    confidenceScore: normalizeConfidence(90, '0-100'),
                     effortEstimate: 'MEDIUM',
                     recommendedFix: ['Set explicit dimensions on media', 'Prefer transform animations'],
                 });
@@ -437,7 +447,7 @@ export function generateWebsiteFindings(data: any): Finding[] {
                     evidence: [createEvidence({ pointer, source: 'pagespeed_v5', type: 'metric', value: Math.round(tbtMs), label: 'TBT (ms)', raw: { tbt_ms: tbtMs } })],
                     metrics: cwvMetrics,
                     impactScore: 6,
-                    confidenceScore: 90,
+                    confidenceScore: normalizeConfidence(90, '0-100'),
                     effortEstimate: 'HIGH',
                     recommendedFix: ['Split and defer JavaScript', 'Reduce JavaScript execution time'],
                 });
@@ -451,7 +461,7 @@ export function generateWebsiteFindings(data: any): Finding[] {
                     evidence: [createEvidence({ pointer, source: 'pagespeed_v5', type: 'metric', value: Math.round(tbtMs), label: 'TBT (ms)', raw: { tbt_ms: tbtMs } })],
                     metrics: cwvMetrics,
                     impactScore: 4,
-                    confidenceScore: 85,
+                    confidenceScore: normalizeConfidence(85, '0-100'),
                     effortEstimate: 'MEDIUM',
                     recommendedFix: ['Code-split and lazy-load non-critical JS'],
                 });
@@ -485,7 +495,7 @@ export function generateWebsiteFindings(data: any): Finding[] {
             evidence: [createEvidence({ pointer: finalUrl || PSI_POINTER, source: 'pagespeed_v5', type: 'score', value: perfScore, label: 'Performance Score', raw: { score: perfScore } })],
             metrics: { performanceScore: perfScore, ...cwvMetrics },
             impactScore: perfScore < 30 ? 10 : perfScore < 50 ? 8 : perfScore < 70 ? 6 : 4,
-            confidenceScore: 10,
+            confidenceScore: normalizeConfidence(10, '1-10'),
             effortEstimate: perfScore < 50 ? 'MEDIUM' : 'LOW',
             recommendedFix: [
                 'Optimize images (compress, use WebP)',
@@ -508,7 +518,7 @@ export function generateWebsiteFindings(data: any): Finding[] {
             evidence: [createEvidence({ pointer: finalUrl || PSI_POINTER, source: 'pagespeed_v5', type: 'score', value: seoScore, label: 'SEO Score', raw: { score: seoScore } })],
             metrics: { seoScore },
             impactScore: seoScore < 50 ? 7 : 5,
-            confidenceScore: 9,
+            confidenceScore: normalizeConfidence(9, '1-10'),
             effortEstimate: 'LOW',
             recommendedFix: [
                 'Add missing meta descriptions',
@@ -531,7 +541,7 @@ export function generateWebsiteFindings(data: any): Finding[] {
             evidence: [createEvidence({ pointer: finalUrl || PSI_POINTER, source: 'pagespeed_v5', type: 'score', value: a11yScore, label: 'Accessibility Score', raw: { score: a11yScore } })],
             metrics: { accessibilityScore: a11yScore },
             impactScore: 4,
-            confidenceScore: 9,
+            confidenceScore: normalizeConfidence(9, '1-10'),
             effortEstimate: 'MEDIUM',
             recommendedFix: [
                 'Add ARIA labels to interactive elements',
@@ -579,7 +589,7 @@ function generateConversionFindingsFromAnalysis(
                 elementsDetected: conversion.elements.filter((e) => e.detected).length,
             },
             impactScore: criticalCount >= 2 ? 8 : 6,
-            confidenceScore: 90,
+            confidenceScore: normalizeConfidence(90, '0-100'),
             effortEstimate: 'MEDIUM',
             recommendedFix: conversion.recommendations.slice(0, 5),
         });
@@ -595,7 +605,7 @@ function generateConversionFindingsFromAnalysis(
             evidence: [createEvidence({ pointer, source: 'conversion_detector', type: 'text', value: 'Missing', label: 'tel: link' })],
             metrics: { element: 'phone' },
             impactScore: 8,
-            confidenceScore: 95,
+            confidenceScore: normalizeConfidence(95, '0-100'),
             effortEstimate: 'LOW',
             recommendedFix: ['Add <a href="tel:+1234567890">Call Now</a> in header/hero', 'Ensure phone is visible above the fold on mobile'],
         });
@@ -654,7 +664,7 @@ export function generateConversionFindings(
                 hasBooking: elements.booking.present,
             },
             impactScore: missing.length >= 2 ? 8 : 6,
-            confidenceScore: 90,
+            confidenceScore: normalizeConfidence(90, '0-100'),
             effortEstimate: 'MEDIUM',
             recommendedFix: recommendations.slice(0, 5),
         });
@@ -670,7 +680,7 @@ export function generateConversionFindings(
             evidence: [createEvidence({ pointer, source: 'conversion_module', type: 'text', value: 'Missing', label: 'tel: link' })],
             metrics: { element: 'phone' },
             impactScore: 8,
-            confidenceScore: 95,
+            confidenceScore: normalizeConfidence(95, '0-100'),
             effortEstimate: 'LOW',
             recommendedFix: [
                 'Add <a href="tel:+1234567890">Call Now</a> in header or hero',
@@ -695,7 +705,7 @@ export function generateConversionFindings(
             })],
             metrics: { ctasCount: elements.ctas.count, aboveFold: elements.ctas.aboveFold },
             impactScore: 5,
-            confidenceScore: 90,
+            confidenceScore: normalizeConfidence(90, '0-100'),
             effortEstimate: 'LOW',
             recommendedFix: ['Move primary CTA to hero/header', 'Use contrasting button color for visibility'],
         });
@@ -715,13 +725,58 @@ export function generateConversionFindings(
             evidence: [createEvidence({ pointer, source: 'conversion_module', type: 'text', value: 'Missing', label: 'booking widget' })],
             metrics: { element: 'booking' },
             impactScore: 7,
-            confidenceScore: 90,
+            confidenceScore: normalizeConfidence(90, '0-100'),
             effortEstimate: 'MEDIUM',
             recommendedFix: [
                 'Add Calendly, Acuity, Square Appointments, or similar',
                 'Embed on homepage or /book page',
             ],
         });
+    }
+
+    if ((data as any).content) {
+        const { readabilityScore, gradeLevel, keywords } = (data as any).content;
+
+        if (readabilityScore < 50 || gradeLevel > 10) {
+            findings.push({
+                module: 'conversion',
+                category: 'content',
+                type: 'VITAMIN',
+                title: 'Text readability is too complex',
+                description: `Readability score is ${Math.round(readabilityScore)}/100 (Grade ${gradeLevel}). Keep your content at an 8th-grade reading level to maximize conversions.`,
+                evidence: [createEvidence({ pointer, source: 'conversion_module', type: 'metric', value: Math.round(readabilityScore), label: 'Readability (Flesch)' })],
+                metrics: { readabilityScore, gradeLevel },
+                impactScore: 5,
+                confidenceScore: normalizeConfidence(90, '0-100'),
+                effortEstimate: 'MEDIUM',
+                recommendedFix: [
+                    'Use shorter sentences (under 20 words)',
+                    'Replace complex words with simpler alternatives',
+                    'Break up large paragraphs with headings and bullet points'
+                ]
+            });
+        }
+
+        if (keywords && keywords.length > 0) {
+            const topKeyword = keywords[0];
+            const isStuffing = topKeyword.density > 5;
+
+            findings.push({
+                module: 'conversion',
+                category: 'content',
+                type: 'VITAMIN',
+                title: isStuffing ? `Possible keyword stuffing: "${topKeyword.word}"` : `Top keyword: "${topKeyword.word}"`,
+                description: isStuffing
+                    ? `The word "${topKeyword.word}" appears very frequently (${topKeyword.density}% density). This may trigger spam filters and hurt readability.`
+                    : `Your most frequent keyword is "${topKeyword.word}" (${topKeyword.density}% density). Ensure this aligns with your primary services.`,
+                evidence: [createEvidence({ pointer, source: 'conversion_module', type: 'text', value: topKeyword.word, label: 'Top Keyword' })],
+                metrics: { topKeyword: topKeyword.word, density: topKeyword.density, keywords },
+                impactScore: isStuffing ? 4 : 2,
+                confidenceScore: normalizeConfidence(90, '0-100'),
+                effortEstimate: 'LOW',
+                recommendedFix: isStuffing ? ['Use synonyms instead of repeating the same keyword', 'Focus on natural language'] : []
+            });
+        }
     }
 
     return findings;
@@ -765,7 +820,7 @@ export function generateSchemaMarkupFindings(
                 schemasFoundCount: schemasFound.length,
             },
             impactScore: score < 40 ? 8 : 6,
-            confidenceScore: 95,
+            confidenceScore: normalizeConfidence(95, '0-100'),
             effortEstimate: 'MEDIUM',
             recommendedFix: recommendations.length > 0 ? recommendations : [
                 'Add LocalBusiness schema with your address, phone, and hours to appear in Google\'s local pack.',
@@ -786,7 +841,7 @@ export function generateSchemaMarkupFindings(
             evidence: [createEvidence({ pointer, source: 'schema_markup', type: 'text', value: 'Missing', label: 'LocalBusiness/Organization' })],
             metrics: { schemaType: 'LocalBusiness', present: false },
             impactScore: 8,
-            confidenceScore: 95,
+            confidenceScore: normalizeConfidence(95, '0-100'),
             effortEstimate: 'MEDIUM',
             recommendedFix: [
                 'Add JSON-LD to your homepage with @context, @type LocalBusiness, name, url, address (PostalAddress), telephone, openingHours.',
@@ -804,7 +859,7 @@ export function generateSchemaMarkupFindings(
             evidence: [createEvidence({ pointer, source: 'schema_markup', type: 'text', value: 'Missing', label: 'WebSite' })],
             metrics: { schemaType: 'WebSite', present: false },
             impactScore: 5,
-            confidenceScore: 95,
+            confidenceScore: normalizeConfidence(95, '0-100'),
             effortEstimate: 'LOW',
             recommendedFix: [
                 'Add WebSite JSON-LD with @context, @type WebSite, name, and url.',
@@ -822,7 +877,7 @@ export function generateSchemaMarkupFindings(
             evidence: [createEvidence({ pointer, source: 'schema_markup', type: 'text', value: 'Missing', label: 'BreadcrumbList' })],
             metrics: { schemaType: 'BreadcrumbList', present: false },
             impactScore: 4,
-            confidenceScore: 9,
+            confidenceScore: normalizeConfidence(9, '1-10'),
             effortEstimate: 'LOW',
             recommendedFix: [
                 'Add BreadcrumbList JSON-LD to each page with itemListElement pointing to each breadcrumb level.',
@@ -852,7 +907,7 @@ export function generateSchemaMarkupFindings(
                 })],
                 metrics: { schemaType: schema.type, completeness: schema.completeness, missingProperties: schema.missingProperties },
                 impactScore: 4,
-                confidenceScore: 9,
+                confidenceScore: normalizeConfidence(9, '1-10'),
                 effortEstimate: 'LOW',
                 recommendedFix: schema.missingProperties.map((p) => `Add "${p}" property to your ${schema.type} schema.`),
             });
@@ -902,7 +957,7 @@ export function generateAccessibilityFindings(
                 wcagLevel: (data as AccessibilityResult['data']).wcagLevel,
             },
             impactScore: isLegalRisk ? 9 : 6,
-            confidenceScore: 95,
+            confidenceScore: normalizeConfidence(95, '0-100'),
             effortEstimate: isLegalRisk ? 'HIGH' : 'MEDIUM',
             recommendedFix: recommendations.slice(0, 6),
         });
@@ -920,7 +975,7 @@ export function generateAccessibilityFindings(
             evidence: [createEvidence({ pointer, source: 'accessibility_scan', type: 'metric', value: alt.percentage, label: 'Alt text coverage %', raw: alt })],
             metrics: { altTextCoverage: alt.percentage, totalImages: alt.total },
             impactScore: alt.percentage < 50 ? 8 : 5,
-            confidenceScore: 95,
+            confidenceScore: normalizeConfidence(95, '0-100'),
             effortEstimate: 'LOW',
             recommendedFix: ['Add descriptive alt text to every image', 'Use alt="" for decorative images'],
         });
@@ -941,7 +996,7 @@ export function generateAccessibilityFindings(
                 evidence: [createEvidence({ pointer, source: 'accessibility_scan', type: 'text', value: JSON.stringify(h), label: 'Heading structure' })],
                 metrics: { h1Count: h.h1Count, skipLevels: h.skipLevels },
                 impactScore: 5,
-                confidenceScore: 90,
+                confidenceScore: normalizeConfidence(90, '0-100'),
                 effortEstimate: 'LOW',
                 recommendedFix: h.h1Count !== 1
                     ? ['Ensure exactly one H1 per page', 'Use H2 for main sections, H3 for subsections']
@@ -962,7 +1017,7 @@ export function generateAccessibilityFindings(
             evidence: [createEvidence({ pointer, source: 'accessibility_scan', type: 'metric', value: c.failCount, label: 'Contrast violations', raw: c })],
             metrics: { contrastFailCount: c.failCount, worstRatio: c.worstRatio },
             impactScore: c.failCount > 10 ? 7 : 5,
-            confidenceScore: 95,
+            confidenceScore: normalizeConfidence(95, '0-100'),
             effortEstimate: 'MEDIUM',
             recommendedFix: ['Aim for 4.5:1 contrast (normal text)', 'Aim for 3:1 (large text)', 'Use a contrast checker tool'],
         });
@@ -980,7 +1035,7 @@ export function generateAccessibilityFindings(
             evidence: [createEvidence({ pointer, source: 'accessibility_scan', type: 'metric', value: f.percentage, label: 'Labeled inputs %' })],
             metrics: { formLabelCoverage: f.percentage },
             impactScore: 6,
-            confidenceScore: 95,
+            confidenceScore: normalizeConfidence(95, '0-100'),
             effortEstimate: 'LOW',
             recommendedFix: ['Add <label> for every input', 'Use aria-label if visual label is not possible'],
         });
@@ -998,7 +1053,7 @@ export function generateAccessibilityFindings(
             evidence: [createEvidence({ pointer, source: 'accessibility_scan', type: 'text', value: l.examples?.join(', ') || '', label: 'Examples' })],
             metrics: { genericLinkCount: l.genericCount },
             impactScore: 4,
-            confidenceScore: 90,
+            confidenceScore: normalizeConfidence(90, '0-100'),
             effortEstimate: 'LOW',
             recommendedFix: ['Replace "click here" with "Download the report"', 'Replace "read more" with the article title'],
         });
@@ -1014,7 +1069,7 @@ export function generateAccessibilityFindings(
             evidence: [createEvidence({ pointer, source: 'accessibility_scan', type: 'text', value: 'Missing', label: 'html lang' })],
             metrics: {},
             impactScore: 4,
-            confidenceScore: 95,
+            confidenceScore: normalizeConfidence(95, '0-100'),
             effortEstimate: 'LOW',
             recommendedFix: ['Add lang="en" to the <html> tag'],
         });
@@ -1029,7 +1084,7 @@ export function generateAccessibilityFindings(
             evidence: [createEvidence({ pointer, source: 'accessibility_scan', type: 'text', value: 'Missing', label: 'viewport meta' })],
             metrics: {},
             impactScore: 4,
-            confidenceScore: 95,
+            confidenceScore: normalizeConfidence(95, '0-100'),
             effortEstimate: 'LOW',
             recommendedFix: ['Add <meta name="viewport" content="width=device-width, initial-scale=1">'],
         });
@@ -1075,7 +1130,7 @@ export function generateSecurityFindings(
             })],
             metrics: { securityScore: score, securityGrade: grade },
             impactScore: isCritical ? 9 : 6,
-            confidenceScore: 95,
+            confidenceScore: normalizeConfidence(95, '0-100'),
             effortEstimate: isCritical ? 'HIGH' : 'MEDIUM',
             recommendedFix: recommendations.slice(0, 6),
         });
@@ -1091,7 +1146,7 @@ export function generateSecurityFindings(
             evidence: [createEvidence({ pointer, source: 'security_audit', type: 'text', value: 'HTTP', label: 'Protocol' })],
             metrics: { httpsEnabled: false },
             impactScore: 9,
-            confidenceScore: 95,
+            confidenceScore: normalizeConfidence(95, '0-100'),
             effortEstimate: 'HIGH',
             recommendedFix: ['Enable HTTPS with an SSL certificate', 'Redirect all HTTP traffic to HTTPS'],
         });
@@ -1113,7 +1168,7 @@ export function generateSecurityFindings(
             })],
             metrics: { certificateValid: false },
             impactScore: 8,
-            confidenceScore: 95,
+            confidenceScore: normalizeConfidence(95, '0-100'),
             effortEstimate: 'MEDIUM',
             recommendedFix: ['Renew your SSL certificate', 'Ensure certificate covers your domain'],
         });
@@ -1136,7 +1191,7 @@ export function generateSecurityFindings(
             })],
             metrics: { missingHeaderCount: missingHeaders.length },
             impactScore: 5,
-            confidenceScore: 90,
+            confidenceScore: normalizeConfidence(90, '0-100'),
             effortEstimate: 'MEDIUM',
             recommendedFix: missingHeaders.slice(0, 3).map((h) => h.recommendation),
         });
@@ -1152,7 +1207,7 @@ export function generateSecurityFindings(
             evidence: [createEvidence({ pointer, source: 'security_audit', type: 'text', value: 'Mixed content', label: 'Issue' })],
             metrics: { mixedContent: true },
             impactScore: 5,
-            confidenceScore: 85,
+            confidenceScore: normalizeConfidence(85, '0-100'),
             effortEstimate: 'LOW',
             recommendedFix: ['Update all resource URLs to use https://', 'Check images, scripts, and stylesheets'],
         });
@@ -1226,7 +1281,7 @@ export function generateGBPCompletenessFindings(
                 competitorComparison: completeness.competitorComparison,
             },
             impactScore: completeness.overallScore < 40 ? 8 : 6,
-            confidenceScore: 95,
+            confidenceScore: normalizeConfidence(95, '0-100'),
             effortEstimate: 'LOW',
             recommendedFix: completeness.recommendations.length > 0
                 ? completeness.recommendations
@@ -1262,7 +1317,7 @@ export function generateGBPFindings(data: any, businessName: string, competitorD
             evidence: [createEvidence({ pointer: gbpPointer, source: 'places_api_v1', type: 'metric', value: rating, label: 'Rating', raw: { rating, reviewCount } })],
             metrics: { rating, reviewCount },
             impactScore: impact,
-            confidenceScore: 10,
+            confidenceScore: normalizeConfidence(10, '1-10'),
             effortEstimate: 'MEDIUM',
             recommendedFix: [
                 'Ask satisfied customers to leave reviews',
@@ -1283,7 +1338,7 @@ export function generateGBPFindings(data: any, businessName: string, competitorD
             evidence: [createEvidence({ pointer: gbpPointer, source: 'places_api_v1', type: 'metric', value: 'none', label: 'Website', raw: { website: null } })],
             metrics: { hasWebsite: false },
             impactScore: 8,
-            confidenceScore: 10,
+            confidenceScore: normalizeConfidence(10, '1-10'),
             effortEstimate: 'LOW',
             recommendedFix: [
                 'Add your website URL to your GBP listing',
@@ -1304,7 +1359,7 @@ export function generateGBPFindings(data: any, businessName: string, competitorD
             evidence: [createEvidence({ pointer: gbpPointer, source: 'places_api_v1', type: 'metric', value: photoCount, label: 'Photo Count', raw: { photoCount } })],
             metrics: { photoCount },
             impactScore: photoCount === 0 ? 7 : photoCount < 5 ? 5 : 3,
-            confidenceScore: 8,
+            confidenceScore: normalizeConfidence(8, '1-10'),
             effortEstimate: 'LOW',
             recommendedFix: [
                 'Upload high-quality photos of your business, products, and team',
@@ -1324,7 +1379,7 @@ export function generateGBPFindings(data: any, businessName: string, competitorD
             evidence: [createEvidence({ pointer: gbpPointer, source: 'places_api_v1', type: 'metric', value: 0, label: 'Opening Hours', raw: { hasHours: false } })],
             metrics: { hasHours: false },
             impactScore: 6,
-            confidenceScore: 10,
+            confidenceScore: normalizeConfidence(10, '1-10'),
             effortEstimate: 'LOW',
             recommendedFix: [
                 'Set your business hours in Google Business Profile',
@@ -1371,7 +1426,7 @@ export function generateCompetitorFindings(data: any, businessName: string): Fin
             evidence: [createEvidence({ pointer: serpPointer, source: 'serpapi_v1', type: 'metric', value: 'not_found', label: 'Local Pack', raw: { keyword, location, found: false } })],
             metrics: { inLocalPack: false },
             impactScore: 8,
-            confidenceScore: 7,
+            confidenceScore: normalizeConfidence(7, '1-10'),
             effortEstimate: 'HIGH',
             recommendedFix: [
                 'Optimize your Google Business Profile',
@@ -1397,7 +1452,7 @@ export function generateCompetitorFindings(data: any, businessName: string): Fin
                 description: `You have ${reviewGap.businessValue} reviews while top competitors average ${reviewGap.competitorAvg}. This social proof gap is costing you customers.`,
                 metrics: { reviewGap: reviewGap.gap },
                 impactScore: 8,
-                confidenceScore: 9,
+                confidenceScore: normalizeConfidence(9, '1-10'),
                 effortEstimate: 'MEDIUM',
                 recommendedFix: [
                     'Launch a systematic review request campaign',
@@ -1422,7 +1477,7 @@ export function generateCompetitorFindings(data: any, businessName: string): Fin
                 evidence: [createEvidence({ pointer: SERPAPI_POINTER, source: 'serpapi_v1', type: 'metric', value: ratingGap.gap, label: 'Rating Gap', raw: { gap: ratingGap.gap, competitorAvg: ratingGap.competitorAvg, matrix: comparisonMatrix } })],
                 metrics: { ratingGap: ratingGap.gap },
                 impactScore: 7,
-                confidenceScore: 9,
+                confidenceScore: normalizeConfidence(9, '1-10'),
                 effortEstimate: 'HIGH',
                 recommendedFix: [
                     'Address root causes of negative feedback',
@@ -1444,7 +1499,7 @@ export function generateCompetitorFindings(data: any, businessName: string): Fin
                 evidence: [createEvidence({ pointer: SERPAPI_POINTER, source: 'serpapi_v1', type: 'metric', value: speedGap.gap, label: 'Speed Gap', raw: { gap: speedGap.gap, competitorAvg: speedGap.competitorAvg } })],
                 metrics: { speedGap: speedGap.gap },
                 impactScore: 5,
-                confidenceScore: 8,
+                confidenceScore: normalizeConfidence(8, '1-10'),
                 effortEstimate: 'MEDIUM',
                 recommendedFix: [
                     'Optimize images',
@@ -1466,7 +1521,7 @@ export function generateCompetitorFindings(data: any, businessName: string): Fin
                 evidence: [createEvidence({ pointer: SERPAPI_POINTER, source: 'serpapi_v1', type: 'metric', value: photoGap.gap, label: 'Photo Gap', raw: { gap: photoGap.gap, competitorAvg: photoGap.competitorAvg } })],
                 metrics: { photoGap: photoGap.gap },
                 impactScore: 4,
-                confidenceScore: 7,
+                confidenceScore: normalizeConfidence(7, '1-10'),
                 effortEstimate: 'LOW',
                 recommendedFix: [
                     'Upload high-quality team and project photos',
@@ -1499,7 +1554,7 @@ export function generateCompetitorFindings(data: any, businessName: string): Fin
             })),
             metrics: { competitorAvgReviews: avgCompetitorReviews },
             impactScore: avgCompetitorReviews > 50 ? 8 : avgCompetitorReviews > 20 ? 6 : 4,
-            confidenceScore: 8,
+            confidenceScore: normalizeConfidence(8, '1-10'),
             effortEstimate: 'MEDIUM',
             recommendedFix: [
                 'Launch a systematic review request campaign',
@@ -1544,7 +1599,7 @@ export function generateReputationFindings(data: any): Finding[] {
             })),
             metrics: { negativeRatio, avgRating, reviewCount },
             impactScore: 8,
-            confidenceScore: 9,
+            confidenceScore: normalizeConfidence(9, '1-10'),
             effortEstimate: 'MEDIUM',
             recommendedFix: [
                 'Address the root causes mentioned in negative reviews',
@@ -1566,7 +1621,7 @@ export function generateReputationFindings(data: any): Finding[] {
             evidence: [createEvidence({ pointer: GOOGLE_REVIEWS_POINTER, source: 'google_reviews', type: 'metric', value: 0, label: 'Response Rate', raw: { responseRate: 0, reviewCount } })],
             metrics: { responseRate, reviewCount },
             impactScore: 7,
-            confidenceScore: 10,
+            confidenceScore: normalizeConfidence(10, '1-10'),
             effortEstimate: 'LOW',
             recommendedFix: [
                 'Respond to all existing reviews within the next week',
@@ -1596,7 +1651,7 @@ export function generateReputationFindings(data: any): Finding[] {
             })),
             metrics: { commonThemes, negativeCount: negativeReviews.length },
             impactScore: 6,
-            confidenceScore: 8,
+            confidenceScore: normalizeConfidence(8, '1-10'),
             effortEstimate: 'MEDIUM',
             recommendedFix: [
                 'Investigate the root cause of the recurring issue',
@@ -1618,7 +1673,7 @@ export function generateReputationFindings(data: any): Finding[] {
             evidence: [createEvidence({ pointer: GOOGLE_REVIEWS_POINTER, source: 'google_reviews', type: 'metric', value: oldestReviewMonths, label: 'Oldest Review (months)', raw: { oldestReviewMonths, reviewCount } })],
             metrics: { oldestReviewMonths, reviewCount },
             impactScore: 5,
-            confidenceScore: 7,
+            confidenceScore: normalizeConfidence(7, '1-10'),
             effortEstimate: 'LOW',
             recommendedFix: [
                 'Launch a review request campaign',
@@ -1648,7 +1703,7 @@ export function generateReputationFindings(data: any): Finding[] {
             })),
             metrics: { negativeResponseRate, negativeCount: negativeReviews.length },
             impactScore: 5,
-            confidenceScore: 9,
+            confidenceScore: normalizeConfidence(9, '1-10'),
             effortEstimate: 'LOW',
             recommendedFix: [
                 'Respond to all unanswered negative reviews',
@@ -1679,7 +1734,7 @@ export function generateSEOFindings(data: any): Finding[] {
             evidence: [createEvidence({ pointer, source: 'seo_deep', type: 'metric', value: metaTitle?.length || 0, label: 'Title length', raw: { metaTitle } })],
             metrics: { metaTitleLength: metaTitle?.length || 0 },
             impactScore: 5,
-            confidenceScore: 9,
+            confidenceScore: normalizeConfidence(9, '1-10'),
             effortEstimate: 'LOW',
             recommendedFix: ['Add a descriptive meta title between 30-60 characters'],
         });
@@ -1694,7 +1749,7 @@ export function generateSEOFindings(data: any): Finding[] {
             evidence: [createEvidence({ pointer, source: 'seo_deep', type: 'metric', value: metaDesc?.length || 0, label: 'Desc length', raw: { metaDesc } })],
             metrics: { metaDescLength: metaDesc?.length || 0 },
             impactScore: 4,
-            confidenceScore: 9,
+            confidenceScore: normalizeConfidence(9, '1-10'),
             effortEstimate: 'LOW',
             recommendedFix: ['Add a meta description between 120-160 characters'],
         });
@@ -1709,7 +1764,7 @@ export function generateSEOFindings(data: any): Finding[] {
             evidence: [createEvidence({ pointer, source: 'serpapi_v1', type: 'metric', value: organicRank, label: 'Rank', raw: { organicRank } })],
             metrics: { organicRank },
             impactScore: 7,
-            confidenceScore: 8,
+            confidenceScore: normalizeConfidence(8, '1-10'),
             effortEstimate: 'HIGH',
             recommendedFix: ['Improve on-page SEO', 'Build local citations', 'Optimize GBP'],
         });
@@ -1724,7 +1779,7 @@ export function generateSEOFindings(data: any): Finding[] {
             evidence: [createEvidence({ pointer, source: 'seo_deep', type: 'metric', value: imagesMissingAlt, label: 'Images missing alt', raw: { imagesMissingAlt } })],
             metrics: { imagesMissingAlt },
             impactScore: 3,
-            confidenceScore: 9,
+            confidenceScore: normalizeConfidence(9, '1-10'),
             effortEstimate: 'LOW',
             recommendedFix: ['Add descriptive alt text to all images'],
         });
@@ -1757,7 +1812,7 @@ export function generateSocialFindings(data: any): Finding[] {
             evidence: [createEvidence({ pointer: socialPointer, source: 'website_html', type: 'metric', value: 0, label: 'Platforms Found', raw: { platformsFound: 0 } })],
             metrics: { platforms_found: [], platforms_missing: platformsMissing, total_count: 0 },
             impactScore: 7,
-            confidenceScore: 7,
+            confidenceScore: normalizeConfidence(7, '1-10'),
             effortEstimate: 'LOW',
             recommendedFix: [
                 'Create business profiles on Facebook and Instagram (minimum)',
@@ -1783,7 +1838,7 @@ export function generateSocialFindings(data: any): Finding[] {
             evidence: [createEvidence({ pointer: socialPointer, source: 'website_html', type: 'metric', value: totalCount, label: 'Platforms', raw: { platformsFound, platformsMissing } })],
             metrics: { platforms_found: platformsFound, platforms_missing: platformsMissing, total_count: totalCount },
             impactScore: 5,
-            confidenceScore: 7,
+            confidenceScore: normalizeConfidence(7, '1-10'),
             effortEstimate: 'LOW',
             recommendedFix: [
                 `Create a ${missingPlatform} business page`,
@@ -1804,7 +1859,7 @@ export function generateSocialFindings(data: any): Finding[] {
             evidence: [createEvidence({ pointer: socialPointer, source: 'website_html', type: 'metric', value: totalCount, label: 'Platforms', raw: { platformsFound } })],
             metrics: { platforms_found: platformsFound, platforms_missing: platformsMissing, total_count: totalCount },
             impactScore: 4,
-            confidenceScore: 7,
+            confidenceScore: normalizeConfidence(7, '1-10'),
             effortEstimate: 'MEDIUM',
             recommendedFix: [
                 'Identify which platforms your target customers use',
@@ -1825,7 +1880,7 @@ export function generateSocialFindings(data: any): Finding[] {
             evidence: [createEvidence({ pointer: socialPointer, source: 'website_html', type: 'metric', value: totalCount, label: 'Platforms', raw: { platformsFound } })],
             metrics: { platforms_found: platformsFound, platforms_missing: platformsMissing, total_count: totalCount },
             impactScore: 2,
-            confidenceScore: 6,
+            confidenceScore: normalizeConfidence(6, '1-10'),
             effortEstimate: 'LOW',
             recommendedFix: [
                 'Ensure all linked profiles are active (posted in last 30 days)',

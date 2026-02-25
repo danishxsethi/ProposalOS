@@ -102,7 +102,7 @@ DO NOT wrap the response in markdown codeblocks. Just raw JSON. Keep it professi
                     })),
                     metrics: { specificFindingType: f.type },
                     impactScore: f.impactScore,
-                    confidenceScore: 90,
+                    confidenceScore: normalizeConfidence(90, '0-100'),
                     effortEstimate: 'MEDIUM',
                     recommendedFix: f.recommendedFix
                 });

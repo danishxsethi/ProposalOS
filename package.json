@@ -65,11 +65,13 @@
     "server-only": "^0.0.1",
     "sharp": "^0.34.5",
     "stripe": "^20.3.1",
-    "swr": "^2.4.0"
+    "swr": "^2.4.0",
+    "text-readability": "^1.1.1"
   },
   "devDependencies": {
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
+    "@types/archiver": "^7.0.0",
     "@types/bcryptjs": "^2.4.6",
     "@types/fs-extra": "^11.0.4",
     "@types/jest": "^30.0.0",
@@ -87,7 +89,7 @@
     "prettier": "^3.8.1",
     "prisma": "^5.20.0",
     "tsx": "^4.19.0",
-    "typescript": "^5",
+    "typescript": "^5.9.3",
     "vitest": "^4.0.18"
   }
 }

@@ -5,20 +5,12 @@ import { runGBPModule } from '@/lib/modules/gbp';
 import { runCompetitorModule } from '@/lib/modules/competitor';
 import { runReputationModule } from '@/lib/modules/reputation';
 import { runSocialModule } from '@/lib/modules/social';
-import { runSchemaMarkupModule } from '@/lib/modules/schemaMarkup';
-import { runAccessibilityModule } from '@/lib/modules/accessibility';
-import { runSecurityModule } from '@/lib/modules/security';
-import { runConversionModule, type ConversionResult } from '@/lib/modules/conversion';
 import {
     generateWebsiteFindings,
     generateGBPFindings,
     generateCompetitorFindings,
     generateReputationFindings,
     generateSocialFindings,
-    generateSchemaMarkupFindings,
-    generateAccessibilityFindings,
-    generateSecurityFindings,
-    generateConversionFindings,
 } from '@/lib/modules/findingGenerator';
 import { detectIndustryFromCategory } from '@/lib/proposal/pricing';
 import { detectVertical } from '@/lib/playbooks';
@@ -27,6 +19,128 @@ import { logger, logError } from '@/lib/logger';
 import { Metrics } from '@/lib/metrics';
 import { createParentTrace } from '@/lib/tracing';
 import { RunTree } from 'langsmith';
+
+/**
+ * Retry configuration for module executions
+ */
+const RETRY_CONFIG = {
+    maxRetries: 3,
+    initialDelayMs: 1000,
+    maxDelayMs: 10000,
+    timeoutMs: 30000, // 30 second timeout per attempt
+} as const;
+
+/**
+ * Content module specification for each canonical module
+ */
+export interface ModuleSpec {
+    id: string;
+    name: string;
+    timeoutMs: number;
+    requiredForComplete: boolean;
+    dependencies?: string[];
+}
+
+export const MODULE_SPECS: Record<string, ModuleSpec> = {
+    website: {
+        id: 'website',
+        name: 'Website Analysis',
+        timeoutMs: 45000,
+        requiredForComplete: true,
+    },
+    gbp: {
+        id: 'gbp',
+        name: 'Google Business Profile',
+        timeoutMs: 30000,
+        requiredForComplete: true,
+    },
+    competitor: {
+        id: 'competitor',
+        name: 'Competitor Analysis',
+        timeoutMs: 30000,
+        requiredForComplete: true,
+    },
+    reputation: {
+        id: 'reputation',
+        name: 'Reputation Analysis',
+        timeoutMs: 60000,
+        requiredForComplete: false,
+        dependencies: ['gbp'],
+    },
+    social: {
+        id: 'social',
+        name: 'Social Media Analysis',
+        timeoutMs: 30000,
+        requiredForComplete: false,
+        dependencies: ['website'],
+    },
+};
+
+/**
+ * Execute a function with retry logic and timeout
+ */
+async function withTimeoutAndRetry<T>(
+    fn: () => Promise<T>,
+    options: {
+        timeout?: number;
+        maxRetries?: number;
+        backoff?: 'exponential';
+        onRetry?: (attempt: number, error: Error) => void;
+    } = {}
+): Promise<T | { status: 'failed'; error: string }> {
+    const {
+        maxRetries = 3,
+        timeout = 30000,
+        backoff = 'exponential',
+        onRetry,
+    } = options;
+
+    const initialDelayMs = 1000;
+    const maxDelayMs = 10000;
+    let lastError: Error | undefined;
+
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+        try {
+            // Create timeout promise
+            const timeoutPromise = new Promise<never>((_, reject) => {
+                setTimeout(() => {
+                    reject(new Error(`Operation timed out after ${timeout}ms`));
+                }, timeout);
+            });
+
+            // Race the function against timeout
+            const result = await Promise.race([fn(), timeoutPromise]);
+            return result;
+        } catch (error) {
+            lastError = error instanceof Error ? error : new Error(String(error));
+
+            if (attempt < maxRetries) {
+                // Exponential backoff
+                const delay = backoff === 'exponential'
+                    ? Math.min(initialDelayMs * Math.pow(2, attempt), maxDelayMs)
+                    : initialDelayMs;
+
+                logger.warn({
+                    event: 'module.retry',
+                    attempt: attempt + 1,
+                    maxRetries,
+                    delayMs: delay,
+                    error: lastError.message,
+                }, 'Module execution failed, retrying...');
+
+                if (onRetry) {
+                    onRetry(attempt + 1, lastError);
+                }
+
+                // Add jitter to prevent thundering herd
+                const jitter = Math.random() * 0.3 * delay;
+                await new Promise(r => setTimeout(r, delay + jitter));
+            }
+        }
+    }
+
+    return { status: 'failed', error: lastError?.message || 'Operation failed after retries' };
+}
 
 export async function runAudit(auditId: string) {
     const audit = await prisma.audit.findUnique({
@@ -72,11 +186,29 @@ export async function runAudit(auditId: string) {
     }
 
     try {
-        // Run modules in parallel (GCP-native approach)
+        // Run modules in parallel with retry logic (GCP-native approach)
         const [websiteResult, gbpResult, competitorResult] = await Promise.allSettled([
-            url ? runWebsiteModule({ url }, tracker) : Promise.resolve({ status: 'failed', error: 'No URL provided' } as any),
-            name && city ? runGBPModule({ businessName: name, city, websiteUrl: url ?? undefined }, tracker) : Promise.resolve({ status: 'failed', error: 'No name/city' } as any),
-            name && city ? runCompetitorModule({ keyword: name, location: city }, tracker) : Promise.resolve({ status: 'failed', error: 'No name/city' } as any),
+            url
+                ? withTimeoutAndRetry(() => runWebsiteModule({ url }, tracker), {
+                    maxRetries: 3,
+                    timeout: MODULE_SPECS.website.timeoutMs,
+                    backoff: 'exponential'
+                })
+                : Promise.resolve({ status: 'failed', error: 'No URL provided' } as any),
+            name && city
+                ? withTimeoutAndRetry(() => runGBPModule({ businessName: name, city, websiteUrl: url ?? undefined }, tracker), {
+                    maxRetries: 3,
+                    timeout: MODULE_SPECS.gbp.timeoutMs,
+                    backoff: 'exponential'
+                })
+                : Promise.resolve({ status: 'failed', error: 'No name/city' } as any),
+            name && city
+                ? withTimeoutAndRetry(() => runCompetitorModule({ keyword: name, location: city }, tracker), {
+                    maxRetries: 3,
+                    timeout: MODULE_SPECS.competitor.timeoutMs,
+                    backoff: 'exponential'
+                })
+                : Promise.resolve({ status: 'failed', error: 'No name/city' } as any),
         ]);
 
         // Track which modules completed
@@ -88,8 +220,11 @@ export async function runAudit(auditId: string) {
         // Handle both formats: { status, data } (legacy) and { findings, evidenceSnapshots } (direct)
         if (websiteResult.status === 'fulfilled') {
             const value = websiteResult.value as any;
-            const isLegacySuccess = value.status === 'success' && value.data;
-            const isDirectSuccess = Array.isArray(value.findings);
+            // The website module returns { findings, evidenceSnapshots, data }
+            // If value.findings exists, it's the new direct format. 
+            // If not, it might be the legacy { status: 'success', data: ... } format.
+            const isDirectSuccess = value && Array.isArray(value.findings);
+            const isLegacySuccess = !isDirectSuccess && value && value.status === 'success' && value.data;
 
             if (isLegacySuccess || isDirectSuccess) {
                 modulesCompleted.push('website');
@@ -102,9 +237,10 @@ export async function runAudit(auditId: string) {
 
                 let findings: any[] = [];
                 if (isDirectSuccess) {
-                    // Ensure each finding has module: 'website' for Prisma
+                    // Normalize findings from direct format
                     findings = value.findings.map((f: any) => ({ ...f, module: f.module || 'website' }));
                 } else {
+                    // Normalize findings from legacy data format
                     findings = generateWebsiteFindings(value.data);
                 }
                 allFindings.push(...findings);
@@ -325,148 +461,6 @@ export async function runAudit(auditId: string) {
                     module: 'social',
                     error: socialResult.error
                 }, 'Social module failed');
-            }
-        }
-
-        // Process Schema Markup Module (depends on website URL)
-        if (url) {
-            const gbpTypes = gbpResult.status === 'fulfilled' && gbpResult.value.status === 'success'
-                ? (gbpResult.value.data as { types?: string[] })?.types
-                : undefined;
-            const schemaMarkupResult = await runSchemaMarkupModule(
-                { url, businessName: name || undefined, gbpTypes },
-                tracker
-            );
-
-            if (schemaMarkupResult.status === 'success' && schemaMarkupResult.data) {
-                modulesCompleted.push('schemaMarkup');
-                Metrics.increment('modules_total');
-                logger.info({
-                    event: 'module.complete',
-                    auditId: audit.id,
-                    module: 'schemaMarkup',
-                }, 'Schema Markup module complete');
-
-                const schemaData = schemaMarkupResult.data as { status?: string; data?: unknown };
-                const innerData = schemaData.data ?? schemaMarkupResult.data;
-                const findings = generateSchemaMarkupFindings(innerData, url);
-                allFindings.push(...findings);
-
-                await prisma.evidenceSnapshot.create({
-                    data: {
-                        auditId: audit.id,
-                        module: 'schemaMarkup',
-                        source: 'Website HTML',
-                        rawResponse: schemaMarkupResult.data,
-                        tenantId: audit.tenantId,
-                    },
-                });
-            }
-        }
-
-        // Process Accessibility Module (depends on website URL)
-        if (url) {
-            const accessibilityResult = await runAccessibilityModule({ url }, tracker);
-
-            if (accessibilityResult.status === 'success' && accessibilityResult.data) {
-                modulesCompleted.push('accessibility');
-                Metrics.increment('modules_total');
-                logger.info({
-                    event: 'module.complete',
-                    auditId: audit.id,
-                    module: 'accessibility',
-                }, 'Accessibility module complete');
-
-                const accData = accessibilityResult.data as { status?: string; data?: unknown };
-                const innerData = accData.data ?? accessibilityResult.data;
-                const findings = generateAccessibilityFindings(innerData, url);
-                allFindings.push(...findings);
-
-                await prisma.evidenceSnapshot.create({
-                    data: {
-                        auditId: audit.id,
-                        module: 'accessibility',
-                        source: 'axe-core + custom checks',
-                        rawResponse: accessibilityResult.data,
-                        tenantId: audit.tenantId,
-                    },
-                });
-            }
-        }
-
-        // Process Security Module (depends on website URL)
-        if (url) {
-            const securityResult = await runSecurityModule({ url }, tracker);
-
-            if (securityResult.status === 'success' && securityResult.data) {
-                modulesCompleted.push('security');
-                Metrics.increment('modules_total');
-                logger.info({
-                    event: 'module.complete',
-                    auditId: audit.id,
-                    module: 'security',
-                }, 'Security module complete');
-
-                const secData = securityResult.data as { status?: string; data?: unknown };
-                const innerData = secData.data ?? securityResult.data;
-                const findings = generateSecurityFindings(innerData, url);
-                allFindings.push(...findings);
-
-                await prisma.evidenceSnapshot.create({
-                    data: {
-                        auditId: audit.id,
-                        module: 'security',
-                        source: 'HTTPS + headers scan',
-                        rawResponse: securityResult.data,
-                        tenantId: audit.tenantId,
-                    },
-                });
-            }
-        }
-
-        // Process Conversion Module (depends on website URL)
-        if (url) {
-            let detectedIndustry = 'general';
-            if (gbpResult.status === 'fulfilled' && gbpResult.value.status === 'success') {
-                const gbpData = gbpResult.value.data as { types?: string[] };
-                for (const type of gbpData.types ?? []) {
-                    const industry = detectIndustryFromCategory(type);
-                    if (industry !== 'general') {
-                        detectedIndustry = industry;
-                        break;
-                    }
-                }
-            }
-            const competitorData = competitorResult.status === 'fulfilled' && competitorResult.value.status === 'success'
-                ? competitorResult.value.data
-                : undefined;
-
-            const conversionResult = await runConversionModule({ url, businessName: name, industry: detectedIndustry }, tracker);
-
-            if (conversionResult.status === 'success' && conversionResult.data) {
-                const convData = conversionResult.data as ConversionResult;
-                if (convData.status === 'success' && convData.data) {
-                    modulesCompleted.push('conversion');
-                    Metrics.increment('modules_total');
-                    logger.info({
-                        event: 'module.complete',
-                        auditId: audit.id,
-                        module: 'conversion',
-                    }, 'Conversion module complete');
-
-                    const findings = generateConversionFindings(convData.data, url, competitorData);
-                    allFindings.push(...findings);
-
-                    await prisma.evidenceSnapshot.create({
-                        data: {
-                            auditId: audit.id,
-                            module: 'conversion',
-                            source: 'Puppeteer DOM analysis',
-                            rawResponse: conversionResult.data,
-                            tenantId: audit.tenantId,
-                        },
-                    });
-                }
             }
         }
 

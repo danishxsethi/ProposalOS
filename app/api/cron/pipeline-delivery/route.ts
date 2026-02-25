@@ -123,14 +123,14 @@ export async function GET(req: Request) {
         verificationResults.push({
           taskId: task.id,
           status: 'Verified',
-          verified: result.verified,
+          verified: result.passed,
         });
 
         logger.info(
           {
             event: 'cron.delivery.task_verified',
             taskId: task.id,
-            verified: result.verified,
+            verified: result.passed,
             improvementPercent: result.improvementPercent,
           },
           `Verified task ${task.id}`

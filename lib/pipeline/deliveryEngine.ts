@@ -187,7 +187,7 @@ export class DeliveryEngine implements IDeliveryEngine {
       },
     });
 
-    return {
+    return { verified: verified || false,
       verified,
       improvementPercent,
       beforeAfterComparison,

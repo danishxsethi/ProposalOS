@@ -54,7 +54,23 @@ pipeline-delivery:
   description: "Process delivery tasks and check for overdue items"
   timezone: "America/New_York"
 
-# 7. Partner Matching - Daily at 10 AM (when Task 26 is implemented)
+# 7. Retention - Daily at 6 AM
+# Processes NPS surveys (Day 30, Day 90), scheduled re-audits, and competitor monitoring
+retention:
+  schedule: "0 6 * * *"
+  endpoint: "/api/cron/retention"
+  description: "Process client retention: NPS surveys, scheduled re-audits, competitor monitoring"
+  timezone: "America/New_York"
+
+# 8. Scheduled Audits - Daily at 7 AM
+# Runs scheduled monthly/quarterly re-audits for existing clients
+scheduled-audits:
+  schedule: "0 7 * * *"
+  endpoint: "/api/cron/scheduled-audits"
+  description: "Run scheduled re-audits for existing clients"
+  timezone: "America/New_York"
+
+# 9. Partner Matching - Daily at 10 AM (when Task 26 is implemented)
 # Matches qualified leads to agency partners
 partner-matching:
   schedule: "0 10 * * *"
@@ -63,7 +79,7 @@ partner-matching:
   timezone: "America/New_York"
   enabled: false  # Enable when Task 26 is implemented
 
-# 8. Intelligence Aggregation - Weekly on Sunday at 3 AM (when Task 27 is implemented)
+# 10. Intelligence Aggregation - Weekly on Sunday at 3 AM (when Task 27 is implemented)
 # Aggregates anonymized patterns across tenants
 intelligence-aggregation:
   schedule: "0 3 * * 0"

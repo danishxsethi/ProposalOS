@@ -4,14 +4,13 @@ import { prisma } from '@/lib/prisma';
 import { getTenantId, createScopedPrisma } from '@/lib/tenant/context';
 import { withAuth } from '@/lib/middleware/auth';
 
-export const GET = withAuth(async (req: Request, { params }: { params: { id: string, previousId: string } }) => {
+export const GET = withAuth(async (req: Request, { params }: { params: Promise<{ id: string, previousId: string }> }) => {
     try {
+        const { id, previousId } = await params;
         const tenantId = await getTenantId();
         if (!tenantId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
         const prismaScoped = createScopedPrisma(tenantId);
-
-        const { id, previousId } = params;
 
         // Fetch both audits with findings
         const [currentAudit, prevAudit] = await Promise.all([

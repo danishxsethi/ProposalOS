@@ -2,6 +2,7 @@ import { headers } from 'next/headers';
 import { NextResponse } from 'next/server';
 import { stripe } from '@/lib/billing/stripe';
 import { prisma } from '@/lib/prisma'; // Use global prisma (webhooks are system-level)
+import { ProposalStatus, ProjectStatus } from '@prisma/client';
 import Stripe from 'stripe';
 
 export async function POST(req: Request) {
@@ -28,19 +29,47 @@ export async function POST(req: Request) {
     switch (event.type) {
         case 'checkout.session.completed':
             // 1. Get tenantId from client_reference_id or metadata
-            const tenantId = session.client_reference_id;
+            const tenantId = session.client_reference_id || session.metadata?.tenantId;
             const subscriptionId = session.subscription as string;
             const customerId = session.customer as string;
 
-            if (tenantId) {
-                // Update Tenant
+            // Sprint 9: Proposal Checkout vs SaaS Subscription
+            if (session.metadata?.proposalId) {
+                // This is a client paying for a Proposal
+                const { proposalId, tierId } = session.metadata;
+
+                // Update Proposal to PAID
+                const proposal = await prisma.proposal.update({
+                    where: { id: proposalId },
+                    data: { status: ProposalStatus.PAID, tierChosen: tierId }
+                });
+
+                // Kick off Delivery Project
+                await (prisma as any).project.create({
+                    data: {
+                        proposalId,
+                        tenantId: proposal.tenantId || '',
+                        status: ProjectStatus.KICKOFF
+                    }
+                });
+
+                // Trigger Delivery Graph (async, non-blocking)
+                try {
+                    const deliveryGraph = await import('@/lib/graph/delivery-graph');
+                    const runFn = (deliveryGraph as any).runDeliveryAgent;
+                    if (typeof runFn === 'function') {
+                        await runFn(proposalId, proposal.tenantId || '');
+                    }
+                } catch (e) {
+                    console.error('Failed to trigger delivery graph on checkout', e);
+                }
+            } else if (tenantId) {
+                // This is an Agency upgrading their SaaS Tenant Subscription
                 await prisma.tenant.update({
                     where: { id: tenantId },
                     data: {
                         stripeCustomerId: customerId,
                         stripeSubscriptionId: subscriptionId,
-                        // We rely on 'customer.subscription.updated' to set planTier usually,
-                        // but good to set active status here.
                         status: 'active',
                     },
                 });

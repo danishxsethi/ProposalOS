@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useProposalViewTracking } from './ProposalViewTracker';
+import { loadStripe } from '@stripe/stripe-js';
 import { ProposalShareButton } from '@/components/ProposalShareButton';
 import { ProposalChatWidget } from '@/components/chat/ProposalChatWidget';
 
@@ -39,6 +40,7 @@ interface Tier {
     deliveryTime?: string;
     features?: string[];
     badge?: string;
+    visualEvidence?: { screenshotUrl: string; annotationText: string; findingRef: string; severity: number }[];
 }
 
 function formatScore(score: number | undefined | null): string {
@@ -165,6 +167,16 @@ export default function ProposalPage({ proposal, branding }: ProposalProps) {
         { id: 'premium', name: tierPremium?.name || 'Premium', price: pricing?.premium || 2997, description: tierPremium?.description || 'Ongoing partnership.', deliveryTime: tierPremium?.deliveryTime || '15 business days', features: (tierPremium as Tier)?.features || [], recommended: false, badge: (tierPremium as Tier)?.badge },
     ];
 
+    // Collect unique visual evidence from all tiers to display inline with findings
+    const visualEvidenceMap = new Map<string, { screenshotUrl: string; annotationText: string; findingRef: string; severity: number }>();
+    [tierEssentials, tierGrowth, tierPremium].forEach(t => {
+        t.visualEvidence?.forEach(v => {
+            if (!visualEvidenceMap.has(v.findingRef)) {
+                visualEvidenceMap.set(v.findingRef, v);
+            }
+        });
+    });
+
     const findings = proposal?.audit?.findings ?? [];
     const scores = extractScores(findings);
     const healthScore = findings.length
@@ -215,6 +227,33 @@ export default function ProposalPage({ proposal, branding }: ProposalProps) {
     const openContactModal = () => {
         trackCta();
         setIsContactModalOpen(true);
+    };
+
+    const handleCheckout = async (tierId: string) => {
+        trackCta();
+        try {
+            const res = await fetch('/api/billing/checkout-proposal', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    proposalId: proposal.id,
+                    tierId,
+                    webLinkToken: proposal.webLinkToken
+                }),
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || 'Failed to start checkout');
+
+            // Redirect natively to Stripe hosted checkout rather than relying on Client-side SDK hooks
+            if (data.url) {
+                window.location.href = data.url;
+            } else {
+                throw new Error("Missing checkout URL in response");
+            }
+        } catch (e: any) {
+            console.error('Checkout error:', e);
+            alert(e.message || 'Failed to start checkout. Please try again or contact support.');
+        }
     };
 
     const submitContact = async (e: React.FormEvent) => {
@@ -344,14 +383,14 @@ export default function ProposalPage({ proposal, branding }: ProposalProps) {
                 )}
                 <header className="border-b border-white/10">
                     <div className="max-w-5xl mx-auto px-4 sm:px-6 py-4 flex justify-between items-center">
-                    <span className="text-lg font-bold text-white">{branding?.name ?? 'ProposalOS'}</span>
-                    <div className="flex items-center gap-2">
-                        <a href={`/api/proposal/${proposal.webLinkToken}/pdf`} target="_blank" rel="noopener noreferrer" className="px-4 py-2 rounded-lg text-sm font-medium text-white flex items-center gap-2 min-h-[44px] min-w-[44px] justify-center" style={{ backgroundColor: BLUE }}>
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
-                            <span className="hidden sm:inline">Download PDF</span>
-                        </a>
+                        <span className="text-lg font-bold text-white">{branding?.name ?? 'ProposalOS'}</span>
+                        <div className="flex items-center gap-2">
+                            <a href={`/api/proposal/${proposal.webLinkToken}/pdf`} target="_blank" rel="noopener noreferrer" className="px-4 py-2 rounded-lg text-sm font-medium text-white flex items-center gap-2 min-h-[44px] min-w-[44px] justify-center" style={{ backgroundColor: BLUE }}>
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                                <span className="hidden sm:inline">Download PDF</span>
+                            </a>
+                        </div>
                     </div>
-                </div>
                 </header>
                 <nav className="border-b border-white/5 py-3 px-4">
                     <div className="max-w-5xl mx-auto flex flex-col sm:flex-row sm:flex-wrap sm:justify-center gap-2 sm:gap-4 text-sm">
@@ -444,6 +483,20 @@ export default function ProposalPage({ proposal, branding }: ProposalProps) {
                                     {isExpanded && (
                                         <div className="px-4 sm:px-6 pb-4 border-t border-white/10">
                                             <p className="text-white/80 text-sm mt-4">{f.description}</p>
+
+                                            {visualEvidenceMap.has(f.id) && (
+                                                <div className="mt-4 rounded-lg overflow-hidden border border-white/10">
+                                                    <img
+                                                        src={visualEvidenceMap.get(f.id)!.screenshotUrl}
+                                                        alt={visualEvidenceMap.get(f.id)!.annotationText}
+                                                        className="w-full h-auto object-cover max-h-80"
+                                                    />
+                                                    <div className="bg-black/40 p-3 text-xs text-center text-white/80 italic font-medium">
+                                                        {visualEvidenceMap.get(f.id)!.annotationText}
+                                                    </div>
+                                                </div>
+                                            )}
+
                                             {Array.isArray(f.recommendedFix) && f.recommendedFix.length > 0 && (
                                                 <div className="mt-4">
                                                     <p className="text-xs font-semibold text-white/60 mb-2">Recommended actions</p>
@@ -587,7 +640,7 @@ export default function ProposalPage({ proposal, branding }: ProposalProps) {
                                 <ul className="space-y-2 mb-6">
                                     {t.features?.slice(0, 5).map((f, i) => <li key={i} className="flex gap-2 text-sm text-white/80"><span style={{ color: BLUE }}>✓</span>{f}</li>)}
                                 </ul>
-                                <button onClick={openContactModal} className="w-full py-4 rounded-xl font-bold text-white min-h-[44px]" style={{ backgroundColor: t.recommended ? ACCENT : 'rgba(255,255,255,0.15)' }}>Get Started</button>
+                                <button onClick={() => handleCheckout(t.id)} className="w-full py-4 rounded-xl font-bold text-white min-h-[44px]" style={{ backgroundColor: t.recommended ? ACCENT : 'rgba(255,255,255,0.15)' }}>Get Started</button>
                             </div>
                         ))}
                     </div>
@@ -632,7 +685,7 @@ export default function ProposalPage({ proposal, branding }: ProposalProps) {
             <div className="md:hidden h-20" />
 
             <ProposalShareButton proposalId={proposal.id} businessName={proposal.audit.businessName} token={proposal.webLinkToken} />
-            
+
             {/* AI Sales Chat Widget */}
             <ProposalChatWidget proposalId={proposal.id} />
         </main>

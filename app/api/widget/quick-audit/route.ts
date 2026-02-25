@@ -39,7 +39,7 @@ export async function POST(req: Request) {
         let score = 50; // Base
         // Crawl succeeded if we got a result (throws on error)
         score += 10;
-        const gbpVal = gbpRes as { status?: string; data?: { reviews?: unknown[] } };
+        const gbpVal = gbpRes as any;
         if (gbpVal.status === 'failed') score -= 10;
         else score += 20;
 
@@ -59,7 +59,7 @@ export async function POST(req: Request) {
 
     } catch (error) {
         console.error('Quick Audit Error', error);
-        return NextResponse.json({ error: 'Failed' }, { status: 500 });
+        return NextResponse.json({ error: 'Failed', details: String(error) }, { status: 500 });
     }
 }
 

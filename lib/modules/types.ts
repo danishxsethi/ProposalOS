@@ -63,25 +63,45 @@ export interface Evidence {
 
 /**
  * Create standardized evidence with required pointer and collected_at.
- * Keeps backward compatibility by including type/value/label when provided.
+ * This ensures every evidence item has proper provenance tracking.
+ * 
+ * @param opts.pointer - URL, API endpoint, or data source reference (REQUIRED)
+ * @param opts.source - Module that collected this (e.g., 'pagespeed_v5', 'places_api_v1')
+ * @param opts.collected_at - ISO 8601 timestamp (defaults to now if not provided)
+ * @param opts.type - Type of evidence: 'url' | 'metric' | 'text' | 'image' | 'link'
+ * @param opts.value - The actual data point
+ * @param opts.label - Human-readable label
+ * @param opts.raw - Raw data for debugging
  */
 export function createEvidence(opts: {
-    pointer: string;
+    pointer?: string;
     source: string;
+    collected_at?: string;
     type?: 'url' | 'metric' | 'text' | 'image' | 'link' | string;
     value?: string | number;
     label?: string;
     raw?: any;
-}): EvidenceItem & { raw?: unknown } {
-    const validTypes: EvidenceItem['type'][] = ['url','metric','text','image','link'];
+}): Evidence {
+    const validTypes: EvidenceItem['type'][] = ['url', 'metric', 'text', 'image', 'link'];
     const t = opts.type && validTypes.includes(opts.type as EvidenceItem['type']) ? opts.type : 'metric';
     const type = (t === 'score' ? 'metric' : t) as EvidenceItem['type'];
-    const item: EvidenceItem & { raw?: unknown } = {
+
+    // Use provided collected_at or default to now
+    const collectedAt = opts.collected_at || new Date().toISOString();
+
+    const item: Evidence = {
+        pointer: opts.pointer || 'unknown',
+        collected_at: collectedAt,
+        source: opts.source,
         type,
         value: opts.value ?? '',
         label: opts.label || opts.source,
     };
-    if (opts.raw !== undefined) item.raw = opts.raw;
+
+    if (opts.raw !== undefined) {
+        item.raw = opts.raw;
+    }
+
     return item;
 }
 

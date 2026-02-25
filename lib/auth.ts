@@ -29,7 +29,13 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
                     if (!user || !user.passwordHash) return null;
 
                     const passwordsMatch = await bcrypt.compare(password, user.passwordHash);
-                    if (passwordsMatch) return user;
+                    if (passwordsMatch) {
+                        // Convert null to undefined for NextAuth compatibility
+                        return {
+                            ...user,
+                            tenantId: user.tenantId ?? undefined,
+                        };
+                    }
                 }
 
                 return null;
@@ -37,3 +43,13 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         }),
     ],
 });
+
+// Re-export authOptions for backward compatibility with API routes
+export const authOptions = authConfig;
+
+// Backward compatible getServerSession using NextAuth v5 auth()
+import { headers } from 'next/headers';
+export async function getServerSession() {
+    const session = await auth();
+    return session;
+}

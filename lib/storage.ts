@@ -22,13 +22,37 @@ export async function uploadPdf(buffer: Buffer, filename: string): Promise<strin
             resumable: false,
         });
 
-        // Make it public? Or just return the public URL?
-        // Usually safer to use signed URLs or make bucket public?
-        // Let's assume public read or return the public URL format
-        // https://storage.googleapis.com/BUCKET_NAME/FILE_PATH
         return `https://storage.googleapis.com/${bucketName}/proposals/${filename}`;
     } catch (error) {
         console.error('Failed to upload PDF to GCS:', error);
+        return null;
+    }
+}
+
+/**
+ * Upload any buffer to Google Cloud Storage
+ * @param buffer The file buffer to upload
+ * @param filename The name of the file in GCS
+ * @param contentType Optional content type (e.g., 'application/pdf', 'application/zip')
+ */
+export async function uploadToGCS(buffer: Buffer, filename: string, contentType?: string): Promise<string | null> {
+    if (!bucketName) {
+        console.warn('GCS_BUCKET_NAME not set, skipping upload');
+        return null;
+    }
+
+    try {
+        const bucket = storage.bucket(bucketName);
+        const file = bucket.file(filename);
+
+        await file.save(buffer, {
+            contentType: contentType || 'application/octet-stream',
+            resumable: false,
+        });
+
+        return `https://storage.googleapis.com/${bucketName}/${filename}`;
+    } catch (error) {
+        console.error('Failed to upload to GCS:', error);
         return null;
     }
 }

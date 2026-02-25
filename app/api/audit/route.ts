@@ -5,7 +5,7 @@ import { logger, logError } from '@/lib/logger';
 import { Metrics } from '@/lib/metrics';
 
 import { withAuth } from '@/lib/middleware/auth';
-import { getTenantId, createScopedPrisma } from '@/lib/tenant/context';
+import { getTenantId, createScopedPrisma, runWithTenantAsync } from '@/lib/tenant/context';
 import { checkAuditLimit } from '@/lib/billing/limits';
 
 import { z } from 'zod';
@@ -18,7 +18,7 @@ const auditSchema = z.object({
 /**
  * POST /api/audit
  * Create and run a single audit. Uses lib/audit/runner.ts as the canonical execution path.
- * Modules: CANONICAL_MODULES = ['website', 'gbp', 'competitor', 'reputation', 'social', 'schemaMarkup', 'accessibility', 'security']
+ * Modules: CANONICAL_MODULES = ['website', 'gbp', 'competitor', 'reputation', 'social']
  * (Same as batch - single source of truth in lib/audit/modules.ts)
  */
 export const POST = withAuth(async (req: Request) => {
@@ -85,7 +85,8 @@ export const POST = withAuth(async (req: Request) => {
         }, 'Starting audit');
 
         // Run audit via canonical runner (single source of truth)
-        const result = await runAudit(audit.id);
+        // Ensure runner has tenant context for child graphs
+        const result = await runWithTenantAsync(tenantId, () => runAudit(audit.id));
 
         return NextResponse.json({
             success: true,

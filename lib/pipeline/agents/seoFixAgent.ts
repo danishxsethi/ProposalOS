@@ -53,7 +53,7 @@ export class SeoFixAgent extends BaseAgent {
         metaTagsCovered: 100,
         brokenLinksFixed: 8,
         imagesWithAltText: 42,
-        schemaMarkupAdded: true,
+        schemaMarkupAdded: 1,
       };
 
       this.log('SEO fixes complete', { changes, metrics });

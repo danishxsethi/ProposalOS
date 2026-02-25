@@ -511,5 +511,3 @@ describe('Learning Loop Property Tests', () => {
     );
   }, 30000);
 });
-  });
-});

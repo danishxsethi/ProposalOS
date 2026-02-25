@@ -74,14 +74,6 @@ export async function GET(req: Request) {
           },
           take: batchSize,
           orderBy: { createdAt: 'asc' },
-          include: {
-            audit: {
-              include: {
-                findings: true,
-              },
-            },
-            proposal: true,
-          },
         });
 
         if (prospects.length === 0) {
@@ -113,12 +105,6 @@ export async function GET(req: Request) {
           `Processing ${prospects.length} prospects for tenant ${config.tenantId}`
         );
 
-        // Get tenant branding
-        const tenant = await prisma.tenant.findUnique({
-          where: { id: config.tenantId },
-          include: { branding: true },
-        });
-
         let emailsSent = 0;
         let emailsQueued = 0;
         let failed = 0;
@@ -126,14 +112,33 @@ export async function GET(req: Request) {
         // Process each prospect
         for (const prospect of prospects) {
           try {
+            // Fetch audit and proposal separately
+            const audit = await prisma.audit.findFirst({
+              where: {
+                businessUrl: prospect.website || '',
+                tenantId: config.tenantId,
+              },
+              include: {
+                findings: true,
+              },
+              orderBy: { createdAt: 'desc' },
+            });
+
+            const proposal = await prisma.proposal.findFirst({
+              where: {
+                auditId: audit?.id,
+              },
+              orderBy: { createdAt: 'desc' },
+            });
+
             // Skip if no audit or proposal
-            if (!prospect.audit || !prospect.proposal) {
+            if (!audit || !proposal) {
               logger.warn(
                 {
                   event: 'cron.pipeline_outreach.missing_data',
                   prospectId: prospect.id,
-                  hasAudit: !!prospect.audit,
-                  hasProposal: !!prospect.proposal,
+                  hasAudit: !!audit,
+                  hasProposal: !!proposal,
                 },
                 `Skipping prospect ${prospect.id} - missing audit or proposal`
               );
@@ -144,9 +149,9 @@ export async function GET(req: Request) {
             // Build outreach context
             const context: OutreachContext = {
               prospect,
-              audit: prospect.audit,
-              proposal: prospect.proposal,
-              findings: prospect.audit.findings || [],
+              audit: audit,
+              proposal: proposal,
+              findings: audit.findings || [],
               painBreakdown: (prospect.painBreakdown as any) || {
                 websiteSpeed: 0,
                 mobileBroken: 0,
@@ -158,7 +163,7 @@ export async function GET(req: Request) {
                 accessibilityViolations: 0,
               },
               vertical: prospect.vertical || 'default',
-              tenantBranding: tenant?.branding || {
+              tenantBranding: {
                 brandName: 'Our Team',
                 contactEmail: 'hello@example.com',
               },
@@ -219,7 +224,7 @@ export async function GET(req: Request) {
                   prospectId: prospect.id,
                   errorType: 'EMAIL_SEND_FAILED',
                   errorMessage: sendResult.error || 'Unknown error',
-                  metadata: { sendResult },
+                  metadata: JSON.parse(JSON.stringify({ sendResult })),
                 },
               });
             }

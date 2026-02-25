@@ -24,9 +24,6 @@ export async function GET(request: NextRequest) {
         tenantId: user.tenantId,
         status: 'pending',
       },
-      include: {
-        // Include related artifact and finding info if needed
-      },
       orderBy: { createdAt: 'desc' },
     });
 

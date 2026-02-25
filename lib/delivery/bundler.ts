@@ -104,6 +104,9 @@ export async function uploadBundle(
 
   try {
     const url = await uploadToGCS(buffer, fileName, 'application/zip');
+    if (!url) {
+      throw new Error('Failed to get upload URL from GCS');
+    }
     return url;
   } catch (error) {
     console.error('Failed to upload bundle to GCS:', error);
