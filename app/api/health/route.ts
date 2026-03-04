@@ -9,29 +9,34 @@ const version = packageJson.version;
  * Returns 200 when DB is reachable, 503 otherwise.
  */
 export async function GET() {
+    const checks = {
+        database: false,
+        llm: false,
+    };
+
+    // Database
     try {
         await prisma.$queryRaw`SELECT 1`;
-
-        return NextResponse.json(
-            {
-                status: 'ok',
-                database: 'connected',
-                timestamp: new Date().toISOString(),
-                version,
-            },
-            { status: 200 }
-        );
-    } catch (error) {
-        console.error('Health check failed:', error);
-        return NextResponse.json(
-            {
-                status: 'error',
-                database: 'disconnected',
-                timestamp: new Date().toISOString(),
-                version,
-                error: String(error),
-            },
-            { status: 503 }
-        );
+        checks.database = true;
+    } catch (e) {
+        checks.database = false;
     }
+
+    // LLM API (lightweight check)
+    try {
+        checks.llm = !!process.env.GOOGLE_AI_API_KEY;
+    } catch (e) {
+        checks.llm = false;
+    }
+
+    const healthy = Object.values(checks).every(Boolean);
+    return NextResponse.json(
+        {
+            status: healthy ? 'healthy' : 'degraded',
+            checks,
+            timestamp: new Date().toISOString(),
+            version
+        },
+        { status: healthy ? 200 : 503 }
+    );
 }

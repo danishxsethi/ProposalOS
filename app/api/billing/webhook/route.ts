@@ -13,11 +13,17 @@ export async function POST(req: Request) {
     let event: Stripe.Event;
 
     try {
-        event = stripe.webhooks.constructEvent(
-            body,
-            signature,
-            process.env.STRIPE_WEBHOOK_SECRET!
-        );
+        // P0-3 Fix: explicit guard prevents crash when env var is absent
+        const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+        if (!webhookSecret) {
+            console.error('CRITICAL: STRIPE_WEBHOOK_SECRET environment variable is not configured');
+            return NextResponse.json(
+                { error: 'Webhook processing is not configured' },
+                { status: 500 }
+            );
+        }
+
+        event = stripe.webhooks.constructEvent(body, signature, webhookSecret);
     } catch (error: any) {
         return NextResponse.json({ error: `Webhook Error: ${error.message}` }, { status: 400 });
     }

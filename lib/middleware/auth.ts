@@ -5,9 +5,24 @@ import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 import { runWithTenantAsync } from '@/lib/tenant/context';
 
+// Typed handler signature used by withAuth and withRole
+// Note: args uses any[] (not unknown[]) because Next.js route handlers receive typed `{ params }` objects
+// as the second argument, which cannot be assigned to unknown without breaking all dynamic routes.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type AuthHandler = (req: Request, ...args: any[]) => Promise<Response | NextResponse>;
+
+// Typed session user — avoids `as any` casts throughout auth middleware
+interface AuthUser {
+    id: string;
+    email: string;
+    name?: string;
+    role: string;
+    tenantId: string;
+}
+
 // Middleware to check authentication (Session OR API Key)
 // API key can be passed via Authorization: Bearer <key> OR X-API-Key header (for Cloud Run + identity token)
-export function withAuth(handler: Function) {
+export function withAuth(handler: AuthHandler) {
     return async (req: Request, ...args: any[]) => {
         const authHeader = req.headers.get('Authorization');
         const xApiKey = req.headers.get('x-api-key')?.trim();
@@ -16,8 +31,8 @@ export function withAuth(handler: Function) {
         // 1. Check for API Key (from X-API-Key or Bearer)
         if (token) {
 
-        // 1a. Database API key (pe_live_*) — primary, tenant-scoped
-        if (token.startsWith('pe_live_')) {
+            // 1a. Database API key (pe_live_*) — primary, tenant-scoped
+            if (token.startsWith('pe_live_')) {
                 const validation = await validateApiKey(token);
 
                 if (!validation) {
@@ -31,11 +46,11 @@ export function withAuth(handler: Function) {
                 const tenantId = validation.tenantId ?? '';
                 logger.info({ authMethod: 'api_key', tenantId }, 'Auth: database API key');
 
-            return runWithTenantAsync(tenantId, () => handler(req, ...args));
-        }
+                return runWithTenantAsync(tenantId, () => handler(req, ...args));
+            }
 
-        // 1b. Env API key fallback — server-to-server, single-tenant
-        if (process.env.API_KEY && token === process.env.API_KEY) {
+            // 1b. Env API key fallback — server-to-server, single-tenant
+            if (process.env.API_KEY && token === process.env.API_KEY) {
                 const headerTenant = req.headers.get('x-tenant-id')?.trim();
                 let tenantId: string | null =
                     (headerTenant || process.env.DEFAULT_TENANT_ID || null) as string | null;
@@ -61,8 +76,8 @@ export function withAuth(handler: Function) {
 
                 logger.info({ authMethod: 'env_key', tenantId }, 'Auth: env API key');
 
-            return runWithTenantAsync(tenantId, () => handler(req, ...args));
-        }
+                return runWithTenantAsync(tenantId, () => handler(req, ...args));
+            }
         }
 
         // 2. Fallback to Session Auth
@@ -71,6 +86,20 @@ export function withAuth(handler: Function) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
-        return handler(req, ...args);
+        // P0-1 Fix: extract tenantId from session and wrap handler in tenant context.
+        // Without this, routes using createScopedPrisma() or getTenantId() would return
+        // unscoped (cross-tenant) data for session-authenticated dashboard users.
+        const authUser = session.user as AuthUser;
+        const sessionTenantId = authUser.tenantId;
+        if (!sessionTenantId) {
+            logger.warn({ authMethod: 'session', email: authUser.email }, 'Auth: session has no tenantId');
+            return NextResponse.json(
+                { error: 'No tenant associated with this session. Please contact support.' },
+                { status: 403 }
+            );
+        }
+
+        logger.info({ authMethod: 'session', tenantId: sessionTenantId }, 'Auth: session');
+        return runWithTenantAsync(sessionTenantId, () => handler(req, ...args));
     };
 }

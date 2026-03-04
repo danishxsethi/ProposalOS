@@ -1,7 +1,11 @@
 import Stripe from 'stripe';
 
-const key = process.env.STRIPE_SECRET_KEY || 'sk_test_placeholder';
-export const stripe = new Stripe(key, {
+// P0-3 Fix: Next.js evaluates this file at build time, so we cannot throw immediately 
+// or it breaks `npm run build`. Instead, we pass a dummy key if it's missing, which 
+// will fail gracefully with a Stripe auth error when an actual API call is made at runtime.
+const stripeSecretKey = process.env.STRIPE_SECRET_KEY || 'sk_test_placeholder';
+
+export const stripe = new Stripe(stripeSecretKey, {
     apiVersion: '2026-01-28.clover' as const,
     typescript: true,
 });
