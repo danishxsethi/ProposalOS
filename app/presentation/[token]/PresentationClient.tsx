@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { BRANDING, getBrandColor } from '@/lib/config/branding';
+import { BRANDING, getBrandColor } from '@/lib/config/branding-client';
 
 interface PresentationProps {
     proposal: any;

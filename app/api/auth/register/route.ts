@@ -2,6 +2,7 @@ import { prisma } from '@/lib/prisma';
 import bcrypt from 'bcryptjs';
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
+import { rateLimit } from '@/lib/middleware/rateLimit';
 
 const registerSchema = z.object({
     name: z.string().min(2),
@@ -10,7 +11,17 @@ const registerSchema = z.object({
     companyName: z.string().min(2),
 });
 
+// 10 registration attempts per 15 minutes per IP
+const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, maxRequests: 10 });
+
 export async function POST(request: Request) {
+    const { allowed, retryAfter } = authLimiter(request);
+    if (!allowed) {
+        return NextResponse.json(
+            { error: 'Too many attempts. Try again later.' },
+            { status: 429, headers: { 'Retry-After': String(retryAfter) } }
+        );
+    }
     try {
         const body = await request.json();
         const { name, email, password, companyName } = registerSchema.parse(body);

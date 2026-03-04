@@ -39,3 +39,13 @@ next-env.d.ts
 # gcp
 service-account.json
 .db_password_temp
+
+# GCP binaries
+cloud-sql-proxy
+
+# Backups (should not be in repo)
+backups/
+
+# One-off fix scripts
+fix_confidence.js
+fix_confidence.ts

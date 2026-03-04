@@ -414,7 +414,7 @@ Scenario C: All 3 modules fail
 
 | Component | Technology | Responsibility | Deployment |
 | --- | --- | --- | --- |
-| **API Server** | Next.js 14 (App Router) | API routes, proposal web pages, PDF generation | Vercel or Cloud Run |
+| **API Server** | Next.js 16 (App Router) | API routes, proposal web pages, PDF generation | Vercel or Cloud Run |
 | **Temporal Worker** | Node.js + @temporalio/worker | Runs all workflow + activity code | Cloud Run (long-running) |
 | **Temporal Cloud** | Managed service | Workflow scheduling, durability, retry | [temporal.io](http://temporal.io) (SaaS) |
 | **LangGraph Runtime** | Python (langgraph + langchain) | Diagnosis + Proposal compilation | Cloud Run or colocated with worker |
@@ -671,7 +671,7 @@ BASE_URL=https://app.proposalengine.com
 ### Tasks (1–2 day chunks)
 
 - [ ]  **Day 1–2: Project scaffolding**
-    - Next.js 14 project with App Router
+    - Next.js 16 project with App Router
     - TypeScript config, ESLint, Prettier
     - Folder structure: `/app/api/`, `/lib/`, `/workers/`, `/graphs/`
     - Basic health check endpoint (`/api/health`)

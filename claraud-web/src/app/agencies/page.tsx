@@ -1,0 +1,1 @@
+export default function Agencies() { return <h1 className="text-center mt-20 text-2xl font-bold">Agencies Landing</h1>; }

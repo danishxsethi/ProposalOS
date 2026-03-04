@@ -6,6 +6,10 @@ const REQUIRED_ENV_VARS = [
     'SERP_API_KEY',
     'GCP_PROJECT_ID',
     'GOOGLE_AI_API_KEY', // Used by competitorStrategy, actionPlan, keywordGap, reviewResponses, gbpDeep, consultingNarrative, contentQuality
+    'STRIPE_SECRET_KEY',       // P0-3: Required for all Stripe operations
+    'STRIPE_WEBHOOK_SECRET',   // P0-3: Required to verify webhook signatures (prevents crash)
+    'NEXTAUTH_SECRET',         // P0-3: Required for NextAuth JWT signing
+    'CRON_SECRET',             // P1-14: Required to authenticate all cron route handlers
 ] as const;
 
 const OPTIONAL_ENV_VARS = [

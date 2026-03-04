@@ -4,7 +4,7 @@
 
 ## Tech Stack
 
-- **Framework:** Next.js 14 (App Router) + TypeScript
+- **Framework:** Next.js 16 (App Router) + TypeScript
 - **Database:** Cloud SQL for PostgreSQL + Prisma ORM
 - **AI:** Vertex AI (Gemini 1.5 Pro & Flash)
 - **Orchestration:** Cloud Workflows + Cloud Run Jobs

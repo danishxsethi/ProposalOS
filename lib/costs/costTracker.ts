@@ -46,12 +46,12 @@ export type LlmModel = 'GEMINI_FLASH' | 'GEMINI_PRO' | 'GEMINI_31_PRO';
 export class CostTracker {
     private totalCents: number = 0;
     private usage: Record<string, number> = {};
-    /** Hard cap in cents (default 100 = $1.00). Throw CostCapExceededError when exceeded. */
+    /** Hard cap in cents (default 200 = $2.00). Throw CostCapExceededError when exceeded. */
     private capCents: number;
     private auditId?: string;
 
     constructor(options?: { capCents?: number; auditId?: string }) {
-        this.capCents = options?.capCents ?? 100; // default $1.00
+        this.capCents = options?.capCents ?? 200; // P1-13: $2.00 hard cap
         this.auditId = options?.auditId;
     }
 

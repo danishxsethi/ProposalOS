@@ -25,7 +25,7 @@ export async function getTenantId(): Promise<string | null> {
     // 2. Check Session
     const session = await auth();
     if (session?.user && 'tenantId' in session.user) {
-        return (session.user as any).tenantId;
+        return (session.user as unknown as { tenantId: string }).tenantId;
     }
 
     return null;
@@ -50,45 +50,250 @@ export function createScopedPrisma(tenantId: string | undefined) {
                     return query(args);
                 },
                 async findUnique({ args, query }) {
-                    // Note: findUnique usually requires ID. 
+                    // Note: findUnique usually requires ID.
                     // Technically we can't inject where clause cleanly into findUnique unless we change to findFirst
                     // But for security, we should ideally verify result.tenantId === tenantId after fetch
                     // Or transform to findFirst({ where: { id: ..., tenantId } })
 
                     // Transformation:
                     if (args.where.id) {
-                        return (prisma as any).audit.findFirst({
+                        return (prisma as unknown as { audit: { findFirst: Function } }).audit.findFirst({
                             where: { ...args.where, tenantId }
                         });
                     }
                     return query(args);
                 },
                 async create({ args, query }) {
-                    args.data = { ...(args.data as any), tenantId };
+                    args.data = { ...(args.data as Record<string, unknown>), tenantId } as typeof args.data;
                     return query(args);
                 }
             },
-            // We can extend for other models too: Finding, Proposal, etc.
+            // P1-11: Extend to all tenant-scoped models
             finding: {
-                async findMany({ args, query }) {
+                async findMany({ args, query }: any) {
                     args.where = { ...args.where, tenantId };
                     return query(args);
                 },
-                async create({ args, query }) {
-                    args.data = { ...(args.data as any), tenantId }; // Auto-set tenantId
+                async findFirst({ args, query }: any) {
+                    args.where = { ...args.where, tenantId };
                     return query(args);
-                }
+                },
+                async findUnique({ args, query }: any) {
+                    return query(args);
+                },
+                async create({ args, query }: any) {
+                    args.data = { ...args.data, tenantId };
+                    return query(args);
+                },
+                async update({ args, query }: any) {
+                    args.where = { ...args.where, tenantId };
+                    return query(args);
+                },
+                async delete({ args, query }: any) {
+                    args.where = { ...args.where, tenantId };
+                    return query(args);
+                },
             },
             proposal: {
-                async findMany({ args, query }) {
+                async findMany({ args, query }: any) {
                     args.where = { ...args.where, tenantId };
                     return query(args);
                 },
-                async create({ args, query }) {
-                    args.data = { ...(args.data as any), tenantId };
+                async findFirst({ args, query }: any) {
+                    args.where = { ...args.where, tenantId };
                     return query(args);
-                }
-            }
+                },
+                async findUnique({ args, query }: any) {
+                    return query(args);
+                },
+                async create({ args, query }: any) {
+                    args.data = { ...args.data, tenantId };
+                    return query(args);
+                },
+                async update({ args, query }: any) {
+                    args.where = { ...args.where, tenantId };
+                    return query(args);
+                },
+                async delete({ args, query }: any) {
+                    args.where = { ...args.where, tenantId };
+                    return query(args);
+                },
+            },
+            evidenceSnapshot: {
+                async findMany({ args, query }: any) {
+                    args.where = { ...args.where, tenantId };
+                    return query(args);
+                },
+                async findFirst({ args, query }: any) {
+                    args.where = { ...args.where, tenantId };
+                    return query(args);
+                },
+                async findUnique({ args, query }: any) {
+                    return query(args);
+                },
+                async create({ args, query }: any) {
+                    args.data = { ...args.data, tenantId };
+                    return query(args);
+                },
+                async update({ args, query }: any) {
+                    args.where = { ...args.where, tenantId };
+                    return query(args);
+                },
+                async delete({ args, query }: any) {
+                    args.where = { ...args.where, tenantId };
+                    return query(args);
+                },
+            },
+            prospectLead: {
+                async findMany({ args, query }: any) {
+                    args.where = { ...args.where, tenantId };
+                    return query(args);
+                },
+                async findFirst({ args, query }: any) {
+                    args.where = { ...args.where, tenantId };
+                    return query(args);
+                },
+                async findUnique({ args, query }: any) {
+                    return query(args);
+                },
+                async create({ args, query }: any) {
+                    args.data = { ...args.data, tenantId };
+                    return query(args);
+                },
+                async update({ args, query }: any) {
+                    args.where = { ...args.where, tenantId };
+                    return query(args);
+                },
+                async delete({ args, query }: any) {
+                    args.where = { ...args.where, tenantId };
+                    return query(args);
+                },
+            },
+            prospectDiscoveryJob: {
+                async findMany({ args, query }: any) {
+                    args.where = { ...args.where, tenantId };
+                    return query(args);
+                },
+                async findFirst({ args, query }: any) {
+                    args.where = { ...args.where, tenantId };
+                    return query(args);
+                },
+                async findUnique({ args, query }: any) {
+                    return query(args);
+                },
+                async create({ args, query }: any) {
+                    args.data = { ...args.data, tenantId };
+                    return query(args);
+                },
+                async update({ args, query }: any) {
+                    args.where = { ...args.where, tenantId };
+                    return query(args);
+                },
+                async delete({ args, query }: any) {
+                    args.where = { ...args.where, tenantId };
+                    return query(args);
+                },
+            },
+            outreachEmail: {
+                async findMany({ args, query }: any) {
+                    args.where = { ...args.where, tenantId };
+                    return query(args);
+                },
+                async findFirst({ args, query }: any) {
+                    args.where = { ...args.where, tenantId };
+                    return query(args);
+                },
+                async findUnique({ args, query }: any) {
+                    return query(args);
+                },
+                async create({ args, query }: any) {
+                    args.data = { ...args.data, tenantId };
+                    return query(args);
+                },
+                async update({ args, query }: any) {
+                    args.where = { ...args.where, tenantId };
+                    return query(args);
+                },
+                async delete({ args, query }: any) {
+                    args.where = { ...args.where, tenantId };
+                    return query(args);
+                },
+            },
+            outreachEmailEvent: {
+                async findMany({ args, query }: any) {
+                    args.where = { ...args.where, tenantId };
+                    return query(args);
+                },
+                async findFirst({ args, query }: any) {
+                    args.where = { ...args.where, tenantId };
+                    return query(args);
+                },
+                async findUnique({ args, query }: any) {
+                    return query(args);
+                },
+                async create({ args, query }: any) {
+                    args.data = { ...args.data, tenantId };
+                    return query(args);
+                },
+                async update({ args, query }: any) {
+                    args.where = { ...args.where, tenantId };
+                    return query(args);
+                },
+                async delete({ args, query }: any) {
+                    args.where = { ...args.where, tenantId };
+                    return query(args);
+                },
+            },
+            auditSchedule: {
+                async findMany({ args, query }: any) {
+                    args.where = { ...args.where, tenantId };
+                    return query(args);
+                },
+                async findFirst({ args, query }: any) {
+                    args.where = { ...args.where, tenantId };
+                    return query(args);
+                },
+                async findUnique({ args, query }: any) {
+                    return query(args);
+                },
+                async create({ args, query }: any) {
+                    args.data = { ...args.data, tenantId };
+                    return query(args);
+                },
+                async update({ args, query }: any) {
+                    args.where = { ...args.where, tenantId };
+                    return query(args);
+                },
+                async delete({ args, query }: any) {
+                    args.where = { ...args.where, tenantId };
+                    return query(args);
+                },
+            },
+            apiKey: {
+                async findMany({ args, query }: any) {
+                    args.where = { ...args.where, tenantId };
+                    return query(args);
+                },
+                async findFirst({ args, query }: any) {
+                    args.where = { ...args.where, tenantId };
+                    return query(args);
+                },
+                async findUnique({ args, query }: any) {
+                    return query(args);
+                },
+                async create({ args, query }: any) {
+                    args.data = { ...args.data, tenantId };
+                    return query(args);
+                },
+                async update({ args, query }: any) {
+                    args.where = { ...args.where, tenantId };
+                    return query(args);
+                },
+                async delete({ args, query }: any) {
+                    args.where = { ...args.where, tenantId };
+                    return query(args);
+                },
+            },
         }
     });
 }

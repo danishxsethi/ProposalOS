@@ -65,7 +65,7 @@ model Finding {
   createdAt       DateTime     @default(now())
 
   // Multi-Tenancy (Denormalized)
-  tenantId String? // Optional for migration, enforce in app logic
+  tenantId String // Made required
 
   audit         Audit           @relation(fields: [auditId], references: [id], onDelete: Cascade)
   FindingStatus FindingStatus[]
@@ -99,7 +99,7 @@ model Proposal {
   createdAt        DateTime       @default(now())
 
   // Multi-Tenancy
-  tenantId String?
+  tenantId String
 
   // Template Link
   templateId String?
@@ -194,8 +194,13 @@ model ContactRequest {
   createdAt     DateTime @default(now())
 
   proposal Proposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+  
+  // Multi-Tenancy
+  tenantId String
+  tenant   Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([proposalId])
+  @@index([tenantId])
 }
 
 model ProposalFollowUp {
@@ -216,6 +221,7 @@ model ProposalFollowUp {
   updatedAt   DateTime  @updatedAt
 
   proposal Proposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+  tenant   Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([proposalId])
   @@index([tenantId])
@@ -232,7 +238,7 @@ model EvidenceSnapshot {
   collectedAt DateTime @default(now())
 
   // Multi-Tenancy
-  tenantId String?
+  tenantId String
 
   audit Audit @relation(fields: [auditId], references: [id], onDelete: Cascade)
 
@@ -313,6 +319,10 @@ model User {
 }
 
 // Feature #9: Multi-Tenant
+// TODO: Implement cascading soft-delete or cleanup job
+// Deleting a tenant currently orphans child records.
+// Use a background job to clean up: audits, findings, proposals,
+// evidence snapshots, prospect leads, outreach emails, etc.
 model Tenant {
   id     String  @id @default(uuid())
   name   String
@@ -348,6 +358,10 @@ model Tenant {
   outreachEmailEvents    OutreachEmailEvent[]
   pipelineConfig         PipelineConfig?
   projects               Project[]
+  contactRequests        ContactRequest[]
+  proposalFollowUps      ProposalFollowUp[]
+  monitoringConfigs      MonitoringConfig[]
+  locationGroups         LocationGroup[]
 
   @@index([domain])
   @@index([isActive])
@@ -1583,6 +1597,38 @@ model Metric {
   @@index([name])
 }
 
+model MonitoringConfig {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id])
+  type      String
+  config    Json
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([tenantId])
+}
 
+model LocationGroup {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id])
+  name      String
+  locations Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([tenantId])
+}
 
-
+model Plugin {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
+  description String?
+  version     String
+  author      String?
+  config      Json?
+  active      Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}

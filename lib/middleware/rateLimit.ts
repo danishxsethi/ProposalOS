@@ -113,3 +113,43 @@ function isRateLimitError(result: any): result is {
 } {
     return 'error' in result;
 }
+
+/**
+ * P1-8: Simple in-memory IP-based rate limiter for auth endpoints.
+ * NOTE: Resets on process restart. For multi-replica deployments, use Redis.
+ */
+interface RateLimitEntry {
+    count: number;
+    resetAt: number;
+}
+
+const _ipRequestCounts = new Map<string, RateLimitEntry>();
+
+export function rateLimit({
+    windowMs = 15 * 60 * 1000,
+    maxRequests = 10,
+}: {
+    windowMs?: number;
+    maxRequests?: number;
+} = {}) {
+    return (req: Request): { allowed: boolean; retryAfter?: number } => {
+        const ip =
+            req.headers.get('x-forwarded-for') ||
+            req.headers.get('x-real-ip') ||
+            'unknown';
+        const now = Date.now();
+        const entry = _ipRequestCounts.get(ip);
+
+        if (!entry || now > entry.resetAt) {
+            _ipRequestCounts.set(ip, { count: 1, resetAt: now + windowMs });
+            return { allowed: true };
+        }
+
+        entry.count++;
+        if (entry.count > maxRequests) {
+            return { allowed: false, retryAfter: Math.ceil((entry.resetAt - now) / 1000) };
+        }
+
+        return { allowed: true };
+    };
+}

@@ -1,18 +1,5 @@
 import { prisma } from '@/lib/prisma';
 import { CANONICAL_MODULES } from '@/lib/audit/modules';
-import { runWebsiteModule } from '@/lib/modules/website';
-import { runGBPModule } from '@/lib/modules/gbp';
-import { runCompetitorModule } from '@/lib/modules/competitor';
-import { runReputationModule } from '@/lib/modules/reputation';
-import { runSocialModule } from '@/lib/modules/social';
-import {
-    generateWebsiteFindings,
-    generateGBPFindings,
-    generateCompetitorFindings,
-    generateReputationFindings,
-    generateSocialFindings,
-} from '@/lib/modules/findingGenerator';
-import { detectIndustryFromCategory } from '@/lib/proposal/pricing';
 import { detectVertical } from '@/lib/playbooks';
 import { CostTracker } from '@/lib/costs/costTracker';
 import { logger, logError } from '@/lib/logger';
@@ -20,126 +7,407 @@ import { Metrics } from '@/lib/metrics';
 import { createParentTrace } from '@/lib/tracing';
 import { RunTree } from 'langsmith';
 
-/**
- * Retry configuration for module executions
- */
-const RETRY_CONFIG = {
-    maxRetries: 3,
-    initialDelayMs: 1000,
-    maxDelayMs: 10000,
-    timeoutMs: 30000, // 30 second timeout per attempt
-} as const;
+// --- Step 1: Import all modules ---
+import { runWebsiteModule } from '../modules/website';
+import { runGBPModule as runGbpModule } from '../modules/gbp';
+import { runCompetitorModule } from '../modules/competitor';
+import { runReputationModule } from '../modules/reputation';
+import { runSocialModule } from '../modules/social';
+import { runAccessibilityModule } from '../modules/accessibility';
+import { runBacklinksModule } from '../modules/backlinks';
+import { runCitationsModule } from '../modules/citations';
+import { runContentQualityModule } from '../modules/contentQuality';
+import { runConversionModule } from '../modules/conversion';
+import { findEmails as runEmailFinderModule } from '../modules/emailFinder';
+import { runGbpDeepModule } from '../modules/gbpDeep';
+import { runKeywordGapModule } from '../modules/keywordGap';
+import { runMobileUXModule } from '../modules/mobileUX';
+import { runPaidSearchModule } from '../modules/paidSearch';
+import { runPrivacyModule as runPrivacyComplianceModule } from '../modules/privacyCompliance';
+import { runSchemaMarkupModule } from '../modules/schemaMarkup';
+import { runSecurityModule } from '../modules/security';
+import { runSeoDeepModule } from '../modules/seoDeep';
+import { runSocialDeepModule } from '../modules/socialDeep';
+import { runTechStackModule } from '../modules/techStack';
+import { runVideoModule as runVideoPresenceModule } from '../modules/videoPresence';
+import { runVisionModule } from '../modules/vision';
+import { runWebsiteCrawlerModule } from '../modules/websiteCrawlerModule';
+import { runCompetitorStrategyModule } from '../modules/competitorStrategy';
 
-/**
- * Content module specification for each canonical module
- */
-export interface ModuleSpec {
-    id: string;
-    name: string;
-    timeoutMs: number;
-    requiredForComplete: boolean;
-    dependencies?: string[];
+// finding generators for legacy modules
+import {
+    generateWebsiteFindings,
+    generateGBPFindings,
+    generateCompetitorFindings,
+    generateReputationFindings,
+    generateSocialFindings,
+} from '@/lib/modules/findingGenerator';
+
+export interface ModuleInput {
+    auditId: string;
+    url?: string;
+    businessName?: string;
+    city?: string;
+    industry?: string;
+    dependencyResults?: Record<string, any>;
+    tenantId: string;
 }
 
-export const MODULE_SPECS: Record<string, ModuleSpec> = {
-    website: {
-        id: 'website',
-        name: 'Website Analysis',
-        timeoutMs: 45000,
-        requiredForComplete: true,
-    },
-    gbp: {
-        id: 'gbp',
-        name: 'Google Business Profile',
-        timeoutMs: 30000,
-        requiredForComplete: true,
-    },
-    competitor: {
-        id: 'competitor',
-        name: 'Competitor Analysis',
-        timeoutMs: 30000,
-        requiredForComplete: true,
-    },
-    reputation: {
-        id: 'reputation',
-        name: 'Reputation Analysis',
-        timeoutMs: 60000,
-        requiredForComplete: false,
-        dependencies: ['gbp'],
-    },
-    social: {
-        id: 'social',
-        name: 'Social Media Analysis',
-        timeoutMs: 30000,
-        requiredForComplete: false,
-        dependencies: ['website'],
-    },
+export interface ModuleResult {
+    status: 'COMPLETE' | 'PARTIAL' | 'FAILED' | 'SKIPPED';
+    data: any;
+    error?: string;
+    cost?: number;
+}
+
+// --- Step 2: Define the 3-phase execution plan ---
+
+interface ModuleConfig {
+    name: string;
+    phase: 1 | 2 | 3;
+    run: (input: ModuleInput, costTracker: CostTracker, parentTrace?: any) => Promise<ModuleResult>;
+    dependsOn?: string[];
+    optional?: boolean;
+    timeoutMs?: number;
+}
+
+async function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
+    let timeoutId: NodeJS.Timeout;
+    const timeoutPromise = new Promise<T>((_, reject) => {
+        timeoutId = setTimeout(() => reject(new Error(`Timed out after ${timeoutMs}ms`)), timeoutMs);
+    });
+    return Promise.race([promise, timeoutPromise]).finally(() => clearTimeout(timeoutId));
+}
+
+// Adapters to normalize the diverse module inputs/outputs into the standard ModuleResult
+const websiteAdapter = async (input: ModuleInput, tracker: CostTracker): Promise<ModuleResult> => {
+    if (!input.url) throw new Error('url required');
+    const data = await runWebsiteModule({ url: input.url }, tracker);
+    return { status: 'COMPLETE', data };
 };
 
+const websiteCrawlerAdapter = async (input: ModuleInput): Promise<ModuleResult> => {
+    if (!input.url || !input.businessName) throw new Error('url and businessName required');
+    const data = await runWebsiteCrawlerModule({ url: input.url, businessName: input.businessName });
+    return { status: 'COMPLETE', data };
+};
+
+const gbpAdapter = async (input: ModuleInput, tracker: CostTracker): Promise<ModuleResult> => {
+    if (!input.businessName || !input.city) throw new Error('businessName and city required');
+    const data = await runGbpModule({ businessName: input.businessName, city: input.city, websiteUrl: input.url }, tracker);
+    return { status: 'COMPLETE', data: (data as unknown as Record<string, any>)?.data || data };
+};
+
+const competitorAdapter = async (input: ModuleInput, tracker: CostTracker): Promise<ModuleResult> => {
+    if (!input.businessName || !input.city) throw new Error('keyword and location required');
+    const data = await runCompetitorModule({ keyword: input.businessName, location: input.city }, tracker);
+    return { status: 'COMPLETE', data: (data as unknown as Record<string, any>)?.data || data };
+};
+
+const techStackAdapter = async (input: ModuleInput, tracker: CostTracker): Promise<ModuleResult> => {
+    if (!input.url) throw new Error('url required');
+    const data = await runTechStackModule({ url: input.url }, tracker);
+    return { status: 'COMPLETE', data };
+};
+
+const securityAdapter = async (input: ModuleInput): Promise<ModuleResult> => {
+    if (!input.url) throw new Error('url required');
+    const data = await runSecurityModule({ url: input.url });
+    return { status: 'COMPLETE', data: (data as unknown as Record<string, any>)?.data || data };
+};
+
+const emailFinderAdapter = async (input: ModuleInput): Promise<ModuleResult> => {
+    if (!input.url) throw new Error('url required');
+    const data = await runEmailFinderModule(input.url);
+    if ((data as unknown as Record<string, any>).status === 'error') throw new Error((data as unknown as Record<string, any>).error);
+    return { status: 'COMPLETE', data };
+};
+
+const reputationAdapter = async (input: ModuleInput, tracker: CostTracker, trace: any): Promise<ModuleResult> => {
+    const gbpData = input.dependencyResults?.gbp;
+    if (!gbpData?.reviews || gbpData.reviews.length === 0) return { status: 'SKIPPED', data: null, error: 'No reviews found' };
+    const data = await runReputationModule({ reviews: gbpData.reviews, businessName: input.businessName || 'Unknown' }, tracker, trace);
+    return { status: 'COMPLETE', data: (data as unknown as Record<string, any>)?.data || data };
+};
+
+const socialAdapter = async (input: ModuleInput, tracker: CostTracker): Promise<ModuleResult> => {
+    if (!input.url || !input.businessName) throw new Error('url and businessName required');
+    const data = await runSocialModule({ websiteUrl: input.url, businessName: input.businessName }, tracker);
+    return { status: 'COMPLETE', data: (data as unknown as Record<string, any>)?.data || data };
+};
+
+const socialDeepAdapter = async (input: ModuleInput, tracker: CostTracker): Promise<ModuleResult> => {
+    if (!input.url || !input.businessName || !input.city) throw new Error('Missing input');
+    const socialData = input.dependencyResults?.social;
+    const discoveredUrls = socialData?.discoveredUrls || [];
+    const data = await runSocialDeepModule({ websiteUrl: input.url, businessName: input.businessName, city: input.city, industry: input.industry || 'Generic', discoveredUrls }, tracker);
+    return { status: 'COMPLETE', data };
+};
+
+const gbpDeepAdapter = async (input: ModuleInput, tracker: CostTracker): Promise<ModuleResult> => {
+    const gbpData = input.dependencyResults?.gbp;
+    if (!gbpData?.placeId && !input.url) return { status: 'SKIPPED', data: null, error: 'No placeId or URL' };
+    const data = await runGbpDeepModule({ placeId: gbpData?.placeId, websiteUrl: input.url, businessName: input.businessName || 'Unknown', city: input.city || 'Unknown' }, tracker);
+    return { status: 'COMPLETE', data };
+};
+
+const seoDeepAdapter = async (input: ModuleInput, tracker: CostTracker): Promise<ModuleResult> => {
+    if (!input.url) throw new Error('url required');
+    const data = await runSeoDeepModule({ url: input.url, businessName: input.businessName || 'Unknown', city: input.city }, tracker);
+    return { status: 'COMPLETE', data };
+};
+
+const accessibilityAdapter = async (input: ModuleInput, tracker: CostTracker): Promise<ModuleResult> => {
+    if (!input.url) throw new Error('url required');
+    const data = await runAccessibilityModule({ url: input.url }, tracker);
+    return { status: 'COMPLETE', data };
+};
+
+const mobileUXAdapter = async (input: ModuleInput, tracker: CostTracker): Promise<ModuleResult> => {
+    if (!input.url) throw new Error('url required');
+    const data = await runMobileUXModule({ url: input.url, businessName: input.businessName || 'Unknown' }, tracker);
+    return { status: 'COMPLETE', data };
+};
+
+const contentQualityAdapter = async (input: ModuleInput, tracker: CostTracker): Promise<ModuleResult> => {
+    if (!input.url) throw new Error('url required');
+    const crawlerData = input.dependencyResults?.websiteCrawler;
+    const crawledPages = crawlerData?.evidenceSnapshots?.[0]?.rawResponse?.crawledPages || [];
+    const data = await runContentQualityModule({ url: input.url, businessName: input.businessName || 'Unknown', industry: input.industry || 'Generic', city: input.city || '', crawledPages }, tracker);
+    return { status: 'COMPLETE', data };
+};
+
+const conversionAdapter = async (input: ModuleInput, tracker: CostTracker): Promise<ModuleResult> => {
+    if (!input.url) throw new Error('url required');
+    const data = await runConversionModule({ url: input.url, businessName: input.businessName || 'Unknown', industry: input.industry }, tracker);
+    return { status: 'COMPLETE', data };
+};
+
+const citationsAdapter = async (input: ModuleInput, tracker: CostTracker): Promise<ModuleResult> => {
+    if (!input.businessName || !input.city) throw new Error('businessName and city required');
+    const data = await runCitationsModule({ businessName: input.businessName, city: input.city }, tracker);
+    return { status: 'COMPLETE', data };
+};
+
+const paidSearchAdapter = async (input: ModuleInput, tracker: CostTracker): Promise<ModuleResult> => {
+    if (!input.url || !input.businessName || !input.city) throw new Error('url, name, city required');
+    const data = await runPaidSearchModule({ url: input.url, businessName: input.businessName, businessType: input.industry || 'Generic', city: input.city }, tracker);
+    return { status: 'COMPLETE', data };
+};
+
+const backlinksAdapter = async (input: ModuleInput, tracker: CostTracker): Promise<ModuleResult> => {
+    if (!input.url || !input.businessName || !input.city) throw new Error('url, name, city required');
+    const data = await runBacklinksModule({ websiteUrl: input.url, businessName: input.businessName, city: input.city }, tracker);
+    return { status: 'COMPLETE', data };
+};
+
+const privacyComplianceAdapter = async (input: ModuleInput, tracker: CostTracker): Promise<ModuleResult> => {
+    if (!input.url) throw new Error('url required');
+    const data = await runPrivacyComplianceModule({ url: input.url, businessName: input.businessName || 'Unknown', city: input.city || '' }, tracker);
+    return { status: 'COMPLETE', data };
+};
+
+const schemaMarkupAdapter = async (input: ModuleInput): Promise<ModuleResult> => {
+    if (!input.url) throw new Error('url required');
+    const gbpData = input.dependencyResults?.gbp;
+    const data = await runSchemaMarkupModule({ url: input.url, businessName: input.businessName, gbpTypes: gbpData?.types });
+    return { status: 'COMPLETE', data: (data as unknown as Record<string, any>)?.data || data };
+};
+
+const keywordGapAdapter = async (input: ModuleInput, tracker: CostTracker): Promise<ModuleResult> => {
+    if (!input.url || !input.businessName || !input.city) throw new Error('url, name, city required');
+    const data = await runKeywordGapModule({ websiteUrl: input.url, businessName: input.businessName, city: input.city, industry: input.industry || 'Generic' }, tracker);
+    return { status: 'COMPLETE', data };
+};
+
+const videoPresenceAdapter = async (input: ModuleInput, tracker: CostTracker): Promise<ModuleResult> => {
+    if (!input.businessName || !input.city) throw new Error('name, city required');
+    const compData = input.dependencyResults?.competitor;
+    const competitors = compData?.results?.slice(0, 3).map((r: any) => r.title) || [];
+    const data = await runVideoPresenceModule({ businessName: input.businessName, city: input.city, industry: input.industry || 'Generic', websiteUrl: input.url || '', competitors }, tracker);
+    return { status: 'COMPLETE', data };
+};
+
+const competitorStrategyAdapter = async (input: ModuleInput, tracker: CostTracker): Promise<ModuleResult> => {
+    if (!input.url || !input.businessName || !input.city) throw new Error('url, name, city required');
+    const compData = input.dependencyResults?.competitor;
+    const topComp = compData?.results?.find((r: any) => r.link && r.title && r.title !== input.businessName);
+    if (!topComp) return { status: 'SKIPPED', data: null, error: 'No major competitor found' };
+    const data = await runCompetitorStrategyModule({ businessName: input.businessName, industry: input.industry || 'Generic', city: input.city, websiteUrl: input.url, competitorName: topComp.title, competitorWebsite: topComp.link, competitorPlaceId: topComp.placeId }, tracker);
+    return { status: 'COMPLETE', data };
+};
+
+const visionAdapter = async (input: ModuleInput, tracker: CostTracker): Promise<ModuleResult> => {
+    const crawlerData = input.dependencyResults?.websiteCrawler;
+    const screenshots = crawlerData?.evidenceSnapshots?.filter((s: any) => s.type === 'screenshot') || [];
+    if (screenshots.length === 0) return { status: 'SKIPPED', data: null, error: 'No screenshots captured' };
+    const data = await runVisionModule({ auditId: input.auditId, businessName: input.businessName || 'Unknown', industry: input.industry || 'Generic', screenshots }, tracker);
+    return { status: 'COMPLETE', data };
+};
+
+export const MODULE_REGISTRY: ModuleConfig[] = [
+    // Phase 1: Foundation (parallel) — no dependencies
+    { name: 'website', phase: 1, run: websiteAdapter, timeoutMs: 30000 },
+    { name: 'websiteCrawler', phase: 1, run: websiteCrawlerAdapter, timeoutMs: 45000 },
+    { name: 'gbp', phase: 1, run: gbpAdapter, timeoutMs: 20000 },
+    { name: 'competitor', phase: 1, run: competitorAdapter, timeoutMs: 25000 },
+    { name: 'techStack', phase: 1, run: techStackAdapter, timeoutMs: 15000 },
+    { name: 'security', phase: 1, run: securityAdapter, timeoutMs: 20000 },
+    { name: 'emailFinder', phase: 1, run: emailFinderAdapter, timeoutMs: 15000, optional: true },
+
+    // Phase 2: Analysis (parallel) — depends on Phase 1 data
+    { name: 'reputation', phase: 2, run: reputationAdapter, dependsOn: ['gbp'] },
+    { name: 'social', phase: 2, run: socialAdapter, dependsOn: ['website'] },
+    { name: 'socialDeep', phase: 2, run: socialDeepAdapter, dependsOn: ['social'], optional: true },
+    { name: 'gbpDeep', phase: 2, run: gbpDeepAdapter, dependsOn: ['gbp'], optional: true },
+    { name: 'seoDeep', phase: 2, run: seoDeepAdapter, dependsOn: ['website', 'websiteCrawler'] },
+    { name: 'accessibility', phase: 2, run: accessibilityAdapter, dependsOn: ['website'] },
+    { name: 'mobileUX', phase: 2, run: mobileUXAdapter, dependsOn: ['website'] },
+    { name: 'contentQuality', phase: 2, run: contentQualityAdapter, dependsOn: ['websiteCrawler'] },
+    { name: 'conversion', phase: 2, run: conversionAdapter, dependsOn: ['website'] },
+    { name: 'citations', phase: 2, run: citationsAdapter, dependsOn: ['gbp'] },
+    { name: 'paidSearch', phase: 2, run: paidSearchAdapter, optional: true },
+    { name: 'backlinks', phase: 2, run: backlinksAdapter, optional: true },
+    { name: 'privacyCompliance', phase: 2, run: privacyComplianceAdapter, dependsOn: ['website'] },
+    { name: 'schemaMarkup', phase: 2, run: schemaMarkupAdapter, dependsOn: ['websiteCrawler', 'gbp'] },
+    { name: 'keywordGap', phase: 2, run: keywordGapAdapter, dependsOn: ['gbp', 'competitor'] },
+    { name: 'videoPresence', phase: 2, run: videoPresenceAdapter, dependsOn: ['competitor'], optional: true },
+
+    // Phase 3: Synthesis (parallel) — depends on Phase 2
+    { name: 'competitorStrategy', phase: 3, run: competitorStrategyAdapter, dependsOn: ['competitor', 'seoDeep'] },
+    { name: 'vision', phase: 3, run: visionAdapter, dependsOn: ['websiteCrawler'], optional: true },
+];
+
 /**
- * Execute a function with retry logic and timeout
+ * Normalizes findings out of the custom module results and legacy modules
  */
-async function withTimeoutAndRetry<T>(
-    fn: () => Promise<T>,
-    options: {
-        timeout?: number;
-        maxRetries?: number;
-        backoff?: 'exponential';
-        onRetry?: (attempt: number, error: Error) => void;
-    } = {}
-): Promise<T | { status: 'failed'; error: string }> {
-    const {
-        maxRetries = 3,
-        timeout = 30000,
-        backoff = 'exponential',
-        onRetry,
-    } = options;
+function extractFindingsFromRegistryResult(moduleName: string, result: ModuleResult, input: ModuleInput): { findings: any[], snapshots: any[] } {
+    if (result.status !== 'COMPLETE' || !result.data) return { findings: [], snapshots: [] };
+    const rd = result.data;
 
-    const initialDelayMs = 1000;
-    const maxDelayMs = 10000;
-    let lastError: Error | undefined;
+    const findings: any[] = [];
+    const snapshots: any[] = [];
 
-    for (let attempt = 0; attempt <= maxRetries; attempt++) {
-        try {
-            // Create timeout promise
-            const timeoutPromise = new Promise<never>((_, reject) => {
-                setTimeout(() => {
-                    reject(new Error(`Operation timed out after ${timeout}ms`));
-                }, timeout);
+    // legacy path
+    if (moduleName === 'website') {
+        const rawResponse = Array.isArray(rd.findings) ? rd : rd.data || rd;
+        if (Array.isArray(rd.findings)) {
+            findings.push(...rd.findings.map((f: any) => ({ ...f, module: 'website' })));
+        } else {
+            findings.push(...generateWebsiteFindings(rawResponse));
+        }
+        snapshots.push({ source: 'PageSpeed', rawResponse });
+    } else if (moduleName === 'gbp') {
+        findings.push(...generateGBPFindings(rd, input.businessName || 'Unknown', input.dependencyResults?.competitor));
+        snapshots.push({ source: 'Places API', rawResponse: rd });
+    } else if (moduleName === 'competitor') {
+        findings.push(...generateCompetitorFindings(rd, input.businessName || 'Unknown'));
+        snapshots.push({ source: 'SerpAPI', rawResponse: rd });
+    } else if (moduleName === 'social') {
+        findings.push(...generateSocialFindings(rd));
+        snapshots.push({ source: 'HTML Analysis', rawResponse: rd });
+    } else if (moduleName === 'reputation') {
+        findings.push(...generateReputationFindings(rd));
+        snapshots.push({ source: 'AI Rep Analysis', rawResponse: rd });
+    } else if (moduleName === 'security' || moduleName === 'schemaMarkup') {
+        if (Array.isArray(rd.findings)) {
+            findings.push(...rd.findings.map((f: any) => ({ ...f, module: moduleName })));
+        }
+        snapshots.push({ source: 'Module Data', rawResponse: rd });
+    } else if (moduleName === 'emailFinder') {
+        if (rd.emails && rd.emails.length > 0) {
+            findings.push({
+                module: 'emailFinder',
+                category: 'Contact & Outreach',
+                type: 'POSITIVE',
+                title: `${rd.emails.length} Emails Found`,
+                description: `Discovered emails: ${rd.emails.join(', ')}`,
+                evidence: rd.emails.map((e: string) => ({ type: 'text', value: e, label: 'Email' })),
+                metrics: { emailCount: rd.emails.length },
+                impactScore: 3,
+                confidenceScore: 90,
+                effortEstimate: 'LOW',
+                recommendedFix: ['Use for outreach'],
             });
-
-            // Race the function against timeout
-            const result = await Promise.race([fn(), timeoutPromise]);
-            return result;
-        } catch (error) {
-            lastError = error instanceof Error ? error : new Error(String(error));
-
-            if (attempt < maxRetries) {
-                // Exponential backoff
-                const delay = backoff === 'exponential'
-                    ? Math.min(initialDelayMs * Math.pow(2, attempt), maxDelayMs)
-                    : initialDelayMs;
-
-                logger.warn({
-                    event: 'module.retry',
-                    attempt: attempt + 1,
-                    maxRetries,
-                    delayMs: delay,
-                    error: lastError.message,
-                }, 'Module execution failed, retrying...');
-
-                if (onRetry) {
-                    onRetry(attempt + 1, lastError);
-                }
-
-                // Add jitter to prevent thundering herd
-                const jitter = Math.random() * 0.3 * delay;
-                await new Promise(r => setTimeout(r, delay + jitter));
+        }
+    } else {
+        // new modules path
+        if (Array.isArray(rd.findings)) {
+            findings.push(...rd.findings.map((f: any) => ({ ...f, module: f.module || moduleName })));
+            if (rd.evidenceSnapshots && Array.isArray(rd.evidenceSnapshots)) {
+                rd.evidenceSnapshots.forEach((s: any) => snapshots.push(s));
+            } else {
+                snapshots.push({ source: moduleName, rawResponse: rd });
             }
         }
     }
 
-    return { status: 'failed', error: lastError?.message || 'Operation failed after retries' };
+    return { findings, snapshots };
+}
+
+// --- Step 3: Replace the current execution logic ---
+
+async function executePhase(
+    phase: number,
+    registry: ModuleConfig[],
+    results: Map<string, ModuleResult>,
+    input: ModuleInput,
+    costTracker: CostTracker,
+    parentTrace: any
+): Promise<void> {
+    const phaseModules = registry.filter(m => m.phase === phase);
+
+    const executions = phaseModules.map(async (mod) => {
+        // Check dependencies
+        if (mod.dependsOn) {
+            const missingDeps = mod.dependsOn.filter(
+                dep => !results.has(dep) || results.get(dep)!.status === 'FAILED'
+            );
+            if (missingDeps.length > 0 && !mod.optional) {
+                logger.warn({ module: mod.name, missingDeps }, 'Skipping module — dependencies failed');
+                results.set(mod.name, {
+                    status: 'SKIPPED',
+                    data: null,
+                    error: `Dependencies failed: ${missingDeps.join(', ')}`
+                });
+                return;
+            }
+        }
+
+        try {
+            const moduleInput: ModuleInput = {
+                ...input,
+                dependencyResults: Object.fromEntries(
+                    (mod.dependsOn || [])
+                        .map(dep => [dep, results.get(dep)?.data])
+                        .filter(([_, v]) => v != null)
+                )
+            };
+
+            const runPromise = async () => {
+                for (let attempt = 0; attempt < 2; attempt++) {
+                    try {
+                        return await mod.run(moduleInput, costTracker, parentTrace);
+                    } catch (e) {
+                        if (attempt === 1) throw e;
+                    }
+                }
+                throw new Error('Retries exceeded');
+            };
+
+            const result = await withTimeout(
+                runPromise(),
+                mod.timeoutMs || 30000
+            );
+
+            results.set(mod.name, result);
+        } catch (error) {
+            logger.error({ module: mod.name, error }, 'Module execution failed');
+            results.set(mod.name, { status: 'FAILED', data: null, error: String(error) });
+        }
+    });
+
+    await Promise.allSettled(executions);
 }
 
 export async function runAudit(auditId: string) {
@@ -170,10 +438,7 @@ export async function runAudit(auditId: string) {
         url
     }, 'Starting audit execution');
 
-    // Create CostTracker
-    const tracker = new CostTracker();
-
-    // Create parent trace for this audit data collection flow
+    const costTracker = new CostTracker();
     let parentTrace: RunTree | undefined;
     try {
         parentTrace = await createParentTrace(audit.id, "audit-data-collection", {
@@ -185,380 +450,171 @@ export async function runAudit(auditId: string) {
         console.error("Failed to create parent trace", e);
     }
 
-    try {
-        // Run modules in parallel with retry logic (GCP-native approach)
-        const [websiteResult, gbpResult, competitorResult] = await Promise.allSettled([
-            url
-                ? withTimeoutAndRetry(() => runWebsiteModule({ url }, tracker), {
-                    maxRetries: 3,
-                    timeout: MODULE_SPECS.website.timeoutMs,
-                    backoff: 'exponential'
-                })
-                : Promise.resolve({ status: 'failed', error: 'No URL provided' } as any),
-            name && city
-                ? withTimeoutAndRetry(() => runGBPModule({ businessName: name, city, websiteUrl: url ?? undefined }, tracker), {
-                    maxRetries: 3,
-                    timeout: MODULE_SPECS.gbp.timeoutMs,
-                    backoff: 'exponential'
-                })
-                : Promise.resolve({ status: 'failed', error: 'No name/city' } as any),
-            name && city
-                ? withTimeoutAndRetry(() => runCompetitorModule({ keyword: name, location: city }, tracker), {
-                    maxRetries: 3,
-                    timeout: MODULE_SPECS.competitor.timeoutMs,
-                    backoff: 'exponential'
-                })
-                : Promise.resolve({ status: 'failed', error: 'No name/city' } as any),
-        ]);
+    const moduleInput: ModuleInput = {
+        auditId: audit.id,
+        url: url || undefined,
+        businessName: name || undefined,
+        city: city || undefined,
+        industry: audit.businessIndustry || undefined,
+        tenantId: audit.tenantId
+    };
 
-        // Track which modules completed
-        const modulesCompleted: string[] = [];
-        const modulesFailed: any[] = [];
-        const allFindings: any[] = [];
+    const results = new Map<string, ModuleResult>();
 
-        // Process Website Module
-        // Handle both formats: { status, data } (legacy) and { findings, evidenceSnapshots } (direct)
-        if (websiteResult.status === 'fulfilled') {
-            const value = websiteResult.value as any;
-            // The website module returns { findings, evidenceSnapshots, data }
-            // If value.findings exists, it's the new direct format. 
-            // If not, it might be the legacy { status: 'success', data: ... } format.
-            const isDirectSuccess = value && Array.isArray(value.findings);
-            const isLegacySuccess = !isDirectSuccess && value && value.status === 'success' && value.data;
+    // Phase 1: Foundation
+    await executePhase(1, MODULE_REGISTRY, results, moduleInput, costTracker, parentTrace);
 
-            if (isLegacySuccess || isDirectSuccess) {
-                modulesCompleted.push('website');
-                Metrics.increment('modules_total');
-                logger.info({
-                    event: 'module.complete',
-                    auditId: audit.id,
-                    module: 'website',
-                }, 'Website module complete');
+    // Phase 2: Analysis (uses Phase 1 outputs)
+    await executePhase(2, MODULE_REGISTRY, results, moduleInput, costTracker, parentTrace);
 
-                let findings: any[] = [];
-                if (isDirectSuccess) {
-                    // Normalize findings from direct format
-                    findings = value.findings.map((f: any) => ({ ...f, module: f.module || 'website' }));
-                } else {
-                    // Normalize findings from legacy data format
-                    findings = generateWebsiteFindings(value.data);
-                }
-                allFindings.push(...findings);
+    // Phase 3: Synthesis (uses Phase 1 + 2 outputs)
+    await executePhase(3, MODULE_REGISTRY, results, moduleInput, costTracker, parentTrace);
 
-                // Store evidence
-                const rawResponse = isDirectSuccess ? value : value.data;
-                const snapshots = value.evidenceSnapshots || [];
-                if (snapshots.length > 0) {
-                    for (const snap of snapshots) {
-                        await prisma.evidenceSnapshot.create({
-                            data: {
-                                auditId: audit.id,
-                                module: 'website',
-                                source: snap.source || 'Website Crawler',
-                                rawResponse: snap.rawResponse ?? snap,
-                                tenantId: audit.tenantId,
-                            },
-                        });
-                    }
-                } else {
-                    await prisma.evidenceSnapshot.create({
-                        data: {
-                            auditId: audit.id,
-                            module: 'website',
-                            source: 'PageSpeed Insights API',
-                            rawResponse: rawResponse,
-                            tenantId: audit.tenantId,
-                        },
-                    });
-                }
-            } else {
-                const err = value?.error || 'Unknown error';
-                modulesFailed.push({ module: 'website', error: err });
-                Metrics.increment('modules_failed');
-                logger.error({
-                    event: 'module.failed',
-                    auditId: audit.id,
-                    module: 'website',
-                    error: err
-                }, 'Website module failed');
-            }
-        } else {
-            modulesFailed.push({ module: 'website', error: 'Promise rejected' });
-            Metrics.increment('modules_failed');
-            logger.error({
-                event: 'module.failed',
-                auditId: audit.id,
-                module: 'website',
-                error: 'Promise rejected'
-            }, 'Website module failed');
-        }
+    const allFindings: any[] = [];
+    const modulesCompleted: string[] = [];
+    const modulesFailed: any[] = [];
 
-        // Process GBP Module
-        if (gbpResult.status === 'fulfilled' && gbpResult.value.status === 'success') {
-            modulesCompleted.push('gbp');
-            Metrics.increment('modules_total');
-            logger.info({
-                event: 'module.complete',
-                auditId: audit.id,
-                module: 'gbp',
-            }, 'GBP module complete');
+    // Synthesize results into discoveries and evidence
+    for (const [modName, res] of Array.from(results.entries())) {
+        if (res.status === 'COMPLETE') {
+            modulesCompleted.push(modName);
+            const ext = extractFindingsFromRegistryResult(modName, res, moduleInput);
+            allFindings.push(...ext.findings);
 
-            const competitorData = competitorResult.status === 'fulfilled' && competitorResult.value.status === 'success'
-                ? competitorResult.value.data
-                : undefined;
-            const findings = generateGBPFindings(gbpResult.value.data, name || 'Unknown', competitorData);
-            allFindings.push(...findings);
-
-            await prisma.evidenceSnapshot.create({
-                data: {
-                    auditId: audit.id,
-                    module: 'gbp',
-                    source: 'Google Places API',
-                    rawResponse: gbpResult.value.data,
-                    tenantId: audit.tenantId,
-                },
-            });
-        } else {
-            const err = gbpResult.status === 'fulfilled' ? gbpResult.value.error : 'Promise rejected';
-            modulesFailed.push({ module: 'gbp', error: err });
-            Metrics.increment('modules_failed');
-            logger.error({
-                event: 'module.failed',
-                auditId: audit.id,
-                module: 'gbp',
-                error: err
-            }, 'GBP module failed');
-            // Add finding when no Google Business listing — major missed opportunity
-            allFindings.push({
-                module: 'gbp',
-                category: 'Local SEO',
-                type: 'PAINKILLER',
-                title: 'No Google Business Listing Detected',
-                description: 'No Google Business listing was found for this business. This is a major missed opportunity — 76% of people who search for something nearby visit a business within 24 hours. A GBP profile drives calls, directions, and website visits.',
-                evidence: [{ type: 'text', value: 'Places API returned no results', label: 'Search' }],
-                metrics: { businessName: name, city },
-                impactScore: 9,
-                confidenceScore: 90,
-                effortEstimate: 'MEDIUM',
-                recommendedFix: [
-                    'Create a Google Business Profile at business.google.com',
-                    'Verify the business with a postcard or phone',
-                    'Add complete NAP (Name, Address, Phone), hours, photos, and services',
-                    'Encourage customers to leave reviews'
-                ],
-            });
-        }
-
-        // Process Competitor Module
-        if (competitorResult.status === 'fulfilled' && competitorResult.value.status === 'success') {
-            modulesCompleted.push('competitor');
-            Metrics.increment('modules_total');
-            logger.info({
-                event: 'module.complete',
-                auditId: audit.id,
-                module: 'competitor',
-            }, 'Competitor module complete');
-
-            const findings = generateCompetitorFindings(competitorResult.value.data, name || 'Unknown');
-            allFindings.push(...findings);
-
-            await prisma.evidenceSnapshot.create({
-                data: {
-                    auditId: audit.id,
-                    module: 'competitor',
-                    source: 'SerpAPI',
-                    rawResponse: competitorResult.value.data,
-                    tenantId: audit.tenantId,
-                },
-            });
-        } else {
-            const err = competitorResult.status === 'fulfilled' ? competitorResult.value.error : 'Promise rejected';
-            modulesFailed.push({ module: 'competitor', error: err });
-            Metrics.increment('modules_failed');
-            logger.error({
-                event: 'module.failed',
-                auditId: audit.id,
-                module: 'competitor',
-                error: err
-            }, 'Competitor module failed');
-        }
-
-        // Process Reputation Module (depends on GBP reviews)
-        if (gbpResult.status === 'fulfilled' && gbpResult.value.status === 'success' && gbpResult.value.data.reviews?.length > 0) {
-            const reputationResult = await runReputationModule(
-                { reviews: gbpResult.value.data.reviews, businessName: name || 'Unknown' },
-                tracker,
-                parentTrace
-            );
-
-            if (reputationResult.status === 'success' && !reputationResult.data?.skipped) {
-                modulesCompleted.push('reputation');
-                Metrics.increment('modules_total');
-                logger.info({
-                    event: 'module.complete',
-                    auditId: audit.id,
-                    module: 'reputation',
-                }, 'Reputation module complete');
-
-                const findings = generateReputationFindings(reputationResult.data);
-                allFindings.push(...findings);
-
+            for (const snap of ext.snapshots) {
                 await prisma.evidenceSnapshot.create({
                     data: {
                         auditId: audit.id,
-                        module: 'reputation',
-                        source: 'Gemini AI + Google Reviews',
-                        rawResponse: reputationResult.data,
+                        module: modName,
+                        source: snap.source || modName,
+                        rawResponse: snap.rawResponse ?? snap,
                         tenantId: audit.tenantId,
-                    },
-                });
-            } else if (reputationResult.status === 'failed') {
-                modulesFailed.push({ module: 'reputation', error: reputationResult.error });
-                Metrics.increment('modules_failed');
-                logger.error({
-                    event: 'module.failed',
-                    auditId: audit.id,
-                    module: 'reputation',
-                    error: reputationResult.error
-                }, 'Reputation module failed');
-            }
-        }
-
-        // Process Social Module (depends on website URL)
-        if (url) {
-            const socialResult = await runSocialModule(
-                { websiteUrl: url, businessName: name || 'Unknown' },
-                tracker
-            );
-
-            if (socialResult.status === 'success' && !socialResult.data?.skipped) {
-                modulesCompleted.push('social');
-                Metrics.increment('modules_total');
-                logger.info({
-                    event: 'module.complete',
-                    auditId: audit.id,
-                    module: 'social',
-                }, 'Social module complete');
-
-                const findings = generateSocialFindings(socialResult.data);
-                allFindings.push(...findings);
-
-                await prisma.evidenceSnapshot.create({
-                    data: {
-                        auditId: audit.id,
-                        module: 'social',
-                        source: 'Website HTML',
-                        rawResponse: socialResult.data,
-                        tenantId: audit.tenantId,
-                    },
-                });
-            } else if (socialResult.status === 'failed') {
-                modulesFailed.push({ module: 'social', error: socialResult.error });
-                Metrics.increment('modules_failed');
-                logger.error({
-                    event: 'module.failed',
-                    auditId: audit.id,
-                    module: 'social',
-                    error: socialResult.error
-                }, 'Social module failed');
-            }
-        }
-
-        // Create Finding records in DB (Batch Insert)
-        if (allFindings.length > 0) {
-            await prisma.finding.createMany({
-                data: allFindings.map(f => ({
-                    ...f,
-                    auditId: audit.id,
-                    tenantId: audit.tenantId, // Ensure tenant consistency
-                    manuallyEdited: false,
-                    excluded: false
-                }))
-            });
-        }
-
-        // Calculate total API cost
-        const totalCostCents = tracker.getTotalCents();
-        console.log(`[Audit] Total Cost: ${totalCostCents} cents`, tracker.getReport());
-
-        // Determine final status (COMPLETE if most canonical modules succeeded)
-        const minForComplete = CANONICAL_MODULES.length - 1;
-        const finalStatus = modulesCompleted.length >= minForComplete ? 'COMPLETE' : modulesCompleted.length > 0 ? 'PARTIAL' : 'FAILED';
-
-        // Detect industry if GBP data available
-        let detectedIndustry: string | null = null;
-        const gbpTypes: string[] = [];
-        if (gbpResult.status === 'fulfilled' && gbpResult.value.status === 'success' && gbpResult.value.data) {
-            const gbpData = gbpResult.value.data as { types?: string[]; reviewCount?: number; rating?: number };
-            if (gbpData.types) {
-                gbpTypes.push(...gbpData.types);
-                for (const type of gbpData.types) {
-                    const industry = detectIndustryFromCategory(type);
-                    if (industry !== 'general') {
-                        detectedIndustry = industry;
-                        break;
                     }
-                }
+                }).catch(() => null);
+            }
+        } else if (res.status === 'FAILED') {
+            modulesFailed.push({ module: modName, error: res.error });
+        }
+    }
+
+    // GBP missing fallback (Preserves original behavior)
+    if (!modulesCompleted.includes('gbp') && name && city) {
+        allFindings.push({
+            module: 'gbp',
+            category: 'Local SEO',
+            type: 'PAINKILLER',
+            title: 'No Google Business Listing Detected',
+            description: 'No Google Business listing was found for this business. This is a major missed opportunity.',
+            evidence: [{ type: 'text', value: 'Places API returned no results', label: 'Search' }],
+            metrics: { businessName: name, city },
+            impactScore: 9,
+            confidenceScore: 90,
+            effortEstimate: 'MEDIUM',
+            recommendedFix: ['Create a Google Business Profile'],
+        });
+    }
+
+    // Create Finding records in DB
+    if (allFindings.length > 0) {
+        await prisma.finding.createMany({
+            data: allFindings.map(f => ({
+                ...f,
+                auditId: audit.id,
+                tenantId: audit.tenantId,
+                manuallyEdited: false,
+                excluded: false
+            }))
+        });
+    }
+
+    // Calculate total API cost
+    const totalCostCents = costTracker.getTotalCents();
+
+    // Determine final status
+    const totalModules = MODULE_REGISTRY.filter(m => !m.optional).length;
+    const completedRequiredModules = [...results.entries()].filter(([n, r]) => {
+        const specs = MODULE_REGISTRY.find(x => x.name === n);
+        return specs && !specs.optional && r.status === 'COMPLETE';
+    }).length;
+
+    const finalStatus = completedRequiredModules >= totalModules * 0.8
+        ? 'COMPLETE'
+        : completedRequiredModules >= totalModules * 0.5
+            ? 'PARTIAL'
+            : completedRequiredModules >= 1
+                ? 'DEGRADED'
+                : 'FAILED';
+
+    const detectIndustryFromCategory = (type: string): string => {
+        const t = type.toLowerCase();
+        if (t.includes('law') || t.includes('attorney') || t.includes('legal')) return 'legal';
+        if (t.includes('dent') || t.includes('ortho')) return 'dental';
+        if (t.includes('med') || t.includes('health') || t.includes('clinic')) return 'medical';
+        if (t.includes('construct') || t.includes('build')) return 'construction';
+        if (t.includes('plumb')) return 'plumbing';
+        if (t.includes('hvac') || t.includes('air')) return 'hvac';
+        if (t.includes('real') || t.includes('estate') || t.includes('realtor')) return 'real_estate';
+        if (t.includes('roof')) return 'roofing';
+        return 'general';
+    };
+
+    let detectedIndustry: string | null = null;
+    const gbpData = results.get('gbp')?.data;
+    const gbpTypes = gbpData?.types || [];
+    if (gbpTypes.length > 0) {
+        for (const type of gbpTypes) {
+            const industry = detectIndustryFromCategory(type);
+            if (industry !== 'general') {
+                detectedIndustry = industry;
+                break;
             }
         }
+    }
 
-        // Detect vertical playbook (for proposal customization)
-        const gbpData = gbpResult.status === 'fulfilled' && gbpResult.value.status === 'success' ? (gbpResult.value.data as { reviewCount?: number; rating?: number }) : null;
-        const verticalPlaybookId = detectVertical({
-            businessName: name,
-            businessIndustry: detectedIndustry,
-            businessCity: city,
-            businessUrl: url,
-            gbpCategories: gbpTypes,
-            reviewCount: gbpData?.reviewCount,
-            rating: gbpData?.rating,
-        });
+    const verticalPlaybookId = detectVertical({
+        businessName: name,
+        businessIndustry: detectedIndustry,
+        businessCity: city,
+        businessUrl: url,
+        gbpCategories: gbpTypes,
+        reviewCount: gbpData?.reviewCount,
+        rating: gbpData?.rating,
+    });
 
-        // Update audit with results
-        await prisma.audit.update({
-            where: { id: audit.id },
-            data: {
-                status: finalStatus,
-                modulesCompleted,
-                modulesFailed,
-                apiCostCents: totalCostCents,
-                completedAt: new Date(),
-                businessIndustry: detectedIndustry ?? undefined,
-                verticalPlaybookId: verticalPlaybookId !== 'general' ? verticalPlaybookId : undefined,
-            },
-        });
-
-        const duration_ms = Date.now() - startTime;
-
-        logger.info({
-            event: 'audit.complete',
-            auditId: audit.id,
-            status: finalStatus,
-            findingsCount: allFindings.length,
-            duration_ms,
-            apiCostCents: totalCostCents
-        }, 'Audit complete');
-
-        return {
-            success: true,
-            auditId: audit.id,
-            status: finalStatus,
+    await prisma.audit.update({
+        where: { id: audit.id },
+        data: {
+            status: finalStatus === 'DEGRADED' ? 'FAILED' : finalStatus, // Map DEGRADED to FAILED for Prisma constraints since DEGRADED is not in the Enum
             modulesCompleted,
             modulesFailed,
-            findingsCount: allFindings.length,
-            costCents: totalCostCents,
-            duration_ms,
-        };
+            apiCostCents: totalCostCents,
+            completedAt: new Date(),
+            businessIndustry: detectedIndustry ?? undefined,
+            verticalPlaybookId: verticalPlaybookId !== 'general' ? verticalPlaybookId : undefined,
+        },
+    });
 
-    } catch (error) {
-        logError('Error running audit execution', error, { auditId });
-        Metrics.increment('audits_failed');
+    const duration_ms = Date.now() - startTime;
 
-        await prisma.audit.update({
-            where: { id: auditId },
-            data: { status: 'FAILED' }
-        });
+    logger.info({
+        event: 'audit.complete',
+        auditId: audit.id,
+        status: finalStatus,
+        findingsCount: allFindings.length,
+        modulesCompleted: modulesCompleted.length,
+        modulesFailed: modulesFailed.length,
+        duration_ms,
+        apiCostCents: totalCostCents
+    }, 'Audit complete');
 
-        throw error;
-    }
+    return {
+        success: true,
+        auditId: audit.id,
+        status: finalStatus,
+        modulesCompleted,
+        modulesFailed,
+        findingsCount: allFindings.length,
+        costCents: totalCostCents,
+        duration_ms,
+    };
 }

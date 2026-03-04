@@ -16,24 +16,22 @@ export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request) {
   const startTime = Date.now();
-  
+
   // Verify cron secret for security
   const authHeader = request.headers.get('authorization');
   const cronSecret = process.env.CRON_SECRET;
-  
-  if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
-    if (process.env.NODE_ENV === 'production') {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+
+  if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
   try {
     logger.info({}, 'Starting email scheduler');
-    
+
     const result = await runEmailScheduler();
-    
+
     const duration = Date.now() - startTime;
-    
+
     logger.info({
       duration,
       ...result
@@ -48,7 +46,7 @@ export async function GET(request: Request) {
 
   } catch (error: any) {
     const duration = Date.now() - startTime;
-    
+
     logger.error({
       err: error,
       duration
