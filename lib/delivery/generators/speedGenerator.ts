@@ -1,5 +1,6 @@
 import { Finding } from '@prisma/client';
-import { RawArtifact, ArtifactGenerator } from './schemaGenerator';
+
+import { ArtifactGenerator, RawArtifact } from './schemaGenerator';
 
 /**
  * Speed Generator - Generates optimization scripts for image compression, lazy loading, CSS minification
@@ -61,7 +62,11 @@ add_action('wp_footer', function() {
     return 'general_optimization';
   }
 
-  private generateOptimizationScript(type: string, finding: Finding, context: Record<string, any>): string {
+  private generateOptimizationScript(
+    type: string,
+    finding: Finding,
+    context: Record<string, any>
+  ): string {
     switch (type) {
       case 'image_compression':
         return this.generateImageCompressionScript();

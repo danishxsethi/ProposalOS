@@ -90,6 +90,7 @@ A Cloud SQL instance `proposal-db` is created in `proposal-487522`. Setup:
 2. **Store DATABASE_URL in Secret Manager** (script prints the exact command)
 
 3. **Grant Cloud SQL Client** to the Cloud Run service account:
+
    ```bash
    gcloud projects add-iam-policy-binding proposal-487522 \
      --member="serviceAccount:PROJECT_NUMBER-compute@developer.gserviceaccount.com" \
@@ -97,9 +98,11 @@ A Cloud SQL instance `proposal-db` is created in `proposal-487522`. Setup:
    ```
 
 4. **Run migrations**:
+
    ```bash
    ./scripts/migrate-cloud-sql.sh
    ```
+
    (Uses port 5434 by default; kills any existing proxy first. Set `MIGRATE_PORT=5433` if needed.)
 
 5. **Deploy**: `export DATABASE_URL="postgresql://...@localhost/proposal_engine?host=/cloudsql/.../" && ./deploy.sh`
@@ -127,12 +130,12 @@ Returns 503 if the database is unreachable.
 
 ## Files Reference
 
-| File | Purpose |
-|------|---------|
-| `Dockerfile` | Multi-stage build, port 8080, standalone output |
-| `.dockerignore` | Excludes node_modules, .next, .git, .env*, etc. |
-| `cloudbuild.yaml` | Cloud Build: build, push, deploy |
-| `deploy.sh` | Local deploy: docker build → push → gcloud deploy |
-| `.env.production.example` | All env vars with Cloud Run setup notes |
-| `next.config.mjs` | `output: 'standalone'` for Docker |
-| `app/api/health/route.ts` | Health check for Cloud Run probes |
+| File                      | Purpose                                           |
+| ------------------------- | ------------------------------------------------- |
+| `Dockerfile`              | Multi-stage build, port 8080, standalone output   |
+| `.dockerignore`           | Excludes node_modules, .next, .git, .env\*, etc.  |
+| `cloudbuild.yaml`         | Cloud Build: build, push, deploy                  |
+| `deploy.sh`               | Local deploy: docker build → push → gcloud deploy |
+| `.env.production.example` | All env vars with Cloud Run setup notes           |
+| `next.config.mjs`         | `output: 'standalone'` for Docker                 |
+| `app/api/health/route.ts` | Health check for Cloud Run probes                 |

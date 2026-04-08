@@ -1,22 +1,30 @@
+/**
+ * app/api/cron/intelligence-aggregation/route.ts
+ *
+ * Intelligence Aggregation Cron Job
+ * Aggregates anonymized patterns from recent outcomes across all tenants
+ *
+ * Features:
+ * - Cron auth verification
+ * - Rate limiting
+ * - Standardized error responses
+ */
+
 import { NextRequest, NextResponse } from 'next/server';
+
+import { generateTraceId, InternalError } from '@/lib/api/errors';
+import { verifyCronAuth } from '@/lib/middleware/cronAuth';
+import { withRateLimit } from '@/lib/middleware/rateLimit';
 import { aggregatePatterns } from '@/lib/pipeline/crossTenantIntelligence';
-import { prisma } from '@/lib/db';
+import { prisma } from '@/lib/prisma';
 
 /**
- * POST /api/cron/intelligence-aggregation
- * Aggregate anonymized patterns from recent outcomes across all tenants
- * Runs weekly to update the shared intelligence model
+ * Inner handler for intelligence aggregation cron
  */
-export async function POST(request: NextRequest) {
+async function handleIntelligenceAggregation(req: NextRequest): Promise<NextResponse> {
+  const traceId = generateTraceId();
+
   try {
-    // Verify cron secret
-    const authHeader = request.headers.get('authorization');
-    const cronSecret = process.env.CRON_SECRET;
-
-    if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
     const startTime = Date.now();
     let totalOutcomes = 0;
     let tenantsProcessed = 0;
@@ -39,7 +47,7 @@ export async function POST(request: NextRequest) {
         });
 
         if (winLossRecords.length > 0) {
-          const outcomes = winLossRecords.map((record) => ({
+          const outcomes = winLossRecords.map((record: any) => ({
             outcome: record.outcome as 'won' | 'lost' | 'ghosted',
             tierChosen: record.tierChosen || undefined,
             dealValue: record.dealValue ? Number(record.dealValue) : undefined,
@@ -48,7 +56,7 @@ export async function POST(request: NextRequest) {
             competitorMentioned: record.competitorMentioned || undefined,
             vertical: record.vertical,
             city: record.city || 'Unknown',
-            painScore: 0, // Would need to join with prospect data
+            painScore: 0,
           }));
 
           await aggregatePatterns(tenant.id, outcomes);
@@ -63,7 +71,7 @@ export async function POST(request: NextRequest) {
 
     const duration = Date.now() - startTime;
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       success: true,
       totalOutcomes,
       tenantsProcessed,
@@ -71,14 +79,31 @@ export async function POST(request: NextRequest) {
       duration,
       timestamp: new Date().toISOString(),
     });
+
+    response.headers.set('X-Trace-Id', traceId);
+    return response;
   } catch (error) {
     console.error('Intelligence aggregation cron error:', error);
-    return NextResponse.json(
-      {
-        success: false,
-        error: error instanceof Error ? error.message : 'Unknown error',
-      },
-      { status: 500 }
-    );
+    const internalError = new InternalError('Intelligence aggregation cron failed', {
+      originalError: error instanceof Error ? error.message : String(error),
+    });
+    return NextResponse.json(internalError.toEnvelope(req.url, traceId), { status: 500 });
   }
 }
+
+// Auth wrapper
+const authHandler = async (req: NextRequest): Promise<NextResponse> => {
+  const authError = verifyCronAuth(req);
+  if (authError) return authError;
+  return handleIntelligenceAggregation(req);
+};
+
+// Apply rate limiting (5 requests per minute for cron jobs)
+const rateLimitedHandler = (req: NextRequest) =>
+  withRateLimit({
+    windowMs: 60 * 1000,
+    max: 5,
+    message: 'Too many cron requests. Please wait before trying again.',
+  })(req, () => authHandler(req));
+
+export const POST = rateLimitedHandler;

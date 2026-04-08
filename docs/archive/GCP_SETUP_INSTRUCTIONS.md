@@ -70,7 +70,7 @@ See `GCP_CRON_MANUAL_SETUP.md` for individual commands.
 ✅ Database migrations: Complete  
 ✅ Environment variables: Complete  
 ⏳ Cloud Run deployment: Needs your action  
-⏳ Cron jobs: Waiting for Cloud Run URL  
+⏳ Cron jobs: Waiting for Cloud Run URL
 
 ## What's Blocking
 

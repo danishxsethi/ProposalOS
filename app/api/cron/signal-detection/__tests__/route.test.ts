@@ -1,16 +1,18 @@
 /**
  * Unit tests for Signal Detection Cron Endpoint
- * 
+ *
  * Tests the cron endpoint that runs signal checks on configurable schedule
  * and triggers signal-specific outreach.
- * 
+ *
  * Requirements: 14.6
  */
 
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { GET } from '../route';
-import { prisma } from '@/lib/prisma';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
 import * as signalDetector from '@/lib/pipeline/signalDetector';
+import { prisma } from '@/lib/prisma';
+
+import { GET } from '../route';
 
 // ============================================================================
 // Mocks
@@ -168,9 +170,7 @@ describe('Signal Detection Cron Endpoint', () => {
     });
 
     it('should process active tenants', async () => {
-      vi.mocked(prisma.pipelineConfig.findMany).mockResolvedValue([
-        createMockConfig(),
-      ]);
+      vi.mocked(prisma.pipelineConfig.findMany).mockResolvedValue([createMockConfig()]);
 
       vi.mocked(signalDetector.runDetection).mockResolvedValue([]);
       vi.mocked(signalDetector.deduplicateSignals).mockReturnValue([]);
@@ -216,9 +216,7 @@ describe('Signal Detection Cron Endpoint', () => {
 
   describe('Signal Detection', () => {
     it('should run detection for all signal types', async () => {
-      vi.mocked(prisma.pipelineConfig.findMany).mockResolvedValue([
-        createMockConfig(),
-      ]);
+      vi.mocked(prisma.pipelineConfig.findMany).mockResolvedValue([createMockConfig()]);
 
       vi.mocked(signalDetector.runDetection).mockResolvedValue([]);
       vi.mocked(signalDetector.deduplicateSignals).mockReturnValue([]);
@@ -231,26 +229,11 @@ describe('Signal Detection Cron Endpoint', () => {
       await new Promise((resolve) => setTimeout(resolve, 100));
 
       // Should call runDetection for each signal type
-      expect(signalDetector.runDetection).toHaveBeenCalledWith(
-        'tenant-1',
-        'bad_review'
-      );
-      expect(signalDetector.runDetection).toHaveBeenCalledWith(
-        'tenant-1',
-        'website_change'
-      );
-      expect(signalDetector.runDetection).toHaveBeenCalledWith(
-        'tenant-1',
-        'competitor_upgrade'
-      );
-      expect(signalDetector.runDetection).toHaveBeenCalledWith(
-        'tenant-1',
-        'new_business_license'
-      );
-      expect(signalDetector.runDetection).toHaveBeenCalledWith(
-        'tenant-1',
-        'hiring_spike'
-      );
+      expect(signalDetector.runDetection).toHaveBeenCalledWith('tenant-1', 'bad_review');
+      expect(signalDetector.runDetection).toHaveBeenCalledWith('tenant-1', 'website_change');
+      expect(signalDetector.runDetection).toHaveBeenCalledWith('tenant-1', 'competitor_upgrade');
+      expect(signalDetector.runDetection).toHaveBeenCalledWith('tenant-1', 'new_business_license');
+      expect(signalDetector.runDetection).toHaveBeenCalledWith('tenant-1', 'hiring_spike');
     });
 
     it('should deduplicate signals before triggering outreach', async () => {
@@ -275,9 +258,7 @@ describe('Signal Detection Cron Endpoint', () => {
         },
       ];
 
-      vi.mocked(prisma.pipelineConfig.findMany).mockResolvedValue([
-        createMockConfig(),
-      ]);
+      vi.mocked(prisma.pipelineConfig.findMany).mockResolvedValue([createMockConfig()]);
 
       vi.mocked(signalDetector.runDetection).mockResolvedValue(mockSignals);
       vi.mocked(signalDetector.deduplicateSignals).mockReturnValue([mockSignals[0]]);
@@ -301,9 +282,7 @@ describe('Signal Detection Cron Endpoint', () => {
 
   describe('Error Handling', () => {
     it('should handle errors gracefully', async () => {
-      vi.mocked(prisma.pipelineConfig.findMany).mockRejectedValue(
-        new Error('Database error')
-      );
+      vi.mocked(prisma.pipelineConfig.findMany).mockRejectedValue(new Error('Database error'));
 
       const req = createMockRequest('Bearer test-secret');
 

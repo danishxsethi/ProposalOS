@@ -1,6 +1,6 @@
 /**
  * AI Service Agents
- * 
+ *
  * This module exports all AI service agents for delivery engine.
  * Each agent handles a specific category of findings.
  */
@@ -13,12 +13,13 @@ export { SecurityHardeningAgent, securityHardeningAgent } from './securityHarden
 export { ContentGenerationAgent, contentGenerationAgent } from './contentGenerationAgent';
 export { PredictiveAgent, predictiveAgent } from './predictiveAgent';
 
-import { speedOptimizationAgent } from './speedOptimizationAgent';
-import { seoFixAgent } from './seoFixAgent';
 import { accessibilityAgent } from './accessibilityAgent';
-import { securityHardeningAgent } from './securityHardeningAgent';
 import { contentGenerationAgent } from './contentGenerationAgent';
 import { predictiveAgent } from './predictiveAgent';
+import { securityHardeningAgent } from './securityHardeningAgent';
+import { seoFixAgent } from './seoFixAgent';
+import { speedOptimizationAgent } from './speedOptimizationAgent';
+
 import type { ServiceAgent } from './baseAgent';
 
 /**

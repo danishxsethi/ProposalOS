@@ -7,6 +7,7 @@ The Autonomous Proposal Engine extends the existing ProposalOS Next.js applicati
 The core architectural addition is a **Pipeline Orchestrator** — a state-machine-driven controller that manages prospect lifecycle transitions and triggers the appropriate subsystem at each stage. Each pipeline stage is implemented as an independent, idempotent worker that reads from and writes to the PostgreSQL database, enabling horizontal scaling with no in-memory state dependencies.
 
 Key design decisions:
+
 - **Event-driven stage transitions**: Prospect status changes trigger downstream stages via a database-backed job queue, not in-memory event emitters
 - **Existing subsystem reuse**: The Audit Orchestrator, Diagnosis Engine, Proposal Generator, and Email Pipeline are wrapped with thin adapter layers rather than rewritten
 - **Idempotent workers**: Every pipeline stage can be safely retried without side effects, enabling fault tolerance at scale
@@ -173,7 +174,11 @@ interface StateTransition {
 
 interface ProspectStateMachine {
   canTransition(from: ProspectStatus, to: ProspectStatus): boolean;
-  transition(prospectId: string, to: ProspectStatus, stage: PipelineStage): Promise<StateTransition>;
+  transition(
+    prospectId: string,
+    to: ProspectStatus,
+    stage: PipelineStage
+  ): Promise<StateTransition>;
   getHistory(prospectId: string): Promise<StateTransition[]>;
   serializeHistory(transitions: StateTransition[]): string; // JSON serialization
   deserializeHistory(json: string): StateTransition[]; // JSON deserialization
@@ -212,12 +217,12 @@ interface DiscoveryConfig {
 }
 
 interface PainScoreBreakdown {
-  websiteSpeed: number;      // 0-20
-  mobileBroken: number;      // 0-15
-  gbpNeglected: number;      // 0-15
-  noSsl: number;             // 0-10
+  websiteSpeed: number; // 0-20
+  mobileBroken: number; // 0-15
+  gbpNeglected: number; // 0-15
+  noSsl: number; // 0-10
   zeroReviewResponses: number; // 0-10
-  socialMediaDead: number;   // 0-10
+  socialMediaDead: number; // 0-10
   competitorsOutperforming: number; // 0-10
   accessibilityViolations: number; // 0-10
 }
@@ -235,7 +240,7 @@ Computes the composite qualification score from multi-signal audit data.
 
 ```typescript
 interface QualificationSignals {
-  pageSpeedScore?: number;       // 0-100 from Lighthouse
+  pageSpeedScore?: number; // 0-100 from Lighthouse
   mobileResponsive?: boolean;
   hasSsl?: boolean;
   gbpClaimed?: boolean;
@@ -246,14 +251,14 @@ interface QualificationSignals {
   gbpPostingFrequencyDays?: number;
   socialPresent?: boolean;
   socialLastPostDays?: number;
-  competitorScoreGap?: number;   // How much competitors outperform
+  competitorScoreGap?: number; // How much competitors outperform
   accessibilityViolationCount?: number;
 }
 
 interface PainScoreCalculator {
   calculate(signals: QualificationSignals): { total: number; breakdown: PainScoreBreakdown };
-  serialize(config: PainScoreConfig): string;   // JSON
-  deserialize(json: string): PainScoreConfig;   // JSON
+  serialize(config: PainScoreConfig): string; // JSON
+  deserialize(json: string): PainScoreConfig; // JSON
 }
 ```
 
@@ -287,11 +292,11 @@ Extends the existing `lib/email/qualityCheck.ts` with the enhanced scoring dimen
 
 ```typescript
 interface EmailQAConfig {
-  maxReadingGradeLevel: number;  // default: 5
-  maxWordCount: number;          // default: 80
-  minFindingReferences: number;  // default: 2
-  maxSpamRiskScore: number;      // default: 30
-  minQualityScore: number;       // default: 90
+  maxReadingGradeLevel: number; // default: 5
+  maxWordCount: number; // default: 80
+  minFindingReferences: number; // default: 2
+  maxSpamRiskScore: number; // default: 30
+  minQualityScore: number; // default: 90
   jargonWordList: string[];
   dimensionWeights: {
     readability: number;
@@ -303,7 +308,7 @@ interface EmailQAConfig {
 }
 
 interface EmailQAResult {
-  compositeScore: number;  // 0-100
+  compositeScore: number; // 0-100
   dimensions: {
     readability: { score: number; gradeLevel: number };
     wordCount: { score: number; count: number };
@@ -317,8 +322,8 @@ interface EmailQAResult {
 
 interface EmailQAScorer {
   score(email: GeneratedEmail, config: EmailQAConfig): EmailQAResult;
-  serializeConfig(config: EmailQAConfig): string;   // JSON
-  deserializeConfig(json: string): EmailQAConfig;    // JSON
+  serializeConfig(config: EmailQAConfig): string; // JSON
+  deserializeConfig(json: string): EmailQAConfig; // JSON
 }
 ```
 
@@ -356,7 +361,12 @@ interface Deliverable {
   id: string;
   proposalId: string;
   findingId: string;
-  agentType: 'speed_optimization' | 'seo_fix' | 'accessibility' | 'security_hardening' | 'content_generation';
+  agentType:
+    | 'speed_optimization'
+    | 'seo_fix'
+    | 'accessibility'
+    | 'security_hardening'
+    | 'content_generation';
   status: 'queued' | 'in_progress' | 'completed' | 'verified' | 'failed' | 'escalated';
   estimatedCompletionDate: Date;
   completedAt?: Date;
@@ -382,7 +392,10 @@ interface LearningLoop {
   // Existing (from dataFlywheel.ts)
   updateBenchmark(industry: string, metrics: Record<string, number>): Promise<void>;
   trackFindingOutcome(findingType: string, accepted: boolean): Promise<void>;
-  trackPromptOutcome(promptId: string, outcome: { qaScore?: number; accepted?: boolean }): Promise<void>;
+  trackPromptOutcome(
+    promptId: string,
+    outcome: { qaScore?: number; accepted?: boolean }
+  ): Promise<void>;
 
   // New extensions
   trackOutreachOutcome(templateId: string, outcome: OutreachOutcome): Promise<void>;
@@ -720,7 +733,6 @@ model SharedIntelligenceModel {
 - `BenchmarkStats`, `FindingEffectiveness`, `PromptPerformance` — learning loop
 - `TenantBranding`, `Tenant`, `User` — multi-tenancy
 
-
 ### 11. Pre-Warming Engine (`lib/pipeline/preWarming.ts`)
 
 Engages with prospects across GBP, Facebook, and Instagram 3–5 days before outreach email delivery.
@@ -742,7 +754,11 @@ interface PreWarmingConfig {
 }
 
 interface PreWarmingEngine {
-  scheduleActions(leadId: string, outreachDate: Date, config: PreWarmingConfig): Promise<PreWarmingAction[]>;
+  scheduleActions(
+    leadId: string,
+    outreachDate: Date,
+    config: PreWarmingConfig
+  ): Promise<PreWarmingAction[]>;
   executeAction(action: PreWarmingAction): Promise<void>;
   checkWindowComplete(leadId: string): Promise<boolean>;
   getDailyActionCount(platform: string, date: Date): Promise<number>;
@@ -754,7 +770,12 @@ interface PreWarmingEngine {
 Monitors external signals indicating optimal outreach timing.
 
 ```typescript
-type SignalType = 'bad_review' | 'website_change' | 'competitor_upgrade' | 'new_business_license' | 'hiring_spike';
+type SignalType =
+  | 'bad_review'
+  | 'website_change'
+  | 'competitor_upgrade'
+  | 'new_business_license'
+  | 'hiring_spike';
 
 interface DetectedSignal {
   id: string;
@@ -797,10 +818,18 @@ interface ChatMessage {
 }
 
 interface AISalesChat {
-  handleMessage(context: ChatContext, history: ChatMessage[], message: string): Promise<ChatMessage>;
+  handleMessage(
+    context: ChatContext,
+    history: ChatMessage[],
+    message: string
+  ): Promise<ChatMessage>;
   detectIntent(message: string): Promise<{ intent: string; confidence: number }>;
   shouldEscalate(confidence: number, config: { threshold: number }): boolean;
-  recordOutcome(proposalId: string, outcome: 'converted' | 'escalated' | 'abandoned', objections: string[]): Promise<void>;
+  recordOutcome(
+    proposalId: string,
+    outcome: 'converted' | 'escalated' | 'abandoned',
+    objections: string[]
+  ): Promise<void>;
 }
 ```
 
@@ -864,7 +893,12 @@ interface PredictiveScore {
 
 interface CrossTenantIntelligence {
   aggregatePatterns(tenantId: string, outcomes: WinLossData[]): Promise<void>;
-  predictCloseProb(prospect: { vertical: string; painScore: number; geoRegion: string; businessSize?: string }): Promise<PredictiveScore>;
+  predictCloseProb(prospect: {
+    vertical: string;
+    painScore: number;
+    geoRegion: string;
+    businessSize?: string;
+  }): Promise<PredictiveScore>;
   getModelVersion(): string;
   rollbackModel(version: string): Promise<void>;
   ensureAnonymized(data: Record<string, unknown>): boolean; // Verify no PII
@@ -873,245 +907,245 @@ interface CrossTenantIntelligence {
 
 ## Correctness Properties
 
-*A property is a characteristic or behavior that should hold true across all valid executions of a system — essentially, a formal statement about what the system should do. Properties serve as the bridge between human-readable specifications and machine-verifiable correctness guarantees.*
+_A property is a characteristic or behavior that should hold true across all valid executions of a system — essentially, a formal statement about what the system should do. Properties serve as the bridge between human-readable specifications and machine-verifiable correctness guarantees._
 
 ### Property 1: Pain Score is bounded and correctly weighted
 
-*For any* set of qualification signals, the computed Pain Score must be between 0 and 100 inclusive, and each dimension score must not exceed its weight cap (website speed ≤ 20, mobile broken ≤ 15, GBP neglected ≤ 15, no SSL ≤ 10, zero review responses ≤ 10, social media dead ≤ 10, competitors outperforming ≤ 10, accessibility violations ≤ 10), and the total must equal the sum of all dimension scores.
+_For any_ set of qualification signals, the computed Pain Score must be between 0 and 100 inclusive, and each dimension score must not exceed its weight cap (website speed ≤ 20, mobile broken ≤ 15, GBP neglected ≤ 15, no SSL ≤ 10, zero review responses ≤ 10, social media dead ≤ 10, competitors outperforming ≤ 10, accessibility violations ≤ 10), and the total must equal the sum of all dimension scores.
 
 **Validates: Requirements 1.3**
 
 ### Property 2: Pain Score threshold correctly gates qualification
 
-*For any* prospect with a computed Pain Score, if the score is below the configured threshold the prospect's status must be "unqualified", and if the score meets or exceeds the threshold the prospect must proceed to enrichment.
+_For any_ prospect with a computed Pain Score, if the score is below the configured threshold the prospect's status must be "unqualified", and if the score meets or exceeds the threshold the prospect must proceed to enrichment.
 
 **Validates: Requirements 1.4**
 
 ### Property 3: Waterfall enrichment respects provider sequence and fault tolerance
 
-*For any* enrichment run, providers must be queried in order (Apollo → Hunter → Proxycurl → Clearbit), the sequence must stop as soon as a verified email is obtained, and if any provider errors or times out the sequence must skip that provider and continue with the next.
+_For any_ enrichment run, providers must be queried in order (Apollo → Hunter → Proxycurl → Clearbit), the sequence must stop as soon as a verified email is obtained, and if any provider errors or times out the sequence must skip that provider and continue with the next.
 
 **Validates: Requirements 1.5, 1.8**
 
 ### Property 4: Prospect deduplication within a tenant
 
-*For any* batch of discovered prospects for a given tenant, if a prospect with the same source and sourceExternalId already exists for that tenant, the duplicate must be skipped and the existing record must remain unchanged.
+_For any_ batch of discovered prospects for a given tenant, if a prospect with the same source and sourceExternalId already exists for that tenant, the duplicate must be skipped and the existing record must remain unchanged.
 
 **Validates: Requirements 1.6**
 
 ### Property 5: Discovery results contain all required fields
 
-*For any* completed discovery job, every persisted prospect record must contain non-null values for: business name, website URL, city, industry, listing source, Pain Score, pain breakdown, and status "discovered".
+_For any_ completed discovery job, every persisted prospect record must contain non-null values for: business name, website URL, city, industry, listing source, Pain Score, pain breakdown, and status "discovered".
 
 **Validates: Requirements 1.1, 1.7**
 
 ### Property 6: Tenant volume limits are enforced
 
-*For any* discovery run for a tenant, the number of newly persisted prospects must not exceed the tenant's configured daily volume limit.
+_For any_ discovery run for a tenant, the number of newly persisted prospects must not exceed the tenant's configured daily volume limit.
 
 **Validates: Requirements 1.9**
 
 ### Property 7: State machine only allows valid transitions
 
-*For any* prospect status and any attempted transition, the transition must succeed only if the target status is in the set of valid successors for the current status. Invalid transitions must be rejected and logged.
+_For any_ prospect status and any attempted transition, the transition must succeed only if the target status is in the set of valid successors for the current status. Invalid transitions must be rejected and logged.
 
 **Validates: Requirements 12.1, 12.2**
 
 ### Property 8: State transitions are fully recorded
 
-*For any* successful state transition, a transition record must be created containing the prospect ID, from-status, to-status, timestamp, originating stage, and tenant ID.
+_For any_ successful state transition, a transition record must be created containing the prospect ID, from-status, to-status, timestamp, originating stage, and tenant ID.
 
 **Validates: Requirements 12.3**
 
 ### Property 9: State transition history round-trip serialization
 
-*For any* list of state transition records, serializing to JSON and then deserializing must produce a list equivalent to the original.
+_For any_ list of state transition records, serializing to JSON and then deserializing must produce a list equivalent to the original.
 
 **Validates: Requirements 12.4**
 
 ### Property 10: Concurrency limit is never exceeded
 
-*For any* batch processing run, the number of concurrently executing pipeline operations must never exceed the configured concurrency limit for the tenant.
+_For any_ batch processing run, the number of concurrently executing pipeline operations must never exceed the configured concurrency limit for the tenant.
 
 **Validates: Requirements 2.5**
 
 ### Property 11: Proposal contains all required sections
 
-*For any* diagnosis result with one or more Pain Clusters, the generated proposal must contain a non-empty executive summary, three tier configurations (Essentials, Growth, Premium) each with mapped finding IDs, pricing for all three tiers, and a non-empty assumptions list.
+_For any_ diagnosis result with one or more Pain Clusters, the generated proposal must contain a non-empty executive summary, three tier configurations (Essentials, Growth, Premium) each with mapped finding IDs, pricing for all three tiers, and a non-empty assumptions list.
 
 **Validates: Requirements 3.2**
 
 ### Property 12: Proposal web link tokens are unique
 
-*For any* two generated proposals, their web link tokens must be distinct.
+_For any_ two generated proposals, their web link tokens must be distinct.
 
 **Validates: Requirements 3.3**
 
 ### Property 13: Pricing reflects tenant multiplier
 
-*For any* generated proposal for a tenant with a pricing multiplier, each tier's price must equal the base price multiplied by the tenant's pricing multiplier (within floating-point tolerance).
+_For any_ generated proposal for a tenant with a pricing multiplier, each tier's price must equal the base price multiplied by the tenant's pricing multiplier (within floating-point tolerance).
 
 **Validates: Requirements 3.6**
 
 ### Property 14: Outreach emails reference sufficient findings and include scorecard link
 
-*For any* generated outreach email, the email body must reference at least 2 specific audit findings by title or metric, and must contain a valid scorecard URL.
+_For any_ generated outreach email, the email body must reference at least 2 specific audit findings by title or metric, and must contain a valid scorecard URL.
 
 **Validates: Requirements 4.1, 4.3**
 
 ### Property 15: Only emails passing QA gate are sent
 
-*For any* outreach email that is actually sent (status = SENT), its Email QA score must be greater than or equal to the configured minimum quality score (default: 90).
+_For any_ outreach email that is actually sent (status = SENT), its Email QA score must be greater than or equal to the configured minimum quality score (default: 90).
 
 **Validates: Requirements 4.4**
 
 ### Property 16: Email regeneration respects retry limit
 
-*For any* outreach email generation attempt, if the email fails QA scoring, regeneration must occur up to 3 times. After 3 consecutive failures, the outreach must be marked as "generation_failed" and no email must be sent.
+_For any_ outreach email generation attempt, if the email fails QA scoring, regeneration must occur up to 3 times. After 3 consecutive failures, the outreach must be marked as "generation_failed" and no email must be sent.
 
 **Validates: Requirements 4.5**
 
 ### Property 17: Inbox rotation daily limit per domain
 
-*For any* sending domain on any calendar day, the total number of emails sent through that domain must not exceed the configured daily limit (default: 50).
+_For any_ sending domain on any calendar day, the total number of emails sent through that domain must not exceed the configured daily limit (default: 50).
 
 **Validates: Requirements 4.6**
 
 ### Property 18: Reply pauses follow-up sequence
 
-*For any* prospect that replies to an outreach email, all pending follow-up emails for that prospect must be cancelled or paused, and no further follow-up emails must be sent until the sequence is explicitly resumed.
+_For any_ prospect that replies to an outreach email, all pending follow-up emails for that prospect must be cancelled or paused, and no further follow-up emails must be sent until the sequence is explicitly resumed.
 
 **Validates: Requirements 4.9**
 
 ### Property 19: Email QA composite score is bounded and decomposable
 
-*For any* email evaluated by the Email QA Scorer, the composite score must be between 0 and 100 inclusive, and must equal the weighted sum of the individual dimension scores (readability, word count, jargon, finding references, spam risk), and any dimension scoring below its threshold must produce at least one improvement suggestion.
+_For any_ email evaluated by the Email QA Scorer, the composite score must be between 0 and 100 inclusive, and must equal the weighted sum of the individual dimension scores (readability, word count, jargon, finding references, spam risk), and any dimension scoring below its threshold must produce at least one improvement suggestion.
 
 **Validates: Requirements 5.1, 5.2**
 
 ### Property 20: Email QA config round-trip serialization
 
-*For any* valid EmailQAConfig object, serializing to JSON and then deserializing must produce an object equivalent to the original, with all dimension weights, thresholds, and jargon word lists preserved.
+_For any_ valid EmailQAConfig object, serializing to JSON and then deserializing must produce an object equivalent to the original, with all dimension weights, thresholds, and jargon word lists preserved.
 
 **Validates: Requirements 5.3**
 
 ### Property 21: Engagement events are recorded with required fields
 
-*For any* engagement event (email open, click, proposal view), the recorded event must contain a non-null timestamp, event type, and the associated prospect/lead ID.
+_For any_ engagement event (email open, click, proposal view), the recorded event must contain a non-null timestamp, event type, and the associated prospect/lead ID.
 
 **Validates: Requirements 6.1**
 
 ### Property 22: Hot lead routing by percentile
 
-*For any* set of active prospects for a tenant, the prospects routed to the Human Review Queue must be exactly those whose engagement score is in the top N percentile (configurable, default: top 5%).
+_For any_ set of active prospects for a tenant, the prospects routed to the Human Review Queue must be exactly those whose engagement score is in the top N percentile (configurable, default: top 5%).
 
 **Validates: Requirements 6.6**
 
 ### Property 23: Deliverables map to accepted tier's findings
 
-*For any* accepted proposal, the generated deliverables must map one-to-one to the finding IDs in the accepted tier, each deliverable must have an agent type matching the finding's category, and each must have an estimated completion date within the tier's delivery timeline.
+_For any_ accepted proposal, the generated deliverables must map one-to-one to the finding IDs in the accepted tier, each deliverable must have an agent type matching the finding's category, and each must have an estimated completion date within the tier's delivery timeline.
 
 **Validates: Requirements 7.1, 7.2**
 
 ### Property 24: Overdue deliverables are escalated
 
-*For any* deliverable task whose estimated completion date has passed and whose status is not "completed" or "verified", the task must be transitioned to "escalated" status.
+_For any_ deliverable task whose estimated completion date has passed and whose status is not "completed" or "verified", the task must be transitioned to "escalated" status.
 
 **Validates: Requirements 7.5**
 
 ### Property 25: Learning loop updates metrics on pipeline outcomes
 
-*For any* proposal outcome (won/lost), the corresponding finding effectiveness scores must be incremented, and for any completed outreach sequence, the template performance metrics (open rate, click rate, reply rate, conversion rate) must be recalculated from the accumulated data.
+_For any_ proposal outcome (won/lost), the corresponding finding effectiveness scores must be incremented, and for any completed outreach sequence, the template performance metrics (open rate, click rate, reply rate, conversion rate) must be recalculated from the accumulated data.
 
 **Validates: Requirements 8.1, 8.2, 8.3, 8.5, 8.6**
 
 ### Property 26: Tenant data isolation
 
-*For any* pipeline query scoped to a tenant ID, the results must contain zero records belonging to a different tenant ID.
+_For any_ pipeline query scoped to a tenant ID, the results must contain zero records belonging to a different tenant ID.
 
 **Validates: Requirements 9.1**
 
 ### Property 27: Tenant branding is applied to outreach and proposals
 
-*For any* outreach email or proposal generated for a tenant with branding configured, the output must use the tenant's brand name and contact email, not the platform defaults.
+_For any_ outreach email or proposal generated for a tenant with branding configured, the output must use the tenant's brand name and contact email, not the platform defaults.
 
 **Validates: Requirements 9.3, 9.4**
 
 ### Property 28: Tenant spending limit enforcement
 
-*For any* tenant, if the cumulative API cost for the current billing cycle exceeds the configured spending limit, the pipeline must be paused for that tenant and no further cost-incurring operations must execute.
+_For any_ tenant, if the cumulative API cost for the current billing cycle exceeds the configured spending limit, the pipeline must be paused for that tenant and no further cost-incurring operations must execute.
 
 **Validates: Requirements 9.5**
 
 ### Property 29: Stage failure logging completeness
 
-*For any* pipeline stage failure, the error log record must contain the stage name, error message, prospect identifier (if applicable), and tenant ID.
+_For any_ pipeline stage failure, the error log record must contain the stage name, error message, prospect identifier (if applicable), and tenant ID.
 
 **Validates: Requirements 10.2**
 
 ### Property 30: Circuit breaker activates on high error rate
 
-*For any* pipeline stage, if the error rate exceeds 10% over a rolling one-hour window, that stage must be paused and an admin alert must be generated, while other stages continue operating.
+_For any_ pipeline stage, if the error rate exceeds 10% over a rolling one-hour window, that stage must be paused and an admin alert must be generated, while other stages continue operating.
 
 **Validates: Requirements 10.6**
 
 ### Property 31: Country-specific configuration application
 
-*For any* prospect in a given country, the pipeline must apply the country-specific language, currency, and data provider configuration, and the applied configuration must match the country's settings.
+_For any_ prospect in a given country, the pipeline must apply the country-specific language, currency, and data provider configuration, and the applied configuration must match the country's settings.
 
 **Validates: Requirements 11.2**
 
 ### Property 32: FIFO queue ordering
 
-*For any* set of queued work items for a pipeline stage, items must be processed in the order they were enqueued (first-in, first-out).
+_For any_ set of queued work items for a pipeline stage, items must be processed in the order they were enqueued (first-in, first-out).
 
 **Validates: Requirements 11.4**
 
 ### Property 33: Pre-warming actions respect platform daily limits
 
-*For any* platform (GBP, Facebook, Instagram) on any calendar day, the total number of pre-warming actions executed must not exceed the configured daily limit for that platform.
+_For any_ platform (GBP, Facebook, Instagram) on any calendar day, the total number of pre-warming actions executed must not exceed the configured daily limit for that platform.
 
 **Validates: Requirements 13.4**
 
 ### Property 34: Pre-warming window completes before outreach
 
-*For any* prospect with scheduled pre-warming actions, the outreach email must not be sent until either all pre-warming actions are completed or the pre-warming window has expired.
+_For any_ prospect with scheduled pre-warming actions, the outreach email must not be sent until either all pre-warming actions are completed or the pre-warming window has expired.
 
 **Validates: Requirements 13.3**
 
 ### Property 35: Signal deduplication prevents duplicate outreach
 
-*For any* detected signal event, the Signal Detector must not trigger more than one outreach email for the same signal type and prospect combination.
+_For any_ detected signal event, the Signal Detector must not trigger more than one outreach email for the same signal type and prospect combination.
 
 **Validates: Requirements 14.6**
 
 ### Property 36: Signal-triggered outreach references the signal event
 
-*For any* outreach email triggered by a detected signal, the email body must contain a reference to the specific signal event (e.g., review text, competitor name, website change description).
+_For any_ outreach email triggered by a detected signal, the email body must contain a reference to the specific signal event (e.g., review text, competitor name, website change description).
 
 **Validates: Requirements 14.5**
 
 ### Property 37: AI Sales Chat escalates on low confidence
 
-*For any* AI Sales Chat response with a confidence score below the configured threshold (default: 70%), the chat must escalate to the Human Review Queue and must not present a definitive answer to the prospect.
+_For any_ AI Sales Chat response with a confidence score below the configured threshold (default: 70%), the chat must escalate to the Human Review Queue and must not present a definitive answer to the prospect.
 
 **Validates: Requirements 15.5**
 
 ### Property 38: Partner lead isolation
 
-*For any* partner portal query scoped to a partner ID, the results must contain zero leads delivered to a different partner, and zero leads from the direct pipeline that were not explicitly delivered to that partner.
+_For any_ partner portal query scoped to a partner ID, the results must contain zero leads delivered to a different partner, and zero leads from the direct pipeline that were not explicitly delivered to that partner.
 
 **Validates: Requirements 16.6**
 
 ### Property 39: Cross-tenant intelligence contains no PII
 
-*For any* record in the shared intelligence model, the record must contain zero tenant-identifiable data (no business names, contact information, tenant IDs, or prospect-specific identifiers).
+_For any_ record in the shared intelligence model, the record must contain zero tenant-identifiable data (no business names, contact information, tenant IDs, or prospect-specific identifiers).
 
 **Validates: Requirements 17.4**
 
 ### Property 40: Predictive close probability is bounded
 
-*For any* prospect evaluated by the Cross Tenant Intelligence, the predictive close probability score must be between 0 and 100 inclusive, and must be accompanied by a confidence score between 0 and 1 and a model version identifier.
+_For any_ prospect evaluated by the Cross Tenant Intelligence, the predictive close probability score must be between 0 and 100 inclusive, and must be accompanied by a confidence score between 0 and 1 and a model version identifier.
 
 **Validates: Requirements 17.2**
 
@@ -1137,17 +1171,18 @@ The Pipeline Orchestrator implements a circuit breaker for each stage:
 
 ### Retry Strategies
 
-| Component | Retry Count | Backoff | Fallback |
-|-----------|-------------|---------|----------|
-| Waterfall enrichment provider | 0 (skip to next) | N/A | Next provider in sequence |
-| Email send | 3 | Exponential (1s, 2s, 4s) | Mark as "send_failed" |
-| Email generation (QA fail) | 3 | Immediate regeneration | Mark as "generation_failed" |
-| Stripe payment | 1 | 24h delay | Payment recovery email |
-| Audit module | 0 (existing behavior) | N/A | Module marked failed, audit continues |
+| Component                     | Retry Count           | Backoff                  | Fallback                              |
+| ----------------------------- | --------------------- | ------------------------ | ------------------------------------- |
+| Waterfall enrichment provider | 0 (skip to next)      | N/A                      | Next provider in sequence             |
+| Email send                    | 3                     | Exponential (1s, 2s, 4s) | Mark as "send_failed"                 |
+| Email generation (QA fail)    | 3                     | Immediate regeneration   | Mark as "generation_failed"           |
+| Stripe payment                | 1                     | 24h delay                | Payment recovery email                |
+| Audit module                  | 0 (existing behavior) | N/A                      | Module marked failed, audit continues |
 
 ### Spending Limit Enforcement
 
 When a tenant's cumulative API cost approaches or exceeds the spending limit:
+
 1. Pipeline Orchestrator checks cost before each batch
 2. If limit exceeded, all cost-incurring stages are paused for that tenant
 3. Admin is notified
@@ -1184,6 +1219,7 @@ Each correctness property from the design document is implemented as a `fast-che
 ### Test Organization
 
 Property tests are co-located with the implementation they validate:
+
 - `lib/pipeline/__tests__/painScore.property.test.ts` — Properties 1, 2
 - `lib/pipeline/__tests__/stateMachine.property.test.ts` — Properties 7, 8, 9
 - `lib/pipeline/__tests__/emailQaScorer.property.test.ts` — Properties 19, 20

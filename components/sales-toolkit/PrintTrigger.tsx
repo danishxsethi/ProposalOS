@@ -9,8 +9,11 @@ export function PrintTrigger() {
       if (params.get('print') === '1') {
         const t = setTimeout(() => window.print(), 300);
         return () => clearTimeout(t);
+      } else {
+        return undefined;
       }
     }
+    return undefined;
   }, []);
 
   return null;

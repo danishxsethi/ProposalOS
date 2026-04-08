@@ -1,16 +1,17 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
+
 import {
-  getCountryConfig,
-  detectCountry,
-  convertCurrency,
   applyCountryPricing,
-  getEmailTemplate,
-  getDataProviders,
-  getComplianceRequirements,
-  getTimezone,
-  getSupportedCountries,
-  isValidCountryCode,
+  convertCurrency,
   CountryCode,
+  detectCountry,
+  getComplianceRequirements,
+  getCountryConfig,
+  getDataProviders,
+  getEmailTemplate,
+  getSupportedCountries,
+  getTimezone,
+  isValidCountryCode,
 } from '../countryConfig';
 
 describe('Country Configuration', () => {

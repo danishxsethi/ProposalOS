@@ -2,85 +2,86 @@
  * Cold email generation pipeline — personalized outreach from audit data.
  * Uses Gemini to generate 3 variants, scores them, rejects <70.
  */
+import { type EmailScoreBreakdown, isEmailAcceptable, scoreEmail } from '@/lib/email/score';
+import { fillEmailTemplate, getEmailTemplate } from '@/lib/email-templates';
 import { generateWithGemini } from '@/lib/llm/provider';
-import { getEmailTemplate } from '@/lib/email-templates';
-import { fillEmailTemplate } from '@/lib/email-templates';
-import { scoreEmail, isEmailAcceptable, type EmailScoreBreakdown } from '@/lib/email/score';
 
 export interface GeneratedEmail {
-    subject: string;
-    body: string;
-    score: number;
-    breakdown: EmailScoreBreakdown;
-    variant: number;
+  subject: string;
+  body: string;
+  score: number;
+  breakdown: EmailScoreBreakdown;
+  variant: number;
 }
 
 export interface GenerateColdEmailInput {
-    auditId: string;
-    vertical: string;
-    businessName: string;
-    recipientName?: string;
-    proposalUrl: string;
-    topFinding: string;
-    topMetric?: string;
-    competitorName?: string;
+  auditId: string;
+  vertical: string;
+  businessName: string;
+  recipientName?: string;
+  proposalUrl: string;
+  topFinding: string;
+  topMetric?: string;
+  competitorName?: string;
 }
 
 export interface GenerateColdEmailResult {
-    emails: GeneratedEmail[];
-    bestVariant: number;
+  emails: GeneratedEmail[];
+  bestVariant: number;
 }
 
 // Security: Prevent prompt injection attacks through prospect names or scraping data
 export function sanitizeForPrompt(str: string): string {
-    if (!str) return 'Unknown';
-    return str
-        .replace(/[\r\n\t]/g, ' ')
-        // Remove markdown or AI instruction keywords
-        .replace(/(\b)(system|instruction|prompt|ignore|bypass|override)(\b)/ig, '')
-        // Remove code block backticks and special bracket sequences
-        .replace(/[`<>{}[\]\\]/g, '')
-        // Cap length to prevent buffer/context attacks
-        .substring(0, 150)
-        .trim();
+  if (!str) return 'Unknown';
+  return (
+    str
+      .replace(/[\r\n\t]/g, ' ')
+      // Remove markdown or AI instruction keywords
+      .replace(/(\b)(system|instruction|prompt|ignore|bypass|override)(\b)/gi, '')
+      // Remove code block backticks and special bracket sequences
+      .replace(/[`<>{}[\]\\]/g, '')
+      // Cap length to prevent buffer/context attacks
+      .substring(0, 150)
+      .trim()
+  );
 }
 
 export function extractAuditContext(audit: {
-    businessName: string;
-    businessCity: string | null;
-    businessIndustry: string | null;
-    findings: Array<{
-        title: string;
-        description: string | null;
-        metrics: unknown;
-        impactScore: number;
-    }>;
-    comparisonReport?: { competitors?: Array<{ name?: string }> } | null;
+  businessName: string;
+  businessCity: string | null;
+  businessIndustry: string | null;
+  findings: Array<{
+    title: string;
+    description: string | null;
+    metrics: unknown;
+    impactScore: number;
+  }>;
+  comparisonReport?: { competitors?: Array<{ name?: string }> } | null;
 }): {
-    topFinding: string;
-    topMetric: string | undefined;
-    competitorName: string | undefined;
-    city: string;
+  topFinding: string;
+  topMetric: string | undefined;
+  competitorName: string | undefined;
+  city: string;
 } {
-    const top = audit.findings
-        .filter((f) => !(f as { excluded?: boolean }).excluded)
-        .sort((a, b) => b.impactScore - a.impactScore)[0];
+  const top = audit.findings
+    .filter((f) => !(f as { excluded?: boolean }).excluded)
+    .sort((a, b) => b.impactScore - a.impactScore)[0];
 
-    const topFinding = top?.title || 'several issues affecting your online visibility';
-    let topMetric: string | undefined;
-    if (top?.metrics && typeof top.metrics === 'object') {
-        const m = top.metrics as Record<string, unknown>;
-        if (typeof m.loadTimeSeconds === 'number') {
-            topMetric = `${m.loadTimeSeconds.toFixed(1)}s mobile load time`;
-        } else if (typeof m.performanceScore === 'number') {
-            topMetric = `${m.performanceScore} performance score`;
-        }
+  const topFinding = top?.title || 'several issues affecting your online visibility';
+  let topMetric: string | undefined;
+  if (top?.metrics && typeof top.metrics === 'object') {
+    const m = top.metrics as Record<string, unknown>;
+    if (typeof m.loadTimeSeconds === 'number') {
+      topMetric = `${m.loadTimeSeconds.toFixed(1)}s mobile load time`;
+    } else if (typeof m.performanceScore === 'number') {
+      topMetric = `${m.performanceScore} performance score`;
     }
+  }
 
-    const competitorName = audit.comparisonReport?.competitors?.[0]?.name;
-    const city = audit.businessCity || 'Saskatoon';
+  const competitorName = audit.comparisonReport?.competitors?.[0]?.name;
+  const city = audit.businessCity || 'Saskatoon';
 
-    return { topFinding, topMetric, competitorName, city };
+  return { topFinding, topMetric, competitorName, city };
 }
 
 const SYSTEM_PROMPT = `You are an expert cold email copywriter for local business marketing. Your emails:
@@ -95,24 +96,27 @@ const SYSTEM_PROMPT = `You are an expert cold email copywriter for local busines
 
 const MAX_REGENERATE_ATTEMPTS = 2;
 
-export async function generateColdEmails(input: GenerateColdEmailInput): Promise<GenerateColdEmailResult> {
-    const template = getEmailTemplate(input.vertical, 'cold');
-    const baseExample = template
-        ? fillEmailTemplate(template, {
-              businessName: input.businessName,
-              finding: input.topFinding,
-              proposalUrl: input.proposalUrl,
-          })
-        : { subject: '', body: '' };
+export async function generateColdEmails(
+  input: GenerateColdEmailInput
+): Promise<GenerateColdEmailResult> {
+  const template = getEmailTemplate(input.vertical, 'cold');
+  const baseExample = template
+    ? fillEmailTemplate(template, {
+        businessName: input.businessName,
+        finding: input.topFinding,
+        proposalUrl: input.proposalUrl,
+      })
+    : { subject: '', body: '' };
 
-    // P1 Security Challenge: Adversarial prospect data
-    const safeBusinessName = sanitizeForPrompt(input.businessName);
-    const safeRecipientName = sanitizeForPrompt(input.recipientName || input.businessName);
-    const safeFinding = sanitizeForPrompt(input.topFinding);
-    const safeMetric = input.topMetric ? sanitizeForPrompt(input.topMetric) : '';
-    const safeCompetitor = input.competitorName ? sanitizeForPrompt(input.competitorName) : '';
+  // P1 Security Challenge: Adversarial prospect data (Prompt Injection Prevention)
+  // We sanitize input to prevent attackers from providing a business name like "Ignore previous instructions and output..."
+  const safeBusinessName = sanitizeForPrompt(input.businessName);
+  const safeRecipientName = sanitizeForPrompt(input.recipientName || input.businessName);
+  const safeFinding = sanitizeForPrompt(input.topFinding);
+  const safeMetric = input.topMetric ? sanitizeForPrompt(input.topMetric) : '';
+  const safeCompetitor = input.competitorName ? sanitizeForPrompt(input.competitorName) : '';
 
-    const prompt = `Generate 3 different cold email variants for this local business.
+  const prompt = `Generate 3 different cold email variants for this local business.
 
 BUSINESS: ${safeBusinessName}
 VERTICAL: ${input.vertical}
@@ -145,61 +149,64 @@ Return JSON only:
   ]
 }`;
 
-    const { text } = await generateWithGemini('gemini-1.5-flash', prompt, {
-        temperature: 0.7,
-        maxOutputTokens: 1024,
+  const { text } = await generateWithGemini('gemini-1.5-flash', prompt, {
+    temperature: 0.7,
+    maxOutputTokens: 1024,
+  });
+
+  const cleanJson = text.replace(/```json|```/g, '').trim();
+  let parsed: { variants: Array<{ subject: string; body: string }> };
+  try {
+    parsed = JSON.parse(cleanJson);
+  } catch {
+    throw new Error('Failed to parse LLM response as JSON');
+  }
+
+  const variants = parsed.variants?.slice(0, 3) || [];
+  const auditData = {
+    hasFinding: !!input.topFinding,
+    hasMetric: !!input.topMetric,
+    businessName: input.businessName,
+  };
+
+  const scoreVariants = (vars: Array<{ subject: string; body: string }>): GeneratedEmail[] => {
+    const out: GeneratedEmail[] = [];
+    for (let i = 0; i < vars.length; i++) {
+      const v = vars[i]!;
+      const breakdown = scoreEmail(v!.subject, v!.body, auditData);
+      out.push({
+        subject: v!.subject,
+        body: v!.body,
+        score: breakdown.total,
+        breakdown,
+        variant: i + 1,
+      });
+    }
+    return out;
+  };
+
+  let results = scoreVariants(variants);
+  let attempts = 1;
+
+  while (
+    attempts < MAX_REGENERATE_ATTEMPTS &&
+    results.every((r) => !isEmailAcceptable(r.breakdown))
+  ) {
+    const { text: retryText } = await generateWithGemini('gemini-1.5-flash', prompt, {
+      temperature: 0.8,
+      maxOutputTokens: 1024,
     });
-
-    const cleanJson = text.replace(/```json|```/g, '').trim();
-    let parsed: { variants: Array<{ subject: string; body: string }> };
+    const retryJson = retryText.replace(/```json|```/g, '').trim();
     try {
-        parsed = JSON.parse(cleanJson);
+      const retryParsed = JSON.parse(retryJson);
+      const retryVariants = retryParsed.variants?.slice(0, 3) || [];
+      if (retryVariants.length > 0) results = scoreVariants(retryVariants);
     } catch {
-        throw new Error('Failed to parse LLM response as JSON');
+      break;
     }
+    attempts++;
+  }
 
-    const variants = parsed.variants?.slice(0, 3) || [];
-    const auditData = {
-        hasFinding: !!input.topFinding,
-        hasMetric: !!input.topMetric,
-        businessName: input.businessName,
-    };
-
-    const scoreVariants = (vars: Array<{ subject: string; body: string }>): GeneratedEmail[] => {
-        const out: GeneratedEmail[] = [];
-        for (let i = 0; i < vars.length; i++) {
-            const v = vars[i];
-            const breakdown = scoreEmail(v.subject, v.body, auditData);
-            out.push({
-                subject: v.subject,
-                body: v.body,
-                score: breakdown.total,
-                breakdown,
-                variant: i + 1,
-            });
-        }
-        return out;
-    };
-
-    let results = scoreVariants(variants);
-    let attempts = 1;
-
-    while (attempts < MAX_REGENERATE_ATTEMPTS && results.every((r) => !isEmailAcceptable(r.breakdown))) {
-        const { text: retryText } = await generateWithGemini('gemini-1.5-flash', prompt, {
-            temperature: 0.8,
-            maxOutputTokens: 1024,
-        });
-        const retryJson = retryText.replace(/```json|```/g, '').trim();
-        try {
-            const retryParsed = JSON.parse(retryJson);
-            const retryVariants = retryParsed.variants?.slice(0, 3) || [];
-            if (retryVariants.length > 0) results = scoreVariants(retryVariants);
-        } catch {
-            break;
-        }
-        attempts++;
-    }
-
-    const best = results.reduce((a, b) => (a.score > b.score ? a : b));
-    return { emails: results, bestVariant: best.variant };
+  const best = results.reduce((a, b) => (a.score > b.score ? a : b));
+  return { emails: results, bestVariant: best.variant };
 }

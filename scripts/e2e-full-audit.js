@@ -155,7 +155,9 @@ async function pollBatchStatus(batchId) {
     if (!res.ok) throw new Error(`Batch status failed: ${JSON.stringify(data)}`);
 
     const { status, summary } = data;
-    console.log(`  Poll ${i + 1}: ${status} - completed: ${summary?.completed}, failed: ${summary?.failed}, pending: ${summary?.pending}`);
+    console.log(
+      `  Poll ${i + 1}: ${status} - completed: ${summary?.completed}, failed: ${summary?.failed}, pending: ${summary?.pending}`
+    );
 
     if (status === 'COMPLETED') {
       return data;
@@ -242,7 +244,9 @@ async function main() {
     console.log('\n  ⏳ Polling batch status...');
     const batchData = await pollBatchStatus(batchId);
 
-    const completed = (batchData.audits || []).filter((a) => a.status === 'COMPLETE' || a.status === 'PARTIAL');
+    const completed = (batchData.audits || []).filter(
+      (a) => a.status === 'COMPLETE' || a.status === 'PARTIAL'
+    );
     if (completed.length === 0) {
       throw new Error('No completed audits in batch');
     }

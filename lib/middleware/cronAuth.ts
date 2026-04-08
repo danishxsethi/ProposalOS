@@ -1,4 +1,17 @@
+import { createHash, timingSafeEqual } from 'crypto';
+
 import { NextRequest, NextResponse } from 'next/server';
+
+function unauthorizedResponse(): NextResponse {
+  return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+}
+
+function timingSafeTokenEquals(a: string, b: string): boolean {
+  // Hash to fixed-length buffers before comparison so we avoid length-based checks.
+  const hashA = createHash('sha256').update(a).digest();
+  const hashB = createHash('sha256').update(b).digest();
+  return timingSafeEqual(hashA, hashB);
+}
 
 /**
  * Shared cron authentication helper.
@@ -8,8 +21,8 @@ import { NextRequest, NextResponse } from 'next/server';
  * allowing unauthenticated access to all cron endpoints.
  *
  * This helper:
- *   - Returns HTTP 500 if CRON_SECRET is not configured (server misconfiguration)
- *   - Returns HTTP 401 if the Authorization header does not match
+ *   - Returns generic HTTP 401 for all auth failures (including missing CRON_SECRET)
+ *   - Uses timing-safe comparison for the bearer token
  *   - Returns null if authentication passes (caller should proceed)
  *
  * Usage:
@@ -17,20 +30,19 @@ import { NextRequest, NextResponse } from 'next/server';
  *   if (authError) return authError;
  */
 export function verifyCronAuth(req: Request | NextRequest): NextResponse | null {
-    const cronSecret = process.env.CRON_SECRET;
+  const cronSecret = process.env.CRON_SECRET;
 
-    if (!cronSecret) {
-        console.error('[CRON] FATAL: CRON_SECRET environment variable is not set');
-        return NextResponse.json(
-            { error: 'Server misconfiguration: CRON_SECRET not set' },
-            { status: 500 }
-        );
-    }
+  if (!cronSecret) {
+    console.error('[CRON] FATAL: CRON_SECRET environment variable is not set');
+    return unauthorizedResponse();
+  }
 
-    const authHeader = req.headers.get('authorization');
-    if (authHeader !== `Bearer ${cronSecret}`) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+  const authHeader = req.headers.get('authorization') ?? '';
+  const expected = `Bearer ${cronSecret}`;
 
-    return null; // Auth passed
+  if (!timingSafeTokenEquals(authHeader, expected)) {
+    return unauthorizedResponse();
+  }
+
+  return null; // Auth passed
 }

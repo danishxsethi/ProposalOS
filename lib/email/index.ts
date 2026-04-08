@@ -4,12 +4,11 @@
  * Pipeline:
  * 1. generateEmailSequence(audit, proposal, playbook) → 4-email cold sequence
  * 2. checkEmailSequenceQuality(sequence) → validate each email
- * 3. If fails: regenerateEmailsWithFeedback(...) → fix failed emails
- * 4. For in-person: generateFollowUpSequence(input) → 3-email warm sequence
+ * 3. For in-person: generateFollowUpSequence(input) → 3-email warm sequence
  */
+import { generateFollowUpSequence } from './followUp';
 import { generateEmailSequenceNode as generateEmailSequence } from './generator';
 import { checkEmailSequenceQuality } from './qualityCheck';
-import { generateFollowUpSequence } from './followUp';
 
 export type {
   AuditForEmail,
@@ -29,11 +28,8 @@ export { generateEmailSequenceNode as generateEmailSequence } from './generator'
 export { checkEmailQuality, checkEmailSequenceQuality } from './qualityCheck';
 export { generateFollowUpSequence } from './followUp';
 
-const MAX_REGENERATE_ATTEMPTS = 2;
-
 /**
- * Full pipeline: generate 4-email sequence, validate, regenerate failed emails up to 2 times.
- * TODO: Fix regenerateEmailsWithFeedback function signature
+ * Full pipeline: generate 4-email sequence and validate.
  */
 export async function runEmailPipeline(
   audit: Parameters<typeof generateEmailSequence>[0],
@@ -46,19 +42,19 @@ export async function runEmailPipeline(
   attempts: number;
   finalReports: import('./qualityCheck').QualityReport[];
 }> {
-  const sequence = await generateEmailSequence(audit as any, proposal as any, playbook as any, options?.tracker as any, '' as any);
+  const sequence = await generateEmailSequence(
+    audit as any,
+    proposal as any,
+    playbook as any,
+    options?.tracker as any,
+    '' as any
+  );
   const { overallPass, reports } = checkEmailSequenceQuality(sequence as any);
-  const attempts = 1;
-
-  // TODO: Fix regenerateEmailsWithFeedback to handle LangGraph EmailSequenceResult
-  // while (!overallPass && failedEmails.length > 0 && attempts < MAX_REGENERATE_ATTEMPTS) {
-  //   ... regeneration logic ...
-  // }
 
   return {
     sequence,
     qualityPassed: overallPass,
-    attempts,
+    attempts: 1,
     finalReports: reports,
   };
 }

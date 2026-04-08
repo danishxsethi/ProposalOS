@@ -1,6 +1,6 @@
 // Feature: agentic-delivery-qa-hardening, Property 3: Rejection rate monotonicity
-import { describe, it, expect } from 'vitest';
 import fc from 'fast-check';
+import { describe, expect, it } from 'vitest';
 
 describe('Property 3: Rejection rate monotonicity', () => {
   it('should compute rejection rate as failed count divided by total count', () => {

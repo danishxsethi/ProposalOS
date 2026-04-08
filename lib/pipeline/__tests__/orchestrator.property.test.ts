@@ -1,22 +1,24 @@
+import * as fc from 'fast-check';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+
 import { cleanupDb } from '@/lib/__tests__/utils/cleanup';
 /**
  * Property-Based Tests for Pipeline Orchestrator
- * 
+ *
  * Tests Properties 10, 28, and 32 from the design document using fast-check.
  * Minimum 100 iterations per property.
- * 
+ *
  * Feature: autonomous-proposal-engine
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import * as fc from 'fast-check';
 import { prisma } from '@/lib/prisma';
+
 import {
-  processStage,
-  transitionProspect,
   getMetrics,
   pauseStage,
+  processStage,
   resumeStage,
+  transitionProspect,
 } from '../orchestrator';
 import { PipelineStage, type ProspectStatus } from '../types';
 
@@ -198,11 +200,11 @@ describe('Pipeline Orchestrator Property Tests', () => {
 
   /**
    * Property 10: Concurrency limit is never exceeded
-   * 
+   *
    * For any batch processing operation with a configured concurrency limit,
    * the number of simultaneously executing operations must never exceed the
    * configured limit.
-   * 
+   *
    * **Validates: Requirements 2.5**
    */
   describe('Property 10: Concurrency limit is never exceeded', () => {
@@ -286,97 +288,83 @@ describe('Pipeline Orchestrator Property Tests', () => {
 
   /**
    * Property 28: Tenant spending limit enforcement
-   * 
+   *
    * For any tenant, if the cumulative API cost for the current billing cycle
    * exceeds the configured spending limit, the pipeline must be paused for
    * that tenant and no further cost-incurring operations must execute.
-   * 
+   *
    * **Validates: Requirements 9.5**
    */
   describe('Property 28: Tenant spending limit enforcement', () => {
     it('pauses pipeline when spending limit is exceeded', async () => {
       await fc.assert(
-        fc.asyncProperty(
-          spendingLimitArb,
-          async (spendingLimit) => {
-            // Create pipeline config with specific spending limit
-            await createPipelineConfig(testTenantId, {
-              spendingLimitCents: spendingLimit,
-            });
+        fc.asyncProperty(spendingLimitArb, async (spendingLimit) => {
+          // Create pipeline config with specific spending limit
+          await createPipelineConfig(testTenantId, {
+            spendingLimitCents: spendingLimit,
+          });
 
-            // Create prospects with costs that exceed the limit
-            const costPerProspect = Math.floor(spendingLimit / 2) + 100;
+          // Create prospects with costs that exceed the limit
+          const costPerProspect = Math.floor(spendingLimit / 2) + 100;
 
-            // Create first prospect with cost that puts us over the limit
-            const prospect1 = await createTestProspect(testTenantId, 'discovered');
-            await prisma.prospectLead.update({
-              where: { id: prospect1 },
-              data: { estimatedCostCents: costPerProspect },
-            });
+          // Create first prospect with cost that puts us over the limit
+          const prospect1 = await createTestProspect(testTenantId, 'discovered');
+          await prisma.prospectLead.update({
+            where: { id: prospect1 },
+            data: { estimatedCostCents: costPerProspect },
+          });
 
-            // Create second prospect
-            const prospect2 = await createTestProspect(testTenantId, 'discovered');
-            await prisma.prospectLead.update({
-              where: { id: prospect2 },
-              data: { estimatedCostCents: costPerProspect },
-            });
+          // Create second prospect
+          const prospect2 = await createTestProspect(testTenantId, 'discovered');
+          await prisma.prospectLead.update({
+            where: { id: prospect2 },
+            data: { estimatedCostCents: costPerProspect },
+          });
 
-            // Process the stage - should pause after detecting limit exceeded
-            const results = await processStage(
-              PipelineStage.DISCOVERY,
-              testTenantId,
-              10
-            );
+          // Process the stage - should pause after detecting limit exceeded
+          const results = await processStage(PipelineStage.DISCOVERY, testTenantId, 10);
 
-            // Verify pipeline was paused (no results returned)
-            expect(results).toEqual([]);
+          // Verify pipeline was paused (no results returned)
+          expect(results).toEqual([]);
 
-            // Verify all stages are paused
-            const config = await prisma.pipelineConfig.findUnique({
-              where: { tenantId: testTenantId },
-            });
+          // Verify all stages are paused
+          const config = await prisma.pipelineConfig.findUnique({
+            where: { tenantId: testTenantId },
+          });
 
-            const pausedStages = (config?.pausedStages as string[]) || [];
-            expect(pausedStages.length).toBeGreaterThan(0);
-          }
-        ),
+          const pausedStages = (config?.pausedStages as string[]) || [];
+          expect(pausedStages.length).toBeGreaterThan(0);
+        }),
         { numRuns: 100 }
       );
     });
 
     it('allows processing when under spending limit', async () => {
       await fc.assert(
-        fc.asyncProperty(
-          fc.integer({ min: 50000, max: 100000 }),
-          async (spendingLimit) => {
-            // Create pipeline config
-            await createPipelineConfig(testTenantId, {
-              spendingLimitCents: spendingLimit,
+        fc.asyncProperty(fc.integer({ min: 50000, max: 100000 }), async (spendingLimit) => {
+          // Create pipeline config
+          await createPipelineConfig(testTenantId, {
+            spendingLimitCents: spendingLimit,
+          });
+
+          // Create prospects with costs well under the limit
+          const costPerProspect = Math.floor(spendingLimit / 20);
+
+          for (let i = 0; i < 3; i++) {
+            const prospectId = await createTestProspect(testTenantId, 'discovered');
+            await prisma.prospectLead.update({
+              where: { id: prospectId },
+              data: { estimatedCostCents: costPerProspect },
             });
-
-            // Create prospects with costs well under the limit
-            const costPerProspect = Math.floor(spendingLimit / 20);
-
-            for (let i = 0; i < 3; i++) {
-              const prospectId = await createTestProspect(testTenantId, 'discovered');
-              await prisma.prospectLead.update({
-                where: { id: prospectId },
-                data: { estimatedCostCents: costPerProspect },
-              });
-            }
-
-            // Process the stage - should succeed
-            const results = await processStage(
-              PipelineStage.DISCOVERY,
-              testTenantId,
-              10
-            );
-
-            // Verify processing occurred (results returned)
-            expect(results).toBeDefined();
-            expect(Array.isArray(results)).toBe(true);
           }
-        ),
+
+          // Process the stage - should succeed
+          const results = await processStage(PipelineStage.DISCOVERY, testTenantId, 10);
+
+          // Verify processing occurred (results returned)
+          expect(results).toBeDefined();
+          expect(Array.isArray(results)).toBe(true);
+        }),
         { numRuns: 100 }
       );
     });
@@ -422,11 +410,7 @@ describe('Pipeline Orchestrator Property Tests', () => {
       });
 
       // Process the stage - should pause due to exceeding limit
-      const results = await processStage(
-        PipelineStage.DISCOVERY,
-        testTenantId,
-        10
-      );
+      const results = await processStage(PipelineStage.DISCOVERY, testTenantId, 10);
 
       // Verify pipeline was paused
       expect(results).toEqual([]);
@@ -471,11 +455,7 @@ describe('Pipeline Orchestrator Property Tests', () => {
       });
 
       // Process the stage - should succeed (old cost not counted)
-      const results = await processStage(
-        PipelineStage.DISCOVERY,
-        testTenantId,
-        10
-      );
+      const results = await processStage(PipelineStage.DISCOVERY, testTenantId, 10);
 
       // Verify processing occurred
       expect(results).toBeDefined();
@@ -485,56 +465,53 @@ describe('Pipeline Orchestrator Property Tests', () => {
 
   /**
    * Property 32: FIFO queue ordering
-   * 
+   *
    * For any set of queued work items for a pipeline stage, items must be
    * processed in the order they were enqueued (first-in, first-out).
-   * 
+   *
    * **Validates: Requirements 11.4**
    */
   describe('Property 32: FIFO queue ordering', () => {
     it('processes prospects in FIFO order based on createdAt', async () => {
       await fc.assert(
-        fc.asyncProperty(
-          fc.integer({ min: 3, max: 10 }),
-          async (prospectCount) => {
-            // Clean up any existing prospects for this tenant first
-            await cleanupDb(prisma);
-            // Create pipeline config
-            await createPipelineConfig(testTenantId, {
-              batchSize: prospectCount,
-            });
+        fc.asyncProperty(fc.integer({ min: 3, max: 10 }), async (prospectCount) => {
+          // Clean up any existing prospects for this tenant first
+          await cleanupDb(prisma);
+          // Create pipeline config
+          await createPipelineConfig(testTenantId, {
+            batchSize: prospectCount,
+          });
 
-            // Create prospects with incrementing timestamps
-            const prospectIds: string[] = [];
-            const baseTime = new Date('2024-01-01T00:00:00Z');
+          // Create prospects with incrementing timestamps
+          const prospectIds: string[] = [];
+          const baseTime = new Date('2024-01-01T00:00:00Z');
 
-            for (let i = 0; i < prospectCount; i++) {
-              const createdAt = new Date(baseTime.getTime() + i * 1000); // 1 second apart
-              const id = await createTestProspect(testTenantId, 'discovered', createdAt);
-              prospectIds.push(id);
-            }
-
-            // Fetch prospects to verify they're in FIFO order
-            const prospects = await prisma.prospectLead.findMany({
-              where: {
-                tenantId: testTenantId,
-                pipelineStatus: 'discovered',
-              },
-              orderBy: { createdAt: 'asc' },
-            });
-
-            // Verify prospects are ordered by createdAt (FIFO)
-            for (let i = 0; i < prospects.length - 1; i++) {
-              expect(prospects[i].createdAt.getTime()).toBeLessThanOrEqual(
-                prospects[i + 1].createdAt.getTime()
-              );
-            }
-
-            // Verify the order matches our creation order
-            const fetchedIds = prospects.map(p => p.id);
-            expect(fetchedIds).toEqual(prospectIds);
+          for (let i = 0; i < prospectCount; i++) {
+            const createdAt = new Date(baseTime.getTime() + i * 1000); // 1 second apart
+            const id = await createTestProspect(testTenantId, 'discovered', createdAt);
+            prospectIds.push(id);
           }
-        ),
+
+          // Fetch prospects to verify they're in FIFO order
+          const prospects = await prisma.prospectLead.findMany({
+            where: {
+              tenantId: testTenantId,
+              pipelineStatus: 'discovered',
+            },
+            orderBy: { createdAt: 'asc' },
+          });
+
+          // Verify prospects are ordered by createdAt (FIFO)
+          for (let i = 0; i < prospects.length - 1; i++) {
+            expect(prospects[i].createdAt.getTime()).toBeLessThanOrEqual(
+              prospects[i + 1].createdAt.getTime()
+            );
+          }
+
+          // Verify the order matches our creation order
+          const fetchedIds = prospects.map((p) => p.id);
+          expect(fetchedIds).toEqual(prospectIds);
+        }),
         { numRuns: 100 }
       );
     });
@@ -567,7 +544,7 @@ describe('Pipeline Orchestrator Property Tests', () => {
       });
 
       // Verify first batch is in FIFO order
-      expect(batch1.map(p => p.id)).toEqual(prospectIds.slice(0, batchSize));
+      expect(batch1.map((p) => p.id)).toEqual(prospectIds.slice(0, batchSize));
 
       // Verify timestamps are in order
       for (let i = 0; i < batch1.length - 1; i++) {
@@ -580,10 +557,12 @@ describe('Pipeline Orchestrator Property Tests', () => {
     it('respects FIFO order even with random creation times', async () => {
       await fc.assert(
         fc.asyncProperty(
-          fc.array(
-            fc.date({ min: new Date('2024-01-01'), max: new Date('2024-12-31') }),
-            { minLength: 3, maxLength: 10 }
-          ).filter((dates) => dates.every((d) => !isNaN(d.getTime()))), // Filter out invalid dates
+          fc
+            .array(fc.date({ min: new Date('2024-01-01'), max: new Date('2024-12-31') }), {
+              minLength: 3,
+              maxLength: 10,
+            })
+            .filter((dates) => dates.every((d) => !isNaN(d.getTime()))), // Filter out invalid dates
           async (dates) => {
             // Clean up any existing prospects for this tenant first
             await cleanupDb(prisma);
@@ -670,18 +649,18 @@ describe('Pipeline Orchestrator Property Tests', () => {
       });
 
       // Verify each tenant's FIFO order is maintained independently
-      expect(tenant1Results.map(p => p.id)).toEqual(tenant1Prospects);
-      expect(tenant2Results.map(p => p.id)).toEqual(tenant2Prospects);
+      expect(tenant1Results.map((p) => p.id)).toEqual(tenant1Prospects);
+      expect(tenant2Results.map((p) => p.id)).toEqual(tenant2Prospects);
     });
   });
 
   /**
    * Property 29: Stage failure logging completeness
-   * 
+   *
    * For any pipeline stage failure, the error log record must contain the
    * stage name, error message, prospect identifier (if applicable), and
    * tenant ID.
-   * 
+   *
    * **Validates: Requirements 10.2**
    */
   describe('Property 29: Stage failure logging completeness', () => {
@@ -847,11 +826,11 @@ describe('Pipeline Orchestrator Property Tests', () => {
 
   /**
    * Property 30: Circuit breaker activates on high error rate
-   * 
+   *
    * For any pipeline stage, if the error rate exceeds 10% over a rolling
    * one-hour window, that stage must be paused and an admin alert must be
    * generated, while other stages continue operating.
-   * 
+   *
    * **Validates: Requirements 10.6**
    */
   describe('Property 30: Circuit breaker activates on high error rate', () => {
@@ -874,7 +853,10 @@ describe('Pipeline Orchestrator Property Tests', () => {
             // We need errorCount / totalOperations > 0.1
             // So errorCount > totalOperations * 0.1
             const minErrorCount = Math.floor(totalOperations * 0.1) + 1;
-            const errorCount = Math.max(minErrorCount, Math.ceil((totalOperations * errorPercentage) / 100));
+            const errorCount = Math.max(
+              minErrorCount,
+              Math.ceil((totalOperations * errorPercentage) / 100)
+            );
             const successCount = totalOperations - errorCount;
 
             // Create prospects and log state transitions (successful operations)
@@ -912,12 +894,7 @@ describe('Pipeline Orchestrator Property Tests', () => {
               });
 
               // Log the error
-              await logStageFailure(
-                stage,
-                prospectId,
-                new Error(`Test error ${i}`),
-                testTenantId
-              );
+              await logStageFailure(stage, prospectId, new Error(`Test error ${i}`), testTenantId);
             }
 
             // Check circuit breaker
@@ -934,8 +911,12 @@ describe('Pipeline Orchestrator Property Tests', () => {
 
             // If the test fails, log the details
             if (!tripped) {
-              console.log(`Circuit breaker did not trip. Expected error rate > 10%, got ${(actualErrorRate * 100).toFixed(2)}% (${actualErrorCount}/${actualTotalCount})`);
-              console.log(`Test parameters: totalOperations=${totalOperations}, errorPercentage=${errorPercentage}, errorCount=${errorCount}, successCount=${successCount}`);
+              console.log(
+                `Circuit breaker did not trip. Expected error rate > 10%, got ${(actualErrorRate * 100).toFixed(2)}% (${actualErrorCount}/${actualTotalCount})`
+              );
+              console.log(
+                `Test parameters: totalOperations=${totalOperations}, errorPercentage=${errorPercentage}, errorCount=${errorCount}, successCount=${successCount}`
+              );
             }
 
             // Verify circuit breaker tripped
@@ -1021,12 +1002,7 @@ describe('Pipeline Orchestrator Property Tests', () => {
                 },
               });
 
-              await logStageFailure(
-                stage,
-                prospectId,
-                new Error(`Test error ${i}`),
-                testTenantId
-              );
+              await logStageFailure(stage, prospectId, new Error(`Test error ${i}`), testTenantId);
             }
 
             // Check circuit breaker
@@ -1080,12 +1056,7 @@ describe('Pipeline Orchestrator Property Tests', () => {
 
         // Log errors for 2 out of 10 (20% error rate)
         if (i < 2) {
-          await logStageFailure(
-            failingStage,
-            prospectId,
-            new Error(`Error ${i}`),
-            testTenantId
-          );
+          await logStageFailure(failingStage, prospectId, new Error(`Error ${i}`), testTenantId);
         }
       }
 
@@ -1106,12 +1077,7 @@ describe('Pipeline Orchestrator Property Tests', () => {
 
         // Log error for 1 out of 20 (5% error rate)
         if (i === 0) {
-          await logStageFailure(
-            healthyStage,
-            prospectId,
-            new Error('Single error'),
-            testTenantId
-          );
+          await logStageFailure(healthyStage, prospectId, new Error('Single error'), testTenantId);
         }
       }
 
@@ -1195,12 +1161,7 @@ describe('Pipeline Orchestrator Property Tests', () => {
 
         // Only 1 error (5% error rate in the window)
         if (i === 0) {
-          await logStageFailure(
-            stage,
-            prospectId,
-            new Error('Recent error'),
-            testTenantId
-          );
+          await logStageFailure(stage, prospectId, new Error('Recent error'), testTenantId);
         }
       }
 

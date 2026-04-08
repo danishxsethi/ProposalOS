@@ -1,20 +1,22 @@
-import { cleanupDb } from '@/lib/__tests__/utils/cleanup';
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import fc from 'fast-check';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+
+import { cleanupDb } from '@/lib/__tests__/utils/cleanup';
+import { prisma } from '@/lib/db';
+
 import {
   aggregatePatterns,
-  predictCloseProb,
-  ensureAnonymized,
   anonymizeData,
-  WinLossData,
+  ensureAnonymized,
+  predictCloseProb,
   ProspectContext,
+  WinLossData,
 } from '../crossTenantIntelligence';
-import { prisma } from '@/lib/db';
 
 describe('Cross-Tenant Intelligence - Property Tests', () => {
   afterEach(async () => {
     await cleanupDb(prisma);
-});
+  });
 
   /**
    * Property 39: Cross-tenant intelligence contains no PII

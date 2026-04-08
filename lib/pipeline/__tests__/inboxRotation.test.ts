@@ -1,23 +1,26 @@
 /**
  * Unit tests for Inbox Rotation Manager
- * 
+ *
  * Tests:
  * - Domain selection logic (lowest usage)
  * - Daily limit enforcement
  * - Reply detection and follow-up pause
- * 
+ *
  * Requirements: 4.6, 4.9
  */
 
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { prisma } from '@/lib/prisma';
+
 import {
-  selectSendingDomain,
   getDomainSentCount,
-  sendWithRotation,
   handleReply,
   hasReplied,
+  selectSendingDomain,
+  sendWithRotation,
 } from '../inboxRotation';
+
 import type { GeneratedEmail } from '../types';
 
 // Mock Prisma
@@ -57,9 +60,24 @@ describe('Inbox Rotation Manager', () => {
 
       // Mock domains
       const domains = [
-        { id: 'domain-1', domain: 'mail1.example.com', fromEmail: 'sales@mail1.example.com', dailyLimit: 50 },
-        { id: 'domain-2', domain: 'mail2.example.com', fromEmail: 'sales@mail2.example.com', dailyLimit: 50 },
-        { id: 'domain-3', domain: 'mail3.example.com', fromEmail: 'sales@mail3.example.com', dailyLimit: 50 },
+        {
+          id: 'domain-1',
+          domain: 'mail1.example.com',
+          fromEmail: 'sales@mail1.example.com',
+          dailyLimit: 50,
+        },
+        {
+          id: 'domain-2',
+          domain: 'mail2.example.com',
+          fromEmail: 'sales@mail2.example.com',
+          dailyLimit: 50,
+        },
+        {
+          id: 'domain-3',
+          domain: 'mail3.example.com',
+          fromEmail: 'sales@mail3.example.com',
+          dailyLimit: 50,
+        },
       ];
 
       // Mock usage stats (domain-2 has lowest usage)
@@ -81,8 +99,18 @@ describe('Inbox Rotation Manager', () => {
       const tenantId = 'tenant-1';
 
       const domains = [
-        { id: 'domain-1', domain: 'mail1.example.com', fromEmail: 'sales@mail1.example.com', dailyLimit: 50 },
-        { id: 'domain-2', domain: 'mail2.example.com', fromEmail: 'sales@mail2.example.com', dailyLimit: 50 },
+        {
+          id: 'domain-1',
+          domain: 'mail1.example.com',
+          fromEmail: 'sales@mail1.example.com',
+          dailyLimit: 50,
+        },
+        {
+          id: 'domain-2',
+          domain: 'mail2.example.com',
+          fromEmail: 'sales@mail2.example.com',
+          dailyLimit: 50,
+        },
       ];
 
       // domain-1 is at limit, domain-2 has room
@@ -103,8 +131,18 @@ describe('Inbox Rotation Manager', () => {
       const tenantId = 'tenant-1';
 
       const domains = [
-        { id: 'domain-1', domain: 'mail1.example.com', fromEmail: 'sales@mail1.example.com', dailyLimit: 50 },
-        { id: 'domain-2', domain: 'mail2.example.com', fromEmail: 'sales@mail2.example.com', dailyLimit: 50 },
+        {
+          id: 'domain-1',
+          domain: 'mail1.example.com',
+          fromEmail: 'sales@mail1.example.com',
+          dailyLimit: 50,
+        },
+        {
+          id: 'domain-2',
+          domain: 'mail2.example.com',
+          fromEmail: 'sales@mail2.example.com',
+          dailyLimit: 50,
+        },
       ];
 
       const stats = [
@@ -134,14 +172,22 @@ describe('Inbox Rotation Manager', () => {
       const tenantId = 'tenant-1';
 
       const domains = [
-        { id: 'domain-1', domain: 'mail1.example.com', fromEmail: 'sales@mail1.example.com', dailyLimit: 50 },
-        { id: 'domain-2', domain: 'mail2.example.com', fromEmail: 'sales@mail2.example.com', dailyLimit: 50 },
+        {
+          id: 'domain-1',
+          domain: 'mail1.example.com',
+          fromEmail: 'sales@mail1.example.com',
+          dailyLimit: 50,
+        },
+        {
+          id: 'domain-2',
+          domain: 'mail2.example.com',
+          fromEmail: 'sales@mail2.example.com',
+          dailyLimit: 50,
+        },
       ];
 
       // Only domain-1 has stats, domain-2 has none (should be treated as 0)
-      const stats = [
-        { domainId: 'domain-1', sentCount: 10 },
-      ];
+      const stats = [{ domainId: 'domain-1', sentCount: 10 }];
 
       vi.mocked(prisma.outreachSendingDomain.findMany).mockResolvedValue(domains as any);
       vi.mocked(prisma.outreachDomainDailyStat.findMany).mockResolvedValue(stats as any);
@@ -193,7 +239,12 @@ describe('Inbox Rotation Manager', () => {
 
       // Mock domain selection
       const domains = [
-        { id: 'domain-1', domain: 'mail1.example.com', fromEmail: 'sales@mail1.example.com', dailyLimit: 50 },
+        {
+          id: 'domain-1',
+          domain: 'mail1.example.com',
+          fromEmail: 'sales@mail1.example.com',
+          dailyLimit: 50,
+        },
       ];
       const stats = [{ domainId: 'domain-1', sentCount: 10 }];
 
@@ -257,7 +308,12 @@ describe('Inbox Rotation Manager', () => {
 
       // All domains at limit
       const domains = [
-        { id: 'domain-1', domain: 'mail1.example.com', fromEmail: 'sales@mail1.example.com', dailyLimit: 50 },
+        {
+          id: 'domain-1',
+          domain: 'mail1.example.com',
+          fromEmail: 'sales@mail1.example.com',
+          dailyLimit: 50,
+        },
       ];
       const stats = [{ domainId: 'domain-1', sentCount: 50 }];
 
@@ -284,7 +340,12 @@ describe('Inbox Rotation Manager', () => {
       };
 
       const domains = [
-        { id: 'domain-1', domain: 'mail1.example.com', fromEmail: 'sales@mail1.example.com', dailyLimit: 50 },
+        {
+          id: 'domain-1',
+          domain: 'mail1.example.com',
+          fromEmail: 'sales@mail1.example.com',
+          dailyLimit: 50,
+        },
       ];
       const stats = [{ domainId: 'domain-1', sentCount: 10 }];
 
@@ -403,8 +464,18 @@ describe('Inbox Rotation Manager', () => {
       const tenantId = 'tenant-1';
 
       const domains = [
-        { id: 'domain-1', domain: 'mail1.example.com', fromEmail: 'sales@mail1.example.com', dailyLimit: 30 }, // Custom limit
-        { id: 'domain-2', domain: 'mail2.example.com', fromEmail: 'sales@mail2.example.com', dailyLimit: 100 }, // Higher limit
+        {
+          id: 'domain-1',
+          domain: 'mail1.example.com',
+          fromEmail: 'sales@mail1.example.com',
+          dailyLimit: 30,
+        }, // Custom limit
+        {
+          id: 'domain-2',
+          domain: 'mail2.example.com',
+          fromEmail: 'sales@mail2.example.com',
+          dailyLimit: 100,
+        }, // Higher limit
       ];
 
       const stats = [
@@ -425,7 +496,12 @@ describe('Inbox Rotation Manager', () => {
       const tenantId = 'tenant-1';
 
       const domains = [
-        { id: 'domain-1', domain: 'mail1.example.com', fromEmail: 'sales@mail1.example.com', dailyLimit: 50 },
+        {
+          id: 'domain-1',
+          domain: 'mail1.example.com',
+          fromEmail: 'sales@mail1.example.com',
+          dailyLimit: 50,
+        },
       ];
 
       const stats = [

@@ -47,15 +47,17 @@ export async function GET(req: Request) {
         // Aggregate by metric name
         const byName: Record<string, number[]> = {};
         for (const row of rows) {
-            if (!byName[row.name]) byName[row.name] = [];
-            byName[row.name].push(row.value);
+            const name = row.name;
+            if (!name) continue;
+            if (!byName[name]) byName[name] = [];
+            if (row.value != null) byName[name].push(row.value);
         }
 
         const aggregated: Record<string, number> = {};
         for (const [name, values] of Object.entries(byName)) {
             if (agg === 'sum') aggregated[name] = values.reduce((s, v) => s + v, 0);
             else if (agg === 'avg') aggregated[name] = values.reduce((s, v) => s + v, 0) / values.length;
-            else aggregated[name] = values[0]; // 'last' — rows are desc by timestamp
+            else aggregated[name] = values[0] ?? 0; // 'last' — rows are desc by timestamp
         }
 
         return NextResponse.json({

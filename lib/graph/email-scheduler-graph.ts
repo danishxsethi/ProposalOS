@@ -1,18 +1,19 @@
 /**
  * Email Scheduler Graph - LangGraph Orchestrator for Email Sequences
- * 
+ *
  * This graph manages the scheduling and sending of email sequences,
  * including branching logic based on recipient engagement.
  */
 
-import { StateGraph, Annotation } from "@langchain/langgraph";
-import { prisma } from '@/lib/prisma';
-import { 
-  getNextEmailDecision, 
+import { Annotation, StateGraph } from '@langchain/langgraph';
+
+import {
+  EngagementState,
+  getNextEmailDecision,
   processPendingEmailSequences,
-  EngagementState 
 } from '@/lib/email/sequence-branching';
 import { sendProposalEmail } from '@/lib/outreach/emailSender';
+import { prisma } from '@/lib/prisma';
 
 export const EmailSchedulerState = Annotation.Root({
   proposalId: Annotation<string>({ reducer: (x, y) => y }),
@@ -42,12 +43,12 @@ async function fetch_pending_sequence(state: typeof EmailSchedulerState.State) {
     where: {
       status: { in: ['SENT', 'VIEWED'] },
       sentAt: { not: null },
-      emailSequence: { isNot: null }
+      emailSequence: { isNot: null },
     },
     include: {
       emailSequence: true,
     },
-    take: 50 // Process up to 50 at a time
+    take: 50, // Process up to 50 at a time
   });
 
   if (proposals.length === 0) {
@@ -55,12 +56,12 @@ async function fetch_pending_sequence(state: typeof EmailSchedulerState.State) {
       proposalId: '',
       tenantId: '',
       recipientEmail: '',
-      emailToSend: null
+      emailToSend: null,
     };
   }
 
   // Process first pending proposal
-  const proposal = proposals[0];
+  const proposal = proposals[0]!;
   const decision = await getNextEmailDecision(proposal.id);
 
   if (!decision.shouldSend) {
@@ -69,7 +70,7 @@ async function fetch_pending_sequence(state: typeof EmailSchedulerState.State) {
       tenantId: proposal.tenantId || '',
       recipientEmail: proposal.prospectEmail || '',
       emailToSend: null,
-      engagementState: decision.reason.includes('replied') ? 'REPLIED' : 'DROPPED'
+      engagementState: decision.reason.includes('replied') ? 'REPLIED' : 'DROPPED',
     };
   }
 
@@ -81,8 +82,8 @@ async function fetch_pending_sequence(state: typeof EmailSchedulerState.State) {
     emailToSend: {
       subject: decision.subject,
       body: decision.body,
-      step: decision.nextStep
-    }
+      step: decision.nextStep,
+    },
   };
 }
 
@@ -92,7 +93,7 @@ async function fetch_pending_sequence(state: typeof EmailSchedulerState.State) {
 async function send_email(state: typeof EmailSchedulerState.State) {
   if (!state.emailToSend || !state.recipientEmail || !state.proposalId) {
     return {
-      sendResult: { success: false, error: 'No email to send' }
+      sendResult: { success: false, error: 'No email to send' },
     };
   }
 
@@ -102,7 +103,7 @@ async function send_email(state: typeof EmailSchedulerState.State) {
       recipientEmail: state.recipientEmail,
       subject: state.emailToSend.subject,
       messageHtml: state.emailToSend.body,
-      tenantId: state.tenantId
+      tenantId: state.tenantId,
     });
 
     // Calculate next scheduled time (based on email step)
@@ -111,7 +112,7 @@ async function send_email(state: typeof EmailSchedulerState.State) {
       2: 2, // Day 2
       3: 3, // Day 5 (3 days after email 2)
       4: 3, // Day 8 (3 days after email 3)
-      5: 4  // Day 12 (4 days after email 4)
+      5: 4, // Day 12 (4 days after email 4)
     };
 
     const nextOffset = dayOffsets[state.currentStep] || 3;
@@ -120,15 +121,14 @@ async function send_email(state: typeof EmailSchedulerState.State) {
 
     return {
       sendResult: { success: true, messageId: result.messageId },
-      nextScheduledAt: nextScheduled
+      nextScheduledAt: nextScheduled,
     };
-
   } catch (error: any) {
     return {
-      sendResult: { 
-        success: false, 
-        error: error.message || 'Failed to send email' 
-      }
+      sendResult: {
+        success: false,
+        error: error.message || 'Failed to send email',
+      },
     };
   }
 }
@@ -143,7 +143,7 @@ async function update_tracking(state: typeof EmailSchedulerState.State) {
 
   // Update the email sequence status
   const emailSequence = await prisma.emailSequence.findUnique({
-    where: { proposalId: state.proposalId }
+    where: { proposalId: state.proposalId },
   });
 
   if (emailSequence) {
@@ -154,11 +154,9 @@ async function update_tracking(state: typeof EmailSchedulerState.State) {
       body: string;
       status: string;
     }>;
-    
-    const updatedEmails = emails.map(email => 
-      email.step === state.currentStep 
-        ? { ...email, status: 'sent' as const }
-        : email
+
+    const updatedEmails = emails.map((email) =>
+      email.step === state.currentStep ? { ...email, status: 'sent' as const } : email
     );
 
     await prisma.emailSequence.update({
@@ -166,11 +164,11 @@ async function update_tracking(state: typeof EmailSchedulerState.State) {
       data: {
         emails: updatedEmails as any,
         analytics: {
-          ...(emailSequence.analytics as object || {}),
+          ...((emailSequence.analytics as object) || {}),
           [`step_${state.currentStep}_sent_at`]: new Date().toISOString(),
-          last_sent_at: new Date().toISOString()
-        }
-      }
+          last_sent_at: new Date().toISOString(),
+        },
+      },
     });
   }
 
@@ -187,20 +185,20 @@ async function update_tracking(state: typeof EmailSchedulerState.State) {
  * Create the email scheduler graph
  */
 export const emailSchedulerGraph = new StateGraph(EmailSchedulerState)
-  .addNode("fetch_pending_sequence", fetch_pending_sequence)
-  .addNode("send_email", send_email)
-  .addNode("update_tracking", update_tracking)
+  .addNode('fetch_pending_sequence', fetch_pending_sequence)
+  .addNode('send_email', send_email)
+  .addNode('update_tracking', update_tracking)
   .addConditionalEdges(
-    "__start__",
-    (state) => state.proposalId ? "fetch_pending_sequence" : "__end__",
-    ["fetch_pending_sequence", "__end__"]
+    '__start__',
+    (state) => (state.proposalId ? 'fetch_pending_sequence' : '__end__'),
+    ['fetch_pending_sequence', '__end__']
   )
-  .addEdge("fetch_pending_sequence", "send_email")
-  .addEdge("send_email", "update_tracking")
+  .addEdge('fetch_pending_sequence', 'send_email')
+  .addEdge('send_email', 'update_tracking')
   .addConditionalEdges(
-    "update_tracking",
-    (state) => state.sendResult?.success ? "__end__" : "__end__",
-    ["__end__"]
+    'update_tracking',
+    (state) => (state.sendResult?.success ? '__end__' : '__end__'),
+    ['__end__']
   )
   .compile();
 
@@ -223,11 +221,11 @@ export async function runEmailScheduler(): Promise<{
     where: {
       status: { in: ['SENT', 'VIEWED'] },
       sentAt: { not: null },
-      emailSequence: { isNot: null }
+      emailSequence: { isNot: null },
     },
     include: {
       emailSequence: true,
-    }
+    },
   });
 
   for (const proposal of proposals) {
@@ -250,19 +248,18 @@ export async function runEmailScheduler(): Promise<{
         recipientEmail: proposal.prospectEmail,
         subject: decision.subject,
         messageHtml: decision.body,
-        tenantId: proposal.tenantId || undefined
+        tenantId: proposal.tenantId || undefined,
       });
 
       if (result.success) {
         sent++;
-        
+
         // Update tracking
         await updateEmailSequenceStatus(proposal.id, decision.nextStep);
       } else {
         failed++;
         errors.push(`Failed to send email for proposal ${proposal.id}`);
       }
-
     } catch (error: any) {
       failed++;
       errors.push(`Error processing proposal ${proposal.id}: ${error.message}`);
@@ -273,19 +270,16 @@ export async function runEmailScheduler(): Promise<{
     processed: proposals.length,
     sent,
     failed,
-    errors
+    errors,
   };
 }
 
 /**
  * Helper to update email sequence status in database
  */
-async function updateEmailSequenceStatus(
-  proposalId: string, 
-  stepSent: number
-): Promise<void> {
+async function updateEmailSequenceStatus(proposalId: string, stepSent: number): Promise<void> {
   const emailSequence = await prisma.emailSequence.findUnique({
-    where: { proposalId }
+    where: { proposalId },
   });
 
   if (!emailSequence) return;
@@ -297,17 +291,15 @@ async function updateEmailSequenceStatus(
     body: string;
     status: string;
   }>;
-  
-  const updatedEmails = emails.map(email => 
-    email.step === stepSent 
-      ? { ...email, status: 'sent' as const }
-      : email
+
+  const updatedEmails = emails.map((email) =>
+    email.step === stepSent ? { ...email, status: 'sent' as const } : email
   );
 
   await prisma.emailSequence.update({
     where: { proposalId },
     data: {
-      emails: updatedEmails as any
-    }
+      emails: updatedEmails as any,
+    },
   });
 }

@@ -1,9 +1,11 @@
-"use client";
+'use client';
+
+import Link from 'next/link';
 
 import { motion } from 'framer-motion';
-import Link from 'next/link';
-import { Badge } from '@/components/ui/badge';
 import { Clock, User } from 'lucide-react';
+
+import { Badge } from '@/components/ui/badge';
 import { BlogPost } from '@/lib/blog';
 
 export function BlogGrid({ posts }: { posts: BlogPost[] }) {

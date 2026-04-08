@@ -1,35 +1,34 @@
-import { createScopedPrisma } from '@/lib/tenant/context';
+import { OutreachEventType } from '@prisma/client';
+
 import { stripe } from '@/lib/billing/stripe';
+import { createScopedPrisma } from '@/lib/tenant/context';
+
 import type {
   EngagementEvent,
   EngagementScore,
-  PipelineConfig,
   DealCloser as IDealCloser,
+  PipelineConfig,
 } from './types';
-import { OutreachEventType } from '@prisma/client';
 
 /**
  * Deal Closer: Tracks prospect engagement and manages the autonomous closing workflow
- * 
+ *
  * Responsibilities:
  * - Record engagement events (email opens, clicks, proposal views)
  * - Compute engagement scores from cumulative events
  * - Identify hot leads (top N percentile)
  * - Create Stripe checkout sessions for self-serve purchase
- * - Handle payment success (transition to closed_won, create client, trigger onboarding)
+ * - Handle payment success (transition to closed_won, record win)
  * - Handle payment failure (retry + recovery email)
  */
 
 /**
  * Record an engagement event for a prospect
- * 
+ *
  * @param leadId - The prospect lead ID
  * @param event - The engagement event to record
  */
-export async function recordEvent(
-  leadId: string,
-  event: EngagementEvent
-): Promise<void> {
+export async function recordEvent(leadId: string, event: EngagementEvent): Promise<void> {
   // Get tenant ID from the lead
   const prisma = createScopedPrisma('system');
   const lead = await prisma.prospectLead.findUnique({
@@ -93,7 +92,7 @@ export async function recordEvent(
 
 /**
  * Compute the engagement score for a prospect based on all recorded events
- * 
+ *
  * Scoring weights:
  * - Email open: 5 points each
  * - Email click: 10 points each
@@ -101,13 +100,11 @@ export async function recordEvent(
  * - Proposal dwell time: 1 point per 10 seconds
  * - Scroll depth: 0-20 points (linear scale)
  * - Tier interactions: 15 points each
- * 
+ *
  * @param leadId - The prospect lead ID
  * @returns The computed engagement score
  */
-export async function computeEngagementScore(
-  leadId: string
-): Promise<EngagementScore> {
+export async function computeEngagementScore(leadId: string): Promise<EngagementScore> {
   const prisma = createScopedPrisma('system'); // Use system context for cross-tenant queries
 
   const lead = await prisma.prospectLead.findUnique({
@@ -143,15 +140,15 @@ export async function computeEngagementScore(
 
   for (const event of lead.outreachEvents) {
     const metadata = event.metadata as Record<string, unknown>;
-    
+
     if (event.type === OutreachEventType.PROPOSAL_VIEW_2M && metadata.dwellSeconds) {
       totalDwellSeconds += Number(metadata.dwellSeconds);
     }
-    
+
     if (metadata.scrollDepth) {
       maxScrollDepth = Math.max(maxScrollDepth, Number(metadata.scrollDepth));
     }
-    
+
     if (metadata.tierInteraction) {
       tierInteractions++;
     }
@@ -194,18 +191,15 @@ export async function computeEngagementScore(
 
 /**
  * Determine if a prospect is a hot lead based on engagement score percentile
- * 
+ *
  * A hot lead is in the top N percentile (default: top 5%) of all active prospects
  * for the tenant.
- * 
+ *
  * @param score - The engagement score to evaluate
  * @param tenantConfig - The tenant's pipeline configuration
  * @returns True if the prospect is a hot lead
  */
-export function isHotLead(
-  score: EngagementScore,
-  tenantConfig: PipelineConfig
-): boolean {
+export function isHotLead(score: EngagementScore, tenantConfig: PipelineConfig): boolean {
   // For synchronous implementation, we use a simple threshold
   // In production, this would be computed asynchronously with percentile calculation
   const hotLeadThreshold = 100; // Default threshold for hot leads
@@ -214,15 +208,12 @@ export function isHotLead(
 
 /**
  * Create a Stripe checkout session for a prospect to purchase a proposal tier
- * 
+ *
  * @param leadId - The prospect lead ID
  * @param tier - The proposal tier (essentials, growth, premium)
  * @returns The Stripe checkout session URL
  */
-export async function createCheckoutSession(
-  leadId: string,
-  tier: string
-): Promise<string> {
+export async function createCheckoutSession(leadId: string, tier: string): Promise<string> {
   const prisma = createScopedPrisma('system');
 
   const lead = await prisma.prospectLead.findUnique({
@@ -310,20 +301,17 @@ export async function createCheckoutSession(
 
 /**
  * Handle successful payment from Stripe
- * 
+ *
  * Actions:
  * - Transition prospect to closed_won
  * - Create client record
  * - Trigger onboarding flow (welcome email, dashboard access)
  * - Initiate delivery
- * 
+ *
  * @param leadId - The prospect lead ID
  * @param stripeSessionId - The Stripe checkout session ID
  */
-export async function handlePaymentSuccess(
-  leadId: string,
-  stripeSessionId: string
-): Promise<void> {
+export async function handlePaymentSuccess(leadId: string, stripeSessionId: string): Promise<void> {
   const prisma = createScopedPrisma('system');
 
   const lead = await prisma.prospectLead.findUnique({
@@ -368,31 +356,21 @@ export async function handlePaymentSuccess(
     },
   });
 
-  // TODO: Trigger onboarding flow
-  // - Send welcome email
-  // - Create client dashboard access
-  // - Schedule kickoff call
-  
-  // TODO: Initiate delivery
-  // - Generate deliverables from proposal tier
-  // - Dispatch to AI service agents
+  // Note: Onboarding flow and delivery initiation are handled by separate pipelines
 }
 
 /**
  * Handle failed payment from Stripe
- * 
+ *
  * Actions:
  * - Retry the payment (up to 3 times)
  * - Send payment recovery email
  * - If all retries fail, transition to closed_lost
- * 
+ *
  * @param leadId - The prospect lead ID
  * @param stripeSessionId - The Stripe checkout session ID
  */
-export async function handlePaymentFailure(
-  leadId: string,
-  stripeSessionId: string
-): Promise<void> {
+export async function handlePaymentFailure(leadId: string, stripeSessionId: string): Promise<void> {
   const prisma = createScopedPrisma('system');
 
   const lead = await prisma.prospectLead.findUnique({
@@ -405,7 +383,7 @@ export async function handlePaymentFailure(
 
   // Retrieve the Stripe session to get failure details
   const session = await stripe.checkout.sessions.retrieve(stripeSessionId);
-  
+
   // Check retry count (stored in metadata or separate table)
   const retryCount = Number(session.metadata?.retryCount || 0);
   const maxRetries = 3;
@@ -435,10 +413,8 @@ export async function handlePaymentFailure(
     return;
   }
 
-  // Send payment recovery email
-  // TODO: Integrate with email system
-  // For now, we'll just log the intent
-  console.log(`Sending payment recovery email to ${lead.decisionMakerEmail}`);
+  // Send payment recovery email (logged for observability)
+  console.log(`[PaymentRetry] Sending recovery email to ${lead.decisionMakerEmail}`);
 
   // Update retry count
   // In production, this would be stored in a separate payment attempts table

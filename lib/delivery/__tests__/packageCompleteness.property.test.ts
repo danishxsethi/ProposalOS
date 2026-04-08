@@ -1,9 +1,10 @@
 // Feature: agentic-delivery-qa-hardening, Property 4: Implementation package completeness
-import { describe, it, expect } from 'vitest';
+import { Finding } from '@prisma/client';
 import fc from 'fast-check';
+import { describe, expect, it } from 'vitest';
+
 import { packageArtifact } from '../packager';
 import { ValidatedArtifact } from '../validationPipeline';
-import { Finding } from '@prisma/client';
 
 describe('Property 4: Implementation package completeness', () => {
   it('should return package with all four required fields non-null and non-empty', async () => {
@@ -66,7 +67,14 @@ describe('Property 4: Implementation package completeness', () => {
   });
 
   it('should have correct artifact type in package', async () => {
-    const artifactTypes = ['json_ld', 'html_meta', 'speed_script', 'gbp_draft', 'content_brief', 'aria_fix'];
+    const artifactTypes = [
+      'json_ld',
+      'html_meta',
+      'speed_script',
+      'gbp_draft',
+      'content_brief',
+      'aria_fix',
+    ];
 
     for (const artifactType of artifactTypes) {
       const mockArtifact: ValidatedArtifact = {

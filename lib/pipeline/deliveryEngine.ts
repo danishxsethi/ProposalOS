@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/db';
-import type { Deliverable, VerificationResult, DeliveryEngine as IDeliveryEngine } from './types';
+
+import type { Deliverable, DeliveryEngine as IDeliveryEngine, VerificationResult } from './types';
 
 /**
  * Maps finding categories to agent types for service delivery
@@ -18,8 +19,8 @@ const CATEGORY_TO_AGENT_TYPE: Record<string, Deliverable['agentType']> = {
  */
 const TIER_DELIVERY_TIMELINES: Record<string, number> = {
   essentials: 14, // 2 weeks
-  growth: 30,     // 1 month
-  premium: 60,    // 2 months
+  growth: 30, // 1 month
+  premium: 60, // 2 months
 };
 
 /**
@@ -58,7 +59,10 @@ export class DeliveryEngine implements IDeliveryEngine {
     }
 
     // Get the tier configuration
-    const tierKey = `tier${tier.charAt(0).toUpperCase() + tier.slice(1)}` as 'tierEssentials' | 'tierGrowth' | 'tierPremium';
+    const tierKey = `tier${tier.charAt(0).toUpperCase() + tier.slice(1)}` as
+      | 'tierEssentials'
+      | 'tierGrowth'
+      | 'tierPremium';
     const tierConfig = proposal[tierKey] as any;
 
     if (!tierConfig || !tierConfig.findingIds || !Array.isArray(tierConfig.findingIds)) {
@@ -187,11 +191,7 @@ export class DeliveryEngine implements IDeliveryEngine {
       },
     });
 
-    return { verified: verified || false,
-      verified,
-      improvementPercent,
-      beforeAfterComparison,
-    };
+    return { verified: verified || false, verified, improvementPercent, beforeAfterComparison };
   }
 
   /**

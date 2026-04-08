@@ -1,17 +1,19 @@
-import { getIndustry, getAllIndustrySlugs } from '@/lib/industries';
-import { SectionWrapper } from '@/components/shared/section-wrapper';
-import { ScanInput } from '@/components/scan/scan-input';
-import { SeverityBadge } from '@/components/shared/severity-badge';
 import { notFound } from 'next/navigation';
-import { Badge } from '@/components/ui/badge';
+
+import { BarChart3 } from 'lucide-react';
+
+import { ScanInput } from '@/components/scan/scan-input';
+import { JsonLd } from '@/components/shared/json-ld';
+import { SectionWrapper } from '@/components/shared/section-wrapper';
+import { SeverityBadge } from '@/components/shared/severity-badge';
 import {
   Accordion,
   AccordionContent,
   AccordionItem,
   AccordionTrigger,
 } from '@/components/ui/accordion';
-import { BarChart3 } from 'lucide-react';
-import { JsonLd } from '@/components/shared/json-ld';
+import { Badge } from '@/components/ui/badge';
+import { getAllIndustrySlugs, getIndustry } from '@/lib/industries';
 
 export async function generateStaticParams() {
   return getAllIndustrySlugs().map((slug) => ({
@@ -40,36 +42,36 @@ export default async function IndustryPage({ params }: { params: Promise<{ verti
   }
 
   const industrySchema = {
-    "@context": "https://schema.org",
-    "@type": "Service",
-    "serviceType": "AI Website Audit",
-    "provider": {
-      "@type": "Organization",
-      "name": "Claraud"
+    '@context': 'https://schema.org',
+    '@type': 'Service',
+    serviceType: 'AI Website Audit',
+    provider: {
+      '@type': 'Organization',
+      name: 'Claraud',
     },
-    "areaServed": "North America",
-    "description": industry.subheadline,
-    "name": `Free AI Audit for ${industry.name}`
+    areaServed: 'North America',
+    description: industry.subheadline,
+    name: `Free AI Audit for ${industry.name}`,
   };
 
   const faqSchema = {
-    "@context": "https://schema.org",
-    "@type": "FAQPage",
-    "mainEntity": industry.problems.map(p => ({
-      "@type": "Question",
-      "name": p.title,
-      "acceptedAnswer": {
-        "@type": "Answer",
-        "text": p.description
-      }
-    }))
+    '@context': 'https://schema.org',
+    '@type': 'FAQPage',
+    mainEntity: industry.problems.map((p) => ({
+      '@type': 'Question',
+      name: p.title,
+      acceptedAnswer: {
+        '@type': 'Answer',
+        text: p.description,
+      },
+    })),
   };
 
   return (
     <div className="bg-[#0a0a0f] min-h-screen pt-32 pb-20">
       <JsonLd data={industrySchema} />
       <JsonLd data={faqSchema} />
-      
+
       {/* Section 1: Hero */}
       <SectionWrapper>
         <div className="text-center max-w-4xl mx-auto px-4">
@@ -96,12 +98,16 @@ export default async function IndustryPage({ params }: { params: Promise<{ verti
       <SectionWrapper className="py-24 bg-white/5">
         <div className="text-center mb-16 px-4">
           <h2 className="text-3xl md:text-5xl font-bold text-white mb-4">
-            The {industry.name.toLowerCase()} marketing problems <span className="gradient-text">no one talks about.</span>
+            The {industry.name.toLowerCase()} marketing problems{' '}
+            <span className="gradient-text">no one talks about.</span>
           </h2>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 max-w-6xl mx-auto px-4">
           {industry.problems.map((problem, idx) => (
-            <div key={idx} className="glass p-8 rounded-2xl border border-white/10 hover:border-blue-500/30 transition-all group h-full flex flex-col">
+            <div
+              key={idx}
+              className="glass p-8 rounded-2xl border border-white/10 hover:border-blue-500/30 transition-all group h-full flex flex-col"
+            >
               <Badge className="w-fit mb-4 bg-orange-500/10 text-orange-400 border-orange-500/20 px-3 py-1 text-xs font-bold uppercase tracking-widest">
                 {problem.stat}
               </Badge>
@@ -123,16 +129,24 @@ export default async function IndustryPage({ params }: { params: Promise<{ verti
             <h2 className="text-3xl md:text-5xl font-bold text-white mb-4">
               What we find in a typical {industry.name.toLowerCase()} audit.
             </h2>
-            <p className="text-text-secondary">Claraud scans over 30 dimensions of your digital presence instantly.</p>
+            <p className="text-text-secondary">
+              Claraud scans over 30 dimensions of your digital presence instantly.
+            </p>
           </div>
 
           <Accordion type="single" collapsible className="space-y-4">
             {industry.sampleFindings.map((finding, idx) => (
-              <AccordionItem key={idx} value={`item-${idx}`} className="glass border border-white/10 rounded-2xl overflow-hidden px-2">
+              <AccordionItem
+                key={idx}
+                value={`item-${idx}`}
+                className="glass border border-white/10 rounded-2xl overflow-hidden px-2"
+              >
                 <AccordionTrigger className="px-6 py-5 hover:no-underline text-left group text-white font-semibold">
                   <div className="flex items-center gap-4 w-full pr-4">
                     <SeverityBadge severity={finding.severity as any} />
-                    <span className="text-white font-semibold text-lg line-clamp-1">{finding.title}</span>
+                    <span className="text-white font-semibold text-lg line-clamp-1">
+                      {finding.title}
+                    </span>
                   </div>
                 </AccordionTrigger>
                 <AccordionContent className="px-6 pb-6 pt-2">
@@ -142,7 +156,9 @@ export default async function IndustryPage({ params }: { params: Promise<{ verti
                         <BarChart3 className="w-4 h-4" />
                       </div>
                       <div>
-                        <p className="text-[10px] uppercase tracking-widest font-bold text-text-secondary mb-1">Impact statement</p>
+                        <p className="text-[10px] uppercase tracking-widest font-bold text-text-secondary mb-1">
+                          Impact statement
+                        </p>
                         <p className="text-text-primary text-base font-medium">{finding.impact}</p>
                       </div>
                     </div>
@@ -168,15 +184,26 @@ export default async function IndustryPage({ params }: { params: Promise<{ verti
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="bg-white/10">
-                    <th className="py-6 px-8 text-sm font-bold uppercase tracking-widest text-text-secondary border-b border-white/10">Metric</th>
-                    <th className="py-6 px-8 text-sm font-bold uppercase tracking-widest text-text-secondary border-b border-white/10">Industry Avg</th>
-                    <th className="py-6 px-8 text-sm font-bold uppercase tracking-widest text-text-secondary border-b border-white/10 text-green-400">Top Performer</th>
-                    <th className="py-6 px-8 text-sm font-bold uppercase tracking-widest text-blue-400 border-b border-white/10">Your Business</th>
+                    <th className="py-6 px-8 text-sm font-bold uppercase tracking-widest text-text-secondary border-b border-white/10">
+                      Metric
+                    </th>
+                    <th className="py-6 px-8 text-sm font-bold uppercase tracking-widest text-text-secondary border-b border-white/10">
+                      Industry Avg
+                    </th>
+                    <th className="py-6 px-8 text-sm font-bold uppercase tracking-widest text-text-secondary border-b border-white/10 text-green-400">
+                      Top Performer
+                    </th>
+                    <th className="py-6 px-8 text-sm font-bold uppercase tracking-widest text-blue-400 border-b border-white/10">
+                      Your Business
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
                   {industry.benchmarks.map((row, idx) => (
-                    <tr key={idx} className="border-b border-white/5 hover:bg-white/5 transition-colors">
+                    <tr
+                      key={idx}
+                      className="border-b border-white/5 hover:bg-white/5 transition-colors"
+                    >
                       <td className="py-6 px-8 font-semibold text-white">{row.metric}</td>
                       <td className="py-6 px-8 text-text-secondary">{row.average}</td>
                       <td className="py-6 px-8 text-green-400 font-bold">{row.topPerformer}</td>
@@ -207,9 +234,7 @@ export default async function IndustryPage({ params }: { params: Promise<{ verti
           <div className="max-w-2xl mx-auto mb-8">
             <ScanInput variant="large" />
           </div>
-          <p className="text-text-secondary text-lg">
-            Free. 30 seconds. No credit card.
-          </p>
+          <p className="text-text-secondary text-lg">Free. 30 seconds. No credit card.</p>
         </div>
       </SectionWrapper>
     </div>

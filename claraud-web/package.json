@@ -5,8 +5,13 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "build:analyze": "ANALYZE=true next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "lighthouse:audit": "lhci autorun --config=./lighthouse.config.js",
+    "lighthouse:local": "lhci autorun --config=./lighthouse.config.js --collect.url=http://localhost:3000",
+    "widget:size": "node scripts/check-widget-size.js",
+    "perf:check": "npm run build:analyze && npm run widget:size"
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.11.1",
@@ -25,6 +30,7 @@
     "@react-email/components": "^1.0.8",
     "@react-email/render": "^2.0.4",
     "@react-google-maps/api": "^2.20.8",
+    "@sentry/nextjs": "^10.45.0",
     "@stripe/stripe-js": "^8.8.0",
     "@tanstack/react-query": "^5.90.21",
     "@types/bcryptjs": "^2.4.6",
@@ -58,9 +64,10 @@
     "tailwind-merge": "^3.5.0",
     "tailwindcss-animate": "^1.0.7",
     "zod": "^4.3.6",
-    "zustand": "^5.0.11"
+    "zustand": "^5.0.12"
   },
   "devDependencies": {
+    "@next/bundle-analyzer": "^16.2.1",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",

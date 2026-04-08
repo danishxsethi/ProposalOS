@@ -1,19 +1,19 @@
-import { prisma } from '@/lib/prisma';
 import {
-  updateBenchmark as flywheelUpdateBenchmark,
   trackFindingOutcome as flywheelTrackFindingOutcome,
   trackPromptOutcome as flywheelTrackPromptOutcome,
+  updateBenchmark as flywheelUpdateBenchmark,
 } from '@/lib/flywheel/dataFlywheel';
+import { prisma } from '@/lib/prisma';
 
 /**
  * Learning Loop Extensions
- * 
+ *
  * Extends the existing data flywheel with additional tracking for:
  * - Outreach template performance
  * - Win/loss analysis with reason codes
  * - Pricing recalibration based on conversion rates
  * - Vertical-specific insights
- * 
+ *
  * Requirements: 8.1, 8.2, 8.3, 8.4, 8.5, 8.6
  */
 
@@ -25,7 +25,10 @@ import {
  * Update industry benchmark statistics
  * Requirements: 8.3
  */
-export async function updateBenchmark(industry: string, metrics: Record<string, number>): Promise<void> {
+export async function updateBenchmark(
+  industry: string,
+  metrics: Record<string, number>
+): Promise<void> {
   return flywheelUpdateBenchmark(industry, metrics);
 }
 
@@ -98,7 +101,7 @@ export interface VerticalInsights {
 /**
  * Track outreach template performance
  * Requirements: 8.2
- * 
+ *
  * Updates OutreachTemplatePerformance table with aggregated metrics
  * for a specific template, vertical, and city combination.
  */
@@ -173,7 +176,9 @@ export async function trackOutreachOutcome(
       });
     }
 
-    console.log(`[LearningLoop] Tracked outreach outcome for template ${templateId} in ${vertical}/${city}`);
+    console.log(
+      `[LearningLoop] Tracked outreach outcome for template ${templateId} in ${vertical}/${city}`
+    );
   } catch (error) {
     console.error('[LearningLoop] Failed to track outreach outcome:', error);
     throw error;
@@ -183,7 +188,7 @@ export async function trackOutreachOutcome(
 /**
  * Track win/loss outcomes with reason codes
  * Requirements: 8.6
- * 
+ *
  * Records detailed win/loss data including reason codes, objections,
  * and competitor mentions for future playbook refinement.
  */
@@ -222,7 +227,7 @@ export async function trackWinLoss(
 /**
  * Recalibrate pricing based on historical conversion rates
  * Requirements: 8.4
- * 
+ *
  * Analyzes win/loss data for a specific vertical and city to compute
  * conversion rates by tier and recommend optimal pricing.
  */
@@ -237,11 +242,11 @@ export async function recalibratePricing(
       vertical,
       city: city || null,
     };
-    
+
     if (tenantId) {
       where.tenantId = tenantId;
     }
-    
+
     const records = await prisma.winLossRecord.findMany({ where });
 
     if (records.length === 0) {
@@ -281,9 +286,7 @@ export async function recalibratePricing(
     }
 
     const essentialsConversionRate =
-      tierCounts.essentials.total > 0
-        ? tierCounts.essentials.won / tierCounts.essentials.total
-        : 0;
+      tierCounts.essentials.total > 0 ? tierCounts.essentials.won / tierCounts.essentials.total : 0;
     const growthConversionRate =
       tierCounts.growth.total > 0 ? tierCounts.growth.won / tierCounts.growth.total : 0;
     const premiumConversionRate =
@@ -351,7 +354,7 @@ function ensureTierOrdering(pricing: { essentials: number; growth: number; premi
   // Otherwise, enforce minimum gaps between tiers
   // Start from the base prices and adjust based on conversion rates
   const basePricing = { essentials: 500, growth: 1500, premium: 3000 };
-  
+
   // If essentials is too high, cap it at growth - 100
   let adjustedEssentials = essentials;
   let adjustedGrowth = growth;
@@ -382,7 +385,7 @@ function ensureTierOrdering(pricing: { essentials: number; growth: number; premi
 /**
  * Get vertical-specific insights
  * Requirements: 8.4
- * 
+ *
  * Aggregates learning data for a specific vertical to provide
  * actionable insights for improving pipeline performance.
  */

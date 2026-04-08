@@ -7,15 +7,17 @@
  *   npm run final-audit -- --skip-server   # Run only local checks (1-4)
  */
 import 'dotenv/config';
-import * as fs from 'fs-extra';
-import * as path from 'path';
 import { execSync } from 'child_process';
+import * as path from 'path';
+
+import * as fs from 'fs-extra';
 
 const BASE_URL = process.env.BASE_URL || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
 const API_KEY = process.env.API_KEY;
 let TENANT_ID = process.env.DEFAULT_TENANT_ID;
 const SKIP_SERVER = process.argv.includes('--skip-server');
-const GCP_PROJECT = process.env.GCP_PROJECT_ID || process.env.GOOGLE_CLOUD_PROJECT || 'proposal-487522';
+const GCP_PROJECT =
+  process.env.GCP_PROJECT_ID || process.env.GOOGLE_CLOUD_PROJECT || 'proposal-487522';
 
 const isCloudRun = BASE_URL.includes('run.app');
 
@@ -31,8 +33,8 @@ async function ensureTenantId(): Promise<void> {
         ...(Object.keys(cloudRunHeaders).length > 0
           ? cloudRunHeaders
           : { Authorization: `Bearer ${API_KEY}` }),
-      ...(TENANT_ID ? { 'x-tenant-id': TENANT_ID } : {}),
-    },
+        ...(TENANT_ID ? { 'x-tenant-id': TENANT_ID } : {}),
+      },
     });
     if (res.ok) {
       const data = (await res.json()) as { tenantId?: string };
@@ -73,7 +75,10 @@ function add(name: string, pass: boolean, detail: string) {
   results.push({ name, pass, detail });
 }
 
-async function runCheck<T>(name: string, fn: () => Promise<{ pass: boolean; detail: string }>): Promise<void> {
+async function runCheck<T>(
+  name: string,
+  fn: () => Promise<{ pass: boolean; detail: string }>
+): Promise<void> {
   try {
     const r = await fn();
     add(name, r.pass, r.detail);
@@ -187,10 +192,13 @@ async function check5_Modules(): Promise<void> {
       return { pass: false, detail: `Non-JSON response (${res.status})` };
     }
     if (!res.ok) {
-      const hint = data.error === 'Unauthorized'
-        ? ' — Ensure API_KEY in GCP Secret Manager matches .env (run: ./scripts/sync-secrets-to-gcp.sh)'
-        : '';
-      const detail = data.details ? `${data.error || res.statusText}: ${data.details}` : (data.error || res.statusText);
+      const hint =
+        data.error === 'Unauthorized'
+          ? ' — Ensure API_KEY in GCP Secret Manager matches .env (run: ./scripts/sync-secrets-to-gcp.sh)'
+          : '';
+      const detail = data.details
+        ? `${data.error || res.statusText}: ${data.details}`
+        : data.error || res.statusText;
       return { pass: false, detail: detail + hint };
     }
     const modules = (data.modulesCompleted as string[]) || [];
@@ -246,7 +254,11 @@ async function check10_Competitor(): Promise<void> {
     add('Competitor comparison', false, 'SKIPPED');
     return;
   }
-  add('Competitor comparison', true, 'Manual: Run audit with local business, verify 2+ competitors');
+  add(
+    'Competitor comparison',
+    true,
+    'Manual: Run audit with local business, verify 2+ competitors'
+  );
 }
 
 async function check11_EmailQuality(): Promise<void> {
@@ -281,15 +293,29 @@ async function check11_EmailQuality(): Promise<void> {
       executiveSummary: 'Test summary',
       webLinkToken: 'demo',
       pricing: { starter: 497, growth: 1497, premium: 2997 },
-      comparisonReport: { prospectRank: 2, summaryStatement: 'Good', positiveStatement: 'OK', urgencyStatement: 'Improve', winningCategories: [], losingCategories: [] },
+      comparisonReport: {
+        prospectRank: 2,
+        summaryStatement: 'Good',
+        positiveStatement: 'OK',
+        urgencyStatement: 'Improve',
+        winningCategories: [],
+        losingCategories: [],
+      },
     };
-    const { sequence, qualityPassed, finalReports } = await runEmailPipeline(mockAudit, mockProposal, null);
+    const { sequence, qualityPassed, finalReports } = await runEmailPipeline(
+      mockAudit,
+      mockProposal,
+      null
+    );
     const avgScore =
       finalReports.length > 0
         ? finalReports.reduce((s, r) => s + r.score, 0) / finalReports.length
         : 0;
     const scoreOk = avgScore >= 80;
-    return { pass: qualityPassed || scoreOk, detail: `avg ${avgScore.toFixed(1)}/100, ${sequence.emails.length} emails` };
+    return {
+      pass: qualityPassed || scoreOk,
+      detail: `avg ${avgScore.toFixed(1)}/100, ${sequence.emails.length} emails`,
+    };
   });
 }
 
@@ -318,7 +344,11 @@ async function check13_ErrorHandling(): Promise<void> {
           : { Authorization: `Bearer ${API_KEY}` }),
         ...(TENANT_ID && !isCloudRun ? { 'x-tenant-id': TENANT_ID } : {}),
       },
-      body: JSON.stringify({ url: 'https://invalid-nonexistent-12345.com', name: 'Invalid', city: 'Test' }),
+      body: JSON.stringify({
+        url: 'https://invalid-nonexistent-12345.com',
+        name: 'Invalid',
+        city: 'Test',
+      }),
     });
     let data: { error?: string };
     try {
@@ -365,7 +395,9 @@ async function main(): Promise<void> {
   const ready = passed === total;
 
   console.log('\n---');
-  console.log(ready ? 'RESULT: ✅ READY TO LAUNCH' : `RESULT: ❌ NOT READY — ${total - passed} issues`);
+  console.log(
+    ready ? 'RESULT: ✅ READY TO LAUNCH' : `RESULT: ❌ NOT READY — ${total - passed} issues`
+  );
   console.log('');
 
   process.exit(ready ? 0 : 1);

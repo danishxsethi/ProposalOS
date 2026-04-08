@@ -1,57 +1,136 @@
+/**
+ * POST /api/public/audit
+ * Public audit endpoint for lead generation.
+ *
+ * Features:
+ * - Zod validation with auditTriggerSchema
+ * - Rate limiting (10 requests/minute for public API)
+ * - Standardized error responses
+ * - System tenant for public leads
+ */
+
 import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
-// P0-3: Use runner
+
+import { generateTraceId, InternalError, ValidationError } from '@/lib/api/errors';
+import { auditTriggerSchema } from '@/lib/api/schemas/audit';
 import { runAudit } from '@/lib/audit/runner';
+import { logError, logger } from '@/lib/logger';
+import { RateLimitPresets, withRateLimit } from '@/lib/middleware/rateLimit';
+import { recordAuditTrailEvent } from '@/lib/observability/auditTrail';
+import { applyObservabilityHeaders, createObservabilityContextFromRequest, getObservabilityContext, runWithObservabilityContext } from '@/lib/observability/context';
+import { prisma } from '@/lib/prisma';
+import { runWithTenantAsync } from '@/lib/tenant/context';
 
-// Need to handle rate limiting manually or via middleware.
-// For now, we'll skip complex IP rate limiting logic code for brevity, 
-// but in production, we'd use KV/Redis.
+/**
+ * Inner handler for public audit creation
+ */
+async function handlePublicAudit(req: Request): Promise<NextResponse> {
+  return runWithObservabilityContext(createObservabilityContextFromRequest(req, { workflow: 'api.public-audit.create' }), async () => {
+    const traceId = generateTraceId();
 
-export async function POST(req: Request) {
     try {
-        const body = await req.json();
-        const { businessName, websiteUrl, city, industry } = body;
+    // Parse and validate body using Zod schema
+    const body = await req.json();
+    const result = auditTriggerSchema.safeParse(body);
 
-        if (!businessName || !websiteUrl) {
-            return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
-        }
-
-        // 1. Create Audit (System Tenant)
-        // Ensure 'system' tenant exists or use a default one.
-        // We'll upsert a 'system' tenant to be safe.
-        const systemTenant = await prisma.tenant.upsert({
-            where: { domain: 'proposalengine.com' }, // or id 'system' if uuid
-            update: {},
-            create: {
-                name: 'System / Public Leads',
-                domain: 'proposalengine.com',
-                planTier: 'agency'
-            }
-        });
-
-        const audit = await prisma.audit.create({
-            data: {
-                tenantId: systemTenant.id,
-                businessName,
-                businessUrl: websiteUrl,
-                businessCity: city,
-                businessIndustry: industry,
-                status: 'QUEUED'
-            }
-        });
-
-        // 2. Trigger Orchestrator (Fire & Forget)
-        // In Vercel, this might be killed if function ends.
-        // Ideally use `waitUntil` from `@vercel/functions` or Inngest/Queue.
-        // For MVP, we just call it without await, but Node event loop *might* kill it.
-        // We'll await it for a microsecond? No.
-        // Valid strategy for MVP on "Serverful" or long-timeout functions:
-        runAudit(audit.id).catch(e => console.error('Bg audit failed', e));
-
-        return NextResponse.json({ id: audit.id });
-
-    } catch (error) {
-        console.error(error);
-        return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    if (!result.success) {
+      const errorDetails = result.error.errors.map((e) => ({
+        field: e.path.join('.'),
+        message: e.message,
+      }));
+      return NextResponse.json(
+        new ValidationError('Invalid input', errorDetails).toEnvelope(req.url, traceId),
+        { status: 400 }
+      );
     }
+
+    const { url, industry, businessName, businessCity } = result.data;
+
+    // Get or create system tenant for public leads
+    const systemTenant = await prisma.tenant.upsert({
+      where: { domain: 'proposalengine.com' },
+      update: {},
+      create: {
+        name: 'System / Public Leads',
+        domain: 'proposalengine.com',
+        planTier: 'agency',
+      },
+    });
+
+    const audit = await prisma.audit.create({
+      data: {
+        tenantId: systemTenant.id,
+        businessName: businessName || 'Unknown',
+        businessUrl: url,
+        businessCity: businessCity ?? null,
+        businessIndustry: industry ?? null,
+        status: 'QUEUED',
+      },
+    });
+
+    // Trigger orchestrator (fire and forget)
+    const currentContext = getObservabilityContext();
+    logger.info(
+      {
+        event: 'audit.public.start',
+        auditId: audit.id,
+        tenantId: systemTenant.id,
+        hasBusinessName: Boolean(businessName),
+        hasTargetUrl: Boolean(url),
+      },
+      'Starting public audit'
+    );
+    await recordAuditTrailEvent({
+      eventType: 'audit.requested',
+      tenantId: systemTenant.id,
+      auditId: audit.id,
+      triggerSource: 'api.public-audit.create',
+      targetUrl: url,
+      payload: {
+        hasBusinessName: Boolean(businessName),
+        industry: industry ?? null,
+      },
+    });
+
+    runWithObservabilityContext(
+      { ...currentContext, tenantId: systemTenant.id, auditId: audit.id, workflow: 'audit-runner' },
+      () => runWithTenantAsync(systemTenant.id, () => runAudit(audit.id))
+    ).catch(async (e) => {
+      logError('Bg audit kickoff failed', e, { auditId: audit.id, tenantId: systemTenant.id });
+      await prisma.audit
+        .update({
+          where: { id: audit.id },
+          data: {
+            status: 'FAILED',
+            completedAt: new Date(),
+            error: `AUDIT_KICKOFF_FAILED: ${String(e)}`,
+          } as any,
+        })
+        .catch((updateErr) => {
+          logError('Failed to persist kickoff failure on public audit record', updateErr, {
+            auditId: audit.id,
+          });
+        });
+    });
+
+    const response = NextResponse.json({ id: audit.id });
+    applyObservabilityHeaders(response);
+    return response;
+  } catch (error) {
+    logError('Failed to create public audit', error);
+    const internalError = new InternalError('Failed to create public audit', {
+      originalError: error instanceof Error ? error.message : String(error),
+    });
+
+    const response = NextResponse.json(internalError.toEnvelope(req.url, traceId), { status: 500 });
+    applyObservabilityHeaders(response);
+    return response;
+  }
+  });
 }
+
+// Apply rate limiting for public API
+const rateLimitedHandler = (req: Request) =>
+  withRateLimit(RateLimitPresets.publicApi)(req, () => handlePublicAudit(req));
+
+export const POST = rateLimitedHandler;

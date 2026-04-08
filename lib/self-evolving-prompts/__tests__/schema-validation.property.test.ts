@@ -5,14 +5,15 @@
  * Validates: Requirements 10.3
  */
 
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import * as fc from 'fast-check';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+
+import { logPerformance } from '../data-access/prompt-performance';
 import {
   createVersion,
-  getVersionHistoryWithDeltas,
   getVersionByHash,
+  getVersionHistoryWithDeltas,
 } from '../data-access/prompt-versions';
-import { logPerformance } from '../data-access/prompt-performance';
 import { prisma } from '../db';
 
 describe('Property 37: Version History Data Completeness', () => {
@@ -30,10 +31,10 @@ describe('Property 37: Version History Data Completeness', () => {
 
   /**
    * Property 37: Version History Data Completeness
-   * 
+   *
    * For any stored prompt version, the record SHALL include complete changelog
    * and performance delta information (where performance data is available).
-   * 
+   *
    * This property verifies that:
    * 1. Every version has a non-empty changelog
    * 2. Versions with parent versions have performance deltas when data exists
@@ -44,7 +45,7 @@ describe('Property 37: Version History Data Completeness', () => {
       fc.asyncProperty(
         // Generate test data: node ID, number of versions, and version details
         fc.record({
-          nodeId: fc.string({ minLength: 5, maxLength: 20 }).map(s => `test-node-${s}`),
+          nodeId: fc.string({ minLength: 5, maxLength: 20 }).map((s) => `test-node-${s}`),
           versions: fc.array(
             fc.record({
               promptText: fc.string({ minLength: 10, maxLength: 200 }),
@@ -117,7 +118,9 @@ describe('Property 37: Version History Data Completeness', () => {
                     expect(typeof version.performanceDelta.qualityScoreChange).toBe('number');
                     expect(typeof version.performanceDelta.costChange).toBe('number');
                     expect(typeof version.performanceDelta.latencyChange).toBe('number');
-                    expect(version.performanceDelta.comparedToVersion).toBe(version.parentVersionHash);
+                    expect(version.performanceDelta.comparedToVersion).toBe(
+                      version.parentVersionHash
+                    );
                   }
                 }
               }
@@ -125,11 +128,10 @@ describe('Property 37: Version History Data Completeness', () => {
 
             // Verify all created versions are in the history
             expect(history.length).toBe(versions.length);
-            const historyHashes = history.map(v => v.versionHash);
+            const historyHashes = history.map((v) => v.versionHash);
             for (const hash of createdVersions) {
               expect(historyHashes).toContain(hash);
             }
-
           } finally {
             // Clean up test data
             for (const hash of createdVersions) {
@@ -148,13 +150,13 @@ describe('Property 37: Version History Data Completeness', () => {
    */
   it('should reject versions with empty changelogs', async () => {
     const nodeId = 'test-node-empty-changelog';
-    
+
     await expect(async () => {
       await createVersion(
         nodeId,
         'Test prompt text',
         'system',
-        '', // Empty changelog
+        '' // Empty changelog
       );
     }).rejects.toThrow();
   });
@@ -166,7 +168,7 @@ describe('Property 37: Version History Data Completeness', () => {
     await fc.assert(
       fc.asyncProperty(
         fc.record({
-          nodeId: fc.string({ minLength: 5, maxLength: 20 }).map(s => `test-node-persist-${s}`),
+          nodeId: fc.string({ minLength: 5, maxLength: 20 }).map((s) => `test-node-persist-${s}`),
           promptText: fc.string({ minLength: 10, maxLength: 200 }),
           changelog: fc.string({ minLength: 5, maxLength: 100 }),
           createdBy: fc.constantFrom('system', 'user', 'evolution-engine'),
@@ -196,7 +198,6 @@ describe('Property 37: Version History Data Completeness', () => {
             expect(retrieved!.changelog).toBe(changelog);
             expect(retrieved!.branchName).toBe(branchName);
             expect(retrieved!.isActive).toBe(false);
-
           } finally {
             // Clean up
             await prisma.$executeRaw`DELETE FROM prompt_versions WHERE node_id = ${nodeId}`;

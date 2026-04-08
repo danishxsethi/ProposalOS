@@ -1,32 +1,33 @@
 /**
  * Pipeline Orchestrator
- * 
+ *
  * Central controller managing prospect state transitions, batch processing,
  * concurrency limiting, tenant spending limit checks, and stage execution.
- * 
+ *
  * Requirements: 2.5, 9.5, 11.3, 11.4
  */
 
-import { prisma } from '@/lib/prisma';
-import { transition } from './stateMachine';
 import { FEATURE_FLAGS } from '@/lib/config/feature-flags';
+import { prisma } from '@/lib/prisma';
+
+import { transition } from './stateMachine';
 import {
+  type PipelineConfig,
+  type PipelineMetrics,
   PipelineStage,
   type ProspectStatus,
   type StageResult,
-  type PipelineConfig,
-  type PipelineMetrics,
 } from './types';
 
 /**
  * Process a batch of prospects for a given pipeline stage
- * 
+ *
  * Enforces:
  * - Concurrency limits via Promise pool pattern
  * - Tenant spending limits before each batch
  * - Paused stage checks
  * - FIFO queue ordering
- * 
+ *
  * @param stage - Pipeline stage to process
  * @param tenantId - Tenant ID
  * @param batchSize - Number of prospects to process
@@ -82,9 +83,9 @@ export async function processStage(
 
 /**
  * Transition a prospect to a new status
- * 
+ *
  * Delegates to the state machine for validation and persistence.
- * 
+ *
  * @param prospectId - ID of the prospect
  * @param toStatus - Target status
  */
@@ -101,7 +102,7 @@ export async function transitionProspect(
 
 /**
  * Get pipeline metrics for a tenant
- * 
+ *
  * @param tenantId - Tenant ID
  * @returns Pipeline metrics
  */
@@ -208,14 +209,11 @@ export async function getMetrics(tenantId: string): Promise<PipelineMetrics> {
 
 /**
  * Pause a pipeline stage for a tenant
- * 
+ *
  * @param stage - Pipeline stage to pause
  * @param tenantId - Tenant ID
  */
-export async function pauseStage(
-  stage: PipelineStage,
-  tenantId: string
-): Promise<void> {
+export async function pauseStage(stage: PipelineStage, tenantId: string): Promise<void> {
   const config = await prisma.pipelineConfig.findUnique({
     where: { tenantId },
   });
@@ -238,14 +236,11 @@ export async function pauseStage(
 
 /**
  * Resume a pipeline stage for a tenant
- * 
+ *
  * @param stage - Pipeline stage to resume
  * @param tenantId - Tenant ID
  */
-export async function resumeStage(
-  stage: PipelineStage,
-  tenantId: string
-): Promise<void> {
+export async function resumeStage(stage: PipelineStage, tenantId: string): Promise<void> {
   const config = await prisma.pipelineConfig.findUnique({
     where: { tenantId },
   });
@@ -255,7 +250,7 @@ export async function resumeStage(
   }
 
   const pausedStages = (config.pausedStages as string[]) || [];
-  const filteredStages = pausedStages.filter(s => s !== stage);
+  const filteredStages = pausedStages.filter((s) => s !== stage);
 
   await prisma.pipelineConfig.update({
     where: { tenantId },
@@ -270,7 +265,9 @@ export async function resumeStage(
 /**
  * Get pipeline config for a tenant, creating default if not exists
  */
-async function getPipelineConfig(tenantId: string): Promise<PipelineConfig & { pausedStages: string[] }> {
+async function getPipelineConfig(
+  tenantId: string
+): Promise<PipelineConfig & { pausedStages: string[] }> {
   let config = await prisma.pipelineConfig.findUnique({
     where: { tenantId },
   });
@@ -297,10 +294,7 @@ async function getPipelineConfig(tenantId: string): Promise<PipelineConfig & { p
 /**
  * Check if tenant has exceeded spending limit for current billing cycle
  */
-async function checkSpendingLimit(
-  tenantId: string,
-  limitCents: number
-): Promise<boolean> {
+async function checkSpendingLimit(tenantId: string, limitCents: number): Promise<boolean> {
   // Get current billing cycle start (first day of current month)
   const now = new Date();
   const cycleStart = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -314,11 +308,7 @@ async function checkSpendingLimit(
 /**
  * Calculate total cost for a tenant in a given period
  */
-async function calculateTotalCost(
-  tenantId: string,
-  start: Date,
-  end: Date
-): Promise<number> {
+async function calculateTotalCost(tenantId: string, start: Date, end: Date): Promise<number> {
   // Sum estimatedCostCents from ProspectLead
   const prospectCosts = await prisma.prospectLead.aggregate({
     where: {
@@ -417,7 +407,7 @@ function getStageForStatus(status: ProspectStatus): PipelineStage {
 
 /**
  * Process a single prospect for a given stage
- * 
+ *
  * This is a placeholder that will be implemented by stage-specific handlers
  */
 async function processProspect(
@@ -442,9 +432,9 @@ async function processProspect(
 
 /**
  * Process items with concurrency limit using Promise pool pattern
- * 
+ *
  * Ensures that no more than `limit` promises are executing concurrently.
- * 
+ *
  * @param items - Array of items to process
  * @param limit - Maximum number of concurrent operations
  * @param processor - Async function to process each item
@@ -461,10 +451,10 @@ async function processWithConcurrencyLimit<T, R>(
   for (const item of items) {
     // Create a promise for this item
     const promise = processor(item)
-      .then(result => {
+      .then((result) => {
         results.push(result);
       })
-      .catch(error => {
+      .catch((error) => {
         // Log error but don't fail the entire batch
         console.error('Error processing item:', error);
       })

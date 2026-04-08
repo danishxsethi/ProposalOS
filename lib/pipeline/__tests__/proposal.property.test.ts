@@ -7,9 +7,10 @@
  * Feature: autonomous-proposal-engine
  */
 
-import { describe, it, expect } from 'vitest';
-import * as fc from 'fast-check';
 import crypto from 'crypto';
+
+import * as fc from 'fast-check';
+import { describe, expect, it } from 'vitest';
 
 // ============================================================================
 // Pure logic under test (no mocks needed — these test the invariants directly)
@@ -196,34 +197,28 @@ describe('Proposal Generation Property Tests', () => {
   describe('Property 12: Proposal web link tokens are unique', () => {
     it('all generated web link tokens are unique across N proposals', () => {
       fc.assert(
-        fc.property(
-          fc.integer({ min: 2, max: 50 }),
-          (count) => {
-            const tokens = Array.from({ length: count }, () => crypto.randomUUID());
-            const uniqueTokens = new Set(tokens);
+        fc.property(fc.integer({ min: 2, max: 50 }), (count) => {
+          const tokens = Array.from({ length: count }, () => crypto.randomUUID());
+          const uniqueTokens = new Set(tokens);
 
-            // Every token must be distinct
-            expect(uniqueTokens.size).toBe(tokens.length);
-          }
-        ),
+          // Every token must be distinct
+          expect(uniqueTokens.size).toBe(tokens.length);
+        }),
         { numRuns: 100 }
       );
     });
 
     it('web link tokens are valid UUID v4 format', () => {
       fc.assert(
-        fc.property(
-          fc.integer({ min: 1, max: 20 }),
-          (count) => {
-            const uuidRegex =
-              /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+        fc.property(fc.integer({ min: 1, max: 20 }), (count) => {
+          const uuidRegex =
+            /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-            for (let i = 0; i < count; i++) {
-              const token = crypto.randomUUID();
-              expect(token).toMatch(uuidRegex);
-            }
+          for (let i = 0; i < count; i++) {
+            const token = crypto.randomUUID();
+            expect(token).toMatch(uuidRegex);
           }
-        ),
+        }),
         { numRuns: 100 }
       );
     });

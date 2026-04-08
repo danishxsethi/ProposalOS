@@ -4,13 +4,9 @@
  */
 
 import { createHash } from 'crypto';
-import { executeQuery, executeCommand } from '../db';
-import {
-  PromptVersion,
-  PromptVersionRow,
-  PerformanceDelta,
-  VersionComparison,
-} from '../types';
+
+import { executeCommand, executeQuery } from '../db';
+import { PerformanceDelta, PromptVersion, PromptVersionRow, VersionComparison } from '../types';
 import { getAggregateMetrics } from './prompt-performance';
 
 /**
@@ -77,9 +73,7 @@ export async function createVersion(
 /**
  * Get version by hash
  */
-export async function getVersionByHash(
-  versionHash: string
-): Promise<PromptVersion | null> {
+export async function getVersionByHash(versionHash: string): Promise<PromptVersion | null> {
   const query = `
     SELECT * FROM prompt_versions
     WHERE version_hash = $1
@@ -117,9 +111,7 @@ export async function getVersionHistory(
 /**
  * Get active version for a node
  */
-export async function getActiveVersion(
-  nodeId: string
-): Promise<PromptVersion | null> {
+export async function getActiveVersion(nodeId: string): Promise<PromptVersion | null> {
   const query = `
     SELECT * FROM prompt_versions
     WHERE node_id = $1 AND is_active = TRUE
@@ -134,9 +126,7 @@ export async function getActiveVersion(
  * Set a version as active (deactivates all other versions for the node)
  * Validates: Requirements 4.4
  */
-export async function setActiveVersion(
-  versionHash: string
-): Promise<void> {
+export async function setActiveVersion(versionHash: string): Promise<void> {
   // First, get the node_id for this version
   const version = await getVersionByHash(versionHash);
   if (!version) {
@@ -144,25 +134,21 @@ export async function setActiveVersion(
   }
 
   // Deactivate all versions for this node
-  await executeCommand(
-    `UPDATE prompt_versions SET is_active = FALSE WHERE node_id = $1`,
-    [version.nodeId]
-  );
+  await executeCommand(`UPDATE prompt_versions SET is_active = FALSE WHERE node_id = $1`, [
+    version.nodeId,
+  ]);
 
   // Activate the target version
-  await executeCommand(
-    `UPDATE prompt_versions SET is_active = TRUE WHERE version_hash = $1`,
-    [versionHash]
-  );
+  await executeCommand(`UPDATE prompt_versions SET is_active = TRUE WHERE version_hash = $1`, [
+    versionHash,
+  ]);
 }
 
 /**
  * Rollback to a previous version
  * Validates: Requirements 4.4
  */
-export async function rollbackToVersion(
-  versionHash: string
-): Promise<PromptVersion> {
+export async function rollbackToVersion(versionHash: string): Promise<PromptVersion> {
   await setActiveVersion(versionHash);
   const version = await getVersionByHash(versionHash);
   if (!version) {
@@ -199,10 +185,7 @@ export async function createBranch(
  * Compare two versions and calculate performance delta
  * Validates: Requirements 4.6
  */
-export async function compareVersions(
-  hash1: string,
-  hash2: string
-): Promise<VersionComparison> {
+export async function compareVersions(hash1: string, hash2: string): Promise<VersionComparison> {
   const [version1, version2] = await Promise.all([
     getVersionByHash(hash1),
     getVersionByHash(hash2),
@@ -240,9 +223,7 @@ export async function compareVersions(
  * Get all versions with their performance deltas
  * Validates: Requirements 4.3
  */
-export async function getVersionHistoryWithDeltas(
-  nodeId: string
-): Promise<PromptVersion[]> {
+export async function getVersionHistoryWithDeltas(nodeId: string): Promise<PromptVersion[]> {
   const versions = await getVersionHistory(nodeId);
 
   // Calculate performance deltas for each version compared to its parent

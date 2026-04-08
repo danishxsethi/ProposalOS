@@ -3,6 +3,7 @@
 ## What I've Done
 
 ### 1. ✅ Database Migrations
+
 ```bash
 npx prisma generate  # ✅ Complete
 npx prisma migrate dev --name autonomous-pipeline-complete  # ✅ Already in sync
@@ -11,7 +12,9 @@ npx prisma migrate dev --name autonomous-pipeline-complete  # ✅ Already in syn
 **Status:** Database is ready! All pipeline models are in place.
 
 ### 2. ✅ Environment Variables
+
 Added to `.env.local`:
+
 - ✅ `CRON_SECRET` - For authenticating cron jobs
 - ✅ `GOOGLE_MAPS_API_KEY` - Reusing existing GOOGLE_PLACES_API_KEY
 - ⚠️ External API keys (placeholders added - see below)
@@ -19,7 +22,9 @@ Added to `.env.local`:
 **Status:** Core variables set. External API keys need your accounts.
 
 ### 3. ✅ Cron Job Configuration
+
 Created:
+
 - ✅ `cron.yaml` - Cron job definitions
 - ✅ `scripts/setup-cron-jobs.sh` - Automated setup script
 
@@ -42,6 +47,7 @@ gcloud run services describe proposal-engine \
 ### Step 2: Update the Setup Script
 
 Edit `scripts/setup-cron-jobs.sh` and replace this line:
+
 ```bash
 SERVICE_URL="https://proposal-engine-${PROJECT_ID}.run.app"
 ```
@@ -59,6 +65,7 @@ gcloud auth login
 ```
 
 This will create 6 Cloud Scheduler jobs:
+
 1. `pipeline-discovery` - Every 6 hours
 2. `pipeline-audit` - Every 2 hours
 3. `pipeline-outreach` - Every hour
@@ -115,6 +122,7 @@ I've added placeholders for these API keys in `.env.local`. You'll need to sign 
      ```
 
 ### Already Configured:
+
 - ✅ Google Places API (for discovery)
 - ✅ Google PageSpeed API (for audits)
 - ✅ Resend API (for emails)
@@ -131,8 +139,10 @@ npm run dev
 
 # In another terminal, test a cron endpoint
 curl -X POST http://localhost:3000/api/cron/discovery \
-  -H "Authorization: Bearer autonomous_pipeline_cron_secret_080b7c4aa772ea425ab408539a0db333"
+  -H "Authorization: Bearer YOUR_CRON_SECRET_HERE"
 ```
+
+> **SECURITY NOTE:** Replace `YOUR_CRON_SECRET_HERE` with your actual CRON_SECRET value from `.env.local`. Never commit real secrets to version control.
 
 ### Test on GCP
 
@@ -183,19 +193,23 @@ gcloud logging read "resource.type=cloud_run_revision AND textPayload=~'pipeline
 ## 🎯 What's Working Now
 
 ### ✅ Ready to Use
+
 - Database with all pipeline models
 - Environment variables configured
 - Cron job definitions created
 - Setup script ready to deploy
 
 ### ⚠️ Needs Your Action
+
 1. Get Cloud Run URL
 2. Update setup script with URL
 3. Run `./scripts/setup-cron-jobs.sh`
 4. Add external API keys (when ready to use those features)
 
 ### 🚀 After Setup
+
 Once cron jobs are deployed:
+
 - Pipeline will discover prospects every 6 hours
 - Audits will run every 2 hours
 - Outreach will send every hour
@@ -206,11 +220,13 @@ Once cron jobs are deployed:
 ## 📁 Files Created/Modified
 
 ### Created:
+
 - ✅ `cron.yaml` - Cron job definitions
 - ✅ `scripts/setup-cron-jobs.sh` - Automated setup script
 - ✅ `GCP_SETUP_COMPLETE.md` - This file
 
 ### Modified:
+
 - ✅ `.env.local` - Added pipeline environment variables
 
 ---
@@ -219,7 +235,7 @@ Once cron jobs are deployed:
 
 **Database:** ✅ Ready  
 **Environment Variables:** ✅ Core variables set  
-**Cron Jobs:** ✅ Ready to deploy  
+**Cron Jobs:** ✅ Ready to deploy
 
 **Next:** Run `./scripts/setup-cron-jobs.sh` to deploy cron jobs!
 
@@ -228,6 +244,7 @@ Once cron jobs are deployed:
 ## 💡 Pro Tips
 
 1. **Start with one cron job** to test:
+
    ```bash
    # Just create the discovery job first
    gcloud scheduler jobs create http pipeline-discovery \
@@ -235,13 +252,14 @@ Once cron jobs are deployed:
      --schedule="0 */6 * * *" \
      --uri="YOUR_CLOUD_RUN_URL/api/cron/discovery" \
      --http-method=POST \
-     --headers="Authorization=Bearer autonomous_pipeline_cron_secret_080b7c4aa772ea425ab408539a0db333"
+     --headers="Authorization=Bearer YOUR_CRON_SECRET_HERE"
    ```
 
 2. **Test manually before scheduling:**
+
    ```bash
    curl -X POST YOUR_CLOUD_RUN_URL/api/cron/discovery \
-     -H "Authorization: Bearer autonomous_pipeline_cron_secret_080b7c4aa772ea425ab408539a0db333"
+     -H "Authorization: Bearer YOUR_CRON_SECRET_HERE"
    ```
 
 3. **Monitor costs:**

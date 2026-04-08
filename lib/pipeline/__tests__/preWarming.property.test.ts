@@ -1,22 +1,25 @@
 /**
  * Property-Based Tests for Pre-Warming Engine
- * 
+ *
  * Tests Properties 33-34 from the design document using fast-check.
  * Minimum 100 iterations per property.
- * 
+ *
  * Feature: autonomous-proposal-engine
  */
 
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fc from 'fast-check';
-import {
-  scheduleActions,
-  executeAction,
-  checkWindowComplete,
-  getDailyActionCount,
-} from '../preWarming';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { prisma } from '@/lib/prisma';
-import type { PreWarmingConfig, PreWarmingAction } from '../types';
+
+import {
+  checkWindowComplete,
+  executeAction,
+  getDailyActionCount,
+  scheduleActions,
+} from '../preWarming';
+
+import type { PreWarmingAction, PreWarmingConfig } from '../types';
 
 // ============================================================================
 // Test Data Generators
@@ -54,7 +57,7 @@ const platformArb = fc.constantFrom('gbp', 'facebook', 'instagram');
  * Generate a date within a specific range
  */
 const dateInRangeArb = (start: Date, end: Date) =>
-  fc.integer({ min: start.getTime(), max: end.getTime() }).map(ts => new Date(ts));
+  fc.integer({ min: start.getTime(), max: end.getTime() }).map((ts) => new Date(ts));
 
 // ============================================================================
 // Database Setup and Teardown
@@ -106,11 +109,11 @@ afterEach(async () => {
 describe('Pre-Warming Engine Property Tests', () => {
   /**
    * Property 33: Pre-warming actions respect platform daily limits
-   * 
+   *
    * For any platform (GBP, Facebook, Instagram) on any calendar day, the total
    * number of pre-warming actions executed must not exceed the configured daily
    * limit for that platform.
-   * 
+   *
    * **Validates: Requirements 13.4**
    */
   describe('Property 33: Pre-warming actions respect platform daily limits', () => {
@@ -196,7 +199,9 @@ describe('Pre-Warming Engine Property Tests', () => {
       await fc.assert(
         fc.asyncProperty(
           platformArb,
-          fc.date({ min: new Date('2024-01-01'), max: new Date('2024-12-31') }).filter(d => !isNaN(d.getTime())),
+          fc
+            .date({ min: new Date('2024-01-01'), max: new Date('2024-12-31') })
+            .filter((d) => !isNaN(d.getTime())),
           fc.integer({ min: 0, max: 20 }),
           async (platform, targetDate, expectedCount) => {
             const tenantId = `tenant-${Date.now()}-${Math.random()}`;
@@ -240,7 +245,7 @@ describe('Pre-Warming Engine Property Tests', () => {
               // Random time within the target date
               const scheduledAt = new Date(
                 targetDateStart.getTime() +
-                Math.random() * (targetDateEnd.getTime() - targetDateStart.getTime())
+                  Math.random() * (targetDateEnd.getTime() - targetDateStart.getTime())
               );
 
               await prisma.preWarmingAction.create({
@@ -273,72 +278,68 @@ describe('Pre-Warming Engine Property Tests', () => {
 
     it('daily limits are enforced per platform independently', async () => {
       await fc.assert(
-        fc.asyncProperty(
-          preWarmingConfigArb,
-          futureDateArb,
-          async (config, outreachDate) => {
-            const tenantId = `tenant-${Date.now()}-${Math.random()}`;
-            createdTenantIds.push(tenantId);
-            createdTenantIds.push(tenantId);
+        fc.asyncProperty(preWarmingConfigArb, futureDateArb, async (config, outreachDate) => {
+          const tenantId = `tenant-${Date.now()}-${Math.random()}`;
+          createdTenantIds.push(tenantId);
+          createdTenantIds.push(tenantId);
 
-            // Create tenant
-            await prisma.tenant.create({
-              data: {
-                id: tenantId,
-                name: 'Test Tenant',
-              },
-            });
+          // Create tenant
+          await prisma.tenant.create({
+            data: {
+              id: tenantId,
+              name: 'Test Tenant',
+            },
+          });
 
-            // Create a lead with all platforms available
-            const leadId = `lead-${tenantId}`;
-            createdLeadIds.push(leadId);
-            createdLeadIds.push(leadId);
-            await prisma.prospectLead.create({
-              data: {
-                id: leadId,
-                tenantId,
-                businessName: 'Test Business',
-                source: 'test',
-                sourceExternalId: 'test-123',
-                city: 'Test City',
-                vertical: 'dentist',
-                painScore: 75,
-                status: 'QUALIFIED',
-              },
-            });
+          // Create a lead with all platforms available
+          const leadId = `lead-${tenantId}`;
+          createdLeadIds.push(leadId);
+          createdLeadIds.push(leadId);
+          await prisma.prospectLead.create({
+            data: {
+              id: leadId,
+              tenantId,
+              businessName: 'Test Business',
+              source: 'test',
+              sourceExternalId: 'test-123',
+              city: 'Test City',
+              vertical: 'dentist',
+              painScore: 75,
+              status: 'QUALIFIED',
+            },
+          });
 
-            // Schedule actions multiple times to test limits
-            for (let i = 0; i < 5; i++) {
-              await scheduleActions(leadId, outreachDate, config);
-            }
-
-            // Check that each platform's limit is respected independently
-            const windowStart = new Date(outreachDate);
-            windowStart.setDate(windowStart.getDate() - config.windowDays.max);
-
-            const windowEnd = new Date(outreachDate);
-            windowEnd.setDate(windowEnd.getDate() - config.windowDays.min);
-
-            const currentDate = new Date(windowStart);
-            while (currentDate <= windowEnd) {
-              const gbpCount = await getDailyActionCount('gbp', currentDate);
-              const fbCount = await getDailyActionCount('facebook', currentDate);
-              const igCount = await getDailyActionCount('instagram', currentDate);
-
-              // Each platform should respect its own limit
-              expect(gbpCount).toBeLessThanOrEqual(config.dailyLimits.gbp);
-              expect(fbCount).toBeLessThanOrEqual(config.dailyLimits.facebook);
-              expect(igCount).toBeLessThanOrEqual(config.dailyLimits.instagram);
-
-              currentDate.setDate(currentDate.getDate() + 1);
-            }
-
-            // Cleanup
-            await prisma.preWarmingAction.deleteMany({ where: { tenantId } });
-            await prisma.prospectLead.deleteMany({ where: { tenantId } });
-            await prisma.tenant.delete({ where: { id: tenantId } });
+          // Schedule actions multiple times to test limits
+          for (let i = 0; i < 5; i++) {
+            await scheduleActions(leadId, outreachDate, config);
           }
-        ),
+
+          // Check that each platform's limit is respected independently
+          const windowStart = new Date(outreachDate);
+          windowStart.setDate(windowStart.getDate() - config.windowDays.max);
+
+          const windowEnd = new Date(outreachDate);
+          windowEnd.setDate(windowEnd.getDate() - config.windowDays.min);
+
+          const currentDate = new Date(windowStart);
+          while (currentDate <= windowEnd) {
+            const gbpCount = await getDailyActionCount('gbp', currentDate);
+            const fbCount = await getDailyActionCount('facebook', currentDate);
+            const igCount = await getDailyActionCount('instagram', currentDate);
+
+            // Each platform should respect its own limit
+            expect(gbpCount).toBeLessThanOrEqual(config.dailyLimits.gbp);
+            expect(fbCount).toBeLessThanOrEqual(config.dailyLimits.facebook);
+            expect(igCount).toBeLessThanOrEqual(config.dailyLimits.instagram);
+
+            currentDate.setDate(currentDate.getDate() + 1);
+          }
+
+          // Cleanup
+          await prisma.preWarmingAction.deleteMany({ where: { tenantId } });
+          await prisma.prospectLead.deleteMany({ where: { tenantId } });
+          await prisma.tenant.delete({ where: { id: tenantId } });
+        }),
         { numRuns: 100 }
       );
     });
@@ -440,341 +441,319 @@ describe('Pre-Warming Engine Property Tests', () => {
 
   /**
    * Property 34: Pre-warming window completes before outreach
-   * 
+   *
    * For any prospect with scheduled pre-warming actions, the outreach email must
    * not be sent until either all pre-warming actions are completed or the
    * pre-warming window has expired.
-   * 
+   *
    * **Validates: Requirements 13.3**
    */
   describe('Property 34: Pre-warming window completes before outreach', () => {
     it('checkWindowComplete returns false when actions are pending', async () => {
       await fc.assert(
-        fc.asyncProperty(
-          preWarmingConfigArb,
-          futureDateArb,
-          async (config, outreachDate) => {
-            const tenantId = `tenant-${Date.now()}-${Math.random()}`;
-            createdTenantIds.push(tenantId);
+        fc.asyncProperty(preWarmingConfigArb, futureDateArb, async (config, outreachDate) => {
+          const tenantId = `tenant-${Date.now()}-${Math.random()}`;
+          createdTenantIds.push(tenantId);
 
-            // Create tenant
-            await prisma.tenant.create({
-              data: {
-                id: tenantId,
-                name: 'Test Tenant',
-              },
-            });
+          // Create tenant
+          await prisma.tenant.create({
+            data: {
+              id: tenantId,
+              name: 'Test Tenant',
+            },
+          });
 
-            // Create a lead
-            const leadId = `lead-${tenantId}`;
-            createdLeadIds.push(leadId);
-            await prisma.prospectLead.create({
-              data: {
-                id: leadId,
-                tenantId,
-                businessName: 'Test Business',
-                source: 'test',
-                sourceExternalId: 'test-123',
-                city: 'Test City',
-                vertical: 'dentist',
-                painScore: 75,
-                status: 'QUALIFIED',
-              },
-            });
+          // Create a lead
+          const leadId = `lead-${tenantId}`;
+          createdLeadIds.push(leadId);
+          await prisma.prospectLead.create({
+            data: {
+              id: leadId,
+              tenantId,
+              businessName: 'Test Business',
+              source: 'test',
+              sourceExternalId: 'test-123',
+              city: 'Test City',
+              vertical: 'dentist',
+              painScore: 75,
+              status: 'QUALIFIED',
+            },
+          });
 
-            // Schedule actions
-            const actions = await scheduleActions(leadId, outreachDate, config);
+          // Schedule actions
+          const actions = await scheduleActions(leadId, outreachDate, config);
 
-            // If actions were scheduled, window should not be complete
-            if (actions.length > 0) {
-              const isComplete = await checkWindowComplete(leadId);
-              expect(isComplete).toBe(false);
-            }
-
-            // Cleanup
-            await prisma.preWarmingAction.deleteMany({ where: { tenantId } });
-            await prisma.prospectLead.deleteMany({ where: { tenantId } });
-            await prisma.tenant.delete({ where: { id: tenantId } });
+          // If actions were scheduled, window should not be complete
+          if (actions.length > 0) {
+            const isComplete = await checkWindowComplete(leadId);
+            expect(isComplete).toBe(false);
           }
-        ),
+
+          // Cleanup
+          await prisma.preWarmingAction.deleteMany({ where: { tenantId } });
+          await prisma.prospectLead.deleteMany({ where: { tenantId } });
+          await prisma.tenant.delete({ where: { id: tenantId } });
+        }),
         { numRuns: 100 }
       );
     });
 
     it('checkWindowComplete returns true when all actions are completed', async () => {
       await fc.assert(
-        fc.asyncProperty(
-          preWarmingConfigArb,
-          futureDateArb,
-          async (config, outreachDate) => {
-            const tenantId = `tenant-${Date.now()}-${Math.random()}`;
-            createdTenantIds.push(tenantId);
+        fc.asyncProperty(preWarmingConfigArb, futureDateArb, async (config, outreachDate) => {
+          const tenantId = `tenant-${Date.now()}-${Math.random()}`;
+          createdTenantIds.push(tenantId);
 
-            // Create tenant
-            await prisma.tenant.create({
-              data: {
-                id: tenantId,
-                name: 'Test Tenant',
-              },
-            });
+          // Create tenant
+          await prisma.tenant.create({
+            data: {
+              id: tenantId,
+              name: 'Test Tenant',
+            },
+          });
 
-            // Create a lead
-            const leadId = `lead-${tenantId}`;
-            createdLeadIds.push(leadId);
-            await prisma.prospectLead.create({
-              data: {
-                id: leadId,
-                tenantId,
-                businessName: 'Test Business',
-                source: 'test',
-                sourceExternalId: 'test-123',
-                city: 'Test City',
-                vertical: 'dentist',
-                painScore: 75,
-                status: 'QUALIFIED',
-              },
-            });
+          // Create a lead
+          const leadId = `lead-${tenantId}`;
+          createdLeadIds.push(leadId);
+          await prisma.prospectLead.create({
+            data: {
+              id: leadId,
+              tenantId,
+              businessName: 'Test Business',
+              source: 'test',
+              sourceExternalId: 'test-123',
+              city: 'Test City',
+              vertical: 'dentist',
+              painScore: 75,
+              status: 'QUALIFIED',
+            },
+          });
 
-            // Schedule actions
-            const actions = await scheduleActions(leadId, outreachDate, config);
+          // Schedule actions
+          const actions = await scheduleActions(leadId, outreachDate, config);
 
-            // Execute all actions
-            for (const action of actions) {
-              await executeAction(action);
-            }
-
-            // Window should now be complete
-            const isComplete = await checkWindowComplete(leadId);
-            expect(isComplete).toBe(true);
-
-            // Cleanup
-            await prisma.preWarmingAction.deleteMany({ where: { tenantId } });
-            await prisma.prospectLead.deleteMany({ where: { tenantId } });
-            await prisma.tenant.delete({ where: { id: tenantId } });
+          // Execute all actions
+          for (const action of actions) {
+            await executeAction(action);
           }
-        ),
+
+          // Window should now be complete
+          const isComplete = await checkWindowComplete(leadId);
+          expect(isComplete).toBe(true);
+
+          // Cleanup
+          await prisma.preWarmingAction.deleteMany({ where: { tenantId } });
+          await prisma.prospectLead.deleteMany({ where: { tenantId } });
+          await prisma.tenant.delete({ where: { id: tenantId } });
+        }),
         { numRuns: 100 }
       );
     });
 
     it('checkWindowComplete returns true when no actions are scheduled', async () => {
       await fc.assert(
-        fc.asyncProperty(
-          fc.uuid(),
-          async (leadId) => {
-            const tenantId = `tenant-${Date.now()}-${Math.random()}`;
-            createdTenantIds.push(tenantId);
+        fc.asyncProperty(fc.uuid(), async (leadId) => {
+          const tenantId = `tenant-${Date.now()}-${Math.random()}`;
+          createdTenantIds.push(tenantId);
 
-            // Create tenant
-            await prisma.tenant.create({
-              data: {
-                id: tenantId,
-                name: 'Test Tenant',
-              },
-            });
+          // Create tenant
+          await prisma.tenant.create({
+            data: {
+              id: tenantId,
+              name: 'Test Tenant',
+            },
+          });
 
-            // Create a lead with no platform URLs (no actions will be scheduled)
-            await prisma.prospectLead.create({
-              data: {
-                id: leadId,
-                tenantId,
-                businessName: 'Test Business',
-                source: 'test',
-                sourceExternalId: 'test-123',
-                city: 'Test City',
-                vertical: 'dentist',
-                painScore: 75,
-                status: 'QUALIFIED',
-              },
-            });
+          // Create a lead with no platform URLs (no actions will be scheduled)
+          await prisma.prospectLead.create({
+            data: {
+              id: leadId,
+              tenantId,
+              businessName: 'Test Business',
+              source: 'test',
+              sourceExternalId: 'test-123',
+              city: 'Test City',
+              vertical: 'dentist',
+              painScore: 75,
+              status: 'QUALIFIED',
+            },
+          });
 
-            // Window should be complete (no actions to wait for)
-            const isComplete = await checkWindowComplete(leadId);
-            expect(isComplete).toBe(true);
+          // Window should be complete (no actions to wait for)
+          const isComplete = await checkWindowComplete(leadId);
+          expect(isComplete).toBe(true);
 
-            // Cleanup
-            await prisma.prospectLead.deleteMany({ where: { tenantId } });
-            await prisma.tenant.delete({ where: { id: tenantId } });
-          }
-        ),
+          // Cleanup
+          await prisma.prospectLead.deleteMany({ where: { tenantId } });
+          await prisma.tenant.delete({ where: { id: tenantId } });
+        }),
         { numRuns: 100 }
       );
     });
 
     it('checkWindowComplete returns true when actions are failed or skipped', async () => {
       await fc.assert(
-        fc.asyncProperty(
-          preWarmingConfigArb,
-          futureDateArb,
-          async (config, outreachDate) => {
-            const tenantId = `tenant-${Date.now()}-${Math.random()}`;
-            createdTenantIds.push(tenantId);
+        fc.asyncProperty(preWarmingConfigArb, futureDateArb, async (config, outreachDate) => {
+          const tenantId = `tenant-${Date.now()}-${Math.random()}`;
+          createdTenantIds.push(tenantId);
 
-            // Create tenant
-            await prisma.tenant.create({
-              data: {
-                id: tenantId,
-                name: 'Test Tenant',
-              },
+          // Create tenant
+          await prisma.tenant.create({
+            data: {
+              id: tenantId,
+              name: 'Test Tenant',
+            },
+          });
+
+          // Create a lead
+          const leadId = `lead-${tenantId}`;
+          createdLeadIds.push(leadId);
+          await prisma.prospectLead.create({
+            data: {
+              id: leadId,
+              tenantId,
+              businessName: 'Test Business',
+              source: 'test',
+              sourceExternalId: 'test-123',
+              city: 'Test City',
+              vertical: 'dentist',
+              painScore: 75,
+              status: 'QUALIFIED',
+            },
+          });
+
+          // Schedule actions
+          const actions = await scheduleActions(leadId, outreachDate, config);
+
+          // Mark all actions as failed or skipped
+          for (const action of actions) {
+            const status = Math.random() > 0.5 ? 'failed' : 'skipped';
+            await prisma.preWarmingAction.update({
+              where: { id: action.id },
+              data: { status },
             });
-
-            // Create a lead
-            const leadId = `lead-${tenantId}`;
-            createdLeadIds.push(leadId);
-            await prisma.prospectLead.create({
-              data: {
-                id: leadId,
-                tenantId,
-                businessName: 'Test Business',
-                source: 'test',
-                sourceExternalId: 'test-123',
-                city: 'Test City',
-                vertical: 'dentist',
-                painScore: 75,
-                status: 'QUALIFIED',
-              },
-            });
-
-            // Schedule actions
-            const actions = await scheduleActions(leadId, outreachDate, config);
-
-            // Mark all actions as failed or skipped
-            for (const action of actions) {
-              const status = Math.random() > 0.5 ? 'failed' : 'skipped';
-              await prisma.preWarmingAction.update({
-                where: { id: action.id },
-                data: { status },
-              });
-            }
-
-            // Window should be complete (all actions in terminal state)
-            const isComplete = await checkWindowComplete(leadId);
-            expect(isComplete).toBe(true);
-
-            // Cleanup
-            await prisma.preWarmingAction.deleteMany({ where: { tenantId } });
-            await prisma.prospectLead.deleteMany({ where: { tenantId } });
-            await prisma.tenant.delete({ where: { id: tenantId } });
           }
-        ),
+
+          // Window should be complete (all actions in terminal state)
+          const isComplete = await checkWindowComplete(leadId);
+          expect(isComplete).toBe(true);
+
+          // Cleanup
+          await prisma.preWarmingAction.deleteMany({ where: { tenantId } });
+          await prisma.prospectLead.deleteMany({ where: { tenantId } });
+          await prisma.tenant.delete({ where: { id: tenantId } });
+        }),
         { numRuns: 100 }
       );
     });
 
     it('actions are scheduled within the pre-warming window', async () => {
       await fc.assert(
-        fc.asyncProperty(
-          preWarmingConfigArb,
-          futureDateArb,
-          async (config, outreachDate) => {
-            const tenantId = `tenant-${Date.now()}-${Math.random()}`;
-            createdTenantIds.push(tenantId);
+        fc.asyncProperty(preWarmingConfigArb, futureDateArb, async (config, outreachDate) => {
+          const tenantId = `tenant-${Date.now()}-${Math.random()}`;
+          createdTenantIds.push(tenantId);
 
-            // Create tenant
-            await prisma.tenant.create({
-              data: {
-                id: tenantId,
-                name: 'Test Tenant',
-              },
-            });
+          // Create tenant
+          await prisma.tenant.create({
+            data: {
+              id: tenantId,
+              name: 'Test Tenant',
+            },
+          });
 
-            // Create a lead
-            const leadId = `lead-${tenantId}`;
-            createdLeadIds.push(leadId);
-            await prisma.prospectLead.create({
-              data: {
-                id: leadId,
-                tenantId,
-                businessName: 'Test Business',
-                source: 'test',
-                sourceExternalId: 'test-123',
-                city: 'Test City',
-                vertical: 'dentist',
-                painScore: 75,
-                status: 'QUALIFIED',
-              },
-            });
+          // Create a lead
+          const leadId = `lead-${tenantId}`;
+          createdLeadIds.push(leadId);
+          await prisma.prospectLead.create({
+            data: {
+              id: leadId,
+              tenantId,
+              businessName: 'Test Business',
+              source: 'test',
+              sourceExternalId: 'test-123',
+              city: 'Test City',
+              vertical: 'dentist',
+              painScore: 75,
+              status: 'QUALIFIED',
+            },
+          });
 
-            // Schedule actions
-            const actions = await scheduleActions(leadId, outreachDate, config);
+          // Schedule actions
+          const actions = await scheduleActions(leadId, outreachDate, config);
 
-            // Calculate window boundaries
-            const windowStart = new Date(outreachDate);
-            windowStart.setDate(windowStart.getDate() - config.windowDays.max);
+          // Calculate window boundaries
+          const windowStart = new Date(outreachDate);
+          windowStart.setDate(windowStart.getDate() - config.windowDays.max);
 
-            const windowEnd = new Date(outreachDate);
-            windowEnd.setDate(windowEnd.getDate() - config.windowDays.min);
+          const windowEnd = new Date(outreachDate);
+          windowEnd.setDate(windowEnd.getDate() - config.windowDays.min);
 
-            // All actions should be scheduled within the window
-            for (const action of actions) {
-              expect(action.scheduledAt.getTime()).toBeGreaterThanOrEqual(windowStart.getTime());
-              expect(action.scheduledAt.getTime()).toBeLessThanOrEqual(windowEnd.getTime());
-            }
-
-            // Cleanup
-            await prisma.preWarmingAction.deleteMany({ where: { tenantId } });
-            await prisma.prospectLead.deleteMany({ where: { tenantId } });
-            await prisma.tenant.delete({ where: { id: tenantId } });
+          // All actions should be scheduled within the window
+          for (const action of actions) {
+            expect(action.scheduledAt.getTime()).toBeGreaterThanOrEqual(windowStart.getTime());
+            expect(action.scheduledAt.getTime()).toBeLessThanOrEqual(windowEnd.getTime());
           }
-        ),
+
+          // Cleanup
+          await prisma.preWarmingAction.deleteMany({ where: { tenantId } });
+          await prisma.prospectLead.deleteMany({ where: { tenantId } });
+          await prisma.tenant.delete({ where: { id: tenantId } });
+        }),
         { numRuns: 100 }
       );
     });
 
     it('window expires after 24 hours past latest scheduled action', async () => {
       await fc.assert(
-        fc.asyncProperty(
-          fc.uuid(),
-          async (leadId) => {
-            const tenantId = `tenant-${Date.now()}-${Math.random()}`;
-            createdTenantIds.push(tenantId);
+        fc.asyncProperty(fc.uuid(), async (leadId) => {
+          const tenantId = `tenant-${Date.now()}-${Math.random()}`;
+          createdTenantIds.push(tenantId);
 
-            // Create tenant
-            await prisma.tenant.create({
-              data: {
-                id: tenantId,
-                name: 'Test Tenant',
-              },
-            });
+          // Create tenant
+          await prisma.tenant.create({
+            data: {
+              id: tenantId,
+              name: 'Test Tenant',
+            },
+          });
 
-            // Create a lead
-            await prisma.prospectLead.create({
-              data: {
-                id: leadId,
-                tenantId,
-                businessName: 'Test Business',
-                source: 'test',
-                sourceExternalId: 'test-123',
-                city: 'Test City',
-                vertical: 'dentist',
-                painScore: 75,
-                status: 'QUALIFIED',
-              },
-            });
+          // Create a lead
+          await prisma.prospectLead.create({
+            data: {
+              id: leadId,
+              tenantId,
+              businessName: 'Test Business',
+              source: 'test',
+              sourceExternalId: 'test-123',
+              city: 'Test City',
+              vertical: 'dentist',
+              painScore: 75,
+              status: 'QUALIFIED',
+            },
+          });
 
-            // Create an action scheduled more than 24 hours ago
-            const oldDate = new Date(Date.now() - 25 * 60 * 60 * 1000); // 25 hours ago
-            await prisma.preWarmingAction.create({
-              data: {
-                tenantId,
-                leadId,
-                platform: 'gbp',
-                actionType: 'like',
-                scheduledAt: oldDate,
-                status: 'scheduled', // Still pending
-              },
-            });
+          // Create an action scheduled more than 24 hours ago
+          const oldDate = new Date(Date.now() - 25 * 60 * 60 * 1000); // 25 hours ago
+          await prisma.preWarmingAction.create({
+            data: {
+              tenantId,
+              leadId,
+              platform: 'gbp',
+              actionType: 'like',
+              scheduledAt: oldDate,
+              status: 'scheduled', // Still pending
+            },
+          });
 
-            // Window should be considered complete (expired)
-            const isComplete = await checkWindowComplete(leadId);
-            expect(isComplete).toBe(true);
+          // Window should be considered complete (expired)
+          const isComplete = await checkWindowComplete(leadId);
+          expect(isComplete).toBe(true);
 
-            // Cleanup
-            await prisma.preWarmingAction.deleteMany({ where: { tenantId } });
-            await prisma.prospectLead.deleteMany({ where: { tenantId } });
-            await prisma.tenant.delete({ where: { id: tenantId } });
-          }
-        ),
+          // Cleanup
+          await prisma.preWarmingAction.deleteMany({ where: { tenantId } });
+          await prisma.prospectLead.deleteMany({ where: { tenantId } });
+          await prisma.tenant.delete({ where: { id: tenantId } });
+        }),
         { numRuns: 100 }
       );
     });

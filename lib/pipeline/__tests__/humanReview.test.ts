@@ -1,22 +1,24 @@
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+
 import { cleanupDb } from '@/lib/__tests__/utils/cleanup';
 /**
  * Unit Tests for Human Review Queue
- * 
+ *
  * Tests routing logic, approve/reject workflows, and queue filtering/sorting.
- * 
+ *
  * Requirements: 10.3, 10.4, 10.5
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { prisma } from '@/lib/db';
+
 import {
-  routeToReview,
-  getReviewQueue,
   approveProspect,
-  rejectProspect,
   getProspectContext,
+  getReviewQueue,
   getReviewQueueStats,
   overrideProspectStatus,
+  rejectProspect,
+  routeToReview,
 } from '../humanReview';
 
 describe('Human Review Queue', () => {
@@ -26,12 +28,12 @@ describe('Human Review Queue', () => {
   beforeEach(async () => {
     // Clean up test data
     await cleanupDb(prisma);
-});
+  });
 
   afterEach(async () => {
     // Clean up test data
     await cleanupDb(prisma);
-});
+  });
 
   describe('Routing Logic', () => {
     it('should route prospect to review queue', async () => {
@@ -108,7 +110,7 @@ describe('Human Review Queue', () => {
         }),
       ]);
 
-      testProspectIds.push(...prospects.map(p => p.id));
+      testProspectIds.push(...prospects.map((p) => p.id));
 
       const queue = await getReviewQueue(testTenantId);
 
@@ -149,7 +151,7 @@ describe('Human Review Queue', () => {
         }),
       ]);
 
-      testProspectIds.push(...prospects.map(p => p.id));
+      testProspectIds.push(...prospects.map((p) => p.id));
 
       const queue = await getReviewQueue(testTenantId, {
         vertical: ['dental'],
@@ -191,7 +193,7 @@ describe('Human Review Queue', () => {
         }),
       ]);
 
-      testProspectIds.push(...prospects.map(p => p.id));
+      testProspectIds.push(...prospects.map((p) => p.id));
 
       const queue = await getReviewQueue(testTenantId, {
         minEngagementScore: 80,
@@ -222,7 +224,7 @@ describe('Human Review Queue', () => {
         )
       );
 
-      testProspectIds.push(...prospects.map(p => p.id));
+      testProspectIds.push(...prospects.map((p) => p.id));
 
       // Get page 1
       const page1 = await getReviewQueue(testTenantId, {

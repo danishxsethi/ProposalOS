@@ -1,14 +1,16 @@
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+
 import { cleanupDb } from '@/lib/__tests__/utils/cleanup';
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import {
-  onboardPartner,
-  matchLeadsToPartner,
-  deliverLead,
-  updateLeadStatus,
-  getPartnerMetrics,
-  PartnerConfig,
-} from '../partnerPortal';
 import { prisma } from '@/lib/db';
+
+import {
+  deliverLead,
+  getPartnerMetrics,
+  matchLeadsToPartner,
+  onboardPartner,
+  PartnerConfig,
+  updateLeadStatus,
+} from '../partnerPortal';
 
 describe('Partner Portal', () => {
   let partnerId: string;
@@ -144,15 +146,11 @@ describe('Partner Portal', () => {
     });
 
     it('should throw error for non-existent partner', async () => {
-      await expect(deliverLead('invalid-partner', leadId)).rejects.toThrow(
-        'Partner not found'
-      );
+      await expect(deliverLead('invalid-partner', leadId)).rejects.toThrow('Partner not found');
     });
 
     it('should throw error for non-existent lead', async () => {
-      await expect(deliverLead(partnerId, 'invalid-lead')).rejects.toThrow(
-        'Prospect not found'
-      );
+      await expect(deliverLead(partnerId, 'invalid-lead')).rejects.toThrow('Prospect not found');
     });
   });
 
@@ -271,9 +269,7 @@ describe('Partner Portal', () => {
     });
 
     it('should throw error for non-existent partner', async () => {
-      await expect(getPartnerMetrics('invalid-partner')).rejects.toThrow(
-        'Partner not found'
-      );
+      await expect(getPartnerMetrics('invalid-partner')).rejects.toThrow('Partner not found');
     });
   });
 

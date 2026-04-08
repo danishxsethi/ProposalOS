@@ -7,7 +7,14 @@
 export * from './types';
 
 // Database connection
-export { prisma, executeQuery, executeCommand, executeTransaction, checkConnection, closeConnection } from './db';
+export {
+  prisma,
+  executeQuery,
+  executeCommand,
+  executeTransaction,
+  checkConnection,
+  closeConnection,
+} from './db';
 
 // Data Access Layer
 export * from './data-access';

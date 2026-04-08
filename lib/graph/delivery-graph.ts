@@ -1,13 +1,14 @@
-import { StateGraph, Annotation } from "@langchain/langgraph";
-import { Finding, ProjectStatus } from '@prisma/client';
-import { RawArtifact, getGenerator } from '@/lib/delivery/generators';
-import { runValidationPipeline, ValidatedArtifact } from '@/lib/delivery/validationPipeline';
-import { packageArtifact, ImplementationPackage } from '@/lib/delivery/packager';
-import { assembleBundle, uploadBundle, createBundleRecord } from '@/lib/delivery/bundler';
-import { prisma } from '@/lib/prisma';
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import { Annotation, StateGraph } from '@langchain/langgraph';
+import { Finding, ProjectStatus } from '@prisma/client';
+
 import { runAudit } from '@/lib/audit/runner';
-import { generateComparisonReport, ComparisonReportResult } from '@/lib/delivery/comparisonReport';
+import { assembleBundle, createBundleRecord, uploadBundle } from '@/lib/delivery/bundler';
+import { ComparisonReportResult, generateComparisonReport } from '@/lib/delivery/comparisonReport';
+import { getGenerator, RawArtifact } from '@/lib/delivery/generators';
+import { ImplementationPackage, packageArtifact } from '@/lib/delivery/packager';
+import { runValidationPipeline, ValidatedArtifact } from '@/lib/delivery/validationPipeline';
+import { prisma } from '@/lib/prisma';
 
 export interface GeneratedArtifact {
   id: string;
@@ -37,27 +38,27 @@ export interface ComparisonReport {
 export const DeliveryState = Annotation.Root({
   findings: Annotation<Finding[]>({
     reducer: (x, y) => y,
-    default: () => []
+    default: () => [],
   }),
   proposalSections: Annotation<Record<string, any>>({
     reducer: (x, y) => y,
-    default: () => ({})
+    default: () => ({}),
   }),
   artifacts: Annotation<GeneratedArtifact[]>({
     reducer: (x, y) => y,
-    default: () => []
+    default: () => [],
   }),
   packages: Annotation<ImplementationPackage[]>({
     reducer: (x, y) => y,
-    default: () => []
+    default: () => [],
   }),
   bundle: Annotation<any>({
     reducer: (x, y) => y,
-    default: () => null
+    default: () => null,
   }),
   validationSummary: Annotation<ValidationSummary>({
     reducer: (x, y) => y,
-    default: () => ({ totalArtifacts: 0, validatedCount: 0, failedCount: 0, rejectionRate: 0 })
+    default: () => ({ totalArtifacts: 0, validatedCount: 0, failedCount: 0, rejectionRate: 0 }),
   }),
   tenantId: Annotation<string>({ reducer: (x, y) => y }),
   proposalId: Annotation<string>({ reducer: (x, y) => y }),
@@ -65,7 +66,10 @@ export const DeliveryState = Annotation.Root({
   // Post-delivery audit fields
   originalAuditId: Annotation<string | null>({ reducer: (x, y) => y, default: () => null }),
   postDeliveryAuditId: Annotation<string | null>({ reducer: (x, y) => y, default: () => null }),
-  comparisonReport: Annotation<ComparisonReportResult | null>({ reducer: (x, y) => y, default: () => null }),
+  comparisonReport: Annotation<ComparisonReportResult | null>({
+    reducer: (x, y) => y,
+    default: () => null,
+  }),
   improvementScore: Annotation<number>({ reducer: (x, y) => y, default: () => 0 }),
 });
 
@@ -165,7 +169,7 @@ async function package_artifact(state: typeof DeliveryState.State) {
     }
 
     try {
-      const finding = state.findings.find(f => f.id === artifact.id);
+      const finding = state.findings.find((f) => f.id === artifact.id);
       if (!finding) {
         continue;
       }
@@ -225,11 +229,7 @@ async function upload_bundle(state: typeof DeliveryState.State) {
   }
 
   try {
-    const zipUrl = await uploadBundle(
-      state.bundle.buffer,
-      state.proposalId,
-      state.tenantId
-    );
+    const zipUrl = await uploadBundle(state.bundle.buffer, state.proposalId, state.tenantId);
 
     // Create bundle record in database
     const bundleRecord = await createBundleRecord(
@@ -254,7 +254,7 @@ async function upload_bundle(state: typeof DeliveryState.State) {
     // Get original audit ID from proposal
     const proposal = await prisma.proposal.findUnique({
       where: { id: state.proposalId },
-      select: { auditId: true }
+      select: { auditId: true },
     });
 
     return {
@@ -331,7 +331,9 @@ async function trigger_reaudit(state: typeof DeliveryState.State) {
     const improvementScore =
       originalCount > 0 ? Math.round((resolvedCount / originalCount) * 100) : 100;
 
-    console.log(`[ReAudit] improvementScore=${improvementScore}% (${resolvedCount}/${originalCount} resolved)`);
+    console.log(
+      `[ReAudit] improvementScore=${improvementScore}% (${resolvedCount}/${originalCount} resolved)`
+    );
 
     // 4. Gate Project status — if < 50% resolved, flag as NEEDS_REVIEW
     if (improvementScore < 50) {
@@ -339,7 +341,9 @@ async function trigger_reaudit(state: typeof DeliveryState.State) {
         where: { proposalId: state.proposalId },
         data: { status: ProjectStatus.NEEDS_REVIEW },
       });
-      console.warn(`[ReAudit] Improvement ${improvementScore}% < 50% — Project flagged as NEEDS_REVIEW`);
+      console.warn(
+        `[ReAudit] Improvement ${improvementScore}% < 50% — Project flagged as NEEDS_REVIEW`
+      );
     }
 
     // 5. Wire re-audit ID into DeliveryTask
@@ -376,7 +380,9 @@ async function generate_comparison(state: typeof DeliveryState.State) {
         where: { proposalId: state.proposalId, tenantId: state.tenantId },
         data: { beforeAfterComparison: report as any },
       });
-      console.log(`[Comparison] Report for ${state.proposalId} — ${report.overallImprovementPercent}% improved`);
+      console.log(
+        `[Comparison] Report for ${state.proposalId} — ${report.overallImprovementPercent}% improved`
+      );
     }
 
     return { comparisonReport: report };
@@ -387,22 +393,22 @@ async function generate_comparison(state: typeof DeliveryState.State) {
 }
 
 export const deliveryGraph = new StateGraph(DeliveryState)
-  .addNode("generate_artifact", generate_artifact)
-  .addNode("validate_artifact", validate_artifact)
-  .addNode("package_artifact", package_artifact)
-  .addNode("assemble_bundle", assemble_bundle)
-  .addNode("upload_bundle", upload_bundle)
-  .addNode("trigger_reaudit", trigger_reaudit)
-  .addNode("generate_comparison", generate_comparison)
+  .addNode('generate_artifact', generate_artifact)
+  .addNode('validate_artifact', validate_artifact)
+  .addNode('package_artifact', package_artifact)
+  .addNode('assemble_bundle', assemble_bundle)
+  .addNode('upload_bundle', upload_bundle)
+  .addNode('trigger_reaudit', trigger_reaudit)
+  .addNode('generate_comparison', generate_comparison)
 
-  .addEdge("__start__", "generate_artifact")
-  .addEdge("generate_artifact", "validate_artifact")
-  .addEdge("validate_artifact", "package_artifact")
-  .addEdge("package_artifact", "assemble_bundle")
-  .addEdge("assemble_bundle", "upload_bundle")
-  .addEdge("upload_bundle", "trigger_reaudit")
-  .addEdge("trigger_reaudit", "generate_comparison")
-  .addEdge("generate_comparison", "__end__")
+  .addEdge('__start__', 'generate_artifact')
+  .addEdge('generate_artifact', 'validate_artifact')
+  .addEdge('validate_artifact', 'package_artifact')
+  .addEdge('package_artifact', 'assemble_bundle')
+  .addEdge('assemble_bundle', 'upload_bundle')
+  .addEdge('upload_bundle', 'trigger_reaudit')
+  .addEdge('trigger_reaudit', 'generate_comparison')
+  .addEdge('generate_comparison', '__end__')
   .compile();
 
 /**
@@ -412,7 +418,7 @@ export const deliveryGraph = new StateGraph(DeliveryState)
 export async function runDeliveryAgent(proposalId: string, tenantId: string): Promise<void> {
   const proposal = await prisma.proposal.findUnique({
     where: { id: proposalId },
-    include: { audit: { include: { findings: true } } }
+    include: { audit: { include: { findings: true } } },
   });
 
   if (!proposal?.audit?.findings?.length) {

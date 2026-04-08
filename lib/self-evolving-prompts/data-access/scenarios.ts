@@ -3,13 +3,8 @@
  * Implements scenario storage and comparison
  */
 
-import { executeQuery, executeCommand } from '../db';
-import {
-  ScenarioResult,
-  ScenarioRow,
-  ScenarioComparison,
-  ScenarioRequest,
-} from '../types';
+import { executeCommand, executeQuery } from '../db';
+import { ScenarioComparison, ScenarioRequest, ScenarioResult, ScenarioRow } from '../types';
 
 /**
  * Save a scenario result
@@ -50,9 +45,7 @@ export async function saveScenario(
 /**
  * Get scenario by ID
  */
-export async function getScenarioById(
-  scenarioId: string
-): Promise<ScenarioResult | null> {
+export async function getScenarioById(scenarioId: string): Promise<ScenarioResult | null> {
   const query = `SELECT * FROM scenarios WHERE id = $1`;
   const rows = await executeQuery<ScenarioRow>(query, [scenarioId]);
   return rows.length > 0 ? mapRowToScenario(rows[0]) : null;
@@ -62,9 +55,7 @@ export async function getScenarioById(
  * Get scenario history for an audit
  * Validates: Requirements 7.3
  */
-export async function getScenarioHistory(
-  auditId: string
-): Promise<ScenarioResult[]> {
+export async function getScenarioHistory(auditId: string): Promise<ScenarioResult[]> {
   const query = `
     SELECT * FROM scenarios
     WHERE audit_id = $1
@@ -79,9 +70,7 @@ export async function getScenarioHistory(
  * Compare multiple scenarios
  * Validates: Requirements 7.4
  */
-export async function compareScenarios(
-  scenarioIds: string[]
-): Promise<ScenarioComparison> {
+export async function compareScenarios(scenarioIds: string[]): Promise<ScenarioComparison> {
   if (scenarioIds.length === 0) {
     throw new Error('At least one scenario ID is required');
   }
@@ -127,10 +116,7 @@ export async function compareScenarios(
 /**
  * Delete old scenarios (for cleanup)
  */
-export async function deleteOldScenarios(
-  auditId: string,
-  keepCount: number = 10
-): Promise<number> {
+export async function deleteOldScenarios(auditId: string, keepCount: number = 10): Promise<number> {
   const query = `
     DELETE FROM scenarios
     WHERE id IN (
@@ -190,10 +176,7 @@ export async function findSimilarScenarios(
     LIMIT 5
   `;
 
-  const rows = await executeQuery<ScenarioRow>(query, [
-    auditId,
-    JSON.stringify(recommendations),
-  ]);
+  const rows = await executeQuery<ScenarioRow>(query, [auditId, JSON.stringify(recommendations)]);
   return rows.map(mapRowToScenario);
 }
 

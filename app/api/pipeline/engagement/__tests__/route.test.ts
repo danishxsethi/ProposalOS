@@ -1,6 +1,8 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { POST, GET } from '../route';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { recordEvent } from '@/lib/pipeline/dealCloser';
+
+import { GET, POST } from '../route';
 
 // Mock the dealCloser module
 vi.mock('@/lib/pipeline/dealCloser', () => ({

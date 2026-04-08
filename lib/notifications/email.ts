@@ -1,72 +1,73 @@
 import { Resend } from 'resend';
-import { logger } from '@/lib/logger';
+
 import { BRANDING, getBrandColor } from '@/lib/config/branding';
+import { logger } from '@/lib/logger';
 
 // Initialize Resend with API key from env
 const OPERATOR_EMAIL = process.env.OPERATOR_EMAIL;
 const FROM_EMAIL = `${BRANDING.name} <notifications@resend.dev>`;
 
 function getResend() {
-    if (!process.env.RESEND_API_KEY) return null;
-    return new Resend(process.env.RESEND_API_KEY);
+  if (!process.env.RESEND_API_KEY) return null;
+  return new Resend(process.env.RESEND_API_KEY);
 }
 
 /**
  * Send a generic email
  */
 export async function sendEmail({
-    to,
-    subject,
-    body,
+  to,
+  subject,
+  body,
 }: {
-    to: string;
-    subject: string;
-    body: string;
+  to: string;
+  subject: string;
+  body: string;
 }): Promise<void> {
-    const resend = getResend();
-    if (!resend) {
-        logger.warn('Skipping email: RESEND_API_KEY not set');
-        return;
-    }
+  const resend = getResend();
+  if (!resend) {
+    logger.warn('Skipping email: RESEND_API_KEY not set');
+    return;
+  }
 
-    try {
-        const { data, error } = await resend.emails.send({
-            from: FROM_EMAIL,
-            to,
-            subject,
-            html: body,
-        });
+  try {
+    const { data, error } = await resend.emails.send({
+      from: FROM_EMAIL,
+      to,
+      subject,
+      html: body,
+    });
 
-        if (error) {
-            logger.error({ error }, 'Failed to send email');
-        } else {
-            logger.info({ emailId: data?.id }, 'Sent email');
-        }
-    } catch (e) {
-        logger.error({ error: e }, 'Exception sending email');
+    if (error) {
+      logger.error({ error }, 'Failed to send email');
+    } else {
+      logger.info({ emailId: data?.id }, 'Sent email');
     }
+  } catch (e) {
+    logger.error({ error: e }, 'Exception sending email');
+  }
 }
 
 /**
  * Send "Proposal Ready" notification
  */
 export async function sendProposalReady(
-    auditId: string,
-    businessName: string,
-    proposalUrl: string
+  auditId: string,
+  businessName: string,
+  proposalUrl: string
 ) {
-    const resend = getResend();
-    if (!OPERATOR_EMAIL || !resend) {
-        logger.warn('Skipping email: OPERATOR_EMAIL or RESEND_API_KEY not set');
-        return;
-    }
+  const resend = getResend();
+  if (!OPERATOR_EMAIL || !resend) {
+    logger.warn('Skipping email: OPERATOR_EMAIL or RESEND_API_KEY not set');
+    return;
+  }
 
-    try {
-        const { data, error } = await resend.emails.send({
-            from: FROM_EMAIL,
-            to: OPERATOR_EMAIL,
-            subject: `Proposal Ready: ${businessName}`,
-            html: `
+  try {
+    const { data, error } = await resend.emails.send({
+      from: FROM_EMAIL,
+      to: OPERATOR_EMAIL,
+      subject: `Proposal Ready: ${businessName}`,
+      html: `
                 <div style="font-family: sans-serif; padding: 20px;">
                     <h1>Proposal Ready 🚀</h1>
                     <p>The proposal for <strong>${businessName}</strong> has been generated successfully.</p>
@@ -77,38 +78,34 @@ export async function sendProposalReady(
                     </p>
                     <p style="color: #666; font-size: 14px; margin-top: 20px;">Audit ID: ${auditId}</p>
                 </div>
-            `
-        });
+            `,
+    });
 
-        if (error) {
-            logger.error({ error }, 'Failed to send Proposal Ready email');
-        } else {
-            logger.info({ emailId: data?.id }, 'Sent Proposal Ready email');
-        }
-    } catch (e) {
-        logger.error({ error: e }, 'Exception sending Proposal Ready email');
+    if (error) {
+      logger.error({ error }, 'Failed to send Proposal Ready email');
+    } else {
+      logger.info({ emailId: data?.id }, 'Sent Proposal Ready email');
     }
+  } catch (e) {
+    logger.error({ error: e }, 'Exception sending Proposal Ready email');
+  }
 }
 
 /**
  * Send "Proposal Viewed" notification
  */
-export async function sendProposalViewed(
-    proposalId: string,
-    businessName: string,
-    viewedAt: Date
-) {
-    const resend = getResend();
-    if (!OPERATOR_EMAIL || !resend) {
-        return;
-    }
+export async function sendProposalViewed(proposalId: string, businessName: string, viewedAt: Date) {
+  const resend = getResend();
+  if (!OPERATOR_EMAIL || !resend) {
+    return;
+  }
 
-    try {
-        const { data, error } = await resend.emails.send({
-            from: FROM_EMAIL,
-            to: OPERATOR_EMAIL,
-            subject: `🔔 Proposal Viewed: ${businessName}`,
-            html: `
+  try {
+    const { data, error } = await resend.emails.send({
+      from: FROM_EMAIL,
+      to: OPERATOR_EMAIL,
+      subject: `🔔 Proposal Viewed: ${businessName}`,
+      html: `
                 <div style="font-family: sans-serif; padding: 20px;">
                     <h1>Proposal Viewed! 👀</h1>
                     <p><strong>${businessName}</strong> just viewed their proposal.</p>
@@ -118,40 +115,49 @@ export async function sendProposalViewed(
                     </p>
                     <p style="color: #666; font-size: 14px; margin-top: 20px;">Proposal ID: ${proposalId}</p>
                 </div>
-            `
-        });
+            `,
+    });
 
-        if (error) {
-            logger.error({ error }, 'Failed to send Proposal Viewed email');
-        } else {
-            logger.info({ emailId: data?.id }, 'Sent Proposal Viewed email');
-        }
-    } catch (e) {
-        logger.error({ error: e }, 'Exception sending Proposal Viewed email');
+    if (error) {
+      logger.error({ error }, 'Failed to send Proposal Viewed email');
+    } else {
+      logger.info({ emailId: data?.id }, 'Sent Proposal Viewed email');
     }
+  } catch (e) {
+    logger.error({ error: e }, 'Exception sending Proposal Viewed email');
+  }
 }
 
 /**
  * Send "Proposal Interest" notification when a lead submits the CTA form
  */
 export async function sendProposalInterest(
-    businessName: string,
-    proposalUrl: string,
-    data: { name: string; email: string; phone?: string | null; preferredTier?: string | null; bestTime?: string | null; message?: string | null }
+  businessName: string,
+  proposalUrl: string,
+  data: {
+    name: string;
+    email: string;
+    phone?: string | null;
+    preferredTier?: string | null;
+    bestTime?: string | null;
+    message?: string | null;
+  }
 ) {
-    const resend = getResend();
-    if (!OPERATOR_EMAIL || !resend) {
-        logger.warn('Skipping interest email: OPERATOR_EMAIL or RESEND_API_KEY not set');
-        return;
-    }
+  const resend = getResend();
+  if (!OPERATOR_EMAIL || !resend) {
+    logger.warn('Skipping interest email: OPERATOR_EMAIL or RESEND_API_KEY not set');
+    return;
+  }
 
-    try {
-        const tier = data.preferredTier ? data.preferredTier.charAt(0).toUpperCase() + data.preferredTier.slice(1) : '—';
-        const { data: result, error } = await resend.emails.send({
-            from: FROM_EMAIL,
-            to: OPERATOR_EMAIL,
-            subject: `🎯 Lead: ${businessName} — Interested in ${tier}`,
-            html: `
+  try {
+    const tier = data.preferredTier
+      ? data.preferredTier.charAt(0).toUpperCase() + data.preferredTier.slice(1)
+      : '—';
+    const { data: result, error } = await resend.emails.send({
+      from: FROM_EMAIL,
+      to: OPERATOR_EMAIL,
+      subject: `🎯 Lead: ${businessName} — Interested in ${tier}`,
+      html: `
                 <div style="font-family: sans-serif; padding: 20px;">
                     <h1>New Lead Interested! 🎯</h1>
                     <p><strong>${businessName}</strong> submitted the interest form.</p>
@@ -169,41 +175,41 @@ export async function sendProposalInterest(
                         </a>
                     </p>
                 </div>
-            `
-        });
+            `,
+    });
 
-        if (error) {
-            logger.error({ error }, 'Failed to send Proposal Interest email');
-        } else {
-            logger.info({ emailId: result?.id }, 'Sent Proposal Interest email');
-        }
-    } catch (e) {
-        logger.error({ error: e }, 'Exception sending Proposal Interest email');
+    if (error) {
+      logger.error({ error }, 'Failed to send Proposal Interest email');
+    } else {
+      logger.info({ emailId: result?.id }, 'Sent Proposal Interest email');
     }
+  } catch (e) {
+    logger.error({ error: e }, 'Exception sending Proposal Interest email');
+  }
 }
 
 interface BatchResult {
-    total: number;
-    completed: number;
-    failed: number;
-    batchId: string;
+  total: number;
+  completed: number;
+  failed: number;
+  batchId: string;
 }
 
 /**
  * Send "Batch Complete" notification
  */
 export async function sendBatchComplete(results: BatchResult) {
-    const resend = getResend();
-    if (!OPERATOR_EMAIL || !resend) {
-        return;
-    }
+  const resend = getResend();
+  if (!OPERATOR_EMAIL || !resend) {
+    return;
+  }
 
-    try {
-        const { data, error } = await resend.emails.send({
-            from: FROM_EMAIL,
-            to: OPERATOR_EMAIL,
-            subject: `Batch Complete: ${results.completed}/${results.total} Audits`,
-            html: `
+  try {
+    const { data, error } = await resend.emails.send({
+      from: FROM_EMAIL,
+      to: OPERATOR_EMAIL,
+      subject: `Batch Complete: ${results.completed}/${results.total} Audits`,
+      html: `
                 <div style="font-family: sans-serif; padding: 20px;">
                     <h1>Batch Processing Complete ✅</h1>
                     <div style="display: flex; gap: 20px; margin: 20px 0;">
@@ -227,15 +233,15 @@ export async function sendBatchComplete(results: BatchResult) {
                     </p>
                     <p style="color: #666; font-size: 14px; margin-top: 20px;">Batch ID: ${results.batchId}</p>
                 </div>
-            `
-        });
+            `,
+    });
 
-        if (error) {
-            logger.error({ error }, 'Failed to send Batch Complete email');
-        } else {
-            logger.info({ emailId: data?.id }, 'Sent Batch Complete email');
-        }
-    } catch (e) {
-        logger.error({ error: e }, 'Exception sending Batch Complete email');
+    if (error) {
+      logger.error({ error }, 'Failed to send Batch Complete email');
+    } else {
+      logger.info({ emailId: data?.id }, 'Sent Batch Complete email');
     }
+  } catch (e) {
+    logger.error({ error: e }, 'Exception sending Batch Complete email');
+  }
 }

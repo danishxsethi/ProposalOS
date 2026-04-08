@@ -1,26 +1,26 @@
 /**
  * API Endpoint: Pipeline Learning Loop
- * 
+ *
  * Provides manual triggers and insights queries for the learning loop.
- * 
+ *
  * Requirements: 8.4
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from '@/lib/auth';
-import { authOptions } from '@/lib/auth';
+
+import { authOptions, getServerSession } from '@/lib/auth';
 import {
-  recalibratePricing,
   getVerticalInsights,
   type PricingCalibration,
+  recalibratePricing,
   type VerticalInsights,
 } from '@/lib/pipeline/learningLoop';
 
 /**
  * GET /api/pipeline/learning
- * 
+ *
  * Query vertical insights or pricing calibration
- * 
+ *
  * Query params:
  * - action: 'insights' | 'pricing'
  * - vertical: string (required)
@@ -40,17 +40,11 @@ export async function GET(request: NextRequest) {
     const city = searchParams.get('city');
 
     if (!action) {
-      return NextResponse.json(
-        { error: 'Missing required parameter: action' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'Missing required parameter: action' }, { status: 400 });
     }
 
     if (!vertical) {
-      return NextResponse.json(
-        { error: 'Missing required parameter: vertical' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'Missing required parameter: vertical' }, { status: 400 });
     }
 
     if (action === 'insights') {
@@ -77,7 +71,10 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     console.error('[API] Pipeline learning error:', error);
     return NextResponse.json(
-      { error: 'Internal server error', details: error instanceof Error ? error.message : 'Unknown error' },
+      {
+        error: 'Internal server error',
+        details: error instanceof Error ? error.message : 'Unknown error',
+      },
       { status: 500 }
     );
   }
@@ -85,9 +82,9 @@ export async function GET(request: NextRequest) {
 
 /**
  * POST /api/pipeline/learning
- * 
+ *
  * Manually trigger pricing recalibration
- * 
+ *
  * Body:
  * - vertical: string (required)
  * - city: string (required)
@@ -104,17 +101,11 @@ export async function POST(request: NextRequest) {
     const { vertical, city } = body;
 
     if (!vertical) {
-      return NextResponse.json(
-        { error: 'Missing required field: vertical' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'Missing required field: vertical' }, { status: 400 });
     }
 
     if (!city) {
-      return NextResponse.json(
-        { error: 'Missing required field: city' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'Missing required field: city' }, { status: 400 });
     }
 
     // Trigger pricing recalibration
@@ -128,7 +119,10 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('[API] Pipeline learning POST error:', error);
     return NextResponse.json(
-      { error: 'Internal server error', details: error instanceof Error ? error.message : 'Unknown error' },
+      {
+        error: 'Internal server error',
+        details: error instanceof Error ? error.message : 'Unknown error',
+      },
       { status: 500 }
     );
   }

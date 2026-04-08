@@ -1,23 +1,24 @@
 /**
  * Property-based tests for AI Sales Chat
- * 
+ *
  * Tests Property 37: AI Sales Chat escalates on low confidence
- * 
+ *
  * Feature: autonomous-proposal-engine
  */
 
-import { describe, it, expect } from 'vitest';
 import * as fc from 'fast-check';
+import { describe, expect, it } from 'vitest';
+
 import { shouldEscalate } from '../aiSalesChat';
 
 describe('AI Sales Chat - Property Tests', () => {
   /**
    * Property 37: AI Sales Chat escalates on low confidence
-   * 
+   *
    * For any AI Sales Chat response with a confidence score below the configured
    * threshold (default: 70%), the chat must escalate to the Human Review Queue
    * and must not present a definitive answer to the prospect.
-   * 
+   *
    * **Validates: Requirements 15.5**
    */
   it('Property 37: escalates when confidence is below threshold', () => {

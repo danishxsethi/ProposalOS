@@ -1,23 +1,25 @@
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+
 import { cleanupDb } from '@/lib/__tests__/utils/cleanup';
 /**
  * Unit Tests for Learning Loop Extensions
- * 
+ *
  * Tests specific examples and edge cases for:
  * - Outreach outcome tracking
  * - Win/loss recording with reason codes
  * - Pricing recalibration logic
- * 
+ *
  * Requirements: 8.2, 8.4, 8.6
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { prisma } from '@/lib/prisma';
+
 import {
-  trackOutreachOutcome,
-  trackWinLoss,
-  recalibratePricing,
   getVerticalInsights,
   type OutreachOutcome,
+  recalibratePricing,
+  trackOutreachOutcome,
+  trackWinLoss,
   type WinLossData,
 } from '../learningLoop';
 
@@ -68,14 +70,14 @@ async function cleanupTestData() {
   // Clean up win/loss records
   if (testTenantId) {
     await cleanupDb(prisma);
-}
+  }
 
   // Clean up outreach template performance
-    await cleanupDb(prisma);
-// Clean up leads
+  await cleanupDb(prisma);
+  // Clean up leads
   if (testLeadIds.length > 0) {
     await cleanupDb(prisma);
-}
+  }
 
   // Clean up tenant
   if (testTenantId) {
@@ -564,21 +566,35 @@ describe('Learning Loop Unit Tests', () => {
       for (let i = 0; i < 3; i++) {
         const leadId = await createTestLead(testTenantId, vertical, 'Test City');
         testLeadIds.push(leadId);
-        await trackWinLoss(`unit-test-insights-won-${i}`, leadId, testTenantId, vertical, 'Test City', {
-          outcome: 'won',
-          tierChosen: 'Growth',
-          dealValue: 1500,
-        });
+        await trackWinLoss(
+          `unit-test-insights-won-${i}`,
+          leadId,
+          testTenantId,
+          vertical,
+          'Test City',
+          {
+            outcome: 'won',
+            tierChosen: 'Growth',
+            dealValue: 1500,
+          }
+        );
       }
 
       for (let i = 0; i < 2; i++) {
         const leadId = await createTestLead(testTenantId, vertical, 'Test City');
         testLeadIds.push(leadId);
-        await trackWinLoss(`unit-test-insights-lost-${i}`, leadId, testTenantId, vertical, 'Test City', {
-          outcome: 'lost',
-          tierChosen: 'Growth',
-          lostReason: 'price',
-        });
+        await trackWinLoss(
+          `unit-test-insights-lost-${i}`,
+          leadId,
+          testTenantId,
+          vertical,
+          'Test City',
+          {
+            outcome: 'lost',
+            tierChosen: 'Growth',
+            lostReason: 'price',
+          }
+        );
       }
 
       const insights = await getVerticalInsights(vertical);
@@ -618,11 +634,18 @@ describe('Learning Loop Unit Tests', () => {
       for (let i = 0; i < dealValues.length; i++) {
         const leadId = await createTestLead(testTenantId, vertical, 'Test City');
         testLeadIds.push(leadId);
-        await trackWinLoss(`unit-test-deal-value-${i}`, leadId, testTenantId, vertical, 'Test City', {
-          outcome: 'won',
-          tierChosen: 'Growth',
-          dealValue: dealValues[i],
-        });
+        await trackWinLoss(
+          `unit-test-deal-value-${i}`,
+          leadId,
+          testTenantId,
+          vertical,
+          'Test City',
+          {
+            outcome: 'won',
+            tierChosen: 'Growth',
+            dealValue: dealValues[i],
+          }
+        );
       }
 
       // Create lost deals (should not affect average)

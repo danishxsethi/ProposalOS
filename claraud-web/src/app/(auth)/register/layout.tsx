@@ -1,9 +1,9 @@
-import { Metadata } from "next";
+import { Metadata } from 'next';
 
 export const metadata: Metadata = {
-    title: "Create Account",
+  title: 'Create Account',
 };
 
 export default function RegisterLayout({ children }: { children: React.ReactNode }) {
-    return <>{children}</>;
+  return <>{children}</>;
 }

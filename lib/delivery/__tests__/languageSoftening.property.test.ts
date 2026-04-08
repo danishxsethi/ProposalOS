@@ -1,6 +1,7 @@
 // Feature: agentic-delivery-qa-hardening, Property 8: LOW confidence language softening
-import { describe, it, expect } from 'vitest';
 import fc from 'fast-check';
+import { describe, expect, it } from 'vitest';
+
 import { softenLanguage } from '../confidenceScorer';
 
 describe('Property 8: LOW confidence language softening', () => {
@@ -30,10 +31,10 @@ describe('Property 8: LOW confidence language softening', () => {
 
     assertivePatterns.forEach((pattern) => {
       const result = softenLanguage(pattern, 'LOW');
-      
+
       // Must not contain the original assertive phrasing
       expect(result).not.toBe(pattern);
-      
+
       // Must contain a qualifier
       const hasQualifier = /estimated|modeled|as of last audit|~/.test(result);
       expect(hasQualifier).toBe(true);
@@ -59,10 +60,10 @@ describe('Property 8: LOW confidence language softening', () => {
 
     // Result should still be a string
     expect(typeof result).toBe('string');
-    
+
     // Result should be non-empty
     expect(result.length).toBeGreaterThan(0);
-    
+
     // Result should contain softened language
     expect(result).toMatch(/estimated|modeled|as of last audit|may be/);
   });
@@ -72,7 +73,8 @@ describe('Property 8: LOW confidence language softening', () => {
     const result = softenLanguage(text, 'LOW');
 
     // Should contain qualifiers for both patterns
-    const hasMultipleQualifiers = (result.match(/estimated|modeled|as of last audit|may be/g) || []).length >= 1;
+    const hasMultipleQualifiers =
+      (result.match(/estimated|modeled|as of last audit|may be/g) || []).length >= 1;
     expect(hasMultipleQualifiers).toBe(true);
   });
 

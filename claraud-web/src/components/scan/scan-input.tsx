@@ -1,13 +1,15 @@
-"use client";
-import { useState, useRef } from 'react';
+'use client';
+import { useRef, useState } from 'react';
+
 import { useRouter } from 'next/navigation';
+
+import { Autocomplete, useJsApiLoader } from '@react-google-maps/api';
+import { AnimatePresence, motion } from 'framer-motion';
+import { ChevronDown, Globe, Loader2, Plus, Search, Trash2 } from 'lucide-react';
+
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Globe, Search, Loader2, ChevronDown, Plus, Trash2 } from 'lucide-react';
-import { usePostHog } from '@/hooks/use-posthog';
-import { useJsApiLoader, Autocomplete } from '@react-google-maps/api';
-import { motion, AnimatePresence } from 'framer-motion';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
   Select,
@@ -16,19 +18,24 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { usePostHog } from '@/hooks/use-posthog';
 
-const libraries: ("places")[] = ["places"];
+const libraries: 'places'[] = ['places'];
 
 const INDUSTRIES = [
-  'Dentists', 'Law Firms', 'HVAC', 'Restaurants', 'Real Estate',
-  'Gyms', 'Veterinary', 'Salons', 'Contractors', 'Retail',
+  'Dentists',
+  'Law Firms',
+  'HVAC',
+  'Restaurants',
+  'Real Estate',
+  'Gyms',
+  'Veterinary',
+  'Salons',
+  'Contractors',
+  'Retail',
 ];
 
-export function ScanInput({
-  variant = 'large',
-}: {
-  variant?: 'large' | 'compact',
-}) {
+export function ScanInput({ variant = 'large' }: { variant?: 'large' | 'compact' }) {
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [noWebsiteMsg, setNoWebsiteMsg] = useState('');
@@ -75,7 +82,7 @@ export function ScanInput({
       competitors: competitors.filter(Boolean),
       businessSize,
       includeEmail,
-      includeSocial
+      includeSocial,
     };
 
     captureEvent('scan_started', { input: finalUrl, placeId, ...extraData });
@@ -87,8 +94,8 @@ export function ScanInput({
         body: JSON.stringify({
           url: finalUrl,
           placeId,
-          ...extraData
-        })
+          ...extraData,
+        }),
       });
 
       const data = await res.json();
@@ -116,7 +123,9 @@ export function ScanInput({
         setNoWebsiteMsg('');
         handleSubmit(undefined, place.website, place.place_id);
       } else {
-        setNoWebsiteMsg("This business doesn't have a website listed on Google. You can enter a URL manually.");
+        setNoWebsiteMsg(
+          "This business doesn't have a website listed on Google. You can enter a URL manually."
+        );
       }
     }
   };
@@ -127,15 +136,24 @@ export function ScanInput({
   return (
     <div className="w-full max-w-2xl mx-auto flex flex-col gap-4">
       {/* Search Input */}
-      <form onSubmit={(e) => handleSubmit(e)} className={`relative flex items-center bg-bg-secondary border border-white/10 rounded-full shadow-lg p-1 ${isLg ? 'h-16' : 'h-12'}`}>
+      <form
+        onSubmit={(e) => handleSubmit(e)}
+        className={`relative flex items-center bg-bg-secondary border border-white/10 rounded-full shadow-lg p-1 ${isLg ? 'h-16' : 'h-12'}`}
+      >
         <div className="pl-4 pr-2 text-text-secondary">
-          {isUrlMode ? <Globe className={isLg ? 'w-5 h-5' : 'w-4 h-4'} /> : <Search className={isLg ? 'w-5 h-5' : 'w-4 h-4'} />}
+          {isUrlMode ? (
+            <Globe className={isLg ? 'w-5 h-5' : 'w-4 h-4'} />
+          ) : (
+            <Search className={isLg ? 'w-5 h-5' : 'w-4 h-4'} />
+          )}
         </div>
 
         {isLoaded && !isUrlMode ? (
           <div className="flex-1 h-full flex items-center">
             <Autocomplete
-              onLoad={(autocomplete) => { autocompleteRef.current = autocomplete; }}
+              onLoad={(autocomplete) => {
+                autocompleteRef.current = autocomplete;
+              }}
               onPlaceChanged={onPlaceChanged}
               className="w-full h-full flex items-center"
               options={{ fields: ['place_id', 'website', 'name'] }}
@@ -172,7 +190,7 @@ export function ScanInput({
           disabled={isLoading || !input}
           className={`gradient-btn rounded-full ${isLg ? 'h-12 px-8' : 'h-10 px-6'}`}
         >
-          {isLoading ? <Loader2 className="animate-spin w-5 h-5" /> : "Scan Free →"}
+          {isLoading ? <Loader2 className="animate-spin w-5 h-5" /> : 'Scan Free →'}
         </Button>
       </form>
 
@@ -205,17 +223,22 @@ export function ScanInput({
               className="overflow-hidden"
             >
               <div className="glass border border-white/10 rounded-2xl p-6 space-y-6 text-left">
-
                 {/* Industry dropdown */}
                 <div>
-                  <Label className="text-sm text-text-secondary mb-2 block">Industry (Optional)</Label>
+                  <Label className="text-sm text-text-secondary mb-2 block">
+                    Industry (Optional)
+                  </Label>
                   <Select value={industry} onValueChange={setIndustry}>
                     <SelectTrigger className="bg-bg-input border-white/10 text-white">
                       <SelectValue placeholder="Select your industry..." />
                     </SelectTrigger>
                     <SelectContent className="bg-bg-card border-white/10">
                       {INDUSTRIES.map((ind) => (
-                        <SelectItem key={ind} value={ind.toLowerCase()} className="text-white hover:bg-white/5">
+                        <SelectItem
+                          key={ind}
+                          value={ind.toLowerCase()}
+                          className="text-white hover:bg-white/5"
+                        >
                           {ind}
                         </SelectItem>
                       ))}
@@ -231,17 +254,27 @@ export function ScanInput({
                       <SelectValue placeholder="Select business size..." />
                     </SelectTrigger>
                     <SelectContent className="bg-bg-card border-white/10">
-                      <SelectItem value="solo" className="text-white hover:bg-white/5">Solo</SelectItem>
-                      <SelectItem value="2-10" className="text-white hover:bg-white/5">2-10 employees</SelectItem>
-                      <SelectItem value="11-50" className="text-white hover:bg-white/5">11-50 employees</SelectItem>
-                      <SelectItem value="50+" className="text-white hover:bg-white/5">50+ employees</SelectItem>
+                      <SelectItem value="solo" className="text-white hover:bg-white/5">
+                        Solo
+                      </SelectItem>
+                      <SelectItem value="2-10" className="text-white hover:bg-white/5">
+                        2-10 employees
+                      </SelectItem>
+                      <SelectItem value="11-50" className="text-white hover:bg-white/5">
+                        11-50 employees
+                      </SelectItem>
+                      <SelectItem value="50+" className="text-white hover:bg-white/5">
+                        50+ employees
+                      </SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
 
                 {/* Competitor URLs */}
                 <div>
-                  <Label className="text-sm text-text-secondary mb-2 block">Competitor URLs (Up to 3)</Label>
+                  <Label className="text-sm text-text-secondary mb-2 block">
+                    Competitor URLs (Up to 3)
+                  </Label>
                   <div className="space-y-3">
                     {competitors.map((val, idx) => (
                       <div key={idx} className="flex gap-2">

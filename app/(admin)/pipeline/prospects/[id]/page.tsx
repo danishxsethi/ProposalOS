@@ -1,17 +1,18 @@
 /**
  * Detailed Prospect View
- * 
+ *
  * Shows complete prospect history, state transitions, audit results,
  * proposal details, engagement events, and allows manual interventions.
- * 
+ *
  * Requirements: 10.3, 10.7
  */
 
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useEffect, useState } from 'react';
+
 import Link from 'next/link';
+import { useParams, useRouter } from 'next/navigation';
 
 interface ProspectDetails {
   prospect: {
@@ -54,7 +55,7 @@ export default function ProspectDetailPage() {
     try {
       setLoading(true);
       const response = await fetch(`/api/pipeline/prospects/${prospectId}`);
-      
+
       if (!response.ok) {
         throw new Error('Failed to fetch prospect details');
       }
@@ -77,7 +78,7 @@ export default function ProspectDetailPage() {
 
     try {
       setActionLoading(true);
-      
+
       const response = await fetch(`/api/pipeline/prospects/${prospectId}/override`, {
         method: 'POST',
         headers: {
@@ -117,7 +118,10 @@ export default function ProspectDetailPage() {
       <div className="p-8">
         <div className="bg-red-50 border border-red-200 rounded-lg p-4">
           <p className="text-red-800">{error || 'Prospect not found'}</p>
-          <Link href="/admin/pipeline" className="text-red-600 hover:text-red-700 text-sm mt-2 inline-block">
+          <Link
+            href="/admin/pipeline"
+            className="text-red-600 hover:text-red-700 text-sm mt-2 inline-block"
+          >
             ← Back to Dashboard
           </Link>
         </div>
@@ -129,7 +133,10 @@ export default function ProspectDetailPage() {
     <div className="p-8 max-w-6xl mx-auto">
       {/* Header */}
       <div className="mb-8">
-        <Link href="/admin/pipeline" className="text-purple-600 hover:text-purple-700 text-sm mb-4 inline-block">
+        <Link
+          href="/admin/pipeline"
+          className="text-purple-600 hover:text-purple-700 text-sm mb-4 inline-block"
+        >
           ← Back to Dashboard
         </Link>
         <div className="flex justify-between items-start">
@@ -138,15 +145,17 @@ export default function ProspectDetailPage() {
             <p className="text-gray-600 mt-2">{prospect.prospect.website}</p>
           </div>
           <div className="flex gap-2">
-            <span className={`px-3 py-1 rounded-full text-sm font-medium ${
-              prospect.prospect.pipelineStatus === 'hot_lead' 
-                ? 'bg-yellow-100 text-yellow-800'
-                : prospect.prospect.pipelineStatus === 'closed_won'
-                ? 'bg-green-100 text-green-800'
-                : prospect.prospect.pipelineStatus === 'closed_lost'
-                ? 'bg-red-100 text-red-800'
-                : 'bg-blue-100 text-blue-800'
-            }`}>
+            <span
+              className={`px-3 py-1 rounded-full text-sm font-medium ${
+                prospect.prospect.pipelineStatus === 'hot_lead'
+                  ? 'bg-yellow-100 text-yellow-800'
+                  : prospect.prospect.pipelineStatus === 'closed_won'
+                    ? 'bg-green-100 text-green-800'
+                    : prospect.prospect.pipelineStatus === 'closed_lost'
+                      ? 'bg-red-100 text-red-800'
+                      : 'bg-blue-100 text-blue-800'
+              }`}
+            >
               {prospect.prospect.pipelineStatus}
             </span>
           </div>
@@ -202,9 +211,7 @@ export default function ProspectDetailPage() {
                     {transition.to}
                   </span>
                 </div>
-                <p className="text-sm text-gray-600 mt-2">
-                  Stage: {transition.stage}
-                </p>
+                <p className="text-sm text-gray-600 mt-2">Stage: {transition.stage}</p>
               </div>
               <div className="text-right text-sm text-gray-500">
                 {new Date(transition.timestamp).toLocaleString()}

@@ -1,15 +1,16 @@
 /**
  * Prospect State Machine
- * 
+ *
  * Enforces valid state transitions and records transition history for the
  * autonomous pipeline. Validates against VALID_TRANSITIONS, persists to
  * ProspectStateTransition table, and updates ProspectLead.status.
- * 
+ *
  * Requirements: 12.1, 12.2, 12.3, 12.4
  */
 
 import { prisma } from '@/lib/prisma';
-import type { ProspectStatus, StateTransition, PipelineStage } from './types';
+
+import type { PipelineStage, ProspectStatus, StateTransition } from './types';
 
 /**
  * Valid state transitions map
@@ -33,7 +34,7 @@ export const VALID_TRANSITIONS: Record<ProspectStatus, ProspectStatus[]> = {
 
 /**
  * Check if a transition from one status to another is valid
- * 
+ *
  * @param from - Current prospect status
  * @param to - Target prospect status
  * @returns true if the transition is valid, false otherwise
@@ -45,11 +46,11 @@ export function canTransition(from: ProspectStatus, to: ProspectStatus): boolean
 
 /**
  * Transition a prospect to a new status
- * 
+ *
  * Validates the transition against VALID_TRANSITIONS, persists to
  * ProspectStateTransition table, and updates ProspectLead.status.
  * Invalid transitions throw an error and log to PipelineErrorLog.
- * 
+ *
  * @param prospectId - ID of the prospect to transition
  * @param to - Target status
  * @param stage - Pipeline stage triggering the transition
@@ -126,7 +127,7 @@ export async function transition(
 
 /**
  * Get the state transition history for a prospect
- * 
+ *
  * @param prospectId - ID of the prospect
  * @returns Array of StateTransition records in chronological order
  */
@@ -148,7 +149,7 @@ export async function getHistory(prospectId: string): Promise<StateTransition[]>
 
 /**
  * Serialize state transition history to JSON
- * 
+ *
  * @param transitions - Array of StateTransition records
  * @returns JSON string representation
  */
@@ -169,7 +170,7 @@ export function serializeHistory(transitions: StateTransition[]): string {
 
 /**
  * Deserialize state transition history from JSON
- * 
+ *
  * @param json - JSON string representation
  * @returns Array of StateTransition records
  */
@@ -192,7 +193,7 @@ export function deserializeHistory(json: string): StateTransition[] {
 
 /**
  * Log an invalid transition attempt to PipelineErrorLog
- * 
+ *
  * @param prospectId - ID of the prospect
  * @param from - Current status
  * @param to - Attempted target status

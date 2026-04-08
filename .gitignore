@@ -49,3 +49,4 @@ backups/
 # One-off fix scripts
 fix_confidence.js
 fix_confidence.ts
+lib/cache/store/

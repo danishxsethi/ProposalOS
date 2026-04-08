@@ -82,12 +82,12 @@ const COUNTRY_CONFIGS: Record<CountryCode, CountryConfig> = {
  * Currency exchange rates (would be fetched from external service in production)
  */
 const EXCHANGE_RATES: Record<string, number> = {
-  'USD_to_GBP': 0.79,
-  'USD_to_CAD': 1.36,
-  'GBP_to_USD': 1.27,
-  'GBP_to_CAD': 1.72,
-  'CAD_to_USD': 0.74,
-  'CAD_to_GBP': 0.58,
+  USD_to_GBP: 0.79,
+  USD_to_CAD: 1.36,
+  GBP_to_USD: 1.27,
+  GBP_to_CAD: 1.72,
+  CAD_to_USD: 0.74,
+  CAD_to_GBP: 0.58,
 };
 
 /**
@@ -145,11 +145,7 @@ export function detectCountry(prospectData: {
 /**
  * Convert currency amount
  */
-export function convertCurrency(
-  amount: number,
-  fromCurrency: string,
-  toCurrency: string
-): number {
+export function convertCurrency(amount: number, fromCurrency: string, toCurrency: string): number {
   if (fromCurrency === toCurrency) {
     return amount;
   }

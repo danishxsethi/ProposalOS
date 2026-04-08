@@ -21,6 +21,9 @@ Replace `YOUR_SERVICE_URL` with the URL from above (e.g., `https://proposal-engi
 
 ### 1. Discovery Job (Every 6 hours)
 
+> **SECURITY NOTE:** Replace `YOUR_CRON_SECRET_HERE` with your actual CRON_SECRET value.
+> Never commit real secrets to version control.
+
 ```bash
 gcloud scheduler jobs create http pipeline-discovery \
   --location=us-central1 \
@@ -28,7 +31,7 @@ gcloud scheduler jobs create http pipeline-discovery \
   --schedule="0 */6 * * *" \
   --uri="YOUR_SERVICE_URL/api/cron/discovery" \
   --http-method=POST \
-  --headers="Authorization=Bearer autonomous_pipeline_cron_secret_080b7c4aa772ea425ab408539a0db333" \
+  --headers="Authorization=Bearer YOUR_CRON_SECRET_HERE" \
   --time-zone="America/New_York" \
   --description="Discover new prospects from external sources"
 ```
@@ -42,7 +45,7 @@ gcloud scheduler jobs create http pipeline-audit \
   --schedule="0 */2 * * *" \
   --uri="YOUR_SERVICE_URL/api/cron/pipeline-audit" \
   --http-method=POST \
-  --headers="Authorization=Bearer autonomous_pipeline_cron_secret_080b7c4aa772ea425ab408539a0db333" \
+  --headers="Authorization=Bearer YOUR_CRON_SECRET_HERE" \
   --time-zone="America/New_York" \
   --description="Process discovered prospects through audit pipeline"
 ```
@@ -56,7 +59,7 @@ gcloud scheduler jobs create http pipeline-outreach \
   --schedule="0 * * * *" \
   --uri="YOUR_SERVICE_URL/api/cron/pipeline-outreach" \
   --http-method=POST \
-  --headers="Authorization=Bearer autonomous_pipeline_cron_secret_080b7c4aa772ea425ab408539a0db333" \
+  --headers="Authorization=Bearer YOUR_CRON_SECRET_HERE" \
   --time-zone="America/New_York" \
   --description="Send outreach emails to proposed prospects"
 ```
@@ -70,7 +73,7 @@ gcloud scheduler jobs create http pipeline-signal-detection \
   --schedule="0 2 * * *" \
   --uri="YOUR_SERVICE_URL/api/cron/signal-detection" \
   --http-method=POST \
-  --headers="Authorization=Bearer autonomous_pipeline_cron_secret_080b7c4aa772ea425ab408539a0db333" \
+  --headers="Authorization=Bearer YOUR_CRON_SECRET_HERE" \
   --time-zone="America/New_York" \
   --description="Detect business signals for optimal outreach timing"
 ```
@@ -84,7 +87,7 @@ gcloud scheduler jobs create http pipeline-closing \
   --schedule="0 */4 * * *" \
   --uri="YOUR_SERVICE_URL/api/cron/pipeline-closing" \
   --http-method=POST \
-  --headers="Authorization=Bearer autonomous_pipeline_cron_secret_080b7c4aa772ea425ab408539a0db333" \
+  --headers="Authorization=Bearer YOUR_CRON_SECRET_HERE" \
   --time-zone="America/New_York" \
   --description="Process hot leads and manage checkout sessions"
 ```
@@ -98,7 +101,7 @@ gcloud scheduler jobs create http pipeline-delivery \
   --schedule="0 8 * * *" \
   --uri="YOUR_SERVICE_URL/api/cron/pipeline-delivery" \
   --http-method=POST \
-  --headers="Authorization=Bearer autonomous_pipeline_cron_secret_080b7c4aa772ea425ab408539a0db333" \
+  --headers="Authorization=Bearer YOUR_CRON_SECRET_HERE" \
   --time-zone="America/New_York" \
   --description="Process delivery tasks and check for overdue items"
 ```
@@ -119,20 +122,24 @@ gcloud logging read "resource.type=cloud_run_revision" --limit=50 --project=prop
 ## Troubleshooting
 
 ### Error: "Service not found"
+
 - Make sure your Cloud Run service is deployed
 - Check the service name: `gcloud run services list --project=proposal`
 
 ### Error: "API not enabled"
+
 - Enable Cloud Scheduler API:
   ```bash
   gcloud services enable cloudscheduler.googleapis.com --project=proposal
   ```
 
 ### Error: "Permission denied"
+
 - Make sure you have the right IAM permissions
 - You need: `roles/cloudscheduler.admin` and `roles/iam.serviceAccountUser`
 
 ### Job not executing
+
 - Check if the service URL is correct
 - Verify the CRON_SECRET matches in `.env.local`
 - Check Cloud Run logs for errors
@@ -140,6 +147,7 @@ gcloud logging read "resource.type=cloud_run_revision" --limit=50 --project=prop
 ## Next Steps
 
 Once jobs are created:
+
 1. Monitor execution in Cloud Scheduler console
 2. Check logs in Cloud Logging
 3. Set up alerts for failures

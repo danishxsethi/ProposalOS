@@ -1,5 +1,6 @@
 version: '3.8'
 services:
+  # PostgreSQL Database
   postgres:
     image: postgres:15-alpine
     container_name: proposal_engine_db
@@ -8,10 +9,73 @@ services:
       POSTGRES_PASSWORD: password
       POSTGRES_DB: proposal_engine
     ports:
-      - "5435:5432"
-
+      - '5435:5432'
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres']
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Redis for caching (API responses, session storage)
+  redis:
+    image: redis:7-alpine
+    container_name: proposal_engine_redis
+    ports:
+      - '6379:6379'
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Mailhog for email testing (catches all emails in dev)
+  mailhog:
+    image: mailhog/mailhog:latest
+    container_name: proposal_engine_mailhog
+    ports:
+      - '1025:1025'  # SMTP port
+      - '8025:8025'  # Web UI port
+    healthcheck:
+      test: ['CMD', 'nc', '-z', 'localhost', '1025']
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Next.js Development Server (optional - uncomment to run in Docker)
+  # Note: By default, run 'npm run dev' locally for faster iteration
+  # app:
+  #   build:
+  #     context: .
+  #     dockerfile: Dockerfile.dev
+  #   container_name: proposal_engine_app
+  #   ports:
+  #     - '3000:3000'
+  #   volumes:
+  #     - .:/app
+  #     - /app/node_modules
+  #   environment:
+  #     - NODE_ENV=development
+  #     - DATABASE_URL=postgresql://postgres:password@postgres:5432/proposal_engine
+  #     - REDIS_URL=redis://redis:6379
+  #   depends_on:
+  #     postgres:
+  #       condition: service_healthy
+  #     redis:
+  #       condition: service_healthy
+  #   command: npm run dev
 
 volumes:
   postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+
+# Network for service isolation
+networks:
+  default:
+    name: proposal_engine_network
+    driver: bridge

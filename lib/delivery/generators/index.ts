@@ -1,13 +1,19 @@
-import { SchemaGenerator } from './schemaGenerator';
-import { MetaTagGenerator } from './metaTagGenerator';
-import { SpeedGenerator } from './speedGenerator';
-import { GBPGenerator } from './gbpGenerator';
-import { ContentGenerator } from './contentGenerator';
 import { AccessibilityGenerator } from './accessibilityGenerator';
-import { ArtifactGenerator } from './schemaGenerator';
+import { ContentGenerator } from './contentGenerator';
+import { GBPGenerator } from './gbpGenerator';
+import { MetaTagGenerator } from './metaTagGenerator';
+import { ArtifactGenerator, SchemaGenerator } from './schemaGenerator';
+import { SpeedGenerator } from './speedGenerator';
 
 export type { RawArtifact, ArtifactGenerator } from './schemaGenerator';
-export { SchemaGenerator, MetaTagGenerator, SpeedGenerator, GBPGenerator, ContentGenerator, AccessibilityGenerator };
+export {
+  SchemaGenerator,
+  MetaTagGenerator,
+  SpeedGenerator,
+  GBPGenerator,
+  ContentGenerator,
+  AccessibilityGenerator,
+};
 
 /**
  * Registry mapping finding categories to their corresponding generators

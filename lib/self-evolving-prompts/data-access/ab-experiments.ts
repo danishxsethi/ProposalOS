@@ -3,11 +3,11 @@
  * Implements experiment management and traffic routing
  */
 
-import { executeQuery, executeCommand, executeTransaction } from '../db';
+import { executeCommand, executeQuery, executeTransaction } from '../db';
 import {
   ABExperiment,
-  ABVariant,
   ABExperimentRow,
+  ABVariant,
   ABVariantRow,
   ExperimentConfig,
   WinnerResult,
@@ -17,18 +17,11 @@ import {
  * Create a new A/B experiment with variants
  * Validates: Requirements 2.1
  */
-export async function createExperiment(
-  config: ExperimentConfig
-): Promise<ABExperiment> {
+export async function createExperiment(config: ExperimentConfig): Promise<ABExperiment> {
   // Validate configuration
-  const totalPercentage = config.variants.reduce(
-    (sum, v) => sum + v.trafficPercentage,
-    0
-  );
+  const totalPercentage = config.variants.reduce((sum, v) => sum + v.trafficPercentage, 0);
   if (Math.abs(totalPercentage - 100) > 0.01) {
-    throw new Error(
-      `Traffic percentages must sum to 100, got ${totalPercentage}`
-    );
+    throw new Error(`Traffic percentages must sum to 100, got ${totalPercentage}`);
   }
 
   return executeTransaction(async (tx) => {
@@ -79,15 +72,11 @@ export async function createExperiment(
 /**
  * Get experiment by ID
  */
-export async function getExperimentById(
-  experimentId: string
-): Promise<ABExperiment | null> {
+export async function getExperimentById(experimentId: string): Promise<ABExperiment | null> {
   const experimentQuery = `
     SELECT * FROM ab_experiments WHERE id = $1
   `;
-  const experimentRows = await executeQuery<ABExperimentRow>(experimentQuery, [
-    experimentId,
-  ]);
+  const experimentRows = await executeQuery<ABExperimentRow>(experimentQuery, [experimentId]);
 
   if (experimentRows.length === 0) {
     return null;
@@ -96,22 +85,15 @@ export async function getExperimentById(
   const variantQuery = `
     SELECT * FROM ab_variants WHERE experiment_id = $1
   `;
-  const variantRows = await executeQuery<ABVariantRow>(variantQuery, [
-    experimentId,
-  ]);
+  const variantRows = await executeQuery<ABVariantRow>(variantQuery, [experimentId]);
 
-  return mapRowToExperiment(
-    experimentRows[0],
-    variantRows.map(mapRowToVariant)
-  );
+  return mapRowToExperiment(experimentRows[0], variantRows.map(mapRowToVariant));
 }
 
 /**
  * Get active experiments for a node
  */
-export async function getActiveExperiments(
-  nodeId?: string
-): Promise<ABExperiment[]> {
+export async function getActiveExperiments(nodeId?: string): Promise<ABExperiment[]> {
   let query = `
     SELECT * FROM ab_experiments
     WHERE status = 'active'
@@ -133,16 +115,9 @@ export async function getActiveExperiments(
     const variantQuery = `
       SELECT * FROM ab_variants WHERE experiment_id = $1
     `;
-    const variantRows = await executeQuery<ABVariantRow>(variantQuery, [
-      expRow.id,
-    ]);
+    const variantRows = await executeQuery<ABVariantRow>(variantQuery, [expRow.id]);
 
-    experiments.push(
-      mapRowToExperiment(
-        expRow,
-        variantRows.map(mapRowToVariant)
-      )
-    );
+    experiments.push(mapRowToExperiment(expRow, variantRows.map(mapRowToVariant)));
   }
 
   return experiments;
@@ -152,10 +127,7 @@ export async function getActiveExperiments(
  * Route a request to a variant based on traffic percentages
  * Validates: Requirements 2.2
  */
-export async function routeRequest(
-  nodeId: string,
-  context: any = {}
-): Promise<string> {
+export async function routeRequest(nodeId: string, context: any = {}): Promise<string> {
   // Get active experiment for this node
   const experiments = await getActiveExperiments(nodeId);
 
@@ -223,9 +195,7 @@ export async function checkForWinner(
   }
 
   // Check if all variants have minimum sample size
-  const allHaveMinSamples = experiment.variants.every(
-    (v) => v.sampleSize >= minSampleSize
-  );
+  const allHaveMinSamples = experiment.variants.every((v) => v.sampleSize >= minSampleSize);
   if (!allHaveMinSamples) {
     return null;
   }
@@ -311,9 +281,7 @@ export async function resumeExperiment(experimentId: string): Promise<void> {
 /**
  * Get variant by ID
  */
-export async function getVariantById(
-  variantId: string
-): Promise<ABVariant | null> {
+export async function getVariantById(variantId: string): Promise<ABVariant | null> {
   const query = `SELECT * FROM ab_variants WHERE id = $1`;
   const rows = await executeQuery<ABVariantRow>(query, [variantId]);
   return rows.length > 0 ? mapRowToVariant(rows[0]) : null;
@@ -322,10 +290,7 @@ export async function getVariantById(
 /**
  * Map database row to experiment object
  */
-function mapRowToExperiment(
-  row: ABExperimentRow,
-  variants: ABVariant[]
-): ABExperiment {
+function mapRowToExperiment(row: ABExperimentRow, variants: ABVariant[]): ABExperiment {
   return {
     id: row.id,
     name: row.name,

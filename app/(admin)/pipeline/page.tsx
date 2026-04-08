@@ -1,16 +1,18 @@
 /**
  * Pipeline Admin Dashboard
- * 
+ *
  * Displays real-time pipeline metrics, human review queue, and manual override controls.
- * 
+ *
  * Requirements: 10.1, 10.3, 10.4, 10.5, 10.6, 10.7
  */
 
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useSession } from 'next-auth/react';
+import { useEffect, useState } from 'react';
+
 import Link from 'next/link';
+
+import { useSession } from 'next-auth/react';
 
 interface PipelineMetrics {
   discoveredPerDay: number;
@@ -57,7 +59,7 @@ export default function PipelineDashboard() {
   const fetchDashboardData = async () => {
     try {
       setLoading(true);
-      
+
       // Fetch metrics
       const metricsRes = await fetch('/api/pipeline/metrics');
       if (metricsRes.ok) {
@@ -78,10 +80,14 @@ export default function PipelineDashboard() {
     }
   };
 
-  const handleReviewAction = async (prospectId: string, action: 'approve' | 'reject', reason?: string) => {
+  const handleReviewAction = async (
+    prospectId: string,
+    action: 'approve' | 'reject',
+    reason?: string
+  ) => {
     try {
       setActionLoading(true);
-      
+
       const response = await fetch('/api/pipeline/review', {
         method: 'POST',
         headers: {
@@ -114,7 +120,7 @@ export default function PipelineDashboard() {
         <div className="animate-pulse space-y-4">
           <div className="h-8 bg-gray-200 rounded w-1/4"></div>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            {[1, 2, 3, 4].map(i => (
+            {[1, 2, 3, 4].map((i) => (
               <div key={i} className="h-32 bg-gray-200 rounded"></div>
             ))}
           </div>
@@ -129,7 +135,9 @@ export default function PipelineDashboard() {
       <div className="mb-8 flex justify-between items-center">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Pipeline Dashboard</h1>
-          <p className="text-gray-600 mt-2">Monitor autonomous pipeline performance and review queue</p>
+          <p className="text-gray-600 mt-2">
+            Monitor autonomous pipeline performance and review queue
+          </p>
         </div>
         <Link
           href="/admin/pipeline/config"
@@ -166,12 +174,7 @@ export default function PipelineDashboard() {
             icon="📄"
             trend="+15%"
           />
-          <MetricCard
-            title="Emails/Day"
-            value={metrics.emailsSentPerDay}
-            icon="📧"
-            trend="+5%"
-          />
+          <MetricCard title="Emails/Day" value={metrics.emailsSentPerDay} icon="📧" trend="+5%" />
         </div>
       )}
 
@@ -203,9 +206,7 @@ export default function PipelineDashboard() {
       <div className="bg-white rounded-lg shadow-sm border border-gray-200">
         <div className="p-6 border-b border-gray-200">
           <h2 className="text-xl font-semibold text-gray-900">Human Review Queue</h2>
-          <p className="text-sm text-gray-600 mt-1">
-            High-value prospects requiring manual review
-          </p>
+          <p className="text-sm text-gray-600 mt-1">High-value prospects requiring manual review</p>
         </div>
 
         {reviewQueue.length === 0 ? (
@@ -226,7 +227,7 @@ export default function PipelineDashboard() {
                         {item.prospect.vertical}
                       </span>
                     </div>
-                    
+
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                       <div>
                         <span className="text-gray-500">Website:</span>
@@ -312,7 +313,9 @@ export default function PipelineDashboard() {
             {Object.entries(metrics.stageErrorRates).map(([stage, rate]) => (
               <div key={stage} className="text-center">
                 <p className="text-sm text-gray-600 mb-1">{stage}</p>
-                <p className={`text-2xl font-bold ${rate > 0.1 ? 'text-red-600' : 'text-green-600'}`}>
+                <p
+                  className={`text-2xl font-bold ${rate > 0.1 ? 'text-red-600' : 'text-green-600'}`}
+                >
                   {(rate * 100).toFixed(1)}%
                 </p>
               </div>
@@ -324,7 +327,12 @@ export default function PipelineDashboard() {
   );
 }
 
-function MetricCard({ title, value, icon, trend }: {
+function MetricCard({
+  title,
+  value,
+  icon,
+  trend,
+}: {
   title: string;
   value: number;
   icon: string;
@@ -334,9 +342,7 @@ function MetricCard({ title, value, icon, trend }: {
     <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
       <div className="flex items-center justify-between mb-2">
         <span className="text-2xl">{icon}</span>
-        {trend && (
-          <span className="text-sm text-green-600 font-medium">{trend}</span>
-        )}
+        {trend && <span className="text-sm text-green-600 font-medium">{trend}</span>}
       </div>
       <h3 className="text-sm text-gray-600 mb-1">{title}</h3>
       <p className="text-3xl font-bold text-gray-900">{value}</p>
@@ -344,7 +350,12 @@ function MetricCard({ title, value, icon, trend }: {
   );
 }
 
-function PerformanceCard({ title, value, target, status }: {
+function PerformanceCard({
+  title,
+  value,
+  target,
+  status,
+}: {
   title: string;
   value: string;
   target: string;

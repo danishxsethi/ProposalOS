@@ -24,42 +24,52 @@ lib/self-evolving-prompts/
 The migration file creates the following tables:
 
 ### 1. `prompt_performance_logs`
+
 Append-only log of all LLM calls with performance metrics.
 
 **Indexes:**
+
 - `idx_performance_version_time` - Query by version and time
 - `idx_performance_node` - Query by node ID
 - `idx_performance_experiment` - Query by experiment ID
 - `idx_performance_timestamp` - Time-based queries
 
 ### 2. `prompt_versions`
+
 Git-like version control for prompts.
 
 **Indexes:**
+
 - `idx_versions_node` - Query by node ID
 - `idx_versions_active` - Find active versions
 - `idx_versions_created` - Time-based queries
 
 ### 3. `ab_experiments` & `ab_variants`
+
 A/B testing framework for prompt experiments.
 
 **Indexes:**
+
 - `idx_experiments_node` - Query by node ID
 - `idx_experiments_status` - Filter by status
 - `idx_variants_experiment` - Query variants by experiment
 
 ### 4. `predictions`
+
 Storage for predictive intelligence forecasts.
 
 **Indexes:**
+
 - `idx_predictions_audit` - Query by audit ID
 - `idx_predictions_type_date` - Query by type and date
 - `idx_predictions_observed` - Find predictions with outcomes
 
 ### 5. `scenarios`
+
 What-if scenario results.
 
 **Indexes:**
+
 - `idx_scenarios_audit` - Query by audit ID
 - `idx_scenarios_created` - Time-based queries
 
@@ -80,7 +90,7 @@ await logPerformance({
   latencyMs: 1250,
   inputTokens: 500,
   outputTokens: 300,
-  metadata: { model: 'gemini-pro' }
+  metadata: { model: 'gemini-pro' },
 });
 
 // Get aggregate metrics
@@ -120,8 +130,8 @@ const experiment = await createExperiment({
   nodeId: 'diagnosis-node',
   variants: [
     { promptVersionHash: 'abc123...', trafficPercentage: 50 },
-    { promptVersionHash: 'def456...', trafficPercentage: 50 }
-  ]
+    { promptVersionHash: 'def456...', trafficPercentage: 50 },
+  ],
 });
 
 // Route a request
@@ -137,7 +147,11 @@ if (winner) {
 ### Predictions
 
 ```typescript
-import { recordPrediction, recordOutcome, getCalibrationMetrics } from '@/lib/self-evolving-prompts';
+import {
+  recordPrediction,
+  recordOutcome,
+  getCalibrationMetrics,
+} from '@/lib/self-evolving-prompts';
 
 // Record a prediction
 const prediction = await recordPrediction({
@@ -147,7 +161,7 @@ const prediction = await recordPrediction({
   confidenceIntervalLower: 8000,
   confidenceIntervalUpper: 12000,
   predictionDate: new Date(),
-  metadata: {}
+  metadata: {},
 });
 
 // Record actual outcome
@@ -172,14 +186,14 @@ const scenario = await saveScenario({
   projectedTraffic: 15000,
   confidenceIntervals: {
     roi: [200, 300],
-    traffic: [12000, 18000]
+    traffic: [12000, 18000],
   },
   comparisonToBaseline: {
     roiDelta: 150,
     trafficDelta: 5000,
-    timelineDelta: '-1 month'
+    timelineDelta: '-1 month',
   },
-  calculationTimeMs: 2500
+  calculationTimeMs: 2500,
 });
 
 // Compare scenarios

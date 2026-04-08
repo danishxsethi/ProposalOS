@@ -1,4 +1,5 @@
 import Link from 'next/link';
+
 import { PrintButton } from '@/components/sales-toolkit/PrintButton';
 import { PrintTrigger } from '@/components/sales-toolkit/PrintTrigger';
 
@@ -22,8 +23,14 @@ export default function OnePagerPage() {
   return (
     <>
       <PrintTrigger />
-      <div className="sales-no-print" style={{ marginBottom: '1rem', display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
-        <Link href="/sales-toolkit" style={{ color: '#e94560', fontWeight: 600, textDecoration: 'none' }}>
+      <div
+        className="sales-no-print"
+        style={{ marginBottom: '1rem', display: 'flex', gap: '0.75rem', alignItems: 'center' }}
+      >
+        <Link
+          href="/sales-toolkit"
+          style={{ color: '#e94560', fontWeight: 600, textDecoration: 'none' }}
+        >
           ← Back
         </Link>
         <PrintButton />
@@ -41,21 +48,24 @@ export default function OnePagerPage() {
             <div className="op-icon">🔍</div>
             <h3>We Scan</h3>
             <p>
-              Our AI analyzes your website&apos;s speed, SEO, reputation, and mobile experience against 50+ checkpoints.
+              Our AI analyzes your website&apos;s speed, SEO, reputation, and mobile experience
+              against 50+ checkpoints.
             </p>
           </div>
           <div className="op-col">
             <div className="op-icon">📋</div>
             <h3>We Diagnose</h3>
             <p>
-              You get a detailed report showing exactly what&apos;s holding you back and what it&apos;s costing you in lost customers.
+              You get a detailed report showing exactly what&apos;s holding you back and what
+              it&apos;s costing you in lost customers.
             </p>
           </div>
           <div className="op-col">
             <div className="op-icon">⚡</div>
             <h3>We Fix</h3>
             <p>
-              Choose a plan and we handle everything. Most improvements are live within 5–10 business days.
+              Choose a plan and we handle everything. Most improvements are live within 5–10
+              business days.
             </p>
           </div>
         </section>
@@ -73,7 +83,9 @@ export default function OnePagerPage() {
 
         <footer className="op-footer">
           <div className="op-footer-left">
-            <p><strong>Proposal Engine</strong></p>
+            <p>
+              <strong>Proposal Engine</strong>
+            </p>
             <p>{process.env.NEXT_PUBLIC_APP_URL || 'proposalengine.com'}</p>
           </div>
           <div className="op-footer-right">

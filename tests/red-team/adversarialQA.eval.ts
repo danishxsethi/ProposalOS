@@ -1,7 +1,8 @@
 // Feature: agentic-delivery-qa-hardening, Property 9: Red team pass rate gate
-import { describe, it, expect } from 'vitest';
-import { adversarialQAGraph, AdversarialQAState } from '@/lib/graph/adversarial-qa-graph';
 import { Finding } from '@prisma/client';
+import { describe, expect, it } from 'vitest';
+
+import { adversarialQAGraph, AdversarialQAState } from '@/lib/graph/adversarial-qa-graph';
 
 /**
  * Red team evaluation dataset
@@ -131,12 +132,14 @@ describe('Property 9: Red team pass rate gate', () => {
 
         // Check if expected flags were caught
         const allFlags = [
-          ...result.hallucinationFlags.map(f => f.claim),
-          ...result.consistencyFlags.map(f => f.type),
-          ...result.competitorFlags.map(f => f.claim),
-        ].join(' ').toLowerCase();
+          ...result.hallucinationFlags.map((f) => f.claim),
+          ...result.consistencyFlags.map((f) => f.type),
+          ...result.competitorFlags.map((f) => f.claim),
+        ]
+          .join(' ')
+          .toLowerCase();
 
-        const flagsCaught = testCase.expectedFlags.some(flag =>
+        const flagsCaught = testCase.expectedFlags.some((flag) =>
           allFlags.includes(flag.toLowerCase())
         );
 

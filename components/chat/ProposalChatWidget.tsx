@@ -2,14 +2,15 @@
 
 /**
  * AI Sales Chat Widget for Proposal Pages
- * 
+ *
  * Displays after 30 seconds or 50% scroll depth.
  * Handles real-time chat with AI assistant.
- * 
+ *
  * Requirements: 15.1, 15.2
  */
 
-import { useState, useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
+
 import type { ChatMessage } from '@/lib/pipeline/types';
 
 interface ProposalChatWidgetProps {
@@ -28,7 +29,9 @@ export function ProposalChatWidget({
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [sessionId] = useState(() => `session-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`);
+  const [sessionId] = useState(
+    () => `session-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+  );
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Show widget after delay or scroll threshold
@@ -41,7 +44,7 @@ export function ProposalChatWidget({
       const scrolled = window.scrollY;
       const total = document.documentElement.scrollHeight - window.innerHeight;
       const scrollPercent = scrolled / total;
-      
+
       if (scrollPercent >= scrollThreshold) {
         setIsVisible(true);
         hasShown = true;
@@ -109,7 +112,7 @@ export function ProposalChatWidget({
         ...prev,
         {
           role: 'assistant',
-          content: 'Sorry, I\'m having trouble right now. Please try again or contact us directly.',
+          content: "Sorry, I'm having trouble right now. Please try again or contact us directly.",
           timestamp: new Date(),
         },
       ]);
@@ -136,12 +139,7 @@ export function ProposalChatWidget({
           className="bg-blue-600 hover:bg-blue-700 text-white rounded-full p-4 shadow-lg transition-all duration-200 flex items-center gap-2"
           aria-label="Open chat"
         >
-          <svg
-            className="w-6 h-6"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
+          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path
               strokeLinecap="round"
               strokeLinejoin="round"
@@ -168,7 +166,12 @@ export function ProposalChatWidget({
               aria-label="Close chat"
             >
               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M6 18L18 6M6 6l12 12"
+                />
               </svg>
             </button>
           </div>
@@ -181,7 +184,7 @@ export function ProposalChatWidget({
                 <p className="text-xs mt-2">Ask me about pricing, services, or next steps.</p>
               </div>
             )}
-            
+
             {messages.map((msg, idx) => (
               <div
                 key={idx}
@@ -196,26 +199,33 @@ export function ProposalChatWidget({
                 >
                   <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
                   {msg.confidence !== undefined && msg.confidence < 0.7 && (
-                    <p className="text-xs mt-1 opacity-70">
-                      A specialist will follow up shortly
-                    </p>
+                    <p className="text-xs mt-1 opacity-70">A specialist will follow up shortly</p>
                   )}
                 </div>
               </div>
             ))}
-            
+
             {isLoading && (
               <div className="flex justify-start">
                 <div className="bg-white border border-gray-200 rounded-lg p-3">
                   <div className="flex space-x-2">
-                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
-                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
-                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+                    <div
+                      className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"
+                      style={{ animationDelay: '0ms' }}
+                    ></div>
+                    <div
+                      className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"
+                      style={{ animationDelay: '150ms' }}
+                    ></div>
+                    <div
+                      className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"
+                      style={{ animationDelay: '300ms' }}
+                    ></div>
                   </div>
                 </div>
               </div>
             )}
-            
+
             <div ref={messagesEndRef} />
           </div>
 
@@ -237,7 +247,12 @@ export function ProposalChatWidget({
                 className="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white rounded-lg px-4 py-2 transition-colors"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"
+                  />
                 </svg>
               </button>
             </div>

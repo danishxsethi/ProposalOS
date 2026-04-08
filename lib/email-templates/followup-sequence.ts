@@ -5,18 +5,18 @@
  */
 
 export interface FollowUpEmailTemplate {
-    step: 1 | 2 | 3;
-    name: string;
-    subjectTemplate: string;
-    bodyTemplate: string;
+  step: 1 | 2 | 3;
+  name: string;
+  subjectTemplate: string;
+  bodyTemplate: string;
 }
 
 export const FOLLOWUP_SEQUENCE: FollowUpEmailTemplate[] = [
-    {
-        step: 1,
-        name: 'The Recap',
-        subjectTemplate: 'Your {{businessName}} website audit — as promised',
-        bodyTemplate: `Hi {{recipientName}},
+  {
+    step: 1,
+    name: 'The Recap',
+    subjectTemplate: 'Your {{businessName}} website audit — as promised',
+    bodyTemplate: `Hi {{recipientName}},
 
 Great meeting you today. As promised, here's your website audit for {{businessName}}.
 
@@ -33,12 +33,12 @@ Best,
 ---
 {{physicalAddress}}
 Unsubscribe: {{unsubscribeUrl}}`,
-    },
-    {
-        step: 2,
-        name: 'The Nudge',
-        subjectTemplate: "Quick question about {{businessName}}'s website",
-        bodyTemplate: `Hi {{recipientName}},
+  },
+  {
+    step: 2,
+    name: 'The Nudge',
+    subjectTemplate: "Quick question about {{businessName}}'s website",
+    bodyTemplate: `Hi {{recipientName}},
 
 Just checking in — have you had a chance to review the audit I sent?
 
@@ -56,12 +56,12 @@ Best,
 ---
 {{physicalAddress}}
 Unsubscribe: {{unsubscribeUrl}}`,
-    },
-    {
-        step: 3,
-        name: 'The Competitor Hook',
-        subjectTemplate: '{{competitorName}} just improved their website',
-        bodyTemplate: `Hi {{recipientName}},
+  },
+  {
+    step: 3,
+    name: 'The Competitor Hook',
+    subjectTemplate: '{{competitorName}} just improved their website',
+    bodyTemplate: `Hi {{recipientName}},
 
 I noticed {{competitorName}} recently updated their website — they've improved their {{metric}} and are likely capturing more local searches as a result.
 
@@ -77,33 +77,33 @@ Best,
 ---
 {{physicalAddress}}
 Unsubscribe: {{unsubscribeUrl}}`,
-    },
+  },
 ];
 
 export function getFollowUpTemplate(step: 1 | 2 | 3): FollowUpEmailTemplate | undefined {
-    return FOLLOWUP_SEQUENCE.find((t) => t.step === step);
+  return FOLLOWUP_SEQUENCE.find((t) => t.step === step);
 }
 
 export function fillFollowUpTemplate(
-    template: FollowUpEmailTemplate,
-    vars: {
-        businessName?: string;
-        proposalUrl?: string;
-        finding?: string;
-        metric?: string;
-        competitorName?: string;
-        recipientName?: string;
-        physicalAddress?: string;
-        unsubscribeUrl?: string;
-    }
+  template: FollowUpEmailTemplate,
+  vars: {
+    businessName?: string;
+    proposalUrl?: string;
+    finding?: string;
+    metric?: string;
+    competitorName?: string;
+    recipientName?: string;
+    physicalAddress?: string;
+    unsubscribeUrl?: string;
+  }
 ): { subject: string; body: string } {
-    let subject = template.subjectTemplate;
-    let body = template.bodyTemplate;
-    for (const [key, value] of Object.entries(vars)) {
-        const placeholder = `{{${key}}}`;
-        const replacement = value ?? '';
-        subject = subject.split(placeholder).join(replacement);
-        body = body.split(placeholder).join(replacement);
-    }
-    return { subject, body };
+  let subject = template.subjectTemplate;
+  let body = template.bodyTemplate;
+  for (const [key, value] of Object.entries(vars)) {
+    const placeholder = `{{${key}}}`;
+    const replacement = value ?? '';
+    subject = subject.split(placeholder).join(replacement);
+    body = body.split(placeholder).join(replacement);
+  }
+  return { subject, body };
 }

@@ -1,6 +1,6 @@
 # Sprint 1 Status — The Engine (Feb 15 – Mar 15)
 
-*Theme: "Make it work flawlessly. Zero bugs. Agency-grade output."*
+_Theme: "Make it work flawlessly. Zero bugs. Agency-grade output."_
 
 **Last updated:** Feb 2026
 
@@ -8,14 +8,14 @@
 
 ## Goal Checklist
 
-| Goal | Status | Notes |
-|------|--------|------|
-| **Bug-zero engine** | ✅ Done | Full audit → diagnosis → proposal → PDF pipeline runs end-to-end. 0 critical/high bugs (SPRINT1_AUDIT). |
-| **Agency-grade output** | ✅ Infrastructure | QA auto-READY at ≥90%. 13 automated checks. Proposals need ongoing prompt tuning to hit 90% consistently. |
-| **Production deployment** | ✅ Done | Live on GCP Cloud Run. `deploy.sh`, `cloudbuild.yaml`. Custom domain optional (run.app has HTTPS). |
-| **Vertical depth** | ✅ Done | 10 vertical playbooks tuned for Saskatoon: dentist, law-firm, hvac, restaurant, real-estate, gym, veterinary, salon, contractor, retail. |
-| **50 real business audits** | 🟡 Ready | `npm run build-targets` → `npm run sync-targets-to-data` → `npm run batch-audit`. Or `npm run blitz` with build-targets output. |
-| **Sales toolkit** | ✅ Done | One-pager, pricing card, objection handler (10), discovery script, launch checklist, pitch rehearsal. All print-ready. |
+| Goal                        | Status            | Notes                                                                                                                                    |
+| --------------------------- | ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| **Bug-zero engine**         | ✅ Done           | Full audit → diagnosis → proposal → PDF pipeline runs end-to-end. 0 critical/high bugs (SPRINT1_AUDIT).                                  |
+| **Agency-grade output**     | ✅ Infrastructure | QA auto-READY at ≥90%. 13 automated checks. Proposals need ongoing prompt tuning to hit 90% consistently.                                |
+| **Production deployment**   | ✅ Done           | Live on GCP Cloud Run. `deploy.sh`, `cloudbuild.yaml`. Custom domain optional (run.app has HTTPS).                                       |
+| **Vertical depth**          | ✅ Done           | 10 vertical playbooks tuned for Saskatoon: dentist, law-firm, hvac, restaurant, real-estate, gym, veterinary, salon, contractor, retail. |
+| **50 real business audits** | 🟡 Ready          | `npm run build-targets` → `npm run sync-targets-to-data` → `npm run batch-audit`. Or `npm run blitz` with build-targets output.          |
+| **Sales toolkit**           | ✅ Done           | One-pager, pricing card, objection handler (10), discovery script, launch checklist, pitch rehearsal. All print-ready.                   |
 
 ---
 

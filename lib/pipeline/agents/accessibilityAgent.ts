@@ -1,6 +1,6 @@
 /**
  * Accessibility Agent
- * 
+ *
  * Handles accessibility-related findings by fixing:
  * - Missing ARIA labels
  * - Color contrast issues
@@ -10,7 +10,7 @@
  * - Semantic HTML structure
  */
 
-import { BaseAgent, type AgentContext, type AgentResult } from './baseAgent';
+import { type AgentContext, type AgentResult, BaseAgent } from './baseAgent';
 
 export class AccessibilityAgent extends BaseAgent {
   getType(): string {

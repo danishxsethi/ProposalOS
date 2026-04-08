@@ -1,101 +1,109 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import { logger } from '@/lib/logger';
+
 import { CostTracker } from '@/lib/costs/costTracker';
+import { logger } from '@/lib/logger';
 
 export interface Review {
-    authorName: string;
-    rating: number; // 1-5
-    text: string;
-    publishTime: string;
-    response?: string; // If already responded
+  authorName: string;
+  rating: number; // 1-5
+  text: string;
+  publishTime: string;
+  response?: string; // If already responded
 }
 
 export interface ReviewResponse {
-    review: Review;
-    draftResponse: string;
-    tone: 'Professional' | 'Empathetic' | 'Grateful';
+  review: Review;
+  draftResponse: string;
+  tone: 'Professional' | 'Empathetic' | 'Grateful';
 }
 
 export interface ReviewResponseInput {
-    businessName: string;
-    industry: string;
-    city: string;
-    reviews: Review[];
+  businessName: string;
+  industry: string;
+  city: string;
+  reviews: Review[];
 }
 
 /**
  * Generate drafts for unanswered reviews
  */
 export async function generateReviewResponses(
-    input: ReviewResponseInput,
-    tracker?: CostTracker
+  input: ReviewResponseInput,
+  tracker?: CostTracker
 ): Promise<ReviewResponse[]> {
-    logger.info({ businessName: input.businessName }, '[ReviewResponses] Generating drafts');
+  logger.info({ businessName: input.businessName }, '[ReviewResponses] Generating drafts');
 
-    if (!process.env.GOOGLE_AI_API_KEY) {
-        throw new Error('GOOGLE_AI_API_KEY is missing');
+  if (!process.env.GOOGLE_AI_API_KEY) {
+    throw new Error('GOOGLE_AI_API_KEY is missing');
+  }
+
+  const genAI = new GoogleGenerativeAI(process.env.GOOGLE_AI_API_KEY);
+  const model = genAI.getGenerativeModel({ model: 'gemini-1.5-pro' }); // Pro for high quality writing
+
+  // Filter for unanswered reviews (or those with empty responses)
+  // Limit to top 5 most relevant (recent/long) to save costs and focus on impact
+  const unansweredReviews = input.reviews
+    .filter((r) => !r.response)
+    .sort((a, b) => b.text.length - a.text.length) // Prioritize longer reviews
+    .slice(0, 5);
+
+  if (unansweredReviews.length === 0) {
+    logger.info('[ReviewResponses] No unanswered reviews found');
+    return [];
+  }
+
+  const responses: ReviewResponse[] = [];
+
+  // Parallel generation
+  const promises = unansweredReviews.map(async (review) => {
+    tracker?.addApiCall('GEMINI_REVIEW_RESPONSE');
+    try {
+      const draft = await generateSingleResponse(model, review, input);
+      return {
+        review,
+        draftResponse: draft,
+        tone: review.rating >= 4 ? 'Grateful' : 'Empathetic',
+      };
+    } catch (error) {
+      logger.warn(
+        { error, reviewAuth: review.authorName },
+        '[ReviewResponses] Failed to draft response'
+      );
+      return null;
     }
+  });
 
-    const genAI = new GoogleGenerativeAI(process.env.GOOGLE_AI_API_KEY);
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-pro' }); // Pro for high quality writing
+  const results = await Promise.all(promises);
 
-    // Filter for unanswered reviews (or those with empty responses)
-    // Limit to top 5 most relevant (recent/long) to save costs and focus on impact
-    const unansweredReviews = input.reviews
-        .filter(r => !r.response)
-        .sort((a, b) => b.text.length - a.text.length) // Prioritize longer reviews
-        .slice(0, 5);
-
-    if (unansweredReviews.length === 0) {
-        logger.info('[ReviewResponses] No unanswered reviews found');
-        return [];
-    }
-
-    const responses: ReviewResponse[] = [];
-
-    // Parallel generation
-    const promises = unansweredReviews.map(async (review) => {
-        tracker?.addApiCall('GEMINI_REVIEW_RESPONSE');
-        try {
-            const draft = await generateSingleResponse(model, review, input);
-            return {
-                review,
-                draftResponse: draft,
-                tone: review.rating >= 4 ? 'Grateful' : 'Empathetic'
-            };
-        } catch (error) {
-            logger.warn({ error, reviewAuth: review.authorName }, '[ReviewResponses] Failed to draft response');
-            return null;
-        }
-    });
-
-    const results = await Promise.all(promises);
-
-    // Filter out failed generations
-    return results.filter((r): r is ReviewResponse => r !== null);
+  // Filter out failed generations
+  return results.filter((r): r is ReviewResponse => r !== null);
 }
 
 /**
  * Generate single response using Gemini
  */
-async function generateSingleResponse(model: any, review: Review, context: ReviewResponseInput): Promise<string> {
-    const isPositive = review.rating >= 4;
+async function generateSingleResponse(
+  model: any,
+  review: Review,
+  context: ReviewResponseInput
+): Promise<string> {
+  const isPositive = review.rating >= 4;
 
-    const instructions = isPositive
-        ? `POSITIVE REVIEW STRATEGY:
+  const instructions = isPositive
+    ? `POSITIVE REVIEW STRATEGY:
            - Thank them by name (if valid name)
            - Reference specific details they mentioned
            - Reinforce our strengths
            - Warm, genuine tone (not corporate)
            - Invite them back`
-        : `NEGATIVE REVIEW STRATEGY:
+    : `NEGATIVE REVIEW STRATEGY:
            - Acknowledge frustration
            - Apologize without admitting legal fault
            - Take conversation offline ("Please call us at...")
            - Professional, empathetic, solution-oriented tone
            - NEVER argue or blame`;
 
-    const prompt = `You are the owner of ${context.businessName}, a ${context.industry} in ${context.city}.
+  const prompt = `You are the owner of ${context.businessName}, a ${context.industry} in ${context.city}.
     Write a response to this Google review.
 
     REVIEWER: ${review.authorName}
@@ -112,6 +120,6 @@ async function generateSingleResponse(model: any, review: Review, context: Revie
     
     DRAFT RESPONSE:`;
 
-    const result = await model.generateContent(prompt);
-    return result.response.text().trim();
+  const result = await model.generateContent(prompt);
+  return result.response.text().trim();
 }

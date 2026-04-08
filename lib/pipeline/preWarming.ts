@@ -1,13 +1,14 @@
 /**
  * Pre-Warming Engine
- * 
+ *
  * Engages with prospects across GBP, Facebook, and Instagram 3-5 days before
  * outreach email delivery to create familiarity and boost open rates.
- * 
+ *
  * Requirements: 13.1, 13.2, 13.3, 13.4, 13.5
  */
 
 import { prisma } from '@/lib/db';
+
 import type { PreWarmingAction, PreWarmingConfig, PreWarmingEngine } from './types';
 
 /**
@@ -20,10 +21,10 @@ const DEFAULT_CONFIG: PreWarmingConfig = {
 
 /**
  * Schedule pre-warming actions for a prospect
- * 
+ *
  * Creates GBP/Facebook/Instagram engagement actions 3-5 days before outreach.
  * Respects daily limits per platform.
- * 
+ *
  * @param leadId - Prospect lead ID
  * @param outreachDate - Scheduled outreach email date
  * @param config - Pre-warming configuration (optional, uses defaults)
@@ -62,8 +63,14 @@ export async function scheduleActions(
   // Determine which platforms are available by checking for their specific URLs
   const platforms: Array<{ platform: 'gbp' | 'facebook' | 'instagram'; available: boolean }> = [
     { platform: 'gbp', available: !!(lead as any).gbpUrl || !!lead.website || !!lead.sourceUrl },
-    { platform: 'facebook', available: !!(lead as any).facebookUrl || !!lead.website || !!lead.sourceUrl },
-    { platform: 'instagram', available: !!(lead as any).instagramUrl || !!lead.website || !!lead.sourceUrl },
+    {
+      platform: 'facebook',
+      available: !!(lead as any).facebookUrl || !!lead.website || !!lead.sourceUrl,
+    },
+    {
+      platform: 'instagram',
+      available: !!(lead as any).instagramUrl || !!lead.website || !!lead.sourceUrl,
+    },
   ];
 
   // Schedule actions within the pre-warming window (3-5 days before outreach)
@@ -79,15 +86,12 @@ export async function scheduleActions(
 
     // Randomly select 1-2 action types for this platform
     const numActions = Math.floor(Math.random() * 2) + 1; // 1 or 2 actions
-    const selectedActionTypes = actionTypes
-      .sort(() => Math.random() - 0.5)
-      .slice(0, numActions);
+    const selectedActionTypes = actionTypes.sort(() => Math.random() - 0.5).slice(0, numActions);
 
     for (const actionType of selectedActionTypes) {
       // Schedule action at a random time within the window
       const scheduledAt = new Date(
-        windowStart.getTime() +
-        Math.random() * (windowEnd.getTime() - windowStart.getTime())
+        windowStart.getTime() + Math.random() * (windowEnd.getTime() - windowStart.getTime())
       );
 
       // Check daily limit for this platform on the scheduled date
@@ -128,10 +132,10 @@ export async function scheduleActions(
 
 /**
  * Execute a pre-warming action
- * 
+ *
  * Performs the actual engagement action on the specified platform.
  * In a real implementation, this would integrate with platform APIs.
- * 
+ *
  * @param action - Pre-warming action to execute
  */
 export async function executeAction(action: PreWarmingAction): Promise<void> {
@@ -145,7 +149,7 @@ export async function executeAction(action: PreWarmingAction): Promise<void> {
     console.log(`Executing ${action.actionType} on ${action.platform} for lead ${action.leadId}`);
 
     // Simulate API call delay
-    await new Promise(resolve => setTimeout(resolve, 100));
+    await new Promise((resolve) => setTimeout(resolve, 100));
 
     // Mark action as completed
     await prisma.preWarmingAction.update({
@@ -171,10 +175,10 @@ export async function executeAction(action: PreWarmingAction): Promise<void> {
 
 /**
  * Check if pre-warming window is complete for a lead
- * 
+ *
  * Returns true if all scheduled actions are completed/failed/skipped,
  * or if the pre-warming window has expired.
- * 
+ *
  * @param leadId - Prospect lead ID
  * @returns True if window is complete, false otherwise
  */
@@ -189,10 +193,9 @@ export async function checkWindowComplete(leadId: string): Promise<boolean> {
   }
 
   // Check if all actions are in a terminal state
-  const allComplete = actions.every(action =>
-    action.status === 'completed' ||
-    action.status === 'failed' ||
-    action.status === 'skipped'
+  const allComplete = actions.every(
+    (action) =>
+      action.status === 'completed' || action.status === 'failed' || action.status === 'skipped'
   );
 
   if (allComplete) {
@@ -200,9 +203,7 @@ export async function checkWindowComplete(leadId: string): Promise<boolean> {
   }
 
   // Check if the latest scheduled action is in the past
-  const latestScheduledAt = Math.max(
-    ...actions.map(action => action.scheduledAt.getTime())
-  );
+  const latestScheduledAt = Math.max(...actions.map((action) => action.scheduledAt.getTime()));
   const now = Date.now();
 
   // If the latest action was scheduled more than 24 hours ago and still not complete,
@@ -216,15 +217,12 @@ export async function checkWindowComplete(leadId: string): Promise<boolean> {
 
 /**
  * Get daily action count for a platform on a specific date
- * 
+ *
  * @param platform - Platform name (gbp, facebook, instagram)
  * @param date - Date to check
  * @returns Number of actions scheduled/executed on that date
  */
-export async function getDailyActionCount(
-  platform: string,
-  date: Date
-): Promise<number> {
+export async function getDailyActionCount(platform: string, date: Date): Promise<number> {
   // Get start and end of the day
   const startOfDay = new Date(date);
   startOfDay.setHours(0, 0, 0, 0);

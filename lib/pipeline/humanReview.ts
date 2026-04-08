@@ -1,15 +1,17 @@
 /**
  * Human Review Queue
- * 
+ *
  * Routes high-value prospects to human operators for review and approval.
  * Provides full context (audit, proposal, engagement, Pain Score) for decision-making.
- * 
+ *
  * Requirements: 10.3, 10.4, 10.5, 10.7
  */
 
-import { prisma } from '@/lib/db';
+import { createScopedPrisma } from '@/lib/tenant/context';
+
 import { transition } from './stateMachine';
-import type { ProspectLead, Audit, Proposal } from '@prisma/client';
+
+import type { Audit, Proposal, ProspectLead } from '@prisma/client';
 
 export interface ReviewQueueItem {
   prospect: ProspectLead & {
@@ -52,20 +54,25 @@ export interface ReviewAction {
  * Route a prospect to the human review queue
  * Requirement 10.3: Display full context for review
  */
-export async function routeToReview(
-  prospectId: string,
-  reason: string
-): Promise<void> {
+export async function routeToReview(prospectId: string, reason: string): Promise<void> {
+  const dbModule = await import('@/lib/db');
+  const tenantId =
+    (
+      await dbModule.prisma.prospectLead.findUnique({
+        where: { id: prospectId },
+        select: { tenantId: true },
+      })
+    )?.tenantId || '';
+
+  const prisma = createScopedPrisma(tenantId);
+
   // Transition prospect to hot_lead status (which triggers human review)
   await transition(prospectId, 'hot_lead', 'deal_closer');
 
   // Log the routing action
   await prisma.pipelineErrorLog.create({
     data: {
-      tenantId: (await prisma.prospectLead.findUnique({
-        where: { id: prospectId },
-        select: { tenantId: true },
-      }))?.tenantId || '',
+      tenantId,
       stage: 'human_review',
       prospectId,
       errorType: 'ROUTED_TO_REVIEW',
@@ -91,6 +98,7 @@ export async function getReviewQueue(
   pageSize: number;
   totalPages: number;
 }> {
+  const prisma = createScopedPrisma(tenantId);
   const {
     status = ['hot_lead'],
     vertical,
@@ -130,18 +138,19 @@ export async function getReviewQueue(
         orderBy: { createdAt: 'asc' },
       },
     },
-    orderBy: sortBy === 'createdAt' || sortBy === 'updatedAt'
-      ? { [sortBy]: sortOrder }
-      : sortBy === 'engagementScore'
-      ? { engagementScore: sortOrder }
-      : { createdAt: sortOrder },
+    orderBy:
+      sortBy === 'createdAt' || sortBy === 'updatedAt'
+        ? { [sortBy]: sortOrder }
+        : sortBy === 'engagementScore'
+          ? { engagementScore: sortOrder }
+          : { createdAt: sortOrder },
     skip: (page - 1) * pageSize,
     take: pageSize,
   });
 
   // Transform to ReviewQueueItem format
-  const items: ReviewQueueItem[] = prospects.map(prospect => {
-    const painBreakdown = (prospect.painScoreBreakdown as Record<string, number>) || {};
+  const items: ReviewQueueItem[] = prospects.map((prospect) => {
+    const painBreakdown = (prospect.painBreakdown as Record<string, number>) || {};
     const painScore = Object.values(painBreakdown).reduce((sum, val) => sum + val, 0);
 
     return {
@@ -153,7 +162,7 @@ export async function getReviewQueue(
       painScore,
       painBreakdown,
       engagementScore: prospect.engagementScore || 0,
-      stateHistory: prospect.stateTransitions.map(t => ({
+      stateHistory: prospect.stateTransitions.map((t) => ({
         from: t.fromStatus,
         to: t.toStatus,
         timestamp: t.createdAt,
@@ -165,10 +174,10 @@ export async function getReviewQueue(
   // Apply pain score filters (post-query since it's computed)
   let filteredItems = items;
   if (minPainScore !== undefined) {
-    filteredItems = filteredItems.filter(item => item.painScore >= minPainScore);
+    filteredItems = filteredItems.filter((item) => item.painScore >= minPainScore);
   }
   if (maxPainScore !== undefined) {
-    filteredItems = filteredItems.filter(item => item.painScore <= maxPainScore);
+    filteredItems = filteredItems.filter((item) => item.painScore <= maxPainScore);
   }
 
   // Sort by pain score if requested (post-query since it's computed)
@@ -195,14 +204,18 @@ export async function getReviewQueue(
 export async function approveProspect(action: ReviewAction): Promise<void> {
   const { prospectId, operatorId, operatorEmail, notes } = action;
 
-  // Get current prospect
-  const prospect = await prisma.prospectLead.findUnique({
+  // Get prospect from global prisma to find tenantId
+  const dbModule = await import('@/lib/db');
+  const prospectRaw = await dbModule.prisma.prospectLead.findUnique({
     where: { id: prospectId },
+    select: { tenantId: true },
   });
 
-  if (!prospect) {
+  if (!prospectRaw) {
     throw new Error(`Prospect ${prospectId} not found`);
   }
+
+  const prisma = createScopedPrisma(prospectRaw.tenantId);
 
   // Transition to closing status
   await transition(prospectId, 'closing', 'human_review');
@@ -210,7 +223,7 @@ export async function approveProspect(action: ReviewAction): Promise<void> {
   // Log the approval action
   await prisma.pipelineErrorLog.create({
     data: {
-      tenantId: prospect.tenantId,
+      tenantId: prospectRaw.tenantId,
       stage: 'human_review',
       prospectId,
       errorType: 'APPROVED',
@@ -232,14 +245,18 @@ export async function approveProspect(action: ReviewAction): Promise<void> {
 export async function rejectProspect(action: ReviewAction): Promise<void> {
   const { prospectId, operatorId, operatorEmail, reason, notes } = action;
 
-  // Get current prospect
-  const prospect = await prisma.prospectLead.findUnique({
+  // Get prospect from global prisma to find tenantId
+  const dbModule = await import('@/lib/db');
+  const prospectRaw = await dbModule.prisma.prospectLead.findUnique({
     where: { id: prospectId },
+    select: { tenantId: true },
   });
 
-  if (!prospect) {
+  if (!prospectRaw) {
     throw new Error(`Prospect ${prospectId} not found`);
   }
+
+  const prisma = createScopedPrisma(prospectRaw.tenantId);
 
   // Transition to closed_lost status
   await transition(prospectId, 'closed_lost', 'human_review');
@@ -247,7 +264,7 @@ export async function rejectProspect(action: ReviewAction): Promise<void> {
   // Log the rejection action
   await prisma.pipelineErrorLog.create({
     data: {
-      tenantId: prospect.tenantId,
+      tenantId: prospectRaw.tenantId,
       stage: 'human_review',
       prospectId,
       errorType: 'REJECTED',
@@ -268,6 +285,15 @@ export async function rejectProspect(action: ReviewAction): Promise<void> {
  * Requirement 10.3: Display full context (audit, proposal, engagement, Pain Score)
  */
 export async function getProspectContext(prospectId: string): Promise<ReviewQueueItem | null> {
+  const dbModule = await import('@/lib/db');
+  const pRaw = await dbModule.prisma.prospectLead.findUnique({
+    where: { id: prospectId },
+    select: { tenantId: true },
+  });
+  if (!pRaw) return null;
+
+  const prisma = createScopedPrisma(pRaw.tenantId);
+
   const prospect = await prisma.prospectLead.findUnique({
     where: { id: prospectId },
     include: {
@@ -287,7 +313,7 @@ export async function getProspectContext(prospectId: string): Promise<ReviewQueu
     return null;
   }
 
-  const painBreakdown = (prospect.painScoreBreakdown as Record<string, number>) || {};
+  const painBreakdown = (prospect.painBreakdown as Record<string, number>) || {};
   const painScore = Object.values(painBreakdown).reduce((sum, val) => sum + val, 0);
 
   return {
@@ -299,7 +325,7 @@ export async function getProspectContext(prospectId: string): Promise<ReviewQueu
     painScore,
     painBreakdown,
     engagementScore: prospect.engagementScore || 0,
-    stateHistory: prospect.stateTransitions.map(t => ({
+    stateHistory: prospect.stateTransitions.map((t) => ({
       from: t.fromStatus,
       to: t.toStatus,
       timestamp: t.createdAt,
@@ -319,6 +345,7 @@ export async function getReviewQueueStats(tenantId: string): Promise<{
   approvalRate: number;
   avgReviewTime: number;
 }> {
+  const prisma = createScopedPrisma(tenantId);
   // Get prospects currently in review
   const inReview = await prisma.prospectLead.findMany({
     where: {
@@ -330,18 +357,20 @@ export async function getReviewQueueStats(tenantId: string): Promise<{
   const totalInReview = inReview.length;
 
   // Calculate average pain score
-  const avgPainScore = inReview.length > 0
-    ? inReview.reduce((sum, p) => {
-        const breakdown = (p.painScoreBreakdown as Record<string, number>) || {};
-        const score = Object.values(breakdown).reduce((s, v) => s + v, 0);
-        return sum + score;
-      }, 0) / inReview.length
-    : 0;
+  const avgPainScore =
+    inReview.length > 0
+      ? inReview.reduce((sum, p) => {
+          const breakdown = (p.painBreakdown as Record<string, number>) || {};
+          const score = Object.values(breakdown).reduce((s, v) => s + v, 0);
+          return sum + score;
+        }, 0) / inReview.length
+      : 0;
 
   // Calculate average engagement score
-  const avgEngagementScore = inReview.length > 0
-    ? inReview.reduce((sum, p) => sum + (p.engagementScore || 0), 0) / inReview.length
-    : 0;
+  const avgEngagementScore =
+    inReview.length > 0
+      ? inReview.reduce((sum, p) => sum + (p.engagementScore || 0), 0) / inReview.length
+      : 0;
 
   // Get approval/rejection logs from last 30 days
   const thirtyDaysAgo = new Date();
@@ -356,8 +385,8 @@ export async function getReviewQueueStats(tenantId: string): Promise<{
     },
   });
 
-  const approvals = reviewActions.filter(a => a.errorType === 'APPROVED').length;
-  const rejections = reviewActions.filter(a => a.errorType === 'REJECTED').length;
+  const approvals = reviewActions.filter((a) => a.errorType === 'APPROVED').length;
+  const rejections = reviewActions.filter((a) => a.errorType === 'REJECTED').length;
   const total = approvals + rejections;
 
   const approvalRate = total > 0 ? approvals / total : 0;
@@ -385,13 +414,17 @@ export async function overrideProspectStatus(
   operatorEmail: string,
   reason: string
 ): Promise<void> {
-  const prospect = await prisma.prospectLead.findUnique({
+  const dbModule = await import('@/lib/db');
+  const prospectRaw = await dbModule.prisma.prospectLead.findUnique({
     where: { id: prospectId },
+    select: { tenantId: true, pipelineStatus: true },
   });
 
-  if (!prospect) {
+  if (!prospectRaw) {
     throw new Error(`Prospect ${prospectId} not found`);
   }
+
+  const prisma = createScopedPrisma(prospectRaw.tenantId);
 
   // Transition to new status
   await transition(prospectId, newStatus as any, 'manual_override');
@@ -399,7 +432,7 @@ export async function overrideProspectStatus(
   // Log the override action
   await prisma.pipelineErrorLog.create({
     data: {
-      tenantId: prospect.tenantId,
+      tenantId: prospectRaw.tenantId,
       stage: 'manual_override',
       prospectId,
       errorType: 'STATUS_OVERRIDE',
@@ -407,7 +440,7 @@ export async function overrideProspectStatus(
       metadata: {
         operatorId,
         operatorEmail,
-        oldStatus: prospect.pipelineStatus,
+        oldStatus: prospectRaw.pipelineStatus,
         newStatus,
         reason,
         overriddenAt: new Date().toISOString(),

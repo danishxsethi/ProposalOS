@@ -9,7 +9,7 @@ interface ConfidenceRule {
 
 /**
  * Scores a finding's confidence level based on evidence quality.
- * 
+ *
  * Rules (evaluated in order, first match wins):
  * - HIGH: finding.evidence contains at least one entry with a valid pointer + collected_at
  * - MEDIUM: finding.evidence is non-empty but lacks a direct measurement pointer
@@ -42,8 +42,14 @@ export function scoreConfidence(finding: Finding): ConfidenceLevel {
  */
 const SOFTENING_PATTERNS: Array<[RegExp, string]> = [
   [/your\s+(\w+)\s+is\s+(\w+)/gi, 'estimated $1: ~$2 (modeled)'],
-  [/(\w+)\s+costs?\s+you\s+\$(\d+(?:,\d{3})*(?:\.\d{2})?)(\/month|\/year)?/gi, 'estimated monthly impact: ~$$$2 (modeled)'],
-  [/competitors?\s+(?:are\s+)?outperforming/gi, 'competitors may be outperforming (as of last audit)'],
+  [
+    /(\w+)\s+costs?\s+you\s+\$(\d+(?:,\d{3})*(?:\.\d{2})?)(\/month|\/year)?/gi,
+    'estimated monthly impact: ~$$$2 (modeled)',
+  ],
+  [
+    /competitors?\s+(?:are\s+)?outperforming/gi,
+    'competitors may be outperforming (as of last audit)',
+  ],
   [/you\s+(?:are\s+)?losing\s+(\$[\d,]+)/gi, 'estimated loss: ~$1 (modeled)'],
   [/your\s+traffic\s+loss\s+is\s+(\$[\d,]+)/gi, 'estimated traffic impact: ~$1 (modeled)'],
 ];

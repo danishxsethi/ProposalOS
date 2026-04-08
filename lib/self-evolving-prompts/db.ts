@@ -24,10 +24,7 @@ export { prisma };
  * Execute a raw SQL query with parameters
  * Provides a consistent interface for raw queries
  */
-export async function executeQuery<T = any>(
-  query: string,
-  params: any[] = []
-): Promise<T[]> {
+export async function executeQuery<T = any>(query: string, params: any[] = []): Promise<T[]> {
   return prisma.$queryRawUnsafe<T[]>(query, ...params);
 }
 
@@ -35,10 +32,7 @@ export async function executeQuery<T = any>(
  * Execute a raw SQL command (INSERT, UPDATE, DELETE)
  * Returns the number of affected rows
  */
-export async function executeCommand(
-  command: string,
-  params: any[] = []
-): Promise<number> {
+export async function executeCommand(command: string, params: any[] = []): Promise<number> {
   const result = await prisma.$executeRawUnsafe(command, ...params);
   return result;
 }
