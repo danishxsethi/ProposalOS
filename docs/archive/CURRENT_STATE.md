@@ -410,12 +410,12 @@ __end__
 ```typescript
 // ✅ CORRECT
 const audits = await prisma.audit.findMany({
-  where: { tenantId, status: "COMPLETE" },
+  where: { tenantId, status: 'COMPLETE' },
 });
 
 // ❌ WRONG
 const audits = await prisma.audit.findMany({
-  where: { status: "COMPLETE" }, // Missing tenantId!
+  where: { status: 'COMPLETE' }, // Missing tenantId!
 });
 ```
 
@@ -476,7 +476,7 @@ if (tracker && result.usageMetadata) {
 // ✅ CORRECT
 const validation = validateClusters(clusters, findings);
 if (!validation.valid) {
-  console.error("Validation failed:", validation.errors);
+  console.error('Validation failed:', validation.errors);
   // Fallback to pre-clusters
 }
 

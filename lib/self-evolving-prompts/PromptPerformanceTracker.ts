@@ -1,29 +1,24 @@
 /**
  * PromptPerformanceTracker Class
  * Provides a high-level interface for tracking LLM prompt performance
- * 
+ *
  * Validates: Requirements 1.1, 1.2, 1.3, 1.4, 1.5
  */
 
-import {
-  PromptPerformanceLog,
-  AggregateMetrics,
-  TimeRange,
-  PromptVersion,
-} from './types';
 import * as promptPerformanceDA from './data-access/prompt-performance';
+import { AggregateMetrics, PromptPerformanceLog, PromptVersion, TimeRange } from './types';
 
 export class PromptPerformanceTracker {
   /**
    * Log a prompt performance entry (append-only)
-   * 
+   *
    * Implements append-only logging to PostgreSQL with:
    * - Automatic timestamp generation (handled by database DEFAULT NOW())
    * - Automatic UUID generation (handled by database gen_random_uuid())
    * - Metadata serialization to JSONB (handled by database JSONB type)
-   * 
+   *
    * Validates: Requirements 1.1, 1.2, 10.2
-   * 
+   *
    * @param log - Performance log data (without id and timestamp)
    * @returns Promise resolving to the created log entry with id and timestamp
    */
@@ -43,9 +38,9 @@ export class PromptPerformanceTracker {
 
   /**
    * Get performance logs by version hash with optional time range filtering
-   * 
+   *
    * Validates: Requirements 1.3
-   * 
+   *
    * @param versionHash - Prompt version hash to filter by
    * @param timeRange - Optional time range filter
    * @returns Promise resolving to array of performance logs
@@ -59,25 +54,22 @@ export class PromptPerformanceTracker {
 
   /**
    * Calculate aggregate metrics for a prompt version
-   * 
+   *
    * Validates: Requirements 1.4
-   * 
+   *
    * @param versionHash - Prompt version hash to calculate metrics for
    * @param timeRange - Optional time range filter
    * @returns Promise resolving to aggregate metrics
    */
-  async getAggregateMetrics(
-    versionHash: string,
-    timeRange?: TimeRange
-  ): Promise<AggregateMetrics> {
+  async getAggregateMetrics(versionHash: string, timeRange?: TimeRange): Promise<AggregateMetrics> {
     return promptPerformanceDA.getAggregateMetrics(versionHash, timeRange);
   }
 
   /**
    * Get underperforming prompts below a quality threshold
-   * 
+   *
    * Validates: Requirements 3.1
-   * 
+   *
    * @param threshold - Quality score threshold
    * @param minSampleSize - Minimum number of samples required (default: 10)
    * @returns Promise resolving to array of underperforming prompt versions
@@ -91,7 +83,7 @@ export class PromptPerformanceTracker {
 
   /**
    * Get performance logs by node ID
-   * 
+   *
    * @param nodeId - LangGraph node ID to filter by
    * @param timeRange - Optional time range filter
    * @returns Promise resolving to array of performance logs
@@ -105,21 +97,19 @@ export class PromptPerformanceTracker {
 
   /**
    * Get performance logs by experiment ID
-   * 
+   *
    * @param experimentId - A/B experiment ID to filter by
    * @returns Promise resolving to array of performance logs
    */
-  async getPerformanceByExperiment(
-    experimentId: string
-  ): Promise<PromptPerformanceLog[]> {
+  async getPerformanceByExperiment(experimentId: string): Promise<PromptPerformanceLog[]> {
     return promptPerformanceDA.getPerformanceByExperiment(experimentId);
   }
 
   /**
    * Get performance logs filtered by quality score threshold
-   * 
+   *
    * Validates: Requirements 1.3, 1.5
-   * 
+   *
    * @param threshold - Quality score threshold
    * @param operator - Comparison operator (default: '>=')
    * @param timeRange - Optional time range filter
@@ -130,16 +120,12 @@ export class PromptPerformanceTracker {
     operator: '>=' | '<=' | '>' | '<' = '>=',
     timeRange?: TimeRange
   ): Promise<PromptPerformanceLog[]> {
-    return promptPerformanceDA.getPerformanceByQualityThreshold(
-      threshold,
-      operator,
-      timeRange
-    );
+    return promptPerformanceDA.getPerformanceByQualityThreshold(threshold, operator, timeRange);
   }
 
   /**
    * Validate log entry has all required fields
-   * 
+   *
    * @param log - Log entry to validate
    * @throws Error if validation fails
    */

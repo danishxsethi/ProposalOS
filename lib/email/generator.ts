@@ -1,5 +1,6 @@
 import { generateWithGemini } from '@/lib/llm/provider';
 import { prisma } from '@/lib/prisma';
+
 import { generatePersonalizationDirectives, ProspectMetadata } from './personalization';
 
 export interface EmailSequenceResult {
@@ -8,7 +9,7 @@ export interface EmailSequenceResult {
     subjectA: string;
     subjectB: string;
     body: string;
-    status: 'draft' | 'sent'
+    status: 'draft' | 'sent';
   }>;
 }
 
@@ -30,18 +31,24 @@ function parseDelimitedEmails(raw: string): EmailSequenceResult['emails'] {
   const matches = [...raw.matchAll(sectionRegex)];
 
   for (const match of matches.slice(0, 5)) {
-    const block = match[2].trim();
+    const block = match[2]!.trim();
     const subjectA = block.match(/^SUBJECT_A:\s*(.+)$/m)?.[1]?.trim() ?? '';
     const subjectB = block.match(/^SUBJECT_B:\s*(.+)$/m)?.[1]?.trim() ?? '';
     const bodyMatch = block.match(/^BODY:\s*\n([\s\S]+)$/m);
     const body = bodyMatch?.[1]?.trim() ?? block;
-    const step = parseInt(match[1], 10);
+    const step = parseInt(match[1]!, 10);
     emails.push({ step, subjectA, subjectB, body, status: 'draft' });
   }
 
   // Fallback: if Gemini dropped the delimiter entirely, treat the whole text as email 1
   if (emails.length === 0 && raw.length > 50) {
-    emails.push({ step: 1, subjectA: 'Your Audit Results', subjectB: 'Re: Your Business Audit', body: raw.trim(), status: 'draft' });
+    emails.push({
+      step: 1,
+      subjectA: 'Your Audit Results',
+      subjectB: 'Re: Your Business Audit',
+      body: raw.trim(),
+      status: 'draft',
+    });
   }
 
   return emails;
@@ -54,7 +61,6 @@ export async function generateEmailSequenceNode(
   roiData: string,
   meta: ProspectMetadata
 ): Promise<EmailSequenceResult> {
-
   const directives = generatePersonalizationDirectives(meta);
 
   const systemPrompt = `You are an elite B2B Strategic Copywriter. Write a highly converting 5-email follow-up sequence based on a recent audit.
@@ -70,6 +76,12 @@ ${executiveSummary}
 ROI Data:
 ${roiData}
 
+IMPORTANT: Each email MUST include:
+1. A clear unsubscribe link placeholder: [UNSUBSCRIBE_LINK]
+2. Physical address placeholder: [COMPANY_ADDRESS]
+3. Accurate, non-deceptive subject lines
+4. Clear identification of sender
+
 Output EXACTLY this format for each of the 5 emails. Do NOT output JSON. Use these exact delimiters:
 
 ---EMAIL 1---
@@ -77,6 +89,10 @@ SUBJECT_A: (subject line variant A)
 SUBJECT_B: (subject line variant B for A/B test)
 BODY:
 (full email body here — plain text, multiple paragraphs, no JSON)
+At the end include:
+---
+To opt out of future emails, click here: [UNSUBSCRIBE_LINK]
+[COMPANY_ADDRESS]
 
 ---EMAIL 2---
 SUBJECT_A: ...
@@ -119,8 +135,8 @@ Write like a sharp senior strategist — not like a generic AI mailer.`;
       role: meta.role,
       sizeScope: meta.sizeScope,
       emails: emailsData as any,
-      analytics: { openRates: {}, clickRates: {}, replyRates: {} }
-    }
+      analytics: { openRates: {}, clickRates: {}, replyRates: {} },
+    },
   });
 
   return { emails: emailsData };

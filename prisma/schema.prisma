@@ -88,6 +88,8 @@ model Proposal {
   tierGrowth       Json           @default("{}")
   tierPremium      Json           @default("{}")
   pricing          Json           @default("{}")
+  stripePriceId    String?
+  stripeAmountCents Int?
   assumptions      String[]       @default([])
   disclaimers      String[]       @default([])
   nextSteps        String[]       @default([])
@@ -161,7 +163,13 @@ model ProposalAcceptance {
 
   acceptedAt DateTime @default(now())
 
+  // Multi-Tenancy
+  tenantId String
+
   proposal Proposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+  tenant   Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
 }
 
 model ProposalView {
@@ -177,10 +185,15 @@ model ProposalView {
   referrer          String?  @db.Text
   ipHash            String? // SHA256 hash of IP for privacy
 
+  // Multi-Tenancy
+  tenantId String
+
   proposal Proposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+  tenant   Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([proposalId])
   @@index([sessionId])
+  @@index([tenantId])
 }
 
 model ContactRequest {
@@ -279,7 +292,7 @@ model ProposalTemplate {
   updatedAt    DateTime @updatedAt
 
   // Multi-Tenancy
-  tenantId String? // Global templates = null, Custom = tenantId
+  tenantId String // Made required for RLS consistency
 
   proposals Proposal[]
 
@@ -306,11 +319,11 @@ model User {
 
   auditsThisMonth Int      @default(0)
   auditsLimit     Int      @default(10)
-  tenantId        String?
+  tenantId        String // Made required for RLS consistency
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  tenant   Tenant?   @relation(fields: [tenantId], references: [id])
+  tenant   Tenant    @relation(fields: [tenantId], references: [id])
   accounts Account[]
   sessions Session[]
 
@@ -333,8 +346,15 @@ model Tenant {
   // Billing
   planTier             String  @default("free") // free, starter, pro, agency
   status               String  @default("active") // active, trial, suspended
+  subscriptionStatus   String  @default("inactive") // inactive, pending, trialing, active, past_due, canceled, unpaid
   stripeCustomerId     String?
   stripeSubscriptionId String?
+  stripeSubscriptionItemId String?
+  onboardingCompletedAt DateTime?
+  
+  // Grace Period for Failed Renewals
+  gracePeriodEndsAt  DateTime? // When the grace period ends (null = no active grace period)
+  gracePeriodNotifiedAt DateTime? // When the first notification was sent
 
   branding  Json     @default("{}")
   settings  Json     @default("{}")
@@ -364,6 +384,24 @@ model Tenant {
   proposalFollowUps      ProposalFollowUp[]
   monitoringConfigs      MonitoringConfig[]
   locationGroups         LocationGroup[]
+  subscriptions          Subscription[]
+  payments               Payment[]
+  auditTargets           AuditTarget[]
+  outreachTemplatePerformances OutreachTemplatePerformance[]
+  proposalOutreach       ProposalOutreach[]
+  followUpEmailSends     FollowUpEmailSend[]
+  failedWebhookEvents    FailedWebhookEvent[]
+  cartAbandonmentEvents  CartAbandonmentEvent[]
+  partnerDeliveredLeads  PartnerDeliveredLead[]
+  proposalAcceptances    ProposalAcceptance[]
+  proposalViews          ProposalView[]
+  
+  // Prompt Management Relations
+  promptVersions         PromptVersion[]
+  promptPerformanceLogs  PromptPerformanceLog[]
+  abExperiments          ABExperiment[]
+  predictions            Prediction[]
+  scenarios              Scenario[]
 
   @@index([domain])
   @@index([isActive])
@@ -453,9 +491,14 @@ model AuditTarget {
   source       String   @default("saskatoon-validation")
   createdAt    DateTime @default(now())
 
+  // Multi-Tenancy (nullable for system-wide targets)
+  tenantId   String?
+  tenant     Tenant?  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
   @@index([placeId])
   @@index([vertical])
   @@index([source])
+  @@index([tenantId])
 }
 
 model ProspectDiscoveryJob {
@@ -876,6 +919,17 @@ model PipelineConfig {
   // Pricing multiplier
   pricingMultiplier Float @default(1.0)
 
+  // Circuit Breaker Configuration
+  circuitBreakerEnabled       Boolean @default(true)
+  errorRateThreshold          Float   @default(0.5) // 50% error rate triggers circuit
+  circuitBreakerMinSamples    Int     @default(10)
+  circuitBreakerWindowMs      Int     @default(300000) // 5 minutes
+  circuitBreakerOpenTimeoutMs Int     @default(600000) // 10 minutes
+  circuitBreakerHalfOpenMaxAttempts Int @default(5)
+
+  // Dead Letter Queue Configuration
+  maxFailureCount Int @default(3) // Move to DLQ after N failures
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -903,6 +957,7 @@ model PipelineErrorLog {
 // Outreach template performance tracking
 model OutreachTemplatePerformance {
   id         String @id @default(uuid())
+  tenantId   String
   templateId String
   vertical   String
   city       String?
@@ -920,7 +975,10 @@ model OutreachTemplatePerformance {
 
   updatedAt DateTime @updatedAt
 
-  @@unique([templateId, vertical, city])
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, templateId, vertical, city])
+  @@index([tenantId])
   @@index([vertical])
 }
 
@@ -1037,6 +1095,10 @@ model PartnerDeliveredLead {
   leadId    String
   lead      ProspectLead @relation(fields: [leadId], references: [id], onDelete: Cascade)
 
+  // Multi-Tenancy (derived from the lead)
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
   packagedData Json // Full lead package (audit, proposal, pain score, contact)
   status       String @default("delivered") // 'delivered', 'viewed', 'contacted', 'converted', 'rejected'
 
@@ -1047,6 +1109,7 @@ model PartnerDeliveredLead {
 
   @@index([partnerId, status])
   @@index([leadId])
+  @@index([tenantId])
 }
 
 // Cross-tenant anonymized intelligence model
@@ -1196,9 +1259,10 @@ model ProposalOutreach {
   clickedAt DateTime?
 
   // Multi-Tenancy
-  tenantId String?
+  tenantId String
 
   proposal Proposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+  tenant   Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([proposalId])
   @@index([recipientEmail])
@@ -1216,7 +1280,9 @@ model FollowUpEmailSend {
   emailSubject   String
   emailBody      String   @db.Text
   sentAt         DateTime @default(now())
-  tenantId       String?
+  tenantId       String
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([auditId])
   @@index([proposalId])
@@ -1247,6 +1313,137 @@ model UsageRecord {
 
   @@index([tenantId])
   @@index([timestamp])
+}
+
+model ProcessedWebhookEvent {
+  id          String   @id
+  type        String
+  processedAt DateTime @default(now())
+
+  @@map("processed_webhook_events")
+}
+
+model FailedWebhookEvent {
+  id           String   @id @default(cuid())
+  eventId      String   @unique  // Original Stripe event ID
+  eventType    String
+  payload      Json
+  errorMessage String?
+  errorStack   String?
+  attempts     Int      @default(0)
+  lastAttempt  DateTime?
+  resolved     Boolean  @default(false)
+  resolvedAt   DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Multi-Tenancy (nullable for system-level webhooks)
+  tenantId     String?
+  tenant       Tenant?  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([eventId])
+  @@index([resolved, createdAt])
+  @@index([tenantId])
+  @@map("failed_webhook_events")
+}
+
+model CartAbandonmentEvent {
+  id          String   @id @default(cuid())
+  sessionId   String
+  proposalId  String
+  checkoutType String   // 'proposal' or 'saas'
+  step        String   // 'initiated', 'pricing_selected', 'checkout_started', 'payment_failed', 'completed'
+  timestamp   DateTime @default(now())
+  metadata    Json?    // Additional event data
+
+  // Multi-Tenancy
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  
+  @@index([sessionId, timestamp])
+  @@index([proposalId, timestamp])
+  @@index([checkoutType, timestamp])
+  @@index([step, timestamp])
+  @@index([tenantId])
+  @@map("cart_abandonment_events")
+}
+
+model PricingPlan {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  type        String   // 'saas' or 'proposal'
+  interval    String?  // 'month', 'year' for subscriptions
+  status      String   // 'active', 'inactive', 'archived'
+  sortOrder   Int      @default(0)
+  
+  // Pricing tiers
+  tiers       Json     // Array of tier configurations
+  
+  // Stripe integration
+  stripeProductId String?
+  stripePriceIds Json? // Mapping of tier -> priceId
+  
+  // Features and limits
+  features    Json?    // Feature matrix
+  limits      Json?    // Usage limits per tier
+  
+  // Metadata
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  createdBy   String?
+  updatedBy   String?
+
+  @@index([type, status])
+  @@index([stripeProductId])
+  @@map("pricing_plans")
+}
+
+model Subscription {
+  id                   String   @id @default(cuid())
+  tenantId             String
+  stripeSubscriptionId String   @unique
+  stripePriceId        String
+  status               String
+  currentPeriodStart   DateTime
+  currentPeriodEnd     DateTime
+  cancelAtPeriodEnd    Boolean  @default(false)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  tenant               Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@map("subscriptions")
+}
+
+model Payment {
+  id              String   @id @default(cuid())
+  tenantId        String
+  stripeInvoiceId String?  @unique
+  stripeChargeId  String?
+  amountCents     Int
+  currency        String   @default("usd")
+  status          String
+  paidAt          DateTime?
+  createdAt       DateTime @default(now())
+  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@map("payments")
+}
+
+model CheckoutAttempt {
+  id              String   @id @default(cuid())
+  stripeSessionId String   @unique
+  tenantId        String // Made required for RLS consistency
+  proposalId      String?
+  type            String
+  completedAt     DateTime?
+  createdAt       DateTime @default(now())
+
+  @@index([tenantId])
+  @@index([proposalId])
+  @@map("checkout_attempts")
 }
 
 model BenchmarkStats {
@@ -1558,7 +1755,7 @@ model QATelemetry {
   unsupportedClaims  Json     // ConsistencyFlag[]
   retryTriggered     Boolean  @default(false)
   retryCount         Int      @default(0)
-  tenantId           String?
+  tenantId           String // Made required for RLS consistency
   auditId            String?
   proposalId         String?
   createdAt          DateTime @default(now())
@@ -1601,6 +1798,33 @@ model Metric {
   @@index([name])
 }
 
+model AuditTrailEvent {
+  id                 String   @id @default(uuid())
+  eventType          String
+  occurredAt         DateTime @default(now())
+  tenantId           String?
+  auditId            String?
+  proposalId         String?
+  actorId            String?
+  triggerSource      String?
+  correlationId      String?
+  traceId            String?
+  targetUrlEncrypted String?
+  targetUrlHash      String?
+  modulesRun         Json     @default("[]")
+  findingsCount      Int?
+  proposalGenerated  Boolean  @default(false)
+  proposalDelivered  Boolean  @default(false)
+  payload            Json     @default("{}")
+  previousHash       String?
+  eventHash          String   @unique
+
+  @@index([tenantId, occurredAt])
+  @@index([auditId, occurredAt])
+  @@index([proposalId, occurredAt])
+  @@index([eventType, occurredAt])
+}
+
 model MonitoringConfig {
   id        String   @id @default(cuid())
   tenantId  String
@@ -1635,4 +1859,318 @@ model Plugin {
   active      Boolean  @default(false)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+}
+
+// Circuit Breaker State per tenant/stage
+model CircuitBreakerState {
+  id                String   @id @default(uuid())
+  tenantId          String
+  stage             String   // PipelineStage enum value
+  state             String   @default("CLOSED") // CLOSED, OPEN, HALF_OPEN
+  errorCount        Int      @default(0)
+  successCount      Int      @default(0)
+  totalAttempts     Int      @default(0)
+  lastErrorAt       DateTime?
+  lastStateChangeAt DateTime  @default(now())
+  halfOpenAttempts  Int      @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([tenantId, stage])
+  @@index([tenantId, state])
+  @@index([stage])
+}
+
+// Dead Letter Queue for permanently failed prospects
+model DeadLetterQueue {
+  id           String   @id @default(uuid())
+  tenantId     String
+  prospectId   String   @unique
+  originalStatus String
+  failureCount Int      @default(0)
+  lastError    String   @db.Text
+  lastErrorAt  DateTime
+  createdAt    DateTime @default(now())
+  processedAt  DateTime?
+  status       String   @default("pending") // pending, retrying, resolved, discarded
+
+  @@index([tenantId, status])
+  @@index([createdAt])
+}
+
+// ===== Retention & Client Portal Models =====
+
+model ClientDashboard {
+  id             String   @id @default(uuid())
+  tenantId       String
+  auditId        String   @unique
+  healthScore    Int
+  lastScanDate   DateTime
+  previousScore  Int?
+  scoreChange    Int?
+  findingsFixed  Int
+  findingsTotal  Int
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([tenantId])
+  @@index([auditId])
+}
+
+model UpsellOpportunity {
+  id            String   @id @default(uuid())
+  tenantId      String
+  proposalId    String
+  triggerType   String   // 'competitor', 'scheduled_audit', 'manual'
+  triggerReason String
+  status        String   // 'created', 'sent', 'viewed', 'accepted', 'rejected'
+  sentAt        DateTime?
+  acceptedAt    DateTime?
+  dealValue     Decimal? @db.Decimal(10, 2)
+  createdAt     DateTime @default(now())
+
+  @@index([tenantId, status])
+  @@index([triggerType])
+}
+
+model NotificationPreference {
+  id          String   @id @default(uuid())
+  tenantId    String
+  userId      String
+  emailEnabled Boolean  @default(true)
+  smsEnabled   Boolean  @default(false)
+  frequency    String   // 'instant', 'daily', 'weekly', 'never'
+  types        Json     // { proposalReady: true, proposalViewed: true, nps: true, upsell: false }
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([tenantId, userId])
+}
+
+model ScheduledAuditRun {
+  id              String   @id @default(uuid())
+  tenantId        String
+  scheduleId      String
+  auditId         String
+  previousAuditId String?
+  status          String   // 'queued', 'running', 'completed', 'failed'
+  comparisonReport Json?
+  startedAt       DateTime?
+  completedAt     DateTime?
+  createdAt       DateTime @default(now())
+
+  @@index([tenantId])
+  @@index([scheduleId])
+  @@index([auditId])
+}
+
+model CompetitorSignal {
+  id              String   @id @default(uuid())
+  tenantId        String
+  leadId          String?
+  signalType      String   // 'competitor_new_review', 'competitor_rating_change', etc.
+  priority        String   // 'high', 'medium', 'low'
+  competitorName  String
+  competitorUrl   String?
+  signalData      Json
+  outreachTriggered Boolean @default(false)
+  upsellProposalId String?
+  detectedAt      DateTime @default(now())
+  createdAt       DateTime @default(now())
+
+  @@index([tenantId, signalType, detectedAt])
+  @@index([leadId])
+}
+
+model ReEngagementCampaign {
+  id           String   @id @default(uuid())
+  tenantId     String
+  proposalId   String
+  status       String   // 'pending', 'sent', 'completed', 'converted'
+  step         Int      @default(0) // 1, 2, 3 for email sequence
+  lastSentAt   DateTime?
+  convertedAt  DateTime?
+  createdAt    DateTime @default(now())
+
+  @@index([tenantId, status])
+  @@index([proposalId])
+}
+
+model WinBackCampaign {
+  id           String   @id @default(uuid())
+  tenantId     String
+  formerTenantId String
+  status       String   // 'pending', 'sent', 'completed', 'converted'
+  step         Int      @default(0)
+  offerCode    String?
+  lastSentAt   DateTime?
+  convertedAt  DateTime?
+  createdAt    DateTime @default(now())
+
+  @@index([tenantId, status])
+  @@index([formerTenantId])
+}
+
+// ============================================================================
+// PROMPT MANAGEMENT & SELF-EVOLVING SYSTEM
+// ============================================================================
+
+// Prompt Version Control - Git-like versioning for prompts
+model PromptVersion {
+  id                  String   @id @default(uuid())
+  versionHash         String   @unique // SHA256 of nodeId + promptText + timestamp
+  nodeId              String   // e.g., "executive_summary", "pricing_generation"
+  promptText          String   @db.Text
+  createdBy           String   // User ID or system
+  parentVersionHash   String?  // Parent version for lineage tracking
+  branchName          String   @default("main") // Support branching
+  changelog           String
+  isActive            Boolean  @default(false) // Only one active version per node
+  environment         String   @default("production") // dev, staging, production
+  metadata            Json     @default("{}") // Additional metadata
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  // Multi-Tenancy
+  tenantId            String?  // Null = system-wide prompt
+  tenant              Tenant?  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  // Relations
+  performanceLogs     PromptPerformanceLog[]
+  experimentVariants  ABVariant[]
+  predictions         Prediction[]
+
+  @@index([nodeId])
+  @@index([versionHash])
+  @@index([isActive])
+  @@index([environment])
+  @@index([tenantId])
+  @@index([createdAt])
+}
+
+// Append-Only Performance Log - Tracks every LLM call
+model PromptPerformanceLog {
+  id                  String   @id @default(uuid())
+  timestamp           DateTime @default(now())
+  promptVersionHash   String
+  nodeId              String
+  qualityScore        Float    // 0-100 score from QA evaluation
+  downstreamImpact    Float    // 0-100 impact on downstream metrics
+  costUSD             Float    // Actual cost in USD
+  latencyMs           Int      // Response time in milliseconds
+  inputTokens         Int      // Tokens in prompt
+  outputTokens        Int      // Tokens in response
+  experimentId        String?  // If part of A/B test
+  variantId           String?  // If part of A/B test
+  metadata            Json     @default("{}") // Model, temperature, etc.
+
+  // Multi-Tenancy
+  tenantId            String
+  tenant              Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  // Relations
+  promptVersion       PromptVersion @relation(fields: [promptVersionHash], references: [versionHash], onDelete: Cascade)
+
+  @@index([promptVersionHash])
+  @@index([nodeId])
+  @@index([experimentId])
+  @@index([timestamp])
+  @@index([tenantId])
+}
+
+// A/B Testing Framework - Experiment management
+model ABExperiment {
+  id                      String   @id @default(uuid())
+  name                    String
+  nodeId                  String   // Which prompt node is being tested
+  status                  String   @default("active") // active, completed, paused
+  startDate               DateTime @default(now())
+  endDate                 DateTime?
+  winnerVariantId         String?  // Winning variant after completion
+  statisticalSignificance Float?   // p-value if completed
+  metadata                Json     @default("{}")
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+
+  // Multi-Tenancy
+  tenantId                String
+  tenant                  Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  // Relations
+  variants                ABVariant[]
+
+  @@index([nodeId])
+  @@index([status])
+  @@index([tenantId])
+}
+
+// A/B Testing Framework - Variant definitions
+model ABVariant {
+  id                      String   @id @default(uuid())
+  experimentId            String
+  promptVersionHash       String
+  trafficPercentage       Int      // 0-100
+  sampleSize              Int      @default(0) // Number of requests routed here
+  avgQualityScore         Float?   // Running average
+  avgDownstreamImpact     Float?   // Running average
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+
+  // Relations
+  experiment              ABExperiment @relation(fields: [experimentId], references: [id], onDelete: Cascade)
+  promptVersion           PromptVersion @relation(fields: [promptVersionHash], references: [versionHash])
+
+  @@index([experimentId])
+  @@index([promptVersionHash])
+}
+
+// Predictive Intelligence - Storage for predictions
+model Prediction {
+  id                      String   @id @default(uuid())
+  auditId                 String?  // Associated audit
+  predictionType          String   // traffic, ranking, competitor, revenue, algorithm
+  predictedValue          Float
+  confidenceIntervalLower Float
+  confidenceIntervalUpper Float
+  actualValue             Float?   // Set when observed
+  observedAt              DateTime? // When actual was recorded
+  predictionDate          DateTime @default(now())
+  metadata                Json     @default("{}")
+  createdAt               DateTime @default(now())
+
+  // Multi-Tenancy
+  tenantId                String
+  tenant                  Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  // Relations
+  promptVersion           PromptVersion? @relation(fields: [promptVersionHash], references: [versionHash])
+  promptVersionHash       String?
+
+  @@index([auditId])
+  @@index([predictionType])
+  @@index([tenantId])
+  @@index([predictionDate])
+}
+
+// What-If Scenarios - Scenario planning results
+model Scenario {
+  id                      String   @id @default(uuid())
+  auditId                 String   // Associated audit
+  selectedRecommendations Json     // Array of recommendation IDs
+  projectedROI            Float    // Expected ROI percentage
+  projectedTimeline       String   // e.g., "3 months"
+  projectedTraffic        Int      // Expected traffic increase
+  confidenceIntervals     Json     // { roi: [min, max], traffic: [min, max] }
+  comparisonToBaseline    Json     // { roiDelta, trafficDelta, timelineDelta }
+  calculationTimeMs       Int      // Time to calculate
+  createdAt               DateTime @default(now())
+
+  // Multi-Tenancy
+  tenantId                String
+  tenant                  Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([auditId])
+  @@index([tenantId])
+  @@index([createdAt])
 }

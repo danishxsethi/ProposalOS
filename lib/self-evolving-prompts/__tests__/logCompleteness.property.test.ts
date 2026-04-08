@@ -1,20 +1,21 @@
 /**
  * Feature: self-evolving-prompts-predictive-intelligence
  * Property 1: Performance Log Completeness
- * 
+ *
  * Validates: Requirements 1.1, 10.2
- * 
+ *
  * Property: For any LLM call, when logged by the Prompt_Performance_Tracker,
  * the stored record contains all required fields: version hash, quality score,
  * downstream impact, cost, latency, input tokens, and output tokens.
  */
 
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import fc from 'fast-check';
-import { PromptPerformanceTracker } from '../PromptPerformanceTracker';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+
 import * as promptPerformanceDA from '../data-access/prompt-performance';
-import { PromptPerformanceLog } from '../types';
 import { closeConnection } from '../db';
+import { PromptPerformanceTracker } from '../PromptPerformanceTracker';
+import { PromptPerformanceLog } from '../types';
 
 describe('Property 1: Performance Log Completeness', () => {
   const tracker = new PromptPerformanceTracker();
@@ -24,7 +25,11 @@ describe('Property 1: Performance Log Completeness', () => {
   const nodeIdArb = fc.string({ minLength: 1, maxLength: 255 });
   // Use reasonable ranges for quality scores (0-100)
   const qualityScoreArb = fc.float({ min: Math.fround(0.01), max: Math.fround(100), noNaN: true });
-  const downstreamImpactArb = fc.float({ min: Math.fround(0.01), max: Math.fround(100), noNaN: true });
+  const downstreamImpactArb = fc.float({
+    min: Math.fround(0.01),
+    max: Math.fround(100),
+    noNaN: true,
+  });
   // Cost in USD with reasonable precision
   const costArb = fc.float({ min: Math.fround(0.01), max: Math.fround(1000), noNaN: true });
   const latencyArb = fc.integer({ min: 1, max: 10000 });

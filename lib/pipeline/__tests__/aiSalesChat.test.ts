@@ -1,12 +1,14 @@
 /**
  * Unit tests for AI Sales Chat
- * 
+ *
  * Tests specific examples and edge cases for chat functionality
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { detectIntent, shouldEscalate, recordOutcome } from '../aiSalesChat';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { prisma } from '@/lib/prisma';
+
+import { detectIntent, recordOutcome, shouldEscalate } from '../aiSalesChat';
 
 // Mock Prisma
 vi.mock('@/lib/prisma', () => ({
@@ -27,11 +29,13 @@ vi.mock('@/lib/llm/provider', () => ({
   getGeminiModel: vi.fn(() => ({
     generateContent: vi.fn().mockResolvedValue({
       response: {
-        candidates: [{
-          content: {
-            parts: [{ text: '{"intent": "question", "confidence": 0.8}' }],
+        candidates: [
+          {
+            content: {
+              parts: [{ text: '{"intent": "question", "confidence": 0.8}' }],
+            },
           },
-        }],
+        ],
       },
     }),
   })),
@@ -62,7 +66,7 @@ describe('AI Sales Chat - Unit Tests', () => {
     });
 
     it('detects objection from "not sure" keyword', async () => {
-      const result = await detectIntent('I\'m not sure this will work');
+      const result = await detectIntent("I'm not sure this will work");
       expect(result.intent).toBe('objection');
       expect(result.confidence).toBeGreaterThanOrEqual(0.85);
     });

@@ -1,7 +1,7 @@
 /**
  * Property-Based Tests for PromptPerformanceTracker
  * Feature: self-evolving-prompts-predictive-intelligence
- * 
+ *
  * Tests correctness properties:
  * - Property 1: Performance Log Completeness
  * - Property 2: Append-Only Log Integrity
@@ -10,11 +10,12 @@
  * - Property 5: Quality Score Comparability
  */
 
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import * as fc from 'fast-check';
-import { PromptPerformanceTracker } from '../PromptPerformanceTracker';
-import { prisma } from '../db';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+
 import { getTotalLogCount } from '../data-access/prompt-performance';
+import { prisma } from '../db';
+import { PromptPerformanceTracker } from '../PromptPerformanceTracker';
 
 describe('PromptPerformanceTracker Property-Based Tests', () => {
   let tracker: PromptPerformanceTracker;
@@ -32,9 +33,9 @@ describe('PromptPerformanceTracker Property-Based Tests', () => {
 
   /**
    * Property 1: Performance Log Completeness
-   * 
+   *
    * **Validates: Requirements 1.1, 10.2**
-   * 
+   *
    * For any LLM call, when logged by the Prompt_Performance_Tracker, the stored record
    * SHALL contain all required fields: version hash, quality score, downstream impact,
    * cost, latency, input tokens, and output tokens.
@@ -44,7 +45,7 @@ describe('PromptPerformanceTracker Property-Based Tests', () => {
       fc.asyncProperty(
         fc.record({
           promptVersionHash: fc.string({ minLength: 10, maxLength: 64 }),
-          nodeId: fc.string({ minLength: 5, maxLength: 50 }).map(s => `test-prop-${s}`),
+          nodeId: fc.string({ minLength: 5, maxLength: 50 }).map((s) => `test-prop-${s}`),
           qualityScore: fc.double({ min: 0, max: 100, noNaN: true }),
           downstreamImpact: fc.double({ min: 0, max: 100, noNaN: true }),
           costUSD: fc.double({ min: 0.0001, max: 1, noNaN: true }),
@@ -79,9 +80,9 @@ describe('PromptPerformanceTracker Property-Based Tests', () => {
 
   /**
    * Property 2: Append-Only Log Integrity
-   * 
+   *
    * **Validates: Requirements 1.2, 10.1**
-   * 
+   *
    * For any performance log record, once written to PostgreSQL, the record SHALL never
    * be modified or deleted, and the total record count SHALL only increase over time.
    */
@@ -124,7 +125,6 @@ describe('PromptPerformanceTracker Property-Based Tests', () => {
               `;
               expect(logs.length).toBe(1);
             }
-
           } finally {
             // Clean up
             for (const id of createdIds) {
@@ -139,9 +139,9 @@ describe('PromptPerformanceTracker Property-Based Tests', () => {
 
   /**
    * Property 3: Query Filter Correctness
-   * 
+   *
    * **Validates: Requirements 1.3**
-   * 
+   *
    * For any query with filters (version hash, time range, or quality score threshold),
    * all returned performance logs SHALL match the specified filter criteria.
    */
@@ -181,17 +181,19 @@ describe('PromptPerformanceTracker Property-Based Tests', () => {
 
             // Test version hash filter
             const versionLogs = await tracker.getPerformanceByVersion(versionHash);
-            expect(versionLogs.every(log => log.promptVersionHash === versionHash)).toBe(true);
+            expect(versionLogs.every((log) => log.promptVersionHash === versionHash)).toBe(true);
 
             // Test quality threshold filter (>=)
             const highQualityLogs = await tracker.getPerformanceByQualityThreshold(threshold, '>=');
-            const relevantHighQuality = highQualityLogs.filter(log => createdIds.includes(log.id));
-            expect(relevantHighQuality.every(log => log.qualityScore >= threshold)).toBe(true);
+            const relevantHighQuality = highQualityLogs.filter((log) =>
+              createdIds.includes(log.id)
+            );
+            expect(relevantHighQuality.every((log) => log.qualityScore >= threshold)).toBe(true);
 
             // Test quality threshold filter (<)
             const lowQualityLogs = await tracker.getPerformanceByQualityThreshold(threshold, '<');
-            const relevantLowQuality = lowQualityLogs.filter(log => createdIds.includes(log.id));
-            expect(relevantLowQuality.every(log => log.qualityScore < threshold)).toBe(true);
+            const relevantLowQuality = lowQualityLogs.filter((log) => createdIds.includes(log.id));
+            expect(relevantLowQuality.every((log) => log.qualityScore < threshold)).toBe(true);
 
             // Test time range filter
             const now = new Date();
@@ -200,10 +202,9 @@ describe('PromptPerformanceTracker Property-Based Tests', () => {
               start: oneHourAgo,
               end: now,
             });
-            expect(timeRangeLogs.every(log => 
-              log.timestamp >= oneHourAgo && log.timestamp <= now
-            )).toBe(true);
-
+            expect(
+              timeRangeLogs.every((log) => log.timestamp >= oneHourAgo && log.timestamp <= now)
+            ).toBe(true);
           } finally {
             // Clean up
             for (const id of createdIds) {
@@ -218,9 +219,9 @@ describe('PromptPerformanceTracker Property-Based Tests', () => {
 
   /**
    * Property 4: Aggregate Metric Accuracy
-   * 
+   *
    * **Validates: Requirements 1.4**
-   * 
+   *
    * For any set of performance logs for a given prompt version, the calculated aggregate
    * metrics (average quality score, average cost, average latency, percentiles) SHALL
    * match the values computed directly from the raw logs.
@@ -262,8 +263,10 @@ describe('PromptPerformanceTracker Property-Based Tests', () => {
             const metrics = await tracker.getAggregateMetrics(versionHash);
 
             // Calculate expected values manually
-            const expectedAvgQuality = logs.reduce((sum, l) => sum + l.qualityScore, 0) / logs.length;
-            const expectedAvgImpact = logs.reduce((sum, l) => sum + l.downstreamImpact, 0) / logs.length;
+            const expectedAvgQuality =
+              logs.reduce((sum, l) => sum + l.qualityScore, 0) / logs.length;
+            const expectedAvgImpact =
+              logs.reduce((sum, l) => sum + l.downstreamImpact, 0) / logs.length;
             const expectedAvgCost = logs.reduce((sum, l) => sum + l.costUSD, 0) / logs.length;
             const expectedAvgLatency = logs.reduce((sum, l) => sum + l.latencyMs, 0) / logs.length;
 
@@ -275,15 +278,14 @@ describe('PromptPerformanceTracker Property-Based Tests', () => {
             expect(metrics.avgLatencyMs).toBeCloseTo(expectedAvgLatency, 1);
 
             // Verify percentiles are within reasonable bounds
-            const sortedLatencies = logs.map(l => l.latencyMs).sort((a, b) => a - b);
+            const sortedLatencies = logs.map((l) => l.latencyMs).sort((a, b) => a - b);
             const minLatency = sortedLatencies[0];
             const maxLatency = sortedLatencies[sortedLatencies.length - 1];
-            
+
             expect(metrics.p50Latency).toBeGreaterThanOrEqual(minLatency);
             expect(metrics.p50Latency).toBeLessThanOrEqual(maxLatency);
             expect(metrics.p95Latency).toBeGreaterThanOrEqual(metrics.p50Latency);
             expect(metrics.p99Latency).toBeGreaterThanOrEqual(metrics.p95Latency);
-
           } finally {
             // Clean up
             for (const id of createdIds) {
@@ -298,9 +300,9 @@ describe('PromptPerformanceTracker Property-Based Tests', () => {
 
   /**
    * Property 5: Quality Score Comparability
-   * 
+   *
    * **Validates: Requirements 1.5**
-   * 
+   *
    * For any two quality scores from different prompt versions, the scores SHALL be
    * numeric values that support comparison operations (greater than, less than, equal to).
    */
@@ -362,7 +364,6 @@ describe('PromptPerformanceTracker Property-Based Tests', () => {
             } else {
               expect(log1.qualityScore).toBeLessThan(log2.qualityScore);
             }
-
           } finally {
             // Clean up
             for (const id of createdIds) {

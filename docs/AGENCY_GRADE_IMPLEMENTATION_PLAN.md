@@ -8,21 +8,21 @@
 
 ## 1. The 13 QA Checks (and risk level)
 
-| # | Check | Category | At-risk? | Typical failure |
-|---|--------|----------|----------|------------------|
-| 1 | Evidence Check | Finding Quality | Low | Finding missing evidence array |
-| 2 | Impact Score Range (1–10) | Finding Quality | Low | Module emits out-of-range score |
-| 3 | No Duplicates (title+module) | Finding Quality | Low | Duplicate finding titles |
-| 4 | Min 3 Findings | Finding Quality | Low | Audit returns &lt;3 findings |
-| 5 | At least 1 Painkiller | Finding Quality | Medium | All findings typed VITAMIN |
-| 6 | Summary Mentions Business | Proposal Quality | Low | LLM drops business name |
-| 7 | Summary Mentions City | Proposal Quality | Medium | City not in prompt or LLM omits |
-| 8 | Summary Length (2–7 sentences) | Proposal Quality | Medium | 1 or 8+ sentences |
-| 9 | Tiers have 2+ items | Proposal Quality | Low | Tier mapping edge case |
-| 10 | Valid Finding IDs in Tiers | Proposal Quality | Low | ID mismatch |
-| 11 | Pricing Logic (E &lt; G &lt; P) | Proposal Quality | Low | Logic bug |
-| 12 | No Wrong Business Name | Anti-Hallucination | Low | Same as #6 |
-| 13 | **Summary Cites Specific Metrics (≥2)** | Proposal Quality | **High** | LLM writes generic summary |
+| #   | Check                                   | Category           | At-risk? | Typical failure                 |
+| --- | --------------------------------------- | ------------------ | -------- | ------------------------------- |
+| 1   | Evidence Check                          | Finding Quality    | Low      | Finding missing evidence array  |
+| 2   | Impact Score Range (1–10)               | Finding Quality    | Low      | Module emits out-of-range score |
+| 3   | No Duplicates (title+module)            | Finding Quality    | Low      | Duplicate finding titles        |
+| 4   | Min 3 Findings                          | Finding Quality    | Low      | Audit returns &lt;3 findings    |
+| 5   | At least 1 Painkiller                   | Finding Quality    | Medium   | All findings typed VITAMIN      |
+| 6   | Summary Mentions Business               | Proposal Quality   | Low      | LLM drops business name         |
+| 7   | Summary Mentions City                   | Proposal Quality   | Medium   | City not in prompt or LLM omits |
+| 8   | Summary Length (2–7 sentences)          | Proposal Quality   | Medium   | 1 or 8+ sentences               |
+| 9   | Tiers have 2+ items                     | Proposal Quality   | Low      | Tier mapping edge case          |
+| 10  | Valid Finding IDs in Tiers              | Proposal Quality   | Low      | ID mismatch                     |
+| 11  | Pricing Logic (E &lt; G &lt; P)         | Proposal Quality   | Low      | Logic bug                       |
+| 12  | No Wrong Business Name                  | Anti-Hallucination | Low      | Same as #6                      |
+| 13  | **Summary Cites Specific Metrics (≥2)** | Proposal Quality   | **High** | LLM writes generic summary      |
 
 **Conclusion:** The check most likely to block 90% is **#13 (Summary Cites Specific Metrics)**. Secondary: **#7 (City)**, **#8 (Length)**, **#5 (Painkiller)**.
 
@@ -56,7 +56,7 @@ Apply fixes in order of observed failure rate.
 ### 3.1 If **Summary Cites Specific Metrics (≥2)** is top
 
 - **2a. Stricter prompt**
-  - In `prompts/exec-summary-v1.txt` and `v2.txt`, add: "Your first draft must include at least 2 numbers. Before returning, list them: (1) ___, (2) ___. If either is missing, add a sentence."
+  - In `prompts/exec-summary-v1.txt` and `v2.txt`, add: "Your first draft must include at least 2 numbers. Before returning, list them: (1) **_, (2) _**. If either is missing, add a sentence."
   - Or switch to a **structured output** for the executive summary (e.g. JSON with `opening`, `metrics_sentence`, `body`, `closing`) and then concatenate; guarantees a dedicated metrics sentence.
 - **2b. Post-process fallback**
   - **File:** `lib/proposal/executiveSummary.ts` (or caller).
@@ -110,15 +110,15 @@ Apply fixes in order of observed failure rate.
 
 ## 6. Suggested order of work
 
-| Order | Task | Owner | Est. |
-|-------|------|--------|------|
-| 1 | Add logging of failed checks when score &lt; 90 (propose route) | Dev | 0.5 day |
-| 2 | (Optional) qa-failure-report script over last N proposals | Dev | 0.5 day |
-| 3 | Post-process: append metrics sentence if &lt;2 in summary | Dev | 1 day |
-| 4 | Re-run validation batch (5–10 proposals), confirm 90+ | Dev | 0.5 day |
-| 5 | If city/length/painkiller still fail, apply Phase 2 fixes | Dev | 1–2 days |
-| 6 | Phase 3 hardening (evidence, tiers, impact, dedupe) | Dev | 2 days |
-| 7 | Phase 4: batch assertion or CI check | Dev | 0.5 day |
+| Order | Task                                                            | Owner | Est.     |
+| ----- | --------------------------------------------------------------- | ----- | -------- |
+| 1     | Add logging of failed checks when score &lt; 90 (propose route) | Dev   | 0.5 day  |
+| 2     | (Optional) qa-failure-report script over last N proposals       | Dev   | 0.5 day  |
+| 3     | Post-process: append metrics sentence if &lt;2 in summary       | Dev   | 1 day    |
+| 4     | Re-run validation batch (5–10 proposals), confirm 90+           | Dev   | 0.5 day  |
+| 5     | If city/length/painkiller still fail, apply Phase 2 fixes       | Dev   | 1–2 days |
+| 6     | Phase 3 hardening (evidence, tiers, impact, dedupe)             | Dev   | 2 days   |
+| 7     | Phase 4: batch assertion or CI check                            | Dev   | 0.5 day  |
 
 **Total estimate:** ~5–7 days to reach “agency-grade for all” with monitoring in place.
 
@@ -132,4 +132,4 @@ Apply fixes in order of observed failure rate.
 
 ---
 
-*Document created: 2026-02-16. Update this plan as you implement and re-measure.*
+_Document created: 2026-02-16. Update this plan as you implement and re-measure._

@@ -3,12 +3,12 @@
  * Implements prediction storage and calibration
  */
 
-import { executeQuery, executeCommand } from '../db';
+import { executeCommand, executeQuery } from '../db';
 import {
+  AccuracyTrend,
+  CalibrationMetrics,
   PredictionRecord,
   PredictionRow,
-  CalibrationMetrics,
-  AccuracyTrend,
   TimeRange,
 } from '../types';
 
@@ -50,10 +50,7 @@ export async function recordPrediction(
  * Record the actual outcome for a prediction
  * Validates: Requirements 6.2
  */
-export async function recordOutcome(
-  predictionId: string,
-  actualValue: number
-): Promise<void> {
+export async function recordOutcome(predictionId: string, actualValue: number): Promise<void> {
   const query = `
     UPDATE predictions
     SET actual_value = $2, observed_at = NOW()
@@ -66,9 +63,7 @@ export async function recordOutcome(
 /**
  * Get predictions by audit ID
  */
-export async function getPredictionsByAudit(
-  auditId: string
-): Promise<PredictionRecord[]> {
+export async function getPredictionsByAudit(auditId: string): Promise<PredictionRecord[]> {
   const query = `
     SELECT * FROM predictions
     WHERE audit_id = $1
@@ -130,9 +125,7 @@ export async function getPredictionsWithOutcomes(
  * Calculate calibration metrics for a prediction type
  * Validates: Requirements 6.3
  */
-export async function getCalibrationMetrics(
-  predictionType: string
-): Promise<CalibrationMetrics> {
+export async function getCalibrationMetrics(predictionType: string): Promise<CalibrationMetrics> {
   const query = `
     SELECT
       COUNT(*) as total_predictions,
@@ -194,11 +187,7 @@ export async function getAccuracyTrends(
     ORDER BY date ASC
   `;
 
-  const rows = await executeQuery<any>(query, [
-    predictionType,
-    timeRange.start,
-    timeRange.end,
-  ]);
+  const rows = await executeQuery<any>(query, [predictionType, timeRange.start, timeRange.end]);
 
   return rows.map((row) => ({
     date: row.date,
@@ -218,17 +207,13 @@ export async function adjustConfidenceIntervals(
   // This would be used in future predictions, not retroactively
   // Store the adjustment factor in a configuration table or cache
   // For now, this is a placeholder that demonstrates the concept
-  console.log(
-    `Adjusting confidence intervals for ${predictionType} by factor ${adjustmentFactor}`
-  );
+  console.log(`Adjusting confidence intervals for ${predictionType} by factor ${adjustmentFactor}`);
 }
 
 /**
  * Get prediction by ID
  */
-export async function getPredictionById(
-  predictionId: string
-): Promise<PredictionRecord | null> {
+export async function getPredictionById(predictionId: string): Promise<PredictionRecord | null> {
   const query = `SELECT * FROM predictions WHERE id = $1`;
   const rows = await executeQuery<PredictionRow>(query, [predictionId]);
   return rows.length > 0 ? mapRowToPrediction(rows[0]) : null;
@@ -238,10 +223,7 @@ export async function getPredictionById(
  * Calculate accuracy for a prediction
  * Validates: Requirements 6.2
  */
-export function calculateAccuracy(
-  predictedValue: number,
-  actualValue: number
-): number {
+export function calculateAccuracy(predictedValue: number, actualValue: number): number {
   if (actualValue === 0) {
     return predictedValue === 0 ? 1 : 0;
   }
@@ -256,10 +238,7 @@ export function isWithinConfidenceInterval(
   confidenceIntervalLower: number,
   confidenceIntervalUpper: number
 ): boolean {
-  return (
-    actualValue >= confidenceIntervalLower &&
-    actualValue <= confidenceIntervalUpper
-  );
+  return actualValue >= confidenceIntervalLower && actualValue <= confidenceIntervalUpper;
 }
 
 /**
@@ -276,15 +255,9 @@ function mapRowToPrediction(row: PredictionRow): PredictionRecord {
       | 'revenue'
       | 'algorithm',
     predictedValue: parseFloat(row.predicted_value.toString()),
-    confidenceIntervalLower: parseFloat(
-      row.confidence_interval_lower.toString()
-    ),
-    confidenceIntervalUpper: parseFloat(
-      row.confidence_interval_upper.toString()
-    ),
-    actualValue: row.actual_value
-      ? parseFloat(row.actual_value.toString())
-      : undefined,
+    confidenceIntervalLower: parseFloat(row.confidence_interval_lower.toString()),
+    confidenceIntervalUpper: parseFloat(row.confidence_interval_upper.toString()),
+    actualValue: row.actual_value ? parseFloat(row.actual_value.toString()) : undefined,
     observedAt: row.observed_at || undefined,
     predictionDate: row.prediction_date,
     metadata: row.metadata || {},

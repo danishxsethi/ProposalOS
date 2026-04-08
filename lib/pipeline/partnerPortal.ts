@@ -1,6 +1,8 @@
-import { prisma } from '@/lib/db';
-import { PainScoreBreakdown } from './types';
 import { ProspectLeadStatus } from '@prisma/client';
+
+import { prisma } from '@/lib/db';
+
+import { PainScoreBreakdown } from './types';
 
 export interface PartnerConfig {
   name: string;
@@ -100,7 +102,10 @@ export async function matchLeadsToPartner(partnerId: string): Promise<PackagedLe
     leadId: prospect.id,
     businessName: prospect.businessName,
     auditSummary: prospect.auditSummarySnippet ? JSON.parse(prospect.auditSummarySnippet) : {},
-    proposalSummary: typeof prospect.qualificationEvidence === 'object' && prospect.qualificationEvidence ? prospect.qualificationEvidence as Record<string, unknown> : {},
+    proposalSummary:
+      typeof prospect.qualificationEvidence === 'object' && prospect.qualificationEvidence
+        ? (prospect.qualificationEvidence as Record<string, unknown>)
+        : {},
     painScore: prospect.painScore || 0,
     painBreakdown: prospect.painBreakdown as unknown as PainScoreBreakdown,
     decisionMaker: {
@@ -140,7 +145,10 @@ export async function deliverLead(partnerId: string, leadId: string): Promise<Pa
     leadId: prospect.id,
     businessName: prospect.businessName,
     auditSummary: prospect.auditSummarySnippet ? JSON.parse(prospect.auditSummarySnippet) : {},
-    proposalSummary: typeof prospect.qualificationEvidence === 'object' && prospect.qualificationEvidence ? prospect.qualificationEvidence as Record<string, unknown> : {},
+    proposalSummary:
+      typeof prospect.qualificationEvidence === 'object' && prospect.qualificationEvidence
+        ? (prospect.qualificationEvidence as Record<string, unknown>)
+        : {},
     painScore: prospect.painScore || 0,
     painBreakdown: prospect.painBreakdown as unknown as PainScoreBreakdown,
     decisionMaker: {

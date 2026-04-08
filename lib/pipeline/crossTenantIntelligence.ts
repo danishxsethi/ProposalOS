@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/db';
+
 import { PainScoreBreakdown } from './types';
 
 export interface AnonymizedPattern {
@@ -59,10 +60,7 @@ const PII_PATTERNS = {
 /**
  * Aggregate anonymized patterns from win/loss outcomes
  */
-export async function aggregatePatterns(
-  tenantId: string,
-  outcomes: WinLossData[]
-): Promise<void> {
+export async function aggregatePatterns(tenantId: string, outcomes: WinLossData[]): Promise<void> {
   if (outcomes.length === 0) {
     return;
   }

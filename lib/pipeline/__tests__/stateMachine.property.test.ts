@@ -1,26 +1,29 @@
+import * as fc from 'fast-check';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+
 import { cleanupDb } from '@/lib/__tests__/utils/cleanup';
 /**
  * Property-Based Tests for Prospect State Machine
- * 
+ *
  * Tests Properties 7, 8, and 9 from the design document using fast-check.
  * Minimum 100 iterations per property.
- * 
+ *
  * Feature: autonomous-proposal-engine
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import * as fc from 'fast-check';
 import { prisma } from '@/lib/prisma';
+
 import {
   canTransition,
-  transition,
+  deserializeHistory,
   getHistory,
   serializeHistory,
-  deserializeHistory,
+  transition,
   VALID_TRANSITIONS,
 } from '../stateMachine';
-import type { ProspectStatus, StateTransition } from '../types';
 import { PipelineStage } from '../types';
+
+import type { ProspectStatus, StateTransition } from '../types';
 
 // ============================================================================
 // Test Data Generators
@@ -77,12 +80,7 @@ const stateTransitionArb = fc.record({
   metadata: fc.option(
     fc.dictionary(
       fc.string(),
-      fc.oneof(
-        fc.string(),
-        fc.integer(),
-        fc.boolean(),
-        fc.constant(null)
-      )
+      fc.oneof(fc.string(), fc.integer(), fc.boolean(), fc.constant(null))
     ),
     { nil: {} }
   ),
@@ -91,28 +89,25 @@ const stateTransitionArb = fc.record({
 /**
  * Generate an array of StateTransition objects
  */
-const stateTransitionArrayArb = fc.array(
-  fc.record({
-    from: prospectStatusArb,
-    to: prospectStatusArb,
-    timestamp: fc.date({ min: new Date('2020-01-01'), max: new Date('2030-12-31') }),
-    stage: pipelineStageArb,
-    tenantId: tenantIdArb,
-    metadata: fc.option(
-      fc.dictionary(
-        fc.string(),
-        fc.oneof(
+const stateTransitionArrayArb = fc
+  .array(
+    fc.record({
+      from: prospectStatusArb,
+      to: prospectStatusArb,
+      timestamp: fc.date({ min: new Date('2020-01-01'), max: new Date('2030-12-31') }),
+      stage: pipelineStageArb,
+      tenantId: tenantIdArb,
+      metadata: fc.option(
+        fc.dictionary(
           fc.string(),
-          fc.integer(),
-          fc.boolean(),
-          fc.constant(null)
-        )
+          fc.oneof(fc.string(), fc.integer(), fc.boolean(), fc.constant(null))
+        ),
+        { nil: {} }
       ),
-      { nil: {} }
-    ),
-  }),
-  { minLength: 0, maxLength: 20 }
-).filter((arr) => arr.every((t) => !isNaN(t.timestamp.getTime())));
+    }),
+    { minLength: 0, maxLength: 20 }
+  )
+  .filter((arr) => arr.every((t) => !isNaN(t.timestamp.getTime())));
 
 /**
  * Generate a valid transition pair (from, to) based on VALID_TRANSITIONS
@@ -125,9 +120,7 @@ const validTransitionPairArb = fc
       // Terminal state, return a dummy pair that we'll filter out
       return fc.constant({ from, to: from, isTerminal: true });
     }
-    return fc
-      .constantFrom(...validNextStates)
-      .map((to) => ({ from, to, isTerminal: false }));
+    return fc.constantFrom(...validNextStates).map((to) => ({ from, to, isTerminal: false }));
   })
   .filter((pair) => !pair.isTerminal);
 
@@ -163,10 +156,7 @@ async function createTestTenant(): Promise<string> {
 /**
  * Create a test prospect in the database
  */
-async function createTestProspect(
-  tenantId: string,
-  status: ProspectStatus
-): Promise<string> {
+async function createTestProspect(tenantId: string, status: ProspectStatus): Promise<string> {
   const prospect = await prisma.prospectLead.create({
     data: {
       tenantId,
@@ -189,8 +179,8 @@ async function createTestProspect(
  */
 async function cleanupTestData(prospectIds: string[]) {
   if (prospectIds.length === 0) return;
-  
-    await cleanupDb(prisma);
+
+  await cleanupDb(prisma);
 }
 
 /**
@@ -198,7 +188,7 @@ async function cleanupTestData(prospectIds: string[]) {
  */
 async function cleanupTestTenant(tenantId: string) {
   if (!tenantId) return;
-  
+
   try {
     await prisma.tenant.delete({
       where: { id: tenantId },
@@ -225,7 +215,7 @@ describe('State Machine Property Tests', () => {
     // Clean up all test data after each test
     await cleanupTestData(createdProspectIds);
     createdProspectIds.length = 0;
-    
+
     // Clean up test tenant
     if (testTenantId) {
       await cleanupTestTenant(testTenantId);
@@ -234,41 +224,37 @@ describe('State Machine Property Tests', () => {
 
   /**
    * Property 7: State machine only allows valid transitions
-   * 
+   *
    * For any prospect status and any attempted transition, the transition must
    * succeed only if the target status is in the set of valid successors for
    * the current status. Invalid transitions must be rejected and logged.
-   * 
+   *
    * **Validates: Requirements 12.1, 12.2**
    */
   describe('Property 7: State machine only allows valid transitions', () => {
     it('accepts all valid transitions', async () => {
       await fc.assert(
-        fc.asyncProperty(
-          validTransitionPairArb,
-          pipelineStageArb,
-          async ({ from, to }, stage) => {
-            // Create a prospect in the 'from' status
-            const prospectId = await createTestProspect(testTenantId, from);
-            createdProspectIds.push(prospectId);
+        fc.asyncProperty(validTransitionPairArb, pipelineStageArb, async ({ from, to }, stage) => {
+          // Create a prospect in the 'from' status
+          const prospectId = await createTestProspect(testTenantId, from);
+          createdProspectIds.push(prospectId);
 
-            // Attempt the transition
-            const result = await transition(prospectId, to, stage);
+          // Attempt the transition
+          const result = await transition(prospectId, to, stage);
 
-            // Verify the transition succeeded
-            expect(result.from).toBe(from);
-            expect(result.to).toBe(to);
-            expect(result.stage).toBe(stage);
-            expect(result.tenantId).toBe(testTenantId);
+          // Verify the transition succeeded
+          expect(result.from).toBe(from);
+          expect(result.to).toBe(to);
+          expect(result.stage).toBe(stage);
+          expect(result.tenantId).toBe(testTenantId);
 
-            // Verify the prospect's status was updated
-            const updatedProspect = await prisma.prospectLead.findUnique({
-              where: { id: prospectId },
-              select: { pipelineStatus: true },
-            });
-            expect(updatedProspect?.pipelineStatus).toBe(to);
-          }
-        ),
+          // Verify the prospect's status was updated
+          const updatedProspect = await prisma.prospectLead.findUnique({
+            where: { id: prospectId },
+            select: { pipelineStatus: true },
+          });
+          expect(updatedProspect?.pipelineStatus).toBe(to);
+        }),
         { numRuns: 100 }
       );
     });
@@ -321,56 +307,52 @@ describe('State Machine Property Tests', () => {
 
   /**
    * Property 8: State transitions are fully recorded
-   * 
+   *
    * For any successful state transition, a transition record must be created
    * containing the prospect ID, from-status, to-status, timestamp, originating
    * stage, and tenant ID.
-   * 
+   *
    * **Validates: Requirements 12.3**
    */
   describe('Property 8: State transitions are fully recorded', () => {
     it('records all transition details in the database', async () => {
       await fc.assert(
-        fc.asyncProperty(
-          validTransitionPairArb,
-          pipelineStageArb,
-          async ({ from, to }, stage) => {
-            // Create a prospect in the 'from' status
-            const prospectId = await createTestProspect(testTenantId, from);
-            createdProspectIds.push(prospectId);
+        fc.asyncProperty(validTransitionPairArb, pipelineStageArb, async ({ from, to }, stage) => {
+          // Create a prospect in the 'from' status
+          const prospectId = await createTestProspect(testTenantId, from);
+          createdProspectIds.push(prospectId);
 
-            // Perform the transition
-            const beforeTransition = new Date();
-            const result = await transition(prospectId, to, stage);
-            const afterTransition = new Date();
+          // Perform the transition
+          const beforeTransition = new Date();
+          const result = await transition(prospectId, to, stage);
+          const afterTransition = new Date();
 
-            // Verify the returned StateTransition contains all required fields
-            expect(result.from).toBe(from);
-            expect(result.to).toBe(to);
-            expect(result.stage).toBe(stage);
-            expect(result.tenantId).toBe(testTenantId);
-            expect(result.timestamp).toBeInstanceOf(Date);
-            expect(result.timestamp.getTime()).toBeGreaterThanOrEqual(beforeTransition.getTime());
-            expect(result.timestamp.getTime()).toBeLessThanOrEqual(afterTransition.getTime());
-            expect(result.metadata).toBeDefined();
+          // Verify the returned StateTransition contains all required fields
+          expect(result.from).toBe(from);
+          expect(result.to).toBe(to);
+          expect(result.stage).toBe(stage);
+          expect(result.tenantId).toBe(testTenantId);
+          expect(result.timestamp).toBeInstanceOf(Date);
+          expect(result.timestamp.getTime()).toBeGreaterThanOrEqual(beforeTransition.getTime());
+          expect(result.timestamp.getTime()).toBeLessThanOrEqual(afterTransition.getTime());
+          expect(result.metadata).toBeDefined();
 
-            // Verify the transition was persisted to the database
-            const transitionRecord = await prisma.prospectStateTransition.findFirst({
-              where: {
-                leadId: prospectId,
-                fromStatus: from,
-                toStatus: to,
-              },
-            });
+          // Verify the transition was persisted to the database
+          const transitionRecord = await prisma.prospectStateTransition.findFirst({
+            where: {
+              leadId: prospectId,
+              fromStatus: from,
+              toStatus: to,
+            },
+          });
 
-            expect(transitionRecord).toBeTruthy();
-            expect(transitionRecord?.tenantId).toBe(testTenantId);
-            expect(transitionRecord?.stage).toBe(stage);
-            expect(transitionRecord?.fromStatus).toBe(from);
-            expect(transitionRecord?.toStatus).toBe(to);
-            expect(transitionRecord?.createdAt).toBeInstanceOf(Date);
-          }
-        ),
+          expect(transitionRecord).toBeTruthy();
+          expect(transitionRecord?.tenantId).toBe(testTenantId);
+          expect(transitionRecord?.stage).toBe(stage);
+          expect(transitionRecord?.fromStatus).toBe(from);
+          expect(transitionRecord?.toStatus).toBe(to);
+          expect(transitionRecord?.createdAt).toBeInstanceOf(Date);
+        }),
         { numRuns: 100 }
       );
     });
@@ -423,10 +405,10 @@ describe('State Machine Property Tests', () => {
 
   /**
    * Property 9: State transition history round-trip serialization
-   * 
+   *
    * For any list of state transition records, serializing to JSON and then
    * deserializing must produce a list equivalent to the original.
-   * 
+   *
    * **Validates: Requirements 12.4**
    */
   describe('Property 9: State transition history round-trip serialization', () => {
@@ -454,10 +436,10 @@ describe('State Machine Property Tests', () => {
             expect(restored.to).toBe(original.to);
             expect(restored.stage).toBe(original.stage);
             expect(restored.tenantId).toBe(original.tenantId);
-            
+
             // Timestamps should be equal (within millisecond precision)
             expect(restored.timestamp.getTime()).toBe(original.timestamp.getTime());
-            
+
             // Metadata should be deeply equal
             expect(restored.metadata).toEqual(original.metadata || {});
           }
@@ -470,29 +452,29 @@ describe('State Machine Property Tests', () => {
       const empty: StateTransition[] = [];
       const serialized = serializeHistory(empty);
       const deserialized = deserializeHistory(serialized);
-      
+
       expect(deserialized).toEqual([]);
     });
 
     it('preserves metadata through serialization', () => {
       fc.assert(
         fc.property(
-          fc.array(
-            fc.record({
-              from: prospectStatusArb,
-              to: prospectStatusArb,
-              timestamp: fc.date({ min: new Date('2020-01-01'), max: new Date('2030-12-31') }),
-              stage: pipelineStageArb,
-              tenantId: tenantIdArb,
-              metadata: fc.dictionary(fc.string(), fc.oneof(
-                fc.string(),
-                fc.integer(),
-                fc.boolean(),
-                fc.constant(null)
-              )),
-            }),
-            { minLength: 1, maxLength: 10 }
-          ).filter((transitions) => transitions.every((t) => !isNaN(t.timestamp.getTime()))),
+          fc
+            .array(
+              fc.record({
+                from: prospectStatusArb,
+                to: prospectStatusArb,
+                timestamp: fc.date({ min: new Date('2020-01-01'), max: new Date('2030-12-31') }),
+                stage: pipelineStageArb,
+                tenantId: tenantIdArb,
+                metadata: fc.dictionary(
+                  fc.string(),
+                  fc.oneof(fc.string(), fc.integer(), fc.boolean(), fc.constant(null))
+                ),
+              }),
+              { minLength: 1, maxLength: 10 }
+            )
+            .filter((transitions) => transitions.every((t) => !isNaN(t.timestamp.getTime()))),
           (transitions) => {
             const serialized = serializeHistory(transitions);
             const deserialized = deserializeHistory(serialized);

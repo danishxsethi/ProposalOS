@@ -1,11 +1,12 @@
-import { StateGraph, Annotation } from "@langchain/langgraph";
-import { Finding } from '@prisma/client';
-import { scoreConfidence, softenLanguage } from '@/lib/delivery/confidenceScorer';
-import { prisma } from '@/lib/prisma';
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import { Annotation, StateGraph } from '@langchain/langgraph';
+import { Finding } from '@prisma/client';
+
 import { getThinkingBudgetForNode } from '@/lib/config/thinking-budgets';
-import { logger } from '@/lib/logger';
 import { CostTracker } from '@/lib/costs/costTracker';
+import { scoreConfidence, softenLanguage } from '@/lib/delivery/confidenceScorer';
+import { logger } from '@/lib/logger';
+import { prisma } from '@/lib/prisma';
 
 // P1-1 fix: Model resolved from env var — no more hardcoded experimental model name.
 // Set ADVERSARIAL_QA_MODEL in .env (default: gemini-2.0-flash — stable + cost-tracked).
@@ -32,39 +33,39 @@ export interface CompetitorFairnessFlag {
 export const AdversarialQAState = Annotation.Root({
   content: Annotation<string>({
     reducer: (x, y) => y,
-    default: () => ""
+    default: () => '',
   }),
   findings: Annotation<Finding[]>({
     reducer: (x, y) => y,
-    default: () => []
+    default: () => [],
   }),
   rawEvidence: Annotation<any[]>({
     reducer: (x, y) => y,
-    default: () => []
+    default: () => [],
   }),
   comparisonReport: Annotation<any>({
     reducer: (x, y) => y,
-    default: () => undefined
+    default: () => undefined,
   }),
   hallucinationFlags: Annotation<HallucinationFlag[]>({
     reducer: (x, y) => y,
-    default: () => []
+    default: () => [],
   }),
   consistencyFlags: Annotation<ConsistencyFlag[]>({
     reducer: (x, y) => y,
-    default: () => []
+    default: () => [],
   }),
   competitorFlags: Annotation<CompetitorFairnessFlag[]>({
     reducer: (x, y) => y,
-    default: () => []
+    default: () => [],
   }),
   confidenceScores: Annotation<Record<string, string>>({
     reducer: (x, y) => y,
-    default: () => ({})
+    default: () => ({}),
   }),
   hardenedContent: Annotation<string>({
     reducer: (x, y) => y,
-    default: () => ""
+    default: () => '',
   }),
   tenantId: Annotation<string>({ reducer: (x, y) => y }),
   auditId: Annotation<string>({ reducer: (x, y) => y }),
@@ -108,7 +109,7 @@ export function createAdversarialQAGraph(costTracker?: CostTracker) {
       }
 
       const evidenceText = JSON.stringify(state.rawEvidence, null, 2);
-      const findingsText = state.findings.map(f => `${f.title}: ${f.description}`).join('\n');
+      const findingsText = state.findings.map((f) => `${f.title}: ${f.description}`).join('\n');
 
       const prompt = `You are a fact-checking expert. Analyze the following content and identify any factual claims that cannot be traced to the provided evidence.\n\nCONTENT TO CHECK:\n${state.content}\n\nAVAILABLE EVIDENCE:\n${evidenceText}\n\nFINDINGS REFERENCE:\n${findingsText}\n\nFor each unsupported claim, provide:\n1. The exact claim text\n2. Where it appears in the content\n3. Why it's unsupported\n\nFormat as JSON array: [{"claim": "...", "location": "...", "reason": "..."}]`;
 
@@ -121,7 +122,10 @@ export function createAdversarialQAGraph(costTracker?: CostTracker) {
 
       return { hallucinationFlags: flags };
     } catch (error) {
-      logger.error({ node: 'hallucination_sweep', error }, '[AdversarialQA] hallucination_sweep failed — returning empty flags');
+      logger.error(
+        { node: 'hallucination_sweep', error },
+        '[AdversarialQA] hallucination_sweep failed — returning empty flags'
+      );
       return { hallucinationFlags: [] };
     }
   }
@@ -134,7 +138,9 @@ export function createAdversarialQAGraph(costTracker?: CostTracker) {
         return { consistencyFlags: [] };
       }
 
-      const findingsText = state.findings.map(f => `${f.title}: ${f.description} (Impact: ${f.impactScore})`).join('\n');
+      const findingsText = state.findings
+        .map((f) => `${f.title}: ${f.description} (Impact: ${f.impactScore})`)
+        .join('\n');
 
       const prompt = `You are a consistency checker. Analyze the content for internal contradictions and mismatches with the findings.\n\nCONTENT:\n${state.content}\n\nFINDINGS:\n${findingsText}\n\nCheck for:\n1. Recommendations that don't correspond to findings\n2. ROI claims that overstate measured impact\n3. Conflicting statements\n\nFormat as JSON array: [{"type": "...", "conflictingElements": [...], "suggestion": "..."}]`;
 
@@ -147,7 +153,10 @@ export function createAdversarialQAGraph(costTracker?: CostTracker) {
 
       return { consistencyFlags: flags };
     } catch (error) {
-      logger.error({ node: 'consistency_check', error }, '[AdversarialQA] consistency_check failed — returning empty flags');
+      logger.error(
+        { node: 'consistency_check', error },
+        '[AdversarialQA] consistency_check failed — returning empty flags'
+      );
       return { consistencyFlags: [] };
     }
   }
@@ -156,11 +165,15 @@ export function createAdversarialQAGraph(costTracker?: CostTracker) {
     try {
       const model = getModel();
       if (!model) {
-        logger.warn('[AdversarialQA] GOOGLE_AI_API_KEY not set — skipping competitor fairness check');
+        logger.warn(
+          '[AdversarialQA] GOOGLE_AI_API_KEY not set — skipping competitor fairness check'
+        );
         return { competitorFlags: [] };
       }
 
-      const comparisonText = state.comparisonReport ? JSON.stringify(state.comparisonReport, null, 2) : 'No comparison data';
+      const comparisonText = state.comparisonReport
+        ? JSON.stringify(state.comparisonReport, null, 2)
+        : 'No comparison data';
 
       const prompt = `You are a fairness auditor. Check competitor claims for accuracy and fairness.\n\nCONTENT:\n${state.content}\n\nCOMPARISON DATA:\n${comparisonText}\n\nCheck for:\n1. Stale competitor data (not from current audit)\n2. Overstated competitor weaknesses\n3. Unsubstantiated competitor comparisons\n\nFormat as JSON array: [{"claim": "...", "issue": "...", "suggestion": "..."}]`;
 
@@ -173,7 +186,10 @@ export function createAdversarialQAGraph(costTracker?: CostTracker) {
 
       return { competitorFlags: flags };
     } catch (error) {
-      logger.error({ node: 'competitor_fairness', error }, '[AdversarialQA] competitor_fairness failed — returning empty flags');
+      logger.error(
+        { node: 'competitor_fairness', error },
+        '[AdversarialQA] competitor_fairness failed — returning empty flags'
+      );
       return { competitorFlags: [] };
     }
   }
@@ -194,7 +210,10 @@ export function createAdversarialQAGraph(costTracker?: CostTracker) {
 
       return { confidenceScores, hardenedContent };
     } catch (error) {
-      logger.error({ node: 'apply_confidence_and_soften', error }, '[AdversarialQA] apply_confidence_and_soften failed — returning content unchanged');
+      logger.error(
+        { node: 'apply_confidence_and_soften', error },
+        '[AdversarialQA] apply_confidence_and_soften failed — returning content unchanged'
+      );
       return {
         confidenceScores: {},
         hardenedContent: state.content,
@@ -203,15 +222,15 @@ export function createAdversarialQAGraph(costTracker?: CostTracker) {
   }
 
   return new StateGraph(AdversarialQAState)
-    .addNode("hallucination_sweep", hallucination_sweep)
-    .addNode("consistency_check", consistency_check)
-    .addNode("competitor_fairness", competitor_fairness)
-    .addNode("apply_confidence_and_soften", apply_confidence_and_soften)
-    .addEdge("__start__", "hallucination_sweep")
-    .addEdge("hallucination_sweep", "consistency_check")
-    .addEdge("consistency_check", "competitor_fairness")
-    .addEdge("competitor_fairness", "apply_confidence_and_soften")
-    .addEdge("apply_confidence_and_soften", "__end__")
+    .addNode('hallucination_sweep', hallucination_sweep)
+    .addNode('consistency_check', consistency_check)
+    .addNode('competitor_fairness', competitor_fairness)
+    .addNode('apply_confidence_and_soften', apply_confidence_and_soften)
+    .addEdge('__start__', 'hallucination_sweep')
+    .addEdge('hallucination_sweep', 'consistency_check')
+    .addEdge('consistency_check', 'competitor_fairness')
+    .addEdge('competitor_fairness', 'apply_confidence_and_soften')
+    .addEdge('apply_confidence_and_soften', '__end__')
     .compile();
 }
 

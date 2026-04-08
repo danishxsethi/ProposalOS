@@ -1,70 +1,85 @@
 /**
+ * app/api/pipeline/prospects/[id]/route.ts
+ *
  * Prospect Details API
- * 
+ *
  * GET: Retrieve full prospect context including audit, proposal, engagement, and state history
- * 
- * Requirements: 10.3
+ *
+ * Features:
+ * - Auth & tenant scoping
+ * - Rate limiting
+ * - Standardized error responses
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from '@/lib/auth';
+
+import { generateTraceId, InternalError, NotFoundError, UnauthorizedError } from '@/lib/api/errors';
+import { withRateLimit } from '@/lib/middleware/rateLimit';
 import { getProspectContext } from '@/lib/pipeline/humanReview';
-import { prisma } from '@/lib/db';
+import { createScopedPrisma, getTenantId } from '@/lib/tenant/context';
+
+interface Params {
+  params: Promise<{ id: string }>;
+}
 
 /**
- * GET /api/pipeline/prospects/[id]
- * Get full prospect context
+ * Inner handler for GET prospect
  */
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+async function handleGetProspect(req: NextRequest, { params }: Params): Promise<NextResponse> {
+  const traceId = generateTraceId();
+
   try {
     const { id } = await params;
-    const session = await getServerSession();
+    const tenantId = (await getTenantId()) || '';
 
-    if (!session?.user?.tenantId) {
+    if (!tenantId) {
       return NextResponse.json(
-        { error: 'Unauthorized' },
+        new UnauthorizedError('Tenant context required').toEnvelope(req.url, traceId),
         { status: 401 }
       );
     }
 
-    // Verify prospect belongs to tenant
+    const prisma = createScopedPrisma(tenantId);
+
+    // Verify prospect belongs to tenant (automatic with createScopedPrisma)
     const prospect = await prisma.prospectLead.findUnique({
       where: { id: id },
-      select: { tenantId: true },
+      select: { id: true },
     });
 
     if (!prospect) {
-      return NextResponse.json(
-        { error: 'Prospect not found' },
-        { status: 404 }
-      );
-    }
-
-    if (prospect.tenantId !== session.user.tenantId) {
-      return NextResponse.json(
-        { error: 'Forbidden' },
-        { status: 403 }
-      );
+      return NextResponse.json(new NotFoundError('Prospect', id).toEnvelope(req.url, traceId), {
+        status: 404,
+      });
     }
 
     const context = await getProspectContext(id);
 
     if (!context) {
       return NextResponse.json(
-        { error: 'Prospect not found' },
+        new NotFoundError('Prospect context', id).toEnvelope(req.url, traceId),
         { status: 404 }
       );
     }
 
-    return NextResponse.json(context);
+    const response = NextResponse.json(context);
+    response.headers.set('X-Trace-Id', traceId);
+    return response;
   } catch (error) {
     console.error('Error fetching prospect details:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    const internalError = new InternalError('Failed to fetch prospect details', {
+      originalError: error instanceof Error ? error.message : String(error),
+    });
+    return NextResponse.json(internalError.toEnvelope(req.url, traceId), { status: 500 });
   }
 }
+
+// Apply rate limiting (30 requests per minute for prospect lookups)
+const rateLimitedHandler = (req: NextRequest, params: Params) =>
+  withRateLimit({
+    windowMs: 60 * 1000,
+    max: 30,
+    message: 'Too many prospect requests. Please wait before trying again.',
+  })(req, () => handleGetProspect(req, params));
+
+export const GET = (req: NextRequest, params: Params) => rateLimitedHandler(req, params);

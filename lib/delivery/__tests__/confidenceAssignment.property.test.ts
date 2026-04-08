@@ -1,8 +1,9 @@
 // Feature: agentic-delivery-qa-hardening, Property 7: Confidence score assignment completeness
-import { describe, it, expect } from 'vitest';
-import fc from 'fast-check';
-import { scoreConfidence, ConfidenceLevel } from '../confidenceScorer';
 import { Finding } from '@prisma/client';
+import fc from 'fast-check';
+import { describe, expect, it } from 'vitest';
+
+import { ConfidenceLevel, scoreConfidence } from '../confidenceScorer';
 
 describe('Property 7: Confidence score assignment completeness', () => {
   it('should always assign exactly one of HIGH, MEDIUM, LOW confidence levels', () => {
@@ -11,7 +12,13 @@ describe('Property 7: Confidence score assignment completeness', () => {
       auditId: fc.uuid(),
       module: fc.string(),
       category: fc.string(),
-      type: fc.constantFrom('PAINKILLER', 'VITAMIN', 'VISUAL_UX', 'VISUAL_DESIGN', 'VISUAL_COMPARISON'),
+      type: fc.constantFrom(
+        'PAINKILLER',
+        'VITAMIN',
+        'VISUAL_UX',
+        'VISUAL_DESIGN',
+        'VISUAL_COMPARISON'
+      ),
       title: fc.string(),
       description: fc.option(fc.string()),
       evidence: fc.array(
@@ -36,10 +43,10 @@ describe('Property 7: Confidence score assignment completeness', () => {
     fc.assert(
       fc.property(findingArbitrary, (finding) => {
         const result = scoreConfidence(finding as Finding);
-        
+
         // Must be exactly one of the three levels
         expect(['HIGH', 'MEDIUM', 'LOW']).toContain(result);
-        
+
         // Must never be null or undefined
         expect(result).toBeDefined();
         expect(result).not.toBeNull();
@@ -54,7 +61,13 @@ describe('Property 7: Confidence score assignment completeness', () => {
       auditId: fc.uuid(),
       module: fc.string(),
       category: fc.string(),
-      type: fc.constantFrom('PAINKILLER', 'VITAMIN', 'VISUAL_UX', 'VISUAL_DESIGN', 'VISUAL_COMPARISON'),
+      type: fc.constantFrom(
+        'PAINKILLER',
+        'VITAMIN',
+        'VISUAL_UX',
+        'VISUAL_DESIGN',
+        'VISUAL_COMPARISON'
+      ),
       title: fc.string(),
       description: fc.option(fc.string()),
       evidence: fc.array(
@@ -92,7 +105,13 @@ describe('Property 7: Confidence score assignment completeness', () => {
       auditId: fc.uuid(),
       module: fc.string(),
       category: fc.string(),
-      type: fc.constantFrom('PAINKILLER', 'VITAMIN', 'VISUAL_UX', 'VISUAL_DESIGN', 'VISUAL_COMPARISON'),
+      type: fc.constantFrom(
+        'PAINKILLER',
+        'VITAMIN',
+        'VISUAL_UX',
+        'VISUAL_DESIGN',
+        'VISUAL_COMPARISON'
+      ),
       title: fc.string(),
       description: fc.option(fc.string()),
       evidence: fc.array(
@@ -130,7 +149,13 @@ describe('Property 7: Confidence score assignment completeness', () => {
       auditId: fc.uuid(),
       module: fc.string(),
       category: fc.string(),
-      type: fc.constantFrom('PAINKILLER', 'VITAMIN', 'VISUAL_UX', 'VISUAL_DESIGN', 'VISUAL_COMPARISON'),
+      type: fc.constantFrom(
+        'PAINKILLER',
+        'VITAMIN',
+        'VISUAL_UX',
+        'VISUAL_DESIGN',
+        'VISUAL_COMPARISON'
+      ),
       title: fc.string(),
       description: fc.option(fc.string()),
       evidence: fc.constant([]), // Empty evidence

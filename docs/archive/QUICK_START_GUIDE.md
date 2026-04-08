@@ -35,6 +35,7 @@ HUNTER_API_KEY="your-key-here"
 ### 3. ✅ API Endpoints Created
 
 All required API endpoints have been created:
+
 - ✅ `app/api/pipeline/metrics/route.ts`
 - ✅ `app/api/pipeline/prospects/[id]/route.ts`
 - ✅ `app/api/pipeline/prospects/[id]/override/route.ts`
@@ -57,12 +58,14 @@ npm run dev
 ### Day 1: Infrastructure & Testing (4-6 hours)
 
 **Morning:**
+
 - [ ] Apply database migrations
 - [ ] Set environment variables
 - [ ] Create missing API endpoints
 - [ ] Test admin dashboard
 
 **Afternoon:**
+
 - [ ] Run full test suite: `npm test -- lib/pipeline`
 - [ ] Fix any failing tests
 - [ ] Test pipeline configuration UI
@@ -71,59 +74,71 @@ npm run dev
 ### Day 2-3: Partner Network (8-12 hours)
 
 **Task 26.1:** Implement `lib/pipeline/partnerPortal.ts`
+
 - Copy interface from design document
 - Implement onboardPartner, matchLeadsToPartner, deliverLead
 - Add partner metrics calculation
 
 **Task 26.2-26.3:** Write tests
+
 - Property test for partner isolation
 - Unit tests for matching and packaging
 
 **Task 26.4:** Create API endpoints
+
 - `/api/pipeline/partners` - CRUD
 - `/api/pipeline/partners/[id]/leads` - Lead delivery
 
 **Task 26.5:** Build partner dashboard UI
+
 - Use admin dashboard as template
 - Add lead list and detail views
 
 **Task 26.6:** Create cron job
+
 - `/api/cron/partner-matching`
 - Test with sample data
 
 ### Day 4-5: Cross-Tenant Intelligence (10-14 hours)
 
 **Task 27.1:** Implement `lib/pipeline/crossTenantIntelligence.ts`
+
 - Start with PII detection (critical!)
 - Implement pattern aggregation
 - Add predictive scoring
 - Model versioning
 
 **Task 27.2-27.3:** Write tests
+
 - Property tests for PII removal
 - Property tests for score bounds
 - Unit tests for aggregation
 
 **Task 27.4:** Create cron job
+
 - `/api/cron/intelligence-aggregation`
 - Test anonymization thoroughly
 
 **Task 27.5:** Integrate with orchestrator
+
 - Add close probability calculation
 - Update prospect prioritization
 
 ### Day 6: Country Configuration (6-8 hours)
 
 **Task 28.1:** Implement `lib/pipeline/countryConfig.ts`
+
 - Define country configs (US, UK, CA)
 - Currency conversion
 - Language templates
 
 **Task 28.2-28.3:** Write tests
+
 - Property test for config application
 - Unit tests for currency conversion
 
 **Task 28.4:** Update pipeline stages
+
 - Modify discovery to detect country
 - Update outreach for language templates
 - Update proposal for currency
@@ -131,6 +146,7 @@ npm run dev
 ### Day 7: Final Testing & Deployment (4-6 hours)
 
 **Task 29:** Final checkpoint
+
 - [ ] Run all tests
 - [ ] Check coverage
 - [ ] End-to-end testing
@@ -167,6 +183,7 @@ npm test -- --watch lib/pipeline
 ### Issue: Prisma migration fails
 
 **Solution:**
+
 ```bash
 # Reset database (WARNING: deletes all data)
 npx prisma migrate reset
@@ -178,6 +195,7 @@ npx prisma migrate resolve --applied <migration-name>
 ### Issue: Tests fail with database errors
 
 **Solution:**
+
 ```bash
 # Ensure test database is set up
 DATABASE_URL="postgresql://..." npm test
@@ -189,6 +207,7 @@ DATABASE_URL="postgresql://test-db" npm test
 ### Issue: TypeScript errors in new files
 
 **Solution:**
+
 ```bash
 # Regenerate Prisma types
 npx prisma generate
@@ -200,6 +219,7 @@ npx prisma generate
 ### Issue: Cron jobs not executing
 
 **Solution:**
+
 - Verify CRON_SECRET is set
 - Check cron job configuration in hosting platform
 - Test endpoint manually: `curl -H "Authorization: Bearer $CRON_SECRET" http://localhost:3000/api/cron/discovery`
@@ -270,6 +290,7 @@ Want to see something working quickly?
    - Save and verify
 
 3. **Test State Machine** (5 min)
+
    ```bash
    npm test -- lib/pipeline/stateMachine
    ```

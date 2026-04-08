@@ -1,0 +1,822 @@
+import { Finding } from '@prisma/client';
+import { RunTree } from 'langsmith';
+
+import { CostTracker } from '../costs/costTracker';
+import { traceLlmCall } from '../tracing';
+import { validateCompleteProposal } from './schemas';
+import { ProposalTemplateSystem } from './template-system';
+import { ProposalPricing, ProposalResult, TierConfig } from './types';
+import { PainCluster } from '../diagnosis/types';
+import { generateWithGemini, LLMCallOptions } from '../llm/provider';
+import { logger } from '../logger';
+import { PiiScrubber } from '../security/piiScrubber';
+
+export interface LLMOrchestrationOptions {
+  model?: string;
+  temperature?: number;
+  maxOutputTokens?: number;
+  thinkingBudget?: number;
+  costTracker?: CostTracker;
+  parentTrace?: RunTree;
+  maxRetries?: number;
+  timeoutMs?: number;
+}
+
+export interface SectionGenerationResult {
+  content: string | any;
+  success: boolean;
+  error?: string;
+  tokensUsed?: {
+    input: number;
+    output: number;
+    total: number;
+  };
+  cost?: number;
+}
+
+export class ProposalLLMOrchestrator {
+  private templateSystem: ProposalTemplateSystem;
+  private defaultOptions: LLMOrchestrationOptions;
+
+  constructor(options: LLMOrchestrationOptions = {}) {
+    this.templateSystem = new ProposalTemplateSystem();
+    this.defaultOptions = {
+      model: process.env.PROPOSAL_MODEL || 'gemini-3.1-pro',
+      temperature: 0.2,
+      maxOutputTokens: 1024,
+      thinkingBudget: 50,
+      maxRetries: 3,
+      timeoutMs: 30000,
+      ...options,
+    };
+  }
+
+  /**
+   * Generate complete proposal with all sections
+   */
+  async generateCompleteProposal(
+    businessName: string,
+    businessIndustry: string | undefined,
+    clusters: PainCluster[],
+    findings: Finding[],
+    options: LLMOrchestrationOptions = {}
+  ): Promise<ProposalResult> {
+    const opts = { ...this.defaultOptions, ...options };
+    const results: Partial<ProposalResult> = {};
+
+    // Generate each section with proper error handling and fallbacks
+    const sections = [
+      {
+        name: 'executiveSummary',
+        generator: () => this.generateExecutiveSummary(businessName, clusters, findings, opts),
+      },
+      {
+        name: 'pricing',
+        generator: () => this.generatePricing(businessIndustry, clusters, findings, opts),
+      },
+      { name: 'assumptions', generator: () => this.generateAssumptions(businessName, opts) },
+      { name: 'disclaimers', generator: () => this.generateDisclaimers(opts) },
+      { name: 'nextSteps', generator: () => this.generateNextSteps(opts) },
+    ];
+
+    for (const section of sections) {
+      try {
+        const result = await section.generator();
+        if (result.success) {
+          (results as any)[section.name] = result.content;
+        } else {
+          logger.warn(`Failed to generate ${section.name}, using fallback`, {
+            error: result.error,
+          });
+          (results as any)[section.name] = this.getFallbackContent(
+            section.name,
+            businessName,
+            businessIndustry,
+            findings
+          );
+        }
+      } catch (error) {
+        logger.error(`Error generating ${section.name}: ${String(error)}`);
+        (results as any)[section.name] = this.getFallbackContent(
+          section.name,
+          businessName,
+          businessIndustry,
+          findings
+        );
+      }
+    }
+
+    // Add static content that doesn't need LLM generation
+    results.painClusters = clusters;
+    results.tiers = this.generateTierConfigurations(clusters, findings);
+
+    // Validate the complete proposal
+    const validation = validateCompleteProposal(results as ProposalResult, findings);
+
+    if (!validation.overallValid) {
+      logger.warn('Proposal validation failed, applying corrections', {
+        errors: validation.proposalValidation.errors,
+        citationErrors: validation.citationValidation.missingCitations,
+      });
+
+      // Apply corrections where possible
+      if (!validation.citationValidation.valid) {
+        results.tiers = this.correctTierCitations(results.tiers, findings);
+      }
+    }
+
+    return results as ProposalResult;
+  }
+
+  /**
+   * Generate executive summary
+   */
+  async generateExecutiveSummary(
+    businessName: string,
+    clusters: PainCluster[],
+    findings: Finding[],
+    options: LLMOrchestrationOptions = {}
+  ): Promise<SectionGenerationResult> {
+    const opts = { ...this.defaultOptions, ...options };
+
+    try {
+      // P0-3 FIX: Sanitize all inputs before prompt injection
+      const sanitizedBusinessName = PiiScrubber.sanitizeSimple(businessName);
+
+      // Prepare cluster summaries with sanitized data
+      const clusterSummaries = clusters.map((c) => ({
+        rootCause: PiiScrubber.sanitizeSimple(c.rootCause),
+        severity: c.severity,
+        narrative: PiiScrubber.sanitizeSimple(c.narrative || ''),
+        findingCount: c.findingIds.length,
+      }));
+
+      // Extract key metrics from findings
+      const keyMetrics = findings
+        .filter(
+          (f) =>
+            f.metrics &&
+            typeof f.metrics === 'object' &&
+            Object.keys(f.metrics as object).length > 0
+        )
+        .slice(0, 8)
+        .map((f) => ({
+          title: PiiScrubber.sanitizeSimple(f.title),
+          metrics: f.metrics,
+        }))
+        .filter((m) => m.metrics && Object.keys(m.metrics as object).length > 0);
+
+      // Count painkillers vs vitamins
+      const painkillers = findings.filter((f) => f.type === 'PAINKILLER').length;
+      const vitamins = findings.filter((f) => f.type === 'VITAMIN').length;
+
+      const clusterSummariesText = clusterSummaries
+        .map((c, i) => `${i + 1}. [${c.severity.toUpperCase()}] ${c.rootCause}`)
+        .join('\n');
+
+      const keyMetricsText =
+        keyMetrics.length > 0
+          ? JSON.stringify(keyMetrics, null, 2)
+          : 'Key findings:\n' +
+              findings
+                .slice(0, 5)
+                .map(
+                  (f) =>
+                    `- ${PiiScrubber.sanitizeSimple(f.title)}${f.description ? `: ${PiiScrubber.sanitizeSimple(f.description)}` : ''}`
+                )
+                .join('\n') || 'No metrics available.';
+
+      const template = this.templateSystem.getSectionTemplate('executiveSummary');
+      const prompt = this.templateSystem.fillTemplate(template, {
+        business_name: sanitizedBusinessName,
+        total_findings: findings.length,
+        painkillers_count: painkillers,
+        vitamins_count: vitamins,
+        cluster_summaries: clusterSummariesText,
+        key_metrics: keyMetricsText,
+      });
+
+      const llmOptions: LLMCallOptions = {
+        model: opts.model!,
+        input: prompt,
+        temperature: opts.temperature,
+        maxOutputTokens: opts.maxOutputTokens,
+        thinkingBudget: opts.thinkingBudget,
+        metadata: {
+          node: 'executive_summary',
+          experimentId: 'proposal_generation',
+        },
+      };
+
+      const result = await traceLlmCall(
+        {
+          name: 'executive_summary',
+          run_type: 'llm',
+          inputs: { businessName, findingsCount: findings.length },
+          parent: opts.parentTrace,
+          tags: ['exec_summary', opts.model, 'proposal_generation'],
+        },
+        async () => {
+          return generateWithGemini(llmOptions);
+        }
+      );
+
+      const usage = result.usageMetadata;
+      const tokensUsed = usage
+        ? {
+            input: usage.promptTokenCount || 0,
+            output: usage.candidatesTokenCount || 0,
+            total: (usage.promptTokenCount || 0) + (usage.candidatesTokenCount || 0),
+          }
+        : undefined;
+
+      // Calculate cost
+      const cost = usage
+        ? (usage.promptTokenCount || 0) * 0.000125 + (usage.candidatesTokenCount || 0) * 0.000375
+        : undefined;
+
+      if (opts.costTracker && usage) {
+        opts.costTracker.addLlmCall(
+          opts.model as any,
+          usage.promptTokenCount || 0,
+          usage.candidatesTokenCount || 0,
+          usage.thoughtsTokenCount || 0
+        );
+      }
+
+      return {
+        content: result.text?.trim() || '',
+        success: true,
+        tokensUsed,
+        cost,
+      };
+    } catch (error) {
+      logger.error('Error generating executive summary', { error });
+      return {
+        content: '',
+        success: false,
+        error: String(error),
+      };
+    }
+  }
+
+  /**
+   * Generate pricing recommendations
+   */
+  async generatePricing(
+    businessIndustry: string | undefined,
+    clusters: PainCluster[],
+    findings: Finding[],
+    options: LLMOrchestrationOptions = {}
+  ): Promise<SectionGenerationResult> {
+    const opts = { ...this.defaultOptions, ...options };
+
+    try {
+      // P0-3 FIX: Sanitize industry input
+      const sanitizedIndustry = businessIndustry
+        ? PiiScrubber.sanitizeSimple(businessIndustry)
+        : 'general';
+
+      const template = this.templateSystem.getSectionTemplate('pricing');
+      const prompt = this.templateSystem.fillTemplate(template, {
+        business_industry: sanitizedIndustry,
+        findings_count: findings.length,
+        pain_points: clusters.length,
+        effort_level: 'medium',
+      });
+
+      const llmOptions: LLMCallOptions = {
+        model: opts.model!,
+        input: prompt,
+        temperature: opts.temperature,
+        maxOutputTokens: opts.maxOutputTokens,
+        thinkingBudget: opts.thinkingBudget,
+        responseModality: 'json',
+        metadata: {
+          node: 'pricing_generation',
+          experimentId: 'proposal_pricing',
+        },
+      };
+
+      const result = await traceLlmCall(
+        {
+          name: 'pricing_generation',
+          run_type: 'llm',
+          inputs: { businessIndustry, clustersCount: clusters.length },
+          parent: opts.parentTrace,
+          tags: ['pricing', opts.model, 'proposal_generation'],
+        },
+        async () => {
+          return generateWithGemini(llmOptions);
+        }
+      );
+
+      const usage = result.usageMetadata;
+      const tokensUsed = usage
+        ? {
+            input: usage.promptTokenCount || 0,
+            output: usage.candidatesTokenCount || 0,
+            total: (usage.promptTokenCount || 0) + (usage.candidatesTokenCount || 0),
+          }
+        : undefined;
+
+      const cost = usage
+        ? (usage.promptTokenCount || 0) * 0.000125 + (usage.candidatesTokenCount || 0) * 0.000375
+        : undefined;
+
+      if (opts.costTracker && usage) {
+        opts.costTracker.addLlmCall(
+          opts.model as any,
+          usage.promptTokenCount || 0,
+          usage.candidatesTokenCount || 0,
+          usage.thoughtsTokenCount || 0
+        );
+      }
+
+      // Parse JSON response
+      let pricingData: ProposalPricing;
+      try {
+        pricingData = JSON.parse(result.text || '{}');
+      } catch {
+        // Fallback to default pricing if JSON parsing fails
+        pricingData = {
+          essentials: 1500,
+          growth: 3500,
+          premium: 7500,
+          currency: 'USD',
+        };
+      }
+
+      return {
+        content: pricingData,
+        success: true,
+        tokensUsed,
+        cost,
+      };
+    } catch (error) {
+      logger.error('Error generating pricing', { error });
+      return {
+        content: {
+          essentials: 1500,
+          growth: 3500,
+          premium: 7500,
+          currency: 'USD',
+        },
+        success: false,
+        error: String(error),
+      };
+    }
+  }
+
+  /**
+   * Generate assumptions
+   */
+  async generateAssumptions(
+    businessName: string,
+    options: LLMOrchestrationOptions = {}
+  ): Promise<SectionGenerationResult> {
+    const opts = { ...this.defaultOptions, ...options };
+
+    try {
+      // P0-3 FIX: Sanitize business name
+      const sanitizedBusinessName = PiiScrubber.sanitizeSimple(businessName);
+
+      const template = this.templateSystem.getSectionTemplate('assumptions');
+      const prompt = this.templateSystem.fillTemplate(template, {
+        business_name: sanitizedBusinessName,
+        custom_assumptions: '',
+      });
+
+      const llmOptions: LLMCallOptions = {
+        model: opts.model!,
+        input: prompt,
+        temperature: opts.temperature,
+        maxOutputTokens: opts.maxOutputTokens,
+        thinkingBudget: opts.thinkingBudget,
+        metadata: {
+          node: 'assumptions_generation',
+          experimentId: 'proposal_assumptions',
+        },
+      };
+
+      const result = await traceLlmCall(
+        {
+          name: 'assumptions_generation',
+          run_type: 'llm',
+          inputs: { businessName },
+          parent: opts.parentTrace,
+          tags: ['assumptions', opts.model, 'proposal_generation'],
+        },
+        async () => {
+          return generateWithGemini(llmOptions);
+        }
+      );
+
+      const usage = result.usageMetadata;
+      const tokensUsed = usage
+        ? {
+            input: usage.promptTokenCount || 0,
+            output: usage.candidatesTokenCount || 0,
+            total: (usage.promptTokenCount || 0) + (usage.candidatesTokenCount || 0),
+          }
+        : undefined;
+
+      const cost = usage
+        ? (usage.promptTokenCount || 0) * 0.000125 + (usage.candidatesTokenCount || 0) * 0.000375
+        : undefined;
+
+      if (opts.costTracker && usage) {
+        opts.costTracker.addLlmCall(
+          opts.model as any,
+          usage.promptTokenCount || 0,
+          usage.candidatesTokenCount || 0,
+          usage.thoughtsTokenCount || 0
+        );
+      }
+
+      // Parse assumptions from response
+      const assumptions = this.parseListFromText(result.text || '');
+
+      return {
+        content: assumptions,
+        success: true,
+        tokensUsed,
+        cost,
+      };
+    } catch (error) {
+      logger.error('Error generating assumptions', { error });
+      return {
+        content: [
+          `${businessName} will provide necessary access to accounts`,
+          'Implementation timeline assumes standard business hours',
+          'Pricing is based on the scope outlined in each tier',
+          'Monthly reporting and ongoing support not included',
+        ],
+        success: false,
+        error: String(error),
+      };
+    }
+  }
+
+  /**
+   * Generate disclaimers
+   */
+  async generateDisclaimers(
+    options: LLMOrchestrationOptions = {}
+  ): Promise<SectionGenerationResult> {
+    const opts = { ...this.defaultOptions, ...options };
+
+    try {
+      const template = this.templateSystem.getSectionTemplate('disclaimers');
+      const prompt = this.templateSystem.fillTemplate(template, {
+        custom_disclaimers: '',
+      });
+
+      const llmOptions: LLMCallOptions = {
+        model: opts.model!,
+        input: prompt,
+        temperature: opts.temperature,
+        maxOutputTokens: opts.maxOutputTokens,
+        thinkingBudget: opts.thinkingBudget,
+        metadata: {
+          node: 'disclaimers_generation',
+          experimentId: 'proposal_disclaimers',
+        },
+      };
+
+      const result = await traceLlmCall(
+        {
+          name: 'disclaimers_generation',
+          run_type: 'llm',
+          inputs: {},
+          parent: opts.parentTrace,
+          tags: ['disclaimers', opts.model, 'proposal_generation'],
+        },
+        async () => {
+          return generateWithGemini(llmOptions);
+        }
+      );
+
+      const usage = result.usageMetadata;
+      const tokensUsed = usage
+        ? {
+            input: usage.promptTokenCount || 0,
+            output: usage.candidatesTokenCount || 0,
+            total: (usage.promptTokenCount || 0) + (usage.candidatesTokenCount || 0),
+          }
+        : undefined;
+
+      const cost = usage
+        ? (usage.promptTokenCount || 0) * 0.000125 + (usage.candidatesTokenCount || 0) * 0.000375
+        : undefined;
+
+      if (opts.costTracker && usage) {
+        opts.costTracker.addLlmCall(
+          opts.model as any,
+          usage.promptTokenCount || 0,
+          usage.candidatesTokenCount || 0,
+          usage.thoughtsTokenCount || 0
+        );
+      }
+
+      // Parse disclaimers from response
+      const disclaimers = this.parseListFromText(result.text || '');
+
+      return {
+        content: disclaimers,
+        success: true,
+        tokensUsed,
+        cost,
+      };
+    } catch (error) {
+      logger.error('Error generating disclaimers', { error });
+      return {
+        content: [
+          'Audit data collected on the date of analysis',
+          'Competitor data is based on publicly available information',
+          'Results may vary based on industry and market conditions',
+          'SEO improvements can take 3-6 months to materialize',
+        ],
+        success: false,
+        error: String(error),
+      };
+    }
+  }
+
+  /**
+   * Generate next steps
+   */
+  async generateNextSteps(options: LLMOrchestrationOptions = {}): Promise<SectionGenerationResult> {
+    const opts = { ...this.defaultOptions, ...options };
+
+    try {
+      const template = this.templateSystem.getSectionTemplate('nextSteps');
+      const prompt = this.templateSystem.fillTemplate(template, {
+        custom_next_steps: '',
+      });
+
+      const llmOptions: LLMCallOptions = {
+        model: opts.model!,
+        input: prompt,
+        temperature: opts.temperature,
+        maxOutputTokens: opts.maxOutputTokens,
+        thinkingBudget: opts.thinkingBudget,
+        metadata: {
+          node: 'next_steps_generation',
+          experimentId: 'proposal_next_steps',
+        },
+      };
+
+      const result = await traceLlmCall(
+        {
+          name: 'next_steps_generation',
+          run_type: 'llm',
+          inputs: {},
+          parent: opts.parentTrace,
+          tags: ['next_steps', opts.model, 'proposal_generation'],
+        },
+        async () => {
+          return generateWithGemini(llmOptions);
+        }
+      );
+
+      const usage = result.usageMetadata;
+      const tokensUsed = usage
+        ? {
+            input: usage.promptTokenCount || 0,
+            output: usage.candidatesTokenCount || 0,
+            total: (usage.promptTokenCount || 0) + (usage.candidatesTokenCount || 0),
+          }
+        : undefined;
+
+      const cost = usage
+        ? (usage.promptTokenCount || 0) * 0.000125 + (usage.candidatesTokenCount || 0) * 0.000375
+        : undefined;
+
+      if (opts.costTracker && usage) {
+        opts.costTracker.addLlmCall(
+          opts.model as any,
+          usage.promptTokenCount || 0,
+          usage.candidatesTokenCount || 0,
+          usage.thoughtsTokenCount || 0
+        );
+      }
+
+      // Parse next steps from response
+      const nextSteps = this.parseListFromText(result.text || '');
+
+      return {
+        content: nextSteps,
+        success: true,
+        tokensUsed,
+        cost,
+      };
+    } catch (error) {
+      logger.error('Error generating next steps', { error });
+      return {
+        content: [
+          'Review this proposal and select your preferred tier',
+          'Reply to this email or schedule a 15-minute call to discuss',
+          "We'll send a simple contract and invoice",
+          'Kickoff call within 3 business days of signing',
+        ],
+        success: false,
+        error: String(error),
+      };
+    }
+  }
+
+  /**
+   * Generate tier configurations
+   */
+  generateTierConfigurations(
+    clusters: PainCluster[],
+    findings: Finding[]
+  ): ProposalResult['tiers'] {
+    const findingMap = new Map(findings.map((f) => [f.id, f]));
+
+    // Group findings by impact and effort for tier assignment
+    const essentialsFindings: string[] = [];
+    const growthFindings: string[] = [];
+    const premiumFindings: string[] = [];
+
+    for (const cluster of clusters) {
+      for (const findingId of cluster.findingIds) {
+        const finding = findingMap.get(findingId);
+        if (!finding) continue;
+
+        const impact = finding.impactScore;
+        const effort = finding.effortEstimate || 'MEDIUM';
+
+        if (impact >= 7 && effort === 'LOW') {
+          essentialsFindings.push(findingId);
+        } else if (impact >= 5 || effort === 'MEDIUM') {
+          growthFindings.push(findingId);
+        } else {
+          premiumFindings.push(findingId);
+        }
+      }
+    }
+
+    // Ensure essentials has at least 3 items
+    if (essentialsFindings.length < 3 && growthFindings.length > 0) {
+      const toMove = Math.min(3 - essentialsFindings.length, growthFindings.length);
+      essentialsFindings.push(...growthFindings.splice(0, toMove));
+    }
+
+    return {
+      essentials: {
+        name: 'Essentials',
+        description: 'Quick wins and critical fixes',
+        findingIds: essentialsFindings,
+        deliveryTime: '5 business days',
+        price: 1500,
+        badge: 'QUICK WIN',
+      },
+      growth: {
+        name: 'Growth',
+        description: 'Competitive improvements and optimizations',
+        findingIds: [...essentialsFindings, ...growthFindings],
+        deliveryTime: '10 business days',
+        price: 3500,
+        recommended: true,
+      },
+      premium: {
+        name: 'Premium',
+        description: 'Comprehensive solution',
+        findingIds: [...essentialsFindings, ...growthFindings, ...premiumFindings],
+        deliveryTime: '15 business days',
+        price: 7500,
+        badge: 'BEST VALUE',
+      },
+    };
+  }
+
+  /**
+   * Parse list items from text response
+   */
+  private parseListFromText(text: string): string[] {
+    const lines = text.split('\n').filter((line) => line.trim().length > 0);
+    const items: string[] = [];
+
+    for (const line of lines) {
+      // Remove numbering and bullet points
+      const cleaned = line
+        .replace(/^\d+\.\s*/, '')
+        .replace(/^\s*[-*]\s*/, '')
+        .trim();
+      if (cleaned.length > 0) {
+        items.push(cleaned);
+      }
+    }
+
+    return items.length > 0 ? items : [text.substring(0, 100) + '...'];
+  }
+
+  /**
+   * Get fallback content for failed generations
+   */
+  private getFallbackContent(
+    section: string,
+    businessName: string,
+    businessIndustry: string | undefined,
+    findings: Finding[]
+  ): any {
+    switch (section) {
+      case 'executiveSummary':
+        return `Based on our audit of ${businessName}, we've identified ${findings.length} critical issues that need immediate attention. Our analysis shows significant opportunities for improvement in your online presence and customer experience.`;
+
+      case 'pricing':
+        return {
+          essentials: 1500,
+          growth: 3500,
+          premium: 7500,
+          currency: 'USD',
+        };
+
+      case 'assumptions':
+        return [
+          `${businessName} will provide necessary access to accounts`,
+          'Implementation timeline assumes standard business hours',
+          'Pricing is based on the scope outlined in each tier',
+          'Monthly reporting and ongoing support not included',
+        ];
+
+      case 'disclaimers':
+        return [
+          'Audit data collected on the date of analysis',
+          'Competitor data is based on publicly available information',
+          'Results may vary based on industry and market conditions',
+          'SEO improvements can take 3-6 months to materialize',
+        ];
+
+      case 'nextSteps':
+        return [
+          'Review this proposal and select your preferred tier',
+          'Reply to this email or schedule a 15-minute call to discuss',
+          "We'll send a simple contract and invoice",
+          'Kickoff call within 3 business days of signing',
+        ];
+
+      default:
+        return null;
+    }
+  }
+
+  /**
+   * Correct tier citations by removing invalid finding references
+   */
+  private correctTierCitations(
+    tiers: ProposalResult['tiers'],
+    findings: Finding[]
+  ): ProposalResult['tiers'] {
+    const validFindingIds = new Set(findings.map((f) => f.id));
+
+    const correctedTiers = { ...tiers };
+
+    for (const [tierName, tier] of Object.entries(correctedTiers)) {
+      correctedTiers[tierName as keyof typeof correctedTiers] = {
+        ...tier,
+        findingIds: tier.findingIds.filter((id) => validFindingIds.has(id)),
+      };
+    }
+
+    return correctedTiers;
+  }
+
+  /**
+   * Enhanced token budget management
+   */
+  async validateTokenBudget(prompt: string, options: LLMCallOptions): Promise<boolean> {
+    const inputLengthChars = prompt.length;
+    const estimatedInputTokens = Math.ceil(inputLengthChars / 4);
+    const maxOutputTokens = options.maxOutputTokens || 1024;
+
+    // Context window for Gemini models
+    const contextWindow = 1000000; // 1M tokens for Gemini models
+    const totalEstimated = estimatedInputTokens + maxOutputTokens;
+
+    if (totalEstimated > contextWindow) {
+      logger.warn('Token budget exceeds context window', {
+        estimatedInputTokens,
+        maxOutputTokens,
+        contextWindow,
+        totalEstimated,
+      });
+      return false;
+    }
+
+    // Warn if approaching 80% of context window
+    if (totalEstimated > contextWindow * 0.8) {
+      logger.warn('Token budget approaching context window limit', {
+        estimatedInputTokens,
+        maxOutputTokens,
+        contextWindow,
+        totalEstimated,
+        percentage: ((totalEstimated / contextWindow) * 100).toFixed(2),
+      });
+    }
+
+    return true;
+  }
+}

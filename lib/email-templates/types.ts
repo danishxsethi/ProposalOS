@@ -4,10 +4,10 @@
  */
 
 export interface EmailTemplate {
-    id: string;
-    vertical: string;
-    stage: 'cold' | 'followup' | 'breakup';
-    subjectTemplate: string;
-    bodyTemplate: string;
-    /** Placeholders: {{businessName}}, {{finding}}, {{competitorName}}, {{metric}}, {{proposalUrl}} */
+  id: string;
+  vertical: string;
+  stage: 'cold' | 'followup' | 'breakup';
+  subjectTemplate: string;
+  bodyTemplate: string;
+  /** Placeholders: {{businessName}}, {{finding}}, {{competitorName}}, {{metric}}, {{proposalUrl}} */
 }

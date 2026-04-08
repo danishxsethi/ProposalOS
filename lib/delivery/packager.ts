@@ -1,6 +1,7 @@
-import { ValidatedArtifact } from './validationPipeline';
 import { GoogleGenerativeAI } from '@google/generative-ai';
+
 import { getGenerator } from './generators';
+import { ValidatedArtifact } from './validationPipeline';
 
 // Import Finding type from Prisma client
 type Finding = {
@@ -44,7 +45,12 @@ export async function packageArtifact(
   // Generate WordPress plugin if applicable
   let wordpressPlugin: string | undefined;
   const generator = getGenerator(finding.category);
-  if (generator && generator.supportsWordPress && generator.supportsWordPress() && generator.generateWordPressPlugin) {
+  if (
+    generator &&
+    generator.supportsWordPress &&
+    generator.supportsWordPress() &&
+    generator.generateWordPressPlugin
+  ) {
     try {
       wordpressPlugin = await generator.generateWordPressPlugin(finding as any, artifact);
     } catch (error) {

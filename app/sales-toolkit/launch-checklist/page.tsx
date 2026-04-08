@@ -1,4 +1,5 @@
 import Link from 'next/link';
+
 import { PrintButton } from '@/components/sales-toolkit/PrintButton';
 import { PrintTrigger } from '@/components/sales-toolkit/PrintTrigger';
 

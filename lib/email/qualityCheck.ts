@@ -27,7 +27,7 @@ const SPAM_TRIGGER_WORDS = [
   'guaranteed',
   'act now',
   'limited time',
-  'don\'t miss',
+  "don't miss",
   'last chance',
   'hurry',
   'urgent',
@@ -38,7 +38,7 @@ const SPAM_TRIGGER_WORDS = [
   '100% free',
   'winner',
   'congratulations',
-  'you\'ve been selected',
+  "you've been selected",
   'claim now',
   'click here',
   'buy now',
@@ -70,7 +70,8 @@ export function checkEmailQuality(
     passed: personalizationOk,
     detail: `Score: ${email.personalizationScore ?? 'N/A'}`,
   });
-  if (!personalizationOk) issues.push('Personalization score must be >= 8 (references real audit data)');
+  if (!personalizationOk)
+    issues.push('Personalization score must be >= 8 (references real audit data)');
 
   // 2. Word count <= 150
   const wordCountOk = wordCount <= 150;
@@ -105,7 +106,8 @@ export function checkEmailQuality(
   if (!subjectLenOk) issues.push(`Subject line ${subject.length} chars (max 60)`);
 
   // 5. Has specific number/metric from audit
-  const hasMetric = /\d+(\.\d+)?(\s*%|\s*seconds?|\s*ms|\s*score|\s*rating|\s*reviews?|\s*points?)/i.test(body) ||
+  const hasMetric =
+    /\d+(\.\d+)?(\s*%|\s*seconds?|\s*ms|\s*score|\s*rating|\s*reviews?|\s*points?)/i.test(body) ||
     /\d+(\s*out of|\/\s*\d+)/.test(body);
   checks.push({
     name: 'Has specific metric/number',
@@ -121,7 +123,8 @@ export function checkEmailQuality(
   }
 
   // 7. Has clear CTA
-  const hasCta = /\?|→|click|reply|send|forward|link|here'?s the/i.test(body) ||
+  const hasCta =
+    /\?|→|click|reply|send|forward|link|here'?s the/i.test(body) ||
     /want (me to |the )|just reply|get (started|the )/i.test(body);
   checks.push({
     name: 'Has clear CTA',
@@ -144,7 +147,8 @@ export function checkEmailQuality(
     name: 'CAN-SPAM: Unsubscribe',
     passed: hasUnsubscribe,
   });
-  if (!hasUnsubscribe) issues.push('Add unsubscribe instruction (e.g. "Reply STOP to unsubscribe")');
+  if (!hasUnsubscribe)
+    issues.push('Add unsubscribe instruction (e.g. "Reply STOP to unsubscribe")');
 
   // 10. CAN-SPAM: physical address placeholder
   const hasAddress = /address|physical address|our (address|location)|\[.*address.*\]/i.test(body);
@@ -152,7 +156,8 @@ export function checkEmailQuality(
     name: 'CAN-SPAM: Physical address',
     passed: hasAddress,
   });
-  if (!hasAddress) issues.push('Add physical address placeholder (e.g. "Our address: [Your Business Address]")');
+  if (!hasAddress)
+    issues.push('Add physical address placeholder (e.g. "Our address: [Your Business Address]")');
 
   const passedCount = checks.filter((c) => c.passed).length;
   const score = Math.round((passedCount / checks.length) * 100);
@@ -189,9 +194,7 @@ export function checkEmailSequenceQuality(
     )
   );
 
-  const failedEmails = reports
-    .map((r, i) => (r.pass ? -1 : i))
-    .filter((i) => i >= 0);
+  const failedEmails = reports.map((r, i) => (r.pass ? -1 : i)).filter((i) => i >= 0);
 
   return {
     overallPass: failedEmails.length === 0,

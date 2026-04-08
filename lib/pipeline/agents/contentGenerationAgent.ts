@@ -1,6 +1,6 @@
 /**
  * Content Generation Agent
- * 
+ *
  * Handles content-related findings by generating:
  * - Blog posts and articles
  * - Product descriptions
@@ -10,7 +10,7 @@
  * - Social media content
  */
 
-import { BaseAgent, type AgentContext, type AgentResult } from './baseAgent';
+import { type AgentContext, type AgentResult, BaseAgent } from './baseAgent';
 
 export class ContentGenerationAgent extends BaseAgent {
   getType(): string {

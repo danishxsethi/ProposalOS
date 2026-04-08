@@ -4,7 +4,10 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'node',
-    include: ['lib/deep-localization-cross-tenant-intelligence/**/*.test.ts', 'lib/deep-localization-cross-tenant-intelligence/**/*.property.test.ts'],
+    include: [
+      'lib/deep-localization-cross-tenant-intelligence/**/*.test.ts',
+      'lib/deep-localization-cross-tenant-intelligence/**/*.property.test.ts',
+    ],
     exclude: ['node_modules', 'dist'],
     coverage: {
       provider: 'v8',

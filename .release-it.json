@@ -1,0 +1,54 @@
+{
+  "git": {
+    "commitMessage": "chore: release v${version}",
+    "tagName": "v${version}",
+    "tagAnnotation": "Release v${version}",
+    "push": true,
+    "pushRepo": "origin",
+    "requireUpstream": true,
+    "requireCleanWorkingDir": false
+  },
+  "github": {
+    "release": true,
+    "releaseName": "v${version}",
+    "releaseNotes": "npx conventional-changelog -p angular -r 1",
+    "autoGenerate": true,
+    "comments": {
+      "submit": true,
+      "issue": "_Released in v${version}._",
+      "pr": "_Merged in v${version}._"
+    }
+  },
+  "npm": {
+    "publish": false
+  },
+  "plugins": {
+    "@release-it/conventional-changelog": {
+      "preset": {
+        "name": "angular",
+        "types": [
+          { "type": "feat", "section": "Features" },
+          { "type": "fix", "section": "Bug Fixes" },
+          { "type": "perf", "section": "Performance Improvements" },
+          { "type": "revert", "section": "Reverts" },
+          { "type": "docs", "section": "Documentation" },
+          { "type": "style", "section": "Styles" },
+          { "type": "chore", "section": "Chores" },
+          { "type": "refactor", "section": "Code Refactoring" },
+          { "type": "test", "section": "Tests" },
+          { "type": "ci", "section": "Continuous Integration" },
+          { "type": "config", "section": "Configuration" },
+          { "type": "audit", "section": "Audits" },
+          { "type": "remediation", "section": "Remediation" }
+        ]
+      },
+      "infile": "CHANGELOG.md",
+      "header": "# Changelog\n\nAll notable changes to this project will be documented in this file.\n\nSee [Conventional Commits](https://conventionalcommits.org) for information about the commit message format.\n"
+    }
+  },
+  "hooks": {
+    "before:init": ["npm run lint", "npm run test"],
+    "after:bump": "npx conventional-changelog -p angular -r 0 -i CHANGELOG.md -s",
+    "after:release": "echo Successfully released v${version} to GitHub"
+  }
+}

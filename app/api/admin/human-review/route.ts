@@ -1,12 +1,53 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
-import { auth } from '@/lib/auth';
+/**
+ * app/api/admin/human-review/route.ts
+ *
+ * Human Review Flag Management
+ * Allows admins to review and approve/reject flagged content
+ *
+ * Features:
+ * - Auth & tenant scoping
+ * - Zod validation
+ * - Rate limiting
+ * - Standardized error responses
+ */
 
-export async function GET(request: NextRequest) {
+import { NextRequest, NextResponse } from 'next/server';
+
+import { z } from 'zod';
+
+import {
+  generateTraceId,
+  InternalError,
+  NotFoundError,
+  UnauthorizedError,
+  ValidationError,
+} from '@/lib/api/errors';
+import { auth } from '@/lib/auth';
+import { withRateLimit } from '@/lib/middleware/rateLimit';
+import { prisma } from '@/lib/prisma';
+
+/**
+ * Human review flag update schema
+ */
+const humanReviewUpdateSchema = z.object({
+  flagId: z.string().uuid({ message: 'Valid flag ID is required' }),
+  status: z.enum(['approved', 'rejected'], { message: 'Status must be approved or rejected' }),
+  reason: z.string().max(500).optional(),
+});
+
+/**
+ * Inner handler for GET flags
+ */
+async function handleGetFlags(req: NextRequest): Promise<NextResponse> {
+  const traceId = generateTraceId();
+
   try {
     const session = await auth();
     if (!session?.user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json(
+        new UnauthorizedError('Authentication required').toEnvelope(req.url, traceId),
+        { status: 401 }
+      );
     }
 
     // Get user's tenant
@@ -16,7 +57,10 @@ export async function GET(request: NextRequest) {
     });
 
     if (!user?.tenantId) {
-      return NextResponse.json({ error: 'No tenant found' }, { status: 404 });
+      return NextResponse.json(
+        new NotFoundError('Tenant', 'not found').toEnvelope(req.url, traceId),
+        { status: 404 }
+      );
     }
 
     const flags = await prisma.humanReviewFlag.findMany({
@@ -27,26 +71,49 @@ export async function GET(request: NextRequest) {
       orderBy: { createdAt: 'desc' },
     });
 
-    return NextResponse.json({ flags, count: flags.length });
+    const response = NextResponse.json({ flags, count: flags.length });
+    response.headers.set('X-Trace-Id', traceId);
+    return response;
   } catch (error) {
     console.error('Failed to get human review flags:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    const internalError = new InternalError('Failed to fetch review flags', {
+      originalError: error instanceof Error ? error.message : String(error),
+    });
+    return NextResponse.json(internalError.toEnvelope(req.url, traceId), { status: 500 });
   }
 }
 
-export async function PATCH(request: NextRequest) {
+/**
+ * Inner handler for PATCH flag
+ */
+async function handleUpdateFlag(req: NextRequest): Promise<NextResponse> {
+  const traceId = generateTraceId();
+
   try {
     const session = await auth();
     if (!session?.user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json(
+        new UnauthorizedError('Authentication required').toEnvelope(req.url, traceId),
+        { status: 401 }
+      );
     }
 
-    const body = await request.json();
-    const { flagId, status } = body;
+    const body = await req.json();
 
-    if (!flagId || !['approved', 'rejected'].includes(status)) {
-      return NextResponse.json({ error: 'Invalid request' }, { status: 400 });
+    // Validate request body
+    const result = humanReviewUpdateSchema.safeParse(body);
+    if (!result.success) {
+      const errorDetails = result.error.errors.map((e) => ({
+        field: e.path.join('.'),
+        message: e.message,
+      }));
+      return NextResponse.json(
+        new ValidationError('Invalid request data', errorDetails).toEnvelope(req.url, traceId),
+        { status: 400 }
+      );
     }
+
+    const { flagId, status, reason } = result.data;
 
     const flag = await prisma.humanReviewFlag.update({
       where: { id: flagId },
@@ -54,12 +121,36 @@ export async function PATCH(request: NextRequest) {
         status,
         reviewedBy: session.user.email,
         reviewedAt: new Date(),
+        ...(reason && { notes: reason }),
       },
     });
 
-    return NextResponse.json({ flag });
+    const response = NextResponse.json({ flag });
+    response.headers.set('X-Trace-Id', traceId);
+    return response;
   } catch (error) {
     console.error('Failed to update human review flag:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    const internalError = new InternalError('Failed to update review flag', {
+      originalError: error instanceof Error ? error.message : String(error),
+    });
+    return NextResponse.json(internalError.toEnvelope(req.url, traceId), { status: 500 });
   }
 }
+
+// Apply rate limiting
+const rateLimitedGet = (req: NextRequest) =>
+  withRateLimit({
+    windowMs: 60 * 1000,
+    max: 30,
+    message: 'Too many review requests. Please wait before trying again.',
+  })(req, () => handleGetFlags(req));
+
+const rateLimitedPatch = (req: NextRequest) =>
+  withRateLimit({
+    windowMs: 60 * 1000,
+    max: 10,
+    message: 'Too many update requests. Please wait before trying again.',
+  })(req, () => handleUpdateFlag(req));
+
+export const GET = rateLimitedGet;
+export const PATCH = rateLimitedPatch;

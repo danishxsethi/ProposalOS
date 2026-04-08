@@ -1,13 +1,15 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
+
 import {
-  speedOptimizationAgent,
-  seoFixAgent,
   accessibilityAgent,
-  securityHardeningAgent,
   contentGenerationAgent,
   getAgent,
   getAgentForCategory,
+  securityHardeningAgent,
+  seoFixAgent,
+  speedOptimizationAgent,
 } from '../index';
+
 import type { AgentContext } from '../baseAgent';
 
 describe('AI Service Agents', () => {

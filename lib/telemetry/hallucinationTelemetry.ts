@@ -1,11 +1,15 @@
-import { prisma } from '@/lib/prisma';
 import { sendEmail } from '@/lib/notifications/email';
+import { prisma } from '@/lib/prisma';
 
 export interface HallucinationEvent {
   tenantId: string;
   auditId?: string;
   proposalId?: string;
-  category: 'data_fabrication' | 'metric_inflation' | 'false_competitor_claim' | 'unsupported_recommendation';
+  category:
+    | 'data_fabrication'
+    | 'metric_inflation'
+    | 'false_competitor_claim'
+    | 'unsupported_recommendation';
   flaggedText: string;
   location: string;
   timestamp: Date;
@@ -183,7 +187,7 @@ export async function sendRateAlert(tenantId: string): Promise<void> {
   });
 
   const totalClaims = Math.max(proposals * 50, 1);
-  const rate = (hallucinations / totalClaims * 100).toFixed(2);
+  const rate = ((hallucinations / totalClaims) * 100).toFixed(2);
 
   const subject = `⚠️ High Hallucination Rate Alert - ${tenant.name}`;
   const body = `

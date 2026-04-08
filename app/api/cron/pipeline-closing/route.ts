@@ -1,20 +1,21 @@
 import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
-import { computeEngagementScore, isHotLead } from '@/lib/pipeline/dealCloser';
-import type { PipelineConfig } from '@/lib/pipeline/types';
+
 import { verifyCronAuth } from '@/lib/middleware/cronAuth';
 import { sendWebhook } from '@/lib/notifications/webhook';
+import { computeEngagementScore, isHotLead } from '@/lib/pipeline/dealCloser';
+import type { PipelineConfig } from '@/lib/pipeline/types';
+import { prisma } from '@/lib/prisma';
 
 /**
  * Pipeline Closing Cron Job
- * 
+ *
  * Runs periodically to:
  * 1. Compute engagement scores for active prospects
  * 2. Identify hot leads (top N percentile)
  * 3. Transition hot leads to hot_lead status
  * 4. Route top 5% to Human Review Queue
  * 5. Send automated follow-ups to hot leads
- * 
+ *
  * Triggered by: Vercel Cron or external scheduler
  * Frequency: Every 1 hour
  */
@@ -24,8 +25,6 @@ export async function GET(req: Request) {
   if (authError) return authError;
 
   try {
-
-
     // Get all active tenants with pipeline config
     const tenants = await prisma.tenant.findMany({
       where: {
@@ -106,9 +105,7 @@ export async function GET(req: Request) {
               if (topPercentile >= 95 && score.total >= 150) {
                 // Route to Human Review Queue
                 // In production, this would create a notification or queue entry
-                console.log(
-                  `[Pipeline Closing] Routing to Human Review Queue: ${prospect.id}`
-                );
+                console.log(`[Pipeline Closing] Routing to Human Review Queue: ${prospect.id}`);
 
                 // Send notification to agency via webhook instead of silent DB queue
                 await sendWebhook('chat.escalated', {
@@ -120,14 +117,11 @@ export async function GET(req: Request) {
               }
 
               // Send automated follow-up
-              // TODO: Integrate with outreach system
+              // Future: Integrate with outreach system for personalized follow-up sequences
               console.log(`[Pipeline Closing] Sending follow-up to: ${prospect.id}`);
             }
           } catch (error) {
-            console.error(
-              `[Pipeline Closing] Error processing prospect ${prospect.id}:`,
-              error
-            );
+            console.error(`[Pipeline Closing] Error processing prospect ${prospect.id}:`, error);
             results.errors.push(
               `Prospect ${prospect.id}: ${error instanceof Error ? error.message : 'Unknown error'}`
             );

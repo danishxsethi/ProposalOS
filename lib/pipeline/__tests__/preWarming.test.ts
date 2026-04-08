@@ -1,12 +1,20 @@
 /**
  * Unit tests for Pre-Warming Engine
- * 
+ *
  * Tests action scheduling logic, daily limit enforcement, and window completion checking.
  */
 
-import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { scheduleActions, executeAction, checkWindowComplete, getDailyActionCount } from '../preWarming';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { prisma } from '@/lib/db';
+
+import {
+  checkWindowComplete,
+  executeAction,
+  getDailyActionCount,
+  scheduleActions,
+} from '../preWarming';
+
 import type { PreWarmingConfig } from '../types';
 
 // Mock Prisma
@@ -64,7 +72,7 @@ describe('Pre-Warming Engine', () => {
 
       // Should schedule at least one action per platform
       expect(actions.length).toBeGreaterThan(0);
-      
+
       // Check that actions are scheduled within the window (3-5 days before outreach)
       const windowStart = new Date(outreachDate);
       windowStart.setDate(windowStart.getDate() - 5);
@@ -144,9 +152,9 @@ describe('Pre-Warming Engine', () => {
     it('should throw error if lead not found', async () => {
       vi.mocked(prisma.prospectLead.findUnique).mockResolvedValue(null);
 
-      await expect(
-        scheduleActions('nonexistent-lead', new Date())
-      ).rejects.toThrow('Lead nonexistent-lead not found');
+      await expect(scheduleActions('nonexistent-lead', new Date())).rejects.toThrow(
+        'Lead nonexistent-lead not found'
+      );
     });
   });
 
@@ -301,7 +309,7 @@ describe('Pre-Warming Engine', () => {
   describe('getDailyActionCount', () => {
     it('should count actions for a specific platform and date', async () => {
       const date = new Date('2024-01-05T12:00:00Z');
-      
+
       vi.mocked(prisma.preWarmingAction.count).mockResolvedValue(5);
 
       const count = await getDailyActionCount('gbp', date);
@@ -323,7 +331,7 @@ describe('Pre-Warming Engine', () => {
 
     it('should only count scheduled and completed actions', async () => {
       const date = new Date('2024-01-05T12:00:00Z');
-      
+
       vi.mocked(prisma.preWarmingAction.count).mockResolvedValue(3);
 
       await getDailyActionCount('facebook', date);

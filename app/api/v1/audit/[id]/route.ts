@@ -1,37 +1,39 @@
 import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
-import { getTenantFromApiKey } from '@/lib/auth/apiKeys';
 
-async function validate(req: Request) {
-    const authHeader = req.headers.get('authorization');
-    if (!authHeader?.startsWith('Bearer ')) return null;
-    return await getTenantFromApiKey(authHeader.split(' ')[1]);
-}
+import { withAuth } from '@/lib/middleware/auth';
+import { createScopedPrisma, getTenantId } from '@/lib/tenant/context';
 
-export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
-    const tenant = await validate(req);
-    if (!tenant) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+export const GET = withAuth(
+  async (req: Request, { params }: { params: Promise<{ id: string }> }) => {
+    try {
+      const tenantId = (await getTenantId()) || '';
+      const prisma = createScopedPrisma(tenantId);
 
-    const { id } = await params;
-    const audit = await prisma.audit.findUnique({
+      const { id } = await params;
+      const audit = await prisma.audit.findUnique({
         where: { id },
-        include: { findings: true }
-    });
+        include: { findings: true },
+      });
 
-    if (!audit || audit.tenantId !== tenant.id) {
+      if (!audit) {
         return NextResponse.json({ error: 'Not found' }, { status: 404 });
-    }
+      }
 
-    return NextResponse.json({
+      return NextResponse.json({
         id: audit.id,
         status: audit.status,
         businessName: audit.businessName,
         overallScore: audit.overallScore,
-        findings: audit.findings.map(f => ({
-            type: f.type,
-            title: f.title,
-            score: f.impactScore,
-            category: f.category
-        }))
-    });
-}
+        findings: audit.findings.map((f) => ({
+          type: f.type,
+          title: f.title,
+          score: f.impactScore,
+          category: f.category,
+        })),
+      });
+    } catch (error) {
+      console.error('Error fetching audit details:', error);
+      return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    }
+  }
+);

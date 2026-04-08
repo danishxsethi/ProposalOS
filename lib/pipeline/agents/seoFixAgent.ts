@@ -1,6 +1,6 @@
 /**
  * SEO Fix Agent
- * 
+ *
  * Handles SEO-related findings by fixing:
  * - Missing or duplicate meta tags
  * - Broken internal/external links
@@ -10,7 +10,7 @@
  * - Schema markup implementation
  */
 
-import { BaseAgent, type AgentContext, type AgentResult } from './baseAgent';
+import { type AgentContext, type AgentResult, BaseAgent } from './baseAgent';
 
 export class SeoFixAgent extends BaseAgent {
   getType(): string {

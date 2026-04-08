@@ -15,8 +15,9 @@
  *   npm run build-portfolio
  */
 
-import * as fs from 'fs-extra';
 import * as path from 'path';
+
+import * as fs from 'fs-extra';
 
 const RESULTS_PATH = path.join(process.cwd(), 'scripts', 'output', 'blitz-results.json');
 const OUTPUT_DIR = path.join(process.cwd(), 'scripts', 'output');
@@ -33,7 +34,10 @@ interface BlitzResult {
 }
 
 function safeFilename(name: string): string {
-  return name.replace(/[^a-z0-9-_]/gi, '_').replace(/_+/g, '_').slice(0, 80);
+  return name
+    .replace(/[^a-z0-9-_]/gi, '_')
+    .replace(/_+/g, '_')
+    .slice(0, 80);
 }
 
 async function main(): Promise<void> {
@@ -45,12 +49,8 @@ async function main(): Promise<void> {
   const results = (await fs.readJson(RESULTS_PATH)) as BlitzResult[];
 
   // Filter to passing results with PDFs and QA scores
-  const withPdfAndScore = results.filter(
-    (r) => r.pass && r.pdfPath && r.qaScore !== undefined
-  );
-  const exists = await Promise.all(
-    withPdfAndScore.map((r) => fs.pathExists(r.pdfPath!))
-  );
+  const withPdfAndScore = results.filter((r) => r.pass && r.pdfPath && r.qaScore !== undefined);
+  const exists = await Promise.all(withPdfAndScore.map((r) => fs.pathExists(r.pdfPath!)));
   const withPdf = withPdfAndScore.filter((_, i) => exists[i]);
 
   if (withPdf.length === 0) {
@@ -74,7 +74,12 @@ async function main(): Promise<void> {
   await fs.ensureDir(PORTFOLIO_DIR);
 
   // Copy PDFs and build HTML entries
-  const entries: { businessName: string; vertical: string; qaScore: number; pdfFilename: string }[] = [];
+  const entries: {
+    businessName: string;
+    vertical: string;
+    qaScore: number;
+    pdfFilename: string;
+  }[] = [];
 
   for (const r of selected) {
     const pdfFilename = `${safeFilename(r.businessName)}.pdf`;

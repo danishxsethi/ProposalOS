@@ -4,9 +4,10 @@
  * Validates: Requirements 1.1, 1.2, 1.3, 1.4, 1.5
  */
 
-import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
-import { PromptPerformanceTracker } from '../PromptPerformanceTracker';
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+
 import { prisma } from '../db';
+import { PromptPerformanceTracker } from '../PromptPerformanceTracker';
 import { PromptPerformanceLog } from '../types';
 
 describe('PromptPerformanceTracker', () => {
@@ -95,8 +96,8 @@ describe('PromptPerformanceTracker', () => {
     it('should auto-generate timestamp', async () => {
       const beforeLog = new Date();
       // Add small delay to ensure timestamp is after beforeLog
-      await new Promise(resolve => setTimeout(resolve, 10));
-      
+      await new Promise((resolve) => setTimeout(resolve, 10));
+
       const log = await tracker.logPerformance({
         promptVersionHash: testVersionHash,
         nodeId: testNodeId,
@@ -223,7 +224,7 @@ describe('PromptPerformanceTracker', () => {
     beforeAll(async () => {
       // Create test logs
       const versionHash = 'test-version-query-123';
-      
+
       for (let i = 0; i < 5; i++) {
         await tracker.logPerformance({
           promptVersionHash: versionHash,
@@ -241,24 +242,22 @@ describe('PromptPerformanceTracker', () => {
 
     it('should retrieve logs by version hash', async () => {
       const logs = await tracker.getPerformanceByVersion('test-version-query-123');
-      
+
       expect(logs.length).toBe(5);
-      expect(logs.every(log => log.promptVersionHash === 'test-version-query-123')).toBe(true);
+      expect(logs.every((log) => log.promptVersionHash === 'test-version-query-123')).toBe(true);
     });
 
     it('should filter by time range', async () => {
       const now = new Date();
       const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
-      
+
       const logs = await tracker.getPerformanceByVersion('test-version-query-123', {
         start: oneHourAgo,
         end: now,
       });
-      
+
       expect(logs.length).toBeGreaterThan(0);
-      expect(logs.every(log => 
-        log.timestamp >= oneHourAgo && log.timestamp <= now
-      )).toBe(true);
+      expect(logs.every((log) => log.timestamp >= oneHourAgo && log.timestamp <= now)).toBe(true);
     });
   });
 
@@ -266,7 +265,7 @@ describe('PromptPerformanceTracker', () => {
     beforeAll(async () => {
       // Create test logs with known values
       const versionHash = 'test-version-aggregate-123';
-      
+
       await tracker.logPerformance({
         promptVersionHash: versionHash,
         nodeId: testNodeId,
@@ -294,7 +293,7 @@ describe('PromptPerformanceTracker', () => {
 
     it('should calculate aggregate metrics correctly', async () => {
       const metrics = await tracker.getAggregateMetrics('test-version-aggregate-123');
-      
+
       expect(metrics.totalCalls).toBe(2);
       expect(metrics.avgQualityScore).toBeCloseTo(85, 1);
       expect(metrics.avgDownstreamImpact).toBeCloseTo(90, 1);
@@ -310,7 +309,7 @@ describe('PromptPerformanceTracker', () => {
     beforeAll(async () => {
       // Create logs with varying quality scores
       const versionHash = 'test-version-threshold-123';
-      
+
       for (let i = 0; i < 5; i++) {
         await tracker.logPerformance({
           promptVersionHash: versionHash,
@@ -328,16 +327,16 @@ describe('PromptPerformanceTracker', () => {
 
     it('should filter by quality threshold with >= operator', async () => {
       const logs = await tracker.getPerformanceByQualityThreshold(80, '>=');
-      
+
       expect(logs.length).toBeGreaterThan(0);
-      expect(logs.every(log => log.qualityScore >= 80)).toBe(true);
+      expect(logs.every((log) => log.qualityScore >= 80)).toBe(true);
     });
 
     it('should filter by quality threshold with < operator', async () => {
       const logs = await tracker.getPerformanceByQualityThreshold(80, '<');
-      
+
       expect(logs.length).toBeGreaterThan(0);
-      expect(logs.every(log => log.qualityScore < 80)).toBe(true);
+      expect(logs.every((log) => log.qualityScore < 80)).toBe(true);
     });
   });
 
@@ -345,7 +344,7 @@ describe('PromptPerformanceTracker', () => {
     beforeAll(async () => {
       // Create underperforming prompt
       const underperformingHash = 'test-version-underperforming';
-      
+
       for (let i = 0; i < 15; i++) {
         await tracker.logPerformance({
           promptVersionHash: underperformingHash,
@@ -362,7 +361,7 @@ describe('PromptPerformanceTracker', () => {
 
       // Create well-performing prompt
       const performingHash = 'test-version-performing';
-      
+
       for (let i = 0; i < 15; i++) {
         await tracker.logPerformance({
           promptVersionHash: performingHash,
@@ -380,13 +379,13 @@ describe('PromptPerformanceTracker', () => {
 
     it('should identify underperforming prompts', async () => {
       const underperforming = await tracker.getUnderperformingPrompts(70, 10);
-      
-      const underperformingHashes = underperforming.map(p => p.versionHash);
+
+      const underperformingHashes = underperforming.map((p) => p.versionHash);
       expect(underperformingHashes).toContain('test-version-underperforming');
       expect(underperformingHashes).not.toContain('test-version-performing');
-      
+
       const underperformingPrompt = underperforming.find(
-        p => p.versionHash === 'test-version-underperforming'
+        (p) => p.versionHash === 'test-version-underperforming'
       );
       expect(underperformingPrompt?.avgQualityScore).toBeLessThan(70);
     });

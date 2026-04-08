@@ -39,7 +39,12 @@ export interface ComparisonReportForEmail {
   urgencyStatement: string;
   winningCategories: string[];
   losingCategories: string[];
-  competitors?: Array<{ name?: string; performanceScore?: number; rating?: number; reviewCount?: number }>;
+  competitors?: Array<{
+    name?: string;
+    performanceScore?: number;
+    rating?: number;
+    reviewCount?: number;
+  }>;
   biggestGap?: {
     category: string;
     competitorName: string;

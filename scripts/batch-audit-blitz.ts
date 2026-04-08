@@ -12,8 +12,9 @@
  */
 
 import 'dotenv/config';
-import * as fs from 'fs-extra';
 import * as path from 'path';
+
+import * as fs from 'fs-extra';
 
 const BASE_URL = process.env.BASE_URL || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
 const API_KEY = process.env.API_KEY;
@@ -90,13 +91,13 @@ function sleep(ms: number): Promise<void> {
 }
 
 function safeFilename(name: string): string {
-  return name.replace(/[^a-z0-9-_]/gi, '_').replace(/_+/g, '_').slice(0, 80);
+  return name
+    .replace(/[^a-z0-9-_]/gi, '_')
+    .replace(/_+/g, '_')
+    .slice(0, 80);
 }
 
-async function fetchWithAuth(
-  url: string,
-  options: RequestInit = {}
-): Promise<Response> {
+async function fetchWithAuth(url: string, options: RequestInit = {}): Promise<Response> {
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     ...(options.headers as Record<string, string>),
@@ -163,7 +164,8 @@ function runQualityGate(
   const issues: string[] = [];
 
   // 1. All expected modules returned data
-  const modulesOk = audit.modulesCompleted && audit.modulesCompleted.length >= EXPECTED_MODULES.length;
+  const modulesOk =
+    audit.modulesCompleted && audit.modulesCompleted.length >= EXPECTED_MODULES.length;
   if (!modulesOk) {
     const failed = audit.modulesFailed?.map((m) => m.module).join(', ') || 'unknown';
     issues.push(`Module(s) failed: ${failed}`);
@@ -336,10 +338,11 @@ function printSummary(results: BlitzResult[]): void {
 
     const issueSummary =
       failed > 0
-        ? arr
+        ? (arr
             .filter((r) => !r.pass)
             .flatMap((r) => r.issues)
-            .slice(0, 1)[0]?.slice(0, 14) ?? 'Various'
+            .slice(0, 1)[0]
+            ?.slice(0, 14) ?? 'Various')
         : 'None';
 
     console.log(
@@ -351,9 +354,7 @@ function printSummary(results: BlitzResult[]): void {
   const overallAvg =
     results.filter((r) => r.qaScore !== undefined).length > 0
       ? (
-          results
-            .filter((r) => r.qaScore !== undefined)
-            .reduce((s, r) => s + (r.qaScore ?? 0), 0) /
+          results.filter((r) => r.qaScore !== undefined).reduce((s, r) => s + (r.qaScore ?? 0), 0) /
           results.filter((r) => r.qaScore !== undefined).length
         ).toFixed(1)
       : 'N/A';
@@ -443,9 +444,7 @@ async function main(): Promise<void> {
 
   for (let i = 0; i < targets.length; i += MAX_CONCURRENT) {
     const batch = targets.slice(i, i + MAX_CONCURRENT);
-    const batchResults = await Promise.all(
-      batch.map((t, j) => processWithRateLimit(t, i + j))
-    );
+    const batchResults = await Promise.all(batch.map((t, j) => processWithRateLimit(t, i + j)));
     results.push(...batchResults);
   }
 

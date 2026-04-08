@@ -1,14 +1,15 @@
 /**
  * Tenant Configuration Management
- * 
+ *
  * Provides CRUD operations for PipelineConfig, tenant onboarding with sensible defaults,
  * and tenant branding application to outreach emails and proposals.
- * 
+ *
  * Requirements: 9.1, 9.2, 9.3, 9.4, 9.5, 9.6
  */
 
 import { prisma } from '@/lib/db';
-import type { PipelineConfig, TenantBranding, Tenant } from '@prisma/client';
+
+import type { PipelineConfig, Tenant, TenantBranding } from '@prisma/client';
 
 export interface PipelineConfigInput {
   concurrencyLimit?: number;
@@ -94,8 +95,10 @@ export async function upsertPipelineConfig(
   if (input.dailyVolumeLimit !== undefined) data.dailyVolumeLimit = input.dailyVolumeLimit;
   if (input.spendingLimitCents !== undefined) data.spendingLimitCents = input.spendingLimitCents;
   if (input.hotLeadPercentile !== undefined) data.hotLeadPercentile = input.hotLeadPercentile;
-  if (input.emailMinQualityScore !== undefined) data.emailMinQualityScore = input.emailMinQualityScore;
-  if (input.maxEmailsPerDomainPerDay !== undefined) data.maxEmailsPerDomainPerDay = input.maxEmailsPerDomainPerDay;
+  if (input.emailMinQualityScore !== undefined)
+    data.emailMinQualityScore = input.emailMinQualityScore;
+  if (input.maxEmailsPerDomainPerDay !== undefined)
+    data.maxEmailsPerDomainPerDay = input.maxEmailsPerDomainPerDay;
   if (input.followUpSchedule !== undefined) data.followUpSchedule = input.followUpSchedule;
   if (input.pausedStages !== undefined) data.pausedStages = input.pausedStages;
   if (input.country !== undefined) data.country = input.country;
@@ -118,7 +121,10 @@ export async function upsertPipelineConfig(
  * Requirement 9.6: Validate configuration changes
  */
 function validatePipelineConfig(input: PipelineConfigInput): void {
-  if (input.concurrencyLimit !== undefined && (input.concurrencyLimit < 1 || input.concurrencyLimit > 100)) {
+  if (
+    input.concurrencyLimit !== undefined &&
+    (input.concurrencyLimit < 1 || input.concurrencyLimit > 100)
+  ) {
     throw new Error('Concurrency limit must be between 1 and 100');
   }
 
@@ -126,7 +132,10 @@ function validatePipelineConfig(input: PipelineConfigInput): void {
     throw new Error('Batch size must be between 1 and 1000');
   }
 
-  if (input.painScoreThreshold !== undefined && (input.painScoreThreshold < 0 || input.painScoreThreshold > 100)) {
+  if (
+    input.painScoreThreshold !== undefined &&
+    (input.painScoreThreshold < 0 || input.painScoreThreshold > 100)
+  ) {
     throw new Error('Pain score threshold must be between 0 and 100');
   }
 
@@ -138,11 +147,17 @@ function validatePipelineConfig(input: PipelineConfigInput): void {
     throw new Error('Spending limit must be non-negative');
   }
 
-  if (input.hotLeadPercentile !== undefined && (input.hotLeadPercentile < 0 || input.hotLeadPercentile > 100)) {
+  if (
+    input.hotLeadPercentile !== undefined &&
+    (input.hotLeadPercentile < 0 || input.hotLeadPercentile > 100)
+  ) {
     throw new Error('Hot lead percentile must be between 0 and 100');
   }
 
-  if (input.emailMinQualityScore !== undefined && (input.emailMinQualityScore < 0 || input.emailMinQualityScore > 100)) {
+  if (
+    input.emailMinQualityScore !== undefined &&
+    (input.emailMinQualityScore < 0 || input.emailMinQualityScore > 100)
+  ) {
     throw new Error('Email min quality score must be between 0 and 100');
   }
 
@@ -154,7 +169,7 @@ function validatePipelineConfig(input: PipelineConfigInput): void {
     if (!Array.isArray(input.followUpSchedule)) {
       throw new Error('Follow-up schedule must be an array');
     }
-    if (input.followUpSchedule.some(day => day < 0)) {
+    if (input.followUpSchedule.some((day) => day < 0)) {
       throw new Error('Follow-up schedule days must be non-negative');
     }
   }
@@ -163,7 +178,10 @@ function validatePipelineConfig(input: PipelineConfigInput): void {
     throw new Error('Paused stages must be an array');
   }
 
-  if (input.pricingMultiplier !== undefined && (input.pricingMultiplier < 0.1 || input.pricingMultiplier > 10)) {
+  if (
+    input.pricingMultiplier !== undefined &&
+    (input.pricingMultiplier < 0.1 || input.pricingMultiplier > 10)
+  ) {
     throw new Error('Pricing multiplier must be between 0.1 and 10');
   }
 
@@ -258,6 +276,14 @@ export function applyBrandingToEmail(
   // Replace website URL placeholder
   if (branding.websiteUrl) {
     branded = branded.replace(/\{\{websiteUrl\}\}/g, () => branding.websiteUrl as string);
+  }
+
+  // Requirement: Ensure CAN-SPAM physical address compliance if it's missing in the content but exists in settings
+  const settings =
+    typeof branding.settings === 'object' && branding.settings ? (branding.settings as any) : {};
+  const physicalAddress = settings?.physicalAddress;
+  if (physicalAddress && !branded.includes(physicalAddress)) {
+    branded += `\n<br><br><div style="font-size: 10px; color: #999;">${physicalAddress}</div>`;
   }
 
   return branded;
@@ -360,7 +386,7 @@ export async function resumeStage(tenantId: string, stage: string): Promise<Pipe
     throw new Error(`Pipeline config not found for tenant ${tenantId}`);
   }
 
-  const pausedStages = ((config.pausedStages as string[]) || []).filter(s => s !== stage);
+  const pausedStages = ((config.pausedStages as string[]) || []).filter((s) => s !== stage);
 
   return prisma.pipelineConfig.update({
     where: { tenantId },

@@ -1,18 +1,21 @@
 /**
  * Inbox Rotation Manager — Distributes outreach emails across sending domains
- * 
+ *
  * Implements smart domain rotation to:
  * - Distribute emails across tenant's OutreachSendingDomains
  * - Respect daily limits (default: 50 emails/domain/day)
  * - Select domain with lowest usage for the day
  * - Handle reply detection to pause follow-up sequences
- * 
+ *
  * Requirements: 4.6, 4.9
  */
 
 import { prisma } from '@/lib/prisma';
+
+import { pauseFollowUpSequence } from './followUpSequence';
+import { sendEmail } from '../outreach/emailSender';
+
 import type { GeneratedEmail, SendResult } from './types';
-import { pauseFollowUpSequence } from './outreach';
 
 // ============================================================================
 // Domain Selection
@@ -20,13 +23,13 @@ import { pauseFollowUpSequence } from './outreach';
 
 /**
  * Selects the best sending domain for a tenant on the current day.
- * 
+ *
  * Strategy:
  * 1. Query all active domains for the tenant
  * 2. Get today's usage stats for each domain
  * 3. Filter out domains at or above their daily limit
  * 4. Select the domain with the lowest usage
- * 
+ *
  * Requirements: 4.6
  */
 export async function selectSendingDomain(tenantId: string): Promise<string | null> {
@@ -76,7 +79,7 @@ export async function selectSendingDomain(tenantId: string): Promise<string | nu
 
   for (const domain of domains) {
     const usage = usageMap.get(domain.id) || 0;
-    
+
     // Skip if at or above limit
     if (usage >= domain.dailyLimit) {
       continue;
@@ -154,14 +157,15 @@ export async function getDomainSentCount(domainId: string): Promise<number> {
 
 /**
  * Sends an email using domain rotation.
- * 
+ *
  * Process:
  * 1. Select the best available domain (lowest usage, under limit)
  * 2. If no domain available, return 'queued' status
  * 3. Create OutreachEmail record with selected domain
  * 4. Increment domain's daily sent count
- * 5. Return send result
- * 
+ * 5. Send email via Resend API
+ * 6. Return send result
+ *
  * Requirements: 4.6
  */
 export async function sendWithRotation(
@@ -200,7 +204,35 @@ export async function sendWithRotation(
     };
   }
 
+  // Get recipient email
+  const lead = await prisma.prospectLead.findUnique({
+    where: { id: email.prospectId },
+    select: { decisionMakerEmail: true, businessName: true },
+  });
+
+  if (!lead?.decisionMakerEmail) {
+    return {
+      emailId: email.id,
+      status: 'failed',
+      sendingDomain: domain.fromEmail,
+      error: 'Prospect has no decision maker email',
+    };
+  }
+
   try {
+    // Actually send the email via Resend
+    const resendResult = await sendEmail({
+      to: lead.decisionMakerEmail,
+      subject: email.subject,
+      body: email.body, // Now contains HTML
+      fromName: domain.fromName || 'ProposalOS',
+      fromEmail: domain.fromEmail, // Will fallback to default in sender if not verified
+    });
+
+    if (!resendResult.success) {
+      throw new Error(`Resend API Error: ${resendResult.error || 'Unknown'}`);
+    }
+
     // Create the outreach email record
     const outreachEmail = await prisma.outreachEmail.create({
       data: {
@@ -214,11 +246,22 @@ export async function sendWithRotation(
         qualityScore: 100, // Passed QA gate
         scorecardUrl: email.scorecardUrl,
         sentAt: new Date(),
+        providerMessageId: resendResult.messageId,
       },
     });
 
     // Increment the domain's daily sent count
     await incrementDomainSentCount(tenantId, domainId);
+
+    // Log the send event
+    await prisma.outreachEmailEvent.create({
+      data: {
+        tenantId,
+        leadId: email.prospectId,
+        emailId: outreachEmail.id,
+        type: 'EMAIL_SENT',
+      },
+    });
 
     return {
       emailId: outreachEmail.id,
@@ -242,12 +285,12 @@ export async function sendWithRotation(
 
 /**
  * Processes a reply event and pauses the follow-up sequence.
- * 
+ *
  * When a prospect replies to an outreach email:
  * 1. Record the reply event
  * 2. Pause all pending follow-ups for that lead
  * 3. Update the domain's reply count for the day
- * 
+ *
  * Requirements: 4.9
  */
 export async function handleReply(

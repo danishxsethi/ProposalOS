@@ -9,17 +9,19 @@
  * Requirements: 3.1, 3.2, 3.3, 3.4, 3.5, 3.6
  */
 
-import { prisma } from '@/lib/prisma';
-import { transition } from '../stateMachine';
-import { logStageFailure } from '../metrics';
-import { diagnosisGraph } from '@/lib/graph/diagnosis-graph';
-import { proposalGraph } from '@/lib/graph/proposal-graph';
-import { CostTracker } from '@/lib/costs/costTracker';
-import { detectVertical, getPlaybook } from '@/lib/playbooks/registry';
-import { PipelineStage, type StageResult } from '../types';
 import crypto from 'crypto';
+
 import { FEATURE_FLAGS } from '@/lib/config/feature-flags';
 import { aggregateContext } from '@/lib/context/aggregator';
+import { CostTracker } from '@/lib/costs/costTracker';
+import { invokeDiagnosisGraphWithTimeout } from '@/lib/graph/diagnosis-graph';
+import { invokeProposalGraphWithTimeout } from '@/lib/graph/proposal-graph';
+import { detectVertical, getPlaybook } from '@/lib/playbooks/registry';
+import { prisma } from '@/lib/prisma';
+
+import { logStageFailure } from '../metrics';
+import { transition } from '../stateMachine';
+import { PipelineStage, type StageResult } from '../types';
 
 /**
  * Process a batch of prospects in "audited" status through the diagnosis & proposal stage.
@@ -123,11 +125,11 @@ export async function processOneDiagnosisProposal(prospectId: string): Promise<S
     aggregatedContext = await aggregateContext(audit as any);
   }
 
-  const diagnosisResult = await diagnosisGraph.invoke({
+  const diagnosisResult = await invokeDiagnosisGraphWithTimeout({
     findings: audit.findings,
     tenantId,
     mode: FEATURE_FLAGS.SINGLE_PASS_DIAGNOSIS ? 'SINGLE_PASS' : 'MULTI_STEP',
-    aggregatedContext
+    aggregatedContext,
   });
 
   const costCents = costTracker.getTotalCents();
@@ -152,11 +154,18 @@ export async function processOneDiagnosisProposal(prospectId: string): Promise<S
   }
 
   // 4. Run proposal pipeline via LangGraph
-  const proposalResult = await proposalGraph.invoke({
+  const evidenceSnapshots = await prisma.evidenceSnapshot.findMany({
+    where: { auditId: audit.id },
+  });
+
+  const proposalResult = await invokeProposalGraphWithTimeout({
     businessName: audit.businessName,
     businessIndustry: audit.businessIndustry ?? undefined,
     clusters: diagnosisResult.clusters,
     findings: audit.findings,
+    evidenceSnapshots,
+    tenantId: audit.tenantId,
+    auditId: audit.id,
   });
 
   // 5. Get tenant pricing multiplier

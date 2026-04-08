@@ -7,7 +7,8 @@
  * Requirements: 2.1, 2.2, 2.3, 2.4, 2.6
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 import type { StageResult } from '../../types';
 
 // --- Mocks ---
@@ -276,9 +277,7 @@ describe('Audit Stage', () => {
     it('throws when prospect is not in "discovered" status', async () => {
       mockFindUnique.mockResolvedValue(makeProspect({ pipelineStatus: 'audited' }));
 
-      await expect(processOneAudit('prospect-1')).rejects.toThrow(
-        'expected "discovered"'
-      );
+      await expect(processOneAudit('prospect-1')).rejects.toThrow('expected "discovered"');
     });
 
     it('includes metadata with auditId and findings count on success', async () => {
@@ -331,9 +330,7 @@ describe('Audit Stage', () => {
       const prospects = [makeProspect({ id: 'p1' }), makeProspect({ id: 'p2' })];
       mockFindMany.mockResolvedValue(prospects);
       // First prospect: not found (will throw)
-      mockFindUnique
-        .mockResolvedValueOnce(null)
-        .mockResolvedValueOnce(makeProspect({ id: 'p2' }));
+      mockFindUnique.mockResolvedValueOnce(null).mockResolvedValueOnce(makeProspect({ id: 'p2' }));
       mockOrchestratorRun.mockResolvedValue({
         status: 'COMPLETE',
         findings: [],

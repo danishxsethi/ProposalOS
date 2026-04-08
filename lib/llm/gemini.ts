@@ -1,54 +1,57 @@
 /**
- * Unified Gemini model access: Vertex AI (preferred) or Google AI API fallback.
- * Use when GCP/Vertex auth is not available (e.g. local dev with GOOGLE_AI_API_KEY only).
+ * @deprecated This file is deprecated and will be removed in a future version.
+ *
+ * Please use the enhanced provider abstraction instead:
+ * - For direct Gemini calls: import { generateWithGemini } from '@/lib/llm/provider';
+ * - For multi-provider with fallback: import { providerRegistry } from '@/lib/llm/providers/registry';
+ *
+ * This legacy file is kept for backward compatibility only.
  */
-import { GoogleGenerativeAI } from '@google/generative-ai';
 
-let _vertexAvailable: boolean | null = null;
+import { logger } from '@/lib/logger';
 
-function isVertexAvailable(): boolean {
-  if (_vertexAvailable !== null) return _vertexAvailable;
-  const projectId = process.env.GCP_PROJECT_ID;
-  const hasCreds = !!process.env.GOOGLE_APPLICATION_CREDENTIALS;
-  _vertexAvailable = !!(projectId && hasCreds);
-  return _vertexAvailable;
-}
+import { generateWithGemini as newGenerateWithGemini } from './provider';
 
+/**
+ * @deprecated Use generateWithGemini from '@/lib/llm/provider' instead
+ *
+ * Legacy support - redirects to the enhanced provider implementation.
+ * Logs a deprecation warning on each call.
+ */
 export async function generateWithGemini(
   modelName: string,
   prompt: string,
   options?: { temperature?: number; maxOutputTokens?: number }
-): Promise<{ text: string; usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number } }> {
-  const apiKey = process.env.GOOGLE_AI_API_KEY;
-  if (!apiKey) {
-    throw new Error('GOOGLE_AI_API_KEY required for Gemini API fallback');
-  }
+): Promise<{
+  text: string;
+  usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number };
+}> {
+  logger.warn(
+    { callSite: 'lib/llm/gemini.ts:generateWithGemini' },
+    'DEPRECATED: generateWithGemini from lib/llm/gemini.ts is deprecated. Use generateWithGemini from lib/llm/provider instead.'
+  );
 
-  const genAI = new GoogleGenerativeAI(apiKey);
-  const model = genAI.getGenerativeModel({
+  const result = await newGenerateWithGemini({
     model: modelName,
-    generationConfig: {
-      temperature: options?.temperature ?? 0.4,
-      maxOutputTokens: options?.maxOutputTokens ?? 2048,
-    },
+    input: prompt,
+    temperature: options?.temperature,
+    maxOutputTokens: options?.maxOutputTokens,
   });
 
-  const result = await model.generateContent(prompt);
-  const response = result.response;
-  const text = response.candidates?.[0]?.content?.parts?.[0]?.text || '';
-  const usage = result.response?.usageMetadata;
-
   return {
-    text,
-    usageMetadata: usage
+    text: result.text,
+    usageMetadata: result.usageMetadata
       ? {
-          promptTokenCount: usage.promptTokenCount,
-          candidatesTokenCount: usage.candidatesTokenCount,
+          promptTokenCount: result.usageMetadata.promptTokenCount,
+          candidatesTokenCount: result.usageMetadata.candidatesTokenCount,
         }
       : undefined,
   };
 }
 
+/**
+ * @deprecated Use generateWithGemini from '@/lib/llm/provider' instead
+ */
 export function getGeminiModel(
   modelName: string,
   generationConfig?: { temperature?: number; maxOutputTokens?: number }
@@ -61,41 +64,38 @@ export function getGeminiModel(
     usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number };
   }>;
 } {
-  const apiKey = process.env.GOOGLE_AI_API_KEY;
-  if (apiKey) {
-    const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({
-      model: modelName,
-      generationConfig: {
-        temperature: generationConfig?.temperature ?? 0.4,
-        maxOutputTokens: generationConfig?.maxOutputTokens ?? 2048,
-      },
-    });
+  logger.warn(
+    { callSite: 'lib/llm/gemini.ts:getGeminiModel' },
+    'DEPRECATED: getGeminiModel from lib/llm/gemini.ts is deprecated. Use generateWithGemini from lib/llm/provider instead.'
+  );
 
-    return {
-      async generateContent(prompt: string) {
-        const result = await model.generateContent(prompt);
-        return {
-          response: result.response,
-          usageMetadata: (result.response as any).usageMetadata,
-        };
-      },
-    } as any;
-  }
+  return {
+    async generateContent(prompt: string) {
+      const result = await newGenerateWithGemini({
+        model: modelName,
+        input: prompt,
+        temperature: generationConfig?.temperature,
+        maxOutputTokens: generationConfig?.maxOutputTokens,
+      });
 
-  if (isVertexAvailable()) {
-    const { VertexAI } = require('@google-cloud/vertexai');
-    const projectId = process.env.GCP_PROJECT_ID!;
-    const location = process.env.GCP_REGION || 'us-central1';
-    const vertexAI = new VertexAI({ project: projectId, location });
-    return vertexAI.getGenerativeModel({
-      model: modelName,
-      generationConfig: {
-        temperature: generationConfig?.temperature ?? 0.4,
-        maxOutputTokens: generationConfig?.maxOutputTokens ?? 2048,
-      },
-    }) as any;
-  }
-
-  throw new Error('GOOGLE_AI_API_KEY or GCP_PROJECT_ID + GOOGLE_APPLICATION_CREDENTIALS required');
+      return {
+        response: {
+          candidates: result.text
+            ? [
+                {
+                  content: {
+                    parts: [{ text: result.text }],
+                  },
+                },
+              ]
+            : [],
+          usageMetadata: result.usageMetadata,
+        },
+        usageMetadata: result.usageMetadata,
+      };
+    },
+  };
 }
+
+// Note: isVertexAvailable is internal to provider.ts and not re-exported
+// If you need this functionality, please use the new provider abstraction

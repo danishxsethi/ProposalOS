@@ -1,20 +1,22 @@
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+
 import { cleanupDb } from '@/lib/__tests__/utils/cleanup';
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { prisma } from '@/lib/db';
+
 import {
   aggregatePatterns,
-  predictCloseProb,
-  rollbackModel,
-  ensureAnonymized,
   anonymizeData,
-  WinLossData,
+  ensureAnonymized,
+  predictCloseProb,
   ProspectContext,
+  rollbackModel,
+  WinLossData,
 } from '../crossTenantIntelligence';
-import { prisma } from '@/lib/db';
 
 describe('Cross-Tenant Intelligence', () => {
   afterEach(async () => {
     await cleanupDb(prisma);
-});
+  });
 
   describe('aggregatePatterns', () => {
     it('should create intelligence model from win/loss outcomes', async () => {
@@ -131,8 +133,8 @@ describe('Cross-Tenant Intelligence', () => {
     });
 
     it('should return neutral prediction when no model exists', async () => {
-    await cleanupDb(prisma);
-const prospect: ProspectContext = {
+      await cleanupDb(prisma);
+      const prospect: ProspectContext = {
         vertical: 'dentistry',
         painScore: 75,
         geoRegion: 'New York',

@@ -20,6 +20,8 @@ module.exports = {
       statements: 80,
     },
   },
-  setupFilesAfterEnv: ['<rootDir>/lib/deep-localization-cross-tenant-intelligence/__tests__/setup.ts'],
+  setupFilesAfterEnv: [
+    '<rootDir>/lib/deep-localization-cross-tenant-intelligence/__tests__/setup.ts',
+  ],
   testTimeout: 30000,
 };

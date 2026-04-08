@@ -1,6 +1,6 @@
 /**
  * Base interface for AI service agents
- * 
+ *
  * Each agent type implements this interface to provide service delivery
  * for specific finding categories.
  */

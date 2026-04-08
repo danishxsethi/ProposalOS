@@ -1,7 +1,9 @@
-import { parse as parseHtml } from 'node-html-parser';
 import * as acorn from 'acorn';
-import { RawArtifact } from './generators';
+import { parse as parseHtml } from 'node-html-parser';
+
 import { prisma } from '@/lib/prisma';
+
+import { RawArtifact } from './generators';
 
 export interface ValidationCheckResult {
   checkName: 'syntax' | 'schema' | 'lighthouse' | 'human_review';
@@ -210,7 +212,8 @@ export async function runLighthouseCheck(artifact: RawArtifact): Promise<Validat
   try {
     // Simulate Lighthouse check - in production this would call Lighthouse CI
     // For now, we'll do basic validation
-    const hasOptimizations = artifact.content.includes('lazy') ||
+    const hasOptimizations =
+      artifact.content.includes('lazy') ||
       artifact.content.includes('defer') ||
       artifact.content.includes('async') ||
       artifact.content.includes('compress') ||

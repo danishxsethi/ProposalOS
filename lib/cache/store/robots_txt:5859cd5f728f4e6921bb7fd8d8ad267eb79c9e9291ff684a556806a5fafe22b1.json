@@ -1,1 +1,5 @@
-{"data":"User-agent: *\r\nDisallow: /wp-admin/\r\nDisallow: /xmlrpc.php\r\nDisallow: /downloadable-guides/","cachedAt":1771277269885,"expiresAt":1771363669885}
+{
+  "data": "User-agent: *\r\nDisallow: /wp-admin/\r\nDisallow: /xmlrpc.php\r\nDisallow: /downloadable-guides/",
+  "cachedAt": 1771277269885,
+  "expiresAt": 1771363669885
+}

@@ -1,18 +1,18 @@
 /**
  * Human Review Queue API
- * 
+ *
  * GET: Retrieve review queue with filtering and pagination
  * POST: Approve or reject prospects
- * 
+ *
  * Requirements: 10.3, 10.4, 10.5
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from '@/lib/auth';
-import { authOptions } from '@/lib/auth';
+
+import { authOptions, getServerSession } from '@/lib/auth';
 import {
-  getReviewQueue,
   approveProspect,
+  getReviewQueue,
   rejectProspect,
   type ReviewQueueFilters,
 } from '@/lib/pipeline/humanReview';
@@ -26,20 +26,17 @@ export async function GET(request: NextRequest) {
     const session = await getServerSession();
 
     if (!session?.user?.tenantId) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      );
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     // Parse query parameters
     const { searchParams } = new URL(request.url);
-    
+
     const filters: ReviewQueueFilters = {
       status: searchParams.get('status')?.split(','),
       vertical: searchParams.get('vertical')?.split(','),
-      minPainScore: searchParams.get('minPainScore') 
-        ? parseInt(searchParams.get('minPainScore')!) 
+      minPainScore: searchParams.get('minPainScore')
+        ? parseInt(searchParams.get('minPainScore')!)
         : undefined,
       maxPainScore: searchParams.get('maxPainScore')
         ? parseInt(searchParams.get('maxPainScore')!)
@@ -58,10 +55,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(queue);
   } catch (error) {
     console.error('Error fetching review queue:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
 
@@ -74,18 +68,12 @@ export async function POST(request: NextRequest) {
     const session = await getServerSession();
 
     if (!session?.user?.tenantId || !session?.user?.id || !session?.user?.email) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      );
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     // Check if user has permission to review
     if (session.user.role !== 'ADMIN' && session.user.role !== 'OWNER') {
-      return NextResponse.json(
-        { error: 'Forbidden - Admin access required' },
-        { status: 403 }
-      );
+      return NextResponse.json({ error: 'Forbidden - Admin access required' }, { status: 403 });
     }
 
     const body = await request.json();
@@ -126,17 +114,11 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     console.error('Error processing review action:', error);
-    
+
     if (error instanceof Error && error.message.includes('not found')) {
-      return NextResponse.json(
-        { error: error.message },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: error.message }, { status: 404 });
     }
 
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

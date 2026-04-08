@@ -1,19 +1,22 @@
 /**
  * Unit tests for Signal Detector
- * 
+ *
  * Tests signal detection, deduplication, and outreach triggering
  */
 
-import { describe, it, expect, beforeEach, vi } from 'vitest';
-import {
-  runDetection,
-  deduplicateSignals,
-  triggerSignalOutreach,
-  getSchedule,
-  signalExists,
-} from '../signalDetector';
-import type { DetectedSignal, SignalType } from '../types';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { prisma } from '@/lib/db';
+
+import {
+  deduplicateSignals,
+  getSchedule,
+  runDetection,
+  signalExists,
+  triggerSignalOutreach,
+} from '../signalDetector';
+
+import type { DetectedSignal, SignalType } from '../types';
 
 // Mock prisma
 vi.mock('@/lib/db', () => ({
@@ -182,9 +185,9 @@ describe('Signal Detector', () => {
     });
 
     it('should throw error for unknown signal type', async () => {
-      await expect(
-        runDetection('tenant-1', 'unknown_signal' as SignalType)
-      ).rejects.toThrow('Unknown signal type: unknown_signal');
+      await expect(runDetection('tenant-1', 'unknown_signal' as SignalType)).rejects.toThrow(
+        'Unknown signal type: unknown_signal'
+      );
     });
 
     it('should return empty array when no config found for new business licenses', async () => {

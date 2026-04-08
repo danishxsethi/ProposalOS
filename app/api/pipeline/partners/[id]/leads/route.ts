@@ -1,22 +1,53 @@
+/**
+ * app/api/pipeline/partners/[id]/leads/route.ts
+ *
+ * Partner Leads Management API
+ *
+ * Features:
+ * - Auth & role-based access
+ * - Rate limiting
+ * - Standardized error responses
+ */
+
 import { NextRequest, NextResponse } from 'next/server';
+
+import { z } from 'zod';
+
+import { generateTraceId, InternalError, NotFoundError, UnauthorizedError } from '@/lib/api/errors';
 import { auth } from '@/lib/auth';
-import { matchLeadsToPartner, deliverLead, updateLeadStatus } from '@/lib/pipeline/partnerPortal';
-import { prisma } from '@/lib/db';
+import { withRateLimit } from '@/lib/middleware/rateLimit';
+import { deliverLead, matchLeadsToPartner, updateLeadStatus } from '@/lib/pipeline/partnerPortal';
+import { prisma } from '@/lib/prisma';
+
+interface Params {
+  params: Promise<{ id: string }>;
+}
 
 /**
- * GET /api/pipeline/partners/[id]/leads
- * Get delivered leads for a partner
+ * Partner lead action schema
  */
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+const partnerLeadActionSchema = z.object({
+  action: z.enum(['match', 'deliver', 'updateStatus']),
+  leadId: z.string().uuid().optional(),
+  status: z.string().optional(),
+});
+
+/**
+ * Inner handler for GET partner leads
+ */
+async function handleGetPartnerLeads(req: NextRequest, { params }: Params): Promise<NextResponse> {
+  const traceId = generateTraceId();
+
   try {
-    const { id: partnerId } = await params;
     const session = await auth();
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    if (!session?.user) {
+      return NextResponse.json(
+        new UnauthorizedError('Authentication required').toEnvelope(req.url, traceId),
+        { status: 401 }
+      );
     }
+
+    const { id: partnerId } = await params;
 
     // Get delivered leads
     const deliveredLeads = await prisma.partnerDeliveredLead.findMany({
@@ -32,46 +63,99 @@ export async function GET(
       orderBy: { deliveredAt: 'desc' },
     });
 
-    return NextResponse.json({ leads: deliveredLeads });
+    const response = NextResponse.json({ leads: deliveredLeads });
+    response.headers.set('X-Trace-Id', traceId);
+    return response;
   } catch (error) {
     console.error('Error fetching partner leads:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    const internalError = new InternalError('Failed to fetch partner leads', {
+      originalError: error instanceof Error ? error.message : String(error),
+    });
+    return NextResponse.json(internalError.toEnvelope(req.url, traceId), { status: 500 });
   }
 }
 
 /**
- * POST /api/pipeline/partners/[id]/leads
- * Deliver leads to a partner
+ * Inner handler for POST partner leads
  */
-export async function POST(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const { id: partnerId } = await params;
-    const session = await auth();
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-    const body = await request.json();
+async function handlePartnerLeadAction(
+  req: NextRequest,
+  { params }: Params
+): Promise<NextResponse> {
+  const traceId = generateTraceId();
 
-    if (body.action === 'match') {
+  try {
+    const session = await auth();
+    if (!session?.user) {
+      return NextResponse.json(
+        new UnauthorizedError('Authentication required').toEnvelope(req.url, traceId),
+        { status: 401 }
+      );
+    }
+
+    const { id: partnerId } = await params;
+    const body = await req.json();
+
+    // Validate request body
+    const result = partnerLeadActionSchema.safeParse(body);
+    if (!result.success) {
+      const errorDetails = result.error.errors.map((e) => ({
+        field: e.path.join('.'),
+        message: e.message,
+      }));
+      const error = new NotFoundError('Invalid action data');
+      error.details = errorDetails;
+      return NextResponse.json(error.toEnvelope(req.url, traceId), { status: 400 });
+    }
+
+    const { action, leadId, status } = result.data;
+
+    if (action === 'match') {
       // Match and deliver leads to partner
       const matches = await matchLeadsToPartner(partnerId);
-      return NextResponse.json({ leads: matches });
-    } else if (body.action === 'deliver' && body.leadId) {
+      const response = NextResponse.json({ leads: matches });
+      response.headers.set('X-Trace-Id', traceId);
+      return response;
+    } else if (action === 'deliver' && leadId) {
       // Deliver specific lead
-      const packagedLead = await deliverLead(partnerId, body.leadId);
-      return NextResponse.json({ lead: packagedLead }, { status: 201 });
-    } else if (body.action === 'updateStatus' && body.leadId && body.status) {
+      const packagedLead = await deliverLead(partnerId, leadId);
+      const response = NextResponse.json({ lead: packagedLead }, { status: 201 });
+      response.headers.set('X-Trace-Id', traceId);
+      return response;
+    } else if (action === 'updateStatus' && leadId && status) {
       // Update lead status
-      await updateLeadStatus(partnerId, body.leadId, body.status);
-      return NextResponse.json({ success: true });
+      await updateLeadStatus(partnerId, leadId, status);
+      const response = NextResponse.json({ success: true });
+      response.headers.set('X-Trace-Id', traceId);
+      return response;
     } else {
-      return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
+      const error = new NotFoundError('Invalid action');
+      error.details = [{ field: 'action', message: 'Invalid action specified' }];
+      return NextResponse.json(error.toEnvelope(req.url, traceId), { status: 400 });
     }
   } catch (error) {
     console.error('Error processing partner lead action:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    const internalError = new InternalError('Failed to process partner lead action', {
+      originalError: error instanceof Error ? error.message : String(error),
+    });
+    return NextResponse.json(internalError.toEnvelope(req.url, traceId), { status: 500 });
   }
 }
+
+// Apply rate limiting
+const rateLimitedGet = (req: NextRequest, params: Params) =>
+  withRateLimit({
+    windowMs: 60 * 1000,
+    max: 30,
+    message: 'Too many partner lead requests. Please wait before trying again.',
+  })(req, () => handleGetPartnerLeads(req, params));
+
+const rateLimitedPost = (req: NextRequest, params: Params) =>
+  withRateLimit({
+    windowMs: 60 * 1000,
+    max: 10,
+    message: 'Too many partner lead actions. Please wait before trying again.',
+  })(req, () => handlePartnerLeadAction(req, params));
+
+export const GET = (req: NextRequest, params: Params) => rateLimitedGet(req, params);
+export const POST = (req: NextRequest, params: Params) => rateLimitedPost(req, params);

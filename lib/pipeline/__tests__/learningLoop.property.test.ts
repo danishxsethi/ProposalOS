@@ -1,23 +1,25 @@
+import * as fc from 'fast-check';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+
 import { cleanupDb } from '@/lib/__tests__/utils/cleanup';
 /**
  * Property-Based Tests for Learning Loop
- * 
+ *
  * Tests Property 25 from the design document using fast-check.
  * Minimum 100 iterations per property.
- * 
+ *
  * Feature: autonomous-proposal-engine
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import * as fc from 'fast-check';
 import { prisma } from '@/lib/prisma';
+
 import {
-  trackOutreachOutcome,
-  trackWinLoss,
-  trackFindingOutcome,
-  recalibratePricing,
   getVerticalInsights,
   type OutreachOutcome,
+  recalibratePricing,
+  trackFindingOutcome,
+  trackOutreachOutcome,
+  trackWinLoss,
   type WinLossData,
 } from '../learningLoop';
 
@@ -74,7 +76,9 @@ const winLossDataArb = fc.record({
   outcome: fc.constantFrom<'won' | 'lost' | 'ghosted'>('won', 'lost', 'ghosted'),
   tierChosen: fc.option(fc.constantFrom('Essentials', 'Growth', 'Premium'), { nil: undefined }),
   dealValue: fc.option(fc.double({ min: 100, max: 10000 }), { nil: undefined }),
-  lostReason: fc.option(fc.constantFrom('price', 'timing', 'competitor', 'no_response'), { nil: undefined }),
+  lostReason: fc.option(fc.constantFrom('price', 'timing', 'competitor', 'no_response'), {
+    nil: undefined,
+  }),
   objectionsRaised: fc.option(
     fc.array(fc.constantFrom('too_expensive', 'need_more_time', 'already_have_solution'), {
       minLength: 0,
@@ -82,7 +86,9 @@ const winLossDataArb = fc.record({
     }),
     { nil: undefined }
   ),
-  competitorMentioned: fc.option(fc.constantFrom('Competitor A', 'Competitor B', 'Competitor C'), { nil: undefined }),
+  competitorMentioned: fc.option(fc.constantFrom('Competitor A', 'Competitor B', 'Competitor C'), {
+    nil: undefined,
+  }),
 });
 
 /**
@@ -191,59 +197,55 @@ describe('Learning Loop Property Tests', () => {
 
   /**
    * Property 25: Learning loop updates metrics on pipeline outcomes
-   * 
+   *
    * For any proposal outcome (won/lost), the corresponding finding effectiveness
    * scores must be incremented, and for any completed outreach sequence, the
    * template performance metrics (open rate, click rate, reply rate, conversion
    * rate) must be recalculated from the accumulated data.
-   * 
+   *
    * **Validates: Requirements 8.1, 8.2, 8.3, 8.5, 8.6**
    */
   describe('Property 25: Learning loop updates metrics on pipeline outcomes', () => {
     it('trackOutreachOutcome updates template performance metrics', async () => {
       await fc.assert(
-        fc.asyncProperty(
-          templateIdArb,
-          outreachOutcomeArb,
-          async (templateId, outcome) => {
-            // Track the outreach outcome
-            await trackOutreachOutcome(templateId, outcome);
+        fc.asyncProperty(templateIdArb, outreachOutcomeArb, async (templateId, outcome) => {
+          // Track the outreach outcome
+          await trackOutreachOutcome(templateId, outcome);
 
-            // Fetch the performance record
-            const performance = await prisma.outreachTemplatePerformance.findUnique({
-              where: {
-                templateId_vertical_city: {
-                  templateId,
-                  vertical: outcome.vertical,
-                  city: outcome.city,
-                },
+          // Fetch the performance record
+          const performance = await prisma.outreachTemplatePerformance.findUnique({
+            where: {
+              templateId_vertical_city: {
+                templateId,
+                vertical: outcome.vertical,
+                city: outcome.city,
               },
-            });
+            },
+          });
 
-            // Verify the record was created
-            expect(performance).toBeTruthy();
-            expect(performance!.templateId).toBe(templateId);
-            expect(performance!.vertical).toBe(outcome.vertical);
-            expect(performance!.city).toBe(outcome.city);
+          // Verify the record was created
+          expect(performance).toBeTruthy();
+          expect(performance!.templateId).toBe(templateId);
+          expect(performance!.vertical).toBe(outcome.vertical);
+          expect(performance!.city).toBe(outcome.city);
 
-            // Verify metrics are within valid ranges [0, 1]
-            expect(performance!.openRate).toBeGreaterThanOrEqual(0);
-            expect(performance!.openRate).toBeLessThanOrEqual(1);
-            expect(performance!.clickRate).toBeGreaterThanOrEqual(0);
-            expect(performance!.clickRate).toBeLessThanOrEqual(1);
-            expect(performance!.replyRate).toBeGreaterThanOrEqual(0);
-            expect(performance!.replyRate).toBeLessThanOrEqual(1);
-            expect(performance!.conversionRate).toBeGreaterThanOrEqual(0);
-            expect(performance!.conversionRate).toBeLessThanOrEqual(1);
+          // Verify metrics are within valid ranges [0, 1]
+          expect(performance!.openRate).toBeGreaterThanOrEqual(0);
+          expect(performance!.openRate).toBeLessThanOrEqual(1);
+          expect(performance!.clickRate).toBeGreaterThanOrEqual(0);
+          expect(performance!.clickRate).toBeLessThanOrEqual(1);
+          expect(performance!.replyRate).toBeGreaterThanOrEqual(0);
+          expect(performance!.replyRate).toBeLessThanOrEqual(1);
+          expect(performance!.conversionRate).toBeGreaterThanOrEqual(0);
+          expect(performance!.conversionRate).toBeLessThanOrEqual(1);
 
-            // Verify counts are non-negative
-            expect(performance!.totalSent).toBeGreaterThanOrEqual(1);
-            expect(performance!.openCount).toBeGreaterThanOrEqual(0);
-            expect(performance!.clickCount).toBeGreaterThanOrEqual(0);
-            expect(performance!.replyCount).toBeGreaterThanOrEqual(0);
-            expect(performance!.conversionCount).toBeGreaterThanOrEqual(0);
-          }
-        ),
+          // Verify counts are non-negative
+          expect(performance!.totalSent).toBeGreaterThanOrEqual(1);
+          expect(performance!.openCount).toBeGreaterThanOrEqual(0);
+          expect(performance!.clickCount).toBeGreaterThanOrEqual(0);
+          expect(performance!.replyCount).toBeGreaterThanOrEqual(0);
+          expect(performance!.conversionCount).toBeGreaterThanOrEqual(0);
+        }),
         { numRuns: 100 }
       );
     }, 30000);
@@ -362,36 +364,32 @@ describe('Learning Loop Property Tests', () => {
 
     it('trackFindingOutcome updates finding effectiveness scores', async () => {
       await fc.assert(
-        fc.asyncProperty(
-          findingTypeArb,
-          fc.boolean(),
-          async (findingType, accepted) => {
-            // Track the finding outcome
-            await trackFindingOutcome(findingType, accepted);
+        fc.asyncProperty(findingTypeArb, fc.boolean(), async (findingType, accepted) => {
+          // Track the finding outcome
+          await trackFindingOutcome(findingType, accepted);
 
-            // Fetch the effectiveness record
-            const effectiveness = await prisma.findingEffectiveness.findUnique({
-              where: { findingType },
-            });
+          // Fetch the effectiveness record
+          const effectiveness = await prisma.findingEffectiveness.findUnique({
+            where: { findingType },
+          });
 
-            // Verify the record was created/updated
-            expect(effectiveness).toBeTruthy();
-            expect(effectiveness!.findingType).toBe(findingType);
-            expect(effectiveness!.totalOccurrences).toBeGreaterThanOrEqual(1);
-            expect(effectiveness!.acceptedCount).toBeGreaterThanOrEqual(0);
+          // Verify the record was created/updated
+          expect(effectiveness).toBeTruthy();
+          expect(effectiveness!.findingType).toBe(findingType);
+          expect(effectiveness!.totalOccurrences).toBeGreaterThanOrEqual(1);
+          expect(effectiveness!.acceptedCount).toBeGreaterThanOrEqual(0);
 
-            // Verify conversion power is within valid range [0, 1]
-            expect(effectiveness!.conversionPower).toBeGreaterThanOrEqual(0);
-            expect(effectiveness!.conversionPower).toBeLessThanOrEqual(1);
+          // Verify conversion power is within valid range [0, 1]
+          expect(effectiveness!.conversionPower).toBeGreaterThanOrEqual(0);
+          expect(effectiveness!.conversionPower).toBeLessThanOrEqual(1);
 
-            // Verify conversion power calculation is correct
-            const expectedConversionPower =
-              effectiveness!.totalOccurrences > 0
-                ? effectiveness!.acceptedCount / effectiveness!.totalOccurrences
-                : 0;
-            expect(effectiveness!.conversionPower).toBeCloseTo(expectedConversionPower, 5);
-          }
-        ),
+          // Verify conversion power calculation is correct
+          const expectedConversionPower =
+            effectiveness!.totalOccurrences > 0
+              ? effectiveness!.acceptedCount / effectiveness!.totalOccurrences
+              : 0;
+          expect(effectiveness!.conversionPower).toBeCloseTo(expectedConversionPower, 5);
+        }),
         { numRuns: 100 }
       );
     }, 30000);
@@ -421,7 +419,14 @@ describe('Learning Loop Property Tests', () => {
             testLeadIds.push(leadId);
             const proposalId = `test-proposal-${Math.random()}`;
 
-            await trackWinLoss(proposalId, leadId, testTenantId, uniqueVertical, uniqueCity, record);
+            await trackWinLoss(
+              proposalId,
+              leadId,
+              testTenantId,
+              uniqueVertical,
+              uniqueCity,
+              record
+            );
           }
 
           // Recalibrate pricing
@@ -466,7 +471,9 @@ describe('Learning Loop Property Tests', () => {
             outcome: fc.constantFrom<'won' | 'lost' | 'ghosted'>('won', 'lost', 'ghosted'),
             tierChosen: fc.constantFrom('Essentials', 'Growth', 'Premium'),
             dealValue: fc.double({ min: 100, max: 10000 }),
-            lostReason: fc.option(fc.constantFrom('price', 'timing', 'competitor'), { nil: undefined }),
+            lostReason: fc.option(fc.constantFrom('price', 'timing', 'competitor'), {
+              nil: undefined,
+            }),
           }),
           { minLength: 3, maxLength: 15 }
         ),

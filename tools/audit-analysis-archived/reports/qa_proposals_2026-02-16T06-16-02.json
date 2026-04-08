@@ -1,0 +1,409 @@
+{
+  "runAt": "2026-02-16T06:16:02.696Z",
+  "baseUrl": "http://localhost:3000",
+  "results": [
+    {
+      "business": {
+        "name": "Joe's Plumbing",
+        "city": "Saskatoon",
+        "url": "https://www.google.com",
+        "industry": "plumbing"
+      },
+      "auditId": "061970b1-7ada-4d06-9a35-e63148a68f9c",
+      "proposalId": "182efa08-8ed8-4a6e-b873-bc8298af6145",
+      "proposalUrl": "http://localhost:3000/proposal/06b4a99e-2707-496b-bc26-4c2e4791afa1",
+      "executiveSummary": "**Joe's Plumbing** is losing significant revenue and market share due to critical online visibility and trust deficiencies",
+      "painClusters": [
+        {
+          "rootCause": "Issues with website:Technical SEO",
+          "narrative": "Your website currently lacks critical schema markup, preventing Google from fully understanding your business and displaying crucial trust"
+        },
+        {
+          "rootCause": "Issues with website:Performance",
+          "narrative": "Your website's performance, with an overall score of 90/100, is hindered"
+        },
+        {
+          "rootCause": "Issues with website:Conversion",
+          "narrative": "Your website's Conversion Readiness score is critically low at 19/100, primarily"
+        },
+        {
+          "rootCause": "Issues with competitor:trust",
+          "narrative": "Your current 15 reviews, compared to competitors' average of 508, creates a"
+        },
+        {
+          "rootCause": "Issues with social:visibility",
+          "narrative": "Your online visibility is currently limited to 2 social platforms (Twitter, YouTube), while 4 key platforms"
+        },
+        {
+          "rootCause": "Issues with other:misc",
+          "narrative": "Your online presence is currently missing critical elements that directly impact customer acquisition. Your website has 2"
+        }
+      ],
+      "tiers": {
+        "starter": {
+          "roi": {
+            "ratio": 1.5,
+            "monthlyValue": 734
+          },
+          "name": "Starter",
+          "price": 497,
+          "features": [
+            "Speed optimization (image compression, lazy loading, caching)",
+            "Basic SEO fixes (meta tags, sitemap, schema markup)",
+            "1 round of revisions"
+          ],
+          "findingIds": [
+            "a5b94a8b-e43b-45cb-b05a-ab25f5e39a30",
+            "c1dfc893-3f74-4fe8-955e-0abc2f09a39f",
+            "4c08d23a-8e61-41a6-b6d7-8f665fc4b9f4"
+          ],
+          "description": "Entry point — quick wins only. Speed optimization, basic SEO, and essential fixes. Limited scope, clear constraints.",
+          "recommended": false,
+          "deliveryTime": "5 business days"
+        },
+        "growth": {
+          "roi": {
+            "ratio": 2.6,
+            "monthlyValue": 3902
+          },
+          "name": "Growth",
+          "badge": "BEST VALUE",
+          "price": 1497,
+          "features": [
+            "Everything in Starter",
+            "Full SEO overhaul (content optimization, internal linking, local SEO)",
+            "Google Business Profile optimization",
+            "Conversion optimization (CTAs, forms, click-to-call)",
+            "Accessibility fixes (WCAG 2.1 Level A)",
+            "Competitor gap analysis report",
+            "3 rounds of revisions"
+          ],
+          "findingIds": [
+            "a5b94a8b-e43b-45cb-b05a-ab25f5e39a30",
+            "c1dfc893-3f74-4fe8-955e-0abc2f09a39f",
+            "4c08d23a-8e61-41a6-b6d7-8f665fc4b9f4",
+            "2e9b95b1-197b-4421-96e2-17f4c8dcfc7c",
+            "0931b3b2-63b6-4e41-8f76-67a66dbf698f",
+            "cd0762a4-fc26-428b-a069-c7a929cd5a2d",
+            "c0eda458-c74a-42fe-8477-6c9bdd0000e5",
+            "835080fa-e2f9-4195-b6e1-68db35deeec8",
+            "5107fb61-a2a3-407d-be63-df22d6f41eca",
+            "2052d513-34b5-46de-a7b4-1017cd8ed86e",
+            "897ea0da-e6b6-470f-9c90-9ca5ed813309",
+            "845696c7-55ea-4ea6-bf92-58b3599e89a3",
+            "dc7ddf9b-1ca1-4493-8d17-0ce060b3fe3a",
+            "2d6a216c-69c2-4063-942b-e64851f41af8",
+            "067fdd7c-95db-43e8-9291-bdd5a78fb041",
+            "b8492b62-be6c-4097-b480-a34d2a509aba"
+          ],
+          "description": "The full transformation — best value. Everything in Starter plus competitive edge. Everything you need to overtake competitors.",
+          "recommended": true,
+          "deliveryTime": "10 business days"
+        },
+        "premium": {
+          "roi": {
+            "ratio": 1.3,
+            "monthlyValue": 3927
+          },
+          "name": "Premium",
+          "price": 2997,
+          "features": [
+            "Everything in Growth",
+            "Content creation (3 new pages/blog posts, optimized for local SEO)",
+            "Monthly performance monitoring (3 months)",
+            "Priority support",
+            "Quarterly re-audit and progress report",
+            "Unlimited revisions"
+          ],
+          "findingIds": [
+            "a5b94a8b-e43b-45cb-b05a-ab25f5e39a30",
+            "c1dfc893-3f74-4fe8-955e-0abc2f09a39f",
+            "4c08d23a-8e61-41a6-b6d7-8f665fc4b9f4",
+            "2e9b95b1-197b-4421-96e2-17f4c8dcfc7c",
+            "0931b3b2-63b6-4e41-8f76-67a66dbf698f",
+            "cd0762a4-fc26-428b-a069-c7a929cd5a2d",
+            "c0eda458-c74a-42fe-8477-6c9bdd0000e5",
+            "835080fa-e2f9-4195-b6e1-68db35deeec8",
+            "5107fb61-a2a3-407d-be63-df22d6f41eca",
+            "2052d513-34b5-46de-a7b4-1017cd8ed86e",
+            "897ea0da-e6b6-470f-9c90-9ca5ed813309",
+            "845696c7-55ea-4ea6-bf92-58b3599e89a3",
+            "dc7ddf9b-1ca1-4493-8d17-0ce060b3fe3a",
+            "2d6a216c-69c2-4063-942b-e64851f41af8",
+            "067fdd7c-95db-43e8-9291-bdd5a78fb041",
+            "b8492b62-be6c-4097-b480-a34d2a509aba",
+            "084e9120-5d5a-4f12-8247-7cabd0a5b8ec"
+          ],
+          "description": "Full-service — ongoing partnership. Everything in Growth plus content and monitoring. Premium positioning, custom work.",
+          "recommended": false,
+          "deliveryTime": "15 business days"
+        }
+      },
+      "pricing": {
+        "growth": 1497,
+        "premium": 2997,
+        "currency": "USD",
+        "essentials": 497
+      }
+    },
+    {
+      "business": {
+        "name": "Main Street Dental",
+        "city": "Saskatoon",
+        "url": "https://example.com",
+        "industry": "dental"
+      },
+      "auditId": "05bad02a-bca3-4c96-850b-aa741737e6a0",
+      "proposalId": "199df767-e6da-4cae-bdf2-cf728dacf7ae",
+      "proposalUrl": "http://localhost:3000/proposal/179eb9bb-cc93-4a89-be00-1a6c21b15e2c",
+      "executiveSummary": "Main Street Dental's online presence is critically underperforming, directly impacting patient acquisition in a market where patients",
+      "painClusters": [
+        {
+          "rootCause": "Issues with website:Content",
+          "narrative": "Your homepage currently features only 17 words. Current: 17 words → Best"
+        },
+        {
+          "rootCause": "Issues with website:Technical SEO",
+          "narrative": "Your homepage currently has 0% schema.org coverage across 1 crawled page, meaning critical information like"
+        },
+        {
+          "rootCause": "Issues with website:Conversion",
+          "narrative": "Your website's conversion readiness is 0/100, critically missing a click-to"
+        },
+        {
+          "rootCause": "Issues with other:misc",
+          "narrative": "Your Google Business Profile is currently only 65% optimized with 5 critical sections missing,"
+        }
+      ],
+      "tiers": {
+        "starter": {
+          "roi": {
+            "ratio": 3.7,
+            "monthlyValue": 1815
+          },
+          "name": "Starter",
+          "price": 497,
+          "features": [
+            "Speed optimization (image compression, lazy loading, caching)",
+            "Basic SEO fixes (meta tags, sitemap, schema markup)",
+            "1 round of revisions"
+          ],
+          "findingIds": [
+            "01d72844-721d-45e0-af93-fd3d95c71a1c",
+            "b03e4b1b-7f9c-4ea1-88f6-46fce3e386b6",
+            "6eddaa20-48d6-4d9b-bbd1-8c17a110795a"
+          ],
+          "description": "Entry point — quick wins only. Speed optimization, basic SEO, and essential fixes. Limited scope, clear constraints.",
+          "recommended": false,
+          "deliveryTime": "5 business days"
+        },
+        "growth": {
+          "roi": {
+            "ratio": 3.5,
+            "monthlyValue": 5170
+          },
+          "name": "Growth",
+          "badge": "BEST VALUE",
+          "price": 1497,
+          "features": [
+            "Everything in Starter",
+            "Full SEO overhaul (content optimization, internal linking, local SEO)",
+            "Google Business Profile optimization",
+            "Conversion optimization (CTAs, forms, click-to-call)",
+            "Accessibility fixes (WCAG 2.1 Level A)",
+            "Competitor gap analysis report",
+            "3 rounds of revisions"
+          ],
+          "findingIds": [
+            "01d72844-721d-45e0-af93-fd3d95c71a1c",
+            "b03e4b1b-7f9c-4ea1-88f6-46fce3e386b6",
+            "6eddaa20-48d6-4d9b-bbd1-8c17a110795a",
+            "31649895-1a1b-4076-9142-8b363d8105b9",
+            "a15bacd9-a76a-4d75-8218-e1b8482e134b",
+            "b8412cf7-be53-425b-8443-899e05140c6e",
+            "c52456d7-6838-4402-95be-7d764fdb0b48",
+            "9ab7b381-9a35-422a-871d-8f17885583ca",
+            "a9766fbd-268c-4ce3-bad3-c8f4b29a2ea7",
+            "4021d332-e738-499f-9216-86ecb7a144aa",
+            "4a3e6519-05f7-4abf-88a6-ce4fdd975521",
+            "57b6fc4e-6859-4e32-ab8a-b5108a38ee6d",
+            "13491354-eb29-4e8f-9b79-74a5eb040b5d",
+            "92ecad28-7c69-4b22-9f36-f0228eef0804",
+            "2070c36b-41e1-4173-bf80-6985db78d83f"
+          ],
+          "description": "The full transformation — best value. Everything in Starter plus competitive edge. Everything you need to overtake competitors.",
+          "recommended": true,
+          "deliveryTime": "10 business days"
+        },
+        "premium": {
+          "roi": {
+            "ratio": 1.7,
+            "monthlyValue": 5170
+          },
+          "name": "Premium",
+          "price": 2997,
+          "features": [
+            "Everything in Growth",
+            "Content creation (3 new pages/blog posts, optimized for local SEO)",
+            "Monthly performance monitoring (3 months)",
+            "Priority support",
+            "Quarterly re-audit and progress report",
+            "Unlimited revisions"
+          ],
+          "findingIds": [
+            "01d72844-721d-45e0-af93-fd3d95c71a1c",
+            "b03e4b1b-7f9c-4ea1-88f6-46fce3e386b6",
+            "6eddaa20-48d6-4d9b-bbd1-8c17a110795a",
+            "31649895-1a1b-4076-9142-8b363d8105b9",
+            "a15bacd9-a76a-4d75-8218-e1b8482e134b",
+            "b8412cf7-be53-425b-8443-899e05140c6e",
+            "c52456d7-6838-4402-95be-7d764fdb0b48",
+            "9ab7b381-9a35-422a-871d-8f17885583ca",
+            "a9766fbd-268c-4ce3-bad3-c8f4b29a2ea7",
+            "4021d332-e738-499f-9216-86ecb7a144aa",
+            "4a3e6519-05f7-4abf-88a6-ce4fdd975521",
+            "57b6fc4e-6859-4e32-ab8a-b5108a38ee6d",
+            "13491354-eb29-4e8f-9b79-74a5eb040b5d",
+            "92ecad28-7c69-4b22-9f36-f0228eef0804",
+            "2070c36b-41e1-4173-bf80-6985db78d83f"
+          ],
+          "description": "Full-service — ongoing partnership. Everything in Growth plus content and monitoring. Premium positioning, custom work.",
+          "recommended": false,
+          "deliveryTime": "15 business days"
+        }
+      },
+      "pricing": {
+        "growth": 1497,
+        "premium": 2997,
+        "currency": "USD",
+        "essentials": 497
+      }
+    },
+    {
+      "business": {
+        "name": "Downtown Cafe",
+        "city": "Saskatoon",
+        "url": "https://www.wikipedia.org",
+        "industry": "restaurant"
+      },
+      "auditId": "c57964ed-b877-4e49-b4e3-306556a4515a",
+      "proposalId": "720e6665-dcac-4495-a8f0-a67dbcdb1963",
+      "proposalUrl": "http://localhost:3000/proposal/732dad96-be6d-4ecf-8b0a-f87e7e400c10",
+      "executiveSummary": "**Downtown Cafe's** online presence is critically underperforming, directly impacting revenue and customer acquisition",
+      "painClusters": [
+        {
+          "rootCause": "Issues with website:Technical SEO",
+          "narrative": "Your site is critically underperforming in search visibility due to a complete absence of structured data. This is not"
+        },
+        {
+          "rootCause": "Issues with website:Conversion",
+          "narrative": "Your site's Conversion Readiness score is a dismal 46/100 (Source"
+        },
+        {
+          "rootCause": "Issues with other:misc",
+          "narrative": "Your website is actively repelling hungry customers and Google. Here's the brutal truth:"
+        }
+      ],
+      "tiers": {
+        "starter": {
+          "roi": {
+            "ratio": 0.7,
+            "monthlyValue": 354
+          },
+          "name": "Starter",
+          "price": 497,
+          "features": [
+            "Speed optimization (image compression, lazy loading, caching)",
+            "Basic SEO fixes (meta tags, sitemap, schema markup)",
+            "1 round of revisions"
+          ],
+          "findingIds": [
+            "72a5e7a8-42cc-42a7-9a61-3f583adc4190",
+            "f4f2de2d-be05-461c-8337-e22329e06c9e",
+            "29046e95-84f9-4e49-81ff-87f25fd9a626"
+          ],
+          "description": "Entry point — quick wins only. Speed optimization, basic SEO, and essential fixes. Limited scope, clear constraints.",
+          "recommended": false,
+          "deliveryTime": "5 business days"
+        },
+        "growth": {
+          "roi": {
+            "ratio": 0.6,
+            "monthlyValue": 940
+          },
+          "name": "Growth",
+          "badge": "BEST VALUE",
+          "price": 1497,
+          "features": [
+            "Everything in Starter",
+            "Full SEO overhaul (content optimization, internal linking, local SEO)",
+            "Google Business Profile optimization",
+            "Conversion optimization (CTAs, forms, click-to-call)",
+            "Accessibility fixes (WCAG 2.1 Level A)",
+            "Competitor gap analysis report",
+            "3 rounds of revisions"
+          ],
+          "findingIds": [
+            "72a5e7a8-42cc-42a7-9a61-3f583adc4190",
+            "f4f2de2d-be05-461c-8337-e22329e06c9e",
+            "29046e95-84f9-4e49-81ff-87f25fd9a626",
+            "7e61c46e-39fb-4ad0-a045-99984417797c",
+            "0faaef67-66f5-4bd8-a72e-1974b28abbe1",
+            "5cd2299c-cbcb-4b60-9546-07b890dca504",
+            "035d8e73-7d3d-4e6e-8e3a-337f196e633c",
+            "26ca8f19-5894-4b1b-874d-99a14a50abf7",
+            "7fb9a69a-4a5f-4724-ac12-e8a8f8caa1f5",
+            "2e0b49e0-1dd7-4a30-b9e1-ac42c009ac3a",
+            "37213dbb-87ec-43c8-9f12-ad7ab1c45ef7",
+            "9f7975a6-9120-4f89-949c-332b11170cd8",
+            "be2d49cc-ab3e-46f3-966b-d8d06b3442cf"
+          ],
+          "description": "The full transformation — best value. Everything in Starter plus competitive edge. Everything you need to overtake competitors.",
+          "recommended": true,
+          "deliveryTime": "10 business days"
+        },
+        "premium": {
+          "roi": {
+            "ratio": 0.3,
+            "monthlyValue": 965
+          },
+          "name": "Premium",
+          "price": 2997,
+          "features": [
+            "Everything in Growth",
+            "Content creation (3 new pages/blog posts, optimized for local SEO)",
+            "Monthly performance monitoring (3 months)",
+            "Priority support",
+            "Quarterly re-audit and progress report",
+            "Unlimited revisions"
+          ],
+          "findingIds": [
+            "72a5e7a8-42cc-42a7-9a61-3f583adc4190",
+            "f4f2de2d-be05-461c-8337-e22329e06c9e",
+            "29046e95-84f9-4e49-81ff-87f25fd9a626",
+            "7e61c46e-39fb-4ad0-a045-99984417797c",
+            "0faaef67-66f5-4bd8-a72e-1974b28abbe1",
+            "5cd2299c-cbcb-4b60-9546-07b890dca504",
+            "035d8e73-7d3d-4e6e-8e3a-337f196e633c",
+            "26ca8f19-5894-4b1b-874d-99a14a50abf7",
+            "7fb9a69a-4a5f-4724-ac12-e8a8f8caa1f5",
+            "2e0b49e0-1dd7-4a30-b9e1-ac42c009ac3a",
+            "37213dbb-87ec-43c8-9f12-ad7ab1c45ef7",
+            "9f7975a6-9120-4f89-949c-332b11170cd8",
+            "be2d49cc-ab3e-46f3-966b-d8d06b3442cf",
+            "76e036ad-b2ec-45e9-addf-45572d061573"
+          ],
+          "description": "Full-service — ongoing partnership. Everything in Growth plus content and monitoring. Premium positioning, custom work.",
+          "recommended": false,
+          "deliveryTime": "15 business days"
+        }
+      },
+      "pricing": {
+        "growth": 1497,
+        "premium": 2997,
+        "currency": "USD",
+        "essentials": 497
+      }
+    }
+  ]
+}

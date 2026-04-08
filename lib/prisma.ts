@@ -1,5 +1,5 @@
-
 import { PrismaClient } from '@prisma/client';
+
 import { getTenantIdFromStore } from '@/lib/tenant/context';
 
 // ─── Prisma Singleton with RLS Middleware ────────────────────────────────────
@@ -17,37 +17,37 @@ import { getTenantIdFromStore } from '@/lib/tenant/context';
 // The canonical equivalents are runWithTenantAsync() and getTenantIdFromStore() in lib/tenant/context.ts.
 
 const prismaClientSingleton = () => {
-    const client = new PrismaClient();
+  const client = new PrismaClient();
 
-    // $extends query middleware: inject SET app.current_tenant_id before every query
-    // when a tenant context is active. This ensures the PostgreSQL RLS policy
-    // `current_setting('app.current_tenant_id', true)` receives the correct value.
-    return client.$extends({
-        query: {
-            $allModels: {
-                async $allOperations({ args, query }) {
-                    const tenantId = getTenantIdFromStore();
-                    if (tenantId) {
-                        // Use an interactive transaction to set the session variable
-                        // before the actual query executes in the same connection.
-                        return client.$transaction(async (tx) => {
-                            await tx.$executeRawUnsafe(
-                                `SET LOCAL app.current_tenant_id = '${tenantId.replace(/'/g, "''")}'`
-                            );
-                            return query(args);
-                        });
-                    }
-                    return query(args);
-                },
-            },
+  // $extends query middleware: inject SET app.current_tenant_id before every query
+  // when a tenant context is active. This ensures the PostgreSQL RLS policy
+  // `current_setting('app.current_tenant_id', true)` receives the correct value.
+  return client.$extends({
+    query: {
+      $allModels: {
+        async $allOperations({ args, query }) {
+          const tenantId = getTenantIdFromStore();
+          if (tenantId) {
+            // Use an interactive transaction to set the session variable
+            // before the actual query executes in the same connection.
+            return client.$transaction(async (tx) => {
+              await tx.$executeRawUnsafe(
+                `SET LOCAL app.current_tenant_id = '${tenantId.replace(/'/g, "''")}'`
+              );
+              return query(args);
+            });
+          }
+          return query(args);
         },
-    });
+      },
+    },
+  });
 };
 
 type PrismaClientSingleton = ReturnType<typeof prismaClientSingleton>;
 
 const globalForPrisma = globalThis as unknown as {
-    prisma: PrismaClientSingleton | undefined;
+  prisma: PrismaClientSingleton | undefined;
 };
 
 export const prisma = globalForPrisma.prisma ?? prismaClientSingleton();

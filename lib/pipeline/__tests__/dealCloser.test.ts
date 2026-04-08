@@ -1,16 +1,19 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
-import {
-  recordEvent,
-  computeEngagementScore,
-  isHotLead,
-  createCheckoutSession,
-  handlePaymentSuccess,
-  handlePaymentFailure,
-} from '../dealCloser';
-import type { EngagementEvent, EngagementScore, PipelineConfig } from '../types';
-import { createScopedPrisma } from '@/lib/tenant/context';
-import { stripe } from '@/lib/billing/stripe';
 import { OutreachEventType } from '@prisma/client';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { stripe } from '@/lib/billing/stripe';
+import { createScopedPrisma } from '@/lib/tenant/context';
+
+import {
+  computeEngagementScore,
+  createCheckoutSession,
+  handlePaymentFailure,
+  handlePaymentSuccess,
+  isHotLead,
+  recordEvent,
+} from '../dealCloser';
+
+import type { EngagementEvent, EngagementScore, PipelineConfig } from '../types';
 
 // Mock dependencies
 vi.mock('@/lib/tenant/context', () => ({
@@ -171,9 +174,7 @@ describe('Deal Closer Unit Tests', () => {
 
       mockPrisma.prospectLead.findUnique.mockResolvedValue(null);
 
-      await expect(recordEvent(leadId, event)).rejects.toThrow(
-        'Lead not found: nonexistent-lead'
-      );
+      await expect(recordEvent(leadId, event)).rejects.toThrow('Lead not found: nonexistent-lead');
     });
   });
 

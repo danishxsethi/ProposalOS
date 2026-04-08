@@ -1,9 +1,12 @@
-"use client";
+'use client';
 
-import { useEffect, Suspense } from 'react';
+import { Suspense, useEffect } from 'react';
+
 import { usePathname, useSearchParams } from 'next/navigation';
-import { initPostHog } from '@/lib/posthog';
+
 import posthog from 'posthog-js';
+
+import { initPostHog } from '@/lib/posthog';
 
 function PostHogPageView() {
   const pathname = usePathname();

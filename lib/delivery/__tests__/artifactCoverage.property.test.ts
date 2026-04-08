@@ -1,8 +1,9 @@
 // Feature: agentic-delivery-qa-hardening, Property 1: Artifact type coverage
-import { describe, it, expect } from 'vitest';
-import fc from 'fast-check';
-import { getGenerator, getSupportedCategories } from '../generators';
 import { Finding } from '@prisma/client';
+import fc from 'fast-check';
+import { describe, expect, it } from 'vitest';
+
+import { getGenerator, getSupportedCategories } from '../generators';
 
 describe('Property 1: Artifact type coverage', () => {
   it('should have generators for all required categories', () => {

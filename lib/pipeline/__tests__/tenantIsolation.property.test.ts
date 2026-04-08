@@ -1,23 +1,22 @@
+import * as fc from 'fast-check';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+
 import { cleanupDb } from '@/lib/__tests__/utils/cleanup';
 /**
  * Property-Based Tests for Tenant Isolation
- * 
+ *
  * Feature: autonomous-proposal-engine
  * Properties:
  * - Property 26: Tenant data isolation
  * - Property 27: Tenant branding is applied to outreach and proposals
- * 
+ *
  * Validates: Requirements 9.1, 9.3, 9.4
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import * as fc from 'fast-check';
 import { prisma } from '@/lib/db';
-import {
-  getTenantConfig,
-  applyBrandingToEmail,
-  applyBrandingToProposal,
-} from '../tenantConfig';
+
+import { applyBrandingToEmail, applyBrandingToProposal, getTenantConfig } from '../tenantConfig';
+
 import type { Tenant, TenantBranding } from '@prisma/client';
 
 describe('Feature: autonomous-proposal-engine - Tenant Isolation Properties', () => {
@@ -26,25 +25,25 @@ describe('Feature: autonomous-proposal-engine - Tenant Isolation Properties', ()
   beforeEach(async () => {
     // Clean up test data
     await cleanupDb(prisma);
-});
+  });
 
   afterEach(async () => {
     // Clean up test data
     await cleanupDb(prisma);
-});
+  });
 
   /**
    * Property 26: Tenant data isolation
-   * 
+   *
    * For any pipeline query scoped to a tenant ID, the results must contain
    * zero records belonging to a different tenant ID.
-   * 
+   *
    * Validates: Requirements 9.1
    */
   it('Property 26: Tenant data isolation', async () => {
     await fc.assert(
       fc.asyncProperty(
-        fc.array(fc.uuid(), { minLength: 2, maxLength: 5 }).chain(ids => {
+        fc.array(fc.uuid(), { minLength: 2, maxLength: 5 }).chain((ids) => {
           // Ensure unique tenant IDs
           const uniqueIds = Array.from(new Set(ids));
           return fc.constant(uniqueIds);
@@ -85,7 +84,7 @@ describe('Feature: autonomous-proposal-engine - Tenant Isolation Properties', ()
               expect(config.tenant.id).toBe(tenantId);
 
               // Verify no data from other tenants is included
-              const otherTenantIds = tenantIds.filter(id => id !== tenantId);
+              const otherTenantIds = tenantIds.filter((id) => id !== tenantId);
               for (const otherId of otherTenantIds) {
                 expect(config.config.tenantId).not.toBe(otherId);
               }
@@ -101,10 +100,10 @@ describe('Feature: autonomous-proposal-engine - Tenant Isolation Properties', ()
 
   /**
    * Property 27: Tenant branding is applied to outreach and proposals
-   * 
+   *
    * For any outreach email or proposal generated for a tenant with branding configured,
    * the output must use the tenant's brand name and contact email, not the platform defaults.
-   * 
+   *
    * Validates: Requirements 9.3, 9.4
    */
   it('Property 27: Tenant branding is applied to outreach and proposals', async () => {
@@ -177,11 +176,7 @@ describe('Feature: autonomous-proposal-engine - Tenant Isolation Properties', ()
           expect(brandedEmail).not.toContain('{{contactEmail}}');
 
           // Test proposal branding application
-          const brandedProposal = applyBrandingToProposal(
-            proposalData,
-            mockBranding,
-            mockTenant
-          );
+          const brandedProposal = applyBrandingToProposal(proposalData, mockBranding, mockTenant);
 
           // Verify branding was applied to proposal
           expect(brandedProposal.branding).toBeDefined();
@@ -191,18 +186,10 @@ describe('Feature: autonomous-proposal-engine - Tenant Isolation Properties', ()
           expect(brandedProposal.branding.websiteUrl).toBe(branding.websiteUrl);
 
           // Test with null branding (should not modify content)
-          const unbrandedEmail = applyBrandingToEmail(
-            emailWithPlaceholders,
-            null,
-            mockTenant
-          );
+          const unbrandedEmail = applyBrandingToEmail(emailWithPlaceholders, null, mockTenant);
           expect(unbrandedEmail).toBe(emailWithPlaceholders);
 
-          const unbrandedProposal = applyBrandingToProposal(
-            proposalData,
-            null,
-            mockTenant
-          );
+          const unbrandedProposal = applyBrandingToProposal(proposalData, null, mockTenant);
           expect(unbrandedProposal).toEqual(proposalData);
 
           return true;

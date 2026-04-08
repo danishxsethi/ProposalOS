@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+
 import matter from 'gray-matter';
 import readingTime from 'reading-time';
 
@@ -20,9 +21,9 @@ export interface BlogPost {
 
 export function getAllPosts(): BlogPost[] {
   if (!fs.existsSync(BLOG_DIR)) return [];
-  const files = fs.readdirSync(BLOG_DIR).filter(f => f.endsWith('.mdx'));
+  const files = fs.readdirSync(BLOG_DIR).filter((f) => f.endsWith('.mdx'));
   return files
-    .map(file => getPostBySlug(file.replace('.mdx', '')))
+    .map((file) => getPostBySlug(file.replace('.mdx', '')))
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 }
 

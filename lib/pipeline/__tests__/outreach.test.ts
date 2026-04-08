@@ -1,19 +1,21 @@
 /**
  * Unit tests for Outreach Agent
- * 
+ *
  * Tests generateEmail(), generateAndQualifyEmail(), scheduleFollowUps(),
  * processBehaviorBranch(), and helper functions.
- * 
+ *
  * Requirements: 4.1, 4.2, 4.3, 4.4, 4.5, 4.8
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 import {
-  generateEmail,
   generateAndQualifyEmail,
-  translateFinding,
+  generateEmail,
   selectTopFindings,
+  translateFinding,
 } from '../outreach';
+
 import type { OutreachContext, PainScoreBreakdown } from '../types';
 
 // ============================================================================
@@ -95,7 +97,7 @@ describe('translateFinding', () => {
   it('should translate mobile finding for HVAC vertical', () => {
     const finding = { module: 'mobile', title: 'Mobile Not Responsive' };
     const result = translateFinding(finding, 'hvac');
-    expect(result).toBe('homeowners can\'t request a quote from their phone');
+    expect(result).toBe("homeowners can't request a quote from their phone");
   });
 
   it('should use default vertical for unknown verticals', () => {
@@ -107,7 +109,7 @@ describe('translateFinding', () => {
   it('should translate GBP finding for restaurant vertical', () => {
     const finding = { module: 'google_business', title: 'GBP Issues' };
     const result = translateFinding(finding, 'restaurant');
-    expect(result).toBe('your Google listing isn\'t filling tables');
+    expect(result).toBe("your Google listing isn't filling tables");
   });
 
   it('should handle findings with type instead of module', () => {
@@ -123,9 +125,7 @@ describe('translateFinding', () => {
 
 describe('selectTopFindings', () => {
   it('should return all findings when count <= requested', () => {
-    const findings = [
-      { id: 'f1', severity: 'high', impactScore: 80 },
-    ];
+    const findings = [{ id: 'f1', severity: 'high', impactScore: 80 }];
     const result = selectTopFindings(findings, 2);
     expect(result).toHaveLength(1);
   });

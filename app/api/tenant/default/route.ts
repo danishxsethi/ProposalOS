@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+
 import { withAuth } from '@/lib/middleware/auth';
 import { getTenantId } from '@/lib/tenant/context';
 

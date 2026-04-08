@@ -1,5 +1,6 @@
 import { Finding } from '@prisma/client';
-import { RawArtifact, ArtifactGenerator } from './schemaGenerator';
+
+import { ArtifactGenerator, RawArtifact } from './schemaGenerator';
 
 /**
  * Meta Tag Generator - Generates HTML <meta> blocks for title, description, and OG tags
@@ -74,12 +75,7 @@ add_action('wp_head', function() {
   }
 
   private generateKeywords(finding: Finding): string {
-    const keywords = [
-      finding.title,
-      finding.category,
-      'optimization',
-      'SEO',
-    ];
+    const keywords = [finding.title, finding.category, 'optimization', 'SEO'];
     return keywords.join(', ');
   }
 

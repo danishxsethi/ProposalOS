@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
+
 import sharp from 'sharp';
 
 // Simplified SVG for radar chart visualization
 const createRadarSVG = () => {
-    return `
+  return `
         <svg width="120" height="120" viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
             <circle cx="60" cy="60" r="50" stroke="url(#radarGradient)" stroke-width="1" stroke-opacity="0.3"/>
             <circle cx="60" cy="60" r="35" stroke="url(#radarGradient)" stroke-width="1" stroke-opacity="0.5"/>
@@ -28,58 +29,55 @@ const createRadarSVG = () => {
     `;
 };
 
-export async function GET(
-    req: NextRequest,
-    { params }: { params: Promise<{ token: string }> }
-) {
-    const { token } = await params;
+export async function GET(req: NextRequest, { params }: { params: Promise<{ token: string }> }) {
+  const { token } = await params;
 
-    // Fetch report data
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
-    let reportData: {
-        businessName: string;
-        overallScore: number;
-        letterGrade: string;
-    };
+  // Fetch report data
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+  let reportData: {
+    businessName: string;
+    overallScore: number;
+    letterGrade: string;
+  };
 
-    try {
-        const res = await fetch(`${baseUrl}/api/report/${token}`, { cache: 'no-store' });
-        if (res.ok) {
-            const report = await res.json();
-            reportData = {
-                businessName: report.businessName,
-                overallScore: Math.round((report.overallScore ?? 0) * 10),
-                letterGrade: report.letterGrade,
-            };
-        } else {
-            // Fallback to mock data
-            reportData = {
-                businessName: 'Saskatoon Family Dental',
-                overallScore: 49,
-                letterGrade: 'D+'
-            };
-        }
-    } catch (e) {
-        reportData = {
-            businessName: 'Business Name',
-            overallScore: 0,
-            letterGrade: 'F'
-        };
+  try {
+    const res = await fetch(`${baseUrl}/api/report/${token}`, { cache: 'no-store' });
+    if (res.ok) {
+      const report = await res.json();
+      reportData = {
+        businessName: report.businessName,
+        overallScore: Math.round((report.overallScore ?? 0) * 10),
+        letterGrade: report.letterGrade,
+      };
+    } else {
+      // Fallback to mock data
+      reportData = {
+        businessName: 'Saskatoon Family Dental',
+        overallScore: 49,
+        letterGrade: 'D+',
+      };
     }
-
-    // Get score color based on score
-    const getScoreColor = (score: number) => {
-        if (score >= 80) return '#22c55e'; // green
-        if (score >= 60) return '#3b82f6'; // blue
-        if (score >= 40) return '#f59e0b'; // yellow
-        if (score >= 20) return '#f97316'; // orange
-        return '#ef4444'; // red
+  } catch (e) {
+    reportData = {
+      businessName: 'Business Name',
+      overallScore: 0,
+      letterGrade: 'F',
     };
+  }
 
-    const scoreColor = getScoreColor(reportData.overallScore);
+  // Get score color based on score
+  const getScoreColor = (score: number) => {
+    if (score >= 80) return '#22c55e'; // green
+    if (score >= 60) return '#3b82f6'; // blue
+    if (score >= 40) return '#f59e0b'; // yellow
+    if (score >= 20) return '#f97316'; // orange
+    return '#ef4444'; // red
+  };
 
-    // Create SVG for OG image
-    const svg = `
+  const scoreColor = getScoreColor(reportData.overallScore);
+
+  // Create SVG for OG image
+  const svg = `
         <svg width="1200" height="630" viewBox="0 0 1200 630" xmlns="http://www.w3.org/2000/svg">
             <defs>
                 <linearGradient id="bgGradient" x1="0" y1="0" x2="1" y2="1">
@@ -146,26 +144,23 @@ export async function GET(
         </svg>
     `;
 
-    // Convert SVG to PNG using sharp
-    try {
-        const pngBuffer = await sharp(Buffer.from(svg))
-            .resize(1200, 630)
-            .png()
-            .toBuffer();
+  // Convert SVG to PNG using sharp
+  try {
+    const pngBuffer = await sharp(Buffer.from(svg)).resize(1200, 630).png().toBuffer();
 
-        const response = new NextResponse(new Uint8Array(pngBuffer), {
-            headers: {
-                'Content-Type': 'image/png',
-                'Cache-Control': 'public, max-age=86400, s-maxage=86400',
-            },
-        });
+    const response = new NextResponse(new Uint8Array(pngBuffer), {
+      headers: {
+        'Content-Type': 'image/png',
+        'Cache-Control': 'public, max-age=86400, s-maxage=86400',
+      },
+    });
 
-        return response;
-    } catch (error) {
-        console.error('Error generating OG image:', error);
-        
-        // Fallback: return a simple PNG with error message
-        const errorSvg = `
+    return response;
+  } catch (error) {
+    console.error('Error generating OG image:', error);
+
+    // Fallback: return a simple PNG with error message
+    const errorSvg = `
             <svg width="1200" height="630" viewBox="0 0 1200 630" xmlns="http://www.w3.org/2000/svg">
                 <rect width="1200" height="630" fill="#0a0a0f"/>
                 <text x="600" y="300" font-family="Arial" font-size="48" fill="#f9fafb" text-anchor="middle">
@@ -179,17 +174,14 @@ export async function GET(
                 </text>
             </svg>
         `;
-        
-        const errorPng = await sharp(Buffer.from(errorSvg))
-            .resize(1200, 630)
-            .png()
-            .toBuffer();
-            
-        return new NextResponse(new Uint8Array(errorPng), {
-            headers: {
-                'Content-Type': 'image/png',
-                'Cache-Control': 'public, max-age=86400',
-            },
-        });
-    }
+
+    const errorPng = await sharp(Buffer.from(errorSvg)).resize(1200, 630).png().toBuffer();
+
+    return new NextResponse(new Uint8Array(errorPng), {
+      headers: {
+        'Content-Type': 'image/png',
+        'Cache-Control': 'public, max-age=86400',
+      },
+    });
+  }
 }

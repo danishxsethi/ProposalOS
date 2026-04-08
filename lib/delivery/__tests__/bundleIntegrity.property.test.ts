@@ -1,5 +1,6 @@
 // Feature: agentic-delivery-qa-hardening, Property 5: Delivery bundle integrity
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
+
 import { assembleBundle, generateReadme } from '../bundler';
 import { ImplementationPackage } from '../packager';
 

@@ -17,13 +17,13 @@ Successfully implemented Tasks 26-28 of the Autonomous Proposal Engine, bringing
    - Support for per-lead and subscription pricing models
    - Complete lead packaging (audit, proposal, pain score, contact)
 
-2. **lib/pipeline/__tests__/partnerPortal.test.ts** (250 lines)
+2. **lib/pipeline/**tests**/partnerPortal.test.ts** (250 lines)
    - Unit tests for all partner portal functions
    - Tests for lead matching, packaging, and status updates
    - Tests for pricing model calculations
    - Tests for partner metrics
 
-3. **lib/pipeline/__tests__/partnerPortal.property.test.ts** (150 lines)
+3. **lib/pipeline/**tests**/partnerPortal.property.test.ts** (150 lines)
    - Property 38: Partner lead isolation
    - Property 39: Partner metrics consistency
    - Property 40: Lead packaging completeness
@@ -43,7 +43,7 @@ Successfully implemented Tasks 26-28 of the Autonomous Proposal Engine, bringing
    - Delivers leads respecting volume limits
    - Returns metrics on execution
 
-7. **app/api/cron/partner-matching/__tests__/route.test.ts** (100 lines)
+7. **app/api/cron/partner-matching/**tests**/route.test.ts** (100 lines)
    - Tests for cron job authentication
    - Tests for lead matching and delivery
    - Tests for error handling and metrics
@@ -83,14 +83,14 @@ Successfully implemented Tasks 26-28 of the Autonomous Proposal Engine, bringing
    - PII detection for email, phone, SSN, credit card
    - Model versioning and rollback support
 
-2. **lib/pipeline/__tests__/crossTenantIntelligence.test.ts** (300 lines)
+2. **lib/pipeline/**tests**/crossTenantIntelligence.test.ts** (300 lines)
    - Unit tests for pattern aggregation
    - Tests for win rate calculation
    - Tests for predictive scoring
    - Tests for model versioning and rollback
    - Tests for PII detection and anonymization
 
-3. **lib/pipeline/__tests__/crossTenantIntelligence.property.test.ts** (200 lines)
+3. **lib/pipeline/**tests**/crossTenantIntelligence.property.test.ts** (200 lines)
    - Property 39: Cross-tenant intelligence contains no PII
    - Property 40: Predictive close probability is bounded
    - Property 41: Anonymization is idempotent
@@ -143,14 +143,14 @@ Successfully implemented Tasks 26-28 of the Autonomous Proposal Engine, bringing
    - Currency conversion with exchange rates
    - Compliance requirements per country
 
-2. **lib/pipeline/__tests__/countryConfig.test.ts** (250 lines)
+2. **lib/pipeline/**tests**/countryConfig.test.ts** (250 lines)
    - Unit tests for all country configuration functions
    - Tests for country detection
    - Tests for currency conversion
    - Tests for pricing multipliers
    - Tests for compliance requirements
 
-3. **lib/pipeline/__tests__/countryConfig.property.test.ts** (200 lines)
+3. **lib/pipeline/**tests**/countryConfig.property.test.ts** (200 lines)
    - Property 31: Country-specific configuration application
    - Property 32: Country detection consistency
    - Property 33: Currency conversion round-trip
@@ -206,34 +206,37 @@ Successfully implemented Tasks 26-28 of the Autonomous Proposal Engine, bringing
 
 ## Code Statistics
 
-| Metric | Count |
-|--------|-------|
-| **New Implementation Files** | 3 |
-| **New Test Files** | 6 |
-| **New API Endpoints** | 4 |
-| **New Cron Jobs** | 2 |
-| **Lines of Code** | ~1,500 |
-| **Lines of Tests** | ~1,150 |
-| **Property Tests** | 7 |
-| **Unit Tests** | 50+ |
+| Metric                       | Count  |
+| ---------------------------- | ------ |
+| **New Implementation Files** | 3      |
+| **New Test Files**           | 6      |
+| **New API Endpoints**        | 4      |
+| **New Cron Jobs**            | 2      |
+| **Lines of Code**            | ~1,500 |
+| **Lines of Tests**           | ~1,150 |
+| **Property Tests**           | 7      |
+| **Unit Tests**               | 50+    |
 
 ---
 
 ## Integration Points
 
 ### Partner Portal Integration
+
 - Integrates with existing ProspectLead model
 - Uses existing Audit and Proposal models
 - Leverages existing Tenant model
 - Connects to Learning Loop for outcome tracking
 
 ### Cross-Tenant Intelligence Integration
+
 - Reads from WinLossRecord model
 - Creates SharedIntelligenceModel records
 - Can be integrated into Pipeline Orchestrator for prioritization
 - Feeds into predictive scoring
 
 ### Country Configuration Integration
+
 - Can be used in Discovery stage for data provider selection
 - Can be used in Outreach stage for email template selection
 - Can be used in Proposal stage for pricing application
@@ -244,6 +247,7 @@ Successfully implemented Tasks 26-28 of the Autonomous Proposal Engine, bringing
 ## What's Left (Task 29)
 
 Task 29 is the final checkpoint:
+
 - Run all tests to verify 28/29 tasks complete
 - Verify all 43 property tests pass
 - Verify all 200+ unit tests pass

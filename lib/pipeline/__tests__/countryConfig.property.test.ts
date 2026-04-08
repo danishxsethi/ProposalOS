@@ -1,13 +1,14 @@
-import { describe, it, expect } from 'vitest';
 import fc from 'fast-check';
+import { describe, expect, it } from 'vitest';
+
 import {
-  getCountryConfig,
-  detectCountry,
-  convertCurrency,
   applyCountryPricing,
+  convertCurrency,
+  CountryCode,
+  detectCountry,
+  getCountryConfig,
   getSupportedCountries,
   isValidCountryCode,
-  CountryCode,
 } from '../countryConfig';
 
 describe('Country Configuration - Property Tests', () => {

@@ -8,13 +8,15 @@
  * Requirements: 2.1, 2.2, 2.3, 2.4, 2.6
  */
 
-import { prisma } from '@/lib/prisma';
-import { transition } from '../stateMachine';
-import { logStageFailure } from '../metrics';
-// P0-3: Redirect to single source of truth
 import { runAudit } from '@/lib/audit/runner';
 import { CostTracker } from '@/lib/costs/costTracker';
-import { PipelineStage, type StageResult, type ProspectStatus } from '../types';
+import { prisma } from '@/lib/prisma';
+
+import { logStageFailure } from '../metrics';
+import { transition } from '../stateMachine';
+// P0-3: Redirect to single source of truth
+
+import { PipelineStage, type ProspectStatus, type StageResult } from '../types';
 
 /**
  * Process a batch of prospects in "discovered" status through the audit stage.
@@ -123,12 +125,14 @@ export async function processOneAudit(prospectId: string): Promise<StageResult> 
 
   // Fetch updated audit to get cost and status
   const updatedAudit = await prisma.audit.findUnique({
-    where: { id: audit.id }
+    where: { id: audit.id },
   });
 
   const costCents = updatedAudit?.apiCostCents ?? 0;
   const isSuccess =
-    updatedAudit?.status === 'COMPLETE' || updatedAudit?.status === 'PARTIAL' || (updatedAudit?.status as any) === 'DEGRADED';
+    updatedAudit?.status === 'COMPLETE' ||
+    updatedAudit?.status === 'PARTIAL' ||
+    (updatedAudit?.status as any) === 'DEGRADED';
 
   if (isSuccess) {
     // 3. Success: link to prospect, transition to "audited"
@@ -197,12 +201,7 @@ async function handleAuditFailure(
     },
   });
 
-  await logStageFailure(
-    PipelineStage.AUDIT,
-    auditId,
-    new Error(errorMessage),
-    tenantId
-  );
+  await logStageFailure(PipelineStage.AUDIT, auditId, new Error(errorMessage), tenantId);
 }
 
 /**

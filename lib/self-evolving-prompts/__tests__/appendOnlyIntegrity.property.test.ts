@@ -1,19 +1,20 @@
 /**
  * Feature: self-evolving-prompts-predictive-intelligence
  * Property 2: Append-Only Log Integrity
- * 
+ *
  * Validates: Requirements 1.2, 10.1
- * 
+ *
  * Property: For any performance log record, once written to PostgreSQL,
  * the record SHALL never be modified or deleted, and the total record count
  * SHALL only increase over time.
  */
 
-import { describe, it, expect, afterAll } from 'vitest';
 import fc from 'fast-check';
-import { PromptPerformanceTracker } from '../PromptPerformanceTracker';
+import { afterAll, describe, expect, it } from 'vitest';
+
 import * as promptPerformanceDA from '../data-access/prompt-performance';
 import { closeConnection } from '../db';
+import { PromptPerformanceTracker } from '../PromptPerformanceTracker';
 
 describe('Property 2: Append-Only Log Integrity', () => {
   const tracker = new PromptPerformanceTracker();
@@ -22,7 +23,11 @@ describe('Property 2: Append-Only Log Integrity', () => {
   const versionHashArb = fc.string({ minLength: 64, maxLength: 64 });
   const nodeIdArb = fc.string({ minLength: 1, maxLength: 255 });
   const qualityScoreArb = fc.float({ min: Math.fround(0.01), max: Math.fround(100), noNaN: true });
-  const downstreamImpactArb = fc.float({ min: Math.fround(0.01), max: Math.fround(100), noNaN: true });
+  const downstreamImpactArb = fc.float({
+    min: Math.fround(0.01),
+    max: Math.fround(100),
+    noNaN: true,
+  });
   const costArb = fc.float({ min: Math.fround(0.01), max: Math.fround(1000), noNaN: true });
   const latencyArb = fc.integer({ min: 1, max: 10000 });
   const tokensArb = fc.integer({ min: 1, max: 100000 });
@@ -77,11 +82,11 @@ describe('Property 2: Append-Only Log Integrity', () => {
           const originalTimestamp = result.timestamp;
 
           // Wait a small amount of time to ensure any potential modification would have a different timestamp
-          await new Promise(resolve => setTimeout(resolve, 10));
+          await new Promise((resolve) => setTimeout(resolve, 10));
 
           // Assert: Retrieve the record again and verify it hasn't changed
           const retrieved = await promptPerformanceDA.getPerformanceByVersion(versionHash);
-          const retrievedRecord = retrieved.find(log => log.id === recordId);
+          const retrievedRecord = retrieved.find((log) => log.id === recordId);
 
           expect(retrievedRecord).toBeDefined();
           if (retrievedRecord) {
@@ -91,7 +96,9 @@ describe('Property 2: Append-Only Log Integrity', () => {
             expect(retrievedRecord.promptVersionHash).toBe(versionHash);
             expect(retrievedRecord.nodeId).toBe(nodeId);
             expect(Math.abs(retrievedRecord.qualityScore - qualityScore)).toBeLessThan(0.01);
-            expect(Math.abs(retrievedRecord.downstreamImpact - downstreamImpact)).toBeLessThan(0.01);
+            expect(Math.abs(retrievedRecord.downstreamImpact - downstreamImpact)).toBeLessThan(
+              0.01
+            );
             expect(Math.abs(retrievedRecord.costUSD - cost)).toBeLessThan(0.01);
             expect(retrievedRecord.latencyMs).toBe(latency);
             expect(retrievedRecord.inputTokens).toBe(inputTokens);
@@ -150,8 +157,10 @@ describe('Property 2: Append-Only Log Integrity', () => {
           for (const recordId of recordIds) {
             let found = false;
             for (const entry of logEntries) {
-              const retrieved = await promptPerformanceDA.getPerformanceByVersion(entry.versionHash);
-              if (retrieved.find(log => log.id === recordId)) {
+              const retrieved = await promptPerformanceDA.getPerformanceByVersion(
+                entry.versionHash
+              );
+              if (retrieved.find((log) => log.id === recordId)) {
                 found = true;
                 break;
               }
@@ -213,7 +222,7 @@ describe('Property 2: Append-Only Log Integrity', () => {
 
           // All retrievals should contain the same record with identical data
           for (const retrieval of retrievals) {
-            const record = retrieval.find(log => log.id === recordId);
+            const record = retrieval.find((log) => log.id === recordId);
             expect(record).toBeDefined();
             if (record) {
               expect(record.id).toBe(recordId);
@@ -319,7 +328,7 @@ describe('Property 2: Append-Only Log Integrity', () => {
           }
 
           // Act: Wait a moment and then retrieve all records
-          await new Promise(resolve => setTimeout(resolve, 10));
+          await new Promise((resolve) => setTimeout(resolve, 10));
 
           // Assert: All records should still exist
           const allRecords: string[] = [];

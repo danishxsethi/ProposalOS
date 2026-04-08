@@ -3,11 +3,11 @@
  * Implements CRUD operations and aggregate queries
  */
 
-import { prisma, executeQuery, executeCommand } from '../db';
+import { executeCommand, executeQuery, prisma } from '../db';
 import {
+  AggregateMetrics,
   PromptPerformanceLog,
   PromptPerformanceLogRow,
-  AggregateMetrics,
   TimeRange,
 } from '../types';
 
@@ -207,7 +207,7 @@ export async function getUnderperformingPrompts(
   `;
 
   const rows = await executeQuery<any>(query, [minSampleSize, threshold]);
-  return rows.map(row => ({
+  return rows.map((row) => ({
     versionHash: row.version_hash,
     avgQualityScore: parseFloat(row.avg_quality_score),
     sampleSize: parseInt(row.sample_size),

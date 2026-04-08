@@ -1,15 +1,15 @@
 /**
  * Email QA Scorer — Enhanced quality gate for outreach emails
- * 
+ *
  * Extends lib/email/qualityCheck.ts with additional scoring dimensions:
  * - Reading level (target: 5th grade)
  * - Word count (target: < 80 words)
  * - Jargon detection (target: zero jargon terms)
  * - Finding reference count (target: >= 2 specific findings)
  * - Spam risk (target: low spam trigger density)
- * 
+ *
  * Returns composite score (0-100) with dimension breakdown and improvement suggestions.
- * 
+ *
  * Requirements: 5.1, 5.2, 5.3, 5.4
  */
 
@@ -27,18 +27,51 @@ export const DEFAULT_EMAIL_QA_CONFIG: EmailQAConfig = {
   minQualityScore: 90,
   jargonWordList: [
     // Technical jargon
-    'optimization', 'implementation', 'infrastructure', 'architecture',
-    'scalability', 'bandwidth', 'latency', 'throughput', 'algorithm',
-    'framework', 'methodology', 'paradigm', 'synergy', 'leverage',
-    'utilize', 'facilitate', 'streamline', 'optimize', 'maximize',
+    'optimization',
+    'implementation',
+    'infrastructure',
+    'architecture',
+    'scalability',
+    'bandwidth',
+    'latency',
+    'throughput',
+    'algorithm',
+    'framework',
+    'methodology',
+    'paradigm',
+    'synergy',
+    'leverage',
+    'utilize',
+    'facilitate',
+    'streamline',
+    'optimize',
+    'maximize',
     // Marketing jargon
-    'best-in-class', 'cutting-edge', 'state-of-the-art', 'world-class',
-    'industry-leading', 'revolutionary', 'game-changing', 'disruptive',
-    'innovative', 'next-generation', 'enterprise-grade', 'mission-critical',
+    'best-in-class',
+    'cutting-edge',
+    'state-of-the-art',
+    'world-class',
+    'industry-leading',
+    'revolutionary',
+    'game-changing',
+    'disruptive',
+    'innovative',
+    'next-generation',
+    'enterprise-grade',
+    'mission-critical',
     // SEO/Web jargon
-    'meta tags', 'schema markup', 'canonical', 'robots.txt', 'sitemap.xml',
-    'core web vitals', 'lighthouse score', 'cumulative layout shift',
-    'first contentful paint', 'time to interactive', 'DOM', 'API',
+    'meta tags',
+    'schema markup',
+    'canonical',
+    'robots.txt',
+    'sitemap.xml',
+    'core web vitals',
+    'lighthouse score',
+    'cumulative layout shift',
+    'first contentful paint',
+    'time to interactive',
+    'DOM',
+    'API',
   ],
   dimensionWeights: {
     readability: 25,
@@ -51,13 +84,37 @@ export const DEFAULT_EMAIL_QA_CONFIG: EmailQAConfig = {
 
 // Spam trigger words (from existing qualityCheck.ts, expanded)
 const SPAM_TRIGGER_WORDS = [
-  'free', 'guaranteed', 'act now', 'limited time', 'don\'t miss',
-  'last chance', 'hurry', 'urgent', 'immediately', 'instant',
-  'no obligation', 'risk-free', '100% free', 'winner', 'congratulations',
-  'you\'ve been selected', 'claim now', 'click here', 'buy now',
-  'order now', 'call now', 'subscribe now', 'sign up now',
-  'limited offer', 'exclusive deal', 'special promotion', 'act fast',
-  'don\'t wait', 'expires soon', 'today only', 'while supplies last',
+  'free',
+  'guaranteed',
+  'act now',
+  'limited time',
+  "don't miss",
+  'last chance',
+  'hurry',
+  'urgent',
+  'immediately',
+  'instant',
+  'no obligation',
+  'risk-free',
+  '100% free',
+  'winner',
+  'congratulations',
+  "you've been selected",
+  'claim now',
+  'click here',
+  'buy now',
+  'order now',
+  'call now',
+  'subscribe now',
+  'sign up now',
+  'limited offer',
+  'exclusive deal',
+  'special promotion',
+  'act fast',
+  "don't wait",
+  'expires soon',
+  'today only',
+  'while supplies last',
 ];
 
 // ============================================================================
@@ -69,9 +126,9 @@ const SPAM_TRIGGER_WORDS = [
  * Formula: 0.39 * (total words / total sentences) + 11.8 * (total syllables / total words) - 15.59
  */
 function calculateReadingGradeLevel(text: string): number {
-  const sentences = text.split(/[.!?]+/).filter(s => s.trim().length > 0);
-  const words = text.split(/\s+/).filter(w => w.trim().length > 0);
-  
+  const sentences = text.split(/[.!?]+/).filter((s) => s.trim().length > 0);
+  const words = text.split(/\s+/).filter((w) => w.trim().length > 0);
+
   if (sentences.length === 0 || words.length === 0) {
     return 0;
   }
@@ -84,7 +141,7 @@ function calculateReadingGradeLevel(text: string): number {
   const avgSyllablesPerWord = totalSyllables / totalWords;
 
   const gradeLevel = 0.39 * avgWordsPerSentence + 11.8 * avgSyllablesPerWord - 15.59;
-  
+
   return Math.max(0, gradeLevel);
 }
 
@@ -124,18 +181,21 @@ function countSyllables(word: string): number {
  * Score readability dimension (0-100)
  * Target: 5th grade level or below
  */
-function scoreReadability(text: string, maxGradeLevel: number): { score: number; gradeLevel: number } {
+function scoreReadability(
+  text: string,
+  maxGradeLevel: number
+): { score: number; gradeLevel: number } {
   const gradeLevel = calculateReadingGradeLevel(text);
-  
+
   // Perfect score if at or below target
   if (gradeLevel <= maxGradeLevel) {
     return { score: 100, gradeLevel };
   }
-  
+
   // Degrade score linearly: lose 10 points per grade level above target
   const excessGrades = gradeLevel - maxGradeLevel;
-  const score = Math.max(0, 100 - (excessGrades * 10));
-  
+  const score = Math.max(0, 100 - excessGrades * 10);
+
   return { score, gradeLevel };
 }
 
@@ -144,18 +204,18 @@ function scoreReadability(text: string, maxGradeLevel: number): { score: number;
  * Target: < 80 words
  */
 function scoreWordCount(text: string, maxWords: number): { score: number; count: number } {
-  const words = text.split(/\s+/).filter(w => w.trim().length > 0);
+  const words = text.split(/\s+/).filter((w) => w.trim().length > 0);
   const count = words.length;
-  
+
   // Perfect score if at or below target
   if (count <= maxWords) {
     return { score: 100, count };
   }
-  
+
   // Degrade score: lose 2 points per word over target
   const excessWords = count - maxWords;
-  const score = Math.max(0, 100 - (excessWords * 2));
-  
+  const score = Math.max(0, 100 - excessWords * 2);
+
   return { score, count };
 }
 
@@ -170,24 +230,27 @@ function escapeRegex(str: string): string {
  * Score jargon dimension (0-100)
  * Target: zero jargon terms
  */
-function scoreJargon(text: string, jargonWordList: string[]): { score: number; termsFound: string[] } {
+function scoreJargon(
+  text: string,
+  jargonWordList: string[]
+): { score: number; termsFound: string[] } {
   const lowerText = text.toLowerCase();
-  const termsFound = jargonWordList.filter(term => {
+  const termsFound = jargonWordList.filter((term) => {
     // Use word boundaries to avoid partial matches
     // Escape special regex characters in the term
     const escapedTerm = escapeRegex(term.toLowerCase());
     const regex = new RegExp(`\\b${escapedTerm}\\b`, 'i');
     return regex.test(lowerText);
   });
-  
+
   // Perfect score if no jargon
   if (termsFound.length === 0) {
     return { score: 100, termsFound: [] };
   }
-  
+
   // Degrade score: lose 15 points per jargon term
-  const score = Math.max(0, 100 - (termsFound.length * 15));
-  
+  const score = Math.max(0, 100 - termsFound.length * 15);
+
   return { score, termsFound };
 }
 
@@ -200,15 +263,15 @@ function scoreFindingReferences(
   minReferences: number
 ): { score: number; refsFound: number } {
   const refsFound = email.findingReferences?.length || 0;
-  
+
   // Perfect score if at or above target
   if (refsFound >= minReferences) {
     return { score: 100, refsFound };
   }
-  
+
   // Partial credit: 50 points per reference
   const score = (refsFound / minReferences) * 100;
-  
+
   return { score, refsFound };
 }
 
@@ -216,21 +279,24 @@ function scoreFindingReferences(
  * Score spam risk dimension (0-100)
  * Target: low spam trigger word density
  */
-function scoreSpamRisk(text: string, maxSpamScore: number): { score: number; triggersFound: string[] } {
+function scoreSpamRisk(
+  text: string,
+  maxSpamScore: number
+): { score: number; triggersFound: string[] } {
   const lowerText = text.toLowerCase();
-  const triggersFound = SPAM_TRIGGER_WORDS.filter(trigger => 
+  const triggersFound = SPAM_TRIGGER_WORDS.filter((trigger) =>
     lowerText.includes(trigger.toLowerCase())
   );
-  
+
   // Calculate spam risk score (0-100, higher = more spam)
-  const words = text.split(/\s+/).filter(w => w.trim().length > 0);
+  const words = text.split(/\s+/).filter((w) => w.trim().length > 0);
   const wordCount = words.length || 1;
   const triggerDensity = (triggersFound.length / wordCount) * 100;
   const spamRiskScore = Math.min(100, triggerDensity * 20); // Scale up density
-  
+
   // Invert for scoring: lower spam risk = higher score
   const score = Math.max(0, 100 - spamRiskScore);
-  
+
   return { score, triggersFound };
 }
 
@@ -246,18 +312,18 @@ function calculateCompositeScore(
   weights: EmailQAConfig['dimensionWeights']
 ): number {
   const totalWeight = Object.values(weights).reduce((sum, w) => sum + w, 0);
-  
+
   if (totalWeight === 0) {
     return 0;
   }
-  
-  const weightedSum = 
-    (dimensions.readability.score * weights.readability) +
-    (dimensions.wordCount.score * weights.wordCount) +
-    (dimensions.jargon.score * weights.jargon) +
-    (dimensions.findingRefs.score * weights.findingRefs) +
-    (dimensions.spamRisk.score * weights.spamRisk);
-  
+
+  const weightedSum =
+    dimensions.readability.score * weights.readability +
+    dimensions.wordCount.score * weights.wordCount +
+    dimensions.jargon.score * weights.jargon +
+    dimensions.findingRefs.score * weights.findingRefs +
+    dimensions.spamRisk.score * weights.spamRisk;
+
   return Math.round(weightedSum / totalWeight);
 }
 
@@ -269,15 +335,15 @@ function generateSuggestions(
   config: EmailQAConfig
 ): string[] {
   const suggestions: string[] = [];
-  
+
   // Readability
   if (dimensions.readability.gradeLevel > config.maxReadingGradeLevel) {
     suggestions.push(
       `Simplify language: reading level is ${dimensions.readability.gradeLevel.toFixed(1)} grade ` +
-      `(target: ${config.maxReadingGradeLevel} grade or below). Use shorter sentences and simpler words.`
+        `(target: ${config.maxReadingGradeLevel} grade or below). Use shorter sentences and simpler words.`
     );
   }
-  
+
   // Word count
   if (dimensions.wordCount.count > config.maxWordCount) {
     const excess = dimensions.wordCount.count - config.maxWordCount;
@@ -285,30 +351,28 @@ function generateSuggestions(
       `Reduce word count by ${excess} words (current: ${dimensions.wordCount.count}, target: ${config.maxWordCount} or fewer)`
     );
   }
-  
+
   // Jargon
   if (dimensions.jargon.termsFound.length > 0) {
     suggestions.push(
       `Remove jargon terms: ${dimensions.jargon.termsFound.join(', ')}. Use plain language instead.`
     );
   }
-  
+
   // Finding references
   if (dimensions.findingRefs.refsFound < config.minFindingReferences) {
     const needed = config.minFindingReferences - dimensions.findingRefs.refsFound;
     suggestions.push(
       `Add ${needed} more specific finding reference${needed > 1 ? 's' : ''} from the audit ` +
-      `(current: ${dimensions.findingRefs.refsFound}, target: ${config.minFindingReferences})`
+        `(current: ${dimensions.findingRefs.refsFound}, target: ${config.minFindingReferences})`
     );
   }
-  
+
   // Spam risk
   if (dimensions.spamRisk.triggersFound.length > 0) {
-    suggestions.push(
-      `Remove spam trigger words: ${dimensions.spamRisk.triggersFound.join(', ')}`
-    );
+    suggestions.push(`Remove spam trigger words: ${dimensions.spamRisk.triggersFound.join(', ')}`);
   }
-  
+
   return suggestions;
 }
 
@@ -318,19 +382,22 @@ function generateSuggestions(
 
 /**
  * Score an email against the QA configuration
- * 
+ *
  * Returns composite score (0-100) with dimension breakdown and suggestions
  */
-export function score(email: GeneratedEmail, config: EmailQAConfig = DEFAULT_EMAIL_QA_CONFIG): EmailQAResult {
+export function score(
+  email: GeneratedEmail,
+  config: EmailQAConfig = DEFAULT_EMAIL_QA_CONFIG
+): EmailQAResult {
   const fullText = `${email.subject} ${email.body}`;
-  
+
   // Score each dimension
   const readability = scoreReadability(fullText, config.maxReadingGradeLevel);
   const wordCount = scoreWordCount(email.body, config.maxWordCount);
   const jargon = scoreJargon(fullText, config.jargonWordList);
   const findingRefs = scoreFindingReferences(email, config.minFindingReferences);
   const spamRisk = scoreSpamRisk(fullText, config.maxSpamRiskScore);
-  
+
   const dimensions = {
     readability,
     wordCount,
@@ -338,16 +405,16 @@ export function score(email: GeneratedEmail, config: EmailQAConfig = DEFAULT_EMA
     findingRefs,
     spamRisk,
   };
-  
+
   // Calculate composite score
   const compositeScore = calculateCompositeScore(dimensions, config.dimensionWeights);
-  
+
   // Generate suggestions
   const suggestions = generateSuggestions(dimensions, config);
-  
+
   // Determine pass/fail
   const passed = compositeScore >= config.minQualityScore;
-  
+
   return {
     compositeScore,
     dimensions,
@@ -372,7 +439,7 @@ export function serializeConfig(config: EmailQAConfig): string {
  */
 export function deserializeConfig(json: string): EmailQAConfig {
   const parsed = JSON.parse(json);
-  
+
   // Validate required fields
   if (typeof parsed.maxReadingGradeLevel !== 'number') {
     throw new Error('Invalid EmailQAConfig: maxReadingGradeLevel must be a number');
@@ -395,7 +462,7 @@ export function deserializeConfig(json: string): EmailQAConfig {
   if (!parsed.dimensionWeights || typeof parsed.dimensionWeights !== 'object') {
     throw new Error('Invalid EmailQAConfig: dimensionWeights must be an object');
   }
-  
+
   // Validate dimension weights
   const requiredWeights = ['readability', 'wordCount', 'jargon', 'findingRefs', 'spamRisk'];
   for (const weight of requiredWeights) {
@@ -403,7 +470,7 @@ export function deserializeConfig(json: string): EmailQAConfig {
       throw new Error(`Invalid EmailQAConfig: dimensionWeights.${weight} must be a number`);
     }
   }
-  
+
   return parsed as EmailQAConfig;
 }
 

@@ -1,13 +1,13 @@
 /**
  * NPS Survey System
- * 
+ *
  * Handles automated Net Promoter Score surveys at Day 30 and Day 90
  * post-proposal acceptance.
  */
 
-import { prisma } from '@/lib/prisma';
 import { generateWithGemini } from '@/lib/llm/provider';
 import { sendProposalEmail } from '@/lib/outreach/emailSender';
+import { prisma } from '@/lib/prisma';
 
 export type NPSSurveyType = 'DAY_30' | 'DAY_90';
 
@@ -32,14 +32,15 @@ export async function generateNPSSurveyEmail(
   businessName: string,
   recipientEmail: string
 ): Promise<{ subject: string; body: string }> {
-  
-  const surveyQuestions = surveyType === 'DAY_30'
-    ? "On a scale of 0-10, how satisfied are you with our audit and proposal process?"
-    : "Now that you've had time to implement (or consider) our recommendations, how likely are you to recommend our services to others?";
+  const surveyQuestions =
+    surveyType === 'DAY_30'
+      ? 'On a scale of 0-10, how satisfied are you with our audit and proposal process?'
+      : "Now that you've had time to implement (or consider) our recommendations, how likely are you to recommend our services to others?";
 
-  const context = surveyType === 'DAY_30'
-    ? "It's been about 30 days since you received our audit report. We'd love to hear about your experience."
-    : "It's been about 90 days since our initial audit. We'd like to follow up on your progress and get your feedback.";
+  const context =
+    surveyType === 'DAY_30'
+      ? "It's been about 30 days since you received our audit report. We'd love to hear about your experience."
+      : "It's been about 90 days since our initial audit. We'd like to follow up on your progress and get your feedback.";
 
   const prompt = `You are writing a brief, professional NPS (Net Promoter Score) survey email.
 
@@ -71,16 +72,16 @@ Do NOT use JSON. Use plain text.`;
   });
 
   const text = result.text || '';
-  
+
   const subjectMatch = text.match(/SUBJECT:\s*(.+)/i);
   const bodyMatch = text.match(/BODY:\s*([\s\S]+)/i);
 
-  const subject = subjectMatch?.[1]?.trim() || 
-    (surveyType === 'DAY_30' 
-      ? "Quick question about your experience" 
-      : "How are things going?");
-  
-  const body = bodyMatch?.[1]?.trim() || 
+  const subject =
+    subjectMatch?.[1]?.trim() ||
+    (surveyType === 'DAY_30' ? 'Quick question about your experience' : 'How are things going?');
+
+  const body =
+    bodyMatch?.[1]?.trim() ||
     `${context}\n\n${surveyQuestions}\n\nPlease take a moment to share your feedback: [SURVEY_LINK]\n\nThank you!`;
 
   return { subject, body };
@@ -93,13 +94,12 @@ export async function sendNPSSurvey(
   proposalId: string,
   surveyType: NPSSurveyType
 ): Promise<{ success: boolean; error?: string }> {
-  
   const proposal = await prisma.proposal.findUnique({
     where: { id: proposalId },
     include: {
       audit: true,
-      tenant: true
-    }
+      tenant: true,
+    },
   });
 
   if (!proposal) {
@@ -115,8 +115,8 @@ export async function sendNPSSurvey(
     where: {
       proposalId,
       surveyType,
-      sentAt: { not: null }
-    }
+      sentAt: { not: null },
+    },
   });
 
   if (existingSurvey) {
@@ -124,7 +124,7 @@ export async function sendNPSSurvey(
   }
 
   const businessName = proposal.audit?.businessName || 'your business';
-  
+
   const { subject, body } = await generateNPSSurveyEmail(
     proposalId,
     surveyType,
@@ -135,7 +135,7 @@ export async function sendNPSSurvey(
   // Generate a unique survey link (you would integrate with a survey tool like Typeform)
   const surveyToken = `${proposalId}-${surveyType.toLowerCase()}-${Date.now()}`;
   const surveyLink = `${process.env.NEXT_PUBLIC_APP_URL}/survey/${surveyToken}`;
-  
+
   const personalizedBody = body.replace(/\[SURVEY_LINK\]/g, surveyLink);
 
   try {
@@ -145,7 +145,7 @@ export async function sendNPSSurvey(
       recipientEmail: proposal.prospectEmail,
       subject: subject,
       messageHtml: personalizedBody,
-      tenantId: proposal.tenantId || undefined
+      tenantId: proposal.tenantId || undefined,
     });
 
     // Create survey record
@@ -155,12 +155,11 @@ export async function sendNPSSurvey(
         tenantId: proposal.tenantId || '',
         surveyType,
         sentAt: new Date(),
-        surveyToken
-      }
+        surveyToken,
+      },
     });
 
     return { success: true };
-
   } catch (error: any) {
     return { success: false, error: error.message };
   }
@@ -191,12 +190,12 @@ export async function processPendingNPSSurveys(): Promise<{
       status: 'ACCEPTED',
       closedAt: {
         gte: thirtyDaysAgo,
-        lt: new Date(thirtyDaysAgo.getTime() + 24 * 60 * 60 * 1000) // Within 1 day window
-      }
+        lt: new Date(thirtyDaysAgo.getTime() + 24 * 60 * 60 * 1000), // Within 1 day window
+      },
     },
     include: {
-      nPSSurveys: true
-    }
+      nPSSurveys: true,
+    },
   });
 
   // Find proposals that need Day 90 surveys
@@ -205,18 +204,18 @@ export async function processPendingNPSSurveys(): Promise<{
       status: 'ACCEPTED',
       closedAt: {
         gte: ninetyDaysAgo,
-        lt: new Date(ninetyDaysAgo.getTime() + 24 * 60 * 60 * 1000) // Within 1 day window
-      }
+        lt: new Date(ninetyDaysAgo.getTime() + 24 * 60 * 60 * 1000), // Within 1 day window
+      },
     },
     include: {
-      nPSSurveys: true
-    }
+      nPSSurveys: true,
+    },
   });
 
   // Process Day 30 surveys
   for (const proposal of day30Proposals) {
-    const hasDay30Survey = proposal.nPSSurveys.some(s => s.surveyType === 'DAY_30');
-    
+    const hasDay30Survey = proposal.nPSSurveys.some((s) => s.surveyType === 'DAY_30');
+
     if (!hasDay30Survey) {
       const result = await sendNPSSurvey(proposal.id, 'DAY_30');
       if (result.success) {
@@ -230,8 +229,8 @@ export async function processPendingNPSSurveys(): Promise<{
 
   // Process Day 90 surveys
   for (const proposal of day90Proposals) {
-    const hasDay90Survey = proposal.nPSSurveys.some(s => s.surveyType === 'DAY_90');
-    
+    const hasDay90Survey = proposal.nPSSurveys.some((s) => s.surveyType === 'DAY_90');
+
     if (!hasDay90Survey) {
       const result = await sendNPSSurvey(proposal.id, 'DAY_90');
       if (result.success) {
@@ -247,7 +246,7 @@ export async function processPendingNPSSurveys(): Promise<{
     day30Processed,
     day90Processed,
     sent,
-    errors
+    errors,
   };
 }
 
@@ -259,15 +258,14 @@ export async function recordNPSResponse(
   score: number,
   feedback?: string
 ): Promise<{ success: boolean; error?: string }> {
-  
   // Find the pending survey
   const survey = await prisma.nPSSurvey.findFirst({
     where: {
       proposalId,
       respondedAt: null,
-      sentAt: { not: null }
+      sentAt: { not: null },
     },
-    orderBy: { sentAt: 'desc' }
+    orderBy: { sentAt: 'desc' },
   });
 
   if (!survey) {
@@ -285,13 +283,13 @@ export async function recordNPSResponse(
     data: {
       score,
       feedback: feedback || null,
-      respondedAt: new Date()
-    }
+      respondedAt: new Date(),
+    },
   });
 
   // Determine follow-up action based on score
   const category = score >= 9 ? 'PROMOTER' : score >= 7 ? 'PASSIVE' : 'DETRACTOR';
-  
+
   // Log the NPS result for analytics
   console.log(`NPS Survey Response: Proposal ${proposalId}, Score ${score}, Category ${category}`);
 

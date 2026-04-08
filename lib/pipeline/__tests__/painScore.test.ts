@@ -1,13 +1,21 @@
 /**
  * Unit tests for Pain Score Calculator
- * 
+ *
  * These tests verify specific examples and edge cases for the pain score calculation.
  * Property-based tests are in painScore.property.test.ts (task 3.2)
  */
 
-import { describe, it, expect } from 'vitest';
-import { calculate, serialize, deserialize, createDefaultConfig, DEFAULT_WEIGHTS } from '../painScore';
-import type { QualificationSignals, PainScoreConfig } from '../types';
+import { describe, expect, it } from 'vitest';
+
+import {
+  calculate,
+  createDefaultConfig,
+  DEFAULT_WEIGHTS,
+  deserialize,
+  serialize,
+} from '../painScore';
+
+import type { PainScoreConfig, QualificationSignals } from '../types';
 
 describe('Pain Score Calculator', () => {
   describe('calculate()', () => {
@@ -73,8 +81,12 @@ describe('Pain Score Calculator', () => {
 
       const result = calculate(signals);
       expect(result.breakdown.websiteSpeed).toBeLessThanOrEqual(DEFAULT_WEIGHTS.websiteSpeed);
-      expect(result.breakdown.competitorsOutperforming).toBeLessThanOrEqual(DEFAULT_WEIGHTS.competitorsOutperforming);
-      expect(result.breakdown.accessibilityViolations).toBeLessThanOrEqual(DEFAULT_WEIGHTS.accessibilityViolations);
+      expect(result.breakdown.competitorsOutperforming).toBeLessThanOrEqual(
+        DEFAULT_WEIGHTS.competitorsOutperforming
+      );
+      expect(result.breakdown.accessibilityViolations).toBeLessThanOrEqual(
+        DEFAULT_WEIGHTS.accessibilityViolations
+      );
     });
 
     it('should handle partial signals gracefully', () => {
@@ -162,7 +174,7 @@ describe('Pain Score Calculator', () => {
       };
 
       const result = calculate(signals);
-      const sum = 
+      const sum =
         result.breakdown.websiteSpeed +
         result.breakdown.mobileBroken +
         result.breakdown.gbpNeglected +

@@ -1,1 +1,5 @@
-{"data":"# START YOAST BLOCK\n# ---------------------------\nUser-agent: *\nDisallow:\n\nSitemap: https://orchardvetcare.ca/sitemap_index.xml\n# ---------------------------\n# END YOAST BLOCK","cachedAt":1771276093162,"expiresAt":1771362493162}
+{
+  "data": "# START YOAST BLOCK\n# ---------------------------\nUser-agent: *\nDisallow:\n\nSitemap: https://orchardvetcare.ca/sitemap_index.xml\n# ---------------------------\n# END YOAST BLOCK",
+  "cachedAt": 1771276093162,
+  "expiresAt": 1771362493162
+}
