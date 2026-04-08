@@ -55,6 +55,7 @@ export function withAuth(handler: AuthHandler) {
                 let tenantId: string | null =
                     (headerTenant || process.env.DEFAULT_TENANT_ID || null) as string | null;
 
+                // If no tenant specified, try to find the first active tenant
                 if (!tenantId) {
                     try {
                         const firstTenant = await prisma.tenant.findFirst({
@@ -67,11 +68,10 @@ export function withAuth(handler: AuthHandler) {
                     }
                 }
 
+                // If still no tenant, use 'system' as fallback for Claraud frontend
                 if (!tenantId) {
-                    return NextResponse.json(
-                        { error: 'Env API key requires x-tenant-id header or DEFAULT_TENANT_ID' },
-                        { status: 401 }
-                    );
+                    tenantId = 'system';
+                    logger.info({ authMethod: 'env_key', tenantId }, 'Auth: env API key (system tenant fallback)');
                 }
 
                 logger.info({ authMethod: 'env_key', tenantId }, 'Auth: env API key');

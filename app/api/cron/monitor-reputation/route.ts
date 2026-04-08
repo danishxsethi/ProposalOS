@@ -1,14 +1,13 @@
 
 import { NextResponse } from 'next/server';
 import { monitorReputation } from '@/lib/monitoring/reputationMonitor';
+import { verifyCronAuth } from '@/lib/middleware/cronAuth';
 
 export const maxDuration = 300; // 5 minutes
 
 export async function GET(req: Request) {
-    const authHeader = req.headers.get('authorization');
-    if (process.env.CRON_SECRET && authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const authError = verifyCronAuth(req);
+    if (authError) return authError;
 
     try {
         await monitorReputation();

@@ -12,15 +12,13 @@ import { prisma } from '@/lib/prisma';
 import { sendNPSSurvey } from '@/lib/retention/nps';
 import { logger } from '@/lib/logger';
 import { ProjectStatus } from '@prisma/client';
+import { verifyCronAuth } from '@/lib/middleware/cronAuth';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(req: Request) {
-    // Security check
-    const authHeader = req.headers.get('authorization');
-    if (process.env.CRON_SECRET && authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const authError = verifyCronAuth(req);
+    if (authError) return authError;
 
     try {
         const now = new Date();

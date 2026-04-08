@@ -2,18 +2,13 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
 import { processAuditStage } from '@/lib/pipeline/stages/auditStage';
+import { verifyCronAuth } from '@/lib/middleware/cronAuth';
 
 const MAX_TENANTS_PER_RUN = 5;
 
 export async function GET(req: Request) {
-  // 1. CRON_SECRET auth
-  const authHeader = req.headers.get('authorization');
-  if (
-    process.env.CRON_SECRET &&
-    authHeader !== `Bearer ${process.env.CRON_SECRET}`
-  ) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const authError = verifyCronAuth(req);
+  if (authError) return authError;
 
   try {
     // 2. Find tenants with active PipelineConfig where audit is not paused

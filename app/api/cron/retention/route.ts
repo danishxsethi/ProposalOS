@@ -12,19 +12,15 @@
 import { NextResponse } from 'next/server';
 import { runRetentionWorkflow } from '@/lib/graph/retention-graph';
 import { logger } from '@/lib/logger';
+import { verifyCronAuth } from '@/lib/middleware/cronAuth';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request) {
   const startTime = Date.now();
 
-  // Verify cron secret for security
-  const authHeader = request.headers.get('authorization');
-  const cronSecret = process.env.CRON_SECRET;
-
-  if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const authError = verifyCronAuth(request);
+  if (authError) return authError;
 
   try {
     logger.info({}, 'Starting retention workflow');

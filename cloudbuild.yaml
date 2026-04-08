@@ -6,8 +6,8 @@
 #   _COMMIT_SHA: Defaults to $COMMIT_SHA (Cloud Build provides); use 'manual' for manual triggers
 
 substitutions:
-  _REGION: 'us-central1'    # TODO: Set your GCP region
-  _COMMIT_SHA: 'manual'   # Use $COMMIT_SHA in triggers; override with --substitutions=_COMMIT_SHA=$(git rev-parse HEAD)
+  _REGION: 'us-central1' # TODO: Set your GCP region
+  _COMMIT_SHA: 'manual' # Use $COMMIT_SHA in triggers; override with --substitutions=_COMMIT_SHA=$(git rev-parse HEAD)
 
 steps:
   # Step 1: Build the container image
@@ -15,14 +15,14 @@ steps:
     args:
       - 'build'
       - '-t'
-      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/proposal-engine/app:${_COMMIT_SHA}'
+      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/proposal-engine/proposal-engine:${_COMMIT_SHA}'
       - '.'
 
   # Step 2: Push the container image to Artifact Registry
   - name: 'gcr.io/cloud-builders/docker'
     args:
       - 'push'
-      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/proposal-engine/app:${_COMMIT_SHA}'
+      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/proposal-engine/proposal-engine:${_COMMIT_SHA}'
 
   # Step 3: Deploy to Cloud Run
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
@@ -32,7 +32,7 @@ steps:
       - 'deploy'
       - 'proposal-engine'
       - '--image'
-      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/proposal-engine/app:${_COMMIT_SHA}'
+      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/proposal-engine/proposal-engine:${_COMMIT_SHA}'
       - '--region'
       - '${_REGION}'
       - '--platform'
@@ -50,4 +50,4 @@ steps:
       - '8080'
 
 images:
-  - '${_REGION}-docker.pkg.dev/$PROJECT_ID/proposal-engine/app:${_COMMIT_SHA}'
+  - '${_REGION}-docker.pkg.dev/$PROJECT_ID/proposal-engine/proposal-engine:${_COMMIT_SHA}'

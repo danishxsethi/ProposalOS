@@ -1,7 +1,9 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { runDiagnosisPipeline } from '@/lib/diagnosis';
+// P0-3: Use LangGraph path — includes evidence verification, validation retry, adversarial QA
+import { diagnosisGraph } from '@/lib/graph/diagnosis-graph';
 import { getTenantId } from '@/lib/tenant/context';
+
 
 /**
  * POST /api/audit/[id]/diagnose
@@ -46,10 +48,15 @@ export async function POST(
 
         console.log(`[Diagnose] Running diagnosis for audit ${auditId} with ${audit.findings.length} findings...`);
 
-        // Run diagnosis pipeline
-        const diagnosisResult = await runDiagnosisPipeline(audit.findings);
+        // Run diagnosis pipeline via LangGraph (P0-3)
+        const diagnosisResult = await diagnosisGraph.invoke({
+            findings: audit.findings,
+            tenantId: audit.tenantId,
+            auditId: audit.id,
+            mode: 'MULTI_STEP'
+        });
 
-        console.log(`[Diagnose] Generated ${diagnosisResult.clusters.length} clusters`);
+        console.log(`[Diagnose] Generated ${diagnosisResult.clusters?.length || 0} clusters`);
 
         return NextResponse.json({
             success: true,

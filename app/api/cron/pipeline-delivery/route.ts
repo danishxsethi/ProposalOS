@@ -2,20 +2,16 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { logger } from '@/lib/logger';
 import { deliveryEngine } from '@/lib/pipeline/deliveryEngine';
+import { verifyCronAuth } from '@/lib/middleware/cronAuth';
 
 const MAX_TASKS_PER_RUN = 50;
 
 export async function GET(req: Request) {
-  // 1. CRON_SECRET auth
-  const authHeader = req.headers.get('authorization');
-  if (
-    process.env.CRON_SECRET &&
-    authHeader !== `Bearer ${process.env.CRON_SECRET}`
-  ) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const authError = verifyCronAuth(req);
+  if (authError) return authError;
 
   try {
+
     logger.info(
       {
         event: 'cron.delivery.start',

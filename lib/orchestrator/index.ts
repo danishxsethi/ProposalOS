@@ -1,6 +1,12 @@
+/**
+ * @deprecated Use lib/audit/runner.ts instead. This file will be deleted in v2.0.
+ * Three separate execution paths caused inconsistent results. We are migrating
+ * all orchestration to runner.ts (MODULE_REGISTRY path).
+ */
 import { prisma } from '@/lib/prisma';
 import { AuditOrchestrator, OrchestratorResult } from './auditOrchestrator';
 import { CostTracker } from '@/lib/costs/costTracker';
+import { deduplicateFindings } from '@/lib/audit/runner';
 
 export async function runAuditOrchestrator(auditId: string) {
     console.log(`[Runner] Starting audit ${auditId}`);
@@ -51,6 +57,8 @@ export async function runAuditOrchestrator(auditId: string) {
         // 4. Run
         const result: OrchestratorResult = await orchestrator.run();
 
+        console.log(`[Runner] Audit ${auditId} orchestrator complete: ${result.status}`);
+
         // 5. Save Final Results (map DEGRADED to PARTIAL for Prisma enum)
         const dbStatus = result.status === 'DEGRADED' ? 'PARTIAL' : result.status;
         await prisma.audit.update({
@@ -58,22 +66,37 @@ export async function runAuditOrchestrator(auditId: string) {
             data: {
                 status: dbStatus,
                 completedAt: new Date(),
-                findings: {
-                    create: result.findings.map(f => ({
-                        module: 'orchestrator', // or specific module if preserved
-                        category: f.category || 'general',
-                        type: f.type || 'VITAMIN',
-                        title: f.title,
-                        description: f.description,
-                        impactScore: f.impactScore || 50,
-                        confidenceScore: f.confidenceScore || 100
-                    }))
-                },
                 apiCostCents: tracker.getTotalCents()
             }
         });
 
-        console.log(`[Runner] Audit ${auditId} complete: ${result.status}`);
+        // NEW (P1-3): Persist findings
+        if (result.findings && result.findings.length > 0) {
+            const dedupedFindings = deduplicateFindings(result.findings);
+            await prisma.finding.createMany({
+                data: dedupedFindings.map((f: any) => ({
+                    ...f,
+                    auditId,
+                    tenantId: audit.tenantId,
+                })),
+                skipDuplicates: true,
+            });
+        }
+
+        // NEW (P1-3): Persist evidence snapshots
+        if (result.evidenceSnapshots && result.evidenceSnapshots.length > 0) {
+            for (const snapshot of result.evidenceSnapshots) {
+                await prisma.evidenceSnapshot.create({
+                    data: {
+                        ...snapshot,
+                        auditId,
+                        tenantId: audit.tenantId,
+                    },
+                });
+            }
+        }
+
+        console.log(`[Runner] Audit ${auditId} saved to database`);
 
     } catch (error) {
         console.error(`[Runner] Audit ${auditId} crash`, error);

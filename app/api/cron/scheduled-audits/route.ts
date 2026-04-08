@@ -6,15 +6,14 @@ import { AuditOrchestrator } from '@/lib/orchestrator/auditOrchestrator';
 import { CostTracker } from '@/lib/costs/costTracker';
 import { sendWebhook } from '@/lib/notifications/webhook';
 import { detectCompetitorImprovement, triggerUpsellProposal } from '@/lib/retention/upsellTrigger';
+import { verifyCronAuth } from '@/lib/middleware/cronAuth';
 
 export async function GET(req: Request) {
-    // 1. Security Check (CRON_SECRET)
-    const authHeader = req.headers.get('authorization');
-    if (process.env.CRON_SECRET && authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const authError = verifyCronAuth(req);
+    if (authError) return authError;
 
     try {
+
         const now = new Date();
 
         // 2. Find Due Schedules (limit to 5 to prevent timeout)

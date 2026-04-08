@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { runProposalPipeline } from '@/lib/proposal';
-import { runDiagnosisPipeline } from '@/lib/diagnosis';
+// P0-3: Use LangGraph path
+import { diagnosisGraph } from '@/lib/graph/diagnosis-graph';
 import { CostTracker } from '@/lib/costs/costTracker';
 import { withAuth } from '@/lib/middleware/auth';
 
@@ -62,9 +63,14 @@ export const POST = withAuth(async (request: Request, { params }: Params) => {
 
         console.log(`[Regenerate] Starting regeneration v${nextVersion} for audit ${auditId}`);
 
-        // Re-run diagnosis with current (possibly edited) findings
-        const diagnosisResult = await runDiagnosisPipeline(audit.findings, tracker);
-        console.log(`[Regenerate] Diagnosis complete: ${diagnosisResult.clusters.length} clusters`);
+        // Re-run diagnosis with current (possibly edited) findings via LangGraph (P0-3)
+        const diagnosisResult = await diagnosisGraph.invoke({
+            findings: audit.findings,
+            tenantId: audit.tenantId,
+            auditId: audit.id,
+            mode: 'MULTI_STEP'
+        });
+        console.log(`[Regenerate] Diagnosis complete: ${diagnosisResult.clusters?.length || 0} clusters`);
 
         // Re-run proposal generation
         const proposalResult = await runProposalPipeline(
@@ -83,6 +89,7 @@ export const POST = withAuth(async (request: Request, { params }: Params) => {
         const proposal = await prisma.proposal.create({
             data: {
                 auditId,
+                tenantId: audit.tenantId, // Fixed TS error
                 version: nextVersion,
                 executiveSummary: proposalResult.executiveSummary,
                 painClusters: JSON.parse(JSON.stringify(diagnosisResult.clusters)),

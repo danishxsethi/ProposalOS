@@ -13,6 +13,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
+import { verifyCronAuth } from '@/lib/middleware/cronAuth';
 
 export const dynamic = 'force-dynamic';
 
@@ -25,10 +26,9 @@ const MAX_LATENCY_INCREASE_PCT = 20;    // <= 20% latency increase allowed
 // We use Prisma's $queryRaw for consistency with the rest of the codebase.
 
 export async function GET(req: Request) {
-    const authHeader = req.headers.get('authorization');
-    if (process.env.CRON_SECRET && authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const authError = verifyCronAuth(req);
+    if (authError) return authError;
+
 
     const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
     const promotions: any[] = [];

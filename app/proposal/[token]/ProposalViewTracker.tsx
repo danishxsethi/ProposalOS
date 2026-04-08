@@ -80,7 +80,7 @@ export function useProposalViewTracking(token: string) {
         };
     }, [sendBeacon]);
 
-    const trackCta = useCallback(() => sendBeacon('cta'), [sendBeacon]);
+    const trackCta = useCallback((action?: string) => sendBeacon('cta', action ? { action } : {}), [sendBeacon]);
     const trackExpand = useCallback(
         (sectionId: string) => sendBeacon('expand', { expandedSections: [sectionId] }),
         [sendBeacon]

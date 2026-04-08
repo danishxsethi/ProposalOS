@@ -1,16 +1,9 @@
 import { ReportData, ScanStatus } from './types';
+import { scanStore } from './stores';
 
 // ─────────────────────────────────────────────
 // In-memory scan store (will move to DB later)
 // ─────────────────────────────────────────────
-export const scanStore = new Map<string, {
-    token: string;
-    url: string;
-    businessName?: string;
-    callCount: number;
-    createdAt: number;
-}>();
-
 // ─────────────────────────────────────────────
 // Module definitions (order matters for stagger)
 // ─────────────────────────────────────────────
@@ -64,15 +57,15 @@ export const mockReportData: ReportData = {
     token: 'mock-token',
     businessName: 'Saskatoon Family Dental',
     businessUrl: 'saskatoonfamilydental.com',
-    overallScore: 49,
-    letterGrade: 'D+',
+    overallScore: 4.9,
+    letterGrade: 'C+',
     categories: [
-        { id: 'website', name: 'Website Performance', score: 62, summary: 'Your site loads in 4.8s on mobile. Core Web Vitals fail on LCP and CLS.' },
-        { id: 'google', name: 'Google Business Profile', score: 48, summary: 'Profile is 62% complete. Missing 14 photos, no Q&A responded to.' },
-        { id: 'seo', name: 'SEO & Content', score: 55, summary: '37 pages missing meta descriptions. No schema markup found.' },
-        { id: 'reviews', name: 'Reviews & Reputation', score: 39, summary: '3.8★ average across 41 reviews. Response rate is 12%.' },
-        { id: 'social', name: 'Social & Presence', score: 41, summary: 'Instagram last posted 73 days ago. Facebook engagement rate is 0.4%.' },
-        { id: 'competitors', name: 'Competitive Intelligence', score: 50, summary: 'Prairie Dental scores 71/100 and dominates 8 of your target keywords.' },
+        { id: 'website', name: 'Website Performance', score: 6.2, summary: 'Your site loads in 4.8s on mobile. Core Web Vitals fail on LCP and CLS.' },
+        { id: 'google', name: 'Google Business Profile', score: 4.8, summary: 'Profile is 62% complete. Missing 14 photos, no Q&A responded to.' },
+        { id: 'seo', name: 'SEO & Content', score: 5.5, summary: '37 pages missing meta descriptions. No schema markup found.' },
+        { id: 'reviews', name: 'Reviews & Reputation', score: 3.9, summary: '3.8★ average across 41 reviews. Response rate is 12%.' },
+        { id: 'social', name: 'Social & Presence', score: 4.1, summary: 'Instagram last posted 73 days ago. Facebook engagement rate is 0.4%.' },
+        { id: 'competitors', name: 'Competitive Intelligence', score: 5.0, summary: 'Prairie Dental scores 7.1/10 and dominates 8 of your target keywords.' },
     ],
     findings: [
         // Website
@@ -108,9 +101,9 @@ export const mockReportData: ReportData = {
         { id: 'c4', category: 'competitors', severity: 'medium', title: 'Competitor website is 2.1x faster than yours', impact: 'Speed is a ranking factor. Prairie Dental loads in 2.2s vs your 4.8s.', evidence: 'Prairie Dental LCP: 2.2s vs your 4.8s', fixComplexity: 'moderate' },
     ],
     competitors: [
-        { name: 'Prairie Dental Group', url: 'prairiedental.ca', overallScore: 71, reviewCount: 127, pageSpeed: 92, gbpCompleteness: 94 },
-        { name: 'Stonebridge Dental', url: 'stonebridgedental.ca', overallScore: 58, reviewCount: 63, pageSpeed: 78, gbpCompleteness: 81 },
-        { name: 'SFD Dental Clinic', url: 'sfdental.ca', overallScore: 55, reviewCount: 89, pageSpeed: 71, gbpCompleteness: 76 },
+        { name: 'Prairie Dental Group', url: 'prairiedental.ca', overallScore: 7.1, reviewCount: 127, pageSpeed: 92, gbpCompleteness: 94 },
+        { name: 'Stonebridge Dental', url: 'stonebridgedental.ca', overallScore: 5.8, reviewCount: 63, pageSpeed: 78, gbpCompleteness: 81 },
+        { name: 'SFD Dental Clinic', url: 'sfdental.ca', overallScore: 5.5, reviewCount: 89, pageSpeed: 71, gbpCompleteness: 76 },
     ]
 };
 

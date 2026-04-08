@@ -1,12 +1,22 @@
 'use client';
 
-import { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { useState, useEffect } from 'react';
+import { motion } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 import { Loader2, ArrowRight, Lock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { AnimatedCounter } from '@/components/shared/animated-counter';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+
+const emailGateSchema = z.object({
+    email: z.string().email("Please enter a valid email address"),
+    name: z.string().optional(),
+});
+type EmailGateForm = z.infer<typeof emailGateSchema>;
 
 interface EmailGateProps {
     token: string;
@@ -16,9 +26,23 @@ interface EmailGateProps {
 }
 
 export function EmailGate({ token, overallScore, businessUrl, categoryScores }: EmailGateProps) {
-    const [email, setEmail] = useState('');
-    const [loading, setLoading] = useState(false);
+    const [returningEmail, setReturningEmail] = useState<string | null>(null);
     const router = useRouter();
+
+    const {
+        register,
+        handleSubmit,
+        formState: { errors, isSubmitting },
+    } = useForm<EmailGateForm>({
+        resolver: zodResolver(emailGateSchema),
+        mode: 'onChange', // Validate on change (debounced implicitly by react-hook-form internals if configured, or just on blur/change)
+        defaultValues: { email: '', name: '' }
+    });
+
+    useEffect(() => {
+        const stored = localStorage.getItem('claraud_user_email');
+        if (stored) setReturningEmail(stored);
+    }, []);
 
     const getLetterGrade = (score: number) => {
         if (score >= 90) return { grade: 'A+', color: 'text-green-400' };
@@ -31,17 +55,18 @@ export function EmailGate({ token, overallScore, businessUrl, categoryScores }: 
 
     const { grade, color } = getLetterGrade(overallScore * 10);
 
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!email) return;
+    const handleSkip = () => {
+        router.push(`/report/${token}`);
+    };
 
-        setLoading(true);
+    const onSubmit = async (data: EmailGateForm) => {
         try {
             const res = await fetch('/api/lead', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    email,
+                    email: data.email,
+                    name: data.name,
                     businessUrl,
                     scanToken: token,
                     scores: categoryScores,
@@ -49,13 +74,11 @@ export function EmailGate({ token, overallScore, businessUrl, categoryScores }: 
             });
 
             if (res.ok) {
-                // Redirect to full report
+                localStorage.setItem('claraud_user_email', data.email);
                 router.push(`/report/${token}`);
             }
         } catch (err) {
             console.error('Lead capture failed:', err);
-        } finally {
-            setLoading(false);
         }
     };
 
@@ -65,10 +88,8 @@ export function EmailGate({ token, overallScore, businessUrl, categoryScores }: 
             animate={{ opacity: 1 }}
             className="fixed inset-0 z-50 flex items-center justify-center p-4"
         >
-            {/* Blurred background overlay */}
             <div className="absolute inset-0 bg-black/60 backdrop-blur-md pointer-events-none" />
 
-            {/* Modal */}
             <motion.div
                 initial={{ scale: 0.9, opacity: 0, y: 20 }}
                 animate={{ scale: 1, opacity: 1, y: 0 }}
@@ -91,31 +112,56 @@ export function EmailGate({ token, overallScore, businessUrl, categoryScores }: 
 
                     <h2 className="text-2xl font-bold text-white mb-2">Audit Complete.</h2>
                     <p className="text-text-secondary text-sm">
-                        We found 25 critical areas of improvement for <strong>{businessUrl}</strong>. Enter your email to unlock the full report.
+                        Enter your email to unlock the full 30-point analysis for <strong>{businessUrl}</strong>.
                     </p>
                 </div>
 
-                <form onSubmit={handleSubmit} className="space-y-4">
-                    <div>
-                        <Input
-                            type="email"
-                            required
-                            placeholder="Enter your email address..."
-                            value={email}
-                            onChange={(e) => setEmail(e.target.value)}
-                            className="bg-bg-input border-white/10 text-white h-12 text-center"
-                        />
+                {returningEmail && (
+                    <div className="mb-6 p-4 bg-accent-primary/10 border border-accent-primary/20 rounded-xl text-center">
+                        <p className="text-sm text-white mb-2">Welcome back!</p>
+                        <Button variant="ghost" className="w-full text-accent-primary hover:text-accent-primary/80 hover:bg-accent-primary/10" onClick={handleSkip}>
+                            Continue as {returningEmail} →
+                        </Button>
                     </div>
+                )}
+
+                <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+                    <div className="space-y-1 text-left">
+                        <Label htmlFor="name" className="text-text-secondary text-xs">Name (Optional)</Label>
+                        <Input
+                            id="name"
+                            type="text"
+                            placeholder="Your full name"
+                            {...register('name')}
+                            className="bg-bg-input border-white/10 text-white h-11"
+                            aria-invalid={!!errors.name}
+                        />
+                        {errors.name && <p className="text-red-400 text-xs mt-1 font-medium">{errors.name.message}</p>}
+                    </div>
+
+                    <div className="space-y-1 text-left">
+                        <Label htmlFor="email" className="text-text-secondary text-xs">Work Email <span className="text-red-500">*</span></Label>
+                        <Input
+                            id="email"
+                            type="email"
+                            placeholder="name@company.com"
+                            {...register('email')}
+                            className={`bg-bg-input text-white h-11 ${errors.email ? 'border-red-500/50' : 'border-white/10'}`}
+                            aria-invalid={!!errors.email}
+                        />
+                        {errors.email && <p className="text-red-400 text-xs mt-1 font-medium">{errors.email.message}</p>}
+                    </div>
+
                     <Button
                         type="submit"
-                        disabled={loading}
-                        className="w-full h-12 gradient-btn font-bold text-base"
+                        disabled={isSubmitting}
+                        className="w-full h-12 gradient-btn font-bold text-base mt-2"
                     >
-                        {loading ? (
+                        {isSubmitting ? (
                             <Loader2 className="w-5 h-5 animate-spin" />
                         ) : (
                             <>
-                                Unlock Report <ArrowRight className="ml-2 w-5 h-5" />
+                                Unlock Full Report <ArrowRight className="ml-2 w-5 h-5" />
                             </>
                         )}
                     </Button>

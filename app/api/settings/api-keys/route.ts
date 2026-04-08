@@ -1,11 +1,11 @@
-
 import { NextResponse } from 'next/server';
 import { withAuth } from '@/lib/middleware/auth';
+import { withRole } from '@/lib/middleware/withRole';
 import { getTenantId } from '@/lib/tenant/context';
-import { prisma } from '@/lib/prisma'; // Global prisma is fine for creation, but we should scope
+import { prisma } from '@/lib/prisma';
 import { generateApiKey } from '@/lib/auth/apiKeys';
 
-// List Keys
+// List Keys — any authenticated tenant member can view
 export const GET = withAuth(async (req: Request) => {
     const tenantId = await getTenantId();
     if (!tenantId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -28,8 +28,9 @@ export const GET = withAuth(async (req: Request) => {
     return NextResponse.json({ keys });
 });
 
-// Create Key
-export const POST = withAuth(async (req: Request) => {
+// Create Key — admin or above
+// P1-9: Only admins may create API keys (they provide programmatic tenant access)
+export const POST = withRole('admin', withAuth(async (req: Request) => {
     try {
         const tenantId = await getTenantId();
         if (!tenantId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -53,14 +54,14 @@ export const POST = withAuth(async (req: Request) => {
                 name,
                 keyHash: hash,
                 keyPrefix: prefix,
-                scopes: scopes || ['audit:read'], // Default scope
+                scopes: scopes || ['audit:read'],
                 expiresAt,
             }
         });
 
-        // Return the raw key ONLY ONCE here
+        // Return the raw key ONLY ONCE — never stored in plaintext
         return NextResponse.json({
-            key: key, // The raw key (pe_live_...)
+            key: key,
             id: apiKey.id,
             name: apiKey.name,
             prefix: apiKey.keyPrefix,
@@ -72,4 +73,4 @@ export const POST = withAuth(async (req: Request) => {
         console.error('Create API Key Error:', error);
         return NextResponse.json({ error: 'Failed to create API key' }, { status: 500 });
     }
-});
+}));

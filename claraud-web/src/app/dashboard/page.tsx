@@ -1,1 +1,0 @@
-export default function Dashboard() { return <h1 className="text-center mt-20 text-2xl font-bold">Dashboard</h1>; }

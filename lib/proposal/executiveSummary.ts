@@ -11,6 +11,15 @@ import type { VerticalPlaybook } from '@/lib/playbooks/types';
 import { hardenExecutiveSummaryForQA, QA_METRIC_PATTERN } from './executiveSummaryQa';
 
 /**
+ * Sanitize user-provided strings to mitigate prompt injection risk
+ * (removes common markdown, XML tags, and script delimiters).
+ */
+function sanitizeForPrompt(input: string | null | undefined): string {
+    if (!input) return '';
+    return input.replace(/[`*_[\]{}<>\\]/g, '').trim();
+}
+
+/**
  * Generate executive summary using Gemini 1.5 Pro
  * @param playbook Optional vertical playbook — proposalLanguage influences tone and urgency
  * @param comparisonReport Optional competitor comparison — AI references specific competitor data
@@ -35,6 +44,10 @@ export async function generateExecutiveSummary(
         summaryRow?: string;
     } | null
 ): Promise<string> {
+    // P1: Mitigate prompt injection by sanitizing user-controlled text
+    businessName = sanitizeForPrompt(businessName) || 'the business';
+    if (city) city = sanitizeForPrompt(city) || city;
+
     // Prepare cluster summaries
     const clusterSummaries = clusters.map((c) => ({
         rootCause: c.rootCause,

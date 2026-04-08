@@ -31,6 +31,20 @@ export interface GenerateColdEmailResult {
     bestVariant: number;
 }
 
+// Security: Prevent prompt injection attacks through prospect names or scraping data
+export function sanitizeForPrompt(str: string): string {
+    if (!str) return 'Unknown';
+    return str
+        .replace(/[\r\n\t]/g, ' ')
+        // Remove markdown or AI instruction keywords
+        .replace(/(\b)(system|instruction|prompt|ignore|bypass|override)(\b)/ig, '')
+        // Remove code block backticks and special bracket sequences
+        .replace(/[`<>{}[\]\\]/g, '')
+        // Cap length to prevent buffer/context attacks
+        .substring(0, 150)
+        .trim();
+}
+
 export function extractAuditContext(audit: {
     businessName: string;
     businessCity: string | null;
@@ -91,20 +105,27 @@ export async function generateColdEmails(input: GenerateColdEmailInput): Promise
           })
         : { subject: '', body: '' };
 
+    // P1 Security Challenge: Adversarial prospect data
+    const safeBusinessName = sanitizeForPrompt(input.businessName);
+    const safeRecipientName = sanitizeForPrompt(input.recipientName || input.businessName);
+    const safeFinding = sanitizeForPrompt(input.topFinding);
+    const safeMetric = input.topMetric ? sanitizeForPrompt(input.topMetric) : '';
+    const safeCompetitor = input.competitorName ? sanitizeForPrompt(input.competitorName) : '';
+
     const prompt = `Generate 3 different cold email variants for this local business.
 
-BUSINESS: ${input.businessName}
+BUSINESS: ${safeBusinessName}
 VERTICAL: ${input.vertical}
-RECIPIENT: ${input.recipientName || input.businessName}
-TOP FINDING: ${input.topFinding}
-${input.topMetric ? `TOP METRIC: ${input.topMetric}` : ''}
-${input.competitorName ? `COMPETITOR: ${input.competitorName}` : ''}
+RECIPIENT: ${safeRecipientName}
+TOP FINDING: ${safeFinding}
+${safeMetric ? `TOP METRIC: ${safeMetric}` : ''}
+${safeCompetitor ? `COMPETITOR: ${safeCompetitor}` : ''}
 PROPOSAL URL: ${input.proposalUrl}
 
 RULES:
 - Each email UNDER 80 words
 - 5th grade reading level
-- Open with a specific finding/metric (e.g. "I noticed ${input.businessName}'s website loads in 4.2s on mobile — slower than 80% of ${input.vertical} sites in Saskatoon")
+- Open with a specific finding/metric (e.g. "I noticed ${safeBusinessName}'s website loads in 4.2s on mobile — slower than 80% of ${input.vertical} sites in Saskatoon")
 - Offer value: "I ran a free audit and found 3 quick wins"
 - One CTA with proposal link
 - Subject under 40 chars, curiosity-driven

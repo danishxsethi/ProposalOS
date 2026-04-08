@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { BRANDING, getBrandColor } from '@/lib/config/branding-client';
+import { useProposalViewTracking } from '@/app/proposal/[token]/ProposalViewTracker';
 
 interface PresentationProps {
     proposal: any;
@@ -10,6 +11,9 @@ interface PresentationProps {
 export default function PresentationClient({ proposal }: PresentationProps) {
     const [currentSlide, setCurrentSlide] = useState(0);
     const [isFullScreen, setIsFullScreen] = useState(false);
+
+    // P2: Hook into the existing Beacon tracking system for presentations
+    const { sessionId } = useProposalViewTracking(proposal.webLinkToken);
 
     // Prepare data
     const audit = proposal.audit;
@@ -253,15 +257,18 @@ export default function PresentationClient({ proposal }: PresentationProps) {
                     <span className="text-sm font-mono self-center">
                         {currentSlide + 1} / {slides.length}
                     </span>
-                    <button onClick={prevSlide} disabled={currentSlide === 0} className="p-2 hover:text-white disabled:opacity-30">
+                    <button onClick={prevSlide} disabled={currentSlide === 0} className="p-2 hover:text-white disabled:opacity-30" title="Previous Slide">
                         <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
                     </button>
-                    <button onClick={nextSlide} disabled={currentSlide === slides.length - 1} className="p-2 hover:text-white disabled:opacity-30">
+                    <button onClick={nextSlide} disabled={currentSlide === slides.length - 1} className="p-2 hover:text-white disabled:opacity-30" title="Next Slide">
                         <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
                     </button>
-                    <button onClick={toggleFullScreen} className="p-2 hover:text-white">
+                    <button onClick={toggleFullScreen} className="p-2 hover:text-white" title="Toggle Fullscreen">
                         <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" /></svg>
                     </button>
+                    <a href={`/api/proposal/${proposal.webLinkToken}/pdf`} target="_blank" rel="noopener noreferrer" className="p-2 hover:text-white" title="Download PDF Version">
+                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                    </a>
                 </div>
             </div>
 

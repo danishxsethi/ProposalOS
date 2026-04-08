@@ -4,7 +4,7 @@ import { processBatch } from '@/lib/audit/batchProcessor';
 import { logger } from '@/lib/logger';
 import { v4 as uuidv4 } from 'uuid';
 import { withAuth } from '@/lib/middleware/auth';
-import { getTenantId } from '@/lib/tenant/context';
+import { getTenantId, runWithTenantAsync } from '@/lib/tenant/context';
 
 export const POST = withAuth(async (req: Request) => {
     try {
@@ -32,6 +32,8 @@ export const POST = withAuth(async (req: Request) => {
 
         const batchId = uuidv4();
         const auditIds: string[] = [];
+        // P1-3 Fix: collect per-item errors instead of aborting the whole loop
+        const creationErrors: Array<{ item: unknown; error: string }> = [];
 
         // Create all Audit records immediately (tenant-scoped)
         for (const business of businesses) {
@@ -40,41 +42,53 @@ export const POST = withAuth(async (req: Request) => {
                 if (!business.url) continue; // Skip invalid
             }
 
-            const audit = await prisma.audit.create({
-                data: {
-                    tenantId,
-                    businessName: business.name || 'Unknown',
-                    businessCity: business.city,
-                    businessUrl: business.url,
-                    businessIndustry: business.industry, // If provided
-                    status: 'QUEUED',
-                    batchId: batchId
-                }
-            });
-            auditIds.push(audit.id);
+            try {
+                const audit = await prisma.audit.create({
+                    data: {
+                        tenantId,
+                        businessName: business.name || 'Unknown',
+                        businessCity: business.city,
+                        businessUrl: business.url,
+                        businessIndustry: business.industry ?? null,
+                        status: 'QUEUED',
+                        batchId: batchId,
+                    }
+                });
+                auditIds.push(audit.id);
+            } catch (err) {
+                // Per-item isolation: one bad record doesn't abort the batch
+                const msg = err instanceof Error ? err.message : String(err);
+                logger.error({ batchId, business, error: msg }, 'Failed to create audit record in batch');
+                creationErrors.push({ item: business, error: msg });
+            }
+        }
+
+        if (auditIds.length === 0) {
+            return NextResponse.json(
+                { error: 'No valid audit records could be created', details: creationErrors },
+                { status: 422 }
+            );
         }
 
         logger.info({
             event: 'batch.created',
             batchId,
-            count: auditIds.length
+            count: auditIds.length,
+            errorCount: creationErrors.length,
         }, 'Batch audit created');
 
-        // Trigger background processing
-        // We do NOT await this.
-        const processingPromise = processBatch(batchId, auditIds).catch(err => {
+        // P1-3 Fix: wrap processBatch in runWithTenantAsync so that any calls to
+        // getTenantId() / createScopedPrisma() inside the batch processor receive
+        // the correct tenant context instead of null.
+        runWithTenantAsync(tenantId, () => processBatch(batchId, auditIds)).catch(err => {
             logger.error({ batchId, error: err }, 'Batch processing crashed');
         });
-
-        // If we are on Vercel or have access to waitUntil, we should use it.
-        // req is standard Request, not NextRequest in some contexts but let's try casting or checking context.
-        // Next.js 13/14 doesn't expose waitUntil on Request uniformly yet without @vercel/functions or edge.
-        // We will just let the promise float. 
 
         return NextResponse.json({
             success: true,
             batchId,
             auditIds,
+            ...(creationErrors.length > 0 && { partialErrors: creationErrors }),
             message: 'Batch started. Poll status at /api/audit/batch/[batchId]'
         });
 

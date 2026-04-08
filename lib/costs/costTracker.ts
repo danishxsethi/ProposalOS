@@ -79,6 +79,18 @@ export class CostTracker {
         const cost = costPerCall * count;
         this.totalCents += cost;
         this.usage[api] = (this.usage[api] || 0) + count;
+
+        // P2-2: Hard-cap check — same guard as addLlmCall.
+        // Catches runaway Puppeteer / SerpAPI loops before they exceed budget.
+        if (this.totalCents > this.capCents) {
+            logger.error({
+                totalCents: this.totalCents,
+                capCents: this.capCents,
+                auditId: this.auditId,
+                usage: this.usage,
+            }, 'HARD CAP EXCEEDED (API call) — halting audit execution');
+            throw new CostCapExceededError(this.totalCents, this.capCents, this.auditId);
+        }
     }
 
     /**

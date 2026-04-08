@@ -1,8 +1,16 @@
+/**
+ * @deprecated Use diagnosisGraph.invoke() from lib/graph/diagnosis-graph.ts instead.
+ * This file will be deleted in v2.0. The LangGraph path includes evidence verification,
+ * QA retry loops, and adversarial checking which this raw execution path misses.
+ */
+/**
+ * Main diagnosis pipeline
+ * Orchestrates: pre-cluster → LLM cluster → validate → narrate
+ * @param playbook Optional vertical playbook — influences prioritization and benchmarks
+ */
 import { Finding, DiagnosisResult } from './types';
-import { preClusterFindings } from './preCluster';
-import { llmClusterFindings, generateNarratives } from './llmCluster';
-import { validateClusters } from './validation';
-
+import { prisma } from '@/lib/prisma';
+import { diagnosisGraph } from '@/lib/graph/diagnosis-graph';
 import { CostTracker } from '@/lib/costs/costTracker';
 import { RunTree } from 'langsmith';
 import type { VerticalPlaybook } from '@/lib/playbooks/types';
@@ -18,41 +26,35 @@ export async function runDiagnosisPipeline(
     parentTrace?: RunTree,
     playbook?: VerticalPlaybook | null
 ): Promise<DiagnosisResult> {
-    console.log(`[DiagnosisPipeline] Processing ${findings.length} findings...${playbook ? ` (vertical: ${playbook.id})` : ''}`);
+    console.warn('[DEPRECATED] runDiagnosisPipeline called — delegating to diagnosisGraph');
 
-    // Step 1: Pre-cluster (rule-based)
-    const preClusters = preClusterFindings(findings);
-    console.log(`[DiagnosisPipeline] Pre-clustered into ${preClusters.length} groups`);
+    // Assume all findings belong to the same audit
+    const auditId = findings.length > 0 ? findings[0].auditId : undefined;
+    const tenantId = findings.length > 0 ? findings[0].tenantId : 'unknown';
 
-    // Step 2: LLM refine clusters (playbook.priorityFindings can influence clustering context)
-    let clusters = await llmClusterFindings(preClusters, findings, tracker, parentTrace, playbook ?? undefined);
-    console.log(`[DiagnosisPipeline] LLM refined into ${clusters.length} clusters`);
-
-    // Step 3: Validate
-    const validation = validateClusters(clusters, findings);
-    if (!validation.valid) {
-        console.error('[DiagnosisPipeline] Validation failed:', validation.errors);
-
-        // Retry logic: If validation fails, fall back to pre-clusters
-        console.log('[DiagnosisPipeline] Falling back to pre-clusters');
-        clusters = preClusters.map((pc, idx) => ({
-            id: `cluster-${idx + 1}`,
-            rootCause: `Issues with ${pc.key}`,
-            severity: 'medium' as const,
-            findingIds: pc.findings.map((f) => f.id),
-        }));
+    let evidenceSnapshots: any[] = [];
+    if (auditId) {
+        evidenceSnapshots = await prisma.evidenceSnapshot.findMany({
+            where: { auditId }
+        });
     }
 
-    // Step 4: Generate narratives (playbook influences industry context)
-    const narrativeClusters = await generateNarratives(clusters, findings, tracker, parentTrace, playbook ?? undefined);
-    console.log(`[DiagnosisPipeline] Generated narratives for ${narrativeClusters.length} clusters`);
+    // Delegate to the LangGraph (which has QA, evidence verification, retries)
+    const result = await diagnosisGraph.invoke({
+        findings,
+        evidenceSnapshots,
+        tenantId,
+        auditId,
+        mode: 'MULTI_STEP',
+        costTracker: tracker
+    });
 
     return {
-        clusters: narrativeClusters,
+        clusters: result.clusters,
         metadata: {
             totalFindings: findings.length,
-            clusteredFindings: narrativeClusters.reduce((sum, c) => sum + c.findingIds.length, 0),
-            clusteringConfidence: validation.valid ? 0.9 : 0.6, // Lower if validation failed
+            clusteredFindings: result.clusters.reduce((sum: number, c: any) => sum + c.findingIds.length, 0),
+            clusteringConfidence: result.validation?.valid ? 0.9 : 0.6, // Lower if validation failed
         },
     };
 }

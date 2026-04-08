@@ -80,7 +80,7 @@ class EmailScheduler {
                 context: {
                     ...baseEmail.context,
                     competitorName: competitors[0]?.name || 'Prairie Dental',
-                    competitorScore: competitors[0]?.overallScore || 71,
+                    competitorScore: competitors[0]?.overallScore || 7.1,
                 },
             },
             // Email 3: Day 5
@@ -93,7 +93,7 @@ class EmailScheduler {
                 context: {
                     ...baseEmail.context,
                     competitorName: competitors[0]?.name || 'Prairie Dental',
-                    competitorScore: competitors[0]?.overallScore || 71,
+                    competitorScore: competitors[0]?.overallScore || 7.1,
                     reviewGap: 86,
                     speedGap: 2.6,
                     quickWins: [

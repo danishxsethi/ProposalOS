@@ -24,11 +24,19 @@ export async function sendReportEmail({
         return;
     }
 
+    const scoreOutOf100 = Math.round(overallScore * 10);
+
     await resend.emails.send({
         from: process.env.RESEND_FROM_EMAIL || 'Claraud <audit@claraud.com>',
         to,
         subject: `Your ${businessName} Audit Report is Ready`,
-        html: generateReportEmailHtml({ businessName, overallScore, letterGrade, topFindings, reportUrl }),
+        html: generateReportEmailHtml({
+            businessName,
+            overallScore: scoreOutOf100,
+            letterGrade,
+            topFindings,
+            reportUrl,
+        }),
     });
 }
 

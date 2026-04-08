@@ -158,14 +158,46 @@ export const POST = withAuth(async (
             });
         const playbook = getPlaybook(verticalId);
 
+        // Fetch full evidence snapshots for P1-4
+        const evidenceSnapshots = await prisma.evidenceSnapshot.findMany({
+            where: { auditId }
+        });
+
         // Step 1: Run diagnosis to get clusters using graph (which now includes adversarial_qa)
-        const diagnosisGraphState = await diagnosisGraph.invoke({
+        const DIAGNOSIS_TIMEOUT_MS = 90_000; // 90 seconds for diagnosis pipeline
+
+        const initialState = {
             findings: audit.findings,
+            evidenceSnapshots,
             tenantId: audit.tenantId,
             auditId: audit.id,
-            mode: 'MULTI_STEP'
+            mode: 'MULTI_STEP' as const,
+            costTracker: tracker
+        };
+
+        const diagnosisGraphState = await Promise.race([
+            diagnosisGraph.invoke(initialState) as any,
+            new Promise<never>((_, reject) =>
+                setTimeout(() => reject(new Error('DIAGNOSIS_TIMEOUT')), DIAGNOSIS_TIMEOUT_MS)
+            )
+        ]).catch(error => {
+            if (error instanceof Error && error.message.includes('DIAGNOSIS_TIMEOUT')) {
+                console.error('[propose] Diagnosis pipeline timed out after 90s');
+                // Return a degraded result instead of crashing
+                return {
+                    ...initialState,
+                    degraded: true,
+                    errors: [{
+                        node: 'global_timeout',
+                        error: 'Diagnosis pipeline exceeded 90s timeout',
+                        timestamp: new Date().toISOString()
+                    }],
+                    clusters: []
+                };
+            }
+            throw error;
         });
-        
+
         const diagnosisResult = {
             clusters: diagnosisGraphState.clusters,
             metadata: {
@@ -251,6 +283,7 @@ export const POST = withAuth(async (
         const proposal = await prisma.proposal.create({
             data: {
                 auditId,
+                tenantId: audit.tenantId, // Fixed TS error
                 templateId,
                 prospectEmail,
                 executiveSummary: proposalResult.executiveSummary,
