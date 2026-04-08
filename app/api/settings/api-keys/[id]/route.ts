@@ -1,10 +1,11 @@
-
 import { NextResponse } from 'next/server';
 import { withAuth } from '@/lib/middleware/auth';
+import { withRole } from '@/lib/middleware/withRole';
 import { getTenantId } from '@/lib/tenant/context';
 import { prisma } from '@/lib/prisma';
 
-export const DELETE = withAuth(async (req: Request, { params }: { params: Promise<{ id: string }> }) => {
+// P1-9: Revoking a key requires 'owner' role — same privilege as deleting team members
+export const DELETE = withRole('owner', withAuth(async (req: Request, { params }: { params: Promise<{ id: string }> }) => {
     const { id } = await params;
     const tenantId = await getTenantId();
     if (!tenantId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -23,4 +24,4 @@ export const DELETE = withAuth(async (req: Request, { params }: { params: Promis
     });
 
     return NextResponse.json({ success: true });
-});
+}));

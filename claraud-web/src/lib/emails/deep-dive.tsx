@@ -37,10 +37,10 @@ export function DeepDiveEmail({
     reportUrl,
 }: DeepDiveEmailProps) {
     const getScoreColor = (score: number) => {
-        if (score >= 80) return '#22c55e';
-        if (score >= 60) return '#3b82f6';
-        if (score >= 40) return '#f59e0b';
-        if (score >= 20) return '#f97316';
+        if (score >= 8) return '#22c55e';
+        if (score >= 6) return '#3b82f6';
+        if (score >= 4) return '#f59e0b';
+        if (score >= 2) return '#f97316';
         return '#ef4444';
     };
 

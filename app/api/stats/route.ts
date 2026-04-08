@@ -1,31 +1,33 @@
 import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
 import { withAuth } from '@/lib/middleware/auth';
-import { getTenantId } from '@/lib/tenant/context';
+import { getTenantId, createScopedPrisma } from '@/lib/tenant/context';
 
 export const GET = withAuth(async (req: Request) => {
     try {
         const tenantId = await getTenantId();
         if (!tenantId) {
-            return NextResponse.json({ error: 'Unauthorized: No Tenant' }, { status: 401 });
+            return NextResponse.json({ error: 'Unauthorized: No Tenant' }, { status: 403 });
         }
+
+        // P1-6: Use scoped Prisma client — tenantId injected automatically by extension
+        // Triple protection: AsyncLocalStorage + Prisma extension scoping + RLS
+        const prisma = createScopedPrisma(tenantId);
 
         // Get current month boundaries
         const now = new Date();
         const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
         const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
 
-        // Run all stats queries in parallel (tenant-scoped)
+        // Run all stats queries in parallel (tenant-scoped automatically)
         const [
             totalAuditsThisMonth,
             proposalsSent,
             proposalsViewed,
             auditsWithCost
         ] = await Promise.all([
-            // Total audits this month
+            // Total audits this month — no tenantId needed in where, scoped client adds it
             prisma.audit.count({
                 where: {
-                    tenantId,
                     createdAt: {
                         gte: startOfMonth,
                         lte: endOfMonth
@@ -33,10 +35,9 @@ export const GET = withAuth(async (req: Request) => {
                 }
             }),
 
-            // Proposals sent (status = SENT)
+            // Proposals sent (with sentAt in current month)
             prisma.proposal.count({
                 where: {
-                    tenantId,
                     sentAt: {
                         gte: startOfMonth,
                         lte: endOfMonth
@@ -44,10 +45,9 @@ export const GET = withAuth(async (req: Request) => {
                 }
             }),
 
-            // Proposals viewed
+            // Proposals viewed (with viewedAt in current month)
             prisma.proposal.count({
                 where: {
-                    tenantId,
                     viewedAt: {
                         gte: startOfMonth,
                         lte: endOfMonth
@@ -55,10 +55,9 @@ export const GET = withAuth(async (req: Request) => {
                 }
             }),
 
-            // Get all audits with cost for average calculation
+            // Audits with non-zero cost for average calculation
             prisma.audit.findMany({
                 where: {
-                    tenantId,
                     createdAt: {
                         gte: startOfMonth,
                         lte: endOfMonth

@@ -13,7 +13,7 @@ import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
 import { ensureLeadScorecardToken, ensureBaseUrl, scorecardUrlForToken } from './scorecard';
 import { incrementDomainCounter, selectDomainForSend } from './domainRotation';
-import { runAuditOrchestrator } from '@/lib/orchestrator';
+import { runAudit } from '@/lib/audit/runner';
 import { generateProposal } from '@/lib/proposal/runner';
 import { generateEmailSequence } from './sequenceComposer';
 import { evaluateSequenceBranching, BranchingEventHistory } from './sequenceBranching';
@@ -121,13 +121,8 @@ async function ensureProposalUrlForLead(lead: ProspectLead, baseUrl: string): Pr
             },
             select: { id: true },
         });
-        runAuditOrchestrator(created.id).catch((error) => {
-            logger.warn({
-                event: 'outreach.sniper.audit_queue_failed',
-                leadId: lead.id,
-                auditId: created.id,
-                error: error instanceof Error ? error.message : String(error),
-            }, 'Failed queued outreach audit');
+        runAudit(created.id).catch((error) => {
+            console.error(`Bg audit failed for ${created.id}:`, error);
         });
     }
 
@@ -260,6 +255,16 @@ export async function processSniperOutreach(
 
     const now = new Date();
 
+    // P2: Human-in-the-loop setting
+    let tenantRequireHumanReview = false;
+    const tenant = await prisma.tenant.findUnique({
+        where: { id: tenantId },
+        select: { requireHumanReview: true }
+    });
+    if (tenant?.requireHumanReview) {
+        tenantRequireHumanReview = true;
+    }
+
     for (const lead of leads) {
         result.processedLeads += 1;
 
@@ -325,12 +330,34 @@ export async function processSniperOutreach(
             }
         }
 
+        // P2: Webhook Sync Fallback
+        // Explicitly check the Db blocklist since webhooks can fail or get out of sync
+        let isBlocklisted = false;
+        try {
+            // Check if domain or email is in global blocklist
+            const domainParts = lead.decisionMakerEmail?.split('@') || [];
+            const domain = domainParts.length === 2 ? domainParts[1] : '';
+            
+            // Only try checking if the model actually exists. We don't want a crash here if 
+            // no blocklist model exists yet in the Prisma client, but we should assume it might.
+            // Using raw query as a safe fallback if emailBlocklist doesn't exist on prisma yet:
+            const blockCheck: { count: number }[] = await prisma.$queryRaw`
+                SELECT COUNT(*) as count FROM "EmailBlocklist" 
+                WHERE email = ${lead.decisionMakerEmail} OR domain = ${domain}
+            `;
+            if (blockCheck[0] && Number(blockCheck[0].count) > 0) {
+                isBlocklisted = true;
+            }
+        } catch (err) {
+            // Model missing or query failed, ignore
+        }
+
         const history: BranchingEventHistory = {
             totalOpens: lead.outreachOpenCount,
             totalClicks: lead.outreachClickCount,
             totalReplies: lead.outreachReplyCount,
             hasBounced: lead.outreachDropReason === 'Email bounced',
-            hasUnsubscribed: lead.outreachDropReason === 'Prospect unsubscribed',
+            hasUnsubscribed: lead.outreachDropReason === 'Prospect unsubscribed' || isBlocklisted,
             lastOpenedAt
         };
 
@@ -338,8 +365,7 @@ export async function processSniperOutreach(
 
         if (branchDecision.kind === 'cancel_sequence' || branchDecision.kind === 'trigger_closing_agent' || branchDecision.kind === 'pause_for_review') {
             if (!dryRun) {
-                // Determine new status
-                let newStage = OutreachLeadStage.DROPPED;
+                let newStage: OutreachLeadStage = OutreachLeadStage.DROPPED;
                 let reason = branchDecision.reason;
 
                 if (branchDecision.kind === 'trigger_closing_agent') {
@@ -467,14 +493,14 @@ export async function processSniperOutreach(
             }
         });
 
-        if (dryRun) {
+        if (dryRun || tenantRequireHumanReview) {
             result.sentEmails += 1;
             result.details.push({
                 leadId: lead.id,
                 businessName: lead.businessName,
                 action: nextEmail.type,
-                outcome: 'dry-run',
-                reason: `quality ${nextEmail.qualityScore}`,
+                outcome: dryRun ? 'dry-run' : 'pending-approval',
+                reason: dryRun ? `quality ${nextEmail.qualityScore}` : 'Human review required by tenant setting',
             });
             continue;
         }

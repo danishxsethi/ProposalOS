@@ -1,6 +1,7 @@
 'use client';
 
 import { motion } from 'framer-motion';
+import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 import { usePostHog } from '@/hooks/use-posthog';
 
@@ -61,9 +62,9 @@ export function ReportCTA({ token }: ReportCTAProps) {
                     <div className="mt-12 flex items-center justify-center gap-8 grayscale opacity-40 group-hover:grayscale-0 group-hover:opacity-100 transition-all duration-700">
                         <div className="text-[10px] font-bold uppercase tracking-[0.3em] text-text-secondary">Compatible with</div>
                         <div className="h-6 w-px bg-white/10" />
-                        <img src="/placeholder.svg" alt="Google" className="h-5 invert" />
-                        <img src="/placeholder.svg" alt="Instagram" className="h-5 invert" />
-                        <img src="/placeholder.svg" alt="Stripe" className="h-5 invert" />
+                        <Image src="/placeholder.svg" alt="Google" width={20} height={20} className="h-5 w-auto invert" />
+                        <Image src="/placeholder.svg" alt="Instagram" width={20} height={20} className="h-5 w-auto invert" />
+                        <Image src="/placeholder.svg" alt="Stripe" width={20} height={20} className="h-5 w-auto invert" />
                     </div>
                 </div>
             </div>

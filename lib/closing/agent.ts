@@ -185,9 +185,12 @@ const customizationTools = [
 async function executeCustomizationTool(toolCall: any, state: ClosingState) {
     const { name, args } = toolCall;
 
-    // Validate proposal access implicitly
+    // Validate proposal access and authorization explicitly
+    // P0 FIX: Ensure the state provided by the LLM hasn't been hallucinated or spoofed
+    if (!state.proposalId) return "Authorization failed: Missing proposal context.";
+
     const proposal = await prisma.proposal.findUnique({ where: { id: state.proposalId } });
-    if (!proposal) throw new Error("Proposal not found");
+    if (!proposal) return "Authorization failed: Proposal not found.";
 
     let actionNotes = "";
 
@@ -205,14 +208,17 @@ async function executeCustomizationTool(toolCall: any, state: ClosingState) {
 
     if (name === 'applyDiscount') {
         const { tierId, discountPercent, reason } = args;
-        if (discountPercent > 20) return "Discount capped at 20%. Validation failed.";
+        
+        // P0 FIX: Hard cap discount to prevent unauthorized excessive discounts
+        const safeDiscount = Math.min(Math.max(Number(discountPercent) || 0, 0), 20);
+        if (safeDiscount === 0) return "Discount validation failed.";
 
-        actionNotes = `Discount of ${discountPercent}% applied to ${tierId}. Reason: ${reason}`;
+        actionNotes = `Discount of ${safeDiscount}% applied to ${tierId}. Reason: ${reason}`;
         await prisma.proposal.update({
             where: { id: state.proposalId },
             data: { status: 'DRAFT', notes: (proposal.notes || '') + '\n' + actionNotes }
         });
-        return `Successfully applied ${discountPercent}% discount to ${tierId}.`;
+        return `Successfully applied ${safeDiscount}% discount to ${tierId}.`;
     }
 
     if (name === 'selectTierForProspect') {

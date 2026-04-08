@@ -1,22 +1,18 @@
 import { NextResponse } from 'next/server';
 import { PromptPerformanceTracker } from '@/lib/self-evolving-prompts/PromptPerformanceTracker';
 import { logger } from '@/lib/logger';
+import { verifyCronAuth } from '@/lib/middleware/cronAuth';
 
 const tracker = new PromptPerformanceTracker();
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request) {
+    const authError = verifyCronAuth(request);
+    if (authError) return authError;
+
     try {
-        const authHeader = request.headers.get('authorization');
 
-        // Simple CRON authorization check
-        if (process.env.CRON_SECRET && authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-            logger.warn('Unauthorized access attempt to auto-promote cron');
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-        }
-
-        // 1. Identify underperforming prompts (e.g., < 40 quality score with at least 10 samples)
         const underperforming = await tracker.getUnderperformingPrompts(40, 10);
 
         // 2. Identify winning A/B variants

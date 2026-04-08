@@ -108,6 +108,7 @@ export async function generatePdf(
                 bottom: '2.5cm',
                 left: '2cm',
             },
+            tagged: true,
             displayHeaderFooter: true,
             headerTemplate: '<div></div>',
             footerTemplate: `

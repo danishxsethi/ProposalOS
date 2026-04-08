@@ -33,6 +33,8 @@ import { runVideoModule as runVideoPresenceModule } from '../modules/videoPresen
 import { runVisionModule } from '../modules/vision';
 import { runWebsiteCrawlerModule } from '../modules/websiteCrawlerModule';
 import { runCompetitorStrategyModule } from '../modules/competitorStrategy';
+import { extractCoreWebVitalsFromAudits } from '../modules/coreWebVitals';
+import { analyzeSchemaMarkup } from '../modules/schemaAnalysis';
 
 // finding generators for legacy modules
 import {
@@ -245,6 +247,127 @@ const visionAdapter = async (input: ModuleInput, tracker: CostTracker): Promise<
     return { status: 'COMPLETE', data };
 };
 
+// P1-7: Adapters for previously dead modules — using existing utility functions
+const coreWebVitalsAdapter = async (input: ModuleInput): Promise<ModuleResult> => {
+    // Reads from the website (PageSpeed) module output which contains Lighthouse audits
+    const websiteData = input.dependencyResults?.website;
+    const lighthouseAudits = websiteData?.lighthouseResult?.audits
+        ?? websiteData?.audits
+        ?? websiteData?.data?.lighthouseResult?.audits
+        ?? null;
+    if (!lighthouseAudits) return { status: 'SKIPPED', data: null, error: 'No Lighthouse audit data available from website module' };
+
+    const cwv = extractCoreWebVitalsFromAudits(lighthouseAudits);
+
+    // Generate findings based on CWV ratings
+    const findings: any[] = [];
+    if (cwv.lcp && cwv.lcp.rating !== 'good') {
+        findings.push({
+            module: 'coreWebVitals',
+            category: 'Performance',
+            type: cwv.lcp.rating === 'poor' ? 'CRITICAL' : 'WARNING',
+            title: `Largest Contentful Paint: ${cwv.lcp.value.toFixed(2)}s`,
+            description: `LCP is ${cwv.lcp.rating} (threshold: good < ${cwv.lcp.thresholdGood}s). Slow LCP hurts SEO rankings and user experience.`,
+            impactScore: cwv.lcp.rating === 'poor' ? 8 : 5,
+            confidenceScore: 95,
+            effortEstimate: 'HIGH',
+            recommendedFix: ['Optimize images', 'Add proper caching', 'Use a CDN', 'Reduce server response time'],
+        });
+    }
+    if (cwv.cls && cwv.cls.rating !== 'good') {
+        findings.push({
+            module: 'coreWebVitals',
+            category: 'Performance',
+            type: cwv.cls.rating === 'poor' ? 'CRITICAL' : 'WARNING',
+            title: `Cumulative Layout Shift: ${cwv.cls.value.toFixed(3)}`,
+            description: `CLS is ${cwv.cls.rating} (threshold: good < ${cwv.cls.thresholdGood}). Layout shifts hurt UX and SEO.`,
+            impactScore: cwv.cls.rating === 'poor' ? 7 : 4,
+            confidenceScore: 95,
+            effortEstimate: 'MEDIUM',
+            recommendedFix: ['Set explicit width/height on images', 'Avoid inserting content above existing content', 'Use CSS transform for animations'],
+        });
+    }
+    if (cwv.tbt && cwv.tbt.rating !== 'good') {
+        findings.push({
+            module: 'coreWebVitals',
+            category: 'Performance',
+            type: cwv.tbt.rating === 'poor' ? 'CRITICAL' : 'WARNING',
+            title: `Total Blocking Time: ${cwv.tbt.value}ms`,
+            description: `TBT is ${cwv.tbt.rating} (threshold: good < ${cwv.tbt.thresholdGood}ms). High TBT means the main thread is blocked, delaying user interaction.`,
+            impactScore: cwv.tbt.rating === 'poor' ? 7 : 4,
+            confidenceScore: 90,
+            effortEstimate: 'HIGH',
+            recommendedFix: ['Break up long tasks', 'Defer non-critical JavaScript', 'Reduce third-party scripts'],
+        });
+    }
+
+    return {
+        status: 'COMPLETE',
+        data: { ...cwv, findings, evidenceSnapshots: [{ source: 'Core Web Vitals', rawResponse: cwv }] },
+    };
+};
+
+const schemaAnalysisAdapter = async (input: ModuleInput): Promise<ModuleResult> => {
+    // Reads the raw HTML captured by the websiteCrawler module
+    const crawlerData = input.dependencyResults?.websiteCrawler;
+    const rawHtml = crawlerData?.rawHtml
+        ?? crawlerData?.evidenceSnapshots?.[0]?.rawResponse?.html
+        ?? crawlerData?.evidenceSnapshots?.[0]?.rawResponse?.content
+        ?? null;
+    if (!rawHtml || typeof rawHtml !== 'string') {
+        return { status: 'SKIPPED', data: null, error: 'No raw HTML available from websiteCrawler module' };
+    }
+
+    const analysis = analyzeSchemaMarkup(rawHtml);
+    const findings: any[] = [];
+
+    // Generate findings for missing critical schema types
+    if (!analysis.hasLocalBusinessOrOrganization.present) {
+        findings.push({
+            module: 'schemaAnalysis',
+            category: 'SEO',
+            type: 'CRITICAL',
+            title: 'Missing LocalBusiness/Organization Schema',
+            description: analysis.hasLocalBusinessOrOrganization.recommendation,
+            impactScore: 8,
+            confidenceScore: 95,
+            effortEstimate: 'LOW',
+            recommendedFix: ['Add JSON-LD LocalBusiness schema with name, address, phone, hours, and geo coordinates'],
+        });
+    }
+    if (!analysis.hasReviewAggregateRating.present) {
+        findings.push({
+            module: 'schemaAnalysis',
+            category: 'SEO',
+            type: 'WARNING',
+            title: 'Missing AggregateRating Schema',
+            description: analysis.hasReviewAggregateRating.recommendation,
+            impactScore: 5,
+            confidenceScore: 90,
+            effortEstimate: 'LOW',
+            recommendedFix: ['Add AggregateRating schema referencing your review platform (Google, Yelp, etc.)'],
+        });
+    }
+    if (!analysis.hasFaq.present) {
+        findings.push({
+            module: 'schemaAnalysis',
+            category: 'SEO',
+            type: 'OPPORTUNITY',
+            title: 'No FAQPage Schema Detected',
+            description: analysis.hasFaq.recommendation,
+            impactScore: 3,
+            confidenceScore: 80,
+            effortEstimate: 'LOW',
+            recommendedFix: ['Add FAQPage JSON-LD to any page with Q&A content to unlock rich results'],
+        });
+    }
+
+    return {
+        status: 'COMPLETE',
+        data: { ...analysis, findings, evidenceSnapshots: [{ source: 'Schema Analysis', rawResponse: analysis }] },
+    };
+};
+
 export const MODULE_REGISTRY: ModuleConfig[] = [
     // Phase 1: Foundation (parallel) — no dependencies
     { name: 'website', phase: 1, run: websiteAdapter, timeoutMs: 30000 },
@@ -254,6 +377,9 @@ export const MODULE_REGISTRY: ModuleConfig[] = [
     { name: 'techStack', phase: 1, run: techStackAdapter, timeoutMs: 15000 },
     { name: 'security', phase: 1, run: securityAdapter, timeoutMs: 20000 },
     { name: 'emailFinder', phase: 1, run: emailFinderAdapter, timeoutMs: 15000, optional: true },
+    // P1-7: Previously dead modules — now wired as Phase 2 (depend on Phase 1 output)
+    { name: 'coreWebVitals', phase: 2, run: coreWebVitalsAdapter, dependsOn: ['website'], timeoutMs: 10000 },
+    { name: 'schemaAnalysis', phase: 2, run: schemaAnalysisAdapter, dependsOn: ['websiteCrawler'], timeoutMs: 20000 },
 
     // Phase 2: Analysis (parallel) — depends on Phase 1 data
     { name: 'reputation', phase: 2, run: reputationAdapter, dependsOn: ['gbp'] },
@@ -410,7 +536,52 @@ async function executePhase(
     await Promise.allSettled(executions);
 }
 
+// ─── P2-3: Finding deduplication ────────────────────────────────────────────
+// Deduplicates by type + normalised title before DB insert.
+// If two modules produce the same finding, we keep the one with the higher impactScore.
+export function deduplicateFindings(findings: any[]): any[] {
+    const seen = new Map<string, any>();
+    for (const finding of findings) {
+        const key = `${finding.type}:${(finding.title || '').toLowerCase().trim()}`;
+        const existing = seen.get(key);
+        if (!existing || (finding.impactScore ?? 0) > (existing.impactScore ?? 0)) {
+            seen.set(key, finding);
+        }
+    }
+    return Array.from(seen.values());
+}
+
+// ─── P2-1: Global audit timeout ──────────────────────────────────────────────
+/** Wall-clock limit for an entire audit run (all phases + DB writes). */
+const GLOBAL_AUDIT_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
+
+/**
+ * Public entry point. Wraps the internal runner in a hard 5-minute timeout.
+ * If the timeout fires, the audit row is marked FAILED and the error is rethrown.
+ */
 export async function runAudit(auditId: string) {
+    const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(
+            () => reject(new Error('AUDIT_TIMEOUT: Global 5-minute limit exceeded')),
+            GLOBAL_AUDIT_TIMEOUT_MS
+        )
+    );
+    try {
+        return await Promise.race([runAuditInternal(auditId), timeoutPromise]);
+    } catch (error) {
+        if (error instanceof Error && error.message.startsWith('AUDIT_TIMEOUT')) {
+            // Best-effort status update — don't let this throw and mask the original error
+            await prisma.audit.update({
+                where: { id: auditId },
+                data: { status: 'FAILED', completedAt: new Date() },
+            }).catch(() => null);
+        }
+        throw error;
+    }
+}
+
+/** Internal implementation — called only by runAudit() above. */
+async function runAuditInternal(auditId: string) {
     const audit = await prisma.audit.findUnique({
         where: { id: auditId },
     });
@@ -514,10 +685,13 @@ export async function runAudit(auditId: string) {
         });
     }
 
+    // P2-3: Deduplicate findings before persisting
+    const dedupedFindings = deduplicateFindings(allFindings);
+
     // Create Finding records in DB
-    if (allFindings.length > 0) {
+    if (dedupedFindings.length > 0) {
         await prisma.finding.createMany({
-            data: allFindings.map(f => ({
+            data: dedupedFindings.map(f => ({
                 ...f,
                 auditId: audit.id,
                 tenantId: audit.tenantId,
@@ -584,7 +758,12 @@ export async function runAudit(auditId: string) {
     await prisma.audit.update({
         where: { id: audit.id },
         data: {
-            status: finalStatus === 'DEGRADED' ? 'FAILED' : finalStatus, // Map DEGRADED to FAILED for Prisma constraints since DEGRADED is not in the Enum
+            // P2-4: Use DEGRADED directly once `npx prisma migrate dev --name add_degraded_status` has run.
+            // Until the migration runs the fallback below maps DEGRADED→PARTIAL to stay compatible.
+            // TODO: remove the conditional once the schema is updated.
+            status: (finalStatus === 'DEGRADED'
+                ? (process.env.DEGRADED_STATUS_ENABLED === 'true' ? 'DEGRADED' : 'PARTIAL')
+                : finalStatus) as any,
             modulesCompleted,
             modulesFailed,
             apiCostCents: totalCostCents,

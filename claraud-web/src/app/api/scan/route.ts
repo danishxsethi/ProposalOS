@@ -7,7 +7,7 @@ import { ScanRequest } from '@/lib/types';
 export async function POST(req: NextRequest) {
     try {
         const body: ScanRequest = await req.json();
-        const { url, businessName, city, industry } = body;
+        const { url, businessName, placeId, city, industry } = body;
 
         // Validate input
         if (!url && !businessName) {
@@ -15,41 +15,45 @@ export async function POST(req: NextRequest) {
         }
 
         // Validate URL format if provided
+        let formattedUrl = url;
         if (url) {
             try {
-                const u = url.startsWith('http') ? url : `https://${url}`;
-                new URL(u);
+                formattedUrl = url.startsWith('http') ? url : `https://${url}`;
+                new URL(formattedUrl);
             } catch {
                 return NextResponse.json({ error: 'Invalid URL format' }, { status: 400 });
             }
         }
 
-        const token = crypto.randomUUID();
-
-        // Store scan in memory
-        scanStore.set(token, {
-            token,
-            url: url || businessName || '',
-            businessName,
-            callCount: 0,
-            createdAt: Date.now(),
+        // Try calling the Proposal Engine backend
+        const audit = await apiClient.createAudit({
+            businessUrl: formattedUrl,
+            businessName: businessName || url,
+            placeId,
+            businessCity: city,
+            businessIndustry: industry,
         });
 
-        // Try calling the Proposal Engine backend
-        const result = await apiClient.startScan({ url, businessName, city, industry });
-
-        if (result) {
-            // Backend returned a token
+        if (audit && audit.id) {
+            // Backend returned an audit object - use its id as the token
             return NextResponse.json(
-                { token: result.token, status: 'scanning' },
+                { token: audit.id, status: 'scanning', source: 'live' },
                 { headers: { 'Cache-Control': 'no-store' } }
             );
         }
 
         // Backend unavailable - fall back to mock
         console.log('[scan] Proposal Engine unreachable, using mock data');
+        const mockToken = crypto.randomUUID();
+        scanStore.set(mockToken, {
+            token: mockToken,
+            url: url || businessName || '',
+            businessName,
+            callCount: 0,
+            createdAt: Date.now(),
+        });
         return NextResponse.json(
-            { token, status: 'scanning' },
+            { token: mockToken, status: 'scanning', source: 'mock' },
             { headers: { 'Cache-Control': 'no-store' } }
         );
     } catch (err) {

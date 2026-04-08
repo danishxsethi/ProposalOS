@@ -40,10 +40,10 @@ export function ReportReadyEmail({
     reportUrl,
 }: ReportReadyEmailProps) {
     const getScoreColor = (score: number) => {
-        if (score >= 80) return '#22c55e';
-        if (score >= 60) return '#3b82f6';
-        if (score >= 40) return '#f59e0b';
-        if (score >= 20) return '#f97316';
+        if (score >= 8) return '#22c55e';
+        if (score >= 6) return '#3b82f6';
+        if (score >= 4) return '#f59e0b';
+        if (score >= 2) return '#f97316';
         return '#ef4444';
     };
 
@@ -104,7 +104,7 @@ export function ReportReadyEmail({
                                             <Text style={categoryName}>{cat.name}</Text>
                                         </Column>
                                         <Column align="right" style={categoryScoreCol}>
-                                            <Text style={{ ...categoryScore, color: catColor }}>{cat.score}/100</Text>
+                                            <Text style={{ ...categoryScore, color: catColor }}>{cat.score.toFixed(1)}/10</Text>
                                         </Column>
                                     </Row>
                                 );

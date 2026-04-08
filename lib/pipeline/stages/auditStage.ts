@@ -11,7 +11,8 @@
 import { prisma } from '@/lib/prisma';
 import { transition } from '../stateMachine';
 import { logStageFailure } from '../metrics';
-import { AuditOrchestrator } from '@/lib/orchestrator/auditOrchestrator';
+// P0-3: Redirect to single source of truth
+import { runAudit } from '@/lib/audit/runner';
 import { CostTracker } from '@/lib/costs/costTracker';
 import { PipelineStage, type StageResult, type ProspectStatus } from '../types';
 
@@ -96,28 +97,15 @@ export async function processOneAudit(prospectId: string): Promise<StageResult> 
     },
   });
 
-  // 2. Create and run the AuditOrchestrator
-  const costTracker = new CostTracker();
-
-  const orchestrator = new AuditOrchestrator(
-    {
-      auditId: audit.id,
-      businessName: prospect.businessName,
-      websiteUrl: prospect.website || '',
-      city: prospect.city,
-      industry: prospect.vertical,
-      placeId: undefined,
-    },
-    costTracker
-  );
-
-  let orchestratorResult;
+  // 2. Run the audit via runner (P0-3)
   try {
-    orchestratorResult = await orchestrator.run();
+    await runAudit(audit.id);
   } catch (error) {
-    // Orchestrator threw — treat as FAILED
+    // runner threw (e.g. timeout)
     const err = error instanceof Error ? error : new Error(String(error));
-    const costCents = costTracker.getTotalCents();
+    // Check cost from DB if partially completed before throw
+    const updated = await prisma.audit.findUnique({ where: { id: audit.id } });
+    const costCents = updated?.apiCostCents ?? 0;
 
     await handleAuditFailure(audit.id, tenantId, costCents, err.message);
     await transition(prospectId, 'audit_failed', PipelineStage.AUDIT);
@@ -133,25 +121,17 @@ export async function processOneAudit(prospectId: string): Promise<StageResult> 
     };
   }
 
-  const costCents = costTracker.getTotalCents();
+  // Fetch updated audit to get cost and status
+  const updatedAudit = await prisma.audit.findUnique({
+    where: { id: audit.id }
+  });
+
+  const costCents = updatedAudit?.apiCostCents ?? 0;
   const isSuccess =
-    orchestratorResult.status === 'COMPLETE' || orchestratorResult.status === 'PARTIAL';
+    updatedAudit?.status === 'COMPLETE' || updatedAudit?.status === 'PARTIAL' || (updatedAudit?.status as any) === 'DEGRADED';
 
   if (isSuccess) {
-    // 3. Success: update audit, link to prospect, transition to "audited"
-    // Map orchestrator status to valid Prisma AuditStatus
-    const auditStatus = orchestratorResult.status === 'COMPLETE' ? 'COMPLETE' : 'PARTIAL';
-
-    await prisma.audit.update({
-      where: { id: audit.id },
-      data: {
-        status: auditStatus,
-        modulesCompleted: orchestratorResult.modulesCompleted || [],
-        apiCostCents: costCents,
-        completedAt: new Date(),
-      },
-    });
-
+    // 3. Success: link to prospect, transition to "audited"
     await prisma.prospectLead.update({
       where: { id: prospectId },
       data: { auditId: audit.id },
@@ -170,9 +150,8 @@ export async function processOneAudit(prospectId: string): Promise<StageResult> 
       costCents,
       metadata: {
         auditId: audit.id,
-        auditStatus: orchestratorResult.status,
-        modulesCompleted: orchestratorResult.modulesCompleted,
-        findingsCount: orchestratorResult.findings?.length ?? 0,
+        auditStatus: updatedAudit?.status,
+        modulesCompleted: updatedAudit?.modulesCompleted,
       },
     };
   } else {
@@ -181,7 +160,7 @@ export async function processOneAudit(prospectId: string): Promise<StageResult> 
       audit.id,
       tenantId,
       costCents,
-      `Audit completed with status: ${orchestratorResult.status}`
+      `Audit completed with status: ${updatedAudit?.status}`
     );
     await transition(prospectId, 'audit_failed', PipelineStage.AUDIT);
 
@@ -194,8 +173,8 @@ export async function processOneAudit(prospectId: string): Promise<StageResult> 
       fromStatus: 'discovered',
       toStatus: 'audit_failed',
       costCents,
-      error: `Audit completed with status: ${orchestratorResult.status}`,
-      metadata: { auditId: audit.id, auditStatus: orchestratorResult.status },
+      error: `Audit completed with status: ${updatedAudit?.status}`,
+      metadata: { auditId: audit.id, auditStatus: updatedAudit?.status },
     };
   }
 }

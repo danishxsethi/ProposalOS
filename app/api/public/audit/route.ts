@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { runAuditOrchestrator } from '@/lib/orchestrator';
+// P0-3: Use runner
+import { runAudit } from '@/lib/audit/runner';
 
 // Need to handle rate limiting manually or via middleware.
 // For now, we'll skip complex IP rate limiting logic code for brevity, 
@@ -45,7 +46,7 @@ export async function POST(req: Request) {
         // For MVP, we just call it without await, but Node event loop *might* kill it.
         // We'll await it for a microsecond? No.
         // Valid strategy for MVP on "Serverful" or long-timeout functions:
-        runAuditOrchestrator(audit.id).catch(e => console.error('Bg audit failed', e));
+        runAudit(audit.id).catch(e => console.error('Bg audit failed', e));
 
         return NextResponse.json({ id: audit.id });
 

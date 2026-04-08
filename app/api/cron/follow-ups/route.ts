@@ -2,6 +2,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { Resend } from 'resend';
+import { verifyCronAuth } from '@/lib/middleware/cronAuth';
 
 function getResend() {
     const key = process.env.RESEND_API_KEY;
@@ -10,12 +11,8 @@ function getResend() {
 }
 
 export async function GET(req: Request) {
-    // Basic security for Cron (e.g. check for a secret header if needed)
-    // For now, open or check for APP_SECRET if provided in headers.
-    const authHeader = req.headers.get('Authorization');
-    if (process.env.CRON_SECRET && authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const authError = verifyCronAuth(req);
+    if (authError) return authError;
 
     try {
         const now = new Date();

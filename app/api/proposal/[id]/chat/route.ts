@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { runClosingAgent } from '@/lib/closing/agent';
 import { logger, logError } from '@/lib/logger';
+import { sendWebhook } from '@/lib/notifications/webhook';
 
 export async function POST(
     req: Request,
@@ -18,13 +19,14 @@ export async function POST(
             return NextResponse.json({ error: 'Missing message or sessionId' }, { status: 400 });
         }
 
+        // P0 FIX: Enforce Authorization by requiring the secret webLinkToken (passed as sessionId from the frontend viewer)
         const proposal = await prisma.proposal.findUnique({
             where: { id: proposalId },
             include: { audit: true }
         });
 
-        if (!proposal) {
-            return NextResponse.json({ error: 'Proposal not found' }, { status: 404 });
+        if (!proposal || proposal.webLinkToken !== sessionId) {
+            return NextResponse.json({ error: 'Proposal not found or unauthorized session' }, { status: 404 });
         }
 
         const businessName = proposal.audit.businessName;
@@ -53,6 +55,16 @@ ${JSON.stringify(proposal.pricing)}
             escalated: result.escalated,
             sentiment: result.sentiment
         }, 'Closing Chat message generated');
+
+        if (result.escalated) {
+            await sendWebhook('chat.escalated', {
+                proposalId,
+                tenantId: proposal.tenantId,
+                businessName,
+                sessionId,
+                reason: 'LangGraph Agent Escalation'
+            });
+        }
 
         return NextResponse.json({
             reply: result.reply,

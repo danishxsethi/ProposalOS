@@ -1,1 +1,0 @@
-export default function Proposal() { return <h1 className="text-center mt-20 text-2xl font-bold">Proposal Page</h1>; }

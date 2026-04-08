@@ -53,7 +53,7 @@ export async function GET(req: NextRequest) {
                         severity: mockData.findings[0].severity,
                     },
                     competitorName: mockData.competitors[0]?.name || 'Prairie Dental',
-                    competitorScore: mockData.competitors[0]?.overallScore || 71,
+                    competitorScore: mockData.competitors[0]?.overallScore || 7.1,
                     yourScore: mockData.overallScore,
                     proposalUrl: `${appUrl}/proposal/${mockData.token}`,
                     reportUrl: `${appUrl}/report/${mockData.token}`,
@@ -67,7 +67,7 @@ export async function GET(req: NextRequest) {
                 const email = ProposalNudgeEmail({
                     businessName: mockData.businessName,
                     competitorName: mockData.competitors[0]?.name || 'Prairie Dental',
-                    competitorScore: mockData.competitors[0]?.overallScore || 71,
+                    competitorScore: mockData.competitors[0]?.overallScore || 7.1,
                     yourScore: mockData.overallScore,
                     reviewGap: 86,
                     speedGap: 2.6,

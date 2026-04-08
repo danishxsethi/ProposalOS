@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { computeEngagementScore, isHotLead } from '@/lib/pipeline/dealCloser';
 import type { PipelineConfig } from '@/lib/pipeline/types';
+import { verifyCronAuth } from '@/lib/middleware/cronAuth';
+import { sendWebhook } from '@/lib/notifications/webhook';
 
 /**
  * Pipeline Closing Cron Job
@@ -18,16 +20,11 @@ import type { PipelineConfig } from '@/lib/pipeline/types';
  */
 
 export async function GET(req: Request) {
+  const authError = verifyCronAuth(req);
+  if (authError) return authError;
+
   try {
-    // Verify cron secret for security
-    const authHeader = req.headers.get('authorization');
-    const cronSecret = process.env.CRON_SECRET;
 
-    if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    console.log('[Pipeline Closing] Starting cron job...');
 
     // Get all active tenants with pipeline config
     const tenants = await prisma.tenant.findMany({
@@ -113,15 +110,13 @@ export async function GET(req: Request) {
                   `[Pipeline Closing] Routing to Human Review Queue: ${prospect.id}`
                 );
 
-                // TODO: Create human review queue entry
-                // await prisma.humanReviewQueueEntry.create({
-                //   data: {
-                //     tenantId: tenant.id,
-                //     leadId: prospect.id,
-                //     reason: 'high_engagement_score',
-                //     score: score.total,
-                //   },
-                // });
+                // Send notification to agency via webhook instead of silent DB queue
+                await sendWebhook('chat.escalated', {
+                  tenantId: tenant.id,
+                  leadId: prospect.id,
+                  reason: 'high_engagement_score_hot_lead',
+                  score: score.total,
+                });
               }
 
               // Send automated follow-up

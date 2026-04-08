@@ -1,6 +1,7 @@
 'use client';
 
-import { Share2, Download, ExternalLink, Mail, Link2, Linkedin, Twitter } from 'lucide-react';
+import { useState } from 'react';
+import { Share2, Download, ExternalLink, Mail, Link2, Linkedin, Twitter, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -22,12 +23,13 @@ interface ReportHeaderProps {
 
 export function ReportHeader({ businessName, businessUrl, overallScore, letterGrade, token }: ReportHeaderProps) {
     const { captureEvent } = usePostHog();
+    const [isDownloading, setIsDownloading] = useState(false);
 
     const getScoreColor = (score: number) => {
-        if (score >= 80) return 'text-green-500';
-        if (score >= 60) return 'text-blue-500';
-        if (score >= 40) return 'text-yellow-500';
-        if (score >= 20) return 'text-orange-500';
+        if (score >= 8) return 'text-green-500';
+        if (score >= 6) return 'text-blue-500';
+        if (score >= 4) return 'text-yellow-500';
+        if (score >= 2) return 'text-orange-500';
         return 'text-red-500';
     };
 
@@ -44,6 +46,32 @@ export function ReportHeader({ businessName, businessUrl, overallScore, letterGr
         navigator.clipboard.writeText(`${window.location.origin}/report/${token}`);
         toast.success('Link copied to clipboard');
         captureEvent('share_clicked', { platform: 'copy', token });
+    };
+
+    const downloadPdf = async () => {
+        setIsDownloading(true);
+        try {
+            const res = await fetch(`/api/report/${token}/pdf`);
+            if (!res.ok) {
+                toast.error("PDF generation coming soon");
+                return;
+            }
+            const blob = await res.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = `${businessName.toLowerCase().replace(/\\s+/g, '-')}-audit-report.pdf`;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            a.remove();
+            toast.success("Download started");
+            captureEvent('pdf_downloaded', { token });
+        } catch (err) {
+            toast.error("PDF generation coming soon");
+        } finally {
+            setIsDownloading(false);
+        }
     };
 
     return (
@@ -67,10 +95,10 @@ export function ReportHeader({ businessName, businessUrl, overallScore, letterGr
                 <div className="flex items-center gap-6 lg:mx-12">
                     <div className="text-center">
                         <div className={`text-6xl lg:text-8xl font-black tracking-tighter ${getScoreColor(overallScore)}`}>
-                            {overallScore}
+                            {overallScore.toFixed(1)}
                         </div>
                         <div className="text-[10px] uppercase tracking-[0.2em] font-bold text-text-secondary mt-1">
-                            Overall Score
+                            Overall Score / 10
                         </div>
                     </div>
                     <Badge className={`text-2xl py-2 px-4 font-bold border rounded-xl ${getGradeBg(letterGrade)}`}>
@@ -107,8 +135,13 @@ export function ReportHeader({ businessName, businessUrl, overallScore, letterGr
                         </DropdownMenuContent>
                     </DropdownMenu>
 
-                    <Button variant="outline" className="hidden sm:flex border-white/10 hover:bg-white/5">
-                        <Download className="w-4 h-4 mr-2" />
+                    <Button
+                        variant="outline"
+                        className="hidden sm:flex border-white/10 hover:bg-white/5"
+                        onClick={downloadPdf}
+                        disabled={isDownloading}
+                    >
+                        {isDownloading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Download className="w-4 h-4 mr-2" />}
                         PDF
                     </Button>
 

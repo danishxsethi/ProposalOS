@@ -1,5 +1,3 @@
-import { ScanRequest, ScanStatus, ReportData } from './types';
-
 class ProposalEngineClient {
     private baseUrl: string;
     private apiKey: string;
@@ -11,55 +9,83 @@ class ProposalEngineClient {
     }
 
     private async fetch<T>(path: string, options?: RequestInit): Promise<T | null> {
-        // If no baseUrl configured, return null (triggers mock fallback)
         if (!this.baseUrl) {
-            console.log('[api-client] No PROPOSAL_ENGINE_API_URL configured, using mock fallback');
+            console.log('[API Client] No PROPOSAL_ENGINE_API_URL configured — using mock data');
             return null;
         }
 
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), this.timeout);
+
         try {
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), this.timeout);
-
-            const headers: HeadersInit = {
-                'Content-Type': 'application/json',
-                ...(this.apiKey ? { Authorization: `Bearer ${this.apiKey}` } : {}),
-                ...options?.headers,
-            };
-
             const response = await fetch(`${this.baseUrl}${path}`, {
                 ...options,
-                headers,
                 signal: controller.signal,
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-API-Key': this.apiKey,
+                    ...options?.headers,
+                },
             });
 
-            clearTimeout(timeoutId);
-
             if (!response.ok) {
-                throw new Error(`HTTP ${response.status}`);
+                const text = await response.text();
+                console.error(`[API Client] ${path} returned ${response.status}: ${response.statusText} - ${text}`);
+                return null;
             }
 
-            const data = (await response.json()) as T;
-            return data;
+            return await response.json() as T;
         } catch (error) {
-            console.log('[api-client] Backend unreachable, using mock fallback:', error);
+            console.error(`[API Client] ${path} failed:`, error);
             return null;
+        } finally {
+            clearTimeout(timeoutId);
         }
     }
 
-    async startScan(req: ScanRequest): Promise<{ token: string } | null> {
-        return this.fetch<{ token: string }>('/api/audit/start', {
+    async healthCheck(): Promise<boolean> {
+        if (!this.baseUrl) return false;
+        try {
+            const result = await this.fetch<any>('/api/health');
+            return result !== null;
+        } catch {
+            return false;
+        }
+    }
+
+    async createAudit(req: {
+        businessName?: string;
+        businessUrl?: string;
+        placeId?: string;
+        businessCity?: string;
+        businessIndustry?: string;
+    }): Promise<any | null> {
+        return this.fetch('/api/audit', {
             method: 'POST',
-            body: JSON.stringify(req),
+            body: JSON.stringify({
+                url: req.businessUrl,
+                name: req.businessName || req.businessUrl || 'Unknown Business',
+                placeId: req.placeId,
+                city: req.businessCity,
+                industry: req.businessIndustry,
+            }),
         });
     }
 
-    async getScanStatus(token: string): Promise<ScanStatus | null> {
-        return this.fetch<ScanStatus>(`/api/audit/status/${token}`);
+    async getAudit(auditId: string): Promise<any | null> {
+        return this.fetch(`/api/audit/${auditId}`);
     }
 
-    async getReport(token: string): Promise<ReportData | null> {
-        return this.fetch<ReportData>(`/api/audit/report/${token}`);
+    async runDiagnosis(auditId: string): Promise<any | null> {
+        return this.fetch(`/api/audit/${auditId}/diagnose`, { method: 'POST' });
+    }
+
+    async generateProposal(auditId: string): Promise<any | null> {
+        return this.fetch(`/api/audit/${auditId}/propose`, { method: 'POST' });
+    }
+
+    async getProposal(token: string): Promise<any | null> {
+        return this.fetch(`/api/proposal/${token}`);
     }
 }
 

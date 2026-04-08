@@ -18,7 +18,7 @@ interface CompetitorTableProps {
 
 export function CompetitorTable({ businessName, businessUrl, userMetrics, competitors }: CompetitorTableProps) {
     const metrics = [
-        { label: 'Overall Score', key: 'overallScore', format: (v: number) => `${v}/100` },
+        { label: 'Overall Score', key: 'overallScore', format: (v: number) => `${v.toFixed(1)}/10` },
         { label: 'Google Reviews', key: 'reviewCount', format: (v: number) => v.toString() },
         { label: 'Page Speed Index', key: 'pageSpeed', format: (v: number) => `${v}/100` },
         { label: 'GBP Completeness', key: 'gbpCompleteness', format: (v: number) => `${v}%` },

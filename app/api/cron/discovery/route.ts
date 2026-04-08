@@ -3,20 +3,16 @@ import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
 import { discover } from '@/lib/pipeline/discovery';
 import type { DiscoveryConfig } from '@/lib/pipeline/types';
+import { verifyCronAuth } from '@/lib/middleware/cronAuth';
 
 const MAX_TENANTS_PER_RUN = 5;
 
 export async function GET(req: Request) {
-  // 1. CRON_SECRET auth
-  const authHeader = req.headers.get('authorization');
-  if (
-    process.env.CRON_SECRET &&
-    authHeader !== `Bearer ${process.env.CRON_SECRET}`
-  ) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const authError = verifyCronAuth(req);
+  if (authError) return authError;
 
   try {
+
     // 2. Find tenants with active PipelineConfig where discovery is not paused
     const configs = await prisma.pipelineConfig.findMany({
       take: MAX_TENANTS_PER_RUN,
@@ -70,32 +66,32 @@ export async function GET(req: Request) {
         // Build DiscoveryConfig from the job or use defaults
         const discoveryConfig: DiscoveryConfig = job
           ? {
-              city: job.city,
-              state: job.state ?? undefined,
-              vertical: job.vertical,
-              targetLeads: job.targetLeads,
-              painThreshold: job.painThreshold,
-              sources: (job.sourceConfig as {
-                googlePlaces: boolean;
-                yelp: boolean;
-                directories: boolean;
-              }) ?? {
-                googlePlaces: true,
-                yelp: true,
-                directories: true,
-              },
-            }
+            city: job.city,
+            state: job.state ?? undefined,
+            vertical: job.vertical,
+            targetLeads: job.targetLeads,
+            painThreshold: job.painThreshold,
+            sources: (job.sourceConfig as {
+              googlePlaces: boolean;
+              yelp: boolean;
+              directories: boolean;
+            }) ?? {
+              googlePlaces: true,
+              yelp: true,
+              directories: true,
+            },
+          }
           : {
-              city: 'default',
-              vertical: 'general',
-              targetLeads: config.dailyVolumeLimit,
-              painThreshold: config.painScoreThreshold,
-              sources: {
-                googlePlaces: true,
-                yelp: true,
-                directories: true,
-              },
-            };
+            city: 'default',
+            vertical: 'general',
+            targetLeads: config.dailyVolumeLimit,
+            painThreshold: config.painScoreThreshold,
+            sources: {
+              googlePlaces: true,
+              yelp: true,
+              directories: true,
+            },
+          };
 
         logger.info(
           {

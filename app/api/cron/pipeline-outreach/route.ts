@@ -7,21 +7,17 @@ import { scheduleFollowUps } from '@/lib/pipeline/outreach';
 import { transition } from '@/lib/pipeline/stateMachine';
 import type { OutreachContext } from '@/lib/pipeline/types';
 import { PipelineStage } from '@/lib/pipeline/types';
+import { verifyCronAuth } from '@/lib/middleware/cronAuth';
 
 const MAX_TENANTS_PER_RUN = 5;
 const DEFAULT_BATCH_SIZE = 50;
 
 export async function GET(req: Request) {
-  // 1. CRON_SECRET auth
-  const authHeader = req.headers.get('authorization');
-  if (
-    process.env.CRON_SECRET &&
-    authHeader !== `Bearer ${process.env.CRON_SECRET}`
-  ) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const authError = verifyCronAuth(req);
+  if (authError) return authError;
 
   try {
+
     // 2. Find tenants with active PipelineConfig where outreach is not paused
     const configs = await prisma.pipelineConfig.findMany({
       take: MAX_TENANTS_PER_RUN,

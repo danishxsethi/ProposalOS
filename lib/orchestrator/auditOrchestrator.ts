@@ -1,4 +1,9 @@
 import { DataBus, DataBusKey } from './dataBus';
+/**
+ * @deprecated Use lib/audit/runner.ts instead. This file will be deleted in v2.0.
+ * Three separate execution paths caused inconsistent results. We are migrating
+ * all orchestration to runner.ts (MODULE_REGISTRY path).
+ */
 import { logger } from '@/lib/logger';
 import { CostTracker } from '@/lib/costs/costTracker';
 
@@ -52,6 +57,7 @@ export class AuditOrchestrator {
     private findings: any[] = [];
     private evidenceSnapshots: any[] = [];
     private timings: Record<string, number> = {};
+    private succeededModules = new Set<string>();
     private tracker?: CostTracker;
     private onModuleComplete?: (moduleId: string, status: 'success' | 'failed') => Promise<void>;
 
@@ -357,6 +363,12 @@ export class AuditOrchestrator {
      * Run the Orchestrator
      */
     async run(): Promise<OrchestratorResult> {
+        console.warn(
+            '[DEPRECATED] AuditOrchestrator.run() called. This path has 15 modules vs MODULE_REGISTRY\'s 27. ' +
+            'Migrate to runAudit() from lib/audit/runner.ts for full scan depth.'
+        );
+        console.error('[DEPRECATION_METRIC] AuditOrchestrator used — caller should be migrated');
+
         logger.info('[Orchestrator] Starting Audit...');
 
         const runPhase = async (phase: number, timeoutMs: number) => {
@@ -401,6 +413,7 @@ export class AuditOrchestrator {
                     }
 
                     logger.info({ module: mod.id, duration }, '[Orchestrator] Module success');
+                    this.succeededModules.add(mod.id);
                     if (this.onModuleComplete) await this.onModuleComplete(mod.id, 'success');
                     return { id: mod.id, status: 'success' };
 
@@ -423,15 +436,14 @@ export class AuditOrchestrator {
 
         // Calculate Status
         const totalModules = this.modules.length;
-        const successCount = Object.keys(this.timings).length; // Rough proxy
-        // Better to count explicit successes
+        const successCount = this.succeededModules.size; // Proper counting
 
         let status: OrchestratorResult['status'] = 'COMPLETE';
         if (successCount < totalModules * 0.25) status = 'FAILED';
         else if (successCount < totalModules * 0.5) status = 'DEGRADED';
         else if (successCount < totalModules) status = 'PARTIAL';
 
-        const modulesCompleted = Object.keys(this.timings);
+        const modulesCompleted = Array.from(this.succeededModules);
         return {
             status,
             findings: this.findings,

@@ -9,8 +9,9 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { handleMessage } from '@/lib/pipeline/aiSalesChat';
+import { handleMessage, shouldEscalate } from '@/lib/pipeline/aiSalesChat';
 import type { ChatMessage, ChatContext } from '@/lib/pipeline/types';
+import { sendWebhook } from '@/lib/notifications/webhook';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -50,9 +51,9 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    if (!proposal) {
+    if (!proposal || proposal.webLinkToken !== sessionId) {
       return NextResponse.json(
-        { error: 'Proposal not found' },
+        { error: 'Proposal not found or unauthorized session' },
         { status: 404 }
       );
     }
@@ -99,6 +100,16 @@ export async function POST(request: NextRequest) {
 
     // Store conversation in database
     await storeConversation(proposalId, sessionId, fullHistory, response, proposal.audit.tenantId);
+
+    // Trigger human escalation webhook if confidence is too low
+    if (shouldEscalate(response.confidence || 0, { threshold: 0.7 })) {
+        await sendWebhook('chat.escalated', {
+            proposalId,
+            tenantId: proposal.audit.tenantId,
+            sessionId,
+            reason: 'AI Sales Chat Escalation (Low Confidence)'
+        });
+    }
 
     // Return response
     return NextResponse.json({

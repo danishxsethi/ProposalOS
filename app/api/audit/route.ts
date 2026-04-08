@@ -10,18 +10,21 @@ import { checkAuditLimit } from '@/lib/billing/limits';
 
 import { z } from 'zod';
 
+import { withRole } from '@/lib/middleware/withRole';
+
 const auditSchema = z.object({
     url: z.string().url(),
+    placeId: z.string().optional(),
     industry: z.string().optional(),
 }).passthrough();
 
 /**
  * POST /api/audit
  * Create and run a single audit. Uses lib/audit/runner.ts as the canonical execution path.
- * Modules: CANONICAL_MODULES = ['website', 'gbp', 'competitor', 'reputation', 'social']
- * (Same as batch - single source of truth in lib/audit/modules.ts)
+ * P1-9: Requires minimum 'member' role — viewers cannot create audits.
  */
-export const POST = withAuth(async (req: Request) => {
+export const POST = withRole('member', withAuth(async (req: Request) => {
+
     try {
         const tenantId = await getTenantId();
         if (!tenantId) {
@@ -42,7 +45,7 @@ export const POST = withAuth(async (req: Request) => {
             throw e;
         }
 
-        let { url, industry, name, city } = validatedData as { url?: string; industry?: string; name?: string; city?: string };
+        let { url, industry, name, city, placeId } = validatedData as { url?: string; industry?: string; name?: string; city?: string; placeId?: string };
 
         // Check Usage Limits
         const limits = await checkAuditLimit();
@@ -67,6 +70,7 @@ export const POST = withAuth(async (req: Request) => {
                 businessName: name || 'Pending...',
                 businessCity: city ?? null,
                 businessUrl: url ?? null,
+                placeId: placeId ?? null,
                 businessIndustry: industry || 'Generic',
                 status: 'QUEUED',
                 apiCostCents: 0,
@@ -86,26 +90,24 @@ export const POST = withAuth(async (req: Request) => {
 
         // Run audit via canonical runner (single source of truth)
         // Ensure runner has tenant context for child graphs
-        const result = await runWithTenantAsync(tenantId, () => runAudit(audit.id));
+        // Fire and forget so we don't block the request timeout
+        runWithTenantAsync(tenantId, () => runAudit(audit.id)).catch(err => {
+            logError('Error running audit asynchronously', err);
+        });
 
         return NextResponse.json({
             success: true,
-            auditId: result.auditId,
-            status: result.status,
-            modulesCompleted: result.modulesCompleted,
-            modulesFailed: result.modulesFailed?.length ? result.modulesFailed : undefined,
-            findingsCount: result.findingsCount,
-            apiCostCents: result.costCents,
-            duration_ms: result.duration_ms,
-            costUSD: (result.costCents / 100).toFixed(2),
+            id: audit.id, // claraud-web uses this if it maps it
+            auditId: audit.id,
+            status: audit.status,
         });
 
     } catch (error) {
-        logError('Error running audit', error);
+        logError('Error creating audit', error);
         Metrics.increment('audits_failed');
         return NextResponse.json(
             { error: 'Internal Server Error', details: String(error) },
             { status: 500 }
         );
     }
-});
+}));

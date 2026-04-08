@@ -117,8 +117,8 @@ function AnimatedGauge({ score, label, delay = 0 }: { score: number; label: stri
     const offset = circumference * (1 - (mounted ? display : 0) / 100);
 
     return (
-        <div ref={ref} className="flex flex-col items-center">
-            <div className="relative w-32 h-32 sm:w-40 sm:h-40">
+        <div ref={ref} className="flex flex-col items-center" role="img" aria-label={`${label} Score is ${Math.round(display)} out of 100`}>
+            <div className="relative w-32 h-32 sm:w-40 sm:h-40" aria-hidden="true">
                 <svg className="w-full h-full -rotate-90" viewBox="0 0 100 100">
                     <circle cx="50" cy="50" r="45" fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth="8" />
                     <circle
@@ -225,12 +225,12 @@ export default function ProposalPage({ proposal, branding }: ProposalProps) {
     const formatDate = (d: Date) => new Date(d).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
 
     const openContactModal = () => {
-        trackCta();
+        trackCta('contact_modal_opened');
         setIsContactModalOpen(true);
     };
 
     const handleCheckout = async (tierId: string) => {
-        trackCta();
+        trackCta(`checkout_attempted_${tierId}`);
         try {
             const res = await fetch('/api/billing/checkout-proposal', {
                 method: 'POST',
@@ -385,7 +385,7 @@ export default function ProposalPage({ proposal, branding }: ProposalProps) {
                     <div className="max-w-5xl mx-auto px-4 sm:px-6 py-4 flex justify-between items-center">
                         <span className="text-lg font-bold text-white">{branding?.name ?? 'ProposalOS'}</span>
                         <div className="flex items-center gap-2">
-                            <a href={`/api/proposal/${proposal.webLinkToken}/pdf`} target="_blank" rel="noopener noreferrer" className="px-4 py-2 rounded-lg text-sm font-medium text-white flex items-center gap-2 min-h-[44px] min-w-[44px] justify-center" style={{ backgroundColor: BLUE }}>
+                            <a href={`/api/proposal/${proposal.webLinkToken}/pdf`} onClick={() => trackCta('download_pdf')} target="_blank" rel="noopener noreferrer" className="px-4 py-2 rounded-lg text-sm font-medium text-white flex items-center gap-2 min-h-[44px] min-w-[44px] justify-center" style={{ backgroundColor: BLUE }} aria-label="Download PDF">
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
                                 <span className="hidden sm:inline">Download PDF</span>
                             </a>
@@ -420,8 +420,8 @@ export default function ProposalPage({ proposal, branding }: ProposalProps) {
                     <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold mb-4">{proposal.audit.businessName}</h1>
                     <p className="text-white/70 text-lg mb-8">Digital Presence Audit</p>
                     <div className="flex justify-center">
-                        <div className="relative w-48 h-48 sm:w-56 sm:h-56">
-                            <svg className="w-full h-full -rotate-90" viewBox="0 0 100 100">
+                        <div className="relative w-48 h-48 sm:w-56 sm:h-56" role="img" aria-label={`Overall Health Score is ${Math.round(healthScore)} out of 100`}>
+                            <svg className="w-full h-full -rotate-90" viewBox="0 0 100 100" aria-hidden="true">
                                 <circle cx="50" cy="50" r="45" fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth="8" />
                                 <circle cx="50" cy="50" r="45" fill="none" stroke={BLUE} strokeWidth="8" strokeLinecap="round" strokeDasharray={2 * Math.PI * 45} strokeDashoffset={2 * Math.PI * 45 * (1 - healthScore / 100)} style={{ transition: 'stroke-dashoffset 1.2s ease-out' }} />
                             </svg>
@@ -486,6 +486,7 @@ export default function ProposalPage({ proposal, branding }: ProposalProps) {
 
                                             {visualEvidenceMap.has(f.id) && (
                                                 <div className="mt-4 rounded-lg overflow-hidden border border-white/10">
+                                                    {/* eslint-disable-next-line @next/next/no-img-element */}
                                                     <img
                                                         src={visualEvidenceMap.get(f.id)!.screenshotUrl}
                                                         alt={visualEvidenceMap.get(f.id)!.annotationText}

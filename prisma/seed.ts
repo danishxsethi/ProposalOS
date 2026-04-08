@@ -7,7 +7,21 @@ const prisma = new PrismaClient();
 async function main() {
     console.log('🌱 Seeding data...');
 
-    // 1. Create or get Tenant
+    // 1. Create or get System Tenant (for Claraud frontend API access)
+    const systemTenant = await prisma.tenant.upsert({
+        where: { slug: 'system' },
+        update: {},
+        create: {
+            name: 'System',
+            slug: 'system',
+            domain: 'system.proposalengine.app',
+            planTier: 'pro',
+            status: 'active',
+        },
+    });
+    console.log(`✅ Created System Tenant: ${systemTenant.name} (ID: ${systemTenant.id})`);
+
+    // 2. Create or get Tenant
     const tenantName = 'Acme Agencies';
     const tenant = await prisma.tenant.upsert({
         where: { domain: 'acme.com' },

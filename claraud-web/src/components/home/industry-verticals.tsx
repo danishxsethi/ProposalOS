@@ -2,29 +2,17 @@
 
 import { motion } from 'framer-motion';
 import { SectionWrapper } from '@/components/shared/section-wrapper';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ArrowRight } from 'lucide-react';
 import { useRef } from 'react';
 import Link from 'next/link';
-
-const industries = [
-    { icon: "🦷", name: "Dentists", slug: "dentists" },
-    { icon: "⚖️", name: "Law Firms", slug: "law-firms" },
-    { icon: "🔧", name: "HVAC", slug: "hvac" },
-    { icon: "🍕", name: "Restaurants", slug: "restaurants" },
-    { icon: "🏠", name: "Real Estate", slug: "real-estate" },
-    { icon: "💪", name: "Gyms", slug: "gyms" },
-    { icon: "🐾", name: "Veterinary", slug: "veterinary" },
-    { icon: "💇", name: "Salons", slug: "salons" },
-    { icon: "🏗️", name: "Contractors", slug: "contractors" },
-    { icon: "🛒", name: "Retail", slug: "retail" }
-];
+import { industries } from '@/lib/industries';
 
 export function IndustryVerticals() {
     const scrollRef = useRef<HTMLDivElement>(null);
 
     const scroll = (dir: 'left' | 'right') => {
         if (!scrollRef.current) return;
-        scrollRef.current.scrollBy({ left: dir === 'right' ? 240 : -240, behavior: 'smooth' });
+        scrollRef.current.scrollBy({ left: dir === 'right' ? 300 : -300, behavior: 'smooth' });
     };
 
     return (
@@ -47,9 +35,9 @@ export function IndustryVerticals() {
                 <button
                     onClick={() => scroll('left')}
                     aria-label="Scroll left"
-                    className="hidden md:flex absolute -left-6 top-1/2 -translate-y-1/2 z-10 w-10 h-10 items-center justify-center glass border border-white/10 rounded-full hover:bg-white/10 transition-colors"
+                    className="hidden md:flex absolute -left-6 top-1/2 -translate-y-1/2 z-10 w-12 h-12 items-center justify-center glass border border-white/10 rounded-full hover:bg-white/10 transition-colors"
                 >
-                    <ChevronLeft className="w-5 h-5" />
+                    <ChevronLeft className="w-6 h-6 text-white" />
                 </button>
 
                 {/* Scrollable carousel */}
@@ -59,20 +47,29 @@ export function IndustryVerticals() {
                     viewport={{ once: true }}
                     transition={{ duration: 0.6 }}
                     ref={scrollRef}
-                    className="flex gap-4 overflow-x-auto snap-x scroll-smooth pb-4"
+                    className="flex gap-6 overflow-x-auto snap-x scroll-smooth pb-8"
                     style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
                 >
                     {industries.map((industry, idx) => (
                         <Link
                             key={idx}
                             href={`/industries/${industry.slug}`}
-                            className="flex-shrink-0 min-w-[200px] snap-start glass border border-white/10 rounded-2xl p-6 flex flex-col items-center text-center gap-4 card-hover group"
+                            className="flex-shrink-0 min-w-[280px] snap-start glass border border-white/10 rounded-2xl p-8 flex flex-col items-center text-center gap-4 card-hover group relative overflow-hidden h-full"
                         >
-                            <span className="text-4xl">{industry.icon}</span>
-                            <h3 className="font-semibold text-white">{industry.name}</h3>
-                            <p className="text-xs text-blue-400 group-hover:text-blue-300 transition-colors">
-                                Get your {industry.name} audit &rarr;
-                            </p>
+                            <div className="absolute top-0 right-0 p-3">
+                                <span className="text-[10px] font-bold text-blue-500/50 uppercase tracking-widest">AVG {industry.avgScore}/10</span>
+                            </div>
+                            <span className="text-5xl mb-2">{industry.icon}</span>
+                            <h3 className="text-xl font-bold text-white group-hover:text-blue-400 transition-colors">{industry.name}</h3>
+                            <div className="space-y-1">
+                                <p className="text-[10px] uppercase tracking-widest text-text-secondary font-bold">Primary Gap</p>
+                                <p className="text-xs text-text-primary font-medium px-3 py-1.5 bg-white/5 rounded-lg border border-white/10">{industry.topIssue}</p>
+                            </div>
+                            <div className="pt-4 mt-auto">
+                                <p className="text-sm font-semibold text-blue-400 group-hover:text-blue-300 transition-colors flex items-center gap-2">
+                                    Industry Audit <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                                </p>
+                            </div>
                         </Link>
                     ))}
                 </motion.div>
@@ -81,9 +78,9 @@ export function IndustryVerticals() {
                 <button
                     onClick={() => scroll('right')}
                     aria-label="Scroll right"
-                    className="hidden md:flex absolute -right-6 top-1/2 -translate-y-1/2 z-10 w-10 h-10 items-center justify-center glass border border-white/10 rounded-full hover:bg-white/10 transition-colors"
+                    className="hidden md:flex absolute -right-6 top-1/2 -translate-y-1/2 z-10 w-12 h-12 items-center justify-center glass border border-white/10 rounded-full hover:bg-white/10 transition-colors"
                 >
-                    <ChevronRight className="w-5 h-5" />
+                    <ChevronRight className="w-6 h-6 text-white" />
                 </button>
             </div>
         </SectionWrapper>

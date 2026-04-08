@@ -26,19 +26,19 @@ export async function POST(req: NextRequest) {
         // Store lead
         leadStore.set(scanToken, { email, businessUrl, scanToken, scores, capturedAt: new Date() });
 
-        // Calculate overall score for email
+        // Calculate overall score for email (/10 scale)
         const scoresList = Object.values(scores || {}) as number[];
         const overallScore = scoresList.length > 0
-            ? Math.round(scoresList.reduce((a, b) => a + b, 0) / scoresList.length)
-            : 49;
+            ? Math.round((scoresList.reduce((a, b) => a + b, 0) / scoresList.length) * 10) / 10
+            : 4.9;
 
         // Get letter grade
         const getLetterGrade = (score: number) => {
-            if (score >= 90) return 'A+';
-            if (score >= 80) return 'A';
-            if (score >= 70) return 'B';
-            if (score >= 60) return 'C';
-            if (score >= 50) return 'D';
+            if (score >= 9) return 'A+';
+            if (score >= 8) return 'A';
+            if (score >= 7) return 'B';
+            if (score >= 6) return 'C';
+            if (score >= 5) return 'D';
             return 'F';
         };
         const letterGrade = getLetterGrade(overallScore);

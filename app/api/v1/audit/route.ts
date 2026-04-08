@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { withRateLimit } from '@/lib/middleware/rateLimit';
-import { AuditOrchestrator } from '@/lib/orchestrator/auditOrchestrator';
+// P0-3: Use runner (Single source of truth)
+import { runAudit } from '@/lib/audit/runner';
 import { CostTracker } from '@/lib/costs/costTracker';
 
 /**
@@ -53,38 +54,10 @@ async function handlePOST(req: Request) {
             }
         });
 
-        // Trigger audit orchestrator asynchronously
-        const tracker = new CostTracker();
-        const orchestrator = new AuditOrchestrator({
-            auditId: audit.id,
-            businessName,
-            websiteUrl: businessUrl,
-            city: city || '',
-            industry: industry || 'Generic'
-        }, tracker);
-
-        // Fire-and-forget execution
-        orchestrator.run()
-            .then(async (result) => {
-                await prisma.audit.update({
-                    where: { id: audit.id },
-                    data: {
-                        status: result.status === 'COMPLETE' ? 'COMPLETE' : 'FAILED',
-                        completedAt: new Date(),
-                        apiCostCents: tracker.getTotalCents()
-                    }
-                });
-            })
-            .catch(async (error) => {
-                await prisma.audit.update({
-                    where: { id: audit.id },
-                    data: {
-                        status: 'FAILED',
-                        completedAt: new Date()
-                    }
-                });
-                console.error('Audit orchestrator failed:', error);
-            });
+        // Trigger audit runner asynchronously (P0-3 redirect)
+        runAudit(audit.id).catch(async (error) => {
+            console.error('Audit runner failed:', error);
+        });
 
         return NextResponse.json({
             id: audit.id,

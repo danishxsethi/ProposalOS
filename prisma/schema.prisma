@@ -16,6 +16,7 @@ model Audit {
   businessName       String
   businessCity       String?
   businessUrl        String?
+  placeId            String?
   businessIndustry   String?
   verticalPlaybookId String? // e.g., 'dentist', 'law-firm' — from playbook detection
   status             AuditStatus @default(QUEUED)
@@ -338,6 +339,7 @@ model Tenant {
   branding  Json     @default("{}")
   settings  Json     @default("{}")
   isActive  Boolean  @default(true)
+  requireHumanReview Boolean @default(false) // P2: Human in the loop for outreach
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -524,6 +526,7 @@ model ProspectLead {
   qualificationEvidence Json      @default("{}")
   qualifiedAt           DateTime?
   disqualifiedReason    String?
+  anonymizedAt          DateTime? // P1: GDPR / Data Retention compliance
 
   decisionMakerName        String?
   decisionMakerTitle       String?
@@ -1066,6 +1069,7 @@ enum AuditStatus {
   RUNNING
   COMPLETE
   PARTIAL
+  DEGRADED
   FAILED
 }
 

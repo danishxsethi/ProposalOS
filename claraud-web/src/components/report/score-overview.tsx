@@ -23,18 +23,18 @@ export function ScoreOverview({ categories }: ScoreOverviewProps) {
     const radarData = categories.map(cat => ({
         category: cat.name,
         score: cat.score,
-        fullMark: 100
+        fullMark: 10
     }));
 
     const getScoreColor = (score: number) => {
-        if (score >= 70) return 'bg-green-500';
-        if (score >= 40) return 'bg-yellow-500';
+        if (score >= 7) return 'bg-green-500';
+        if (score >= 4) return 'bg-yellow-500';
         return 'bg-red-500';
     };
 
     const getScoreTextColor = (score: number) => {
-        if (score >= 70) return 'text-green-500';
-        if (score >= 40) return 'text-yellow-500';
+        if (score >= 7) return 'text-green-500';
+        if (score >= 4) return 'text-yellow-500';
         return 'text-red-500';
     };
 
@@ -69,13 +69,13 @@ export function ScoreOverview({ categories }: ScoreOverviewProps) {
                                 </div>
                                 <span className="font-semibold text-white tracking-tight">{cat.name}</span>
                             </div>
-                            <span className={`font-bold ${getScoreTextColor(cat.score)}`}>{cat.score}/100</span>
+                            <span className={`font-bold ${getScoreTextColor(cat.score)}`}>{cat.score.toFixed(1)}/10</span>
                         </div>
 
                         <div className="w-full h-1.5 bg-white/5 rounded-full overflow-hidden mb-3">
                             <motion.div
                                 initial={{ width: 0 }}
-                                whileInView={{ width: `${cat.score}%` }}
+                                whileInView={{ width: `${Math.max(0, Math.min(100, cat.score * 10))}%` }}
                                 transition={{ duration: 1, delay: 0.5 + (idx * 0.1), ease: "easeOut" }}
                                 viewport={{ once: true }}
                                 className={`h-full rounded-full ${getScoreColor(cat.score)}`}

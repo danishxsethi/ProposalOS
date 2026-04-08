@@ -45,7 +45,12 @@ export async function GET(
     try {
         const res = await fetch(`${baseUrl}/api/report/${token}`, { cache: 'no-store' });
         if (res.ok) {
-            reportData = await res.json();
+            const report = await res.json();
+            reportData = {
+                businessName: report.businessName,
+                overallScore: Math.round((report.overallScore ?? 0) * 10),
+                letterGrade: report.letterGrade,
+            };
         } else {
             // Fallback to mock data
             reportData = {
