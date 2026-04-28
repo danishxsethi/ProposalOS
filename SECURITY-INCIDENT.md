@@ -599,3 +599,28 @@ Cannot connect to the Docker daemon at unix:///Users/danishsethi/.docker/run/doc
   - normal `git commit` was blocked again by the broken Husky/ESLint pre-commit hook (`.eslintrc.json` circular-config failure)
   - this finding will be committed with `HUSKY=0`; hook repair remains tracked for Phase 3
 - Status: ✅ fixed
+
+### P1-02 — Audit proposal tenant authorization
+
+- File: `app/api/audit/[id]/propose/route.ts`
+- Alias sweep:
+  - no re-export route aliases found under `app/api/`
+  - only direct references are the handler itself and `app/api/__tests__/audit.test.ts`
+- Sibling audit-route sweep:
+  - `app/api/audit/[id]/propose/route.ts` had raw `prisma.audit.findUnique({ where: { id } })`
+  - `app/api/audit/[id]/regenerate/route.ts` had the same raw `findUnique` pattern and was folded into this commit
+  - `app/api/audit/[id]/compare/[previousId]/route.ts` uses `createScopedPrisma(tenantId)` before `findUnique`, so it was left unchanged in this pass
+- Fix:
+  - `propose` now uses `getTenantId()` and `prisma.audit.findFirst({ where: { id, tenantId } })`
+  - `regenerate` now uses the same canonical tenant-scoped lookup
+- Tests:
+  - `tests/security/audit-propose-authz.test.ts`
+  - `tests/security/audit-regenerate-authz.test.ts`
+  - updated `app/api/__tests__/audit.test.ts` to match the new route signature and scoped lookup
+- Verification:
+  - `pnpm exec vitest run tests/security/audit-propose-authz.test.ts tests/security/audit-regenerate-authz.test.ts app/api/__tests__/audit.test.ts` → `3 passed`, `7 passed`
+  - `pnpm exec tsc --noEmit --pretty false` still fails globally from pre-existing Phase 3 issues, but none of the touched P1-02 files appear in the compiler error set
+- Commit-path note:
+  - Husky/ESLint pre-commit remains broken (`.eslintrc.json` circular-config failure from earlier findings)
+  - this finding will also be committed with `HUSKY=0`; hook repair remains tracked for Phase 3
+- Status: ✅ fixed
