@@ -1,1 +1,5 @@
+#!/usr/bin/env sh
+set -e
+
+./scripts/pre-commit-secret-scan.sh
 npx lint-staged
