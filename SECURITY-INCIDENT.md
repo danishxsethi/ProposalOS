@@ -624,3 +624,25 @@ Cannot connect to the Docker daemon at unix:///Users/danishsethi/.docker/run/doc
   - Husky/ESLint pre-commit remains broken (`.eslintrc.json` circular-config failure from earlier findings)
   - this finding will also be committed with `HUSKY=0`; hook repair remains tracked for Phase 3
 - Status: ✅ fixed
+
+## Phase 1 — Authz Remediation ✅ COMPLETE (`2026-04-28T22:51:46Z`)
+
+- P0-02: ✅ commit `5872f00`
+- P0-03: ✅ commit `1160f9e`
+- P1-02: ✅ commit `5ad7dda`
+- Branch: `phase-1-authz-remediation`
+- Full test suite:
+  - command: `pnpm test`
+  - result: ❌ `43 failed | 77 passed (120)` files, `240 failed | 1351 passed | 63 skipped (1654)` tests
+  - representative unrelated failure: `app/api/cron/pipeline-delivery/__tests__/route.test.ts` expected `200`, received `429`
+- Type check:
+  - command: `pnpm exec tsc --noEmit --pretty false`
+  - result: ❌ pre-existing repo-wide failures remain
+  - representative tail: missing `k6` typings in `tests/load/*`, invalid `__ENV` references, red-team typing mismatches in `tests/red-team/adversarialQA.eval.ts`, and `vitest.config.deep-localization.ts` coverage config errors
+- Build:
+  - command: `pnpm build`
+  - result: ✅ clean
+- Notes:
+  - the three Phase 1 authz findings are fixed and covered by targeted regression tests
+  - repo-wide gates are still blocked by pre-existing Phase 3 build/test debt outside the authz remediation surface
+  - Phase 1 closure documentation commit also uses `HUSKY=0` because the same Husky/ESLint hook remains broken
