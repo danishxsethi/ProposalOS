@@ -12,8 +12,15 @@ export default async function ClientAuditPage({
   const token = searchParams.token;
   if (!token) return redirect('/login');
 
-  const audit = await prisma.audit.findUnique({
-    where: { id: params.id },
+  const audit = await prisma.audit.findFirst({
+    where: {
+      id: params.id,
+      proposals: {
+        some: {
+          webLinkToken: token,
+        },
+      },
+    },
     include: {
       findings: true,
     },

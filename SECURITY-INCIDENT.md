@@ -569,3 +569,15 @@ Cannot connect to the Docker daemon at unix:///Users/danishsethi/.docker/run/doc
 - Project `ixcc-486621` contains multiple unrelated apps (ProposalOS scratch + Passwise prod). Consider per-app projects to reduce blast radius.
 - `scripts/connect-db.sh` must continue to read DSN from env / Secret Manager, never from a literal credential.
 - Other `ixcc-486621` Cloud SQL instances (for example `immigration-prod`) should be audited separately for similar leak patterns and rotated independently if any credentials were ever shared in chat or notes.
+
+## Phase 1 — Authz Remediation
+
+### P0-02 — Client magic-link cross-audit access
+
+- File: `app/(client)/client/audit/[id]/page.tsx`
+- Fix: replaced raw audit lookup by `id` with a token-scoped lookup requiring `proposals.some.webLinkToken = token` in the same query
+- Sweep: `app/(client)/` has two `findUnique` calls total; only the vulnerable page used raw `id`. `app/(client)/client/dashboard/page.tsx` is already token-scoped via `webLinkToken`
+- Token expiry: `Proposal.webLinkToken` has no expiration field in `prisma/schema.prisma`; follow-up required for expiring/rotating client access tokens
+- Test: `tests/security/client-magic-link.test.ts`
+- Verification: `pnpm exec vitest run tests/security/client-magic-link.test.ts` → `1 passed`, `4 passed`
+- Status: ✅ fixed
