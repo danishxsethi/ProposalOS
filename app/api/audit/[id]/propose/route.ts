@@ -14,6 +14,7 @@ import { withAuth } from '@/lib/middleware/auth';
 import { detectVertical, getPlaybook } from '@/lib/playbooks';
 import { prisma } from '@/lib/prisma';
 import { runAutoQA } from '@/lib/qa/autoQA';
+import { getTenantId } from '@/lib/tenant/context';
 import { createParentTrace } from '@/lib/tracing';
 
 /**
@@ -27,6 +28,11 @@ export const POST = withAuth(
       const resolved = await params;
       auditId = resolved.id;
       const startTime = Date.now();
+      const tenantId = await getTenantId();
+
+      if (!tenantId) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      }
 
       logger.info(
         {
@@ -37,8 +43,8 @@ export const POST = withAuth(
       );
 
       // Fetch audit with findings
-      const audit = await prisma.audit.findUnique({
-        where: { id: auditId },
+      const audit = await prisma.audit.findFirst({
+        where: { id: auditId, tenantId },
         include: {
           findings: true,
           proposals: {

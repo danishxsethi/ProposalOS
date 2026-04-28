@@ -5,6 +5,7 @@ import { invokeDiagnosisGraphWithTimeout } from '@/lib/graph/diagnosis-graph';
 import { withAuth } from '@/lib/middleware/auth';
 import { prisma } from '@/lib/prisma';
 import { runProposalPipeline } from '@/lib/proposal';
+import { getTenantId } from '@/lib/tenant/context';
 // P0-3: Use LangGraph path
 
 interface Params {
@@ -18,10 +19,15 @@ interface Params {
 export const POST = withAuth(async (request: Request, { params }: Params) => {
   try {
     const { id: auditId } = await params;
+    const tenantId = await getTenantId();
+
+    if (!tenantId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
 
     // Verify audit exists
-    const audit = await prisma.audit.findUnique({
-      where: { id: auditId },
+    const audit = await prisma.audit.findFirst({
+      where: { id: auditId, tenantId },
       include: {
         findings: {
           where: { excluded: false },
