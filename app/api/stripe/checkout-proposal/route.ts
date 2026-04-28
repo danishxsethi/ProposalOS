@@ -1,11 +1,12 @@
 import { NextResponse } from 'next/server';
+import { z } from 'zod';
 
 import { generateTraceId, InternalError } from '@/lib/api/errors';
 import { prisma } from '@/lib/prisma';
 import { getProposalPriceId, stripe } from '@/lib/stripe/stripe';
 import type { ProposalPlanId } from '@/lib/stripe/stripe';
 
-const ALLOWED_TIERS: ProposalPlanId[] = ['essentials', 'growth', 'premium'];
+const ALLOWED_TIERS = ['essentials', 'growth', 'premium'] as const satisfies readonly ProposalPlanId[];
 
 // In-memory idempotency cache (24 hour TTL)
 const IDEMPOTENCY_CACHE = new Map<
@@ -13,6 +14,12 @@ const IDEMPOTENCY_CACHE = new Map<
   { response: unknown; statusCode: number; timestamp: number }
 >();
 const IDEMPOTENCY_TTL_MS = 24 * 60 * 60 * 1000;
+
+const CheckoutProposalSchema = z.object({
+  proposalId: z.string().min(1),
+  tierId: z.enum(ALLOWED_TIERS),
+  webLinkToken: z.string().min(1),
+});
 
 /**
  * POST /api/stripe/checkout-proposal
@@ -37,14 +44,20 @@ export async function POST(req: Request) {
   }
 
   try {
-    const { proposalId, tierId } = await req.json();
-    if (!proposalId || !tierId || !ALLOWED_TIERS.includes(tierId)) {
-      return NextResponse.json({ error: 'Missing or invalid proposalId/tierId' }, { status: 400 });
+    const parsed = CheckoutProposalSchema.safeParse(await req.json());
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: 'Missing or invalid proposalId/tierId/webLinkToken' },
+        { status: 400 }
+      );
     }
+    const { proposalId, tierId, webLinkToken } = parsed.data;
 
-    const proposal = await prisma.proposal.findUnique({ where: { id: proposalId } });
+    const proposal = await prisma.proposal.findFirst({
+      where: { id: proposalId, webLinkToken },
+    });
     if (!proposal) {
-      return NextResponse.json({ error: 'Proposal not found' }, { status: 404 });
+      return NextResponse.json({ error: 'not found' }, { status: 404 });
     }
 
     const priceId = getProposalPriceId(tierId);
