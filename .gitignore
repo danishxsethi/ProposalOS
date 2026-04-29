@@ -34,7 +34,6 @@ yarn-error.log*
 next-env.d.ts
 
 # prisma
-/prisma/migrations/
 
 # gcp
 service-account.json
