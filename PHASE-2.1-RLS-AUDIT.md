@@ -495,3 +495,59 @@ Because Cloud Run access remains denied in `ixcc-486621`, this audit still canno
 2. Does the live app connect as `postgres`, `app_user`, or another role?
 3. Was `prisma/migrations/**` intentionally gitignored at some point, or is it pure drift?
 4. Should nullable `tenantId` rows remain globally visible on all such tables, or only on a narrower allowlist?
+
+## Phase 2.1.5 Closure
+
+### Reconciliation strategy chosen
+
+- `R2` — reconcile legacy RLS files into a standard Prisma migration directory
+- canonical merged artifact:
+  - [prisma/migrations/20260429093000_enable_rls/migration.sql](/Users/danishsethi/VSCODE/ProposalOS/prisma/migrations/20260429093000_enable_rls/migration.sql)
+  - [prisma/migrations/20260429093000_enable_rls/revert.sql](/Users/danishsethi/VSCODE/ProposalOS/prisma/migrations/20260429093000_enable_rls/revert.sql)
+- legacy files removed:
+  - `prisma/enable_rls.sql`
+  - `prisma/migrations/rls/enable_rls.sql`
+  - `prisma/migrations/rls/revert_rls.sql`
+
+### Post-auth findings summary
+
+- migration tracking restored in git
+- Cloud SQL inventory in `ixcc-486621` is visible
+- Cloud Run runtime inspection in `ixcc-486621` is still IAM-blocked
+- `DATABASE_URL` and `DIRECT_URL` both point to:
+  - DB role: `postgres`
+  - DB name: `immigration_platform`
+  - Cloud SQL socket: `ixcc-486621:northamerica-northeast1:immigration-prod`
+- `proposal-engine-db` remains stopped and is not the current secret-backed target
+
+### Closure gates
+
+- `vitest`: full suite did **not** complete within the closure window; process was terminated after extended wait
+- `tsc --noEmit`: still failing with pre-existing type errors in test/eval code and config, including:
+  - `tests/red-team/adversarialQA.eval.ts`
+  - `vitest.config.deep-localization.ts`
+- `pnpm build`: completed successfully
+
+### Baseline comparison
+
+- No application code changed in this phase
+- Changes were limited to:
+  - docs
+  - `.gitignore`
+  - migration SQL files
+- `tsc` remains red in the same broad Phase 3 / `P1-01` territory captured in [PHASE-2-BASELINE.md](/Users/danishsethi/VSCODE/ProposalOS/PHASE-2-BASELINE.md)
+- `build` remains green
+- `vitest` full-suite comparison is inconclusive because the suite did not finish in-window
+
+### Phase 2.2 readiness checklist
+
+- [x] RLS audit materialized to a tracked artifact
+- [x] `prisma/migrations/**` restored to git
+- [x] Divergent RLS files reconciled into one canonical Prisma migration directory
+- [x] `@@map` table-name bugs corrected for known mapped tables
+- [x] `WITH CHECK` clauses added to the merged migration
+- [x] Post-auth Cloud SQL and secret verification completed
+- [ ] Cloud Run runtime inspection still blocked by IAM in `ixcc-486621`
+- [ ] Live DB migration state still not confirmed via `pg_tables` / `pg_policies`
+- [ ] Remaining RLS coverage gaps (`17` tenant-bearing models) deferred to Phase 2.2+
+- [ ] Tenant-derived models missing `tenantId` deferred to Phase 2.3 schema work
