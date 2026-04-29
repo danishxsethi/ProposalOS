@@ -376,6 +376,98 @@ They do **not** prove:
 - that the live app connects as a restricted role rather than `postgres`
 - that `SET LOCAL` behaves correctly under the production pooled connection model
 
+## Post-Auth Verification
+
+### What became accessible after auth refresh
+
+- `gcloud config get-value project` returned `ixcc-486621`
+- `gcloud projects list` succeeded and showed visible projects including:
+  - `ixcc-486621`
+  - `proposal-487522`
+  - `swinglabs-fund`
+  - `drape-prod`
+  - `dealpilot-ae`
+  - `blazecrawl-prod`
+- `gcloud sql instances list --project=ixcc-486621` succeeded
+- Secret Manager access for `DATABASE_URL` and `DIRECT_URL` in `ixcc-486621` succeeded
+
+### What is still blocked
+
+- Cloud Run service listing in `ixcc-486621` is still denied:
+
+```text
+ERROR: (gcloud.run.services.list) PERMISSION_DENIED:
+Permission 'run.services.list' denied on resource 'namespaces/ixcc-486621/services'
+```
+
+- Cloud Run job listing in `ixcc-486621` is still denied:
+
+```text
+ERROR: (gcloud.run.jobs.list) PERMISSION_DENIED:
+Permission 'run.jobs.list' denied on resource 'namespaces/ixcc-486621/jobs'
+```
+
+- Direct `describe` calls for the likely ProposalOS services are also denied:
+  - `proposal-engine`
+  - `proposal-engine-staging`
+
+So post-auth access improved, but not enough to inspect actual Cloud Run runtime env or Cloud SQL attachment metadata for ProposalOS in `ixcc-486621`.
+
+### Cloud SQL inventory in `ixcc-486621`
+
+Visible instances:
+
+- `immigration-db` — `northamerica-northeast1` — `RUNNABLE`
+- `immigration-prod` — `northamerica-northeast1` — `RUNNABLE`
+- `proposal-engine-db` — `us-central1` — `STOPPED`
+- `misprice-db` — `us-central1` — `RUNNABLE`
+
+This confirms again that `proposal-engine-db` remains stopped and is not the active secret-backed target today.
+
+### Secret Manager findings
+
+Accessible secrets:
+
+- `DATABASE_URL`
+- `DIRECT_URL`
+
+Latest `DATABASE_URL` versions list:
+
+- version `18` — enabled — `2026-02-14T21:20:45`
+- version `17` — enabled — `2026-02-07T19:31:05`
+- version `16` — enabled — `2026-02-07T19:23:16`
+
+Masked `DATABASE_URL` shape:
+
+```text
+postgresql://postgres:REDACTED@/immigration_platform?host=/cloudsql/ixcc-486621:northamerica-northeast1:immigration-prod
+```
+
+Parsed fields:
+
+- role: `postgres`
+- database: `immigration_platform`
+- Cloud SQL socket target: `ixcc-486621:northamerica-northeast1:immigration-prod`
+
+`DIRECT_URL` resolved to the same masked shape and the same parsed role/database/instance.
+
+### Best-effort inference
+
+- The current `DATABASE_URL` and `DIRECT_URL` secrets in `ixcc-486621` are **not** pointing at `proposal-engine-db`
+- They point to `immigration-prod` / `immigration_platform`
+- The current connecting DB role encoded in both secrets is **`postgres`**
+
+This is a strong signal that the visible DB credentials in this project are for another live app in the shared project, not for the dormant `proposal-engine-db`.
+
+### Remaining unknowns
+
+Because Cloud Run access remains denied in `ixcc-486621`, this audit still cannot prove:
+
+- whether a live ProposalOS Cloud Run service exists in that project,
+- whether ProposalOS consumes `DATABASE_URL` / `DIRECT_URL`,
+- whether any ProposalOS runtime is actually attached to `immigration-prod`,
+- or whether a different secret or different project backs ProposalOS runtime traffic.
+
 ## Critical findings
 
 1. **`prisma/migrations/**` is gitignored.\*\* This is a source-of-truth failure for schema and RLS history across machines and deploys.
