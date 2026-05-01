@@ -17,6 +17,7 @@ import { verifyCronAuth } from '@/lib/middleware/cronAuth';
 import { withRateLimit } from '@/lib/middleware/rateLimit';
 import { aggregatePatterns } from '@/lib/pipeline/crossTenantIntelligence';
 import { prisma } from '@/lib/prisma';
+import { runWithTenantAsync, runWithTenantBypass } from '@/lib/tenant/context';
 
 /**
  * Inner handler for intelligence aggregation cron
@@ -30,39 +31,44 @@ async function handleIntelligenceAggregation(req: NextRequest): Promise<NextResp
     let tenantsProcessed = 0;
     let errors = 0;
 
-    // Get all tenants
-    const tenants = await prisma.tenant.findMany();
+    // Cross-tenant enumeration is intentional here because this cron aggregates
+    // patterns across every tenant before each inner pass drops back to tenant scope.
+    const tenants = await runWithTenantBypass('cron-intelligence-aggregation-all-tenants', () =>
+      prisma.tenant.findMany()
+    );
 
     // For each tenant, aggregate recent outcomes
     for (const tenant of tenants) {
       try {
-        // Get recent win/loss records (last 7 days)
-        const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+        await runWithTenantAsync(tenant.id, async () => {
+          const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
 
-        const winLossRecords = await prisma.winLossRecord.findMany({
-          where: {
-            tenantId: tenant.id,
-            createdAt: { gte: sevenDaysAgo },
-          },
+          // Keep the tenant filter explicit even though the ALS context now scopes the client.
+          const winLossRecords = await prisma.winLossRecord.findMany({
+            where: {
+              tenantId: tenant.id,
+              createdAt: { gte: sevenDaysAgo },
+            },
+          });
+
+          if (winLossRecords.length > 0) {
+            const outcomes = winLossRecords.map((record) => ({
+              outcome: record.outcome as 'won' | 'lost' | 'ghosted',
+              tierChosen: record.tierChosen || undefined,
+              dealValue: record.dealValue ? Number(record.dealValue) : undefined,
+              lostReason: record.lostReason || undefined,
+              objectionsRaised: (record.objectionsRaised as string[]) || [],
+              competitorMentioned: record.competitorMentioned || undefined,
+              vertical: record.vertical,
+              city: record.city || 'Unknown',
+              painScore: 0,
+            }));
+
+            await aggregatePatterns(tenant.id, outcomes);
+            totalOutcomes += outcomes.length;
+            tenantsProcessed++;
+          }
         });
-
-        if (winLossRecords.length > 0) {
-          const outcomes = winLossRecords.map((record: any) => ({
-            outcome: record.outcome as 'won' | 'lost' | 'ghosted',
-            tierChosen: record.tierChosen || undefined,
-            dealValue: record.dealValue ? Number(record.dealValue) : undefined,
-            lostReason: record.lostReason || undefined,
-            objectionsRaised: (record.objectionsRaised as string[]) || [],
-            competitorMentioned: record.competitorMentioned || undefined,
-            vertical: record.vertical,
-            city: record.city || 'Unknown',
-            painScore: 0,
-          }));
-
-          await aggregatePatterns(tenant.id, outcomes);
-          totalOutcomes += outcomes.length;
-          tenantsProcessed++;
-        }
       } catch (error) {
         console.error(`Error aggregating patterns for tenant ${tenant.id}:`, error);
         errors++;

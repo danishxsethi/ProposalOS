@@ -13,9 +13,9 @@
 import { logger } from '@/lib/logger';
 import { sendAlert } from '@/lib/notifications/slack';
 import { prisma } from '@/lib/prisma';
-import { createScopedPrisma } from '@/lib/tenant/context';
+import { createScopedPrisma, runWithTenantAsync, runWithTenantBypass } from '@/lib/tenant/context';
 
-import { PipelineStage, ProspectStatus } from './types';
+import { ProspectStatus } from './types';
 
 /**
  * DLQ entry for a failed prospect
@@ -350,67 +350,70 @@ export async function processDLQ(): Promise<{
   retried: number;
   discarded: number;
 }> {
-  const allTenants = await prisma.tenant.findMany({
-    where: { isActive: true },
-  });
+  // Cross-tenant enumeration is intentional here because the retry driver needs to
+  // fan out across every active tenant before dropping back into tenant-local work.
+  const allTenants = await runWithTenantBypass('dlq-cross-tenant-retry-driver', () =>
+    prisma.tenant.findMany({
+      where: { isActive: true },
+    })
+  );
 
   let processed = 0;
   let retried = 0;
   let discarded = 0;
 
   for (const tenant of allTenants) {
-    const prismaScoped = createScopedPrisma(tenant.id);
-    const config = await prismaScoped.pipelineConfig.findUnique({
-      where: { tenantId: tenant.id },
-    });
+    await runWithTenantAsync(tenant.id, async () => {
+      const config = await prisma.pipelineConfig.findUnique({
+        where: { tenantId: tenant.id },
+      });
 
-    const maxFailureCount = config?.maxFailureCount || 3;
+      const maxFailureCount = config?.maxFailureCount || 3;
 
-    // Get pending entries
-    const pendingEntries = await prismaScoped.deadLetterQueue.findMany({
-      where: {
-        tenantId: tenant.id,
-        status: 'pending',
-      },
-      take: 10, // Process up to 10 per tenant per run
-    });
-
-    for (const entry of pendingEntries) {
-      processed++;
-
-      if (entry.failureCount >= maxFailureCount * 2) {
-        // Auto-discard after 2x max failures
-        await prismaScoped.deadLetterQueue.update({
-          where: { prospectId: entry.prospectId },
-          data: {
-            status: 'discarded',
-            processedAt: new Date(),
-          },
-        });
-        discarded++;
-
-        await sendAlert({
+      // Keep the active tenant filter explicit even though the ALS context now scopes the client.
+      const pendingEntries = await prisma.deadLetterQueue.findMany({
+        where: {
           tenantId: tenant.id,
-          type: 'DLQ_AUTO_DISCARDED',
-          title: `Auto-Discarded from DLQ: ${entry.prospectId}`,
-          message: `Prospect was automatically discarded after ${entry.failureCount} failures.`,
-          severity: 'medium',
-          metadata: {
-            prospectId: entry.prospectId,
-            failureCount: entry.failureCount,
-          },
-        });
-      } else {
-        // Mark for retry
-        await prismaScoped.deadLetterQueue.update({
-          where: { prospectId: entry.prospectId },
-          data: {
-            status: 'retrying',
-          },
-        });
-        retried++;
+          status: 'pending',
+        },
+        take: 10, // Process up to 10 per tenant per run
+      });
+
+      for (const entry of pendingEntries) {
+        processed++;
+
+        if (entry.failureCount >= maxFailureCount * 2) {
+          await prisma.deadLetterQueue.update({
+            where: { prospectId: entry.prospectId },
+            data: {
+              status: 'discarded',
+              processedAt: new Date(),
+            },
+          });
+          discarded++;
+
+          await sendAlert({
+            tenantId: tenant.id,
+            type: 'DLQ_AUTO_DISCARDED',
+            title: `Auto-Discarded from DLQ: ${entry.prospectId}`,
+            message: `Prospect was automatically discarded after ${entry.failureCount} failures.`,
+            severity: 'medium',
+            metadata: {
+              prospectId: entry.prospectId,
+              failureCount: entry.failureCount,
+            },
+          });
+        } else {
+          await prisma.deadLetterQueue.update({
+            where: { prospectId: entry.prospectId },
+            data: {
+              status: 'retrying',
+            },
+          });
+          retried++;
+        }
       }
-    }
+    });
   }
 
   return { processed, retried, discarded };
