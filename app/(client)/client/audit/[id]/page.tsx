@@ -1,6 +1,7 @@
 import { notFound, redirect } from 'next/navigation';
 
 import { prisma } from '@/lib/prisma';
+import { runWithTenantAsync, runWithTenantBypass } from '@/lib/tenant/context';
 
 export default async function ClientAuditPage({
   params,
@@ -12,26 +13,30 @@ export default async function ClientAuditPage({
   const token = searchParams.token;
   if (!token) return redirect('/login');
 
-  const audit = await prisma.audit.findFirst({
-    where: {
-      id: params.id,
-      proposals: {
-        some: {
-          webLinkToken: token,
+  const audit = await runWithTenantBypass(() =>
+    prisma.audit.findFirst({
+      where: {
+        id: params.id,
+        proposals: {
+          some: {
+            webLinkToken: token,
+          },
         },
       },
-    },
-    include: {
-      findings: true,
-    },
-  });
+      include: {
+        findings: true,
+      },
+    })
+  );
 
   if (!audit) return notFound();
 
   // Fetch Statuses
-  const statuses = await prisma.findingStatus.findMany({
-    where: { auditId: audit.id },
-  });
+  const statuses = await runWithTenantAsync(audit.tenantId, () =>
+    prisma.findingStatus.findMany({
+      where: { auditId: audit.id },
+    })
+  );
 
   const statusMap = new Map(statuses.map((s) => [s.findingId, s.status]));
 

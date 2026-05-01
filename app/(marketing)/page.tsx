@@ -1,16 +1,17 @@
 import Link from 'next/link';
 
 import { prisma } from '@/lib/prisma'; // For live stats if we want 'server' component data
+import { runWithTenantBypass } from '@/lib/tenant/context';
 
 // Force dynamic if we use DB
 export const dynamic = 'force-dynamic';
 
 async function getStats() {
   try {
-    const count = await prisma.audit.count();
+    const count = await runWithTenantBypass(() => prisma.audit.count());
     // Fake it till you make it if count is low
     return Math.max(count, 1420);
-  } catch (e) {
+  } catch {
     return 1420;
   }
 }

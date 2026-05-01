@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 import CaseStudyTemplate from '@/components/CaseStudyTemplate';
 import { getBranding } from '@/lib/config/branding';
 import { prisma } from '@/lib/prisma';
+import { runWithTenantAsync, runWithTenantBypass } from '@/lib/tenant/context';
 import './pdf.css';
 
 export const metadata = {
@@ -16,20 +17,22 @@ interface Props {
 export default async function CaseStudyPdfPage({ params }: Props) {
   const { auditId } = await params;
 
-  const audit = await prisma.audit.findUnique({
-    where: { id: auditId },
-    include: {
-      findings: { where: { excluded: false }, orderBy: { impactScore: 'desc' } },
-      proposals: { take: 1, orderBy: { createdAt: 'desc' } },
-    },
-  });
+  const audit = await runWithTenantBypass(() =>
+    prisma.audit.findUnique({
+      where: { id: auditId },
+      include: {
+        findings: { where: { excluded: false }, orderBy: { impactScore: 'desc' } },
+        proposals: { take: 1, orderBy: { createdAt: 'desc' } },
+      },
+    })
+  );
 
   if (!audit) {
     notFound();
   }
 
   const proposal = audit.proposals[0] ?? null;
-  const branding = await getBranding(audit.tenantId);
+  const branding = await runWithTenantAsync(audit.tenantId, () => getBranding(audit.tenantId));
 
   return (
     <CaseStudyTemplate

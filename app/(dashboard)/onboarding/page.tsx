@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation';
 
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { runWithTenantAsync } from '@/lib/tenant/context';
 
 export default async function OnboardingPage({
   searchParams,
@@ -19,20 +20,24 @@ export default async function OnboardingPage({
   }
 
   if (searchParams.complete === '1') {
-    await prisma.tenant.update({
-      where: { id: tenantId },
-      data: { onboardingCompletedAt: new Date() },
-    });
+    await runWithTenantAsync(tenantId, () =>
+      prisma.tenant.update({
+        where: { id: tenantId },
+        data: { onboardingCompletedAt: new Date() },
+      })
+    );
     redirect('/dashboard');
   }
 
-  const [tenant, branding, proposal] = await Promise.all([
-    prisma.tenant.findUnique({ where: { id: tenantId } }),
-    prisma.tenantBranding.findUnique({ where: { tenantId } }),
-    searchParams.proposalId
-      ? prisma.proposal.findUnique({ where: { id: searchParams.proposalId } })
-      : Promise.resolve(null),
-  ]);
+  const [tenant, branding, proposal] = await runWithTenantAsync(tenantId, () =>
+    Promise.all([
+      prisma.tenant.findUnique({ where: { id: tenantId } }),
+      prisma.tenantBranding.findUnique({ where: { tenantId } }),
+      searchParams.proposalId
+        ? prisma.proposal.findUnique({ where: { id: searchParams.proposalId } })
+        : Promise.resolve(null),
+    ])
+  );
 
   const proposalFlow = searchParams.type === 'proposal';
   const steps = proposalFlow

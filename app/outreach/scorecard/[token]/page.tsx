@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation';
 
 import { toObject, toStringArray } from '@/lib/outreach/sprint2/scorecard';
 import { prisma } from '@/lib/prisma';
+import { runWithTenantBypass } from '@/lib/tenant/context';
 
 import ScorecardTracker from './ScorecardTracker';
 
@@ -67,19 +68,21 @@ function competitorName(qualificationEvidence: unknown): string | null {
 export default async function ScorecardPage({ params }: PageProps) {
   const { token } = await params;
 
-  const lead = await prisma.prospectLead.findUnique({
-    where: { scorecardToken: token },
-    select: {
-      id: true,
-      businessName: true,
-      city: true,
-      vertical: true,
-      painScore: true,
-      painBreakdown: true,
-      topFindings: true,
-      qualificationEvidence: true,
-    },
-  });
+  const lead = await runWithTenantBypass(() =>
+    prisma.prospectLead.findUnique({
+      where: { scorecardToken: token },
+      select: {
+        id: true,
+        businessName: true,
+        city: true,
+        vertical: true,
+        painScore: true,
+        painBreakdown: true,
+        topFindings: true,
+        qualificationEvidence: true,
+      },
+    })
+  );
 
   if (!lead) return notFound();
 
