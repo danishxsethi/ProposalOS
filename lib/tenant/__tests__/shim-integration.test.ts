@@ -11,10 +11,13 @@ const POOLED_POSTGRES_URL = `postgresql://postgres:${POSTGRES_PASSWORD}@localhos
 const POOLED_APP_USER_URL = `postgresql://app_user:${POSTGRES_PASSWORD}@localhost:6432/${TEST_DB}?pgbouncer=true`;
 const RLS_MIGRATION_PATH =
   '/Users/danishsethi/VSCODE/ProposalOS/prisma/migrations/20260429093000_enable_rls/migration.sql';
+const BYPASS_MIGRATION_PATH =
+  '/Users/danishsethi/VSCODE/ProposalOS/prisma/migrations/20260501014500_rls_bypass_policies/migration.sql';
 
 type RuntimeModules = {
   prisma: PrismaClient;
   MissingTenantError: typeof import('@/lib/prisma').MissingTenantError;
+  logger: typeof import('@/lib/logger').logger;
   runWithTenantAsync: typeof import('@/lib/tenant/context').runWithTenantAsync;
   runWithTenantBypass: typeof import('@/lib/tenant/context').runWithTenantBypass;
 };
@@ -63,6 +66,26 @@ function ensureLocalStack() {
   }
 }
 
+function assertPooledEndpointConfiguration() {
+  const poolMode = runShell(
+    `PGPASSWORD=${POSTGRES_PASSWORD} psql -h localhost -p 6432 -U postgres -d pgbouncer -tAc 'SHOW CONFIG' | awk -F'|' '$1=="pool_mode"{print $2}'`
+  )
+    .trim()
+    .split('\n')
+    .at(-1);
+
+  if (poolMode !== 'transaction') {
+    throw new Error(`Expected PgBouncer pool_mode=transaction, received "${poolMode}"`);
+  }
+
+  if (
+    !POOLED_APP_USER_URL.includes('localhost:6432') ||
+    !POOLED_APP_USER_URL.includes('pgbouncer=true')
+  ) {
+    throw new Error(`Expected pooled app URL to target PgBouncer: ${POOLED_APP_USER_URL}`);
+  }
+}
+
 function resetSchemaAndRls() {
   runShell(
     `PGPASSWORD=${POSTGRES_PASSWORD} psql -h localhost -p 5435 -U postgres -d ${TEST_DB} -c 'DROP SCHEMA public CASCADE; CREATE SCHEMA public;'`
@@ -74,6 +97,10 @@ function resetSchemaAndRls() {
 
   runShell(
     `PGPASSWORD=${POSTGRES_PASSWORD} psql -h localhost -p 5435 -U postgres -d ${TEST_DB} -f ${RLS_MIGRATION_PATH}`
+  );
+
+  runShell(
+    `PGPASSWORD=${POSTGRES_PASSWORD} psql -h localhost -p 5435 -U postgres -d ${TEST_DB} -f ${BYPASS_MIGRATION_PATH}`
   );
 
   runShell(
@@ -91,10 +118,12 @@ async function loadRuntimeModules(): Promise<RuntimeModules> {
 
   const prismaModule = await import('@/lib/prisma');
   const contextModule = await import('@/lib/tenant/context');
+  const loggerModule = await import('@/lib/logger');
 
   return {
     prisma: prismaModule.prisma as PrismaClient,
     MissingTenantError: prismaModule.MissingTenantError,
+    logger: loggerModule.logger,
     runWithTenantAsync: contextModule.runWithTenantAsync,
     runWithTenantBypass: contextModule.runWithTenantBypass,
   };
@@ -165,9 +194,11 @@ async function seedTenantsAndAudits(): Promise<SeedData> {
 describe('Prisma RLS shim integration', () => {
   beforeAll(async () => {
     ensureLocalStack();
+    assertPooledEndpointConfiguration();
     resetSchemaAndRls();
     runtime = await loadRuntimeModules();
     await admin.$connect();
+    expect(process.env.DATABASE_URL).toBe(POOLED_APP_USER_URL);
   }, 120000);
 
   afterAll(async () => {
@@ -176,6 +207,7 @@ describe('Prisma RLS shim integration', () => {
   });
 
   beforeEach(async () => {
+    vi.restoreAllMocks();
     await cleanupSeedData();
     currentSeed = await seedTenantsAndAudits();
   });
@@ -321,10 +353,8 @@ describe('Prisma RLS shim integration', () => {
     expect(rows.map((row) => row.businessName)).toEqual([currentSeed!.auditAName]);
   });
 
-  it.skip('bypass hook allows cross-tenant read', async () => {
-    // Phase 2.4 will add the database-side bypass policy. The runtime hook exists now,
-    // but the DB policy is intentionally not active yet.
-    const rows = await runtime.runWithTenantBypass(() =>
+  it('bypass hook allows cross-tenant read', async () => {
+    const rows = await runtime.runWithTenantBypass('test:bypass-cross-tenant-read', () =>
       runtime.prisma.audit.findMany({
         where: {
           businessName: {
@@ -341,6 +371,119 @@ describe('Prisma RLS shim integration', () => {
       currentSeed!.auditAName,
       currentSeed!.auditBName,
     ]);
+  });
+
+  it('bypass hook allows cross-tenant write as app_user', async () => {
+    const created = await runtime.runWithTenantBypass('test:bypass-cross-tenant-write', () =>
+      runtime.prisma.audit.create({
+        data: {
+          businessName: `${currentSeed!.prefix} Bypass Insert`,
+          tenantId: currentSeed!.tenantBId,
+        },
+      })
+    );
+
+    expect(created.tenantId).toBe(currentSeed!.tenantBId);
+
+    const tenantBRows = await runtime.runWithTenantAsync(currentSeed!.tenantBId, () =>
+      runtime.prisma.audit.findMany({
+        where: {
+          businessName: {
+            startsWith: currentSeed!.prefix,
+          },
+        },
+        orderBy: {
+          businessName: 'asc',
+        },
+      })
+    );
+
+    expect(tenantBRows.map((row) => row.businessName)).toContain(
+      `${currentSeed!.prefix} Bypass Insert`
+    );
+  });
+
+  it("bypass setting doesn't bleed across pooled requests", async () => {
+    const [bypassRows, noTenantResult] = await Promise.allSettled([
+      runtime.runWithTenantBypass('test:bypass-bleed-check', () =>
+        runtime.prisma.audit.findMany({
+          where: {
+            businessName: {
+              startsWith: currentSeed!.prefix,
+            },
+          },
+          orderBy: {
+            businessName: 'asc',
+          },
+        })
+      ),
+      runtime.prisma.audit.findMany({
+        where: {
+          businessName: {
+            startsWith: currentSeed!.prefix,
+          },
+        },
+      }),
+    ]);
+
+    expect(bypassRows.status).toBe('fulfilled');
+    if (bypassRows.status === 'fulfilled') {
+      expect(bypassRows.value.map((row) => row.businessName)).toEqual([
+        currentSeed!.auditAName,
+        currentSeed!.auditBName,
+      ]);
+    }
+
+    expect(noTenantResult.status).toBe('rejected');
+    if (noTenantResult.status === 'rejected') {
+      expect(noTenantResult.reason).toMatchObject({
+        name: 'MissingTenantError',
+        reason: 'missing',
+      });
+    }
+  });
+
+  it('runWithTenantBypass requires a reason argument', async () => {
+    const unsafeBypass = runtime.runWithTenantBypass as unknown as (
+      reason: string | undefined,
+      fn: () => Promise<unknown>
+    ) => Promise<unknown>;
+
+    await expect(
+      unsafeBypass(undefined, () =>
+        runtime.prisma.audit.findMany({
+          where: {
+            businessName: {
+              startsWith: currentSeed!.prefix,
+            },
+          },
+        })
+      )
+    ).rejects.toThrow('runWithTenantBypass requires a non-empty reason');
+  });
+
+  it('runWithTenantBypass logs an audit entry', async () => {
+    const warnSpy = vi.spyOn(runtime.logger, 'warn');
+
+    await runtime.runWithTenantBypass('test:bypass-log-entry', () =>
+      runtime.prisma.audit.findMany({
+        where: {
+          businessName: {
+            startsWith: currentSeed!.prefix,
+          },
+        },
+      })
+    );
+
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'rls_bypass',
+        reason: 'test:bypass-log-entry',
+        caller: expect.any(String),
+        timestamp: expect.any(String),
+      }),
+      'RLS bypass invoked'
+    );
   });
 
   it('mutation respects tenant scope via WITH CHECK', async () => {

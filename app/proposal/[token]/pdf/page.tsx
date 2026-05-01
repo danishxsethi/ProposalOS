@@ -17,7 +17,8 @@ interface Props {
 export default async function PdfPage({ params }: Props) {
   const { token } = await params;
 
-  const proposal = await runWithTenantBypass(() =>
+  // PDF rendering is token-gated and needs one pre-tenant bootstrap read.
+  const proposal = await runWithTenantBypass('magic-link-pre-auth:proposal-pdf-bootstrap', () =>
     prisma.proposal.findUnique({
       where: { webLinkToken: token },
       include: {

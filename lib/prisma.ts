@@ -14,6 +14,7 @@ type ModelDelegate = {
 };
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const BYPASS_TENANT_SENTINEL = '00000000-0000-0000-0000-000000000000';
 
 export class MissingTenantError extends Error {
   readonly operationName: string;
@@ -93,11 +94,14 @@ async function applyRlsContext(
   tenantId: string | null
 ): Promise<void> {
   if (bypassRls) {
+    // Keep tenant-scoped policy casts valid even when bypass policy wins.
+    await tx.$queryRaw`SELECT set_config('app.current_tenant_id', ${BYPASS_TENANT_SENTINEL}, true)`;
     await tx.$queryRaw`SELECT set_config('app.bypass_rls', 'true', true)`;
     return;
   }
 
   const validatedTenantId = assertTenantContext(operationName, tenantId);
+  await tx.$queryRaw`SELECT set_config('app.bypass_rls', 'false', true)`;
   await tx.$queryRaw`SELECT set_config('app.current_tenant_id', ${validatedTenantId}, true)`;
 }
 
@@ -150,7 +154,10 @@ function createExtendedPrismaClient(): ExtendedPrismaClient {
           }
 
           return wrappedClientRef.current!.$transaction(async (tx: Prisma.TransactionClient) =>
-            runWithPrismaTransactionContext(tx, () => dispatchOnTx(tx, model, operation, args))
+            runWithPrismaTransactionContext(tx, async () => {
+              await applyRlsContext(tx, operationName, bypassRls, tenantId);
+              return dispatchOnTx(tx, model, operation, args);
+            })
           );
         },
       },

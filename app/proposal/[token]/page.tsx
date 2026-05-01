@@ -13,7 +13,8 @@ interface Props {
 }
 
 async function getProposal(token: string) {
-  return runWithTenantBypass(() =>
+  // Proposal links are client-facing and must resolve tenant context from the token itself.
+  return runWithTenantBypass('magic-link-pre-auth:proposal-bootstrap', () =>
     prisma.proposal.findUnique({
       where: { webLinkToken: token },
       include: {
@@ -32,7 +33,8 @@ async function getProposal(token: string) {
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { token } = await params;
-  const proposal = await runWithTenantBypass(() =>
+  // Metadata reads follow the same token-gated bootstrap path as the page render.
+  const proposal = await runWithTenantBypass('magic-link-pre-auth:proposal-metadata', () =>
     prisma.proposal.findUnique({
       where: { webLinkToken: token },
       include: { audit: true },
