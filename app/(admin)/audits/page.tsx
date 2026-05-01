@@ -1,15 +1,18 @@
 import Link from 'next/link';
 
 import { prisma } from '@/lib/prisma';
+import { runWithTenantBypass } from '@/lib/tenant/context';
 
 export default async function AuditBrowserPage() {
-  const audits = await prisma.audit.findMany({
-    include: {
-      tenant: { select: { name: true } },
-    },
-    orderBy: { createdAt: 'desc' },
-    take: 50,
-  });
+  const audits = await runWithTenantBypass(() =>
+    prisma.audit.findMany({
+      include: {
+        tenant: { select: { name: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+    })
+  );
 
   return (
     <div className="space-y-6">

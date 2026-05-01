@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation';
 
 import { getBranding } from '@/lib/config/branding';
 import { prisma } from '@/lib/prisma';
+import { runWithTenantAsync, runWithTenantBypass } from '@/lib/tenant/context';
 
 import ProposalPage from '../../proposal/[token]/ProposalPage';
 
@@ -12,27 +13,31 @@ interface PageProps {
 export default async function PreviewPage({ params }: PageProps) {
   const { token } = await params;
 
-  const proposal = await prisma.proposal.findUnique({
-    where: { webLinkToken: token },
-    include: {
-      audit: {
-        include: {
-          findings: {
-            where: { excluded: false },
-            orderBy: { impactScore: 'desc' },
+  const proposal = await runWithTenantBypass(() =>
+    prisma.proposal.findUnique({
+      where: { webLinkToken: token },
+      include: {
+        audit: {
+          include: {
+            findings: {
+              where: { excluded: false },
+              orderBy: { impactScore: 'desc' },
+            },
+            evidence: true,
           },
-          evidence: true,
         },
+        template: true,
       },
-      template: true,
-    },
-  });
+    })
+  );
 
   if (!proposal) {
     notFound();
   }
 
-  const branding = await getBranding(proposal.tenantId);
+  const branding = await runWithTenantAsync(proposal.tenantId, () =>
+    getBranding(proposal.tenantId)
+  );
 
   return (
     <>

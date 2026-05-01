@@ -1,37 +1,43 @@
-import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 
 import { getBranding } from '@/lib/config/branding';
 import { prisma } from '@/lib/prisma';
+import { runWithTenantAsync, runWithTenantBypass } from '@/lib/tenant/context';
 
 import ProposalPage from './ProposalPage';
+
+import type { Metadata } from 'next';
 
 interface Props {
   params: Promise<{ token: string }>;
 }
 
 async function getProposal(token: string) {
-  return prisma.proposal.findUnique({
-    where: { webLinkToken: token },
-    include: {
-      audit: {
-        include: {
-          findings: {
-            where: { excluded: false },
-            orderBy: { impactScore: 'desc' },
+  return runWithTenantBypass(() =>
+    prisma.proposal.findUnique({
+      where: { webLinkToken: token },
+      include: {
+        audit: {
+          include: {
+            findings: {
+              where: { excluded: false },
+              orderBy: { impactScore: 'desc' },
+            },
           },
         },
       },
-    },
-  });
+    })
+  );
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { token } = await params;
-  const proposal = await prisma.proposal.findUnique({
-    where: { webLinkToken: token },
-    include: { audit: true },
-  });
+  const proposal = await runWithTenantBypass(() =>
+    prisma.proposal.findUnique({
+      where: { webLinkToken: token },
+      include: { audit: true },
+    })
+  );
 
   if (!proposal) {
     return { title: 'Proposal Not Found' };
@@ -52,7 +58,9 @@ export default async function Page({ params }: Props) {
     notFound();
   }
 
-  const branding = await getBranding(proposal.tenantId);
+  const branding = await runWithTenantAsync(proposal.tenantId, () =>
+    getBranding(proposal.tenantId)
+  );
 
   return <ProposalPage proposal={proposal} branding={branding} />;
 }

@@ -1,18 +1,19 @@
-import Link from 'next/link';
-
 import { prisma } from '@/lib/prisma';
+import { runWithTenantBypass } from '@/lib/tenant/context';
 
 // Server Component
 export default async function TenantsPage() {
-  const tenants = await prisma.tenant.findMany({
-    include: {
-      _count: {
-        select: { audits: true, users: true },
+  const tenants = await runWithTenantBypass(() =>
+    prisma.tenant.findMany({
+      include: {
+        _count: {
+          select: { audits: true, users: true },
+        },
       },
-    },
-    orderBy: { createdAt: 'desc' },
-    take: 50,
-  });
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+    })
+  );
 
   return (
     <div className="space-y-6">

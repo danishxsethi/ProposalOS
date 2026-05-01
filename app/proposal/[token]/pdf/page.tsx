@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 import PdfTemplate from '@/components/PdfTemplate';
 import { getBranding } from '@/lib/config/branding';
 import { prisma } from '@/lib/prisma';
+import { runWithTenantAsync, runWithTenantBypass } from '@/lib/tenant/context';
 import './pdf-print.css';
 
 export const metadata = {
@@ -16,20 +17,24 @@ interface Props {
 export default async function PdfPage({ params }: Props) {
   const { token } = await params;
 
-  const proposal = await prisma.proposal.findUnique({
-    where: { webLinkToken: token },
-    include: {
-      audit: {
-        include: { findings: true },
+  const proposal = await runWithTenantBypass(() =>
+    prisma.proposal.findUnique({
+      where: { webLinkToken: token },
+      include: {
+        audit: {
+          include: { findings: true },
+        },
       },
-    },
-  });
+    })
+  );
 
   if (!proposal) {
     notFound();
   }
 
-  const branding = await getBranding(proposal.tenantId);
+  const branding = await runWithTenantAsync(proposal.tenantId, () =>
+    getBranding(proposal.tenantId)
+  );
 
   return (
     <div className="pdf-root" data-pdf-ready>

@@ -4,14 +4,56 @@ import { headers } from 'next/headers';
 
 import { prisma } from '@/lib/prisma';
 
-const tenantStorage = new AsyncLocalStorage<string>();
+import type { Prisma } from '@prisma/client';
 
-export function runWithTenant<T>(tenantId: string, fn: () => T): T {
-  return tenantStorage.run(tenantId, fn);
+export interface TenantRuntimeContext {
+  tenantId: string | null;
+  bypassRls: boolean;
+  currentTx: Prisma.TransactionClient | null;
 }
 
-export async function runWithTenantAsync<T>(tenantId: string, fn: () => Promise<T>): Promise<T> {
-  return tenantStorage.run(tenantId, fn);
+type Awaitable<T> = T | PromiseLike<T>;
+
+const tenantStorage = new AsyncLocalStorage<TenantRuntimeContext>();
+
+function getDefaultTenantRuntimeContext(): TenantRuntimeContext {
+  return {
+    tenantId: null,
+    bypassRls: false,
+    currentTx: null,
+  };
+}
+
+function withTenantRuntimeContext<T>(overrides: Partial<TenantRuntimeContext>, fn: () => T): T {
+  const current = tenantStorage.getStore() ?? getDefaultTenantRuntimeContext();
+  return tenantStorage.run({ ...current, ...overrides }, fn);
+}
+
+export function runWithTenant<T>(tenantId: string, fn: () => T): T {
+  return withTenantRuntimeContext({ tenantId, bypassRls: false }, fn);
+}
+
+export async function runWithTenantAsync<T>(
+  tenantId: string,
+  fn: () => Awaitable<T>
+): Promise<Awaited<T>> {
+  return withTenantRuntimeContext(
+    { tenantId, bypassRls: false },
+    async () => await fn()
+  ) as Promise<Awaited<T>>;
+}
+
+export async function runWithTenantBypass<T>(fn: () => Awaitable<T>): Promise<Awaited<T>> {
+  return withTenantRuntimeContext({ bypassRls: true }, async () => await fn()) as Promise<
+    Awaited<T>
+  >;
+}
+
+export async function runWithPrismaTransactionContext<T>(
+  tx: Prisma.TransactionClient,
+  fn: () => Awaitable<T>
+): Promise<Awaited<T>> {
+  return withTenantRuntimeContext({ currentTx: tx }, async () => await fn()) as Promise<Awaited<T>>;
 }
 
 /**
@@ -21,12 +63,16 @@ export async function runWithTenantAsync<T>(tenantId: string, fn: () => Promise<
  * Prisma $extends query hook.
  */
 export function getTenantIdFromStore(): string | null {
-  return tenantStorage.getStore() ?? null;
+  return tenantStorage.getStore()?.tenantId ?? null;
+}
+
+export function getTenantRuntimeContextFromStore(): TenantRuntimeContext {
+  return tenantStorage.getStore() ?? getDefaultTenantRuntimeContext();
 }
 
 export async function getTenantId(): Promise<string | null> {
   // 1. Check context set by API Key middleware (avoids Request clone issues)
-  const stored = tenantStorage.getStore();
+  const stored = tenantStorage.getStore()?.tenantId;
   if (stored) return stored;
 
   const headerList = await headers();
@@ -40,7 +86,7 @@ export async function getTenantId(): Promise<string | null> {
     if (session?.user && 'tenantId' in session.user) {
       return (session.user as unknown as { tenantId: string }).tenantId;
     }
-  } catch (err) {
+  } catch {
     // Ignore auth import errors during build
   }
 
@@ -73,6 +119,9 @@ function verifyTenant(result: any, tenantId: string): any {
  * P1-5 Fix: Added 7 missing tenant-scoped models:
  *   proposalFollowUp, contactRequest, prospectEnrichmentRun,
  *   outreachSendingDomain, outreachDomainDailyStat, tenantBranding, invitation
+ *
+ * @deprecated Phase 2.3 repairs tenant scoping in lib/prisma.ts. Keep this
+ * helper only for compatibility during the Phase 2.6 cleanup pass.
  */
 export function createScopedPrisma(tenantId: string | undefined) {
   if (!tenantId) return prisma; // Return unscoped if no tenant (e.g. admin or system tasks)

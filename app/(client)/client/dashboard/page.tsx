@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 
 import { prisma } from '@/lib/prisma';
+import { runWithTenantAsync, runWithTenantBypass } from '@/lib/tenant/context';
 
 export default async function ClientDashboard({
   searchParams,
@@ -11,26 +12,31 @@ export default async function ClientDashboard({
   const token = searchParams.token;
   if (!token) return redirect('/login');
 
-  const proposal = await prisma.proposal.findUnique({
-    where: { webLinkToken: token },
-    include: {
-      audit: true,
-      acceptance: true,
-    },
-  });
+  const proposal = await runWithTenantBypass(() =>
+    prisma.proposal.findUnique({
+      where: { webLinkToken: token },
+      include: {
+        audit: true,
+        acceptance: true,
+      },
+    })
+  );
 
   if (!proposal || !proposal.audit) return notFound();
 
-  const fixedCount = await prisma.findingStatus.count({
-    where: {
-      auditId: proposal.auditId,
-      status: 'fixed',
-    },
-  });
-
-  const totalFindings = await prisma.finding.count({
-    where: { auditId: proposal.auditId, type: 'PAINKILLER' },
-  });
+  const [fixedCount, totalFindings] = await runWithTenantAsync(proposal.tenantId, () =>
+    Promise.all([
+      prisma.findingStatus.count({
+        where: {
+          auditId: proposal.auditId,
+          status: 'fixed',
+        },
+      }),
+      prisma.finding.count({
+        where: { auditId: proposal.auditId, type: 'PAINKILLER' },
+      }),
+    ])
+  );
 
   const progress = totalFindings > 0 ? Math.round((fixedCount / totalFindings) * 100) : 0;
 
