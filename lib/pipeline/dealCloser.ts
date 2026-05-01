@@ -1,7 +1,8 @@
 import { OutreachEventType } from '@prisma/client';
 
 import { stripe } from '@/lib/billing/stripe';
-import { createScopedPrisma } from '@/lib/tenant/context';
+import { prisma } from '@/lib/prisma';
+import { createScopedPrisma, runWithTenantBypass } from '@/lib/tenant/context';
 
 import type {
   EngagementEvent,
@@ -30,11 +31,14 @@ import type {
  */
 export async function recordEvent(leadId: string, event: EngagementEvent): Promise<void> {
   // Get tenant ID from the lead
-  const prisma = createScopedPrisma('system');
-  const lead = await prisma.prospectLead.findUnique({
-    where: { id: leadId },
-    select: { tenantId: true },
-  });
+  // Cross-tenant lookup is intentional here because webhook-style engagement events
+  // arrive keyed by lead ID before we know which tenant owns the lead.
+  const lead = await runWithTenantBypass('deal-closer-lead-lookup-by-id', () =>
+    prisma.prospectLead.findUnique({
+      where: { id: leadId },
+      select: { tenantId: true },
+    })
+  );
 
   if (!lead) {
     throw new Error(`Lead not found: ${leadId}`);
@@ -63,7 +67,7 @@ export async function recordEvent(leadId: string, event: EngagementEvent): Promi
       leadId,
       emailId: event.metadata?.emailId as string | undefined,
       type: outreachEventType,
-      metadata: (event.metadata || {}) as any,
+      metadata: (event.metadata || {}) as Record<string, unknown>,
       occurredAt: event.timestamp,
     },
   });
@@ -105,16 +109,18 @@ export async function recordEvent(leadId: string, event: EngagementEvent): Promi
  * @returns The computed engagement score
  */
 export async function computeEngagementScore(leadId: string): Promise<EngagementScore> {
-  const prisma = createScopedPrisma('system'); // Use system context for cross-tenant queries
-
-  const lead = await prisma.prospectLead.findUnique({
-    where: { id: leadId },
-    include: {
-      outreachEvents: {
-        orderBy: { occurredAt: 'asc' },
+  // Cross-tenant lookup is intentional here because score recomputation starts from
+  // a lead ID and must discover the owning tenant before any tenant-local follow-up.
+  const lead = await runWithTenantBypass('deal-closer-score-cross-tenant-read', () =>
+    prisma.prospectLead.findUnique({
+      where: { id: leadId },
+      include: {
+        outreachEvents: {
+          orderBy: { occurredAt: 'asc' },
+        },
       },
-    },
-  });
+    })
+  );
 
   if (!lead) {
     throw new Error(`Lead not found: ${leadId}`);
@@ -181,10 +187,12 @@ export async function computeEngagementScore(leadId: string): Promise<Engagement
   };
 
   // Update the lead's engagement score
-  await prisma.prospectLead.update({
-    where: { id: leadId },
-    data: { engagementScore: total },
-  });
+  await runWithTenantBypass('deal-closer-score-cross-tenant-read', () =>
+    prisma.prospectLead.update({
+      where: { id: leadId },
+      data: { engagementScore: total },
+    })
+  );
 
   return score;
 }
@@ -199,7 +207,7 @@ export async function computeEngagementScore(leadId: string): Promise<Engagement
  * @param tenantConfig - The tenant's pipeline configuration
  * @returns True if the prospect is a hot lead
  */
-export function isHotLead(score: EngagementScore, tenantConfig: PipelineConfig): boolean {
+export function isHotLead(score: EngagementScore, _tenantConfig: PipelineConfig): boolean {
   // For synchronous implementation, we use a simple threshold
   // In production, this would be computed asynchronously with percentile calculation
   const hotLeadThreshold = 100; // Default threshold for hot leads
@@ -214,14 +222,16 @@ export function isHotLead(score: EngagementScore, tenantConfig: PipelineConfig):
  * @returns The Stripe checkout session URL
  */
 export async function createCheckoutSession(leadId: string, tier: string): Promise<string> {
-  const prisma = createScopedPrisma('system');
-
-  const lead = await prisma.prospectLead.findUnique({
-    where: { id: leadId },
-    include: {
-      tenant: true,
-    },
-  });
+  // Cross-tenant bootstrap is intentional here because checkout creation starts
+  // from a lead ID and has to load the owning tenant + proposal before billing.
+  const lead = await runWithTenantBypass('deal-closer-checkout-session-bootstrap', () =>
+    prisma.prospectLead.findUnique({
+      where: { id: leadId },
+      include: {
+        tenant: true,
+      },
+    })
+  );
 
   if (!lead) {
     throw new Error(`Lead not found: ${leadId}`);
@@ -229,9 +239,11 @@ export async function createCheckoutSession(leadId: string, tier: string): Promi
 
   // Get the proposal to extract pricing
   const proposal = lead.proposalId
-    ? await prisma.proposal.findUnique({
-        where: { id: lead.proposalId },
-      })
+    ? await runWithTenantBypass('deal-closer-checkout-session-bootstrap', () =>
+        prisma.proposal.findUnique({
+          where: { id: lead.proposalId },
+        })
+      )
     : null;
 
   if (!proposal) {
@@ -289,12 +301,14 @@ export async function createCheckoutSession(leadId: string, tier: string): Promi
   }
 
   // Update lead status to closing
-  await prisma.prospectLead.update({
-    where: { id: leadId },
-    data: {
-      pipelineStatus: 'closing',
-    },
-  });
+  await runWithTenantBypass('deal-closer-checkout-session-bootstrap', () =>
+    prisma.prospectLead.update({
+      where: { id: leadId },
+      data: {
+        pipelineStatus: 'closing',
+      },
+    })
+  );
 
   return session.url;
 }
@@ -312,14 +326,16 @@ export async function createCheckoutSession(leadId: string, tier: string): Promi
  * @param stripeSessionId - The Stripe checkout session ID
  */
 export async function handlePaymentSuccess(leadId: string, stripeSessionId: string): Promise<void> {
-  const prisma = createScopedPrisma('system');
-
-  const lead = await prisma.prospectLead.findUnique({
-    where: { id: leadId },
-    include: {
-      tenant: true,
-    },
-  });
+  // Cross-tenant reconciliation is intentional here because Stripe webhooks arrive
+  // outside tenant-authenticated request context and are keyed by external IDs.
+  const lead = await runWithTenantBypass('deal-closer-payment-success-reconciliation', () =>
+    prisma.prospectLead.findUnique({
+      where: { id: leadId },
+      include: {
+        tenant: true,
+      },
+    })
+  );
 
   if (!lead) {
     throw new Error(`Lead not found: ${leadId}`);
@@ -331,30 +347,34 @@ export async function handlePaymentSuccess(leadId: string, stripeSessionId: stri
   const amountPaid = session.amount_total || 0;
 
   // Transition to closed_won
-  await prisma.prospectLead.update({
-    where: { id: leadId },
-    data: {
-      pipelineStatus: 'closed_won',
-    },
-  });
+  await runWithTenantBypass('deal-closer-payment-success-reconciliation', () =>
+    prisma.prospectLead.update({
+      where: { id: leadId },
+      data: {
+        pipelineStatus: 'closed_won',
+      },
+    })
+  );
 
   // Create client record (simplified - in production this would be more complex)
   // For now, we'll just create a record in a hypothetical clients table
   // In the actual system, this would integrate with the existing client management
 
   // Record the win in the learning loop
-  await prisma.winLossRecord.create({
-    data: {
-      tenantId: lead.tenantId,
-      proposalId: lead.proposalId || '',
-      leadId: lead.id,
-      vertical: lead.vertical,
-      city: lead.city,
-      outcome: 'won',
-      tierChosen: tier,
-      dealValue: amountPaid / 100, // Convert cents to dollars
-    },
-  });
+  await runWithTenantBypass('deal-closer-payment-success-reconciliation', () =>
+    prisma.winLossRecord.create({
+      data: {
+        tenantId: lead.tenantId,
+        proposalId: lead.proposalId || '',
+        leadId: lead.id,
+        vertical: lead.vertical,
+        city: lead.city,
+        outcome: 'won',
+        tierChosen: tier,
+        dealValue: amountPaid / 100, // Convert cents to dollars
+      },
+    })
+  );
 
   // Note: Onboarding flow and delivery initiation are handled by separate pipelines
 }
@@ -371,11 +391,13 @@ export async function handlePaymentSuccess(leadId: string, stripeSessionId: stri
  * @param stripeSessionId - The Stripe checkout session ID
  */
 export async function handlePaymentFailure(leadId: string, stripeSessionId: string): Promise<void> {
-  const prisma = createScopedPrisma('system');
-
-  const lead = await prisma.prospectLead.findUnique({
-    where: { id: leadId },
-  });
+  // Cross-tenant recovery is intentional here because failed-payment callbacks
+  // also start outside tenant-authenticated request context.
+  const lead = await runWithTenantBypass('deal-closer-payment-failure-recovery', () =>
+    prisma.prospectLead.findUnique({
+      where: { id: leadId },
+    })
+  );
 
   if (!lead) {
     throw new Error(`Lead not found: ${leadId}`);
@@ -390,25 +412,29 @@ export async function handlePaymentFailure(leadId: string, stripeSessionId: stri
 
   if (retryCount >= maxRetries) {
     // All retries exhausted, mark as closed_lost
-    await prisma.prospectLead.update({
-      where: { id: leadId },
-      data: {
-        pipelineStatus: 'closed_lost',
-      },
-    });
+    await runWithTenantBypass('deal-closer-payment-failure-recovery', () =>
+      prisma.prospectLead.update({
+        where: { id: leadId },
+        data: {
+          pipelineStatus: 'closed_lost',
+        },
+      })
+    );
 
     // Record the loss
-    await prisma.winLossRecord.create({
-      data: {
-        tenantId: lead.tenantId,
-        proposalId: lead.proposalId || '',
-        leadId: lead.id,
-        vertical: lead.vertical,
-        city: lead.city,
-        outcome: 'lost',
-        lostReason: 'payment_failed',
-      },
-    });
+    await runWithTenantBypass('deal-closer-payment-failure-recovery', () =>
+      prisma.winLossRecord.create({
+        data: {
+          tenantId: lead.tenantId,
+          proposalId: lead.proposalId || '',
+          leadId: lead.id,
+          vertical: lead.vertical,
+          city: lead.city,
+          outcome: 'lost',
+          lostReason: 'payment_failed',
+        },
+      })
+    );
 
     return;
   }
@@ -418,12 +444,14 @@ export async function handlePaymentFailure(leadId: string, stripeSessionId: stri
 
   // Update retry count
   // In production, this would be stored in a separate payment attempts table
-  await prisma.prospectLead.update({
-    where: { id: leadId },
-    data: {
-      pipelineStatus: 'hot_lead', // Return to hot_lead for retry
-    },
-  });
+  await runWithTenantBypass('deal-closer-payment-failure-recovery', () =>
+    prisma.prospectLead.update({
+      where: { id: leadId },
+      data: {
+        pipelineStatus: 'hot_lead', // Return to hot_lead for retry
+      },
+    })
+  );
 }
 
 /**
