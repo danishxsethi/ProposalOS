@@ -68,7 +68,8 @@ function competitorName(qualificationEvidence: unknown): string | null {
 export default async function ScorecardPage({ params }: PageProps) {
   const { token } = await params;
 
-  const lead = await runWithTenantBypass(() =>
+  // Scorecard tokens are public-facing and must resolve the lead before tenant context exists.
+  const lead = await runWithTenantBypass('magic-link-pre-auth:scorecard-bootstrap', () =>
     prisma.prospectLead.findUnique({
       where: { scorecardToken: token },
       select: {

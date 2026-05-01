@@ -13,7 +13,9 @@ export default async function ClientAuditPage({
   const token = searchParams.token;
   if (!token) return redirect('/login');
 
-  const audit = await runWithTenantBypass(() =>
+  // The magic-link token is the access boundary here; we need one pre-tenant lookup
+  // to discover the tenant before switching back to tenant-scoped reads.
+  const audit = await runWithTenantBypass('magic-link-pre-auth:client-audit-bootstrap', () =>
     prisma.audit.findFirst({
       where: {
         id: params.id,

@@ -12,7 +12,8 @@ export default async function ClientDashboard({
   const token = searchParams.token;
   if (!token) return redirect('/login');
 
-  const proposal = await runWithTenantBypass(() =>
+  // The dashboard bootstraps tenant context from a proposal magic-link token.
+  const proposal = await runWithTenantBypass('magic-link-pre-auth:client-dashboard-bootstrap', () =>
     prisma.proposal.findUnique({
       where: { webLinkToken: token },
       include: {

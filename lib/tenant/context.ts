@@ -2,6 +2,7 @@ import { AsyncLocalStorage } from 'async_hooks';
 
 import { headers } from 'next/headers';
 
+import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 
 import type { Prisma } from '@prisma/client';
@@ -29,6 +30,36 @@ function withTenantRuntimeContext<T>(overrides: Partial<TenantRuntimeContext>, f
   return tenantStorage.run({ ...current, ...overrides }, fn);
 }
 
+function assertBypassReason(reason: unknown): string {
+  if (typeof reason !== 'string') {
+    throw new Error('runWithTenantBypass requires a non-empty reason');
+  }
+
+  const normalizedReason = reason.trim();
+
+  if (!normalizedReason) {
+    throw new Error('runWithTenantBypass requires a non-empty reason');
+  }
+
+  return normalizedReason;
+}
+
+function getBypassCaller(): string | null {
+  const stackLines = new Error().stack
+    ?.split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  return (
+    stackLines?.find(
+      (line) =>
+        !line.includes('runWithTenantBypass') &&
+        !line.includes('getBypassCaller') &&
+        !line.includes('lib/tenant/context')
+    ) ?? null
+  );
+}
+
 export function runWithTenant<T>(tenantId: string, fn: () => T): T {
   return withTenantRuntimeContext({ tenantId, bypassRls: false }, fn);
 }
@@ -43,7 +74,22 @@ export async function runWithTenantAsync<T>(
   ) as Promise<Awaited<T>>;
 }
 
-export async function runWithTenantBypass<T>(fn: () => Awaitable<T>): Promise<Awaited<T>> {
+export async function runWithTenantBypass<T>(
+  reason: string,
+  fn: () => Awaitable<T>
+): Promise<Awaited<T>> {
+  const normalizedReason = assertBypassReason(reason);
+
+  logger.warn(
+    {
+      event: 'rls_bypass',
+      reason: normalizedReason,
+      caller: getBypassCaller(),
+      timestamp: new Date().toISOString(),
+    },
+    'RLS bypass invoked'
+  );
+
   return withTenantRuntimeContext({ bypassRls: true }, async () => await fn()) as Promise<
     Awaited<T>
   >;

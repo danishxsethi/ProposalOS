@@ -3,7 +3,8 @@ import { runWithTenantBypass } from '@/lib/tenant/context';
 
 // Server Component
 export default async function TenantsPage() {
-  const tenants = await runWithTenantBypass(() =>
+  // Intentional cross-tenant admin surface: this page lists every tenant.
+  const tenants = await runWithTenantBypass('admin-page-render:tenant-management', () =>
     prisma.tenant.findMany({
       include: {
         _count: {

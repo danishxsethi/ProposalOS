@@ -13,7 +13,8 @@ interface PageProps {
 export default async function PreviewPage({ params }: PageProps) {
   const { token } = await params;
 
-  const proposal = await runWithTenantBypass(() =>
+  // Preview mode resolves the tenant from the proposal token before tenant-scoped reads resume.
+  const proposal = await runWithTenantBypass('magic-link-pre-auth:preview-bootstrap', () =>
     prisma.proposal.findUnique({
       where: { webLinkToken: token },
       include: {

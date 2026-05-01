@@ -17,7 +17,8 @@ interface Props {
 export default async function CaseStudyPdfPage({ params }: Props) {
   const { auditId } = await params;
 
-  const audit = await runWithTenantBypass(() =>
+  // Case-study PDF generation loads the tenant from the audit itself before fetching branding.
+  const audit = await runWithTenantBypass('public-pdf-pre-auth:case-study-bootstrap', () =>
     prisma.audit.findUnique({
       where: { id: auditId },
       include: {

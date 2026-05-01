@@ -8,7 +8,10 @@ export const dynamic = 'force-dynamic';
 
 async function getStats() {
   try {
-    const count = await runWithTenantBypass(() => prisma.audit.count());
+    // Marketing intentionally shows a cross-tenant aggregate, not a tenant-scoped count.
+    const count = await runWithTenantBypass('marketing-aggregate:audit-count', () =>
+      prisma.audit.count()
+    );
     // Fake it till you make it if count is low
     return Math.max(count, 1420);
   } catch {

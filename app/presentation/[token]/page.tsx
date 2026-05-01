@@ -14,7 +14,8 @@ interface Props {
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { token } = await params;
-  const proposal = await runWithTenantBypass(() =>
+  // Metadata generation starts from a client token before we know the tenant.
+  const proposal = await runWithTenantBypass('magic-link-pre-auth:presentation-metadata', () =>
     prisma.proposal.findUnique({
       where: { webLinkToken: token },
       include: { audit: true },
@@ -34,7 +35,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 export default async function Page({ params }: Props) {
   const { token } = await params;
 
-  const proposal = await runWithTenantBypass(() =>
+  // This presentation is token-gated; the first proposal lookup bootstraps tenant context.
+  const proposal = await runWithTenantBypass('magic-link-pre-auth:presentation-bootstrap', () =>
     prisma.proposal.findUnique({
       where: { webLinkToken: token },
       include: {

@@ -4,7 +4,8 @@ import { prisma } from '@/lib/prisma';
 import { runWithTenantBypass } from '@/lib/tenant/context';
 
 export default async function AuditBrowserPage() {
-  const audits = await runWithTenantBypass(() =>
+  // Intentional cross-tenant admin surface: this page is a global audit browser.
+  const audits = await runWithTenantBypass('admin-page-render:global-audit-browser', () =>
     prisma.audit.findMany({
       include: {
         tenant: { select: { name: true } },
