@@ -1,4 +1,5 @@
-import { createScopedPrisma, getTenantId } from '@/lib/tenant/context';
+import { prisma } from '@/lib/prisma';
+import { getTenantId, runWithTenantAsync } from '@/lib/tenant/context';
 
 import { getPlanById } from './stripe';
 
@@ -7,12 +8,11 @@ export async function checkAuditLimit() {
   if (!tenantId)
     return { allowed: false, current: 0, limit: 0, planTier: 'unknown', reason: 'No Tenant ID' };
 
-  const prisma = createScopedPrisma(tenantId);
-
-  // Fetch tenant to get planTier
-  const tenant = await prisma.tenant.findUnique({
-    where: { id: tenantId },
-  });
+  const tenant = await runWithTenantAsync(tenantId, () =>
+    prisma.tenant.findUnique({
+      where: { id: tenantId },
+    })
+  );
 
   if (!tenant)
     return {
@@ -31,14 +31,16 @@ export async function checkAuditLimit() {
   const now = new Date();
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
-  const count = await prisma.audit.count({
-    where: {
-      tenantId,
-      createdAt: {
-        gte: startOfMonth,
+  const count = await runWithTenantAsync(tenantId, () =>
+    prisma.audit.count({
+      where: {
+        tenantId,
+        createdAt: {
+          gte: startOfMonth,
+        },
       },
-    },
-  });
+    })
+  );
 
   const limit = plan?.limits?.audits || 0;
 
@@ -64,13 +66,12 @@ export async function checkSeatLimit() {
   const tenantId = await getTenantId();
   if (!tenantId) return { allowed: false, current: 0, limit: 0, planTier: 'unknown' };
 
-  const prisma = createScopedPrisma(tenantId);
-
-  // Fetch tenant to get planTier
-  const tenant = await prisma.tenant.findUnique({
-    where: { id: tenantId },
-    include: { users: true },
-  });
+  const tenant = await runWithTenantAsync(tenantId, () =>
+    prisma.tenant.findUnique({
+      where: { id: tenantId },
+      include: { users: true },
+    })
+  );
 
   if (!tenant) return { allowed: false, current: 0, limit: 0, planTier: 'unknown' };
 
