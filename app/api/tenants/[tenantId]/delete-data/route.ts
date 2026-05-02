@@ -2,7 +2,7 @@
  * app/api/tenants/[tenantId]/delete-data/route.ts
  *
  * GDPR Data Deletion Endpoint
- * 
+ *
  * Implements explicit data deletion for GDPR compliance:
  * - Right to erasure ("right to be forgotten")
  * - 30-day deletion SLA
@@ -15,15 +15,16 @@ import { NextResponse } from 'next/server';
 import { generateTraceId, InternalError } from '@/lib/api/errors';
 import { logger } from '@/lib/logger';
 import { verifyCronAuth } from '@/lib/middleware/cronAuth';
-import { prisma } from '@/lib/prisma';
 import { recordAuditTrailEvent } from '@/lib/observability/auditTrail';
+import { prisma } from '@/lib/prisma';
+import { runWithTenantAsync } from '@/lib/tenant/context';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 /**
  * Delete all data for a tenant (GDPR right to erasure)
- * 
+ *
  * This endpoint:
  * 1. Anonymizes all PII
  * 2. Deletes all audit data
@@ -32,7 +33,10 @@ export const revalidate = 0;
  * 5. Logs deletion for audit trail
  * 6. Returns deletion certificate
  */
-async function handleDataDeletion(req: Request, params: { params: { tenantId: string } }): Promise<NextResponse> {
+async function handleDataDeletion(
+  req: Request,
+  params: { params: { tenantId: string } }
+): Promise<NextResponse> {
   const traceId = generateTraceId();
   const { tenantId } = params.params;
 
@@ -67,7 +71,7 @@ async function handleDataDeletion(req: Request, params: { params: { tenantId: st
     const deletionStats: Record<string, number> = {};
 
     // Step 1: Anonymize/Delete all PII-containing records
-    
+
     // Anonymize prospect leads
     const leadsResult = await prisma.prospectLead.updateMany({
       where: { tenantId },
@@ -132,22 +136,13 @@ async function handleDataDeletion(req: Request, params: { params: { tenantId: st
     deletionStats.proposalOutreachDeleted = proposalOutreachResult.count;
 
     // Delete client messages
-    const messagesResult = await prisma.$executeRawUnsafe(
-      'DELETE FROM "ClientMessage" WHERE "tenantId" = $1',
-      tenantId
-    );
+    await prisma.$executeRawUnsafe('DELETE FROM "ClientMessage" WHERE "tenantId" = $1', tenantId);
 
     // Delete finding status
-    const findingStatusResult = await prisma.$executeRawUnsafe(
-      'DELETE FROM "FindingStatus" WHERE "tenantId" = $1',
-      tenantId
-    );
+    await prisma.$executeRawUnsafe('DELETE FROM "FindingStatus" WHERE "tenantId" = $1', tenantId);
 
     // Delete review snapshots
-    const reviewsResult = await prisma.$executeRawUnsafe(
-      'DELETE FROM "ReviewSnapshot" WHERE "tenantId" = $1',
-      tenantId
-    );
+    await prisma.$executeRawUnsafe('DELETE FROM "ReviewSnapshot" WHERE "tenantId" = $1', tenantId);
 
     // Delete evidence snapshots
     const evidenceResult = await prisma.evidenceSnapshot.deleteMany({
@@ -273,17 +268,22 @@ async function handleDataDeletion(req: Request, params: { params: { tenantId: st
 /**
  * Get deletion status for a tenant
  */
-async function getDeletionStatus(req: Request, params: { params: { tenantId: string } }): Promise<NextResponse> {
+async function getDeletionStatus(
+  req: Request,
+  params: { params: { tenantId: string } }
+): Promise<NextResponse> {
   const { tenantId } = params.params;
 
   try {
     // Check for recent deletion events using raw query
     // (AuditTrailEvent model may not be exposed in Prisma Client)
-    const deletionEvents = await prisma.$queryRawUnsafe<Array<{
-      event_type: string;
-      occurred_at: Date;
-      payload: unknown;
-    }>>(
+    const deletionEvents = await prisma.$queryRawUnsafe<
+      Array<{
+        event_type: string;
+        occurred_at: Date;
+        payload: unknown;
+      }>
+    >(
       `
       SELECT "eventType" as event_type, "occurredAt" as occurred_at, "payload"
       FROM "AuditTrailEvent"
@@ -306,10 +306,7 @@ async function getDeletionStatus(req: Request, params: { params: { tenantId: str
     });
   } catch (error) {
     logger.error({ error, tenantId }, 'Failed to get deletion status');
-    return NextResponse.json(
-      { error: 'Failed to retrieve deletion status' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Failed to retrieve deletion status' }, { status: 500 });
   }
 }
 
@@ -333,7 +330,8 @@ const authHandler = async (
   // 3. User has explicitly confirmed data deletion
 
   if (req.method === 'DELETE') {
-    return handleDataDeletion(req, params);
+    // The route param is the authority for this destructive tenant-local workflow.
+    return runWithTenantAsync(params.params.tenantId, () => handleDataDeletion(req, params));
   } else if (req.method === 'GET') {
     return getDeletionStatus(req, params);
   }
