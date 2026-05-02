@@ -10,9 +10,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 import { generateTraceId, InternalError, UnauthorizedError } from '@/lib/api/errors';
-import { validateApiKey, API_KEY_SCOPES } from '@/lib/auth/apiKeys';
+import { API_KEY_SCOPES, validateApiKey } from '@/lib/auth/apiKeys';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
+import { runWithTenantAsync } from '@/lib/tenant/context';
 
 export const dynamic = 'force-dynamic';
 
@@ -55,8 +56,7 @@ export async function POST(
 
     // Verify access to this tenant
     const hasAdminScope =
-      validation.scopes.includes(API_KEY_SCOPES.ALL) ||
-      validation.scopes.includes('admin:*');
+      validation.scopes.includes(API_KEY_SCOPES.ALL) || validation.scopes.includes('admin:*');
 
     if (!hasAdminScope && validation.tenantId !== tenantId) {
       throw new UnauthorizedError('Access denied to this tenant');
@@ -71,70 +71,72 @@ export async function POST(
       );
     }
 
-    // Execute offboarding in transaction
-    await prisma.$transaction(async (tx) => {
-      // 1. Revoke all API keys
-      await tx.apiKey.updateMany({
-        where: { tenantId },
-        data: { isActive: false },
+    return runWithTenantAsync(tenantId, async () => {
+      // The route param is the authority for this destructive tenant-local workflow.
+      await prisma.$transaction(async (tx) => {
+        // 1. Revoke all API keys
+        await tx.apiKey.updateMany({
+          where: { tenantId },
+          data: { isActive: false },
+        });
+
+        // 2. Update tenant status
+        await tx.tenant.update({
+          where: { id: tenantId },
+          data: {
+            status: 'suspended',
+            subscriptionStatus: 'canceled',
+            gracePeriodEndsAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days
+          },
+        });
+
+        // 3. Anonymize PII in prospect leads (GDPR)
+        await tx.prospectLead.updateMany({
+          where: { tenantId },
+          data: {
+            businessName: 'ANONYMIZED',
+            decisionMakerName: 'Anonymized',
+            decisionMakerEmail: 'anonymized@gdpr.local',
+            decisionMakerLinkedin: null,
+            phone: null,
+            website: null,
+            anonymizedAt: new Date(),
+          },
+        });
+
+        // 4. Anonymize outreach emails
+        await tx.outreachEmail.updateMany({
+          where: { tenantId },
+          data: {
+            subject: '[REDACTED]',
+            body: '[REDACTED FOR GDPR]',
+          },
+        });
+
+        // 5. Cancel any active projects
+        await tx.project.updateMany({
+          where: { tenantId, status: { in: ['KICKOFF', 'IN_PROGRESS'] } },
+          data: { status: 'COMPLETE' },
+        });
       });
 
-      // 2. Update tenant status
-      await tx.tenant.update({
-        where: { id: tenantId },
-        data: {
-          status: 'suspended',
-          subscriptionStatus: 'canceled',
-          gracePeriodEndsAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days
+      logger.info(
+        {
+          event: 'tenant.offboarded',
+          tenantId,
+          reason: body.reason,
+          exportData: body.exportData,
         },
-      });
+        'Tenant offboarded successfully'
+      );
 
-      // 3. Anonymize PII in prospect leads (GDPR)
-      await tx.prospectLead.updateMany({
-        where: { tenantId },
-        data: {
-          businessName: 'ANONYMIZED',
-          decisionMakerName: 'Anonymized',
-          decisionMakerEmail: 'anonymized@gdpr.local',
-          decisionMakerLinkedin: null,
-          phone: null,
-          website: null,
-          anonymizedAt: new Date(),
-        },
-      });
-
-      // 4. Anonymize outreach emails
-      await tx.outreachEmail.updateMany({
-        where: { tenantId },
-        data: {
-          subject: '[REDACTED]',
-          body: '[REDACTED FOR GDPR]',
-        },
-      });
-
-      // 5. Cancel any active projects
-      await tx.project.updateMany({
-        where: { tenantId, status: { in: ['KICKOFF', 'IN_PROGRESS'] } },
-        data: { status: 'COMPLETE' },
-      });
-    });
-
-    logger.info(
-      {
-        event: 'tenant.offboarded',
+      return NextResponse.json({
+        success: true,
         tenantId,
-        reason: body.reason,
-        exportData: body.exportData,
-      },
-      'Tenant offboarded successfully'
-    );
-
-    return NextResponse.json({
-      success: true,
-      tenantId,
-      status: 'suspended',
-      gracePeriodEndsAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-      message: 'Tenant offboarded. Data will be permanently deleted after 30-day grace period.',
+        status: 'suspended',
+        gracePeriodEndsAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+        message: 'Tenant offboarded. Data will be permanently deleted after 30-day grace period.',
+      });
     });
   } catch (error) {
     logger.error({ error, tenantId }, 'Failed to offboard tenant');
@@ -181,46 +183,47 @@ export async function DELETE(
     }
 
     const hasAdminScope =
-      validation.scopes.includes(API_KEY_SCOPES.ALL) ||
-      validation.scopes.includes('admin:*');
+      validation.scopes.includes(API_KEY_SCOPES.ALL) || validation.scopes.includes('admin:*');
 
     if (!hasAdminScope) {
       throw new UnauthorizedError('Admin scope required for hard delete');
     }
 
-    // Verify tenant exists
-    const tenant = await prisma.tenant.findUnique({
-      where: { id: tenantId },
-      select: { id: true, name: true, slug: true },
-    });
+    return runWithTenantAsync(tenantId, async () => {
+      // The route param is the authority for this destructive tenant-local workflow.
+      const tenant = await prisma.tenant.findUnique({
+        where: { id: tenantId },
+        select: { id: true, name: true, slug: true },
+      });
 
-    if (!tenant) {
-      return NextResponse.json(
-        { error: 'Tenant not found', code: 'NOT_FOUND' },
-        { status: 404, headers: { 'X-Trace-Id': traceId } }
+      if (!tenant) {
+        return NextResponse.json(
+          { error: 'Tenant not found', code: 'NOT_FOUND' },
+          { status: 404, headers: { 'X-Trace-Id': traceId } }
+        );
+      }
+
+      // Hard delete - Prisma cascade will handle all relations
+      await prisma.tenant.delete({
+        where: { id: tenantId },
+      });
+
+      logger.warn(
+        {
+          event: 'tenant.hard_deleted',
+          tenantId,
+          tenantName: tenant.name,
+          tenantSlug: tenant.slug,
+          deletedBy: validation.keyId,
+        },
+        'Tenant permanently deleted'
       );
-    }
 
-    // Hard delete - Prisma cascade will handle all relations
-    await prisma.tenant.delete({
-      where: { id: tenantId },
-    });
-
-    logger.warn(
-      {
-        event: 'tenant.hard_deleted',
+      return NextResponse.json({
+        success: true,
         tenantId,
-        tenantName: tenant.name,
-        tenantSlug: tenant.slug,
-        deletedBy: validation.keyId,
-      },
-      'Tenant permanently deleted'
-    );
-
-    return NextResponse.json({
-      success: true,
-      tenantId,
-      message: 'Tenant and all associated data permanently deleted.',
+        message: 'Tenant and all associated data permanently deleted.',
+      });
     });
   } catch (error) {
     logger.error({ error, tenantId }, 'Failed to hard delete tenant');

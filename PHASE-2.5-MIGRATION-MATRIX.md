@@ -224,3 +224,39 @@ These surfaced during the direct-`prisma` sweep. They are **not** `createScopedP
   - `app/api/proposals/[id]/send/route.ts:55`
   - `app/api/schedule/[id]/route.ts:14`
   - `app/api/settings/templates/[id]/route.ts:159`
+
+## Migration Execution Notes
+
+### Completed: B1 Cron (`e4a8a80`)
+
+- `app/api/cron/intelligence-aggregation/route.ts`
+  - Pattern chosen: isolated `runWithTenantBypass('cron-intelligence-aggregation-all-tenants', ...)` for tenant enumeration, then `runWithTenantAsync(tenant.id, ...)` inside each tenant pass.
+  - Justification: the cron needs one cross-tenant tenant list read, but each tenant's aggregation work is properly tenant-local.
+  - Existing auth preserved: yes (`verifyCronAuth` and rate limiting remain unchanged).
+  - Latent followup: none surfaced in this batch.
+
+- `lib/pipeline/deadLetterQueue.ts`
+  - Pattern chosen: isolated `runWithTenantBypass('dlq-cross-tenant-retry-driver', ...)` for active-tenant enumeration, then `runWithTenantAsync(tenant.id, ...)` for each tenant's retry work.
+  - Justification: DLQ processing is a cross-tenant driver only at the outer fan-out step; the actual retries, updates, and alerts are single-tenant work and should stay inside tenant scope.
+  - Existing auth preserved: n/a (library helper, no route auth layer).
+  - Latent followup: none surfaced in this batch.
+
+### Completed: B2 Admin destructive
+
+- `app/api/tenants/[tenantId]/delete-data/route.ts`
+  - Pattern chosen: `runWithTenantAsync(tenantId, ...)` around the destructive delete/anonymize workflow. No bypass added.
+  - Justification: the URL tenant param already defines the target tenant, so this route should execute fully inside tenant scope while preserving its current cron/user gate behavior.
+  - Existing auth preserved: yes (`verifyCronAuth` and the existing TODO user-auth placeholder remain unchanged).
+  - Latent authz/RLS followup: route still contains raw SQL delete/status queries (`$executeRawUnsafe`, `$queryRawUnsafe`) that bypass the Prisma shim; Phase 2.6 should migrate or wrap those callsites before app_user rollout.
+
+- `app/api/tenants/[tenantId]/offboard/route.ts:67`
+  - Pattern chosen: `runWithTenantAsync(tenantId, ...)` around the offboard transaction. No bypass added.
+  - Justification: the POST offboard flow is destructive but tenant-local; the URL tenant param and current API-key authorization already define the target tenant.
+  - Existing auth preserved: yes (Bearer API key validation, scope checks, and tenant ownership/admin checks remain unchanged).
+  - Latent authz followup: none discovered during mechanism swap.
+
+- `app/api/tenants/[tenantId]/offboard/route.ts:177`
+  - Pattern chosen: `runWithTenantAsync(tenantId, ...)` around the hard-delete block. No bypass added.
+  - Justification: hard delete is tenant-local and irreversible, so the route param should drive scoping directly instead of broadening access with bypass.
+  - Existing auth preserved: yes (admin-scope API key validation remains unchanged).
+  - Latent authz followup: none discovered during mechanism swap.
