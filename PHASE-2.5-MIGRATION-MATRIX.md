@@ -323,6 +323,26 @@ These surfaced during the direct-`prisma` sweep. They are **not** `createScopedP
   - Existing billing/auth behavior preserved: yes (tenantId lookup contract, plan selection, trial handling, limit calculations, fallback values, and returned reason strings remain unchanged).
   - Latent followup: none discovered during the mechanism swap.
 
+### Completed: C2 Analytics/stats/audits tenant-local read cluster
+
+- `app/api/analytics/route.ts`
+  - Pattern chosen: existing ambient `withAuth` tenant context plus plain `prisma`.
+  - Justification: this analytics surface reads only current-tenant data and already resolves `tenantId` inside an authenticated request, so a second scoped client wrapper is redundant.
+  - Existing auth/reporting/list/create behavior preserved: yes (date-range params, aggregations, ordering, response shape, and status codes remain unchanged).
+  - Latent followup: none discovered during the mechanism swap.
+
+- `app/api/stats/route.ts`
+  - Pattern chosen: existing ambient `withAuth` tenant context plus plain `prisma`.
+  - Justification: this monthly stats surface is tenant-local reporting, so it should use the repaired ambient tenant context rather than a deprecated scoped client helper.
+  - Existing auth/reporting/list/create behavior preserved: yes (auth checks, month window, conversion/cost math, response shape, and status codes remain unchanged).
+  - Latent followup: none discovered during the mechanism swap.
+
+- `app/api/audits/route.ts`
+  - Pattern chosen: existing ambient `withAuth` tenant context plus plain `prisma`.
+  - Justification: this audits list route stays tenant-local under `withAuth`, and its explicit filters/pagination should continue to run without a separate wrapper client.
+  - Existing auth/reporting/list/create behavior preserved: yes (rate limiting, query params, pagination, filters, projection, response shape, and status codes remain unchanged).
+  - Latent followup: none discovered during the mechanism swap.
+
 ### Completed: B5 Other specialized routes/helpers
 
 - `lib/pipeline/idempotency.ts`

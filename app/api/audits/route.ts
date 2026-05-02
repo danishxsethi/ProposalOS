@@ -14,7 +14,8 @@ import { generateTraceId } from '@/lib/api/errors';
 import { getCostStatus } from '@/lib/config/costBudget';
 import { withAuth } from '@/lib/middleware/auth';
 import { RateLimitPresets, withRateLimit } from '@/lib/middleware/rateLimit';
-import { createScopedPrisma, getTenantId } from '@/lib/tenant/context';
+import { prisma } from '@/lib/prisma';
+import { getTenantId } from '@/lib/tenant/context';
 
 /**
  * Inner handler for listing audits
@@ -27,8 +28,6 @@ async function handleListAudits(req: Request): Promise<NextResponse> {
     if (!tenantId) {
       return NextResponse.json({ error: 'Unauthorized: No Tenant' }, { status: 403 });
     }
-
-    const prisma = createScopedPrisma(tenantId);
 
     const { searchParams } = new URL(req.url);
 
