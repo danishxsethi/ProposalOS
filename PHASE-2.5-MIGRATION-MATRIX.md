@@ -290,3 +290,41 @@ These surfaced during the direct-`prisma` sweep. They are **not** `createScopedP
   - `app/api/proposals/[id]/send/route.ts` remains intentionally classified as Batch C, not B4, because it is a `withAuth`-scoped tenant mutation rather than a public/magic-link surface.
 - Existing token/auth/public validation preserved: yes (no code changed in this batch).
 - Latent followup: keep the existing proposal-token and public-audit bypass patterns visible during Phase 2.5 closure / Phase 2.6 verification under `app_user` + RLS, but do not reclassify them mid-phase.
+
+### Completed: B5 Other specialized routes/helpers
+
+- `lib/pipeline/idempotency.ts`
+  - Pattern chosen: `runWithTenantAsync(tenantId, ...)` for tenant-local idempotency lookups/writes; isolated `runWithTenantBypass(...)` only for the global expired-key cleanup scan/delete path.
+  - Justification: request-bound idempotency state is tenant-local, while the periodic cleanup job is a true cross-tenant maintenance sweep.
+  - Existing auth/validation preserved: n/a (library helper, no route auth layer).
+  - Latent followup: the key format (`pending:` prefix vs tenant-prefixed keys) was preserved exactly even though the cleanup logic looks odd; behavior change deferred.
+
+- `lib/pipeline/circuitBreaker.ts`
+  - Pattern chosen: `runWithTenantAsync(tenantId, ...)` for tenant-local state/config/error-rate work; isolated `runWithTenantBypass('circuit-breaker-global-config-scan', ...)` only for the cross-tenant cron driver that enumerates enabled tenant configs.
+  - Justification: circuit state mutations and reads are tenant-local once the tenant is known, but the auto-close cron must first discover all participating tenants globally.
+  - Existing auth/validation preserved: n/a (library helper, no route auth layer).
+  - Latent followup: none discovered beyond the intentional global config scan now being explicit.
+
+- `lib/pipeline/deadLetterQueue.ts`
+  - Pattern chosen: `runWithTenantAsync(tenantId, ...)` for all tenant-local DLQ CRUD helpers; the existing isolated bypass on `processDLQ()` tenant enumeration from B1 remains the only cross-tenant piece.
+  - Justification: DLQ entry management is tenant-local once the tenant is known, so the old scoped-client wrappers were replaced with explicit ambient tenant scope.
+  - Existing auth/validation preserved: n/a (library helper, no route auth layer).
+  - Latent followup: none discovered in this batch beyond the already-recorded B1 cross-tenant driver reason.
+
+- `lib/pipeline/humanReview.ts`
+  - Pattern chosen: `runWithTenantAsync(resolvedTenantId, ...)` for `routeToReview()`, `approveProspect()`, and `rejectProspect()` after the existing tenant-discovery lookup.
+  - Justification: these are tenant-local state transitions and audit-log writes once the owning tenant has been resolved.
+  - Existing auth/validation preserved: yes (no caller auth logic changed; helper semantics preserved).
+  - Latent followup: the initial global tenant-discovery lookups remain in place by design and should stay visible through Phase 2.6 verification.
+
+- `lib/pipeline/dealCloser.ts:recordEvent()`
+  - Pattern chosen: existing narrow bypass for lead-id tenant discovery, then `runWithTenantAsync(tenantId, ...)` for tenant-local event write/update work.
+  - Justification: engagement webhooks arrive keyed by lead ID, but once the tenant is known the actual writes are tenant-local.
+  - Existing auth/validation preserved: yes (no webhook semantics changed).
+  - Latent followup: other deal-closer cross-tenant reconciliation flows remain intentionally handled by their earlier explicit bypass reasons.
+
+- `app/api/pipeline/prospects/[id]/route.ts`
+  - Pattern chosen: `runWithTenantAsync(tenantId, ...)` after the existing `getTenantId()` resolution; no bypass added.
+  - Justification: this is a tenant-local authenticated detail route, so tenant context should come from the existing request/session resolution rather than a permissive scoped client.
+  - Existing auth/validation preserved: yes (`getTenantId()`, rate limiting, response codes, and the two-step prospect/context lookup all remain unchanged).
+  - Latent followup: this route still depends on `getProspectContext()`'s global tenant-discovery lookup, which remains intentionally preserved from B3.

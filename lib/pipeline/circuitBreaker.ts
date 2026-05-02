@@ -10,7 +10,7 @@
 import { logger } from '@/lib/logger';
 import { sendAlert } from '@/lib/notifications/slack';
 import { prisma } from '@/lib/prisma';
-import { createScopedPrisma } from '@/lib/tenant/context';
+import { runWithTenantAsync, runWithTenantBypass } from '@/lib/tenant/context';
 
 import { PipelineStage } from './types';
 
@@ -63,9 +63,11 @@ export interface CircuitStateRecord {
  * Get circuit breaker config for a tenant
  */
 export async function getConfig(tenantId: string): Promise<CircuitBreakerConfig> {
-  const config = await prisma.pipelineConfig.findUnique({
-    where: { tenantId },
-  });
+  const config = await runWithTenantAsync(tenantId, () =>
+    prisma.pipelineConfig.findUnique({
+      where: { tenantId },
+    })
+  );
 
   if (!config) {
     return DEFAULT_CONFIG;
@@ -89,76 +91,76 @@ export async function getCircuitState(
   tenantId: string,
   stage: PipelineStage
 ): Promise<CircuitStateRecord> {
-  const prismaScoped = createScopedPrisma(tenantId);
-
-  let record = await prismaScoped.circuitBreakerState.findUnique({
-    where: {
-      tenantId_stage: {
-        tenantId,
-        stage,
-      },
-    },
-  });
-
-  if (!record) {
-    record = await prismaScoped.circuitBreakerState.create({
-      data: {
-        tenantId,
-        stage,
-        state: 'CLOSED',
-        errorCount: 0,
-        successCount: 0,
-        totalAttempts: 0,
-        lastErrorAt: null,
-        lastStateChangeAt: new Date(),
-        halfOpenAttempts: 0,
+  return runWithTenantAsync(tenantId, async () => {
+    let record = await prisma.circuitBreakerState.findUnique({
+      where: {
+        tenantId_stage: {
+          tenantId,
+          stage,
+        },
       },
     });
-  }
 
-  return {
-    tenantId: record.tenantId,
-    stage: record.stage as PipelineStage,
-    state: record.state as CircuitState,
-    errorCount: record.errorCount,
-    successCount: record.successCount,
-    totalAttempts: record.totalAttempts,
-    lastErrorAt: record.lastErrorAt,
-    lastStateChangeAt: record.lastStateChangeAt,
-    halfOpenAttempts: record.halfOpenAttempts,
-  };
+    if (!record) {
+      record = await prisma.circuitBreakerState.create({
+        data: {
+          tenantId,
+          stage,
+          state: 'CLOSED',
+          errorCount: 0,
+          successCount: 0,
+          totalAttempts: 0,
+          lastErrorAt: null,
+          lastStateChangeAt: new Date(),
+          halfOpenAttempts: 0,
+        },
+      });
+    }
+
+    return {
+      tenantId: record.tenantId,
+      stage: record.stage as PipelineStage,
+      state: record.state as CircuitState,
+      errorCount: record.errorCount,
+      successCount: record.successCount,
+      totalAttempts: record.totalAttempts,
+      lastErrorAt: record.lastErrorAt,
+      lastStateChangeAt: record.lastStateChangeAt,
+      halfOpenAttempts: record.halfOpenAttempts,
+    };
+  });
 }
 
 /**
  * Record a successful operation
  */
 export async function recordSuccess(tenantId: string, stage: PipelineStage): Promise<void> {
-  const prismaScoped = createScopedPrisma(tenantId);
   const config = await getConfig(tenantId);
   const circuit = await getCircuitState(tenantId, stage);
 
-  await prismaScoped.circuitBreakerState.update({
-    where: {
-      tenantId_stage: {
-        tenantId,
-        stage,
+  await runWithTenantAsync(tenantId, () =>
+    prisma.circuitBreakerState.update({
+      where: {
+        tenantId_stage: {
+          tenantId,
+          stage,
+        },
       },
-    },
-    data: {
-      successCount: { increment: 1 },
-      totalAttempts: { increment: 1 },
-      // If half-open and success, may close circuit
-      state:
-        circuit.state === 'HALF_OPEN' && circuit.halfOpenAttempts >= config.halfOpenMaxAttempts
-          ? 'CLOSED'
-          : circuit.state,
-      halfOpenAttempts: circuit.state === 'HALF_OPEN' ? circuit.halfOpenAttempts + 1 : 0,
-      lastStateChangeAt:
-        circuit.state === 'HALF_OPEN' && circuit.halfOpenAttempts >= config.halfOpenMaxAttempts
-          ? new Date()
-          : circuit.lastStateChangeAt,
-    },
-  });
+      data: {
+        successCount: { increment: 1 },
+        totalAttempts: { increment: 1 },
+        state:
+          circuit.state === 'HALF_OPEN' && circuit.halfOpenAttempts >= config.halfOpenMaxAttempts
+            ? 'CLOSED'
+            : circuit.state,
+        halfOpenAttempts: circuit.state === 'HALF_OPEN' ? circuit.halfOpenAttempts + 1 : 0,
+        lastStateChangeAt:
+          circuit.state === 'HALF_OPEN' && circuit.halfOpenAttempts >= config.halfOpenMaxAttempts
+            ? new Date()
+            : circuit.lastStateChangeAt,
+      },
+    })
+  );
 
   logger.info(
     {
@@ -177,9 +179,8 @@ export async function recordSuccess(tenantId: string, stage: PipelineStage): Pro
 export async function recordFailure(
   tenantId: string,
   stage: PipelineStage,
-  error: Error
+  _error: Error
 ): Promise<void> {
-  const prismaScoped = createScopedPrisma(tenantId);
   const config = await getConfig(tenantId);
   const circuit = await getCircuitState(tenantId, stage);
   const now = new Date();
@@ -202,23 +203,24 @@ export async function recordFailure(
   }
 
   // Update failure counts
-  await prismaScoped.circuitBreakerState.update({
-    where: {
-      tenantId_stage: {
-        tenantId,
-        stage,
+  await runWithTenantAsync(tenantId, () =>
+    prisma.circuitBreakerState.update({
+      where: {
+        tenantId_stage: {
+          tenantId,
+          stage,
+        },
       },
-    },
-    data: {
-      errorCount: { increment: 1 },
-      totalAttempts: { increment: 1 },
-      lastErrorAt: now,
-      // If half-open and failure, reopen circuit
-      state: circuit.state === 'HALF_OPEN' ? 'OPEN' : circuit.state,
-      halfOpenAttempts: circuit.state === 'HALF_OPEN' ? 0 : circuit.halfOpenAttempts,
-      lastStateChangeAt: circuit.state === 'HALF_OPEN' ? now : circuit.lastStateChangeAt,
-    },
-  });
+      data: {
+        errorCount: { increment: 1 },
+        totalAttempts: { increment: 1 },
+        lastErrorAt: now,
+        state: circuit.state === 'HALF_OPEN' ? 'OPEN' : circuit.state,
+        halfOpenAttempts: circuit.state === 'HALF_OPEN' ? 0 : circuit.halfOpenAttempts,
+        lastStateChangeAt: circuit.state === 'HALF_OPEN' ? now : circuit.lastStateChangeAt,
+      },
+    })
+  );
 
   logger.warn(
     {
@@ -240,41 +242,40 @@ async function openCircuit(
   stage: PipelineStage,
   errorRate: number
 ): Promise<void> {
-  const prismaScoped = createScopedPrisma(tenantId);
   const config = await getConfig(tenantId);
   const now = new Date();
 
-  // Update circuit state to OPEN
-  await prismaScoped.circuitBreakerState.update({
-    where: {
-      tenantId_stage: {
-        tenantId,
-        stage,
-      },
-    },
-    data: {
-      state: 'OPEN',
-      lastStateChangeAt: now,
-      halfOpenAttempts: 0,
-    },
-  });
-
-  // Pause the pipeline stage
-  const pipelineConfig = await prismaScoped.pipelineConfig.findUnique({
-    where: { tenantId },
-  });
-
-  if (pipelineConfig) {
-    const pausedStages = (pipelineConfig.pausedStages as string[]) || [];
-    if (!pausedStages.includes(stage)) {
-      await prismaScoped.pipelineConfig.update({
-        where: { tenantId },
-        data: {
-          pausedStages: [...pausedStages, stage],
+  await runWithTenantAsync(tenantId, async () => {
+    await prisma.circuitBreakerState.update({
+      where: {
+        tenantId_stage: {
+          tenantId,
+          stage,
         },
-      });
+      },
+      data: {
+        state: 'OPEN',
+        lastStateChangeAt: now,
+        halfOpenAttempts: 0,
+      },
+    });
+
+    const pipelineConfig = await prisma.pipelineConfig.findUnique({
+      where: { tenantId },
+    });
+
+    if (pipelineConfig) {
+      const pausedStages = (pipelineConfig.pausedStages as string[]) || [];
+      if (!pausedStages.includes(stage)) {
+        await prisma.pipelineConfig.update({
+          where: { tenantId },
+          data: {
+            pausedStages: [...pausedStages, stage],
+          },
+        });
+      }
     }
-  }
+  });
 
   // Send alert to admins
   await sendAlert({
@@ -328,21 +329,21 @@ export async function canProceed(
     const timeSinceOpen = now.getTime() - circuit.lastStateChangeAt.getTime();
 
     if (timeSinceOpen >= config.openTimeoutMs) {
-      // Transition to HALF_OPEN
-      const prismaScoped = createScopedPrisma(tenantId);
-      await prismaScoped.circuitBreakerState.update({
-        where: {
-          tenantId_stage: {
-            tenantId,
-            stage,
+      await runWithTenantAsync(tenantId, () =>
+        prisma.circuitBreakerState.update({
+          where: {
+            tenantId_stage: {
+              tenantId,
+              stage,
+            },
           },
-        },
-        data: {
-          state: 'HALF_OPEN',
-          lastStateChangeAt: now,
-          halfOpenAttempts: 0,
-        },
-      });
+          data: {
+            state: 'HALF_OPEN',
+            lastStateChangeAt: now,
+            halfOpenAttempts: 0,
+          },
+        })
+      );
 
       logger.info(
         {
@@ -384,27 +385,27 @@ async function calculateErrorRate(
   stage: PipelineStage,
   windowMs: number
 ): Promise<{ rate: number; total: number; errors: number; successes: number }> {
-  const prismaScoped = createScopedPrisma(tenantId);
   const now = new Date();
   const windowStart = new Date(now.getTime() - windowMs);
 
-  // Get error logs in window
-  const errorCount = await prismaScoped.pipelineErrorLog.count({
-    where: {
-      tenantId,
-      stage,
-      createdAt: { gte: windowStart },
-    },
-  });
-
-  // Get successful transitions in window
-  const successCount = await prismaScoped.prospectStateTransition.count({
-    where: {
-      tenantId,
-      stage,
-      createdAt: { gte: windowStart },
-    },
-  });
+  const [errorCount, successCount] = await runWithTenantAsync(tenantId, () =>
+    Promise.all([
+      prisma.pipelineErrorLog.count({
+        where: {
+          tenantId,
+          stage,
+          createdAt: { gte: windowStart },
+        },
+      }),
+      prisma.prospectStateTransition.count({
+        where: {
+          tenantId,
+          stage,
+          createdAt: { gte: windowStart },
+        },
+      }),
+    ])
+  );
 
   const total = errorCount + successCount;
   const rate = total > 0 ? errorCount / total : 0;
@@ -425,42 +426,41 @@ export async function resetCircuit(
   stage: PipelineStage,
   operatorId: string
 ): Promise<void> {
-  const prismaScoped = createScopedPrisma(tenantId);
-
-  await prismaScoped.circuitBreakerState.update({
-    where: {
-      tenantId_stage: {
-        tenantId,
-        stage,
+  await runWithTenantAsync(tenantId, async () => {
+    await prisma.circuitBreakerState.update({
+      where: {
+        tenantId_stage: {
+          tenantId,
+          stage,
+        },
       },
-    },
-    data: {
-      state: 'CLOSED',
-      errorCount: 0,
-      successCount: 0,
-      totalAttempts: 0,
-      lastErrorAt: null,
-      lastStateChangeAt: new Date(),
-      halfOpenAttempts: 0,
-    },
-  });
-
-  // Also resume the pipeline stage
-  const pipelineConfig = await prismaScoped.pipelineConfig.findUnique({
-    where: { tenantId },
-  });
-
-  if (pipelineConfig) {
-    const pausedStages = (pipelineConfig.pausedStages as string[]) || [];
-    const filteredStages = pausedStages.filter((s) => s !== stage);
-
-    await prismaScoped.pipelineConfig.update({
-      where: { tenantId },
       data: {
-        pausedStages: filteredStages,
+        state: 'CLOSED',
+        errorCount: 0,
+        successCount: 0,
+        totalAttempts: 0,
+        lastErrorAt: null,
+        lastStateChangeAt: new Date(),
+        halfOpenAttempts: 0,
       },
     });
-  }
+
+    const pipelineConfig = await prisma.pipelineConfig.findUnique({
+      where: { tenantId },
+    });
+
+    if (pipelineConfig) {
+      const pausedStages = (pipelineConfig.pausedStages as string[]) || [];
+      const filteredStages = pausedStages.filter((s) => s !== stage);
+
+      await prisma.pipelineConfig.update({
+        where: { tenantId },
+        data: {
+          pausedStages: filteredStages,
+        },
+      });
+    }
+  });
 
   logger.info(
     {
@@ -520,9 +520,11 @@ export async function checkCircuits(): Promise<{
   autoClosed: number;
   alerted: number;
 }> {
-  const allConfigs = await prisma.pipelineConfig.findMany({
-    where: { circuitBreakerEnabled: true },
-  });
+  const allConfigs = await runWithTenantBypass('circuit-breaker-global-config-scan', () =>
+    prisma.pipelineConfig.findMany({
+      where: { circuitBreakerEnabled: true },
+    })
+  );
 
   let checked = 0;
   let autoClosed = 0;

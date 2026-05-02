@@ -8,7 +8,7 @@
  */
 
 import { prisma } from '@/lib/prisma';
-import { createScopedPrisma, runWithTenantAsync } from '@/lib/tenant/context';
+import { runWithTenantAsync } from '@/lib/tenant/context';
 
 import { transition } from './stateMachine';
 
@@ -65,23 +65,21 @@ export async function routeToReview(prospectId: string, reason: string): Promise
       })
     )?.tenantId || '';
 
-  const prisma = createScopedPrisma(tenantId);
+  await runWithTenantAsync(tenantId, async () => {
+    await transition(prospectId, 'hot_lead', 'deal_closer');
 
-  // Transition prospect to hot_lead status (which triggers human review)
-  await transition(prospectId, 'hot_lead', 'deal_closer');
-
-  // Log the routing action
-  await prisma.pipelineErrorLog.create({
-    data: {
-      tenantId,
-      stage: 'human_review',
-      prospectId,
-      errorType: 'ROUTED_TO_REVIEW',
-      errorMessage: reason,
-      metadata: {
-        routedAt: new Date().toISOString(),
+    await prisma.pipelineErrorLog.create({
+      data: {
+        tenantId,
+        stage: 'human_review',
+        prospectId,
+        errorType: 'ROUTED_TO_REVIEW',
+        errorMessage: reason,
+        metadata: {
+          routedAt: new Date().toISOString(),
+        },
       },
-    },
+    });
   });
 }
 
@@ -210,26 +208,24 @@ export async function approveProspect(action: ReviewAction): Promise<void> {
     throw new Error(`Prospect ${prospectId} not found`);
   }
 
-  const prisma = createScopedPrisma(prospectRaw.tenantId);
+  await runWithTenantAsync(prospectRaw.tenantId, async () => {
+    await transition(prospectId, 'closing', 'human_review');
 
-  // Transition to closing status
-  await transition(prospectId, 'closing', 'human_review');
-
-  // Log the approval action
-  await prisma.pipelineErrorLog.create({
-    data: {
-      tenantId: prospectRaw.tenantId,
-      stage: 'human_review',
-      prospectId,
-      errorType: 'APPROVED',
-      errorMessage: `Approved by ${operatorEmail}`,
-      metadata: {
-        operatorId,
-        operatorEmail,
-        notes: notes || '',
-        approvedAt: new Date().toISOString(),
+    await prisma.pipelineErrorLog.create({
+      data: {
+        tenantId: prospectRaw.tenantId,
+        stage: 'human_review',
+        prospectId,
+        errorType: 'APPROVED',
+        errorMessage: `Approved by ${operatorEmail}`,
+        metadata: {
+          operatorId,
+          operatorEmail,
+          notes: notes || '',
+          approvedAt: new Date().toISOString(),
+        },
       },
-    },
+    });
   });
 }
 
@@ -251,27 +247,25 @@ export async function rejectProspect(action: ReviewAction): Promise<void> {
     throw new Error(`Prospect ${prospectId} not found`);
   }
 
-  const prisma = createScopedPrisma(prospectRaw.tenantId);
+  await runWithTenantAsync(prospectRaw.tenantId, async () => {
+    await transition(prospectId, 'closed_lost', 'human_review');
 
-  // Transition to closed_lost status
-  await transition(prospectId, 'closed_lost', 'human_review');
-
-  // Log the rejection action
-  await prisma.pipelineErrorLog.create({
-    data: {
-      tenantId: prospectRaw.tenantId,
-      stage: 'human_review',
-      prospectId,
-      errorType: 'REJECTED',
-      errorMessage: `Rejected by ${operatorEmail}: ${reason || 'No reason provided'}`,
-      metadata: {
-        operatorId,
-        operatorEmail,
-        reason: reason || '',
-        notes: notes || '',
-        rejectedAt: new Date().toISOString(),
+    await prisma.pipelineErrorLog.create({
+      data: {
+        tenantId: prospectRaw.tenantId,
+        stage: 'human_review',
+        prospectId,
+        errorType: 'REJECTED',
+        errorMessage: `Rejected by ${operatorEmail}: ${reason || 'No reason provided'}`,
+        metadata: {
+          operatorId,
+          operatorEmail,
+          reason: reason || '',
+          notes: notes || '',
+          rejectedAt: new Date().toISOString(),
+        },
       },
-    },
+    });
   });
 }
 

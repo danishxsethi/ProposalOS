@@ -2,7 +2,7 @@ import { OutreachEventType } from '@prisma/client';
 
 import { stripe } from '@/lib/billing/stripe';
 import { prisma } from '@/lib/prisma';
-import { createScopedPrisma, runWithTenantBypass } from '@/lib/tenant/context';
+import { runWithTenantAsync, runWithTenantBypass } from '@/lib/tenant/context';
 
 import type {
   EngagementEvent,
@@ -45,52 +45,46 @@ export async function recordEvent(leadId: string, event: EngagementEvent): Promi
   }
 
   const tenantId = lead.tenantId;
-  const scopedPrisma = createScopedPrisma(tenantId);
+  await runWithTenantAsync(tenantId, async () => {
+    const eventTypeMap: Record<string, OutreachEventType> = {
+      email_open: OutreachEventType.EMAIL_OPEN,
+      email_click: OutreachEventType.EMAIL_CLICK,
+      proposal_view: OutreachEventType.PROPOSAL_VIEW_2M,
+      tier_interaction: OutreachEventType.SCORECARD_CLICK,
+    };
 
-  // Map EngagementEvent type to OutreachEventType
-  const eventTypeMap: Record<string, OutreachEventType> = {
-    email_open: OutreachEventType.EMAIL_OPEN,
-    email_click: OutreachEventType.EMAIL_CLICK,
-    proposal_view: OutreachEventType.PROPOSAL_VIEW_2M,
-    tier_interaction: OutreachEventType.SCORECARD_CLICK,
-  };
+    const outreachEventType = eventTypeMap[event.eventType];
+    if (!outreachEventType) {
+      throw new Error(`Unknown engagement event type: ${event.eventType}`);
+    }
 
-  const outreachEventType = eventTypeMap[event.eventType];
-  if (!outreachEventType) {
-    throw new Error(`Unknown engagement event type: ${event.eventType}`);
-  }
+    await prisma.outreachEmailEvent.create({
+      data: {
+        tenantId,
+        leadId,
+        emailId: event.metadata?.emailId as string | undefined,
+        type: outreachEventType,
+        metadata: (event.metadata || {}) as Record<string, unknown>,
+        occurredAt: event.timestamp,
+      },
+    });
 
-  // Create the event record
-  await scopedPrisma.outreachEmailEvent.create({
-    data: {
-      tenantId,
-      leadId,
-      emailId: event.metadata?.emailId as string | undefined,
-      type: outreachEventType,
-      metadata: (event.metadata || {}) as Record<string, unknown>,
-      occurredAt: event.timestamp,
-    },
-  });
+    const updates: Record<string, unknown> = {
+      lastEngagementAt: event.timestamp,
+    };
 
-  // Update the lead's engagement counters
-  const updates: Record<string, unknown> = {
-    lastEngagementAt: event.timestamp,
-  };
-
-  if (event.eventType === 'email_open') {
-    updates.outreachOpenCount = { increment: 1 };
-  } else if (event.eventType === 'email_click') {
-    updates.outreachClickCount = { increment: 1 };
-  } else if (event.eventType === 'proposal_view') {
-    // Track proposal view
-    if (event.metadata?.dwellSeconds) {
+    if (event.eventType === 'email_open') {
+      updates.outreachOpenCount = { increment: 1 };
+    } else if (event.eventType === 'email_click') {
+      updates.outreachClickCount = { increment: 1 };
+    } else if (event.eventType === 'proposal_view' && event.metadata?.dwellSeconds) {
       updates.scorecardTotalViewSeconds = { increment: Number(event.metadata.dwellSeconds) };
     }
-  }
 
-  await scopedPrisma.prospectLead.update({
-    where: { id: leadId },
-    data: updates,
+    await prisma.prospectLead.update({
+      where: { id: leadId },
+      data: updates,
+    });
   });
 }
 

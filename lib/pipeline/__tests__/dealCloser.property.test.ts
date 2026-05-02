@@ -3,7 +3,7 @@ import * as fc from 'fast-check';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { prisma } from '@/lib/prisma';
-import { createScopedPrisma, runWithTenantBypass } from '@/lib/tenant/context';
+import { runWithTenantAsync, runWithTenantBypass } from '@/lib/tenant/context';
 
 import { computeEngagementScore, isHotLead, recordEvent } from '../dealCloser';
 
@@ -11,7 +11,7 @@ import type { EngagementEvent, EngagementScore, PipelineConfig } from '../types'
 
 // Mock the tenant context
 vi.mock('@/lib/tenant/context', () => ({
-  createScopedPrisma: vi.fn(),
+  runWithTenantAsync: vi.fn(async (_tenantId: string, fn: () => Promise<unknown>) => await fn()),
   runWithTenantBypass: vi.fn(async (_reason: string, fn: () => Promise<unknown>) => await fn()),
 }));
 
@@ -44,7 +44,7 @@ vi.mock('@/lib/billing/stripe', () => ({
 }));
 
 describe('Deal Closer Property Tests', () => {
-  const mockedCreateScopedPrisma = vi.mocked(createScopedPrisma);
+  const mockedRunWithTenantAsync = vi.mocked(runWithTenantAsync);
   const mockedRunWithTenantBypass = vi.mocked(runWithTenantBypass);
   const mockPrisma = prisma as unknown as {
     prospectLead: {
@@ -62,7 +62,9 @@ describe('Deal Closer Property Tests', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    mockedCreateScopedPrisma.mockReturnValue(mockPrisma as never);
+    mockedRunWithTenantAsync.mockImplementation(
+      async (_tenantId: string, fn: () => Promise<unknown>) => await fn()
+    );
     mockedRunWithTenantBypass.mockImplementation(
       async (_reason: string, fn: () => Promise<unknown>) => await fn()
     );
