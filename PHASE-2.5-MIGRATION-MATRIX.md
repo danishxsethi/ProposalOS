@@ -280,3 +280,13 @@ These surfaced during the direct-`prisma` sweep. They are **not** `createScopedP
   - Justification: queue metrics are computed from a single tenant's prospects and review logs, so bypass would be over-broad.
   - Existing auth preserved: yes (no auth logic changed here; callers still own admin/operator access checks).
   - Latent authz followup: none discovered during mechanism swap.
+
+### Completed: B4 Public/magic-link
+
+- No Phase 2.5 code changes were required for Batch B4 because the matrix still classifies this family as zero sites.
+- Validation pass:
+  - `app/api/public/audit/route.ts` already uses `runWithTenantAsync(...)` and is outside the remaining `createScopedPrisma(...)` migration scope.
+  - `app/proposal/[token]/page.tsx` and `app/proposal/[token]/pdf/page.tsx` already use narrow bypass for token bootstrap plus tenant-local reads under `runWithTenantAsync(...)`.
+  - `app/api/proposals/[id]/send/route.ts` remains intentionally classified as Batch C, not B4, because it is a `withAuth`-scoped tenant mutation rather than a public/magic-link surface.
+- Existing token/auth/public validation preserved: yes (no code changed in this batch).
+- Latent followup: keep the existing proposal-token and public-audit bypass patterns visible during Phase 2.5 closure / Phase 2.6 verification under `app_user` + RLS, but do not reclassify them mid-phase.
