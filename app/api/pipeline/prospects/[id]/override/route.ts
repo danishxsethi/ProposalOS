@@ -17,10 +17,12 @@ import { z } from 'zod';
 
 import { generateTraceId, InternalError, NotFoundError, UnauthorizedError } from '@/lib/api/errors';
 import { auth } from '@/lib/auth';
+import { prisma as dbPrisma } from '@/lib/db';
 import { withRateLimit } from '@/lib/middleware/rateLimit';
 import { withRole } from '@/lib/middleware/withRole';
 import { overrideProspectStatus } from '@/lib/pipeline/humanReview';
-import { createScopedPrisma, getTenantId } from '@/lib/tenant/context';
+import { prisma } from '@/lib/prisma';
+import { getTenantId, runWithTenantAsync } from '@/lib/tenant/context';
 
 interface Params {
   params: Promise<{ id: string }>;
@@ -52,20 +54,6 @@ async function handleStatusOverride(req: NextRequest, params: Params): Promise<N
       );
     }
 
-    const prisma = createScopedPrisma(tenantId);
-
-    // Verify prospect belongs to tenant (automatic with createScopedPrisma)
-    const prospect = await prisma.prospectLead.findUnique({
-      where: { id: id },
-      select: { id: true },
-    });
-
-    if (!prospect) {
-      return NextResponse.json(new NotFoundError('Prospect', id).toEnvelope(req.url, traceId), {
-        status: 404,
-      });
-    }
-
     const body = await req.json();
 
     // Validate request body
@@ -83,15 +71,45 @@ async function handleStatusOverride(req: NextRequest, params: Params): Promise<N
 
     const { newStatus, reason } = result.data;
 
-    await overrideProspectStatus(id, newStatus, session.user.id, session.user.email, reason);
+    const executeOverride = async () => {
+      const prospect = await prisma.prospectLead.findUnique({
+        where: { id },
+        select: { id: true },
+      });
 
-    const response = NextResponse.json({
-      success: true,
-      message: 'Status overridden successfully',
-    });
+      if (!prospect) {
+        return NextResponse.json(new NotFoundError('Prospect', id).toEnvelope(req.url, traceId), {
+          status: 404,
+        });
+      }
 
-    response.headers.set('X-Trace-Id', traceId);
-    return response;
+      await overrideProspectStatus(id, newStatus, session.user.id, session.user.email, reason);
+
+      const response = NextResponse.json({
+        success: true,
+        message: 'Status overridden successfully',
+      });
+
+      response.headers.set('X-Trace-Id', traceId);
+      return response;
+    };
+
+    if (!tenantId) {
+      const prospect = await dbPrisma.prospectLead.findUnique({
+        where: { id },
+        select: { tenantId: true },
+      });
+
+      if (!prospect) {
+        return NextResponse.json(new NotFoundError('Prospect', id).toEnvelope(req.url, traceId), {
+          status: 404,
+        });
+      }
+
+      return runWithTenantAsync(prospect.tenantId, executeOverride);
+    }
+
+    return runWithTenantAsync(tenantId, executeOverride);
   } catch (error) {
     console.error('Error overriding prospect status:', error);
 
