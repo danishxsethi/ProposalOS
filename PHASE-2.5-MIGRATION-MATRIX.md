@@ -260,3 +260,23 @@ These surfaced during the direct-`prisma` sweep. They are **not** `createScopedP
   - Justification: hard delete is tenant-local and irreversible, so the route param should drive scoping directly instead of broadening access with bypass.
   - Existing auth preserved: yes (admin-scope API key validation remains unchanged).
   - Latent authz followup: none discovered during mechanism swap.
+
+### Completed: B3 Admin reads
+
+- `lib/pipeline/humanReview.ts:getReviewQueue()`
+  - Pattern chosen: `runWithTenantAsync(tenantId, ...)` around the tenant-local queue read. No bypass added.
+  - Justification: this helper reads one tenant's review queue after the caller has already chosen the tenant, so ambient tenant scope is the right primitive.
+  - Existing auth preserved: yes (no auth logic changed here; callers still own admin/operator access checks).
+  - Latent authz followup: none discovered during mechanism swap.
+
+- `lib/pipeline/humanReview.ts:getProspectContext()`
+  - Pattern chosen: `runWithTenantAsync(pRaw.tenantId, ...)` after the existing global lookup resolves the owning tenant. No bypass added.
+  - Justification: the global read is only for tenant discovery; the actual admin-read context fetch is tenant-local and should execute under that tenant scope.
+  - Existing auth preserved: yes (no auth logic changed here; callers still own admin/operator access checks).
+  - Latent authz followup: the initial tenant-discovery lookup still uses global prisma by prospect ID; preserved intentionally for this batch because changing discovery semantics would be a behavior change.
+
+- `lib/pipeline/humanReview.ts:getReviewQueueStats()`
+  - Pattern chosen: `runWithTenantAsync(tenantId, ...)` around the tenant-local stats read. No bypass added.
+  - Justification: queue metrics are computed from a single tenant's prospects and review logs, so bypass would be over-broad.
+  - Existing auth preserved: yes (no auth logic changed here; callers still own admin/operator access checks).
+  - Latent authz followup: none discovered during mechanism swap.
