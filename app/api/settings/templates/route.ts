@@ -2,22 +2,20 @@ import { NextResponse } from 'next/server';
 
 import { withAuth } from '@/lib/middleware/auth';
 import { prisma } from '@/lib/prisma';
-import { createScopedPrisma, getTenantId } from '@/lib/tenant/context';
+import { getTenantId } from '@/lib/tenant/context';
 
 // GET: List Templates
-export const GET = withAuth(async (req: Request) => {
+export const GET = withAuth(async (_req: Request) => {
   try {
     const tenantId = await getTenantId();
     if (!tenantId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-    const prismaScoped = createScopedPrisma(tenantId);
-
-    const templates = await prismaScoped.proposalTemplate.findMany({
+    const templates = await prisma.proposalTemplate.findMany({
       orderBy: { createdAt: 'desc' },
     });
 
     return NextResponse.json(templates);
-  } catch (error) {
+  } catch {
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 });
@@ -30,9 +28,7 @@ export const POST = withAuth(async (req: Request) => {
 
     const body = await req.json();
 
-    const prismaScoped = createScopedPrisma(tenantId);
-
-    const template = await prismaScoped.proposalTemplate.create({
+    const template = await prisma.proposalTemplate.create({
       data: {
         tenantId,
         name: body.name || 'Untitled Template',
@@ -57,7 +53,7 @@ export const POST = withAuth(async (req: Request) => {
     // If isDefault, uncheck others?
     // Logic for single default per tenant might be needed.
     if (body.isDefault) {
-      await prismaScoped.proposalTemplate.updateMany({
+      await prisma.proposalTemplate.updateMany({
         where: {
           id: { not: template.id },
           isDefault: true,

@@ -343,6 +343,38 @@ These surfaced during the direct-`prisma` sweep. They are **not** `createScopedP
   - Existing auth/reporting/list/create behavior preserved: yes (rate limiting, query params, pagination, filters, projection, response shape, and status codes remain unchanged).
   - Latent followup: none discovered during the mechanism swap.
 
+### Completed: C3 Settings/templates tenant-local cluster
+
+- `app/api/settings/templates/route.ts` (GET list)
+  - Pattern chosen: existing ambient `withAuth` tenant context plus plain `prisma`.
+  - Justification: this template list is a tenant-local authenticated settings read, so the deprecated scoped client wrapper was redundant.
+  - Existing auth/settings/template CRUD behavior preserved: yes (auth check, ordering, response shape, and status codes remain unchanged).
+  - Latent followup: none discovered during the mechanism swap.
+
+- `app/api/settings/templates/route.ts` (POST create)
+  - Pattern chosen: existing ambient `withAuth` tenant context plus plain `prisma`.
+  - Justification: template creation already receives the current tenant and writes a tenant-owned record, so it should continue under the repaired ambient tenant context without bypass.
+  - Existing auth/settings/template CRUD behavior preserved: yes (auth check, body parsing, defaults, `isDefault` handling, create fields, and response shape remain unchanged).
+  - Latent followup: none discovered during the mechanism swap.
+
+- `app/api/settings/templates/[id]/route.ts` (GET read)
+  - Pattern chosen: existing ambient `withAuth` tenant context plus plain `prisma`.
+  - Justification: id-based template reads must remain tenant-local; keeping the existing `where: { id }` under ambient tenant scope preserves not-found-versus-not-in-scope behavior.
+  - Existing auth/settings/template CRUD behavior preserved: yes (forbidden handling, trace headers, not-found path, and response shape remain unchanged).
+  - Latent followup: none discovered during the mechanism swap.
+
+- `app/api/settings/templates/[id]/route.ts` (PATCH update)
+  - Pattern chosen: existing ambient `withAuth` tenant context plus plain `prisma`.
+  - Justification: template updates are tenant-local CRUD and should continue to rely on the current tenant context rather than a deprecated scoped wrapper.
+  - Existing auth/settings/template CRUD behavior preserved: yes (body validation, update payload, `isDefault` demotion logic, trace headers, and status codes remain unchanged).
+  - Latent followup: none discovered during the mechanism swap.
+
+- `app/api/settings/templates/[id]/route.ts` (DELETE delete)
+  - Pattern chosen: existing ambient `withAuth` tenant context plus plain `prisma`.
+  - Justification: deleting a tenant-owned template is high-risk but still tenant-local; the route continues to require current-tenant scope instead of authorizing by id alone.
+  - Existing auth/settings/template CRUD behavior preserved: yes (forbidden handling, delete side effect, success response, trace headers, and status codes remain unchanged).
+  - Latent followup: none discovered during the mechanism swap.
+
 ### Completed: B5 Other specialized routes/helpers
 
 - `lib/pipeline/idempotency.ts`
