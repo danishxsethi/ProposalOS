@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server';
 
 import { withAuth } from '@/lib/middleware/auth';
+import { prisma } from '@/lib/prisma';
 import { stripe } from '@/lib/stripe/stripe';
-import { createScopedPrisma, getTenantId } from '@/lib/tenant/context';
+import { getTenantId } from '@/lib/tenant/context';
 
 export const POST = withAuth(async () => {
   try {
@@ -11,8 +12,7 @@ export const POST = withAuth(async () => {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const scopedPrisma = createScopedPrisma(tenantId);
-    const tenant = await scopedPrisma.tenant.findUnique({ where: { id: tenantId } });
+    const tenant = await prisma.tenant.findUnique({ where: { id: tenantId } });
     if (!tenant?.stripeCustomerId) {
       return NextResponse.json({ error: 'No billing account found' }, { status: 400 });
     }

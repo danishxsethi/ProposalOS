@@ -303,6 +303,26 @@ These surfaced during the direct-`prisma` sweep. They are **not** `createScopedP
 - Existing token/auth/public validation preserved: yes (no code changed in this batch).
 - Latent followup: keep the existing proposal-token and public-audit bypass patterns visible during Phase 2.5 closure / Phase 2.6 verification under `app_user` + RLS, but do not reclassify them mid-phase.
 
+### Completed: C1 Stripe/billing tenant-local callers
+
+- `app/api/stripe/checkout-saas/route.ts`
+  - Pattern chosen: existing ambient `withAuth` tenant context plus plain `prisma`.
+  - Justification: this subscription checkout bootstrap is a tenant-local authenticated billing flow, so it should rely on the already-established tenant context rather than a second scoped client wrapper.
+  - Existing billing/auth behavior preserved: yes (`withAuth`, `getTenantId()`, Stripe checkout parameters, metadata, URLs, and response codes remain unchanged).
+  - Latent followup: `checkoutAttempt.create` still depends on the route's tenant context being present under the repaired shim; keep that visible during Phase 2.6 verification.
+
+- `app/api/stripe/portal/route.ts`
+  - Pattern chosen: existing ambient `withAuth` tenant context plus plain `prisma`.
+  - Justification: portal-session creation is a tenant-local authenticated billing flow and does not need bypass or a secondary scoped client wrapper.
+  - Existing billing/auth behavior preserved: yes (`withAuth`, `getTenantId()`, Stripe portal semantics, return URL, and response codes remain unchanged).
+  - Latent followup: none discovered during the mechanism swap.
+
+- `lib/billing/limits.ts`
+  - Pattern chosen: `runWithTenantAsync(tenantId, ...)` around tenant-local tenant/audit reads after the helper resolves `tenantId` via its existing contract.
+  - Justification: the limit checks already resolve a single tenant, so they should perform their DB work inside explicit tenant scope without changing plan math or fallback behavior.
+  - Existing billing/auth behavior preserved: yes (tenantId lookup contract, plan selection, trial handling, limit calculations, fallback values, and returned reason strings remain unchanged).
+  - Latent followup: none discovered during the mechanism swap.
+
 ### Completed: B5 Other specialized routes/helpers
 
 - `lib/pipeline/idempotency.ts`

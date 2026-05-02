@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server';
 import { withAuth } from '@/lib/middleware/auth';
 import { prisma } from '@/lib/prisma';
 import { getSaasPlanById, stripe } from '@/lib/stripe/stripe';
-import { createScopedPrisma, getTenantId } from '@/lib/tenant/context';
+import { getTenantId } from '@/lib/tenant/context';
 
 export const POST = withAuth(async (req: Request) => {
   try {
@@ -18,8 +18,7 @@ export const POST = withAuth(async (req: Request) => {
       return NextResponse.json({ error: 'Invalid plan' }, { status: 400 });
     }
 
-    const scopedPrisma = createScopedPrisma(tenantId);
-    const tenant = await scopedPrisma.tenant.findUnique({
+    const tenant = await prisma.tenant.findUnique({
       where: { id: tenantId },
       include: { users: true },
     });
