@@ -13,7 +13,7 @@
 import { logger } from '@/lib/logger';
 import { sendAlert } from '@/lib/notifications/slack';
 import { prisma } from '@/lib/prisma';
-import { createScopedPrisma, runWithTenantAsync, runWithTenantBypass } from '@/lib/tenant/context';
+import { runWithTenantAsync, runWithTenantBypass } from '@/lib/tenant/context';
 
 import { ProspectStatus } from './types';
 
@@ -55,39 +55,39 @@ export async function addToDLQ(
   originalStatus: ProspectStatus,
   error: Error
 ): Promise<DLQEntry> {
-  const prismaScoped = createScopedPrisma(tenantId);
   const now = new Date();
 
-  // Get or create DLQ entry
-  let entry = await prismaScoped.deadLetterQueue.findUnique({
-    where: { prospectId },
-  });
-
-  if (entry) {
-    // Update existing entry
-    entry = await prismaScoped.deadLetterQueue.update({
+  const entry = await runWithTenantAsync(tenantId, async () => {
+    let currentEntry = await prisma.deadLetterQueue.findUnique({
       where: { prospectId },
-      data: {
-        failureCount: { increment: 1 },
-        lastError: error.message,
-        lastErrorAt: now,
-        status: 'pending',
-      },
     });
-  } else {
-    // Create new entry
-    entry = await prismaScoped.deadLetterQueue.create({
-      data: {
-        tenantId,
-        prospectId,
-        originalStatus,
-        failureCount: 1,
-        lastError: error.message,
-        lastErrorAt: now,
-        status: 'pending',
-      },
-    });
-  }
+
+    if (currentEntry) {
+      currentEntry = await prisma.deadLetterQueue.update({
+        where: { prospectId },
+        data: {
+          failureCount: { increment: 1 },
+          lastError: error.message,
+          lastErrorAt: now,
+          status: 'pending',
+        },
+      });
+    } else {
+      currentEntry = await prisma.deadLetterQueue.create({
+        data: {
+          tenantId,
+          prospectId,
+          originalStatus,
+          failureCount: 1,
+          lastError: error.message,
+          lastErrorAt: now,
+          status: 'pending',
+        },
+      });
+    }
+
+    return currentEntry;
+  });
 
   logger.error(
     {
@@ -150,7 +150,6 @@ export async function getDLQEntries(
   pageSize: number;
   totalPages: number;
 }> {
-  const prismaScoped = createScopedPrisma(tenantId);
   const { status, page = 1, pageSize = 20, sortBy = 'lastErrorAt', sortOrder = 'desc' } = options;
 
   const where: any = { tenantId };
@@ -158,14 +157,17 @@ export async function getDLQEntries(
     where.status = status;
   }
 
-  const total = await prismaScoped.deadLetterQueue.count({ where });
-
-  const entries = await prismaScoped.deadLetterQueue.findMany({
-    where,
-    orderBy: { [sortBy]: sortOrder },
-    skip: (page - 1) * pageSize,
-    take: pageSize,
-  });
+  const [total, entries] = await runWithTenantAsync(tenantId, () =>
+    Promise.all([
+      prisma.deadLetterQueue.count({ where }),
+      prisma.deadLetterQueue.findMany({
+        where,
+        orderBy: { [sortBy]: sortOrder },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+    ])
+  );
 
   return {
     items: entries.map((e) => ({
@@ -191,25 +193,25 @@ export async function getDLQEntries(
  * Get DLQ statistics for a tenant
  */
 export async function getDLQStats(tenantId: string): Promise<DLQStats> {
-  const prismaScoped = createScopedPrisma(tenantId);
-
-  const [total, pending, retrying, resolved, discarded, oldest] = await Promise.all([
-    prismaScoped.deadLetterQueue.count({ where: { tenantId } }),
-    prismaScoped.deadLetterQueue.count({ where: { tenantId, status: 'pending' } }),
-    prismaScoped.deadLetterQueue.count({ where: { tenantId, status: 'retrying' } }),
-    prismaScoped.deadLetterQueue.count({ where: { tenantId, status: 'resolved' } }),
-    prismaScoped.deadLetterQueue.count({ where: { tenantId, status: 'discarded' } }),
-    prismaScoped.deadLetterQueue.findFirst({
-      where: { tenantId },
-      orderBy: { createdAt: 'asc' },
-      select: { createdAt: true },
-    }),
-  ]);
-
-  const avgResult = await prismaScoped.deadLetterQueue.aggregate({
-    where: { tenantId },
-    _avg: { failureCount: true },
-  });
+  const [total, pending, retrying, resolved, discarded, oldest, avgResult] =
+    await runWithTenantAsync(tenantId, () =>
+      Promise.all([
+        prisma.deadLetterQueue.count({ where: { tenantId } }),
+        prisma.deadLetterQueue.count({ where: { tenantId, status: 'pending' } }),
+        prisma.deadLetterQueue.count({ where: { tenantId, status: 'retrying' } }),
+        prisma.deadLetterQueue.count({ where: { tenantId, status: 'resolved' } }),
+        prisma.deadLetterQueue.count({ where: { tenantId, status: 'discarded' } }),
+        prisma.deadLetterQueue.findFirst({
+          where: { tenantId },
+          orderBy: { createdAt: 'asc' },
+          select: { createdAt: true },
+        }),
+        prisma.deadLetterQueue.aggregate({
+          where: { tenantId },
+          _avg: { failureCount: true },
+        }),
+      ])
+    );
 
   return {
     total,
@@ -230,26 +232,25 @@ export async function retryFromDLQ(
   prospectId: string,
   operatorId: string
 ): Promise<void> {
-  const prismaScoped = createScopedPrisma(tenantId);
+  await runWithTenantAsync(tenantId, async () => {
+    const entry = await prisma.deadLetterQueue.findUnique({
+      where: { prospectId },
+    });
 
-  const entry = await prismaScoped.deadLetterQueue.findUnique({
-    where: { prospectId },
-  });
+    if (!entry) {
+      throw new Error(`DLQ entry not found for prospect ${prospectId}`);
+    }
 
-  if (!entry) {
-    throw new Error(`DLQ entry not found for prospect ${prospectId}`);
-  }
+    if (entry.status === 'discarded') {
+      throw new Error(`Prospect ${prospectId} has been discarded and cannot be retried`);
+    }
 
-  if (entry.status === 'discarded') {
-    throw new Error(`Prospect ${prospectId} has been discarded and cannot be retried`);
-  }
-
-  // Update DLQ entry status
-  await prismaScoped.deadLetterQueue.update({
-    where: { prospectId },
-    data: {
-      status: 'retrying',
-    },
+    await prisma.deadLetterQueue.update({
+      where: { prospectId },
+      data: {
+        status: 'retrying',
+      },
+    });
   });
 
   logger.info(
@@ -272,22 +273,22 @@ export async function resolveDLQEntry(
   operatorId: string,
   notes?: string
 ): Promise<void> {
-  const prismaScoped = createScopedPrisma(tenantId);
+  await runWithTenantAsync(tenantId, async () => {
+    const entry = await prisma.deadLetterQueue.findUnique({
+      where: { prospectId },
+    });
 
-  const entry = await prismaScoped.deadLetterQueue.findUnique({
-    where: { prospectId },
-  });
+    if (!entry) {
+      throw new Error(`DLQ entry not found for prospect ${prospectId}`);
+    }
 
-  if (!entry) {
-    throw new Error(`DLQ entry not found for prospect ${prospectId}`);
-  }
-
-  await prismaScoped.deadLetterQueue.update({
-    where: { prospectId },
-    data: {
-      status: 'resolved',
-      processedAt: new Date(),
-    },
+    await prisma.deadLetterQueue.update({
+      where: { prospectId },
+      data: {
+        status: 'resolved',
+        processedAt: new Date(),
+      },
+    });
   });
 
   logger.info(
@@ -311,23 +312,23 @@ export async function discardDLQEntry(
   operatorId: string,
   reason: string
 ): Promise<void> {
-  const prismaScoped = createScopedPrisma(tenantId);
+  await runWithTenantAsync(tenantId, async () => {
+    const entry = await prisma.deadLetterQueue.findUnique({
+      where: { prospectId },
+    });
 
-  const entry = await prismaScoped.deadLetterQueue.findUnique({
-    where: { prospectId },
-  });
+    if (!entry) {
+      throw new Error(`DLQ entry not found for prospect ${prospectId}`);
+    }
 
-  if (!entry) {
-    throw new Error(`DLQ entry not found for prospect ${prospectId}`);
-  }
-
-  await prismaScoped.deadLetterQueue.update({
-    where: { prospectId },
-    data: {
-      status: 'discarded',
-      processedAt: new Date(),
-      lastError: `${entry.lastError}\n[DISCARDED by ${operatorId}]: ${reason}`,
-    },
+    await prisma.deadLetterQueue.update({
+      where: { prospectId },
+      data: {
+        status: 'discarded',
+        processedAt: new Date(),
+        lastError: `${entry.lastError}\n[DISCARDED by ${operatorId}]: ${reason}`,
+      },
+    });
   });
 
   logger.warn(
@@ -423,10 +424,11 @@ export async function processDLQ(): Promise<{
  * Check if a prospect is in the DLQ
  */
 export async function isInDLQ(tenantId: string, prospectId: string): Promise<boolean> {
-  const prismaScoped = createScopedPrisma(tenantId);
-  const entry = await prismaScoped.deadLetterQueue.findUnique({
-    where: { prospectId },
-  });
+  const entry = await runWithTenantAsync(tenantId, () =>
+    prisma.deadLetterQueue.findUnique({
+      where: { prospectId },
+    })
+  );
   return entry !== null;
 }
 
@@ -434,10 +436,11 @@ export async function isInDLQ(tenantId: string, prospectId: string): Promise<boo
  * Get DLQ entry for a prospect
  */
 export async function getDLQEntry(tenantId: string, prospectId: string): Promise<DLQEntry | null> {
-  const prismaScoped = createScopedPrisma(tenantId);
-  const entry = await prismaScoped.deadLetterQueue.findUnique({
-    where: { prospectId },
-  });
+  const entry = await runWithTenantAsync(tenantId, () =>
+    prisma.deadLetterQueue.findUnique({
+      where: { prospectId },
+    })
+  );
 
   if (!entry) return null;
 

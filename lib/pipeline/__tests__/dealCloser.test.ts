@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { stripe } from '@/lib/billing/stripe';
 import { prisma } from '@/lib/prisma';
-import { createScopedPrisma, runWithTenantBypass } from '@/lib/tenant/context';
+import { runWithTenantAsync, runWithTenantBypass } from '@/lib/tenant/context';
 
 import {
   computeEngagementScore,
@@ -18,7 +18,7 @@ import type { EngagementEvent, EngagementScore, PipelineConfig } from '../types'
 
 // Mock dependencies
 vi.mock('@/lib/tenant/context', () => ({
-  createScopedPrisma: vi.fn(),
+  runWithTenantAsync: vi.fn(async (_tenantId: string, fn: () => Promise<unknown>) => await fn()),
   runWithTenantBypass: vi.fn(async (_reason: string, fn: () => Promise<unknown>) => await fn()),
 }));
 
@@ -53,7 +53,7 @@ vi.mock('@/lib/billing/stripe', () => ({
 }));
 
 describe('Deal Closer Unit Tests', () => {
-  const mockedCreateScopedPrisma = vi.mocked(createScopedPrisma);
+  const mockedRunWithTenantAsync = vi.mocked(runWithTenantAsync);
   const mockedRunWithTenantBypass = vi.mocked(runWithTenantBypass);
   const mockedCreateCheckoutSession = vi.mocked(stripe.checkout.sessions.create);
   const mockedRetrieveCheckoutSession = vi.mocked(stripe.checkout.sessions.retrieve);
@@ -76,7 +76,9 @@ describe('Deal Closer Unit Tests', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    mockedCreateScopedPrisma.mockReturnValue(mockPrisma as never);
+    mockedRunWithTenantAsync.mockImplementation(
+      async (_tenantId: string, fn: () => Promise<unknown>) => await fn()
+    );
     mockedRunWithTenantBypass.mockImplementation(
       async (_reason: string, fn: () => Promise<unknown>) => await fn()
     );

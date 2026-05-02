@@ -9,7 +9,7 @@
 
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
-import { createScopedPrisma } from '@/lib/tenant/context';
+import { runWithTenantAsync, runWithTenantBypass } from '@/lib/tenant/context';
 
 /**
  * Idempotency record structure
@@ -53,13 +53,13 @@ export async function checkIdempotency(
   result?: unknown;
   record?: IdempotencyRecord;
 }> {
-  const prismaScoped = createScopedPrisma(tenantId);
-
-  const record = await prismaScoped.featureFlag
-    .findFirst({
-      where: { key: idempotencyKey },
-    })
-    .catch(() => null);
+  const record = await runWithTenantAsync(tenantId, () =>
+    prisma.featureFlag
+      .findFirst({
+        where: { key: idempotencyKey },
+      })
+      .catch(() => null)
+  );
 
   if (!record) {
     return {
@@ -100,22 +100,21 @@ export async function markIdempotencyStarted(
   stage: string,
   prospectId: string
 ): Promise<void> {
-  const prismaScoped = createScopedPrisma(tenantId);
-  const expiresAt = new Date(Date.now() + 30 * 60 * 1000); // 30 minute TTL
-
-  await prismaScoped.featureFlag.upsert({
-    where: { key: idempotencyKey },
-    create: {
-      key: idempotencyKey,
-      value: `pending:${stage}:${prospectId}`,
-      updatedAt: new Date(),
-      createdAt: new Date(),
-    },
-    update: {
-      value: `pending:${stage}:${prospectId}`,
-      updatedAt: new Date(),
-    },
-  });
+  await runWithTenantAsync(tenantId, () =>
+    prisma.featureFlag.upsert({
+      where: { key: idempotencyKey },
+      create: {
+        key: idempotencyKey,
+        value: `pending:${stage}:${prospectId}`,
+        updatedAt: new Date(),
+        createdAt: new Date(),
+      },
+      update: {
+        value: `pending:${stage}:${prospectId}`,
+        updatedAt: new Date(),
+      },
+    })
+  );
 
   logger.info(
     {
@@ -137,15 +136,15 @@ export async function markIdempotencyCompleted(
   idempotencyKey: string,
   result: unknown
 ): Promise<void> {
-  const prismaScoped = createScopedPrisma(tenantId);
-
-  await prismaScoped.featureFlag.update({
-    where: { key: idempotencyKey },
-    data: {
-      value: `completed:${JSON.stringify(result)}`,
-      updatedAt: new Date(),
-    },
-  });
+  await runWithTenantAsync(tenantId, () =>
+    prisma.featureFlag.update({
+      where: { key: idempotencyKey },
+      data: {
+        value: `completed:${JSON.stringify(result)}`,
+        updatedAt: new Date(),
+      },
+    })
+  );
 
   logger.info(
     {
@@ -165,15 +164,15 @@ export async function markIdempotencyFailed(
   idempotencyKey: string,
   error: string
 ): Promise<void> {
-  const prismaScoped = createScopedPrisma(tenantId);
-
-  await prismaScoped.featureFlag.update({
-    where: { key: idempotencyKey },
-    data: {
-      value: `failed:${error}`,
-      updatedAt: new Date(),
-    },
-  });
+  await runWithTenantAsync(tenantId, () =>
+    prisma.featureFlag.update({
+      where: { key: idempotencyKey },
+      data: {
+        value: `failed:${error}`,
+        updatedAt: new Date(),
+      },
+    })
+  );
 
   logger.warn(
     {
@@ -276,23 +275,26 @@ export async function cleanupExpiredIdempotency(): Promise<{
 }> {
   const now = new Date();
 
-  // Delete expired records (older than 24 hours)
-  const expiredKeys = await prisma.featureFlag.findMany({
-    where: {
-      createdAt: { lt: new Date(now.getTime() - 24 * 60 * 60 * 1000) },
-    },
-    select: { key: true },
-  });
+  const expiredKeys = await runWithTenantBypass('idempotency-cleanup-global-scan', () =>
+    prisma.featureFlag.findMany({
+      where: {
+        createdAt: { lt: new Date(now.getTime() - 24 * 60 * 60 * 1000) },
+      },
+      select: { key: true },
+    })
+  );
 
   let cleaned = 0;
 
   for (const record of expiredKeys) {
     if (record.key.startsWith('pending:')) {
-      await prisma.featureFlag
-        .delete({
-          where: { key: record.key },
-        })
-        .catch(() => {});
+      await runWithTenantBypass('idempotency-cleanup-delete-expired-key', () =>
+        prisma.featureFlag
+          .delete({
+            where: { key: record.key },
+          })
+          .catch(() => {})
+      );
       cleaned++;
     }
   }
