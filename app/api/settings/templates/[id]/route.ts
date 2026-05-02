@@ -23,7 +23,7 @@ import {
 import { withAuth } from '@/lib/middleware/auth';
 import { withRateLimit } from '@/lib/middleware/rateLimit';
 import { prisma } from '@/lib/prisma';
-import { createScopedPrisma, getTenantId } from '@/lib/tenant/context';
+import { getTenantId } from '@/lib/tenant/context';
 
 interface Params {
   params: Promise<{ id: string }>;
@@ -56,9 +56,7 @@ async function handleGetTemplate(req: Request, { params }: Params): Promise<Next
       );
     }
 
-    const prismaScoped = createScopedPrisma(tenantId);
-
-    const template = await prismaScoped.proposalTemplate.findUnique({
+    const template = await prisma.proposalTemplate.findUnique({
       where: { id },
     });
 
@@ -111,15 +109,13 @@ async function handleUpdateTemplate(req: Request, { params }: Params): Promise<N
       );
     }
 
-    const prismaScoped = createScopedPrisma(tenantId);
-
-    const template = await prismaScoped.proposalTemplate.update({
+    const template = await prisma.proposalTemplate.update({
       where: { id },
       data: result.data,
     });
 
     if (body.isDefault) {
-      await prismaScoped.proposalTemplate.updateMany({
+      await prisma.proposalTemplate.updateMany({
         where: {
           id: { not: template.id },
           isDefault: true,
@@ -156,8 +152,7 @@ async function handleDeleteTemplate(req: Request, { params }: Params): Promise<N
       );
     }
 
-    const prismaScoped = createScopedPrisma(tenantId);
-    await prismaScoped.proposalTemplate.delete({
+    await prisma.proposalTemplate.delete({
       where: { id },
     });
 
