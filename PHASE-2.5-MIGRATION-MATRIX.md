@@ -261,6 +261,18 @@ These surfaced during the direct-`prisma` sweep. They are **not** `createScopedP
   - Existing auth preserved: yes (admin-scope API key validation remains unchanged).
   - Latent authz followup: none discovered during mechanism swap.
 
+- `app/api/pipeline/prospects/[id]/override/route.ts:55`
+  - Pattern chosen: `runWithTenantAsync(tenantId, ...)` when request tenant context exists; otherwise preserve the current global prospect lookup to resolve `tenantId`, then run the override under `runWithTenantAsync(resolvedTenantId, ...)`. No full-route bypass added.
+  - Justification: this is a high-risk tenant-local admin mutation by prospect ID, so the override work should run inside the owning tenant context without broadening the whole handler.
+  - Existing auth preserved: yes (`auth()`, `withRole('admin')`, rate limiting, body validation, and 401/404/400 response semantics remain unchanged).
+  - Latent authz followup: the fallback global prospect lookup remains intentionally visible for Phase 2.6 verification under `app_user` + RLS.
+
+- `lib/pipeline/humanReview.ts:427`
+  - Pattern chosen: preserve the existing global tenant-discovery lookup, then `runWithTenantAsync(resolvedTenantId, ...)` for the manual override transition and audit-log write.
+  - Justification: manual status override is a high-risk tenant-local mutation once the owning tenant has been resolved.
+  - Existing auth preserved: yes (no caller auth logic changed; only the helper's scoping mechanism changed).
+  - Latent authz followup: the global tenant-discovery lookup remains intentionally preserved and should stay on the Phase 2.6 verification list.
+
 ### Completed: B3 Admin reads
 
 - `lib/pipeline/humanReview.ts:getReviewQueue()`

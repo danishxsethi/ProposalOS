@@ -409,27 +409,25 @@ export async function overrideProspectStatus(
     throw new Error(`Prospect ${prospectId} not found`);
   }
 
-  const prisma = createScopedPrisma(prospectRaw.tenantId);
+  await runWithTenantAsync(prospectRaw.tenantId, async () => {
+    await transition(prospectId, newStatus as any, 'manual_override');
 
-  // Transition to new status
-  await transition(prospectId, newStatus as any, 'manual_override');
-
-  // Log the override action
-  await prisma.pipelineErrorLog.create({
-    data: {
-      tenantId: prospectRaw.tenantId,
-      stage: 'manual_override',
-      prospectId,
-      errorType: 'STATUS_OVERRIDE',
-      errorMessage: `Status overridden by ${operatorEmail}: ${reason}`,
-      metadata: {
-        operatorId,
-        operatorEmail,
-        oldStatus: prospectRaw.pipelineStatus,
-        newStatus,
-        reason,
-        overriddenAt: new Date().toISOString(),
+    await prisma.pipelineErrorLog.create({
+      data: {
+        tenantId: prospectRaw.tenantId,
+        stage: 'manual_override',
+        prospectId,
+        errorType: 'STATUS_OVERRIDE',
+        errorMessage: `Status overridden by ${operatorEmail}: ${reason}`,
+        metadata: {
+          operatorId,
+          operatorEmail,
+          oldStatus: prospectRaw.pipelineStatus,
+          newStatus,
+          reason,
+          overriddenAt: new Date().toISOString(),
+        },
       },
-    },
+    });
   });
 }
