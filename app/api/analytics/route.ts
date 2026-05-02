@@ -1,15 +1,15 @@
 import { NextResponse } from 'next/server';
 
-import { format, startOfDay, startOfWeek, subDays } from 'date-fns';
+import { format, startOfWeek, subDays } from 'date-fns';
 
 import { withAuth } from '@/lib/middleware/auth';
-import { createScopedPrisma, getTenantId } from '@/lib/tenant/context';
+import { prisma } from '@/lib/prisma';
+import { getTenantId } from '@/lib/tenant/context';
 
 export const GET = withAuth(async (req: Request) => {
   try {
     const tenantId = await getTenantId();
     if (!tenantId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    const prisma = createScopedPrisma(tenantId);
 
     const url = new URL(req.url);
     const from = url.searchParams.get('from');

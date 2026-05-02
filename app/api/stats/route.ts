@@ -1,18 +1,15 @@
 import { NextResponse } from 'next/server';
 
 import { withAuth } from '@/lib/middleware/auth';
-import { createScopedPrisma, getTenantId } from '@/lib/tenant/context';
+import { prisma } from '@/lib/prisma';
+import { getTenantId } from '@/lib/tenant/context';
 
-export const GET = withAuth(async (req: Request) => {
+export const GET = withAuth(async (_req: Request) => {
   try {
     const tenantId = await getTenantId();
     if (!tenantId) {
       return NextResponse.json({ error: 'Unauthorized: No Tenant' }, { status: 403 });
     }
-
-    // P1-6: Use scoped Prisma client — tenantId injected automatically by extension
-    // Triple protection: AsyncLocalStorage + Prisma extension scoping + RLS
-    const prisma = createScopedPrisma(tenantId);
 
     // Get current month boundaries
     const now = new Date();
