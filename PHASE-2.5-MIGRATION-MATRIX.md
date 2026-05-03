@@ -12,6 +12,7 @@ Scope: Step 0 classification only. No code changes yet.
   - **Batch C remaining**: `0`
   - **Production legacy helper callsites**: `0`
   - **Helper/export removed**: `yes`
+  - **Phase 2.5 status**: `complete`
 - Grouping proposal:
   - **Batch A**: 5 sites
   - **Batch B**: 34 sites
@@ -502,3 +503,54 @@ These surfaced during the direct-`prisma` sweep. They are **not** `legacy tenant
   - Justification: this is a tenant-local authenticated detail route, so tenant context should come from the existing request/session resolution rather than a permissive scoped client.
   - Existing auth/validation preserved: yes (`getTenantId()`, rate limiting, response codes, and the two-step prospect/context lookup all remain unchanged).
   - Latent followup: this route still depends on `getProspectContext()`'s global tenant-discovery lookup, which remains intentionally preserved from B3.
+
+## Phase 2.5 Closure
+
+- Branch: `phase-2-rls-migration`
+- Commit sequence:
+  - `c123e04` Batch A
+  - `e4a8a80` Batch B1
+  - `5902c60` Batch B2
+  - `7bc6373` Batch B3
+  - `ed9544b` Batch B4
+  - `fd7eb38` Batch B5
+  - `51e936e` Batch B2.1 catch-up
+  - `2580e1a` Batch C1
+  - `ec369b0` Batch C2
+  - `e5c6867` Batch C3
+  - `e061953` Batch C4
+  - `c7e98ef` Batch C5
+  - `1e04a9e` Batch C6
+  - `72d4335` Step 4 helper removal
+- Final batch status:
+  - Batch A: complete
+  - Batch B: complete
+  - Batch C: complete
+  - Step 4 helper removal: complete
+  - Batch B unresolved: `0`
+  - Batch C remaining: `0`
+  - Production legacy helper callsites: `0`
+- Final verification snapshot:
+  - Repo-wide legacy helper search: `0` matches
+  - Production legacy helper search: `0` matches
+  - `pnpm build`: green
+  - Broad-gate band observed across Phase 2.5: usually `20 failed | 24 passed`, with observed wobble to `21 failed | 23 passed` and `22 failed | 22 passed`
+  - Step 4 broad gate result: `22 failed | 22 passed`
+  - Targeted direct-Prisma tenant tests remain operationally blocked without `DATABASE_URL`
+  - Parallel `next build` contention and low-disk `ENOSPC` remain known operational hazards, not code regressions
+- Phase 1 / security verification:
+  - `tests/security/` remained included in the recurring broad gate throughout Phase 2.5
+  - Final closure also reran `pnpm exec vitest run tests/security/` separately
+- TypeScript / baseline verification:
+  - Standalone command: `pnpm exec tsc --noEmit --pretty false`
+  - Closure records whether the current repo-wide baseline remains at or below the known `1211` threshold from prior phases
+- Phase 2.6 followups intentionally preserved:
+  - `lib/pipeline/humanReview.ts` global tenant-discovery verification under `app_user + RLS`
+  - `app/api/pipeline/prospects/[id]/override/route.ts` fallback global lookup verification
+  - `app/api/team/invite/route.ts` global-user uniqueness lookup verification
+  - `checkoutAttempt.create` route-context verification
+  - raw SQL cleanup / `app_user` verification items already logged in earlier batch notes
+  - any other direct Prisma or global lookup sites intentionally preserved as behavior-preserving mechanism swaps
+- Explicit closure:
+  - Phase 2.5 is complete.
+  - Phase 2.6 followups remain open and intentionally deferred.
