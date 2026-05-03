@@ -375,6 +375,32 @@ These surfaced during the direct-`prisma` sweep. They are **not** `createScopedP
   - Existing auth/settings/template CRUD behavior preserved: yes (forbidden handling, delete side effect, success response, trace headers, and status codes remain unchanged).
   - Latent followup: none discovered during the mechanism swap.
 
+### Completed: C4 Schedule tenant-local routes
+
+- `app/api/schedule/route.ts` (GET list)
+  - Pattern chosen: existing ambient `withAuth` tenant context plus plain `prisma`.
+  - Justification: this schedule list is a tenant-local authenticated read, so the deprecated scoped client wrapper was redundant.
+  - Existing auth/schedule behavior preserved: yes (auth check, ordering, response shape, and status codes remain unchanged).
+  - Latent followup: none discovered during the mechanism swap.
+
+- `app/api/schedule/route.ts` (POST create)
+  - Pattern chosen: existing ambient `withAuth` tenant context plus plain `prisma`.
+  - Justification: schedule creation already writes an explicit `tenantId`, so it should continue under the repaired ambient tenant context without bypass.
+  - Existing auth/schedule behavior preserved: yes (auth check, body parsing, required-field validation, `nextRunAt` default, create fields, and response shape remain unchanged).
+  - Latent followup: none discovered during the mechanism swap.
+
+- `app/api/schedule/[id]/route.ts` (DELETE delete)
+  - Pattern chosen: existing ambient `withAuth` tenant context plus plain `prisma` with the existing explicit `{ id, tenantId }` ownership filter.
+  - Justification: this destructive id-route is high-risk but already tenant-local, so 2.5 should only remove the redundant helper and keep ownership tied to the current tenant.
+  - Existing auth/schedule behavior preserved: yes (auth check, explicit ownership filter, delete side effect, response shape, and status codes remain unchanged).
+  - Latent followup: none discovered during the mechanism swap.
+
+- `app/api/schedule/[id]/route.ts` (PATCH update)
+  - Pattern chosen: existing ambient `withAuth` tenant context plus plain `prisma` with the existing explicit `{ id, tenantId }` ownership filter.
+  - Justification: this id-based update must remain tenant-local and scoped by the current tenant rather than authorizing by id alone.
+  - Existing auth/schedule behavior preserved: yes (auth check, body parsing, update payload, explicit ownership filter, response shape, and status codes remain unchanged).
+  - Latent followup: none discovered during the mechanism swap.
+
 ### Completed: B5 Other specialized routes/helpers
 
 - `lib/pipeline/idempotency.ts`
