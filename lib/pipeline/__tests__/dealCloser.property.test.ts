@@ -63,10 +63,10 @@ describe('Deal Closer Property Tests', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockedRunWithTenantAsync.mockImplementation(
-      async (_tenantId: string, fn: () => Promise<unknown>) => await fn()
+      async (_tenantId: string, fn: () => unknown) => await fn()
     );
     mockedRunWithTenantBypass.mockImplementation(
-      async (_reason: string, fn: () => Promise<unknown>) => await fn()
+      async (_reason: string, fn: () => unknown) => await fn()
     );
   });
 
@@ -366,8 +366,8 @@ describe('Deal Closer Property Tests', () => {
               ];
 
             // Verify same event type mapping
-            expect(call1[0].data.type).toBe(call2[0].data.type);
-            expect(call1[0].data.type).toBe(expectedMapping[eventType]);
+            expect(call1![0].data.type).toBe(call2![0].data.type);
+            expect(call1![0].data.type).toBe(expectedMapping[eventType]);
           }
         ),
         { numRuns: 100 }

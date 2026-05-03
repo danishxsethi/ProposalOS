@@ -543,7 +543,21 @@ These surfaced during the direct-`prisma` sweep. They are **not** `legacy tenant
   - Final closure also reran `pnpm exec vitest run tests/security/` separately
 - TypeScript / baseline verification:
   - Standalone command: `pnpm exec tsc --noEmit --pretty false`
-  - Closure records whether the current repo-wide baseline remains at or below the known `1211` threshold from prior phases
+  - Counting method: `rg -c 'error TS[0-9]+'` over the standalone compiler output, matching the prior Phase 2.4 `1211` baseline method
+  - Initial closure rerun produced `1231` matching `error TS...` lines, which was a real narrow Phase 2.5 regression rather than a command mismatch
+  - Root cause of the +20: test-only type fallout introduced during scoped-helper removal cleanup in `lib/pipeline/__tests__/dealCloser.property.test.ts`, `lib/pipeline/__tests__/dealCloser.test.ts`, and `lib/tenant/__tests__/isolation-stress.test.ts`
+  - Narrow addendum fix: updated those tests to match the current async helper signatures, tightened mock casts, and added explicit non-null / tenantId annotations without changing runtime behavior
+  - Final rerun after the addendum fix:
+    - Command: `pnpm exec tsc --noEmit --pretty false`
+    - Count: `1207`
+    - Status vs prior threshold `<=1211`: restored
+  - Phase 2.5-touched files that still appear in the final `tsc` output:
+    - `app/api/pipeline/prospects/[id]/override/route.ts`
+    - `app/api/team/invite/route.ts`
+    - `lib/middleware/auth.ts`
+    - `lib/pipeline/dealCloser.ts`
+    - `lib/pipeline/humanReview.ts`
+  - Classification of those remaining hits: pre-existing / broader P1-01-type debt in files touched during the migration, not new errors introduced by the addendum fix
 - Phase 2.6 followups intentionally preserved:
   - `lib/pipeline/humanReview.ts` global tenant-discovery verification under `app_user + RLS`
   - `app/api/pipeline/prospects/[id]/override/route.ts` fallback global lookup verification
