@@ -5,7 +5,8 @@ import { nanoid } from 'nanoid';
 import { withRole } from '@/lib/auth/rbac';
 import { checkSeatLimit } from '@/lib/billing/limits';
 import { withAuth } from '@/lib/middleware/auth';
-import { createScopedPrisma, getTenantId } from '@/lib/tenant/context';
+import { prisma } from '@/lib/prisma';
+import { getTenantId } from '@/lib/tenant/context';
 
 // import { Resend } from 'resend'; // Mocking for now to avoid dependency install issues if not present
 
@@ -28,13 +29,12 @@ export const POST = withAuth(async (req: Request) => {
 
       const tenantId = await getTenantId();
       if (!tenantId) return NextResponse.json({ error: 'No Tenant' }, { status: 401 });
-      const prisma = createScopedPrisma(tenantId);
 
       // 3. User Existence Check (Global)
       // Need global prisma to check if user exists in ANY tenant
       // Actually, we might allow user to be in multiple tenants in future, but for now:
       // "If user exists in another tenant -> error" per requirements
-      // We need access to global prisma for this check, but `createScopedPrisma` gives us access to current tenant scope.
+      // We need access to global prisma for this check, while the invitation write stays on current-tenant scope.
       // Using `prisma` from global import for this specific check.
       const globalPrisma = (await import('@/lib/prisma')).prisma;
       const existingUser = await globalPrisma.user.findUnique({
