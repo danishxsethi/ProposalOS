@@ -23,159 +23,169 @@ import { withIdempotencyMemory } from '@/lib/middleware/idempotency';
 import { RateLimitPresets, withRateLimit } from '@/lib/middleware/rateLimit';
 import { withRole } from '@/lib/middleware/withRole';
 import { recordAuditTrailEvent } from '@/lib/observability/auditTrail';
-import { applyObservabilityHeaders, createObservabilityContextFromRequest, getObservabilityContext, runWithObservabilityContext } from '@/lib/observability/context';
-import { createScopedPrisma, getTenantId, runWithTenantAsync } from '@/lib/tenant/context';
+import {
+  applyObservabilityHeaders,
+  createObservabilityContextFromRequest,
+  getObservabilityContext,
+  runWithObservabilityContext,
+} from '@/lib/observability/context';
+import { prisma } from '@/lib/prisma';
+import { getTenantId, runWithTenantAsync } from '@/lib/tenant/context';
 import { extractBusinessFromUrl } from '@/lib/utils/urlExtractor';
 
 /**
  * Inner handler for audit creation with all middleware applied
  */
 async function handleAuditCreation(req: Request): Promise<NextResponse> {
-  return runWithObservabilityContext(createObservabilityContextFromRequest(req, { workflow: 'api.audit.create' }), async () => {
-    const traceId = generateTraceId();
+  return runWithObservabilityContext(
+    createObservabilityContextFromRequest(req, { workflow: 'api.audit.create' }),
+    async () => {
+      const traceId = generateTraceId();
 
-    try {
-    const tenantId = await getTenantId();
-    if (!tenantId) {
-      const unauthorized = NextResponse.json(
-        new ValidationError('Unauthorized: No Tenant').toEnvelope(req.url, traceId),
-        { status: 401 }
-      );
-      applyObservabilityHeaders(unauthorized);
-      return unauthorized;
-    }
+      try {
+        const tenantId = await getTenantId();
+        if (!tenantId) {
+          const unauthorized = NextResponse.json(
+            new ValidationError('Unauthorized: No Tenant').toEnvelope(req.url, traceId),
+            { status: 401 }
+          );
+          applyObservabilityHeaders(unauthorized);
+          return unauthorized;
+        }
 
-    const prisma = createScopedPrisma(tenantId);
+        // Parse and validate body using Zod schema
+        const body = await req.json();
+        const result = auditTriggerSchema.safeParse(body);
 
-    // Parse and validate body using Zod schema
-    const body = await req.json();
-    const result = auditTriggerSchema.safeParse(body);
+        if (!result.success) {
+          const errorDetails = result.error.errors.map((e) => ({
+            field: e.path.join('.'),
+            message: e.message,
+          }));
+          return NextResponse.json(
+            new ValidationError('Invalid input', errorDetails).toEnvelope(req.url, traceId),
+            { status: 400 }
+          );
+        }
 
-    if (!result.success) {
-      const errorDetails = result.error.errors.map((e) => ({
-        field: e.path.join('.'),
-        message: e.message,
-      }));
-      return NextResponse.json(
-        new ValidationError('Invalid input', errorDetails).toEnvelope(req.url, traceId),
-        { status: 400 }
-      );
-    }
+        const { url, industry, businessName, businessCity, placeId } = result.data;
 
-    const { url, industry, businessName, businessCity, placeId } = result.data;
+        // Check Usage Limits
+        const limits = await checkAuditLimit();
+        if (!limits.allowed) {
+          return NextResponse.json(
+            {
+              error: {
+                code: 'QUOTA_EXCEEDED',
+                message: 'Plan Limit Exceeded',
+                details: { reason: limits.reason, upgrade: true },
+                timestamp: new Date().toISOString(),
+                traceId,
+              },
+            },
+            { status: 429 }
+          );
+        }
 
-    // Check Usage Limits
-    const limits = await checkAuditLimit();
-    if (!limits.allowed) {
-      return NextResponse.json(
-        {
-          error: {
-            code: 'QUOTA_EXCEEDED',
-            message: 'Plan Limit Exceeded',
-            details: { reason: limits.reason, upgrade: true },
-            timestamp: new Date().toISOString(),
-            traceId,
-          },
-        },
-        { status: 429 }
-      );
-    }
+        let name = businessName;
+        const city = businessCity;
+        let targetUrl = url;
 
-    let name = businessName;
-    let city = businessCity;
-    let targetUrl = url;
+        // If URL provided without name, extract business info from URL
+        if (targetUrl && !name) {
+          const extracted = await extractBusinessFromUrl(targetUrl);
+          name = extracted.name;
+          targetUrl = extracted.url;
+        }
 
-    // If URL provided without name, extract business info from URL
-    if (targetUrl && !name) {
-      const extracted = await extractBusinessFromUrl(targetUrl);
-      name = extracted.name;
-      targetUrl = extracted.url;
-    }
-
-    // Create Audit record (runner will execute modules)
-    const audit = await prisma.audit.create({
-      data: {
-        tenantId,
-        businessName: name || 'Pending...',
-        businessCity: city ?? null,
-        businessUrl: targetUrl ?? null,
-        placeId: placeId ?? null,
-        businessIndustry: industry || 'Generic',
-        status: 'QUEUED',
-        apiCostCents: 0,
-      },
-    });
-
-    Metrics.increment('audits_total');
-
-    logger.info(
-      {
-        event: 'audit.start',
-        auditId: audit.id,
-        tenantId,
-        hasBusinessName: Boolean(name),
-        hasTargetUrl: Boolean(targetUrl),
-      },
-      'Starting audit'
-    );
-    await recordAuditTrailEvent({
-      eventType: 'audit.requested',
-      tenantId,
-      auditId: audit.id,
-      triggerSource: 'api.audit.create',
-      targetUrl: targetUrl,
-      payload: {
-        hasBusinessName: Boolean(name),
-        industry: industry || 'Generic',
-      },
-    });
-
-    // Run audit via canonical runner (single source of truth)
-    // Ensure runner has tenant context for child graphs
-    // Fire and forget so we don't block the request timeout
-    const currentContext = getObservabilityContext();
-    runWithObservabilityContext({ ...currentContext, tenantId, auditId: audit.id, workflow: 'audit-runner' }, () =>
-      runWithTenantAsync(tenantId, () => runAudit(audit.id))
-    ).catch((err) => {
-      logError('Error running audit asynchronously', err);
-      prisma.audit
-        .update({
-          where: { id: audit.id },
+        // Create Audit record (runner will execute modules)
+        const audit = await prisma.audit.create({
           data: {
-            status: 'FAILED',
-            completedAt: new Date(),
-            error: `AUDIT_KICKOFF_FAILED: ${String(err)}`,
-          } as any,
-        })
-        .catch((updateErr) => {
-          logError('Failed to persist async kickoff failure on audit record', updateErr, {
-            auditId: audit.id,
-          });
+            tenantId,
+            businessName: name || 'Pending...',
+            businessCity: city ?? null,
+            businessUrl: targetUrl ?? null,
+            placeId: placeId ?? null,
+            businessIndustry: industry || 'Generic',
+            status: 'QUEUED',
+            apiCostCents: 0,
+          },
         });
-    });
 
-    const response = NextResponse.json({
-      success: true,
-      id: audit.id,
-      auditId: audit.id,
-      status: audit.status,
-    });
+        Metrics.increment('audits_total');
 
-    applyObservabilityHeaders(response);
-    return response;
-  } catch (error) {
-    logError('Error creating audit', error);
-    Metrics.increment('audits_failed');
+        logger.info(
+          {
+            event: 'audit.start',
+            auditId: audit.id,
+            tenantId,
+            hasBusinessName: Boolean(name),
+            hasTargetUrl: Boolean(targetUrl),
+          },
+          'Starting audit'
+        );
+        await recordAuditTrailEvent({
+          eventType: 'audit.requested',
+          tenantId,
+          auditId: audit.id,
+          triggerSource: 'api.audit.create',
+          targetUrl: targetUrl,
+          payload: {
+            hasBusinessName: Boolean(name),
+            industry: industry || 'Generic',
+          },
+        });
 
-    const internalError = new InternalError('Failed to create audit', {
-      originalError: error instanceof Error ? error.message : String(error),
-    });
+        // Run audit via canonical runner (single source of truth)
+        // Ensure runner has tenant context for child graphs
+        // Fire and forget so we don't block the request timeout
+        const currentContext = getObservabilityContext();
+        runWithObservabilityContext(
+          { ...currentContext, tenantId, auditId: audit.id, workflow: 'audit-runner' },
+          () => runWithTenantAsync(tenantId, () => runAudit(audit.id))
+        ).catch((err) => {
+          logError('Error running audit asynchronously', err);
+          prisma.audit
+            .update({
+              where: { id: audit.id },
+              data: {
+                status: 'FAILED',
+                completedAt: new Date(),
+                error: `AUDIT_KICKOFF_FAILED: ${String(err)}`,
+              } as any,
+            })
+            .catch((updateErr) => {
+              logError('Failed to persist async kickoff failure on audit record', updateErr, {
+                auditId: audit.id,
+              });
+            });
+        });
 
-    const response = NextResponse.json(internalError.toEnvelope(req.url, traceId), { status: 500 });
-    applyObservabilityHeaders(response);
-    return response;
-  }
-  });
+        const response = NextResponse.json({
+          success: true,
+          id: audit.id,
+          auditId: audit.id,
+          status: audit.status,
+        });
+
+        applyObservabilityHeaders(response);
+        return response;
+      } catch (error) {
+        logError('Error creating audit', error);
+        Metrics.increment('audits_failed');
+
+        const internalError = new InternalError('Failed to create audit', {
+          originalError: error instanceof Error ? error.message : String(error),
+        });
+
+        const response = NextResponse.json(internalError.toEnvelope(req.url, traceId), {
+          status: 500,
+        });
+        applyObservabilityHeaders(response);
+        return response;
+      }
+    }
+  );
 }
 
 // Apply middleware stack: withRole -> withAuth -> withRateLimit -> withIdempotency

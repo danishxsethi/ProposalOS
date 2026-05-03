@@ -1,13 +1,13 @@
 import { NextResponse } from 'next/server';
 
 import { withAuth } from '@/lib/middleware/auth';
-import { createScopedPrisma, getTenantId } from '@/lib/tenant/context';
+import { prisma } from '@/lib/prisma';
+import { getTenantId } from '@/lib/tenant/context';
 
 export const GET = withAuth(
   async (req: Request, { params }: { params: Promise<{ id: string }> }) => {
     try {
-      const tenantId = (await getTenantId()) || '';
-      const prisma = createScopedPrisma(tenantId);
+      await getTenantId();
 
       const { id } = await params;
       const audit = await prisma.audit.findUnique({

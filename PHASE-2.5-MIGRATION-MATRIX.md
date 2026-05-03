@@ -401,6 +401,32 @@ These surfaced during the direct-`prisma` sweep. They are **not** `createScopedP
   - Existing auth/schedule behavior preserved: yes (auth check, body parsing, update payload, explicit ownership filter, response shape, and status codes remain unchanged).
   - Latent followup: none discovered during the mechanism swap.
 
+### Completed: C5 Audit route cluster
+
+- `app/api/v1/audit/[id]/route.ts` (GET detail)
+  - Pattern chosen: existing ambient `withAuth` tenant context plus plain `prisma`.
+  - Justification: this audit detail read is tenant-local and should rely on the repaired ambient tenant context instead of a deprecated scoped client wrapper.
+  - Existing auth/audit behavior preserved: yes (detail shape, findings projection, not-found behavior, and status codes remain unchanged).
+  - Latent followup: none discovered during the mechanism swap.
+
+- `app/api/v1/audit/route.ts` (POST create)
+  - Pattern chosen: existing ambient `withAuth` tenant context plus plain `prisma`.
+  - Justification: this v1 audit creation route already writes explicit `tenantId` and runs downstream work under `runWithTenantAsync`, so the scoped client wrapper was redundant.
+  - Existing auth/audit behavior preserved: yes (validation, observability, rate limiting, create fields, runner kickoff, and response contract remain unchanged).
+  - Latent followup: none discovered during the mechanism swap.
+
+- `app/api/audit/[id]/compare/[previousId]/route.ts` (GET compare)
+  - Pattern chosen: existing ambient `withAuth` tenant context plus plain `prisma`.
+  - Justification: both audit ids must remain tenant-scoped, and ambient tenant context preserves the current compare behavior without introducing bypass.
+  - Existing auth/audit behavior preserved: yes (auth check, both-id lookup semantics, compare payload, not-found behavior, and status codes remain unchanged).
+  - Latent followup: none discovered during the mechanism swap.
+
+- `app/api/audit/route.ts` (POST create)
+  - Pattern chosen: existing ambient `withAuth` tenant context plus plain `prisma`.
+  - Justification: this audit creation route already writes explicit `tenantId` and dispatches the runner under `runWithTenantAsync`, so the deprecated wrapper was redundant.
+  - Existing auth/audit behavior preserved: yes (role/auth stack, validation, quota check, defaults, create fields, idempotency, runner kickoff, and response contract remain unchanged).
+  - Latent followup: none discovered during the mechanism swap.
+
 ### Completed: B5 Other specialized routes/helpers
 
 - `lib/pipeline/idempotency.ts`
