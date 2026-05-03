@@ -1,22 +1,21 @@
 import { NextResponse } from 'next/server';
 
 import { withAuth } from '@/lib/middleware/auth';
-import { createScopedPrisma, getTenantId } from '@/lib/tenant/context';
+import { prisma } from '@/lib/prisma';
+import { getTenantId } from '@/lib/tenant/context';
 
 // GET: List Schedules
-export const GET = withAuth(async (req: Request) => {
+export const GET = withAuth(async (_req: Request) => {
   try {
     const tenantId = await getTenantId();
     if (!tenantId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-    const prismaScoped = createScopedPrisma(tenantId);
-
-    const schedules = await prismaScoped.auditSchedule.findMany({
+    const schedules = await prisma.auditSchedule.findMany({
       orderBy: { createdAt: 'desc' },
     });
 
     return NextResponse.json(schedules);
-  } catch (error) {
+  } catch {
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 });
@@ -37,9 +36,7 @@ export const POST = withAuth(async (req: Request) => {
     // Calculate First Run (Now? or Tomorrow? Let's say Now)
     const nextRunAt = new Date(); // Runs immediately by default or next hour
 
-    const prismaScoped = createScopedPrisma(tenantId);
-
-    const schedule = await prismaScoped.auditSchedule.create({
+    const schedule = await prisma.auditSchedule.create({
       data: {
         tenantId,
         businessName,
