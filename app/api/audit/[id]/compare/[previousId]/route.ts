@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 
 import { withAuth } from '@/lib/middleware/auth';
 import { prisma } from '@/lib/prisma';
-import { createScopedPrisma, getTenantId } from '@/lib/tenant/context';
+import { getTenantId } from '@/lib/tenant/context';
 
 export const GET = withAuth(
   async (req: Request, { params }: { params: Promise<{ id: string; previousId: string }> }) => {
@@ -11,12 +11,10 @@ export const GET = withAuth(
       const tenantId = await getTenantId();
       if (!tenantId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-      const prismaScoped = createScopedPrisma(tenantId);
-
       // Fetch both audits with findings
       const [currentAudit, prevAudit] = await Promise.all([
-        prismaScoped.audit.findUnique({ where: { id }, include: { findings: true } }),
-        prismaScoped.audit.findUnique({ where: { id: previousId }, include: { findings: true } }),
+        prisma.audit.findUnique({ where: { id }, include: { findings: true } }),
+        prisma.audit.findUnique({ where: { id: previousId }, include: { findings: true } }),
       ]);
 
       if (!currentAudit || !prevAudit) {
@@ -36,7 +34,6 @@ export const GET = withAuth(
       currentAudit.findings.forEach((f) => currentMap.set(generateKey(f), f));
 
       const improved: any[] = [];
-      const worsened: any[] = []; // New findings that are bad
       const unchanged: any[] = [];
       const newFindings: any[] = []; // Newly discovered issues
 
