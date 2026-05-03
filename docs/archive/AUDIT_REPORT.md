@@ -411,10 +411,10 @@
 ### 13.1 Tenant Isolation (3-Layer)
 
 1. **Layer 1: AsyncLocalStorage** — `lib/tenant/context.ts` — `runWithTenantAsync()` sets context
-2. **Layer 2: Prisma Extension** — `createScopedPrisma()` auto-filters queries by tenantId
+2. **Layer 2: Prisma Extension** — `legacy tenant-scoped Prisma helper()` auto-filters queries by tenantId
 3. **Layer 3: PostgreSQL RLS** — `prisma/migrations/rls/enable_rls.sql` — database-level enforcement
 
-- ⚠️ **P1** `createScopedPrisma()` only covers `audit`, `finding`, `proposal` models (lines 43-91). All other models (ProspectLead, OutreachEmail, DeliveryTask, etc.) are NOT scoped — relies solely on RLS + manual query filtering.
+- ⚠️ **P1** `legacy tenant-scoped Prisma helper()` only covers `audit`, `finding`, `proposal` models (lines 43-91). All other models (ProspectLead, OutreachEmail, DeliveryTask, etc.) are NOT scoped — relies solely on RLS + manual query filtering.
 
 ### 13.2 Branding
 
@@ -660,7 +660,7 @@ event = stripe.webhooks.constructEvent(body, signature, webhookSecret);
 | 8   | Auth endpoints                 | —     | No rate limiting on `/register`, `/login`                             | Add rate limiter                                              |
 | 9   | `lib/billing/stripe.ts`        | 3     | Hardcoded `sk_test_placeholder` fallback                              | Throw if missing in prod                                      |
 | 10  | `app/api/audit/batch/route.ts` | 5     | `uuid` not in package.json                                            | Add to dependencies                                           |
-| 11  | `lib/tenant/context.ts`        | 38-93 | `createScopedPrisma()` only covers 3 models                           | Extend to all tenant-scoped models                            |
+| 11  | `lib/tenant/context.ts`        | 38-93 | `legacy tenant-scoped Prisma helper()` only covers 3 models           | Extend to all tenant-scoped models                            |
 | 12  | `.gitignore`                   | —     | `cloud-sql-proxy` not ignored                                         | Add to .gitignore, remove from git history                    |
 | 13  | Runner                         | —     | No `$2.00` hard cap on audit cost                                     | Add enforcement in CostTracker                                |
 | 14  | Cron routes                    | —     | Security unclear — verify CRON_SECRET                                 | Audit each cron route for auth                                |

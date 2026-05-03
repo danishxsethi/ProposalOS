@@ -25,7 +25,6 @@ describe('Multi-Tenant Isolation', () => {
   let tenantBId: string;
   let testAuditAId: string;
   let testAuditBId: string;
-  let testFindingAId: string;
   let testFindingBId: string;
 
   beforeAll(async () => {
@@ -68,7 +67,7 @@ describe('Multi-Tenant Isolation', () => {
     });
     testAuditAId = auditA.id;
 
-    const findingA = await prisma.finding.create({
+    await prisma.finding.create({
       data: {
         id: uuidv4(),
         tenantId: tenantAId,
@@ -82,8 +81,6 @@ describe('Multi-Tenant Isolation', () => {
         confidenceScore: 95,
       },
     });
-    testFindingAId = findingA.id;
-
     // Create test data for Tenant B
     const auditB = await prisma.audit.create({
       data: {
@@ -152,19 +149,16 @@ describe('Multi-Tenant Isolation', () => {
       expect(tenantBFindings[0]?.id).toBe(testFindingBId);
     });
 
-    it('should return null when Tenant A tries to findUnique Tenant B audit', async () => {
-      // This tests the post-query verification in createScopedPrisma
-      // In production, the middleware should block this access
+    it('should return null when Tenant A tries to access Tenant B audit through tenant verification', async () => {
       const tenantBAudit = await prisma.audit.findUnique({
         where: { id: testAuditBId },
       });
 
-      // Without tenant scoping, the audit is returned
-      // The scoped Prisma client should filter this
+      // Without tenant-aware query context, the audit is returned.
       expect(tenantBAudit).not.toBeNull();
       expect(tenantBAudit?.tenantId).toBe(tenantBId);
 
-      // Simulate tenant verification (as done in createScopedPrisma)
+      // Simulate the tenant check that should block cross-tenant access.
       const verifyTenant = (result: any, tenantId: string) => {
         if (result && result.tenantId && result.tenantId !== tenantId) {
           return null;

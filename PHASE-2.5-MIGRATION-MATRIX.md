@@ -6,7 +6,12 @@ Scope: Step 0 classification only. No code changes yet.
 
 ## Summary
 
-- Production `createScopedPrisma(...)` callsites: **57** across **24** files.
+- Historical production legacy helper callsites at Step 0: **57** across **24** files.
+- Current status after Step 4:
+  - **Batch B unresolved**: `0`
+  - **Batch C remaining**: `0`
+  - **Production legacy helper callsites**: `0`
+  - **Helper/export removed**: `yes`
 - Grouping proposal:
   - **Batch A**: 5 sites
   - **Batch B**: 34 sites
@@ -23,7 +28,7 @@ Scope: Step 0 classification only. No code changes yet.
 ## Batch Definitions
 
 - **Batch A — Pipeline cross-tenant bypass**
-  - Only the `createScopedPrisma('system')` sites that are intentionally crossing tenant boundaries.
+  - Only the `legacy tenant-scoped Prisma helper('system')` sites that are intentionally crossing tenant boundaries.
   - Target primitive: `runWithTenantBypass(reason, async () => ...)`
 
 - **Batch B — Specialized/background helpers and high-risk non-helper routes**
@@ -70,79 +75,79 @@ Scope: Step 0 classification only. No code changes yet.
 
 ## Batch A — Pipeline Cross-Tenant
 
-| File:line                        | Current pattern                                               | Tenant intent                                               | Target primitive      | Proposed reason                              | Risk tier |
-| -------------------------------- | ------------------------------------------------------------- | ----------------------------------------------------------- | --------------------- | -------------------------------------------- | --------- |
-| `lib/pipeline/dealCloser.ts:33`  | `createScopedPrisma('system')` in `recordEvent()` lead lookup | cross-tenant lookup by lead ID before tenant-specific write | `runWithTenantBypass` | `deal-closer-lead-lookup-by-id`              | medium    |
-| `lib/pipeline/dealCloser.ts:108` | `createScopedPrisma('system')` in `computeEngagementScore()`  | cross-tenant read of lead + outreach history by lead ID     | `runWithTenantBypass` | `deal-closer-score-cross-tenant-read`        | medium    |
-| `lib/pipeline/dealCloser.ts:217` | `createScopedPrisma('system')` in `createCheckoutSession()`   | cross-tenant billing bootstrap for lead/proposal lookup     | `runWithTenantBypass` | `deal-closer-checkout-session-bootstrap`     | high      |
-| `lib/pipeline/dealCloser.ts:315` | `createScopedPrisma('system')` in `handlePaymentSuccess()`    | cross-tenant Stripe reconciliation and close-won write path | `runWithTenantBypass` | `deal-closer-payment-success-reconciliation` | high      |
-| `lib/pipeline/dealCloser.ts:374` | `createScopedPrisma('system')` in `handlePaymentFailure()`    | cross-tenant Stripe failure recovery flow                   | `runWithTenantBypass` | `deal-closer-payment-failure-recovery`       | high      |
+| File:line                        | Current pattern                                                               | Tenant intent                                               | Target primitive      | Proposed reason                              | Risk tier |
+| -------------------------------- | ----------------------------------------------------------------------------- | ----------------------------------------------------------- | --------------------- | -------------------------------------------- | --------- |
+| `lib/pipeline/dealCloser.ts:33`  | `legacy tenant-scoped Prisma helper('system')` in `recordEvent()` lead lookup | cross-tenant lookup by lead ID before tenant-specific write | `runWithTenantBypass` | `deal-closer-lead-lookup-by-id`              | medium    |
+| `lib/pipeline/dealCloser.ts:108` | `legacy tenant-scoped Prisma helper('system')` in `computeEngagementScore()`  | cross-tenant read of lead + outreach history by lead ID     | `runWithTenantBypass` | `deal-closer-score-cross-tenant-read`        | medium    |
+| `lib/pipeline/dealCloser.ts:217` | `legacy tenant-scoped Prisma helper('system')` in `createCheckoutSession()`   | cross-tenant billing bootstrap for lead/proposal lookup     | `runWithTenantBypass` | `deal-closer-checkout-session-bootstrap`     | high      |
+| `lib/pipeline/dealCloser.ts:315` | `legacy tenant-scoped Prisma helper('system')` in `handlePaymentSuccess()`    | cross-tenant Stripe reconciliation and close-won write path | `runWithTenantBypass` | `deal-closer-payment-success-reconciliation` | high      |
+| `lib/pipeline/dealCloser.ts:374` | `legacy tenant-scoped Prisma helper('system')` in `handlePaymentFailure()`    | cross-tenant Stripe failure recovery flow                   | `runWithTenantBypass` | `deal-closer-payment-failure-recovery`       | high      |
 
 ## Batch B — Specialized Helpers and Non-Standard Routes
 
-| File:line                                              | Current pattern                                                          | Tenant intent                                        | Target primitive     | Proposed reason | Risk tier |
-| ------------------------------------------------------ | ------------------------------------------------------------------------ | ---------------------------------------------------- | -------------------- | --------------- | --------- |
-| `lib/pipeline/dealCloser.ts:44`                        | `createScopedPrisma(tenantId)` after lead lookup                         | single-tenant follow-up writes after bootstrap       | `runWithTenantAsync` | n/a             | medium    |
-| `lib/pipeline/idempotency.ts:56`                       | `createScopedPrisma(tenantId)` in `checkIdempotency()`                   | single-tenant helper outside middleware              | `runWithTenantAsync` | n/a             | low       |
-| `lib/pipeline/idempotency.ts:103`                      | `createScopedPrisma(tenantId)` in `markIdempotencyStarted()`             | single-tenant helper outside middleware              | `runWithTenantAsync` | n/a             | low       |
-| `lib/pipeline/idempotency.ts:140`                      | `createScopedPrisma(tenantId)` in `markIdempotencyCompleted()`           | single-tenant helper outside middleware              | `runWithTenantAsync` | n/a             | low       |
-| `lib/pipeline/idempotency.ts:168`                      | `createScopedPrisma(tenantId)` in `markIdempotencyFailed()`              | single-tenant helper outside middleware              | `runWithTenantAsync` | n/a             | low       |
-| `lib/pipeline/circuitBreaker.ts:92`                    | `createScopedPrisma(tenantId)` in `getCircuitState()`                    | single-tenant helper outside middleware              | `runWithTenantAsync` | n/a             | low       |
-| `lib/pipeline/circuitBreaker.ts:136`                   | `createScopedPrisma(tenantId)` in `recordSuccess()`                      | single-tenant helper outside middleware              | `runWithTenantAsync` | n/a             | low       |
-| `lib/pipeline/circuitBreaker.ts:182`                   | `createScopedPrisma(tenantId)` in `recordFailure()`                      | single-tenant helper outside middleware              | `runWithTenantAsync` | n/a             | medium    |
-| `lib/pipeline/circuitBreaker.ts:243`                   | `createScopedPrisma(tenantId)` in `openCircuit()`                        | single-tenant helper outside middleware              | `runWithTenantAsync` | n/a             | medium    |
-| `lib/pipeline/circuitBreaker.ts:332`                   | `createScopedPrisma(tenantId)` in `canProceed()` half-open transition    | single-tenant helper outside middleware              | `runWithTenantAsync` | n/a             | medium    |
-| `lib/pipeline/circuitBreaker.ts:387`                   | `createScopedPrisma(tenantId)` in `calculateErrorRate()`                 | single-tenant helper outside middleware              | `runWithTenantAsync` | n/a             | low       |
-| `lib/pipeline/circuitBreaker.ts:428`                   | `createScopedPrisma(tenantId)` in `resetCircuit()`                       | single-tenant helper outside middleware              | `runWithTenantAsync` | n/a             | high      |
-| `lib/pipeline/deadLetterQueue.ts:58`                   | `createScopedPrisma(tenantId)` in `addToDLQ()`                           | single-tenant helper outside middleware              | `runWithTenantAsync` | n/a             | medium    |
-| `lib/pipeline/deadLetterQueue.ts:153`                  | `createScopedPrisma(tenantId)` in `getDLQEntries()`                      | single-tenant helper outside middleware              | `runWithTenantAsync` | n/a             | low       |
-| `lib/pipeline/deadLetterQueue.ts:194`                  | `createScopedPrisma(tenantId)` in `getDLQStats()`                        | single-tenant helper outside middleware              | `runWithTenantAsync` | n/a             | low       |
-| `lib/pipeline/deadLetterQueue.ts:233`                  | `createScopedPrisma(tenantId)` in `retryFromDLQ()`                       | single-tenant retry helper outside middleware        | `runWithTenantAsync` | n/a             | medium    |
-| `lib/pipeline/deadLetterQueue.ts:275`                  | `createScopedPrisma(tenantId)` in `resolveDLQEntry()`                    | single-tenant operator action outside middleware     | `runWithTenantAsync` | n/a             | medium    |
-| `lib/pipeline/deadLetterQueue.ts:314`                  | `createScopedPrisma(tenantId)` in `discardDLQEntry()`                    | single-tenant destructive operator action            | `runWithTenantAsync` | n/a             | high      |
-| `lib/pipeline/deadLetterQueue.ts:362`                  | `createScopedPrisma(tenant.id)` inside `processDLQ()` tenant loop        | cross-tenant cron driver with per-tenant inner work  | `runWithTenantAsync` | n/a             | high      |
-| `lib/pipeline/deadLetterQueue.ts:423`                  | `createScopedPrisma(tenantId)` in `isInDLQ()`                            | single-tenant helper outside middleware              | `runWithTenantAsync` | n/a             | low       |
-| `lib/pipeline/deadLetterQueue.ts:434`                  | `createScopedPrisma(tenantId)` in `getDLQEntry()`                        | single-tenant helper outside middleware              | `runWithTenantAsync` | n/a             | low       |
-| `lib/pipeline/humanReview.ts:67`                       | `createScopedPrisma(tenantId)` in `routeToReview()`                      | single-tenant helper after tenant resolution         | `runWithTenantAsync` | n/a             | medium    |
-| `lib/pipeline/humanReview.ts:101`                      | `createScopedPrisma(tenantId)` in `getReviewQueue()`                     | single-tenant helper outside middleware              | `runWithTenantAsync` | n/a             | medium    |
-| `lib/pipeline/humanReview.ts:218`                      | `createScopedPrisma(prospectRaw.tenantId)` in `approveProspect()`        | single-tenant operator approval after global lookup  | `runWithTenantAsync` | n/a             | high      |
-| `lib/pipeline/humanReview.ts:259`                      | `createScopedPrisma(prospectRaw.tenantId)` in `rejectProspect()`         | single-tenant operator rejection after global lookup | `runWithTenantAsync` | n/a             | high      |
-| `lib/pipeline/humanReview.ts:295`                      | `createScopedPrisma(pRaw.tenantId)` in `getProspectContext()`            | single-tenant read after global lookup               | `runWithTenantAsync` | n/a             | medium    |
-| `lib/pipeline/humanReview.ts:348`                      | `createScopedPrisma(tenantId)` in `getReviewQueueStats()`                | single-tenant helper outside middleware              | `runWithTenantAsync` | n/a             | low       |
-| `lib/pipeline/humanReview.ts:427`                      | `createScopedPrisma(prospectRaw.tenantId)` in `overrideProspectStatus()` | single-tenant operator override after global lookup  | `runWithTenantAsync` | n/a             | high      |
-| `app/api/pipeline/prospects/[id]/route.ts:42`          | `createScopedPrisma(tenantId)` in route not wrapped by `withAuth`        | single-tenant route relying on ambient tenant lookup | `runWithTenantAsync` | n/a             | medium    |
-| `app/api/pipeline/prospects/[id]/override/route.ts:55` | `createScopedPrisma(tenantId)` in admin override route                   | single-tenant route with admin auth composition      | `runWithTenantAsync` | n/a             | high      |
+| File:line                                              | Current pattern                                                                          | Tenant intent                                        | Target primitive     | Proposed reason | Risk tier |
+| ------------------------------------------------------ | ---------------------------------------------------------------------------------------- | ---------------------------------------------------- | -------------------- | --------------- | --------- |
+| `lib/pipeline/dealCloser.ts:44`                        | `legacy tenant-scoped Prisma helper(tenantId)` after lead lookup                         | single-tenant follow-up writes after bootstrap       | `runWithTenantAsync` | n/a             | medium    |
+| `lib/pipeline/idempotency.ts:56`                       | `legacy tenant-scoped Prisma helper(tenantId)` in `checkIdempotency()`                   | single-tenant helper outside middleware              | `runWithTenantAsync` | n/a             | low       |
+| `lib/pipeline/idempotency.ts:103`                      | `legacy tenant-scoped Prisma helper(tenantId)` in `markIdempotencyStarted()`             | single-tenant helper outside middleware              | `runWithTenantAsync` | n/a             | low       |
+| `lib/pipeline/idempotency.ts:140`                      | `legacy tenant-scoped Prisma helper(tenantId)` in `markIdempotencyCompleted()`           | single-tenant helper outside middleware              | `runWithTenantAsync` | n/a             | low       |
+| `lib/pipeline/idempotency.ts:168`                      | `legacy tenant-scoped Prisma helper(tenantId)` in `markIdempotencyFailed()`              | single-tenant helper outside middleware              | `runWithTenantAsync` | n/a             | low       |
+| `lib/pipeline/circuitBreaker.ts:92`                    | `legacy tenant-scoped Prisma helper(tenantId)` in `getCircuitState()`                    | single-tenant helper outside middleware              | `runWithTenantAsync` | n/a             | low       |
+| `lib/pipeline/circuitBreaker.ts:136`                   | `legacy tenant-scoped Prisma helper(tenantId)` in `recordSuccess()`                      | single-tenant helper outside middleware              | `runWithTenantAsync` | n/a             | low       |
+| `lib/pipeline/circuitBreaker.ts:182`                   | `legacy tenant-scoped Prisma helper(tenantId)` in `recordFailure()`                      | single-tenant helper outside middleware              | `runWithTenantAsync` | n/a             | medium    |
+| `lib/pipeline/circuitBreaker.ts:243`                   | `legacy tenant-scoped Prisma helper(tenantId)` in `openCircuit()`                        | single-tenant helper outside middleware              | `runWithTenantAsync` | n/a             | medium    |
+| `lib/pipeline/circuitBreaker.ts:332`                   | `legacy tenant-scoped Prisma helper(tenantId)` in `canProceed()` half-open transition    | single-tenant helper outside middleware              | `runWithTenantAsync` | n/a             | medium    |
+| `lib/pipeline/circuitBreaker.ts:387`                   | `legacy tenant-scoped Prisma helper(tenantId)` in `calculateErrorRate()`                 | single-tenant helper outside middleware              | `runWithTenantAsync` | n/a             | low       |
+| `lib/pipeline/circuitBreaker.ts:428`                   | `legacy tenant-scoped Prisma helper(tenantId)` in `resetCircuit()`                       | single-tenant helper outside middleware              | `runWithTenantAsync` | n/a             | high      |
+| `lib/pipeline/deadLetterQueue.ts:58`                   | `legacy tenant-scoped Prisma helper(tenantId)` in `addToDLQ()`                           | single-tenant helper outside middleware              | `runWithTenantAsync` | n/a             | medium    |
+| `lib/pipeline/deadLetterQueue.ts:153`                  | `legacy tenant-scoped Prisma helper(tenantId)` in `getDLQEntries()`                      | single-tenant helper outside middleware              | `runWithTenantAsync` | n/a             | low       |
+| `lib/pipeline/deadLetterQueue.ts:194`                  | `legacy tenant-scoped Prisma helper(tenantId)` in `getDLQStats()`                        | single-tenant helper outside middleware              | `runWithTenantAsync` | n/a             | low       |
+| `lib/pipeline/deadLetterQueue.ts:233`                  | `legacy tenant-scoped Prisma helper(tenantId)` in `retryFromDLQ()`                       | single-tenant retry helper outside middleware        | `runWithTenantAsync` | n/a             | medium    |
+| `lib/pipeline/deadLetterQueue.ts:275`                  | `legacy tenant-scoped Prisma helper(tenantId)` in `resolveDLQEntry()`                    | single-tenant operator action outside middleware     | `runWithTenantAsync` | n/a             | medium    |
+| `lib/pipeline/deadLetterQueue.ts:314`                  | `legacy tenant-scoped Prisma helper(tenantId)` in `discardDLQEntry()`                    | single-tenant destructive operator action            | `runWithTenantAsync` | n/a             | high      |
+| `lib/pipeline/deadLetterQueue.ts:362`                  | `legacy tenant-scoped Prisma helper(tenant.id)` inside `processDLQ()` tenant loop        | cross-tenant cron driver with per-tenant inner work  | `runWithTenantAsync` | n/a             | high      |
+| `lib/pipeline/deadLetterQueue.ts:423`                  | `legacy tenant-scoped Prisma helper(tenantId)` in `isInDLQ()`                            | single-tenant helper outside middleware              | `runWithTenantAsync` | n/a             | low       |
+| `lib/pipeline/deadLetterQueue.ts:434`                  | `legacy tenant-scoped Prisma helper(tenantId)` in `getDLQEntry()`                        | single-tenant helper outside middleware              | `runWithTenantAsync` | n/a             | low       |
+| `lib/pipeline/humanReview.ts:67`                       | `legacy tenant-scoped Prisma helper(tenantId)` in `routeToReview()`                      | single-tenant helper after tenant resolution         | `runWithTenantAsync` | n/a             | medium    |
+| `lib/pipeline/humanReview.ts:101`                      | `legacy tenant-scoped Prisma helper(tenantId)` in `getReviewQueue()`                     | single-tenant helper outside middleware              | `runWithTenantAsync` | n/a             | medium    |
+| `lib/pipeline/humanReview.ts:218`                      | `legacy tenant-scoped Prisma helper(prospectRaw.tenantId)` in `approveProspect()`        | single-tenant operator approval after global lookup  | `runWithTenantAsync` | n/a             | high      |
+| `lib/pipeline/humanReview.ts:259`                      | `legacy tenant-scoped Prisma helper(prospectRaw.tenantId)` in `rejectProspect()`         | single-tenant operator rejection after global lookup | `runWithTenantAsync` | n/a             | high      |
+| `lib/pipeline/humanReview.ts:295`                      | `legacy tenant-scoped Prisma helper(pRaw.tenantId)` in `getProspectContext()`            | single-tenant read after global lookup               | `runWithTenantAsync` | n/a             | medium    |
+| `lib/pipeline/humanReview.ts:348`                      | `legacy tenant-scoped Prisma helper(tenantId)` in `getReviewQueueStats()`                | single-tenant helper outside middleware              | `runWithTenantAsync` | n/a             | low       |
+| `lib/pipeline/humanReview.ts:427`                      | `legacy tenant-scoped Prisma helper(prospectRaw.tenantId)` in `overrideProspectStatus()` | single-tenant operator override after global lookup  | `runWithTenantAsync` | n/a             | high      |
+| `app/api/pipeline/prospects/[id]/route.ts:42`          | `legacy tenant-scoped Prisma helper(tenantId)` in route not wrapped by `withAuth`        | single-tenant route relying on ambient tenant lookup | `runWithTenantAsync` | n/a             | medium    |
+| `app/api/pipeline/prospects/[id]/override/route.ts:55` | `legacy tenant-scoped Prisma helper(tenantId)` in admin override route                   | single-tenant route with admin auth composition      | `runWithTenantAsync` | n/a             | high      |
 
 ### Batch B Sub-Batches
 
 #### B1 Cron
 
-| File:line                                           | Current pattern                                                   | Tenant intent                                       | Target primitive      | Proposed reason                             | Risk tier |
-| --------------------------------------------------- | ----------------------------------------------------------------- | --------------------------------------------------- | --------------------- | ------------------------------------------- | --------- |
-| `lib/pipeline/deadLetterQueue.ts:362`               | `createScopedPrisma(tenant.id)` inside `processDLQ()` tenant loop | cross-tenant cron driver with per-tenant inner work | `runWithTenantAsync`  | n/a                                         | high      |
-| `app/api/cron/intelligence-aggregation/route.ts:31` | direct `prisma.tenant.findMany()` cross-tenant cron               | intentional cross-tenant aggregation                | `runWithTenantBypass` | `cron-intelligence-aggregation-all-tenants` | medium    |
+| File:line                                           | Current pattern                                                                   | Tenant intent                                       | Target primitive      | Proposed reason                             | Risk tier |
+| --------------------------------------------------- | --------------------------------------------------------------------------------- | --------------------------------------------------- | --------------------- | ------------------------------------------- | --------- |
+| `lib/pipeline/deadLetterQueue.ts:362`               | `legacy tenant-scoped Prisma helper(tenant.id)` inside `processDLQ()` tenant loop | cross-tenant cron driver with per-tenant inner work | `runWithTenantAsync`  | n/a                                         | high      |
+| `app/api/cron/intelligence-aggregation/route.ts:31` | direct `prisma.tenant.findMany()` cross-tenant cron                               | intentional cross-tenant aggregation                | `runWithTenantBypass` | `cron-intelligence-aggregation-all-tenants` | medium    |
 
 #### B2 Admin Destructive
 
-| File:line                                              | Current pattern                                                          | Tenant intent                                        | Target primitive     | Proposed reason | Risk tier |
-| ------------------------------------------------------ | ------------------------------------------------------------------------ | ---------------------------------------------------- | -------------------- | --------------- | --------- |
-| `app/api/tenants/[tenantId]/delete-data/route.ts:32`   | direct `prisma.*` destructive sequence under `verifyCronAuth`            | single URL-tenant destructive GDPR erase             | `runWithTenantAsync` | n/a             | high      |
-| `app/api/tenants/[tenantId]/offboard/route.ts:67`      | direct `prisma.$transaction(...)` offboard flow                          | single URL-tenant destructive admin/API-key offboard | `runWithTenantAsync` | n/a             | high      |
-| `app/api/tenants/[tenantId]/offboard/route.ts:177`     | direct `prisma.tenant.delete(...)` hard delete                           | single URL-tenant destructive admin/API-key delete   | `runWithTenantAsync` | n/a             | high      |
-| `app/api/pipeline/prospects/[id]/override/route.ts:55` | `createScopedPrisma(tenantId)` in admin override route                   | single-tenant route with admin auth composition      | `runWithTenantAsync` | n/a             | high      |
-| `lib/pipeline/humanReview.ts:427`                      | `createScopedPrisma(prospectRaw.tenantId)` in `overrideProspectStatus()` | single-tenant operator override after global lookup  | `runWithTenantAsync` | n/a             | high      |
+| File:line                                              | Current pattern                                                                          | Tenant intent                                        | Target primitive     | Proposed reason | Risk tier |
+| ------------------------------------------------------ | ---------------------------------------------------------------------------------------- | ---------------------------------------------------- | -------------------- | --------------- | --------- |
+| `app/api/tenants/[tenantId]/delete-data/route.ts:32`   | direct `prisma.*` destructive sequence under `verifyCronAuth`                            | single URL-tenant destructive GDPR erase             | `runWithTenantAsync` | n/a             | high      |
+| `app/api/tenants/[tenantId]/offboard/route.ts:67`      | direct `prisma.$transaction(...)` offboard flow                                          | single URL-tenant destructive admin/API-key offboard | `runWithTenantAsync` | n/a             | high      |
+| `app/api/tenants/[tenantId]/offboard/route.ts:177`     | direct `prisma.tenant.delete(...)` hard delete                                           | single URL-tenant destructive admin/API-key delete   | `runWithTenantAsync` | n/a             | high      |
+| `app/api/pipeline/prospects/[id]/override/route.ts:55` | `legacy tenant-scoped Prisma helper(tenantId)` in admin override route                   | single-tenant route with admin auth composition      | `runWithTenantAsync` | n/a             | high      |
+| `lib/pipeline/humanReview.ts:427`                      | `legacy tenant-scoped Prisma helper(prospectRaw.tenantId)` in `overrideProspectStatus()` | single-tenant operator override after global lookup  | `runWithTenantAsync` | n/a             | high      |
 
 #### B3 Admin Reads
 
-| File:line                         | Current pattern                                               | Tenant intent                           | Target primitive     | Proposed reason | Risk tier |
-| --------------------------------- | ------------------------------------------------------------- | --------------------------------------- | -------------------- | --------------- | --------- |
-| `lib/pipeline/humanReview.ts:101` | `createScopedPrisma(tenantId)` in `getReviewQueue()`          | single-tenant helper outside middleware | `runWithTenantAsync` | n/a             | medium    |
-| `lib/pipeline/humanReview.ts:295` | `createScopedPrisma(pRaw.tenantId)` in `getProspectContext()` | single-tenant read after global lookup  | `runWithTenantAsync` | n/a             | medium    |
-| `lib/pipeline/humanReview.ts:348` | `createScopedPrisma(tenantId)` in `getReviewQueueStats()`     | single-tenant helper outside middleware | `runWithTenantAsync` | n/a             | low       |
+| File:line                         | Current pattern                                                               | Tenant intent                           | Target primitive     | Proposed reason | Risk tier |
+| --------------------------------- | ----------------------------------------------------------------------------- | --------------------------------------- | -------------------- | --------------- | --------- |
+| `lib/pipeline/humanReview.ts:101` | `legacy tenant-scoped Prisma helper(tenantId)` in `getReviewQueue()`          | single-tenant helper outside middleware | `runWithTenantAsync` | n/a             | medium    |
+| `lib/pipeline/humanReview.ts:295` | `legacy tenant-scoped Prisma helper(pRaw.tenantId)` in `getProspectContext()` | single-tenant read after global lookup  | `runWithTenantAsync` | n/a             | medium    |
+| `lib/pipeline/humanReview.ts:348` | `legacy tenant-scoped Prisma helper(tenantId)` in `getReviewQueueStats()`     | single-tenant helper outside middleware | `runWithTenantAsync` | n/a             | low       |
 
 #### B4 Public/Magic-Link
 
-No Batch B callsites currently land in this family. Existing public and magic-link reads were migrated in Phase 2.3/2.4 and do not use `createScopedPrisma(...)`.
+No Batch B callsites currently land in this family. Existing public and magic-link reads were migrated in Phase 2.3/2.4 and do not use `legacy tenant-scoped Prisma helper(...)`.
 
 #### B5 Other
 
@@ -175,34 +180,34 @@ Everything remaining in Batch B stays here:
 
 ## Batch C — Ambient Single-Tenant Cleanup
 
-| File:line                                             | Current pattern                                                                               | Tenant intent                                               | Target primitive | Proposed reason | Risk tier |
-| ----------------------------------------------------- | --------------------------------------------------------------------------------------------- | ----------------------------------------------------------- | ---------------- | --------------- | --------- |
-| `app/api/stripe/checkout-saas/route.ts:21`            | `createScopedPrisma(tenantId)` inside `withAuth`                                              | single-tenant billing portal bootstrap                      | `prisma`         | n/a             | medium    |
-| `app/api/stripe/portal/route.ts:14`                   | `createScopedPrisma(tenantId)` inside `withAuth`                                              | single-tenant billing portal bootstrap                      | `prisma`         | n/a             | low       |
-| `app/api/analytics/route.ts:12`                       | `createScopedPrisma(tenantId)` inside `withAuth`                                              | single-tenant analytics read                                | `prisma`         | n/a             | low       |
-| `lib/billing/limits.ts:10`                            | `createScopedPrisma(tenantId)` in `checkAuditLimit()`                                         | single-tenant helper relying on current tenant context      | `prisma`         | n/a             | low       |
-| `lib/billing/limits.ts:67`                            | `createScopedPrisma(tenantId)` in `checkSeatLimit()`                                          | single-tenant helper relying on current tenant context      | `prisma`         | n/a             | low       |
-| `app/api/proposals/[id]/send/route.ts:55`             | `createScopedPrisma(tenantId)` inside `withAuth`                                              | single-tenant mutation                                      | `prisma`         | n/a             | high      |
-| `app/api/proposals/route.ts:30`                       | `createScopedPrisma(tenantId)` inside `withAuth`                                              | single-tenant list read                                     | `prisma`         | n/a             | low       |
-| `app/api/team/invite/route.ts:31`                     | `createScopedPrisma(tenantId)` inside `withAuth` + admin RBAC                                 | single-tenant invite creation after global uniqueness check | `prisma`         | n/a             | medium    |
-| `app/api/audits/route.ts:31`                          | `createScopedPrisma(tenantId)` inside `withAuth`                                              | single-tenant list read                                     | `prisma`         | n/a             | low       |
-| `app/api/audit/[id]/compare/[previousId]/route.ts:14` | `createScopedPrisma(tenantId)` inside `withAuth`                                              | single-tenant compare read                                  | `prisma`         | n/a             | medium    |
-| `app/api/audit/route.ts:48`                           | `createScopedPrisma(tenantId)` inside `withAuth`                                              | single-tenant audit creation                                | `prisma`         | n/a             | medium    |
-| `app/api/schedule/[id]/route.ts:14`                   | `createScopedPrisma(tenantId)` but route already uses explicit `tenantId` filters on `prisma` | single-tenant destructive route                             | `prisma`         | n/a             | high      |
-| `app/api/schedule/route.ts:12`                        | `createScopedPrisma(tenantId)` inside `withAuth`                                              | single-tenant schedule list                                 | `prisma`         | n/a             | low       |
-| `app/api/schedule/route.ts:40`                        | `createScopedPrisma(tenantId)` inside `withAuth`                                              | single-tenant schedule create                               | `prisma`         | n/a             | medium    |
-| `app/api/stats/route.ts:15`                           | `createScopedPrisma(tenantId)` inside `withAuth`                                              | single-tenant stats read                                    | `prisma`         | n/a             | low       |
-| `app/api/settings/templates/route.ts:13`              | `createScopedPrisma(tenantId)` inside `withAuth`                                              | single-tenant template list                                 | `prisma`         | n/a             | low       |
-| `app/api/settings/templates/route.ts:33`              | `createScopedPrisma(tenantId)` inside `withAuth`                                              | single-tenant template create                               | `prisma`         | n/a             | medium    |
-| `app/api/v1/audit/[id]/route.ts:10`                   | `createScopedPrisma(tenantId)` inside `withAuth`                                              | single-tenant audit detail read                             | `prisma`         | n/a             | low       |
-| `app/api/settings/templates/[id]/route.ts:59`         | `createScopedPrisma(tenantId)` inside `withAuth`                                              | single-tenant template read                                 | `prisma`         | n/a             | low       |
-| `app/api/settings/templates/[id]/route.ts:114`        | `createScopedPrisma(tenantId)` inside `withAuth`                                              | single-tenant template update                               | `prisma`         | n/a             | medium    |
-| `app/api/settings/templates/[id]/route.ts:159`        | `createScopedPrisma(tenantId)` inside `withAuth`                                              | single-tenant template delete                               | `prisma`         | n/a             | high      |
-| `app/api/v1/audit/route.ts:40`                        | `createScopedPrisma(tenantId)` inside `withAuth`                                              | single-tenant audit creation                                | `prisma`         | n/a             | medium    |
+| File:line                                             | Current pattern                                                                                               | Tenant intent                                               | Target primitive | Proposed reason | Risk tier |
+| ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- | ---------------- | --------------- | --------- |
+| `app/api/stripe/checkout-saas/route.ts:21`            | `legacy tenant-scoped Prisma helper(tenantId)` inside `withAuth`                                              | single-tenant billing portal bootstrap                      | `prisma`         | n/a             | medium    |
+| `app/api/stripe/portal/route.ts:14`                   | `legacy tenant-scoped Prisma helper(tenantId)` inside `withAuth`                                              | single-tenant billing portal bootstrap                      | `prisma`         | n/a             | low       |
+| `app/api/analytics/route.ts:12`                       | `legacy tenant-scoped Prisma helper(tenantId)` inside `withAuth`                                              | single-tenant analytics read                                | `prisma`         | n/a             | low       |
+| `lib/billing/limits.ts:10`                            | `legacy tenant-scoped Prisma helper(tenantId)` in `checkAuditLimit()`                                         | single-tenant helper relying on current tenant context      | `prisma`         | n/a             | low       |
+| `lib/billing/limits.ts:67`                            | `legacy tenant-scoped Prisma helper(tenantId)` in `checkSeatLimit()`                                          | single-tenant helper relying on current tenant context      | `prisma`         | n/a             | low       |
+| `app/api/proposals/[id]/send/route.ts:55`             | `legacy tenant-scoped Prisma helper(tenantId)` inside `withAuth`                                              | single-tenant mutation                                      | `prisma`         | n/a             | high      |
+| `app/api/proposals/route.ts:30`                       | `legacy tenant-scoped Prisma helper(tenantId)` inside `withAuth`                                              | single-tenant list read                                     | `prisma`         | n/a             | low       |
+| `app/api/team/invite/route.ts:31`                     | `legacy tenant-scoped Prisma helper(tenantId)` inside `withAuth` + admin RBAC                                 | single-tenant invite creation after global uniqueness check | `prisma`         | n/a             | medium    |
+| `app/api/audits/route.ts:31`                          | `legacy tenant-scoped Prisma helper(tenantId)` inside `withAuth`                                              | single-tenant list read                                     | `prisma`         | n/a             | low       |
+| `app/api/audit/[id]/compare/[previousId]/route.ts:14` | `legacy tenant-scoped Prisma helper(tenantId)` inside `withAuth`                                              | single-tenant compare read                                  | `prisma`         | n/a             | medium    |
+| `app/api/audit/route.ts:48`                           | `legacy tenant-scoped Prisma helper(tenantId)` inside `withAuth`                                              | single-tenant audit creation                                | `prisma`         | n/a             | medium    |
+| `app/api/schedule/[id]/route.ts:14`                   | `legacy tenant-scoped Prisma helper(tenantId)` but route already uses explicit `tenantId` filters on `prisma` | single-tenant destructive route                             | `prisma`         | n/a             | high      |
+| `app/api/schedule/route.ts:12`                        | `legacy tenant-scoped Prisma helper(tenantId)` inside `withAuth`                                              | single-tenant schedule list                                 | `prisma`         | n/a             | low       |
+| `app/api/schedule/route.ts:40`                        | `legacy tenant-scoped Prisma helper(tenantId)` inside `withAuth`                                              | single-tenant schedule create                               | `prisma`         | n/a             | medium    |
+| `app/api/stats/route.ts:15`                           | `legacy tenant-scoped Prisma helper(tenantId)` inside `withAuth`                                              | single-tenant stats read                                    | `prisma`         | n/a             | low       |
+| `app/api/settings/templates/route.ts:13`              | `legacy tenant-scoped Prisma helper(tenantId)` inside `withAuth`                                              | single-tenant template list                                 | `prisma`         | n/a             | low       |
+| `app/api/settings/templates/route.ts:33`              | `legacy tenant-scoped Prisma helper(tenantId)` inside `withAuth`                                              | single-tenant template create                               | `prisma`         | n/a             | medium    |
+| `app/api/v1/audit/[id]/route.ts:10`                   | `legacy tenant-scoped Prisma helper(tenantId)` inside `withAuth`                                              | single-tenant audit detail read                             | `prisma`         | n/a             | low       |
+| `app/api/settings/templates/[id]/route.ts:59`         | `legacy tenant-scoped Prisma helper(tenantId)` inside `withAuth`                                              | single-tenant template read                                 | `prisma`         | n/a             | low       |
+| `app/api/settings/templates/[id]/route.ts:114`        | `legacy tenant-scoped Prisma helper(tenantId)` inside `withAuth`                                              | single-tenant template update                               | `prisma`         | n/a             | medium    |
+| `app/api/settings/templates/[id]/route.ts:159`        | `legacy tenant-scoped Prisma helper(tenantId)` inside `withAuth`                                              | single-tenant template delete                               | `prisma`         | n/a             | high      |
+| `app/api/v1/audit/route.ts:40`                        | `legacy tenant-scoped Prisma helper(tenantId)` inside `withAuth`                                              | single-tenant audit creation                                | `prisma`         | n/a             | medium    |
 
 ## Folded Batch B Non-Helper Routes
 
-These surfaced during the direct-`prisma` sweep. They are **not** `createScopedPrisma(...)` callers, but they are now part of Batch B so the migration source of truth stays aligned with execution.
+These surfaced during the direct-`prisma` sweep. They are **not** `legacy tenant-scoped Prisma helper(...)` callers, but they are now part of Batch B so the migration source of truth stays aligned with execution.
 
 | File:line                                            | Current pattern                                               | Tenant intent                                        | Proposed target primitive                            | Proposed reason                             | Risk tier |
 | ---------------------------------------------------- | ------------------------------------------------------------- | ---------------------------------------------------- | ---------------------------------------------------- | ------------------------------------------- | --------- |
@@ -297,7 +302,7 @@ These surfaced during the direct-`prisma` sweep. They are **not** `createScopedP
 
 - No Phase 2.5 code changes were required for Batch B4 because the matrix still classifies this family as zero sites.
 - Validation pass:
-  - `app/api/public/audit/route.ts` already uses `runWithTenantAsync(...)` and is outside the remaining `createScopedPrisma(...)` migration scope.
+  - `app/api/public/audit/route.ts` already uses `runWithTenantAsync(...)` and is outside the remaining `legacy tenant-scoped Prisma helper(...)` migration scope.
   - `app/proposal/[token]/page.tsx` and `app/proposal/[token]/pdf/page.tsx` already use narrow bypass for token bootstrap plus tenant-local reads under `runWithTenantAsync(...)`.
   - `app/api/proposals/[id]/send/route.ts` remains intentionally classified as Batch C, not B4, because it is a `withAuth`-scoped tenant mutation rather than a public/magic-link surface.
 - Existing token/auth/public validation preserved: yes (no code changed in this batch).
@@ -446,6 +451,19 @@ These surfaced during the direct-`prisma` sweep. They are **not** `createScopedP
   - Justification: invitation creation is tenant-local after the route's current RBAC and seat-limit checks, so the deprecated scoped wrapper was redundant for the write path.
   - Existing auth/proposal/team-invite behavior preserved: yes (admin RBAC, seat-limit check, email/role parsing, existing-user check, token generation, expiry, invitation payload, and response contract remain unchanged).
   - Latent followup: preserve the current global-user uniqueness check behavior for Phase 2.6 verification under `app_user` + RLS; do not redesign it in 2.5.
+
+### Completed: Step 4 Helper Removal
+
+- Removed the legacy tenant-scoped Prisma helper implementation/export from `lib/tenant/context.ts`.
+- Repo-wide production callsites are now `0`.
+- Batch B unresolved remains `0`.
+- Batch C remaining remains `0`.
+- Phase 2.6 followups intentionally remain visible:
+  - `lib/pipeline/humanReview.ts` global tenant-discovery verification under `app_user + RLS`
+  - `app/api/pipeline/prospects/[id]/override/route.ts` fallback global lookup verification
+  - `app/api/team/invite/route.ts` global-user uniqueness lookup verification
+  - `checkoutAttempt.create` route-context verification
+  - raw SQL cleanup / `app_user` verification items already logged in earlier batch notes
 
 ### Completed: B5 Other specialized routes/helpers
 

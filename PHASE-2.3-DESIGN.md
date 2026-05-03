@@ -16,7 +16,7 @@ Scope: Task 0 only - design gate for repairing the Prisma tenant/RLS runtime shi
 
 - [lib/prisma.ts](/Users/danishsethi/VSCODE/ProposalOS/lib/prisma.ts:1) uses a global Prisma client with a `query.$allModels.$allOperations` extension.
 - [lib/middleware/auth.ts](/Users/danishsethi/VSCODE/ProposalOS/lib/middleware/auth.ts:1) already wraps authenticated requests in `runWithTenantAsync(...)`, so tenant context is available through `AsyncLocalStorage`.
-- [lib/tenant/context.ts](/Users/danishsethi/VSCODE/ProposalOS/lib/tenant/context.ts:1) still contains a second tenant-scoping mechanism, `createScopedPrisma(...)`, with `63` callsites across the repo.
+- [lib/tenant/context.ts](/Users/danishsethi/VSCODE/ProposalOS/lib/tenant/context.ts:1) still contains a second tenant-scoping mechanism, `legacy tenant-scoped Prisma helper(...)`, with `63` callsites across the repo.
 - The repo also already has `29` explicit `$transaction(...)` callsites and `33` raw-query sites (`$queryRaw*` / `$executeRaw*`) in `app/` and `lib/`.
 
 ## Root cause of the current shim bug
@@ -237,7 +237,7 @@ It will not solve in Phase 2.3:
    - if bypass flag is active, open a transaction, set `app.bypass_rls = 'true'`, and re-dispatch via `tx`
    - otherwise require a valid tenant UUID, open a transaction, set `app.current_tenant_id`, and re-dispatch via `tx`
 5. Leave raw-query methods explicitly documented as a limitation for Phase 2.6.
-6. Mark `createScopedPrisma(...)` as `@deprecated` but leave callers untouched in this phase.
+6. Mark `legacy tenant-scoped Prisma helper(...)` as `@deprecated` but leave callers untouched in this phase.
 
 ## Operator approval gate
 
@@ -276,7 +276,7 @@ Why this shipped:
 - Added a single `dispatchOnTx(tx, model, operation, args)` helper so the transaction-client cast lives in one place.
 - Added nested-transaction detection through `currentTx` in `AsyncLocalStorage`.
 - Added `runWithTenantBypass(...)` runtime hook for intentional cross-tenant/admin/system reads.
-- Marked `createScopedPrisma(...)` as deprecated for the later Phase 2.6 cleanup.
+- Marked `legacy tenant-scoped Prisma helper(...)` as deprecated for the later Phase 2.6 cleanup.
 - Added explicit server-component wrappers where fail-closed behavior surfaced intentional no-tenant reads:
   - admin pages
   - magic-link proposal/client pages

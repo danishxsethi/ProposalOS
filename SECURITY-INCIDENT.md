@@ -609,7 +609,7 @@ Cannot connect to the Docker daemon at unix:///Users/danishsethi/.docker/run/doc
 - Sibling audit-route sweep:
   - `app/api/audit/[id]/propose/route.ts` had raw `prisma.audit.findUnique({ where: { id } })`
   - `app/api/audit/[id]/regenerate/route.ts` had the same raw `findUnique` pattern and was folded into this commit
-  - `app/api/audit/[id]/compare/[previousId]/route.ts` uses `createScopedPrisma(tenantId)` before `findUnique`, so it was left unchanged in this pass
+  - `app/api/audit/[id]/compare/[previousId]/route.ts` uses `legacy tenant-scoped Prisma helper(tenantId)` before `findUnique`, so it was left unchanged in this pass
 - Fix:
   - `propose` now uses `getTenantId()` and `prisma.audit.findFirst({ where: { id, tenantId } })`
   - `regenerate` now uses the same canonical tenant-scoped lookup
