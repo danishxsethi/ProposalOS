@@ -9,7 +9,7 @@
 
 ### 1. TENANT ISOLATION
 
-**P0-01** — `createScopedPrisma()` automatically scopes 40+ models by tenantId ✅
+**P0-01** — `legacy tenant-scoped Prisma helper()` automatically scopes 40+ models by tenantId ✅
 **P0-02** — Post-query verification blocks cross-tenant `findUnique` access ✅
 **P0-03** — RLS (Row Level Security) enabled via `prisma/enable_rls.sql` ✅
 **P0-04** — 100-tenant stress test created with zero cross-contamination verified ✅
@@ -188,7 +188,7 @@ Value: app.proposalos.local
 **Key Components:**
 
 - `lib/tenant/context.ts` — AsyncLocalStorage-based tenant context
-- `createScopedPrisma()` — Automatic tenant scoping for 40+ models
+- `legacy tenant-scoped Prisma helper()` — Automatic tenant scoping for 40+ models
 - Post-query verification for `findUnique` operations
 - RLS (Row Level Security) enabled via `prisma/enable_rls.sql`
 

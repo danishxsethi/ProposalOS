@@ -3,7 +3,6 @@ import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { validateApiKey } from '@/lib/auth/apiKeys';
 import { logger } from '@/lib/logger';
-import { prisma } from '@/lib/prisma';
 import { runWithTenantAsync } from '@/lib/tenant/context';
 
 // Typed handler signature used by withAuth and withRole
@@ -76,7 +75,7 @@ export function withAuth(handler: AuthHandler) {
     }
 
     // P0-1 Fix: extract tenantId from session and wrap handler in tenant context.
-    // Without this, routes using createScopedPrisma() or getTenantId() would return
+    // Without this, tenant-aware routes using the Prisma shim or getTenantId() would return
     // unscoped (cross-tenant) data for session-authenticated dashboard users.
     const authUser = session.user as AuthUser;
     const sessionTenantId = authUser.tenantId;

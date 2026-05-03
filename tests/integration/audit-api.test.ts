@@ -1,5 +1,3 @@
-import { NextResponse } from 'next/server';
-
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { POST } from '@/app/api/audit/route';
@@ -46,13 +44,11 @@ vi.mock('@/lib/metrics', () => ({
 }));
 vi.mock('@/lib/tracing', () => ({ createParentTrace: vi.fn(() => ({})) }));
 vi.mock('langsmith', () => ({
-  RunTree: vi
-    .fn()
-    .mockImplementation(() => ({
-      createChild: vi.fn(() => ({ end: vi.fn() })),
-      end: vi.fn(),
-      save: vi.fn(),
-    })),
+  RunTree: vi.fn().mockImplementation(() => ({
+    createChild: vi.fn(() => ({ end: vi.fn() })),
+    end: vi.fn(),
+    save: vi.fn(),
+  })),
 }));
 
 // Mock Auth & Tenant
@@ -61,10 +57,12 @@ vi.mock('@/lib/middleware/auth', () => ({
 }));
 vi.mock('@/lib/tenant/context', () => ({
   getTenantId: vi.fn(() => 'tenant-123'),
-  createScopedPrisma: vi.fn(() => ({
+  runWithTenantAsync: vi.fn(async (_tenantId: string, fn: () => unknown) => await fn()),
+}));
+vi.mock('@/lib/prisma', () => ({
+  prisma: {
     audit: { create: vi.fn(() => ({ id: 'audit-123' })), update: vi.fn() },
-    $extends: { prism: { $all: vi.fn() } },
-  })),
+  },
 }));
 vi.mock('@/lib/billing/limits', () => ({
   checkAuditLimit: vi.fn(() => Promise.resolve({ allowed: true })),

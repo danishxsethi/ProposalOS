@@ -142,7 +142,7 @@ export function runWithTenant<T>(tenantId: string, fn: () => T): T {
 }
 
 // Layer 3: Scoped Prisma Extension (lib/tenant/context.ts)
-export function createScopedPrisma(tenantId: string) {
+export function legacy tenant-scoped Prisma helper(tenantId: string) {
   return prisma.$extends({
     query: {
       audit: {
@@ -165,7 +165,7 @@ export function createScopedPrisma(tenantId: string) {
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                        HTTP REQUEST: POST /api/audit                     │
-│  withAuth() → getTenantId() → createScopedPrisma()                       │
+│  withAuth() → getTenantId() → legacy tenant-scoped Prisma helper()                       │
 └─────────────────────────────────────────────────────────────────────────┘
                                     │
                                     ▼
@@ -400,12 +400,12 @@ __end__
 
 ### A. Multi-Tenancy
 
-| Rule                               | Enforcement                                                  |
-| ---------------------------------- | ------------------------------------------------------------ |
-| **Always filter by `tenantId`**    | Use `createScopedPrisma()` or explicit `where: { tenantId }` |
-| **Never bypass `withAuth()`**      | All protected routes must use auth middleware                |
-| **Never expose cross-tenant data** | List/aggregate endpoints must always scope queries           |
-| **API keys are tenant-scoped**     | `pe_live_*` keys resolve to single tenant                    |
+| Rule                               | Enforcement                                                                  |
+| ---------------------------------- | ---------------------------------------------------------------------------- |
+| **Always filter by `tenantId`**    | Use `legacy tenant-scoped Prisma helper()` or explicit `where: { tenantId }` |
+| **Never bypass `withAuth()`**      | All protected routes must use auth middleware                                |
+| **Never expose cross-tenant data** | List/aggregate endpoints must always scope queries                           |
+| **API keys are tenant-scoped**     | `pe_live_*` keys resolve to single tenant                                    |
 
 ```typescript
 // ✅ CORRECT

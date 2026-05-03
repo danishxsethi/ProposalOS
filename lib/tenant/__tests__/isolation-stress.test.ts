@@ -19,7 +19,8 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { PrismaClient } from '@prisma/client';
 import { v4 as uuidv4 } from 'uuid';
-import { createScopedPrisma } from '../context';
+import { prisma as appPrisma } from '@/lib/prisma';
+import { runWithTenantAsync } from '../context';
 
 // Use a test-specific Prisma client
 const prisma = new PrismaClient();
@@ -233,29 +234,29 @@ describe('Multi-Tenant Isolation Stress Test (100 Tenants)', () => {
     });
   });
 
-  describe('P0: Scoped Prisma Client Isolation', () => {
-    it('should automatically scope findMany queries by tenant', async () => {
+  describe('P0: Tenant-Aware Prisma Isolation', () => {
+    it('should automatically scope findMany queries by tenant context', async () => {
       // Pick 10 random tenants to test
       const sampleTenants = testTenants.slice(0, 10);
 
       const results = await Promise.all(
-        sampleTenants.map(async (testTenant) => {
-          const scopedPrisma = createScopedPrisma(testTenant.id);
+        sampleTenants.map((testTenant) =>
+          runWithTenantAsync(testTenant.id, async () => {
+            const audits = await appPrisma.audit.findMany();
+            const findings = await appPrisma.finding.findMany();
+            const proposals = await appPrisma.proposal.findMany();
 
-          const audits = await scopedPrisma.audit.findMany();
-          const findings = await scopedPrisma.finding.findMany();
-          const proposals = await scopedPrisma.proposal.findMany();
-
-          return {
-            tenantId: testTenant.id,
-            auditCount: audits.length,
-            findingCount: findings.length,
-            proposalCount: proposals.length,
-            allAuditsScoped: audits.every((a) => a.tenantId === testTenant.id),
-            allFindingsScoped: findings.every((f) => f.tenantId === testTenant.id),
-            allProposalsScoped: proposals.every((p) => p.tenantId === testTenant.id),
-          };
-        })
+            return {
+              tenantId: testTenant.id,
+              auditCount: audits.length,
+              findingCount: findings.length,
+              proposalCount: proposals.length,
+              allAuditsScoped: audits.every((a) => a.tenantId === testTenant.id),
+              allFindingsScoped: findings.every((f) => f.tenantId === testTenant.id),
+              allProposalsScoped: proposals.every((p) => p.tenantId === testTenant.id),
+            };
+          })
+        )
       );
 
       for (const result of results) {
@@ -270,16 +271,16 @@ describe('Multi-Tenant Isolation Stress Test (100 Tenants)', () => {
 
     it('should automatically inject tenantId on create operations', async () => {
       const testTenant = testTenants[0];
-      const scopedPrisma = createScopedPrisma(testTenant.id);
-
-      const newAudit = await scopedPrisma.audit.create({
-        data: {
-          businessName: 'Test Auto-Scoped Business',
-          businessUrl: 'https://test.com',
-          status: 'QUEUED',
-          modulesCompleted: [],
-        },
-      });
+      const newAudit = await runWithTenantAsync(testTenant.id, () =>
+        appPrisma.audit.create({
+          data: {
+            businessName: 'Test Auto-Scoped Business',
+            businessUrl: 'https://test.com',
+            status: 'QUEUED',
+            modulesCompleted: [],
+          },
+        })
+      );
 
       expect(newAudit.tenantId).toBe(testTenant.id);
 
@@ -287,23 +288,16 @@ describe('Multi-Tenant Isolation Stress Test (100 Tenants)', () => {
       await prisma.audit.delete({ where: { id: newAudit.id } });
     });
 
-    it('should block cross-tenant findUnique access via post-query verification', async () => {
-      // Get a finding from tenant A
+    it('should block cross-tenant findUnique access via tenant-aware query context', async () => {
       const tenantA = testTenants[0];
-      const tenantBFinding = await prisma.finding.findUnique({
-        where: { id: testTenants[1].findingIds[0] },
-      });
+      const tenantBFindingId = testTenants[1].findingIds[0];
+      const scopedFinding = await runWithTenantAsync(tenantA.id, () =>
+        appPrisma.finding.findUnique({
+          where: { id: tenantBFindingId },
+        })
+      );
 
-      // Simulate what scoped prisma would do
-      const verifyTenant = (result: any, tenantId: string) => {
-        if (result && result.tenantId && result.tenantId !== tenantId) {
-          return null;
-        }
-        return result;
-      };
-
-      const verified = verifyTenant(tenantBFinding, tenantA.id);
-      expect(verified).toBeNull();
+      expect(scopedFinding).toBeNull();
     });
   });
 
@@ -331,18 +325,19 @@ describe('Multi-Tenant Isolation Stress Test (100 Tenants)', () => {
 
     it('should handle concurrent create operations without tenant leakage', async () => {
       const creates = testTenants.slice(0, 50).map(async (tenant) => {
-        const scopedPrisma = createScopedPrisma(tenant.id);
-        return scopedPrisma.finding.create({
-          data: {
-            auditId: tenant.auditIds[0],
-            module: 'test',
-            category: 'test',
-            type: 'PAINKILLER',
-            title: 'Concurrent Test Finding',
-            impactScore: 5,
-            confidenceScore: 90,
-          },
-        });
+        return runWithTenantAsync(tenant.id, () =>
+          appPrisma.finding.create({
+            data: {
+              auditId: tenant.auditIds[0],
+              module: 'test',
+              category: 'test',
+              type: 'PAINKILLER',
+              title: 'Concurrent Test Finding',
+              impactScore: 5,
+              confidenceScore: 90,
+            },
+          })
+        );
       });
 
       const results = await Promise.all(creates);
@@ -415,7 +410,7 @@ describe('Multi-Tenant Isolation Stress Test (100 Tenants)', () => {
     it('should not have any unscoped count operations', async () => {
       // Verify count operations require tenant scoping
       const globalCount = await prisma.audit.count();
-      
+
       // Each tenant should only see their own count
       const tenantCounts = await Promise.all(
         testTenants.slice(0, 10).map(async (tenant) => {
@@ -426,30 +421,25 @@ describe('Multi-Tenant Isolation Stress Test (100 Tenants)', () => {
       );
 
       const sumOfTenantCounts = tenantCounts.reduce((a, b) => a + b, 0);
-      
+
       // Global count should be higher than sum of sampled tenants
       expect(globalCount).toBeGreaterThan(sumOfTenantCounts);
     });
   });
 
   describe('P1: Edge Cases', () => {
-    it('should handle null/undefined tenantId gracefully', async () => {
-      // Create scoped prisma with undefined tenant (should return unscoped)
-      const unscopedPrisma = createScopedPrisma(undefined);
-      
-      // This should work but return all records (admin mode)
-      const allAudits = await unscopedPrisma.audit.findMany({
+    it('should allow direct unscoped PrismaClient access for explicit admin-mode tests', async () => {
+      const allAudits = await prisma.audit.findMany({
         take: 1,
       });
-      
-      // Verify it returns records (admin access)
+
       expect(allAudits.length).toBeGreaterThanOrEqual(0);
     });
 
     it('should cascade delete all child records when tenant is deleted', async () => {
       // Create a temporary tenant with related data
       const tempTenantId = uuidv4();
-      
+
       await prisma.tenant.create({
         data: {
           id: tempTenantId,
