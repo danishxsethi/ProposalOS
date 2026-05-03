@@ -427,6 +427,26 @@ These surfaced during the direct-`prisma` sweep. They are **not** `createScopedP
   - Existing auth/audit behavior preserved: yes (role/auth stack, validation, quota check, defaults, create fields, idempotency, runner kickoff, and response contract remain unchanged).
   - Latent followup: none discovered during the mechanism swap.
 
+### Completed: C6 Final Batch C production callers
+
+- `app/api/proposals/[id]/send/route.ts` (POST send)
+  - Pattern chosen: existing ambient `withAuth` tenant context plus plain `prisma`.
+  - Justification: this high-risk proposal-send mutation is tenant-local and already performs its own tenant ownership check before mutating delivery state, so the deprecated wrapper was redundant.
+  - Existing auth/proposal/team-invite behavior preserved: yes (auth check, validation, tenant ownership check, status transition, follow-up scheduling, audit/logging side effects, and response contract remain unchanged).
+  - Latent followup: none discovered during the mechanism swap.
+
+- `app/api/proposals/route.ts` (GET list)
+  - Pattern chosen: existing ambient `withAuth` tenant context plus plain `prisma`.
+  - Justification: this proposal list route is a tenant-local authenticated read and already carries explicit tenant filtering in its query shape.
+  - Existing auth/proposal/team-invite behavior preserved: yes (auth check, pagination, filters, includes, ordering, and response contract remain unchanged).
+  - Latent followup: none discovered during the mechanism swap.
+
+- `app/api/team/invite/route.ts` (POST invite)
+  - Pattern chosen: existing ambient `withAuth` tenant context plus plain `prisma` for the tenant-local invitation write, while preserving the existing separate global user-existence lookup.
+  - Justification: invitation creation is tenant-local after the route's current RBAC and seat-limit checks, so the deprecated scoped wrapper was redundant for the write path.
+  - Existing auth/proposal/team-invite behavior preserved: yes (admin RBAC, seat-limit check, email/role parsing, existing-user check, token generation, expiry, invitation payload, and response contract remain unchanged).
+  - Latent followup: preserve the current global-user uniqueness check behavior for Phase 2.6 verification under `app_user` + RLS; do not redesign it in 2.5.
+
 ### Completed: B5 Other specialized routes/helpers
 
 - `lib/pipeline/idempotency.ts`
