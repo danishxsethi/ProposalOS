@@ -77,10 +77,10 @@ describe('Deal Closer Unit Tests', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockedRunWithTenantAsync.mockImplementation(
-      async (_tenantId: string, fn: () => Promise<unknown>) => await fn()
+      async (_tenantId: string, fn: () => unknown) => await fn()
     );
     mockedRunWithTenantBypass.mockImplementation(
-      async (_reason: string, fn: () => Promise<unknown>) => await fn()
+      async (_reason: string, fn: () => unknown) => await fn()
     );
   });
 
@@ -492,7 +492,7 @@ describe('Deal Closer Unit Tests', () => {
       mockedRetrieveCheckoutSession.mockResolvedValue({
         metadata: { tier: 'growth' },
         amount_total: 500000, // $5000
-      } as Awaited<ReturnType<typeof stripe.checkout.sessions.retrieve>>);
+      } as unknown as Awaited<ReturnType<typeof stripe.checkout.sessions.retrieve>>);
 
       mockPrisma.prospectLead.update.mockResolvedValue({});
       mockPrisma.winLossRecord.create.mockResolvedValue({});
@@ -542,7 +542,7 @@ describe('Deal Closer Unit Tests', () => {
 
       mockedRetrieveCheckoutSession.mockResolvedValue({
         metadata: { retryCount: '1' },
-      } as Awaited<ReturnType<typeof stripe.checkout.sessions.retrieve>>);
+      } as unknown as Awaited<ReturnType<typeof stripe.checkout.sessions.retrieve>>);
 
       mockPrisma.prospectLead.update.mockResolvedValue({});
 
@@ -568,7 +568,7 @@ describe('Deal Closer Unit Tests', () => {
 
       mockedRetrieveCheckoutSession.mockResolvedValue({
         metadata: { retryCount: '3' },
-      } as Awaited<ReturnType<typeof stripe.checkout.sessions.retrieve>>);
+      } as unknown as Awaited<ReturnType<typeof stripe.checkout.sessions.retrieve>>);
 
       mockPrisma.prospectLead.update.mockResolvedValue({});
       mockPrisma.winLossRecord.create.mockResolvedValue({});
