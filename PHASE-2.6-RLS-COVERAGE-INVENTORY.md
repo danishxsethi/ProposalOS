@@ -11,11 +11,11 @@
 | ------------------------------------------------------------------------------ | ----: | ----------------------------------------------------------------------------------------------------------- |
 | Prisma models total                                                            |    89 | Parsed from `prisma/schema.prisma`                                                                          |
 | Models with first-class `tenantId`                                             |    66 | Direct tenant-bearing schema models                                                                         |
-| Tenant-bearing models covered by `tenant_isolation`                            |    50 | Matches `20260429093000_enable_rls` VERIFIED manifest                                                       |
-| Tenant-bearing models uncovered by `tenant_isolation`                          |    16 | Also missing bypass parity                                                                                  |
-| Models with `tenant_bypass` policy                                             |    50 | Exact parity with the 50 covered tables                                                                     |
-| Tenant-bearing models missing `tenant_bypass`                                  |    16 | Same 16 models still outside base RLS                                                                       |
-| Indirect tenant-scoped candidates (no `tenantId`, tenant implied by parent FK) |     9 | Phase 2.6-B candidates                                                                                      |
+| Tenant-bearing models covered by `tenant_isolation`                            |    66 | `50` from Phase 2.1.5 plus `16` added in Phase 2.6-B                                                        |
+| Tenant-bearing models uncovered by `tenant_isolation`                          |     0 | First-class tenant-bearing coverage is now closed                                                           |
+| Models with `tenant_bypass` policy                                             |    66 | Bypass parity now matches all first-class tenant-bearing tables                                             |
+| Tenant-bearing models missing `tenant_bypass`                                  |     0 | First-class tenant-bearing bypass parity is now closed                                                      |
+| Indirect tenant-scoped candidates (no `tenantId`, tenant implied by parent FK) |     9 | Phase 2.6-C candidates                                                                                      |
 | Tenant-agnostic / shared-system tables                                         |    14 | Includes one mixed telemetry table (`Metric`) that likely needs design, not simple RLS                      |
 | Direct executable raw SQL callsites                                            |    21 | Across 9 production files; 2 comment-only grep matches excluded                                             |
 | Hidden raw-SQL helper fan-out                                                  |     7 | Additional `executeQuery` / `executeCommand` / `executeTransaction` uses under `lib/self-evolving-prompts/` |
@@ -75,28 +75,30 @@ These 50 schema models / tables have first-class `tenantId`, are covered by `ten
 49. `MonitoringConfig` -> `MonitoringConfig`
 50. `LocationGroup` -> `LocationGroup`
 
-## Uncovered Tenant-Bearing Models
+## Phase 2.6-B Coverage Update
 
-These 16 models have first-class `tenantId` in Prisma, but are still outside both the base RLS manifest and bypass-policy parity:
+Phase 2.6-B adds both `tenant_isolation` and `tenant_bypass` coverage for the 16 previously-uncovered first-class tenant-bearing tables. No production DB changes were made in this batch; the migration is staged in-repo only.
+
+These are now covered by `20260504164459_rls_cover_remaining_tenant_tables`:
 
 | Model                    | Table                    | Risk   | Notes                                                                                    |
 | ------------------------ | ------------------------ | ------ | ---------------------------------------------------------------------------------------- |
 | `CheckoutAttempt`        | `checkout_attempts`      | medium | Billing route-context followup from Phase 2.5 remains open                               |
 | `AuditTrailEvent`        | `AuditTrailEvent`        | high   | Raw SQL writer/reader in `lib/observability/auditTrail.ts`; optional `tenantId`          |
 | `CircuitBreakerState`    | `CircuitBreakerState`    | medium | Pipeline runtime table added after base RLS migration                                    |
-| `DeadLetterQueue`        | `DeadLetterQueue`        | high   | Cross-tenant maintenance driver exists; app-user rollout needs explicit policy story     |
-| `ClientDashboard`        | `ClientDashboard`        | medium | Tenant-bearing, no RLS yet                                                               |
-| `UpsellOpportunity`      | `UpsellOpportunity`      | medium | Tenant-bearing, no RLS yet                                                               |
-| `NotificationPreference` | `NotificationPreference` | medium | Tenant-bearing, no RLS yet                                                               |
-| `ScheduledAuditRun`      | `ScheduledAuditRun`      | medium | Tenant-bearing, no RLS yet                                                               |
-| `CompetitorSignal`       | `CompetitorSignal`       | medium | Tenant-bearing, no RLS yet                                                               |
-| `ReEngagementCampaign`   | `ReEngagementCampaign`   | medium | Tenant-bearing, no RLS yet                                                               |
-| `WinBackCampaign`        | `WinBackCampaign`        | medium | Tenant-bearing, no RLS yet                                                               |
-| `PromptVersion`          | `PromptVersion`          | medium | Nullable `tenantId`; shared/system prompt versions need optional-tenant policy semantics |
-| `PromptPerformanceLog`   | `PromptPerformanceLog`   | high   | Raw SQL / self-evolving prompt access path depends on it                                 |
-| `ABExperiment`           | `ABExperiment`           | high   | Tenant-bearing experiment table; raw-SQL writes already exist                            |
-| `Prediction`             | `Prediction`             | medium | Tenant-bearing ML data, still outside manifest                                           |
-| `Scenario`               | `Scenario`               | medium | Tenant-bearing ML scenario table, still outside manifest                                 |
+| `DeadLetterQueue`        | `DeadLetterQueue`        | high   | Cross-tenant maintenance driver exists; app-user rollout still needs raw-query hardening |
+| `ClientDashboard`        | `ClientDashboard`        | medium | First-class tenant-bearing coverage added in 2.6-B                                       |
+| `UpsellOpportunity`      | `UpsellOpportunity`      | medium | First-class tenant-bearing coverage added in 2.6-B                                       |
+| `NotificationPreference` | `NotificationPreference` | medium | First-class tenant-bearing coverage added in 2.6-B                                       |
+| `ScheduledAuditRun`      | `ScheduledAuditRun`      | medium | First-class tenant-bearing coverage added in 2.6-B                                       |
+| `CompetitorSignal`       | `CompetitorSignal`       | medium | First-class tenant-bearing coverage added in 2.6-B                                       |
+| `ReEngagementCampaign`   | `ReEngagementCampaign`   | medium | First-class tenant-bearing coverage added in 2.6-B                                       |
+| `WinBackCampaign`        | `WinBackCampaign`        | medium | First-class tenant-bearing coverage added in 2.6-B                                       |
+| `PromptVersion`          | `PromptVersion`          | medium | Nullable `tenantId`; optional-tenant policy semantics preserved                          |
+| `PromptPerformanceLog`   | `PromptPerformanceLog`   | high   | Table is now covered, but raw-SQL access paths still need hardening                      |
+| `ABExperiment`           | `ABExperiment`           | high   | Table is now covered, but raw-SQL writes still need hardening                            |
+| `Prediction`             | `Prediction`             | medium | First-class tenant-bearing coverage added in 2.6-B                                       |
+| `Scenario`               | `Scenario`               | medium | First-class tenant-bearing coverage added in 2.6-B                                       |
 
 ## Indirect Tenant-Scoped Candidates
 
@@ -152,9 +154,9 @@ Notes:
 
 ## Bypass Parity
 
-- `tenant_bypass` coverage is currently **50 / 50** for the tables already covered by `tenant_isolation`.
+- `tenant_bypass` coverage is currently **66 / 66** for the first-class tenant-bearing tables covered by `tenant_isolation`.
 - There are **0** tables covered by `tenant_isolation` but missing `tenant_bypass`.
-- The same **16 uncovered tenant-bearing models** listed above are also the exact set missing bypass parity.
+- First-class tenant-bearing bypass parity is now closed; the remaining RLS design surface is the indirect tenant-scoped candidate set.
 
 ## Raw SQL Inventory
 
@@ -162,17 +164,17 @@ Notes:
 
 Direct grep inventory (`$queryRaw`, `$queryRawUnsafe`, `$executeRaw`, `$executeRawUnsafe`) found **21 executable callsites across 9 production files**:
 
-| File                                                      | Executable raw callsites | Classification                            | Risk   | Notes                                                                                                                                                         |
-| --------------------------------------------------------- | -----------------------: | ----------------------------------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `lib/prisma.ts`                                           |                        4 | tenant-local internal shim support        | low    | Internal `set_config(...)` calls inside the repaired runtime shim; intentionally not a Phase 2.6 hardening target                                             |
-| `lib/stripe/webhookRetryService.ts`                       |                        3 | unsafe under `app_user + RLS`             | high   | Cross-tenant/system webhook retry flow uses raw reads/writes with no bypass hook and no tenant-scoped runtime context                                         |
-| `lib/observability/auditTrail.ts`                         |                        2 | unsafe under `app_user + RLS`             | high   | Raw read/write on uncovered `AuditTrailEvent`; current helper can run without scoped raw-query protections                                                    |
-| `app/api/tenants/[tenantId]/delete-data/route.ts`         |                        4 | unsafe under `app_user + RLS`             | high   | Three tenant-local deletes target models that do not expose `tenantId` in Prisma schema today; one audit-trail status query reads uncovered `AuditTrailEvent` |
-| `app/api/health/route.ts`                                 |                        1 | tenant-agnostic/system query              | low    | `SELECT 1` itself is harmless, though the route’s non-raw Prisma counts still need app-user verification                                                      |
-| `app/api/cron/prompt-promotion/route.ts`                  |                        1 | unknown / manual review                   | medium | Cross-tenant/system analytics query over raw prompt-performance storage; currently outside the shim’s raw-query protection                                    |
-| `lib/self-evolving-prompts/data-access/ab-experiments.ts` |                        2 | unsafe under `app_user + RLS`             | high   | Direct raw writes to experiment / variant storage; `ABExperiment` is uncovered and `ABVariant` is an indirect candidate                                       |
-| `lib/self-evolving-prompts/db.ts`                         |                        3 | unsafe abstraction under `app_user + RLS` | high   | Standalone `PrismaClient` plus generic raw query/command wrappers bypass the shared shim entirely                                                             |
-| `lib/outreach/sprint2/sniperWorker.ts`                    |                        1 | tenant-agnostic/system query              | low    | Global `EmailBlocklist` check appears intentionally system-wide                                                                                               |
+| File                                                      | Executable raw callsites | Classification                            | Risk   | Notes                                                                                                                                                |
+| --------------------------------------------------------- | -----------------------: | ----------------------------------------- | ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `lib/prisma.ts`                                           |                        4 | tenant-local internal shim support        | low    | Internal `set_config(...)` calls inside the repaired runtime shim; intentionally not a Phase 2.6 hardening target                                    |
+| `lib/stripe/webhookRetryService.ts`                       |                        3 | unsafe under `app_user + RLS`             | high   | Cross-tenant/system webhook retry flow uses raw reads/writes with no bypass hook and no tenant-scoped runtime context                                |
+| `lib/observability/auditTrail.ts`                         |                        2 | unsafe under `app_user + RLS`             | high   | Raw read/write on `AuditTrailEvent`; table coverage is added in 2.6-B, but the helper still runs outside scoped raw-query protections                |
+| `app/api/tenants/[tenantId]/delete-data/route.ts`         |                        4 | unsafe under `app_user + RLS`             | high   | Three tenant-local deletes target models whose schema / raw-query contracts still need cleanup; one audit-trail status query reads `AuditTrailEvent` |
+| `app/api/health/route.ts`                                 |                        1 | tenant-agnostic/system query              | low    | `SELECT 1` itself is harmless, though the route’s non-raw Prisma counts still need app-user verification                                             |
+| `app/api/cron/prompt-promotion/route.ts`                  |                        1 | unknown / manual review                   | medium | Cross-tenant/system analytics query over raw prompt-performance storage; currently outside the shim’s raw-query protection                           |
+| `lib/self-evolving-prompts/data-access/ab-experiments.ts` |                        2 | unsafe under `app_user + RLS`             | high   | Direct raw writes to experiment / variant storage; `ABExperiment` is covered in 2.6-B but `ABVariant` remains an indirect candidate                  |
+| `lib/self-evolving-prompts/db.ts`                         |                        3 | unsafe abstraction under `app_user + RLS` | high   | Standalone `PrismaClient` plus generic raw query/command wrappers bypass the shared shim entirely                                                    |
+| `lib/outreach/sprint2/sniperWorker.ts`                    |                        1 | tenant-agnostic/system query              | low    | Global `EmailBlocklist` check appears intentionally system-wide                                                                                      |
 
 Comment-only grep matches excluded from the executable count:
 
@@ -223,6 +225,12 @@ These items remain intentionally visible and should stay in scope for Phase 2.6 
 
 ### Phase 2.6-B
 
+Completed in this commit:
+
+- Added `tenant_isolation` and `tenant_bypass` coverage for all 16 previously-uncovered first-class tenant-bearing tables
+
+### Phase 2.6-C
+
 Schema / RLS coverage for orphan or indirectly tenant-scoped models:
 
 - `FindingStatus`
@@ -233,27 +241,6 @@ Schema / RLS coverage for orphan or indirectly tenant-scoped models:
 - `EmailSequence`
 - `ABVariant`
 - Evaluate `Account` / `Session` separately because auth-table semantics may need a different policy design
-
-### Phase 2.6-C
-
-Bypass-policy parity for any newly covered tenant tables, plus the existing uncovered first-class tenant-bearing models:
-
-- `CheckoutAttempt`
-- `AuditTrailEvent`
-- `CircuitBreakerState`
-- `DeadLetterQueue`
-- `ClientDashboard`
-- `UpsellOpportunity`
-- `NotificationPreference`
-- `ScheduledAuditRun`
-- `CompetitorSignal`
-- `ReEngagementCampaign`
-- `WinBackCampaign`
-- `PromptVersion`
-- `PromptPerformanceLog`
-- `ABExperiment`
-- `Prediction`
-- `Scenario`
 
 ### Phase 2.6-D
 
