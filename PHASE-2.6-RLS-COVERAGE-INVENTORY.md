@@ -282,3 +282,6 @@ Phase closure:
 
 - The current base RLS migration header still says `target 50/67 multi-tenant models`, but the current Prisma schema parses to **66** first-class tenant-bearing models. The stale `67` appears to be an older working count rather than the current schema truth.
 - That same header includes `Metric` in the “known remaining gaps” comment even though `Metric` does not expose first-class `tenantId` in Prisma today. Treat that as documentation drift, not as evidence that `Metric` is already a ready-to-policy table.
+- Phase 2.6-C follow-on design is captured in `PHASE-2.6-C-SCHEMA-GAP-PLAN.md`. It classifies the remaining 9 indirect tenant-scoped candidates into:
+  - direct `tenantId` + deterministic backfill (`FindingStatus`, `ClientMessage`, `ReviewSnapshot`, `ConversationState`, `ObjectionLog`, `EmailSequence`, `ABVariant`)
+  - parent-join RLS only (`Account`, `Session`)
