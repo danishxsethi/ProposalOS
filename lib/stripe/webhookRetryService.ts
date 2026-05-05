@@ -2,7 +2,7 @@ import Stripe from 'stripe';
 
 import { prisma } from '@/lib/prisma';
 import { stripe } from '@/lib/stripe/stripe';
-import { startGracePeriod } from '@/lib/tenant/gracePeriodService';
+import { runWithTenantBypass } from '@/lib/tenant/context';
 
 interface FailedWebhookEvent {
   id: string;
@@ -19,20 +19,42 @@ interface FailedWebhookEvent {
   updatedAt: Date;
 }
 
+type StripeSubscriptionWithPeriods = Stripe.Subscription & {
+  current_period_start: number;
+  current_period_end: number;
+};
+
 export class WebhookRetryService {
   private static readonly MAX_ATTEMPTS = 5;
   private static readonly RETRY_DELAY_MS = 1000; // 1 second between retries
+
+  private static async withGlobalRetryBypass<T>(
+    reason:
+      | 'stripe-webhook-retry:global-failed-webhook-scan'
+      | 'stripe-webhook-retry:replay-failed-event'
+      | 'stripe-webhook-retry:global-stats'
+      | 'stripe-webhook-retry:cleanup-resolved-events',
+    fn: () => Promise<T>
+  ): Promise<T> {
+    return runWithTenantBypass(reason, fn);
+  }
 
   /**
    * Retry failed webhooks with exponential backoff
    */
   static async retryFailedWebhooks(): Promise<{ processed: number; errors: number }> {
-    const failedEvents = await prisma.$queryRaw<Array<any>>`
-      SELECT * FROM failed_webhook_events 
-      WHERE resolved = false AND attempts < ${this.MAX_ATTEMPTS}
-      ORDER BY created_at ASC
-      LIMIT 100
-    `;
+    const failedEvents = await this.withGlobalRetryBypass(
+      'stripe-webhook-retry:global-failed-webhook-scan',
+      () =>
+        prisma.failedWebhookEvent.findMany({
+          where: {
+            resolved: false,
+            attempts: { lt: this.MAX_ATTEMPTS },
+          },
+          orderBy: { createdAt: 'asc' },
+          take: 100,
+        })
+    );
 
     let processed = 0;
     let errors = 0;
@@ -57,44 +79,56 @@ export class WebhookRetryService {
    * Retry a single failed webhook event
    */
   private static async retrySingleWebhook(event: FailedWebhookEvent): Promise<void> {
-    try {
-      // Reconstruct the event from the stored payload
-      const reconstructedEvent: Stripe.Event = {
-        id: event.eventId,
-        object: 'event',
-        type: event.eventType,
-        created: Math.floor(new Date().getTime() / 1000),
-        livemode: false, // Will be determined by Stripe key
-        pending_webhooks: 0,
-        request: null,
-        data: {
-          object: event.payload.data?.object || {},
-          previous_attributes: event.payload.data?.previous_attributes || null,
-        },
-        ...event.payload,
-      };
+    await this.withGlobalRetryBypass('stripe-webhook-retry:replay-failed-event', async () => {
+      try {
+        // Reconstruct the event from the stored payload
+        const reconstructedEvent: Stripe.Event = {
+          id: event.eventId,
+          object: 'event',
+          type: event.eventType,
+          created: Math.floor(new Date().getTime() / 1000),
+          livemode: false, // Will be determined by Stripe key
+          pending_webhooks: 0,
+          request: null,
+          data: {
+            object: event.payload.data?.object || {},
+            previous_attributes: event.payload.data?.previous_attributes || null,
+          },
+          ...event.payload,
+        };
 
-      // Process the event using the main webhook logic
-      await this.processWebhookEvent(reconstructedEvent);
+        // Process the event using the main webhook logic
+        await this.processWebhookEvent(reconstructedEvent);
 
-      // Mark as resolved if successful
-      await prisma.$executeRaw`
-        UPDATE failed_webhook_events 
-        SET resolved = true, resolved_at = NOW(), attempts = ${event.attempts + 1}, last_attempt = NOW()
-        WHERE id = ${event.id}
-      `;
-    } catch (error) {
-      // Increment attempt count and update last attempt time
-      await prisma.$executeRaw`
-        UPDATE failed_webhook_events 
-        SET attempts = ${event.attempts + 1}, last_attempt = NOW(), 
-            error_message = ${error instanceof Error ? error.message : 'Unknown error'},
-            error_stack = ${error instanceof Error ? error.stack : null}
-        WHERE id = ${event.id}
-      `;
+        const resolvedAt = new Date();
 
-      throw error;
-    }
+        // Mark as resolved if successful
+        await prisma.failedWebhookEvent.update({
+          where: { id: event.id },
+          data: {
+            resolved: true,
+            resolvedAt,
+            attempts: event.attempts + 1,
+            lastAttempt: resolvedAt,
+          },
+        });
+      } catch (error) {
+        const lastAttempt = new Date();
+
+        // Increment attempt count and update last attempt time
+        await prisma.failedWebhookEvent.update({
+          where: { id: event.id },
+          data: {
+            attempts: event.attempts + 1,
+            lastAttempt,
+            errorMessage: error instanceof Error ? error.message : 'Unknown error',
+            errorStack: error instanceof Error ? (error.stack ?? null) : null,
+          },
+        });
+
+        throw error;
+      }
+    });
   }
 
   /**
@@ -161,7 +195,9 @@ export class WebhookRetryService {
           const customerId = typeof session.customer === 'string' ? session.customer : null;
           if (!tenantId || !subscriptionId) return;
 
-          const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+          const subscription = (await stripe.subscriptions.retrieve(
+            subscriptionId
+          )) as unknown as StripeSubscriptionWithPeriods;
 
           // Update subscription records
           const priceId = subscription.items?.data[0]?.price?.id ?? '';
@@ -204,7 +240,7 @@ export class WebhookRetryService {
       }
 
       case 'customer.subscription.updated': {
-        const subscription = event.data.object as Stripe.Subscription;
+        const subscription = event.data.object as StripeSubscriptionWithPeriods;
         await prisma.$transaction(async (tx: any) => {
           await tx.processedWebhookEvent.create({
             data: { id: event.id, type: event.type },
@@ -256,7 +292,7 @@ export class WebhookRetryService {
       }
 
       case 'customer.subscription.deleted': {
-        const subscription = event.data.object as Stripe.Subscription;
+        const subscription = event.data.object as StripeSubscriptionWithPeriods;
         await prisma.$transaction(async (tx: any) => {
           await tx.processedWebhookEvent.create({
             data: { id: event.id, type: event.type },
@@ -385,11 +421,13 @@ export class WebhookRetryService {
     }
 
     if (triggerDelivery) {
+      const deliveryTarget = triggerDelivery as { proposalId: string; tenantId: string } | null;
+
       try {
         const deliveryGraph = await import('@/lib/graph/delivery-graph');
         const runFn = (deliveryGraph as any).runDeliveryAgent;
         if (typeof runFn === 'function') {
-          await runFn(triggerDelivery.proposalId, triggerDelivery.tenantId);
+          await runFn(deliveryTarget!.proposalId, deliveryTarget!.tenantId);
         }
       } catch (error) {
         console.error('Failed to trigger delivery graph on checkout', error);
@@ -406,17 +444,21 @@ export class WebhookRetryService {
     unresolved: number;
     maxAttemptsReached: number;
   }> {
-    const [total, resolved, unresolved, maxAttempts] = await Promise.all([
-      prisma.failedWebhookEvent.count(),
-      prisma.failedWebhookEvent.count({ where: { resolved: true } }),
-      prisma.failedWebhookEvent.count({ where: { resolved: false } }),
-      prisma.failedWebhookEvent.count({
-        where: {
-          resolved: false,
-          attempts: { gte: this.MAX_ATTEMPTS },
-        },
-      }),
-    ]);
+    const [total, resolved, unresolved, maxAttempts] = await this.withGlobalRetryBypass(
+      'stripe-webhook-retry:global-stats',
+      () =>
+        Promise.all([
+          prisma.failedWebhookEvent.count(),
+          prisma.failedWebhookEvent.count({ where: { resolved: true } }),
+          prisma.failedWebhookEvent.count({ where: { resolved: false } }),
+          prisma.failedWebhookEvent.count({
+            where: {
+              resolved: false,
+              attempts: { gte: this.MAX_ATTEMPTS },
+            },
+          }),
+        ])
+    );
 
     return {
       totalFailed: total,
@@ -433,12 +475,16 @@ export class WebhookRetryService {
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-    const result = await prisma.failedWebhookEvent.deleteMany({
-      where: {
-        resolved: true,
-        resolvedAt: { lte: thirtyDaysAgo },
-      },
-    });
+    const result = await this.withGlobalRetryBypass(
+      'stripe-webhook-retry:cleanup-resolved-events',
+      () =>
+        prisma.failedWebhookEvent.deleteMany({
+          where: {
+            resolved: true,
+            resolvedAt: { lte: thirtyDaysAgo },
+          },
+        })
+    );
 
     return result.count;
   }

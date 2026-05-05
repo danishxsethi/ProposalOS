@@ -136,13 +136,19 @@ async function handleDataDeletion(
     deletionStats.proposalOutreachDeleted = proposalOutreachResult.count;
 
     // Delete client messages
-    await prisma.$executeRawUnsafe('DELETE FROM "ClientMessage" WHERE "tenantId" = $1', tenantId);
+    await prisma.clientMessage.deleteMany({
+      where: { tenantId },
+    });
 
     // Delete finding status
-    await prisma.$executeRawUnsafe('DELETE FROM "FindingStatus" WHERE "tenantId" = $1', tenantId);
+    await prisma.findingStatus.deleteMany({
+      where: { tenantId },
+    });
 
     // Delete review snapshots
-    await prisma.$executeRawUnsafe('DELETE FROM "ReviewSnapshot" WHERE "tenantId" = $1', tenantId);
+    await prisma.reviewSnapshot.deleteMany({
+      where: { tenantId },
+    });
 
     // Delete evidence snapshots
     const evidenceResult = await prisma.evidenceSnapshot.deleteMany({
@@ -275,32 +281,28 @@ async function getDeletionStatus(
   const { tenantId } = params.params;
 
   try {
-    // Check for recent deletion events using raw query
-    // (AuditTrailEvent model may not be exposed in Prisma Client)
-    const deletionEvents = await prisma.$queryRawUnsafe<
-      Array<{
-        event_type: string;
-        occurred_at: Date;
-        payload: unknown;
-      }>
-    >(
-      `
-      SELECT "eventType" as event_type, "occurredAt" as occurred_at, "payload"
-      FROM "AuditTrailEvent"
-      WHERE "tenantId" = $1
-        AND "eventType" IN ('data.deletion_requested', 'data.deletion_completed', 'data.deletion_failed')
-      ORDER BY "occurredAt" DESC
-      LIMIT 10
-      `,
-      tenantId
-    );
+    const deletionEvents = await prisma.auditTrailEvent.findMany({
+      where: {
+        tenantId,
+        eventType: {
+          in: ['data.deletion_requested', 'data.deletion_completed', 'data.deletion_failed'],
+        },
+      },
+      orderBy: { occurredAt: 'desc' },
+      take: 10,
+      select: {
+        eventType: true,
+        occurredAt: true,
+        payload: true,
+      },
+    });
 
     return NextResponse.json({
       tenantId,
       hasDeletionHistory: deletionEvents.length > 0,
       recentEvents: deletionEvents.map((e) => ({
-        eventType: e.event_type,
-        occurredAt: e.occurred_at,
+        eventType: e.eventType,
+        occurredAt: e.occurredAt,
         payload: e.payload,
       })),
     });
@@ -333,7 +335,7 @@ const authHandler = async (
     // The route param is the authority for this destructive tenant-local workflow.
     return runWithTenantAsync(params.params.tenantId, () => handleDataDeletion(req, params));
   } else if (req.method === 'GET') {
-    return getDeletionStatus(req, params);
+    return runWithTenantAsync(params.params.tenantId, () => getDeletionStatus(req, params));
   }
 
   return NextResponse.json({ error: 'Method not allowed' }, { status: 405 });
