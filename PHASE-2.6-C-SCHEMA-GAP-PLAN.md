@@ -46,6 +46,45 @@ Still pending after Phase 2.6-E:
 
 No production DB changes were made in this phase; migration files were added in-repo only.
 
+## Phase 2.6-F Auth-Table Preflight Update
+
+Preflight result for the remaining auth tables:
+
+- `Account`: `UNSAFE_UNTIL_AUTH_ADAPTER_CONTEXT_PLAN`
+- `Session`: `UNSAFE_UNTIL_AUTH_ADAPTER_CONTEXT_PLAN`
+
+Why the parent-join policy was not implemented in 2.6-F:
+
+- `Account` and `Session` are owned by `PrismaAdapter(prisma)` in `lib/auth.ts`.
+- The adapter performs `Account` operations before tenant context exists:
+  - `getUserByAccount(...)` reads `Account` and joins `User`
+  - `linkAccount(...)` writes `Account`
+- Current auth bootstrapping does not wrap adapter operations in `runWithTenantAsync(...)` or a narrow auth-specific bypass wrapper.
+- Credentials auth also performs a pre-tenant `prisma.user.findUnique({ where: { email } })` inside `authorize(...)`, which confirms the auth stack still has pre-tenant database reads.
+- Although current config uses `session.strategy = 'jwt'`, the adapter still exposes `Session` methods (`getSessionAndUser`, `createSession`, `updateSession`, `deleteSession`), and there is no verified guarantee in this batch that all auth/session code paths remain free of pre-tenant `Session` access.
+- Local Postgres + PgBouncer verification is still unavailable (`localhost:5435` refused connection), so there is no safe way in this batch to validate login/session behavior under actual RLS enforcement.
+
+Recommended next step before adding `Account` / `Session` RLS:
+
+1. Introduce an auth-adapter context plan that explicitly classifies which adapter methods are:
+   - tenant-scoped after session/bootstrap, or
+   - intentionally pre-tenant and require a narrow audited bypass wrapper
+2. Add local auth smoke coverage for:
+   - credentials sign-in
+   - Google OAuth account lookup/link flow
+   - session retrieval / refresh behavior
+3. Re-run those flows against the local Postgres + PgBouncer stack under real RLS before enabling `Account` / `Session` policies.
+
+Resulting open items after 2.6-F:
+
+- direct `tenantId` + raw-SQL-paired batch:
+  - `ABVariant`
+- auth-table parent-policy batch pending adapter/context plan:
+  - `Account`
+  - `Session`
+
+No production DB changes were made in 2.6-F.
+
 ## Classification Table
 
 | Model               | Table               | Parent                             | Parent tenant-bearing status                                                             | Relation shape                                        | Classification                       | Why                                                                                                                 |

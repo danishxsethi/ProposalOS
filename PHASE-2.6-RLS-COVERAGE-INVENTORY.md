@@ -15,7 +15,7 @@
 | Tenant-bearing models uncovered by `tenant_isolation`                          |     0 | First-class tenant-bearing coverage is still closed                                                         |
 | Models with `tenant_bypass` policy                                             |    69 | Bypass parity matches all first-class tenant-bearing tables                                                 |
 | Tenant-bearing models missing `tenant_bypass`                                  |     0 | First-class tenant-bearing bypass parity is still closed                                                    |
-| Indirect tenant-scoped candidates (no `tenantId`, tenant implied by parent FK) |     3 | `ABVariant`, `Account`, and `Session` remain after the proposal-scoped trio closed in Phase 2.6-E           |
+| Indirect tenant-scoped candidates (no `tenantId`, tenant implied by parent FK) |     3 | `ABVariant`, `Account`, and `Session` remain; `Account`/`Session` are blocked on auth-safety preflight      |
 | Tenant-agnostic / shared-system tables                                         |    14 | Includes one mixed telemetry table (`Metric`) that likely needs design, not simple RLS                      |
 | Direct executable raw SQL callsites                                            |    21 | Across 9 production files; 2 comment-only grep matches excluded                                             |
 | Hidden raw-SQL helper fan-out                                                  |     7 | Additional `executeQuery` / `executeCommand` / `executeTransaction` uses under `lib/self-evolving-prompts/` |
@@ -117,6 +117,19 @@ The previously noted candidate gap set is confirmed by the current schema:
 - `ABVariant`
 - `Account`
 - `Session`
+
+### Phase 2.6-F Auth-Table Safety Classification
+
+| Model     | Classification                           | Why no policy migration was applied in 2.6-F                                                                  |
+| --------- | ---------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `Account` | `UNSAFE_UNTIL_AUTH_ADAPTER_CONTEXT_PLAN` | `PrismaAdapter(prisma)` performs pre-tenant `getUserByAccount(...)` and `linkAccount(...)` operations today.  |
+| `Session` | `UNSAFE_UNTIL_AUTH_ADAPTER_CONTEXT_PLAN` | JWT sessions reduce current use, but adapter-owned session methods remain unwrapped and unverified under RLS. |
+
+Recommended follow-up before enabling parent-join RLS for either table:
+
+- wrap auth-adapter pre-tenant reads/writes in a narrowly-audited auth bootstrap strategy
+- verify credentials sign-in, OAuth account linking, and session retrieval against local Postgres + PgBouncer under RLS
+- only then add `Account` / `Session` `tenant_isolation` + `tenant_bypass` policies
 
 ## Tenant-Agnostic / Shared-System Tables
 
@@ -284,4 +297,10 @@ Phase closure:
   - complete: `ConversationState`, `ObjectionLog`, `EmailSequence`
   - remaining direct-column candidate: `ABVariant`
   - remaining parent-policy candidates: `Account`, `Session`
+  - raw SQL hardening and local `app_user + RLS` verification remain open
+- Phase 2.6-F preflighted the auth tables and intentionally did not create a migration:
+  - `Account`: blocked on auth-adapter pre-tenant lookup/link flows
+  - `Session`: blocked on unverified adapter/session behavior under RLS despite JWT strategy
+  - remaining direct-column candidate: `ABVariant`
+  - remaining auth-table candidates: `Account`, `Session`
   - raw SQL hardening and local `app_user + RLS` verification remain open
