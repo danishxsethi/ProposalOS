@@ -20,6 +20,27 @@ The indirect tenant-scoped candidate set reconciles to exactly 9 tables:
 8. `EmailSequence`
 9. `ABVariant`
 
+## Phase 2.6-D Status Update
+
+Implemented in Phase 2.6-D:
+
+- `FindingStatus`
+- `ClientMessage`
+- `ReviewSnapshot`
+
+Still pending after Phase 2.6-D:
+
+- direct `tenantId` + backfill:
+  - `ConversationState`
+  - `ObjectionLog`
+  - `EmailSequence`
+  - `ABVariant`
+- parent-join RLS:
+  - `Account`
+  - `Session`
+
+No production DB changes were made in this phase; migration files were added in-repo only.
+
 ## Classification Table
 
 | Model               | Table               | Parent                             | Parent tenant-bearing status                                                             | Relation shape                                        | Classification                       | Why                                                                                                                 |
@@ -68,6 +89,10 @@ Reason to do these first:
 - all three backfill from `Audit`
 - delete-data route already assumes a direct `tenantId`
 - portal/export/reporting reads already naturally organize around audit ownership
+
+Status:
+
+- Completed in Phase 2.6-D
 
 ### Step 3: Direct-tenant schema migration for proposal-scoped tables
 
