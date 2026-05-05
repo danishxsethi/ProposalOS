@@ -4,6 +4,9 @@ import { randomUUID } from 'crypto';
 import { logger } from '@/lib/logger';
 import { getObservabilityContext } from '@/lib/observability/context';
 import { prisma } from '@/lib/prisma';
+import { runWithTenantAsync, runWithTenantBypass } from '@/lib/tenant/context';
+
+import type { Prisma } from '@prisma/client';
 
 export type AuditTrailEventType =
   | 'audit.requested'
@@ -47,7 +50,10 @@ function getEncryptionKey(): Buffer | null {
   return crypto.createHash('sha256').update(rawKey).digest();
 }
 
-function protectTargetUrl(targetUrl?: string | null): { encrypted: string | null; hash: string | null } {
+function protectTargetUrl(targetUrl?: string | null): {
+  encrypted: string | null;
+  hash: string | null;
+} {
   if (!targetUrl) return { encrypted: null, hash: null };
 
   const hash = hashValue(targetUrl);
@@ -67,109 +73,84 @@ function protectTargetUrl(targetUrl?: string | null): { encrypted: string | null
   };
 }
 
-async function getPreviousHash(auditId?: string, proposalId?: string): Promise<string | null> {
-  const rows = await prisma.$queryRawUnsafe<Array<{ eventHash: string | null }>>(
-    `
-      SELECT "eventHash"
-      FROM "AuditTrailEvent"
-      WHERE ($1::text IS NULL OR "auditId" = $1::text)
-        AND ($2::text IS NULL OR "proposalId" = $2::text)
-      ORDER BY "occurredAt" DESC
-      LIMIT 1
-    `,
-    auditId ?? null,
-    proposalId ?? null
-  );
+async function withAuditTrailScope<T>(tenantId: string | null, fn: () => Promise<T>): Promise<T> {
+  if (tenantId) {
+    return runWithTenantAsync(tenantId, fn);
+  }
 
-  return rows[0]?.eventHash ?? null;
+  return runWithTenantBypass('audit-trail:system-event-read-write', fn);
+}
+
+async function getPreviousHash(
+  tenantId: string | null,
+  auditId?: string,
+  proposalId?: string
+): Promise<string | null> {
+  const previousEvent = await prisma.auditTrailEvent.findFirst({
+    where: {
+      ...(tenantId ? { tenantId } : {}),
+      ...(auditId ? { auditId } : {}),
+      ...(proposalId ? { proposalId } : {}),
+    },
+    orderBy: { occurredAt: 'desc' },
+    select: { eventHash: true },
+  });
+
+  return previousEvent?.eventHash ?? null;
 }
 
 export async function recordAuditTrailEvent(input: AuditTrailEventInput): Promise<void> {
   const context = getObservabilityContext();
   const occurredAt = new Date();
   const protectedUrl = protectTargetUrl(input.targetUrl);
+  const effectiveTenantId = input.tenantId ?? context?.tenantId ?? null;
 
   try {
-    const previousHash = await getPreviousHash(input.auditId, input.proposalId);
-    const eventHash = hashValue(
-      JSON.stringify({
-        eventType: input.eventType,
-        occurredAt: occurredAt.toISOString(),
-        correlationId: context?.correlationId,
-        traceId: context?.traceId,
-        tenantId: input.tenantId ?? context?.tenantId,
-        auditId: input.auditId,
-        proposalId: input.proposalId,
-        previousHash,
-        payload: input.payload ?? {},
-        targetUrlHash: protectedUrl.hash,
-      })
-    );
+    await withAuditTrailScope(effectiveTenantId, async () => {
+      const previousHash = await getPreviousHash(
+        effectiveTenantId,
+        input.auditId,
+        input.proposalId
+      );
+      const eventHash = hashValue(
+        JSON.stringify({
+          eventType: input.eventType,
+          occurredAt: occurredAt.toISOString(),
+          correlationId: context?.correlationId,
+          traceId: context?.traceId,
+          tenantId: effectiveTenantId,
+          auditId: input.auditId,
+          proposalId: input.proposalId,
+          previousHash,
+          payload: input.payload ?? {},
+          targetUrlHash: protectedUrl.hash,
+        })
+      );
 
-    await prisma.$executeRawUnsafe(
-      `
-        INSERT INTO "AuditTrailEvent" (
-          "id",
-          "eventType",
-          "occurredAt",
-          "tenantId",
-          "auditId",
-          "proposalId",
-          "actorId",
-          "triggerSource",
-          "correlationId",
-          "traceId",
-          "targetUrlEncrypted",
-          "targetUrlHash",
-          "modulesRun",
-          "findingsCount",
-          "proposalGenerated",
-          "proposalDelivered",
-          "payload",
-          "previousHash",
-          "eventHash"
-        ) VALUES (
-          $1::text,
-          $2::text,
-          $3::timestamp,
-          $4::text,
-          $5::text,
-          $6::text,
-          $7::text,
-          $8::text,
-          $9::text,
-          $10::text,
-          $11::text,
-          $12::text,
-          $13::jsonb,
-          $14::integer,
-          $15::boolean,
-          $16::boolean,
-          $17::jsonb,
-          $18::text,
-          $19::text
-        )
-      `,
-      randomUUID(),
-      input.eventType,
-      occurredAt,
-      input.tenantId ?? context?.tenantId ?? null,
-      input.auditId ?? null,
-      input.proposalId ?? null,
-      input.actorId ?? context?.actorId ?? null,
-      input.triggerSource ?? context?.workflow ?? 'system',
-      context?.correlationId ?? null,
-      context?.traceId ?? null,
-      protectedUrl.encrypted,
-      protectedUrl.hash,
-      JSON.stringify(input.modulesRun ?? []),
-      input.findingsCount ?? null,
-      input.proposalGenerated ?? false,
-      input.proposalDelivered ?? false,
-      JSON.stringify(input.payload ?? {}),
-      previousHash,
-      eventHash
-    );
+      await prisma.auditTrailEvent.create({
+        data: {
+          id: randomUUID(),
+          eventType: input.eventType,
+          occurredAt,
+          tenantId: effectiveTenantId,
+          auditId: input.auditId ?? null,
+          proposalId: input.proposalId ?? null,
+          actorId: input.actorId ?? context?.actorId ?? null,
+          triggerSource: input.triggerSource ?? context?.workflow ?? 'system',
+          correlationId: context?.correlationId ?? null,
+          traceId: context?.traceId ?? null,
+          targetUrlEncrypted: protectedUrl.encrypted,
+          targetUrlHash: protectedUrl.hash,
+          modulesRun: input.modulesRun ?? [],
+          findingsCount: input.findingsCount ?? null,
+          proposalGenerated: input.proposalGenerated ?? false,
+          proposalDelivered: input.proposalDelivered ?? false,
+          payload: (input.payload ?? {}) as Prisma.InputJsonValue,
+          previousHash,
+          eventHash,
+        },
+      });
+    });
   } catch (error) {
     logger.warn(
       {
@@ -177,6 +158,7 @@ export async function recordAuditTrailEvent(input: AuditTrailEventInput): Promis
         eventType: input.eventType,
         auditId: input.auditId,
         proposalId: input.proposalId,
+        tenantId: effectiveTenantId,
         error: error instanceof Error ? error.message : String(error),
       },
       'Failed to write audit trail event'

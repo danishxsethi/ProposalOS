@@ -211,6 +211,50 @@ The highest-risk 2.6 raw-SQL items are:
 4. `lib/self-evolving-prompts/db.ts` and its downstream consumers
 5. `lib/self-evolving-prompts/data-access/ab-experiments.ts`
 
+## Phase 2.6-H Raw SQL Hardening Update
+
+Phase 2.6-H hardens the first highest-risk production batch without changing production DB state. The scoped files now have **0 remaining raw SQL callsites**.
+
+| File                                              | Before | After | Classification after 2.6-H                   | What changed                                                                                                  | Residual risk / deferred item                                                                                  |
+| ------------------------------------------------- | -----: | ----: | -------------------------------------------- | ------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `app/api/tenants/[tenantId]/delete-data/route.ts` |      4 |     0 | tenant-local destructive route               | Replaced three unsafe tenant-local deletes and one audit-status raw read with Prisma model operations         | Route still needs local `app_user + RLS` verification once `localhost:5435` is available                       |
+| `lib/observability/auditTrail.ts`                 |      2 |     0 | mixed tenant-local + system audit event path | Replaced unsafe raw read/write with scoped Prisma model operations; tenant-local events use tenant context    | System audit events now use narrow per-call bypass until broader local `app_user + RLS` verification runs      |
+| `lib/stripe/webhookRetryService.ts`               |      3 |     0 | cross-tenant/system retry queue              | Replaced raw queue scan/update SQL with Prisma model operations and isolated named bypasses for global replay | Retry flow remains intentionally bypassed because tenant context is unavailable during global webhook recovery |
+
+### 2.6-H Scoped File Notes
+
+- `app/api/tenants/[tenantId]/delete-data/route.ts`
+  - Removed all remaining `$executeRawUnsafe` / `$queryRawUnsafe` usage.
+  - Added explicit tenant-scoped model deletes for `ClientMessage`, `FindingStatus`, and `ReviewSnapshot`.
+  - Moved deletion-history reads onto `AuditTrailEvent` Prisma reads and wrapped the `GET` path in `runWithTenantAsync(tenantId, ...)` so the route param remains the tenant authority.
+- `lib/observability/auditTrail.ts`
+  - Removed all remaining raw SQL.
+  - `tenantId`-backed audit events now stay tenant-local via `runWithTenantAsync`.
+  - System-level audit events with no tenant context use a narrow `runWithTenantBypass('audit-trail:system-event-read-write', ...)` wrapper so best-effort logging semantics stay intact.
+  - Previous-hash lookup now also includes tenant scoping whenever a tenant is available.
+- `lib/stripe/webhookRetryService.ts`
+  - Removed all remaining raw SQL.
+  - Global retry queue scan, replay, stats, and cleanup now use explicit named bypasses:
+    - `stripe-webhook-retry:global-failed-webhook-scan`
+    - `stripe-webhook-retry:replay-failed-event`
+    - `stripe-webhook-retry:global-stats`
+    - `stripe-webhook-retry:cleanup-resolved-events`
+  - This keeps the cross-tenant/system recovery behavior unchanged while making the bypass reason visible and auditable.
+
+### 2.6-H Outcome
+
+- Unsafe raw SQL removed in scoped files: **9 / 9**
+- Unsafe raw SQL retained in scoped files: **0**
+- New production DB changes made: **none**
+- Broader raw-SQL hardening still open for:
+  - `lib/self-evolving-prompts/db.ts`
+  - `lib/self-evolving-prompts/data-access/ab-experiments.ts`
+  - `app/api/cron/prompt-promotion/route.ts`
+  - `app/api/health/route.ts`
+  - `lib/outreach/sprint2/sniperWorker.ts`
+- `Account` / `Session` remain intentionally blocked pending auth-adapter context planning and local auth/RLS smoke.
+- Local `app_user + RLS` verification remains required before Phase 2.6 closure.
+
 ## Preserved Phase 2.5 Followups Carried Forward
 
 These items remain intentionally visible and should stay in scope for Phase 2.6 verification / fixes:
