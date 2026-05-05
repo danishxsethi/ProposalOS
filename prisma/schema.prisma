@@ -398,6 +398,9 @@ model Tenant {
   partnerDeliveredLeads        PartnerDeliveredLead[]
   proposalAcceptances          ProposalAcceptance[]
   proposalViews                ProposalView[]
+  conversationStates           ConversationState[]
+  objectionLogs                ObjectionLog[]
+  emailSequences               EmailSequence[]
 
   // Prompt Management Relations
   promptVersions        PromptVersion[]
@@ -1558,6 +1561,7 @@ model FeatureFlag {
 model ConversationState {
   id               String   @id @default(uuid())
   proposalId       String   @unique
+  tenantId         String
   sessionId        String // Generic prospect session identifier
   history          Json     @default("[]") // Array of { role: 'user'|'agent', text: string, timestamp: string }
   objectionsRaised String[] @default([])
@@ -1569,14 +1573,17 @@ model ConversationState {
   updatedAt        DateTime @updatedAt
 
   proposal Proposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+  tenant   Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([proposalId])
   @@index([sessionId])
+  @@index([tenantId])
 }
 
 model ObjectionLog {
   id            String   @id @default(uuid())
   proposalId    String
+  tenantId      String
   category      String // 'price', 'timing', 'trust', 'scope', 'competition'
   prospectText  String   @db.Text
   agentResponse String   @db.Text
@@ -1584,9 +1591,11 @@ model ObjectionLog {
   createdAt     DateTime @default(now())
 
   proposal Proposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+  tenant   Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([proposalId])
   @@index([category])
+  @@index([tenantId])
 }
 
 // --- Sprint 9: Email Intelligence ---
@@ -1594,6 +1603,7 @@ model ObjectionLog {
 model EmailSequence {
   id         String   @id @default(uuid())
   proposalId String   @unique
+  tenantId   String
   industry   String?
   role       String?
   sizeScope  String?
@@ -1603,8 +1613,10 @@ model EmailSequence {
   updatedAt  DateTime @updatedAt
 
   proposal Proposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+  tenant   Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([proposalId])
+  @@index([tenantId])
 }
 
 // --- Sprint 10: Agentic Delivery + QA Hardening ---

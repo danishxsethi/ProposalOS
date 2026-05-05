@@ -9,6 +9,19 @@ export interface ChatMessage {
 }
 
 export class ConversationMemory {
+  private static async getProposalTenantId(proposalId: string) {
+    const proposal = await prisma.proposal.findUnique({
+      where: { id: proposalId },
+      select: { tenantId: true },
+    });
+
+    if (!proposal) {
+      throw new Error('Proposal not found.');
+    }
+
+    return proposal.tenantId;
+  }
+
   /**
    * Retrieves or initializes the chat session persistence logic for a Proposal.
    */
@@ -18,9 +31,11 @@ export class ConversationMemory {
     });
 
     if (!state) {
+      const tenantId = await this.getProposalTenantId(proposalId);
       state = await prisma.conversationState.create({
         data: {
           proposalId,
+          tenantId,
           sessionId: sessionId || 'anonymous',
           history: [],
           objectionsRaised: [],
@@ -62,9 +77,12 @@ export class ConversationMemory {
     agentResponse: string,
     escalated: boolean = false
   ) {
+    const tenantId = await this.getProposalTenantId(proposalId);
+
     await prisma.objectionLog.create({
       data: {
         proposalId,
+        tenantId,
         category,
         prospectText,
         agentResponse,
