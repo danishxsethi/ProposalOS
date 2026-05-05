@@ -119,6 +119,14 @@ Write like a sharp senior strategist — not like a generic AI mailer.`;
   });
 
   const emailsData = parseDelimitedEmails(response.text);
+  const proposal = await prisma.proposal.findUnique({
+    where: { id: proposalId },
+    select: { tenantId: true },
+  });
+
+  if (!proposal) {
+    throw new Error('Proposal not found.');
+  }
 
   // Upsert into DB against the Prisma EmailSequence model
   await prisma.emailSequence.upsert({
@@ -131,6 +139,7 @@ Write like a sharp senior strategist — not like a generic AI mailer.`;
     },
     create: {
       proposalId,
+      tenantId: proposal.tenantId,
       industry: meta.industry,
       role: meta.role,
       sizeScope: meta.sizeScope,

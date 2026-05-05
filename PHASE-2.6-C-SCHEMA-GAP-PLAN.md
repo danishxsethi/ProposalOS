@@ -28,12 +28,17 @@ Implemented in Phase 2.6-D:
 - `ClientMessage`
 - `ReviewSnapshot`
 
-Still pending after Phase 2.6-D:
+## Phase 2.6-E Status Update
+
+Implemented in Phase 2.6-E:
+
+- `ConversationState`
+- `ObjectionLog`
+- `EmailSequence`
+
+Still pending after Phase 2.6-E:
 
 - direct `tenantId` + backfill:
-  - `ConversationState`
-  - `ObjectionLog`
-  - `EmailSequence`
   - `ABVariant`
 - parent-join RLS:
   - `Account`

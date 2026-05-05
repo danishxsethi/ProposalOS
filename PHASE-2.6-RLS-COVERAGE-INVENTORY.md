@@ -10,12 +10,12 @@
 | Category                                                                       | Count | Notes                                                                                                       |
 | ------------------------------------------------------------------------------ | ----: | ----------------------------------------------------------------------------------------------------------- |
 | Prisma models total                                                            |    89 | Parsed from `prisma/schema.prisma`                                                                          |
-| Models with first-class `tenantId`                                             |    66 | Direct tenant-bearing schema models                                                                         |
-| Tenant-bearing models covered by `tenant_isolation`                            |    66 | `50` from Phase 2.1.5 plus `16` added in Phase 2.6-B                                                        |
-| Tenant-bearing models uncovered by `tenant_isolation`                          |     0 | First-class tenant-bearing coverage is now closed                                                           |
-| Models with `tenant_bypass` policy                                             |    66 | Bypass parity now matches all first-class tenant-bearing tables                                             |
-| Tenant-bearing models missing `tenant_bypass`                                  |     0 | First-class tenant-bearing bypass parity is now closed                                                      |
-| Indirect tenant-scoped candidates (no `tenantId`, tenant implied by parent FK) |     9 | Phase 2.6-C candidates                                                                                      |
+| Models with first-class `tenantId`                                             |    69 | Direct tenant-bearing schema models                                                                         |
+| Tenant-bearing models covered by `tenant_isolation`                            |    69 | `50` from Phase 2.1.5 plus `16` added in Phase 2.6-B plus `3` added in Phase 2.6-E                          |
+| Tenant-bearing models uncovered by `tenant_isolation`                          |     0 | First-class tenant-bearing coverage is still closed                                                         |
+| Models with `tenant_bypass` policy                                             |    69 | Bypass parity matches all first-class tenant-bearing tables                                                 |
+| Tenant-bearing models missing `tenant_bypass`                                  |     0 | First-class tenant-bearing bypass parity is still closed                                                    |
+| Indirect tenant-scoped candidates (no `tenantId`, tenant implied by parent FK) |     3 | `ABVariant`, `Account`, and `Session` remain after the proposal-scoped trio closed in Phase 2.6-E           |
 | Tenant-agnostic / shared-system tables                                         |    14 | Includes one mixed telemetry table (`Metric`) that likely needs design, not simple RLS                      |
 | Direct executable raw SQL callsites                                            |    21 | Across 9 production files; 2 comment-only grep matches excluded                                             |
 | Hidden raw-SQL helper fan-out                                                  |     7 | Additional `executeQuery` / `executeCommand` / `executeTransaction` uses under `lib/self-evolving-prompts/` |
@@ -102,31 +102,21 @@ These are now covered by `20260504164459_rls_cover_remaining_tenant_tables`:
 
 ## Indirect Tenant-Scoped Candidates
 
-These 9 models do not have first-class `tenantId` today, but tenant ownership is implied by a parent relation and they are likely candidates for Phase 2.6-B schema / RLS work:
+These 3 models still do not have first-class `tenantId`, but tenant ownership is implied by a parent relation and they remain the open indirect-schema candidates after Phase 2.6-E:
 
-| Model               | Parent relation                 | Why it is a candidate                                                   |
-| ------------------- | ------------------------------- | ----------------------------------------------------------------------- |
-| `Account`           | `User`                          | Auth account records are tenant-scoped via the owning user today        |
-| `Session`           | `User`                          | Auth sessions are tenant-scoped via the owning user today               |
-| `FindingStatus`     | `Audit`, `Finding`              | Client-portal status row should follow audit/finding tenant ownership   |
-| `ClientMessage`     | `Audit`                         | Client portal messages are audit-scoped and should not cross tenants    |
-| `ReviewSnapshot`    | `Audit`                         | Snapshot history is audit-scoped                                        |
-| `ConversationState` | `Proposal`                      | Conversational closing state is proposal-scoped                         |
-| `ObjectionLog`      | `Proposal`                      | Objection logs are proposal-scoped                                      |
-| `EmailSequence`     | `Proposal`                      | Proposal follow-up sequence is proposal-scoped                          |
-| `ABVariant`         | `ABExperiment`, `PromptVersion` | Variant ownership is implied by the experiment / prompt version lineage |
+| Model       | Parent relation                 | Why it is a candidate                                                   |
+| ----------- | ------------------------------- | ----------------------------------------------------------------------- |
+| `Account`   | `User`                          | Auth account records are tenant-scoped via the owning user today        |
+| `Session`   | `User`                          | Auth sessions are tenant-scoped via the owning user today               |
+| `ABVariant` | `ABExperiment`, `PromptVersion` | Variant ownership is implied by the experiment / prompt version lineage |
 
 ### Known Phase 2.6 Candidate Gaps Reconciled
 
 The previously noted candidate gap set is confirmed by the current schema:
 
-- `FindingStatus`
-- `ClientMessage`
-- `ReviewSnapshot`
-- `ConversationState`
-- `ObjectionLog`
-- `EmailSequence`
 - `ABVariant`
+- `Account`
+- `Session`
 
 ## Tenant-Agnostic / Shared-System Tables
 
@@ -154,7 +144,7 @@ Notes:
 
 ## Bypass Parity
 
-- `tenant_bypass` coverage is currently **66 / 66** for the first-class tenant-bearing tables covered by `tenant_isolation`.
+- `tenant_bypass` coverage is currently **69 / 69** for the first-class tenant-bearing tables covered by `tenant_isolation`.
 - There are **0** tables covered by `tenant_isolation` but missing `tenant_bypass`.
 - First-class tenant-bearing bypass parity is now closed; the remaining RLS design surface is the indirect tenant-scoped candidate set.
 
@@ -280,13 +270,18 @@ Phase closure:
 
 ## Inventory Notes
 
-- The current base RLS migration header still says `target 50/67 multi-tenant models`, but the current Prisma schema parses to **66** first-class tenant-bearing models. The stale `67` appears to be an older working count rather than the current schema truth.
+- The current base RLS migration header still says `target 50/67 multi-tenant models`, but the current Prisma schema now parses to **69** first-class tenant-bearing models after the 2.6-D and 2.6-E direct-column additions. The stale `67` appears to be an older working count rather than the current schema truth.
 - That same header includes `Metric` in the “known remaining gaps” comment even though `Metric` does not expose first-class `tenantId` in Prisma today. Treat that as documentation drift, not as evidence that `Metric` is already a ready-to-policy table.
 - Phase 2.6-C follow-on design is captured in `PHASE-2.6-C-SCHEMA-GAP-PLAN.md`. It classifies the remaining 9 indirect tenant-scoped candidates into:
   - direct `tenantId` + deterministic backfill (`FindingStatus`, `ClientMessage`, `ReviewSnapshot`, `ConversationState`, `ObjectionLog`, `EmailSequence`, `ABVariant`)
   - parent-join RLS only (`Account`, `Session`)
 - Phase 2.6-D implements the audit-scoped direct-column subset:
   - complete: `FindingStatus`, `ClientMessage`, `ReviewSnapshot`
-  - remaining direct-column candidates: `ConversationState`, `ObjectionLog`, `EmailSequence`, `ABVariant`
+  - remaining direct-column candidates after 2.6-D: `ConversationState`, `ObjectionLog`, `EmailSequence`, `ABVariant`
+  - remaining parent-policy candidates: `Account`, `Session`
+  - raw SQL hardening and local `app_user + RLS` verification remain open
+- Phase 2.6-E implements the proposal-scoped direct-column subset:
+  - complete: `ConversationState`, `ObjectionLog`, `EmailSequence`
+  - remaining direct-column candidate: `ABVariant`
   - remaining parent-policy candidates: `Account`, `Session`
   - raw SQL hardening and local `app_user + RLS` verification remain open
