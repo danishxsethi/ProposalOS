@@ -62,7 +62,7 @@ model Finding {
   recommendedFix  Json         @default("[]")
   manuallyEdited  Boolean      @default(false)
   excluded        Boolean      @default(false)
-  confidenceLevel String?      // 'HIGH', 'MEDIUM', 'LOW' — set by Confidence Scorer
+  confidenceLevel String? // 'HIGH', 'MEDIUM', 'LOW' — set by Confidence Scorer
   createdAt       DateTime     @default(now())
 
   // Multi-Tenancy (Denormalized)
@@ -77,29 +77,29 @@ model Finding {
 }
 
 model Proposal {
-  id               String         @id @default(uuid())
-  auditId          String
-  version          Int            @default(1)
-  status           ProposalStatus @default(DRAFT)
-  prospectEmail    String? // Added for follow-ups
-  executiveSummary String?
-  painClusters     Json           @default("[]")
-  tierEssentials   Json           @default("{}")
-  tierGrowth       Json           @default("{}")
-  tierPremium      Json           @default("{}")
-  pricing          Json           @default("{}")
-  stripePriceId    String?
+  id                String         @id @default(uuid())
+  auditId           String
+  version           Int            @default(1)
+  status            ProposalStatus @default(DRAFT)
+  prospectEmail     String? // Added for follow-ups
+  executiveSummary  String?
+  painClusters      Json           @default("[]")
+  tierEssentials    Json           @default("{}")
+  tierGrowth        Json           @default("{}")
+  tierPremium       Json           @default("{}")
+  pricing           Json           @default("{}")
+  stripePriceId     String?
   stripeAmountCents Int?
-  assumptions      String[]       @default([])
-  disclaimers      String[]       @default([])
-  nextSteps        String[]       @default([])
-  comparisonReport Json? // Competitor comparison (ranking, winning/losing, quick wins)
-  pdfUrl           String?
-  pdfGeneratedAt   DateTime?
-  webLinkToken     String         @unique @default(uuid())
-  sentAt           DateTime?
-  viewedAt         DateTime?
-  createdAt        DateTime       @default(now())
+  assumptions       String[]       @default([])
+  disclaimers       String[]       @default([])
+  nextSteps         String[]       @default([])
+  comparisonReport  Json? // Competitor comparison (ranking, winning/losing, quick wins)
+  pdfUrl            String?
+  pdfGeneratedAt    DateTime?
+  webLinkToken      String         @unique @default(uuid())
+  sentAt            DateTime?
+  viewedAt          DateTime?
+  createdAt         DateTime       @default(now())
 
   // Multi-Tenancy
   tenantId String
@@ -208,10 +208,10 @@ model ContactRequest {
   createdAt     DateTime @default(now())
 
   proposal Proposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)
-  
+
   // Multi-Tenancy
   tenantId String
-  tenant   Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([proposalId])
   @@index([tenantId])
@@ -344,64 +344,67 @@ model Tenant {
   domain String? @unique
 
   // Billing
-  planTier             String  @default("free") // free, starter, pro, agency
-  status               String  @default("active") // active, trial, suspended
-  subscriptionStatus   String  @default("inactive") // inactive, pending, trialing, active, past_due, canceled, unpaid
-  stripeCustomerId     String?
-  stripeSubscriptionId String?
+  planTier                 String    @default("free") // free, starter, pro, agency
+  status                   String    @default("active") // active, trial, suspended
+  subscriptionStatus       String    @default("inactive") // inactive, pending, trialing, active, past_due, canceled, unpaid
+  stripeCustomerId         String?
+  stripeSubscriptionId     String?
   stripeSubscriptionItemId String?
-  onboardingCompletedAt DateTime?
-  
+  onboardingCompletedAt    DateTime?
+
   // Grace Period for Failed Renewals
-  gracePeriodEndsAt  DateTime? // When the grace period ends (null = no active grace period)
+  gracePeriodEndsAt     DateTime? // When the grace period ends (null = no active grace period)
   gracePeriodNotifiedAt DateTime? // When the first notification was sent
 
-  branding  Json     @default("{}")
-  settings  Json     @default("{}")
-  isActive  Boolean  @default(true)
-  requireHumanReview Boolean @default(false) // P2: Human in the loop for outreach
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  branding           Json     @default("{}")
+  settings           Json     @default("{}")
+  isActive           Boolean  @default(true)
+  requireHumanReview Boolean  @default(false) // P2: Human in the loop for outreach
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 
-  users                  User[]
-  audits                 Audit[]
-  brandingConfig         TenantBranding?
-  apiKeys                ApiKey[]
-  playbooks              Playbook[]
-  auditSchedules         AuditSchedule[]
-  UsageRecord            UsageRecord[]
-  invitations            Invitation[]
-  prospectDiscoveryJobs  ProspectDiscoveryJob[]
-  prospectLeads          ProspectLead[]
-  prospectEnrichmentRuns ProspectEnrichmentRun[]
-  outreachSendingDomains OutreachSendingDomain[]
-  outreachDomainDailyStats OutreachDomainDailyStat[]
-  outreachEmails         OutreachEmail[]
-  outreachEmailEvents    OutreachEmailEvent[]
-  pipelineConfig         PipelineConfig?
-  projects               Project[]
-  contactRequests        ContactRequest[]
-  proposalFollowUps      ProposalFollowUp[]
-  monitoringConfigs      MonitoringConfig[]
-  locationGroups         LocationGroup[]
-  subscriptions          Subscription[]
-  payments               Payment[]
-  auditTargets           AuditTarget[]
+  users                        User[]
+  audits                       Audit[]
+  brandingConfig               TenantBranding?
+  apiKeys                      ApiKey[]
+  playbooks                    Playbook[]
+  auditSchedules               AuditSchedule[]
+  UsageRecord                  UsageRecord[]
+  invitations                  Invitation[]
+  prospectDiscoveryJobs        ProspectDiscoveryJob[]
+  prospectLeads                ProspectLead[]
+  prospectEnrichmentRuns       ProspectEnrichmentRun[]
+  outreachSendingDomains       OutreachSendingDomain[]
+  outreachDomainDailyStats     OutreachDomainDailyStat[]
+  outreachEmails               OutreachEmail[]
+  outreachEmailEvents          OutreachEmailEvent[]
+  pipelineConfig               PipelineConfig?
+  projects                     Project[]
+  contactRequests              ContactRequest[]
+  proposalFollowUps            ProposalFollowUp[]
+  findingStatuses              FindingStatus[]
+  clientMessages               ClientMessage[]
+  reviewSnapshots              ReviewSnapshot[]
+  monitoringConfigs            MonitoringConfig[]
+  locationGroups               LocationGroup[]
+  subscriptions                Subscription[]
+  payments                     Payment[]
+  auditTargets                 AuditTarget[]
   outreachTemplatePerformances OutreachTemplatePerformance[]
-  proposalOutreach       ProposalOutreach[]
-  followUpEmailSends     FollowUpEmailSend[]
-  failedWebhookEvents    FailedWebhookEvent[]
-  cartAbandonmentEvents  CartAbandonmentEvent[]
-  partnerDeliveredLeads  PartnerDeliveredLead[]
-  proposalAcceptances    ProposalAcceptance[]
-  proposalViews          ProposalView[]
-  
+  proposalOutreach             ProposalOutreach[]
+  followUpEmailSends           FollowUpEmailSend[]
+  failedWebhookEvents          FailedWebhookEvent[]
+  cartAbandonmentEvents        CartAbandonmentEvent[]
+  partnerDeliveredLeads        PartnerDeliveredLead[]
+  proposalAcceptances          ProposalAcceptance[]
+  proposalViews                ProposalView[]
+
   // Prompt Management Relations
-  promptVersions         PromptVersion[]
-  promptPerformanceLogs  PromptPerformanceLog[]
-  abExperiments          ABExperiment[]
-  predictions            Prediction[]
-  scenarios              Scenario[]
+  promptVersions        PromptVersion[]
+  promptPerformanceLogs PromptPerformanceLog[]
+  abExperiments         ABExperiment[]
+  predictions           Prediction[]
+  scenarios             Scenario[]
 
   @@index([domain])
   @@index([isActive])
@@ -492,8 +495,8 @@ model AuditTarget {
   createdAt    DateTime @default(now())
 
   // Multi-Tenancy (nullable for system-wide targets)
-  tenantId   String?
-  tenant     Tenant?  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenantId String?
+  tenant   Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([placeId])
   @@index([vertical])
@@ -579,35 +582,35 @@ model ProspectLead {
   enrichmentState          Json    @default("{}")
   estimatedCostCents       Int     @default(0)
 
-  outreachStage            OutreachLeadStage @default(READY)
-  outreachAttempts         Int               @default(0)
-  outreachOpenCount        Int               @default(0)
-  outreachClickCount       Int               @default(0)
-  outreachReplyCount       Int               @default(0)
-  outreachLastContactedAt  DateTime?
-  outreachNextActionAt     DateTime?
-  outreachDroppedAt        DateTime?
-  outreachDropReason       String?
-  scorecardToken           String?           @unique
-  scorecardFirstViewedAt   DateTime?
-  scorecardLastViewedAt    DateTime?
-  scorecardTotalViewSeconds Int              @default(0)
+  outreachStage             OutreachLeadStage @default(READY)
+  outreachAttempts          Int               @default(0)
+  outreachOpenCount         Int               @default(0)
+  outreachClickCount        Int               @default(0)
+  outreachReplyCount        Int               @default(0)
+  outreachLastContactedAt   DateTime?
+  outreachNextActionAt      DateTime?
+  outreachDroppedAt         DateTime?
+  outreachDropReason        String?
+  scorecardToken            String?           @unique
+  scorecardFirstViewedAt    DateTime?
+  scorecardLastViewedAt     DateTime?
+  scorecardTotalViewSeconds Int               @default(0)
 
   // Pipeline orchestrator fields
-  pipelineStatus  String  @default("discovered")
-  auditId         String?
-  proposalId      String?
-  engagementScore Int     @default(0)
+  pipelineStatus   String    @default("discovered")
+  auditId          String?
+  proposalId       String?
+  engagementScore  Int       @default(0)
   lastEngagementAt DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  enrichmentRuns       ProspectEnrichmentRun[]
-  outreachEmails       OutreachEmail[]
-  outreachEvents       OutreachEmailEvent[]
-  stateTransitions     ProspectStateTransition[]
-  deliveredLeads       PartnerDeliveredLead[]
+  enrichmentRuns   ProspectEnrichmentRun[]
+  outreachEmails   OutreachEmail[]
+  outreachEvents   OutreachEmailEvent[]
+  stateTransitions ProspectStateTransition[]
+  deliveredLeads   PartnerDeliveredLead[]
 
   @@unique([tenantId, source, sourceExternalId])
   @@index([tenantId, status])
@@ -649,11 +652,11 @@ model OutreachSendingDomain {
   tenantId String
   tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
-  domain    String
-  fromEmail String
-  fromName  String?
-  dailyLimit Int    @default(50)
-  isActive  Boolean @default(true)
+  domain     String
+  fromEmail  String
+  fromName   String?
+  dailyLimit Int     @default(50)
+  isActive   Boolean @default(true)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -674,10 +677,10 @@ model OutreachDomainDailyStat {
   domain   OutreachSendingDomain @relation(fields: [domainId], references: [id], onDelete: Cascade)
 
   day        DateTime
-  sentCount  Int @default(0)
-  openCount  Int @default(0)
-  clickCount Int @default(0)
-  replyCount Int @default(0)
+  sentCount  Int      @default(0)
+  openCount  Int      @default(0)
+  clickCount Int      @default(0)
+  replyCount Int      @default(0)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -709,19 +712,19 @@ model OutreachEmail {
   spamRisk         Int   @default(0)
   findingsUsed     Json  @default("[]")
 
-  scorecardUrl      String?
-  proposalUrl       String?
-  trackingPixelUrl  String?
+  scorecardUrl         String?
+  proposalUrl          String?
+  trackingPixelUrl     String?
   trackingClickBaseUrl String?
 
   providerMessageId String?
   errorMessage      String?
 
-  sentAt    DateTime?
-  openedAt  DateTime?
-  clickedAt DateTime?
-  repliedAt DateTime?
-  scheduledAt DateTime?
+  sentAt           DateTime?
+  openedAt         DateTime?
+  clickedAt        DateTime?
+  repliedAt        DateTime?
+  scheduledAt      DateTime?
   sequencePosition Int?
 
   createdAt DateTime @default(now())
@@ -747,10 +750,10 @@ model OutreachEmailEvent {
   emailId String?
   email   OutreachEmail? @relation(fields: [emailId], references: [id], onDelete: SetNull)
 
-  type     OutreachEventType
-  metadata Json      @default("{}")
-  occurredAt DateTime @default(now())
-  createdAt DateTime  @default(now())
+  type       OutreachEventType
+  metadata   Json              @default("{}")
+  occurredAt DateTime          @default(now())
+  createdAt  DateTime          @default(now())
 
   @@index([tenantId, type, occurredAt])
   @@index([leadId, occurredAt])
@@ -853,7 +856,7 @@ model ProspectStateTransition {
   leadId     String
   fromStatus String
   toStatus   String
-  stage      String   // Pipeline stage that triggered the transition
+  stage      String // Pipeline stage that triggered the transition
   metadata   Json     @default("{}")
   createdAt  DateTime @default(now())
 
@@ -879,9 +882,9 @@ model DeliveryTask {
   errorMessage            String?
 
   // Sprint 10: Delivery Agent fields
-  artifactId      String?   // FK to GeneratedArtifact
-  bundleId        String?   // FK to DeliveryBundle
-  confidenceLevel String?   // 'HIGH', 'MEDIUM', 'LOW'
+  artifactId      String? // FK to GeneratedArtifact
+  bundleId        String? // FK to DeliveryBundle
+  confidenceLevel String? // 'HIGH', 'MEDIUM', 'LOW'
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -896,13 +899,13 @@ model PipelineConfig {
   id       String @id @default(uuid())
   tenantId String @unique
 
-  concurrencyLimit    Int     @default(10)
-  batchSize           Int     @default(50)
-  painScoreThreshold  Int     @default(60)
-  dailyVolumeLimit    Int     @default(200)
-  spendingLimitCents  Int     @default(100000) // $1000 default
-  hotLeadPercentile   Int     @default(95)
-  emailMinQualityScore Int    @default(90)
+  concurrencyLimit         Int @default(10)
+  batchSize                Int @default(50)
+  painScoreThreshold       Int @default(60)
+  dailyVolumeLimit         Int @default(200)
+  spendingLimitCents       Int @default(100000) // $1000 default
+  hotLeadPercentile        Int @default(95)
+  emailMinQualityScore     Int @default(90)
   maxEmailsPerDomainPerDay Int @default(50)
 
   // Follow-up schedule (days after initial send)
@@ -920,12 +923,12 @@ model PipelineConfig {
   pricingMultiplier Float @default(1.0)
 
   // Circuit Breaker Configuration
-  circuitBreakerEnabled       Boolean @default(true)
-  errorRateThreshold          Float   @default(0.5) // 50% error rate triggers circuit
-  circuitBreakerMinSamples    Int     @default(10)
-  circuitBreakerWindowMs      Int     @default(300000) // 5 minutes
-  circuitBreakerOpenTimeoutMs Int     @default(600000) // 10 minutes
-  circuitBreakerHalfOpenMaxAttempts Int @default(5)
+  circuitBreakerEnabled             Boolean @default(true)
+  errorRateThreshold                Float   @default(0.5) // 50% error rate triggers circuit
+  circuitBreakerMinSamples          Int     @default(10)
+  circuitBreakerWindowMs            Int     @default(300000) // 5 minutes
+  circuitBreakerOpenTimeoutMs       Int     @default(600000) // 10 minutes
+  circuitBreakerHalfOpenMaxAttempts Int     @default(5)
 
   // Dead Letter Queue Configuration
   maxFailureCount Int @default(3) // Move to DLQ after N failures
@@ -940,15 +943,15 @@ model PipelineConfig {
 
 // Pipeline error log for observability
 model PipelineErrorLog {
-  id         String   @id @default(uuid())
-  tenantId   String
-  stage      String
-  prospectId String?
-  errorType  String
-  errorMessage String @db.Text
-  stackTrace String?  @db.Text
-  metadata   Json     @default("{}")
-  createdAt  DateTime @default(now())
+  id           String   @id @default(uuid())
+  tenantId     String
+  stage        String
+  prospectId   String?
+  errorType    String
+  errorMessage String   @db.Text
+  stackTrace   String?  @db.Text
+  metadata     Json     @default("{}")
+  createdAt    DateTime @default(now())
 
   @@index([tenantId, stage, createdAt])
   @@index([createdAt])
@@ -956,17 +959,17 @@ model PipelineErrorLog {
 
 // Outreach template performance tracking
 model OutreachTemplatePerformance {
-  id         String @id @default(uuid())
+  id         String  @id @default(uuid())
   tenantId   String
   templateId String
   vertical   String
   city       String?
 
-  totalSent      Int   @default(0)
-  openCount      Int   @default(0)
-  clickCount     Int   @default(0)
-  replyCount     Int   @default(0)
-  conversionCount Int  @default(0)
+  totalSent       Int @default(0)
+  openCount       Int @default(0)
+  clickCount      Int @default(0)
+  replyCount      Int @default(0)
+  conversionCount Int @default(0)
 
   openRate       Float @default(0)
   clickRate      Float @default(0)
@@ -984,18 +987,18 @@ model OutreachTemplatePerformance {
 
 // Win/loss tracking with reason codes
 model WinLossRecord {
-  id         String @id @default(uuid())
+  id         String  @id @default(uuid())
   tenantId   String
   proposalId String
   leadId     String
   vertical   String
   city       String?
 
-  outcome           String  // 'won', 'lost', 'ghosted'
-  tierChosen        String?
-  dealValue         Decimal? @db.Decimal(10, 2)
-  lostReason        String?
-  objectionsRaised  Json    @default("[]")
+  outcome             String // 'won', 'lost', 'ghosted'
+  tierChosen          String?
+  dealValue           Decimal? @db.Decimal(10, 2)
+  lostReason          String?
+  objectionsRaised    Json     @default("[]")
   competitorMentioned String?
 
   createdAt DateTime @default(now())
@@ -1014,8 +1017,8 @@ model PreWarmingAction {
   actionType String // 'question', 'like', 'comment', 'follow', 'post_interaction'
   status     String @default("scheduled") // 'scheduled', 'completed', 'failed', 'skipped'
 
-  scheduledAt DateTime
-  executedAt  DateTime?
+  scheduledAt  DateTime
+  executedAt   DateTime?
   errorMessage String?
 
   createdAt DateTime @default(now())
@@ -1026,7 +1029,7 @@ model PreWarmingAction {
 
 // Detected signals for signal-based selling
 model DetectedSignal {
-  id       String @id @default(uuid())
+  id       String  @id @default(uuid())
   tenantId String
   leadId   String?
 
@@ -1052,9 +1055,9 @@ model ChatConversation {
   proposalId String
   sessionId  String
 
-  messages Json    @default("[]") // Array of ChatMessage
-  outcome  String? // 'converted', 'escalated', 'abandoned'
-  objections Json  @default("[]") // Array of objection strings
+  messages   Json    @default("[]") // Array of ChatMessage
+  outcome    String? // 'converted', 'escalated', 'abandoned'
+  objections Json    @default("[]") // Array of objection strings
 
   startedAt   DateTime  @default(now())
   completedAt DateTime?
@@ -1065,18 +1068,18 @@ model ChatConversation {
 
 // Agency partner accounts
 model AgencyPartner {
-  id       String @id @default(uuid())
+  id String @id @default(uuid())
 
-  name     String
+  name         String
   contactEmail String
   contactName  String?
 
-  verticals   Json @default("[]")   // Array of target verticals
-  geographies Json @default("[]")   // Array of target geographies
-  monthlyVolume Int @default(50)
+  verticals     Json @default("[]") // Array of target verticals
+  geographies   Json @default("[]") // Array of target geographies
+  monthlyVolume Int  @default(50)
 
-  pricingModel     String  // 'per_lead', 'subscription'
-  perLeadPriceCents Int?
+  pricingModel           String // 'per_lead', 'subscription'
+  perLeadPriceCents      Int?
   subscriptionPriceCents Int?
 
   isActive  Boolean  @default(true)
@@ -1090,14 +1093,14 @@ model AgencyPartner {
 
 // Leads delivered to agency partners
 model PartnerDeliveredLead {
-  id        String @id @default(uuid())
+  id        String       @id @default(uuid())
   partnerId String
   leadId    String
   lead      ProspectLead @relation(fields: [leadId], references: [id], onDelete: Cascade)
 
   // Multi-Tenancy (derived from the lead)
-  tenantId  String
-  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   packagedData Json // Full lead package (audit, proposal, pain score, contact)
   status       String @default("delivered") // 'delivered', 'viewed', 'contacted', 'converted', 'rejected'
@@ -1324,22 +1327,22 @@ model ProcessedWebhookEvent {
 }
 
 model FailedWebhookEvent {
-  id           String   @id @default(cuid())
-  eventId      String   @unique  // Original Stripe event ID
+  id           String    @id @default(cuid())
+  eventId      String    @unique // Original Stripe event ID
   eventType    String
   payload      Json
   errorMessage String?
   errorStack   String?
-  attempts     Int      @default(0)
+  attempts     Int       @default(0)
   lastAttempt  DateTime?
-  resolved     Boolean  @default(false)
+  resolved     Boolean   @default(false)
   resolvedAt   DateTime?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 
   // Multi-Tenancy (nullable for system-level webhooks)
-  tenantId     String?
-  tenant       Tenant?  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenantId String?
+  tenant   Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([eventId])
   @@index([resolved, createdAt])
@@ -1348,18 +1351,18 @@ model FailedWebhookEvent {
 }
 
 model CartAbandonmentEvent {
-  id          String   @id @default(cuid())
-  sessionId   String
-  proposalId  String
-  checkoutType String   // 'proposal' or 'saas'
-  step        String   // 'initiated', 'pricing_selected', 'checkout_started', 'payment_failed', 'completed'
-  timestamp   DateTime @default(now())
-  metadata    Json?    // Additional event data
+  id           String   @id @default(cuid())
+  sessionId    String
+  proposalId   String
+  checkoutType String // 'proposal' or 'saas'
+  step         String // 'initiated', 'pricing_selected', 'checkout_started', 'payment_failed', 'completed'
+  timestamp    DateTime @default(now())
+  metadata     Json? // Additional event data
 
   // Multi-Tenancy
-  tenantId    String
-  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
   @@index([sessionId, timestamp])
   @@index([proposalId, timestamp])
   @@index([checkoutType, timestamp])
@@ -1369,30 +1372,30 @@ model CartAbandonmentEvent {
 }
 
 model PricingPlan {
-  id          String   @id @default(cuid())
+  id          String  @id @default(cuid())
   name        String
   description String?
-  type        String   // 'saas' or 'proposal'
-  interval    String?  // 'month', 'year' for subscriptions
-  status      String   // 'active', 'inactive', 'archived'
-  sortOrder   Int      @default(0)
-  
+  type        String // 'saas' or 'proposal'
+  interval    String? // 'month', 'year' for subscriptions
+  status      String // 'active', 'inactive', 'archived'
+  sortOrder   Int     @default(0)
+
   // Pricing tiers
-  tiers       Json     // Array of tier configurations
-  
+  tiers Json // Array of tier configurations
+
   // Stripe integration
   stripeProductId String?
-  stripePriceIds Json? // Mapping of tier -> priceId
-  
+  stripePriceIds  Json? // Mapping of tier -> priceId
+
   // Features and limits
-  features    Json?    // Feature matrix
-  limits      Json?    // Usage limits per tier
-  
+  features Json? // Feature matrix
+  limits   Json? // Usage limits per tier
+
   // Metadata
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  createdBy   String?
-  updatedBy   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  createdBy String?
+  updatedBy String?
 
   @@index([type, status])
   @@index([stripeProductId])
@@ -1417,29 +1420,29 @@ model Subscription {
 }
 
 model Payment {
-  id              String   @id @default(cuid())
+  id              String    @id @default(cuid())
   tenantId        String
-  stripeInvoiceId String?  @unique
+  stripeInvoiceId String?   @unique
   stripeChargeId  String?
   amountCents     Int
-  currency        String   @default("usd")
+  currency        String    @default("usd")
   status          String
   paidAt          DateTime?
-  createdAt       DateTime @default(now())
-  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  createdAt       DateTime  @default(now())
+  tenant          Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId])
   @@map("payments")
 }
 
 model CheckoutAttempt {
-  id              String   @id @default(cuid())
-  stripeSessionId String   @unique
+  id              String    @id @default(cuid())
+  stripeSessionId String    @unique
   tenantId        String // Made required for RLS consistency
   proposalId      String?
   type            String
   completedAt     DateTime?
-  createdAt       DateTime @default(now())
+  createdAt       DateTime  @default(now())
 
   @@index([tenantId])
   @@index([proposalId])
@@ -1495,42 +1498,51 @@ model FindingStatus {
   id        String @id @default(uuid())
   auditId   String
   findingId String
+  tenantId  String
 
   status    String   @default("not_started") // not_started, in_progress, fixed, wont_fix
   notes     String?
   updatedBy String? // User ID (Operator)
   updatedAt DateTime @updatedAt
 
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   audit   Audit   @relation(fields: [auditId], references: [id], onDelete: Cascade)
   finding Finding @relation(fields: [findingId], references: [id], onDelete: Cascade)
 
   @@unique([auditId, findingId])
   @@index([auditId])
+  @@index([tenantId])
 }
 
 model ClientMessage {
   id        String   @id @default(uuid())
   auditId   String
+  tenantId  String
   sender    String // 'client' | 'operator'
   message   String   @db.Text
   read      Boolean  @default(false)
   createdAt DateTime @default(now())
 
-  audit Audit @relation(fields: [auditId], references: [id], onDelete: Cascade)
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  audit  Audit  @relation(fields: [auditId], references: [id], onDelete: Cascade)
 
   @@index([auditId])
+  @@index([tenantId])
 }
 
 model ReviewSnapshot {
-  id      String   @id @default(uuid())
-  auditId String
-  audit   Audit    @relation(fields: [auditId], references: [id], onDelete: Cascade)
-  date    DateTime @default(now())
-  rating  Float
-  count   Int
-  source  String // 'google', 'facebook', etc.
+  id       String   @id @default(uuid())
+  auditId  String
+  tenantId String
+  tenant   Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  audit    Audit    @relation(fields: [auditId], references: [id], onDelete: Cascade)
+  date     DateTime @default(now())
+  rating   Float
+  count    Int
+  source   String // 'google', 'facebook', etc.
 
   @@index([auditId])
+  @@index([tenantId])
 }
 
 model FeatureFlag {
@@ -1544,34 +1556,34 @@ model FeatureFlag {
 // --- Sprint 9: Conversational Closing ---
 
 model ConversationState {
-  id              String   @id @default(uuid())
-  proposalId      String   @unique
-  sessionId       String // Generic prospect session identifier
-  history         Json     @default("[]") // Array of { role: 'user'|'agent', text: string, timestamp: string }
+  id               String   @id @default(uuid())
+  proposalId       String   @unique
+  sessionId        String // Generic prospect session identifier
+  history          Json     @default("[]") // Array of { role: 'user'|'agent', text: string, timestamp: string }
   objectionsRaised String[] @default([])
-  questionsAsked  Int      @default(0)
-  sentimentScore  Float    @default(0) // -1.0 to 1.0 trajectory
-  engagementScore Int      @default(0)
-  escalated       Boolean  @default(false)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  questionsAsked   Int      @default(0)
+  sentimentScore   Float    @default(0) // -1.0 to 1.0 trajectory
+  engagementScore  Int      @default(0)
+  escalated        Boolean  @default(false)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 
-  proposal        Proposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+  proposal Proposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)
 
   @@index([proposalId])
   @@index([sessionId])
 }
 
 model ObjectionLog {
-  id              String   @id @default(uuid())
-  proposalId      String
-  category        String   // 'price', 'timing', 'trust', 'scope', 'competition'
-  prospectText    String   @db.Text
-  agentResponse   String   @db.Text
-  escalated       Boolean  @default(false)
-  createdAt       DateTime @default(now())
+  id            String   @id @default(uuid())
+  proposalId    String
+  category      String // 'price', 'timing', 'trust', 'scope', 'competition'
+  prospectText  String   @db.Text
+  agentResponse String   @db.Text
+  escalated     Boolean  @default(false)
+  createdAt     DateTime @default(now())
 
-  proposal        Proposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+  proposal Proposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)
 
   @@index([proposalId])
   @@index([category])
@@ -1580,17 +1592,17 @@ model ObjectionLog {
 // --- Sprint 9: Email Intelligence ---
 
 model EmailSequence {
-  id              String   @id @default(uuid())
-  proposalId      String   @unique
-  industry        String?
-  role            String?
-  sizeScope       String?
-  emails          Json     @default("[]") // Array of { step: number, subject: string, body: string, status: 'draft'|'sent' }
-  analytics       Json     @default("{}") // { openRates: {...}, clickRates: {...}, replyRates: {...} }
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id         String   @id @default(uuid())
+  proposalId String   @unique
+  industry   String?
+  role       String?
+  sizeScope  String?
+  emails     Json     @default("[]") // Array of { step: number, subject: string, body: string, status: 'draft'|'sent' }
+  analytics  Json     @default("{}") // { openRates: {...}, clickRates: {...}, replyRates: {...} }
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
-  proposal        Proposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+  proposal Proposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)
 
   @@index([proposalId])
 }
@@ -1598,23 +1610,23 @@ model EmailSequence {
 // --- Sprint 10: Agentic Delivery + QA Hardening ---
 
 model GeneratedArtifact {
-  id           String   @id @default(uuid())
-  tenantId     String
-  proposalId   String
-  findingId    String
-  artifactType String   // 'json_ld', 'html_meta', 'speed_script', 'gbp_draft', 'content_brief', 'aria_fix', 'wp_plugin'
-  content      String   @db.Text
-  status       String   @default("pending") // 'pending', 'validated', 'failed_validation', 'packaged'
-  validationResults Json @default("[]")     // ValidationCheckResult[]
-  confidenceLevel   String? // 'HIGH', 'MEDIUM', 'LOW'
-  estimatedImpact   String?
-  installationInstructions String? @db.Text
-  beforePreview    String? @db.Text
-  afterPreview     String? @db.Text
-  wordpressPlugin  String? @db.Text         // .php content if applicable
-  humanReviewFlag  Boolean @default(false)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id                       String   @id @default(uuid())
+  tenantId                 String
+  proposalId               String
+  findingId                String
+  artifactType             String // 'json_ld', 'html_meta', 'speed_script', 'gbp_draft', 'content_brief', 'aria_fix', 'wp_plugin'
+  content                  String   @db.Text
+  status                   String   @default("pending") // 'pending', 'validated', 'failed_validation', 'packaged'
+  validationResults        Json     @default("[]") // ValidationCheckResult[]
+  confidenceLevel          String? // 'HIGH', 'MEDIUM', 'LOW'
+  estimatedImpact          String?
+  installationInstructions String?  @db.Text
+  beforePreview            String?  @db.Text
+  afterPreview             String?  @db.Text
+  wordpressPlugin          String?  @db.Text // .php content if applicable
+  humanReviewFlag          Boolean  @default(false)
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
 
   @@index([tenantId, proposalId])
   @@index([findingId])
@@ -1622,33 +1634,33 @@ model GeneratedArtifact {
 }
 
 model DeliveryBundle {
-  id           String   @id @default(uuid())
-  tenantId     String
-  proposalId   String   @unique
-  zipUrl       String?  // GCS URL
-  readmeContent String? @db.Text
-  artifactCount Int     @default(0)
-  status       String   @default("assembling") // 'assembling', 'ready', 'failed'
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id            String   @id @default(uuid())
+  tenantId      String
+  proposalId    String   @unique
+  zipUrl        String? // GCS URL
+  readmeContent String?  @db.Text
+  artifactCount Int      @default(0)
+  status        String   @default("assembling") // 'assembling', 'ready', 'failed'
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   @@index([tenantId])
   @@index([proposalId])
 }
 
 model AdversarialQARun {
-  id           String   @id @default(uuid())
-  tenantId     String
-  auditId      String?
-  proposalId   String?
-  runType      String   // 'diagnosis', 'proposal'
-  hallucinationFlags Json @default("[]")
-  consistencyFlags   Json @default("[]")
-  competitorFlags    Json @default("[]")
-  totalClaimsChecked Int  @default(0)
-  totalFlagged       Int  @default(0)
-  hardenedContent    String? @db.Text
-  createdAt    DateTime @default(now())
+  id                 String   @id @default(uuid())
+  tenantId           String
+  auditId            String?
+  proposalId         String?
+  runType            String // 'diagnosis', 'proposal'
+  hallucinationFlags Json     @default("[]")
+  consistencyFlags   Json     @default("[]")
+  competitorFlags    Json     @default("[]")
+  totalClaimsChecked Int      @default(0)
+  totalFlagged       Int      @default(0)
+  hardenedContent    String?  @db.Text
+  createdAt          DateTime @default(now())
 
   @@index([tenantId, auditId])
   @@index([proposalId])
@@ -1656,15 +1668,15 @@ model AdversarialQARun {
 }
 
 model HallucinationLog {
-  id           String   @id @default(uuid())
-  tenantId     String
-  auditId      String?
-  proposalId   String?
-  category     String   // 'data_fabrication', 'metric_inflation', 'false_competitor_claim', 'unsupported_recommendation'
-  flaggedText  String   @db.Text
-  location     String
-  weekStart    DateTime // Truncated to Monday for weekly aggregation
-  createdAt    DateTime @default(now())
+  id          String   @id @default(uuid())
+  tenantId    String
+  auditId     String?
+  proposalId  String?
+  category    String // 'data_fabrication', 'metric_inflation', 'false_competitor_claim', 'unsupported_recommendation'
+  flaggedText String   @db.Text
+  location    String
+  weekStart   DateTime // Truncated to Monday for weekly aggregation
+  createdAt   DateTime @default(now())
 
   @@index([tenantId, weekStart])
   @@index([auditId])
@@ -1672,15 +1684,15 @@ model HallucinationLog {
 }
 
 model HumanReviewFlag {
-  id           String   @id @default(uuid())
-  tenantId     String
-  artifactId   String
-  findingId    String
-  reason       String   @db.Text
-  status       String   @default("pending") // 'pending', 'approved', 'rejected'
-  reviewedBy   String?
-  reviewedAt   DateTime?
-  createdAt    DateTime @default(now())
+  id         String    @id @default(uuid())
+  tenantId   String
+  artifactId String
+  findingId  String
+  reason     String    @db.Text
+  status     String    @default("pending") // 'pending', 'approved', 'rejected'
+  reviewedBy String?
+  reviewedAt DateTime?
+  createdAt  DateTime  @default(now())
 
   @@index([tenantId, status])
   @@index([artifactId])
@@ -1696,17 +1708,17 @@ enum ProjectStatus {
 
 // Sprint 9: Post-Payment Auto-Onboarding
 model Project {
-  id             String        @id @default(uuid())
-  proposalId     String       @unique
-  tenantId       String
-  status         ProjectStatus @default(KICKOFF)
-  completedAt    DateTime?
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime      @updatedAt
+  id          String        @id @default(uuid())
+  proposalId  String        @unique
+  tenantId    String
+  status      ProjectStatus @default(KICKOFF)
+  completedAt DateTime?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
 
-  proposal       Proposal      @relation(fields: [proposalId], references: [id], onDelete: Cascade)
-  tenant         Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  npsSurveys     NPSSurvey[]
+  proposal   Proposal    @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+  tenant     Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  npsSurveys NPSSurvey[]
 
   @@index([tenantId])
   @@index([status])
@@ -1714,19 +1726,19 @@ model Project {
 
 // Task 4: NPS Automation
 model NPSSurvey {
-  id           String             @id @default(uuid())
-  projectId    String
-  tenantId     String
-  score        Int?
-  feedback     String?
-  surveyDay    Int                // 30 or 90
-  status       NPSSurveyStatus    @default(PENDING)
-  sentAt       DateTime           @default(now())
-  respondedAt  DateTime?
-  createdAt    DateTime           @default(now())
-  updatedAt    DateTime           @updatedAt
+  id          String          @id @default(uuid())
+  projectId   String
+  tenantId    String
+  score       Int?
+  feedback    String?
+  surveyDay   Int // 30 or 90
+  status      NPSSurveyStatus @default(PENDING)
+  sentAt      DateTime        @default(now())
+  respondedAt DateTime?
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
 
-  project      Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@index([projectId])
   @@index([tenantId])
@@ -1738,21 +1750,21 @@ enum NPSSurveyStatus {
   SENT
   RESPONDED
   FLAGGED_DETRACTOR /// score <= 6 — manual outreach needed
-  REFERRAL_SENT     /// score >= 9 — referral email triggered
+  REFERRAL_SENT /// score >= 9 — referral email triggered
 }
 
 // Task 3: QA Telemetry (Adversarial QA monitoring)
 model QATelemetry {
   id                 String   @id @default(uuid())
   runId              String   @unique @default(uuid())
-  graphName          String   // "diagnosis" | "proposal"
+  graphName          String // "diagnosis" | "proposal"
   inputHash          String
-  qaScore            Float    // 0.0–1.0 (0 = clean, 1 = heavily flagged)
+  qaScore            Float // 0.0–1.0 (0 = clean, 1 = heavily flagged)
   hallucinationCount Int
   unsupportedCount   Int
   consistencyCount   Int
-  hallucinations     Json     // HallucinationFlag[]
-  unsupportedClaims  Json     // ConsistencyFlag[]
+  hallucinations     Json // HallucinationFlag[]
+  unsupportedClaims  Json // ConsistencyFlag[]
   retryTriggered     Boolean  @default(false)
   retryCount         Int      @default(0)
   tenantId           String // Made required for RLS consistency
@@ -1767,20 +1779,20 @@ model QATelemetry {
 
 // Task 2: Prompt auto-promotion audit trail
 model PromptPromotionLog {
-  id                    String   @id @default(uuid())
-  promptId              String   // ExperimentName from promptAB.ts
-  winnerVariantId       String   // 'control' | 'variant'
-  loserVariantId        String
-  winnerAvgQuality      Float
-  loserAvgQuality       Float
-  qualityDeltaPct       Float    // (winner - loser) / loser * 100
-  winnerAvgLatencyMs    Float
-  loserAvgLatencyMs     Float
-  latencyIncreasePct    Float
-  winnerSampleSize      Int
-  loserSampleSize       Int
-  promotedAt            DateTime @default(now())
-  note                  String?
+  id                 String   @id @default(uuid())
+  promptId           String // ExperimentName from promptAB.ts
+  winnerVariantId    String // 'control' | 'variant'
+  loserVariantId     String
+  winnerAvgQuality   Float
+  loserAvgQuality    Float
+  qualityDeltaPct    Float // (winner - loser) / loser * 100
+  winnerAvgLatencyMs Float
+  loserAvgLatencyMs  Float
+  latencyIncreasePct Float
+  winnerSampleSize   Int
+  loserSampleSize    Int
+  promotedAt         DateTime @default(now())
+  note               String?
 
   @@index([promptId])
   @@index([promotedAt])
@@ -1789,9 +1801,9 @@ model PromptPromotionLog {
 // Task 3: Persistent Metrics Storage (Pipeline 17)
 model Metric {
   id        String   @id @default(uuid())
-  name      String   // e.g. "llm_calls_total", "llm_cost_total"
+  name      String // e.g. "llm_calls_total", "llm_cost_total"
   value     Float
-  labels    Json     @default("{}")  // { model, node, tenantId, ... }
+  labels    Json     @default("{}") // { model, node, tenantId, ... }
   timestamp DateTime @default(now())
 
   @@index([name, timestamp])
@@ -1834,6 +1846,7 @@ model MonitoringConfig {
   active    Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
   @@index([tenantId])
 }
 
@@ -1845,6 +1858,7 @@ model LocationGroup {
   locations Json
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
   @@index([tenantId])
 }
 
@@ -1863,16 +1877,16 @@ model Plugin {
 
 // Circuit Breaker State per tenant/stage
 model CircuitBreakerState {
-  id                String   @id @default(uuid())
+  id                String    @id @default(uuid())
   tenantId          String
-  stage             String   // PipelineStage enum value
-  state             String   @default("CLOSED") // CLOSED, OPEN, HALF_OPEN
-  errorCount        Int      @default(0)
-  successCount      Int      @default(0)
-  totalAttempts     Int      @default(0)
+  stage             String // PipelineStage enum value
+  state             String    @default("CLOSED") // CLOSED, OPEN, HALF_OPEN
+  errorCount        Int       @default(0)
+  successCount      Int       @default(0)
+  totalAttempts     Int       @default(0)
   lastErrorAt       DateTime?
   lastStateChangeAt DateTime  @default(now())
-  halfOpenAttempts  Int      @default(0)
+  halfOpenAttempts  Int       @default(0)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1884,16 +1898,16 @@ model CircuitBreakerState {
 
 // Dead Letter Queue for permanently failed prospects
 model DeadLetterQueue {
-  id           String   @id @default(uuid())
-  tenantId     String
-  prospectId   String   @unique
+  id             String    @id @default(uuid())
+  tenantId       String
+  prospectId     String    @unique
   originalStatus String
-  failureCount Int      @default(0)
-  lastError    String   @db.Text
-  lastErrorAt  DateTime
-  createdAt    DateTime @default(now())
-  processedAt  DateTime?
-  status       String   @default("pending") // pending, retrying, resolved, discarded
+  failureCount   Int       @default(0)
+  lastError      String    @db.Text
+  lastErrorAt    DateTime
+  createdAt      DateTime  @default(now())
+  processedAt    DateTime?
+  status         String    @default("pending") // pending, retrying, resolved, discarded
 
   @@index([tenantId, status])
   @@index([createdAt])
@@ -1902,63 +1916,63 @@ model DeadLetterQueue {
 // ===== Retention & Client Portal Models =====
 
 model ClientDashboard {
-  id             String   @id @default(uuid())
-  tenantId       String
-  auditId        String   @unique
-  healthScore    Int
-  lastScanDate   DateTime
-  previousScore  Int?
-  scoreChange    Int?
-  findingsFixed  Int
-  findingsTotal  Int
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  id            String   @id @default(uuid())
+  tenantId      String
+  auditId       String   @unique
+  healthScore   Int
+  lastScanDate  DateTime
+  previousScore Int?
+  scoreChange   Int?
+  findingsFixed Int
+  findingsTotal Int
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   @@index([tenantId])
   @@index([auditId])
 }
 
 model UpsellOpportunity {
-  id            String   @id @default(uuid())
+  id            String    @id @default(uuid())
   tenantId      String
   proposalId    String
-  triggerType   String   // 'competitor', 'scheduled_audit', 'manual'
+  triggerType   String // 'competitor', 'scheduled_audit', 'manual'
   triggerReason String
-  status        String   // 'created', 'sent', 'viewed', 'accepted', 'rejected'
+  status        String // 'created', 'sent', 'viewed', 'accepted', 'rejected'
   sentAt        DateTime?
   acceptedAt    DateTime?
-  dealValue     Decimal? @db.Decimal(10, 2)
-  createdAt     DateTime @default(now())
+  dealValue     Decimal?  @db.Decimal(10, 2)
+  createdAt     DateTime  @default(now())
 
   @@index([tenantId, status])
   @@index([triggerType])
 }
 
 model NotificationPreference {
-  id          String   @id @default(uuid())
-  tenantId    String
-  userId      String
+  id           String   @id @default(uuid())
+  tenantId     String
+  userId       String
   emailEnabled Boolean  @default(true)
   smsEnabled   Boolean  @default(false)
-  frequency    String   // 'instant', 'daily', 'weekly', 'never'
-  types        Json     // { proposalReady: true, proposalViewed: true, nps: true, upsell: false }
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  frequency    String // 'instant', 'daily', 'weekly', 'never'
+  types        Json // { proposalReady: true, proposalViewed: true, nps: true, upsell: false }
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   @@unique([tenantId, userId])
 }
 
 model ScheduledAuditRun {
-  id              String   @id @default(uuid())
-  tenantId        String
-  scheduleId      String
-  auditId         String
-  previousAuditId String?
-  status          String   // 'queued', 'running', 'completed', 'failed'
+  id               String    @id @default(uuid())
+  tenantId         String
+  scheduleId       String
+  auditId          String
+  previousAuditId  String?
+  status           String // 'queued', 'running', 'completed', 'failed'
   comparisonReport Json?
-  startedAt       DateTime?
-  completedAt     DateTime?
-  createdAt       DateTime @default(now())
+  startedAt        DateTime?
+  completedAt      DateTime?
+  createdAt        DateTime  @default(now())
 
   @@index([tenantId])
   @@index([scheduleId])
@@ -1966,47 +1980,47 @@ model ScheduledAuditRun {
 }
 
 model CompetitorSignal {
-  id              String   @id @default(uuid())
-  tenantId        String
-  leadId          String?
-  signalType      String   // 'competitor_new_review', 'competitor_rating_change', etc.
-  priority        String   // 'high', 'medium', 'low'
-  competitorName  String
-  competitorUrl   String?
-  signalData      Json
-  outreachTriggered Boolean @default(false)
-  upsellProposalId String?
-  detectedAt      DateTime @default(now())
-  createdAt       DateTime @default(now())
+  id                String   @id @default(uuid())
+  tenantId          String
+  leadId            String?
+  signalType        String // 'competitor_new_review', 'competitor_rating_change', etc.
+  priority          String // 'high', 'medium', 'low'
+  competitorName    String
+  competitorUrl     String?
+  signalData        Json
+  outreachTriggered Boolean  @default(false)
+  upsellProposalId  String?
+  detectedAt        DateTime @default(now())
+  createdAt         DateTime @default(now())
 
   @@index([tenantId, signalType, detectedAt])
   @@index([leadId])
 }
 
 model ReEngagementCampaign {
-  id           String   @id @default(uuid())
-  tenantId     String
-  proposalId   String
-  status       String   // 'pending', 'sent', 'completed', 'converted'
-  step         Int      @default(0) // 1, 2, 3 for email sequence
-  lastSentAt   DateTime?
-  convertedAt  DateTime?
-  createdAt    DateTime @default(now())
+  id          String    @id @default(uuid())
+  tenantId    String
+  proposalId  String
+  status      String // 'pending', 'sent', 'completed', 'converted'
+  step        Int       @default(0) // 1, 2, 3 for email sequence
+  lastSentAt  DateTime?
+  convertedAt DateTime?
+  createdAt   DateTime  @default(now())
 
   @@index([tenantId, status])
   @@index([proposalId])
 }
 
 model WinBackCampaign {
-  id           String   @id @default(uuid())
-  tenantId     String
+  id             String    @id @default(uuid())
+  tenantId       String
   formerTenantId String
-  status       String   // 'pending', 'sent', 'completed', 'converted'
-  step         Int      @default(0)
-  offerCode    String?
-  lastSentAt   DateTime?
-  convertedAt  DateTime?
-  createdAt    DateTime @default(now())
+  status         String // 'pending', 'sent', 'completed', 'converted'
+  step           Int       @default(0)
+  offerCode      String?
+  lastSentAt     DateTime?
+  convertedAt    DateTime?
+  createdAt      DateTime  @default(now())
 
   @@index([tenantId, status])
   @@index([formerTenantId])
@@ -2018,28 +2032,28 @@ model WinBackCampaign {
 
 // Prompt Version Control - Git-like versioning for prompts
 model PromptVersion {
-  id                  String   @id @default(uuid())
-  versionHash         String   @unique // SHA256 of nodeId + promptText + timestamp
-  nodeId              String   // e.g., "executive_summary", "pricing_generation"
-  promptText          String   @db.Text
-  createdBy           String   // User ID or system
-  parentVersionHash   String?  // Parent version for lineage tracking
-  branchName          String   @default("main") // Support branching
-  changelog           String
-  isActive            Boolean  @default(false) // Only one active version per node
-  environment         String   @default("production") // dev, staging, production
-  metadata            Json     @default("{}") // Additional metadata
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
+  id                String   @id @default(uuid())
+  versionHash       String   @unique // SHA256 of nodeId + promptText + timestamp
+  nodeId            String // e.g., "executive_summary", "pricing_generation"
+  promptText        String   @db.Text
+  createdBy         String // User ID or system
+  parentVersionHash String? // Parent version for lineage tracking
+  branchName        String   @default("main") // Support branching
+  changelog         String
+  isActive          Boolean  @default(false) // Only one active version per node
+  environment       String   @default("production") // dev, staging, production
+  metadata          Json     @default("{}") // Additional metadata
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 
   // Multi-Tenancy
-  tenantId            String?  // Null = system-wide prompt
-  tenant              Tenant?  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenantId String? // Null = system-wide prompt
+  tenant   Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   // Relations
-  performanceLogs     PromptPerformanceLog[]
-  experimentVariants  ABVariant[]
-  predictions         Prediction[]
+  performanceLogs    PromptPerformanceLog[]
+  experimentVariants ABVariant[]
+  predictions        Prediction[]
 
   @@index([nodeId])
   @@index([versionHash])
@@ -2051,26 +2065,26 @@ model PromptVersion {
 
 // Append-Only Performance Log - Tracks every LLM call
 model PromptPerformanceLog {
-  id                  String   @id @default(uuid())
-  timestamp           DateTime @default(now())
-  promptVersionHash   String
-  nodeId              String
-  qualityScore        Float    // 0-100 score from QA evaluation
-  downstreamImpact    Float    // 0-100 impact on downstream metrics
-  costUSD             Float    // Actual cost in USD
-  latencyMs           Int      // Response time in milliseconds
-  inputTokens         Int      // Tokens in prompt
-  outputTokens        Int      // Tokens in response
-  experimentId        String?  // If part of A/B test
-  variantId           String?  // If part of A/B test
-  metadata            Json     @default("{}") // Model, temperature, etc.
+  id                String   @id @default(uuid())
+  timestamp         DateTime @default(now())
+  promptVersionHash String
+  nodeId            String
+  qualityScore      Float // 0-100 score from QA evaluation
+  downstreamImpact  Float // 0-100 impact on downstream metrics
+  costUSD           Float // Actual cost in USD
+  latencyMs         Int // Response time in milliseconds
+  inputTokens       Int // Tokens in prompt
+  outputTokens      Int // Tokens in response
+  experimentId      String? // If part of A/B test
+  variantId         String? // If part of A/B test
+  metadata          Json     @default("{}") // Model, temperature, etc.
 
   // Multi-Tenancy
-  tenantId            String
-  tenant              Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   // Relations
-  promptVersion       PromptVersion @relation(fields: [promptVersionHash], references: [versionHash], onDelete: Cascade)
+  promptVersion PromptVersion @relation(fields: [promptVersionHash], references: [versionHash], onDelete: Cascade)
 
   @@index([promptVersionHash])
   @@index([nodeId])
@@ -2081,24 +2095,24 @@ model PromptPerformanceLog {
 
 // A/B Testing Framework - Experiment management
 model ABExperiment {
-  id                      String   @id @default(uuid())
+  id                      String    @id @default(uuid())
   name                    String
-  nodeId                  String   // Which prompt node is being tested
-  status                  String   @default("active") // active, completed, paused
-  startDate               DateTime @default(now())
+  nodeId                  String // Which prompt node is being tested
+  status                  String    @default("active") // active, completed, paused
+  startDate               DateTime  @default(now())
   endDate                 DateTime?
-  winnerVariantId         String?  // Winning variant after completion
-  statisticalSignificance Float?   // p-value if completed
-  metadata                Json     @default("{}")
-  createdAt               DateTime @default(now())
-  updatedAt               DateTime @updatedAt
+  winnerVariantId         String? // Winning variant after completion
+  statisticalSignificance Float? // p-value if completed
+  metadata                Json      @default("{}")
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
 
   // Multi-Tenancy
-  tenantId                String
-  tenant                  Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   // Relations
-  variants                ABVariant[]
+  variants ABVariant[]
 
   @@index([nodeId])
   @@index([status])
@@ -2107,19 +2121,19 @@ model ABExperiment {
 
 // A/B Testing Framework - Variant definitions
 model ABVariant {
-  id                      String   @id @default(uuid())
-  experimentId            String
-  promptVersionHash       String
-  trafficPercentage       Int      // 0-100
-  sampleSize              Int      @default(0) // Number of requests routed here
-  avgQualityScore         Float?   // Running average
-  avgDownstreamImpact     Float?   // Running average
-  createdAt               DateTime @default(now())
-  updatedAt               DateTime @updatedAt
+  id                  String   @id @default(uuid())
+  experimentId        String
+  promptVersionHash   String
+  trafficPercentage   Int // 0-100
+  sampleSize          Int      @default(0) // Number of requests routed here
+  avgQualityScore     Float? // Running average
+  avgDownstreamImpact Float? // Running average
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
 
   // Relations
-  experiment              ABExperiment @relation(fields: [experimentId], references: [id], onDelete: Cascade)
-  promptVersion           PromptVersion @relation(fields: [promptVersionHash], references: [versionHash])
+  experiment    ABExperiment  @relation(fields: [experimentId], references: [id], onDelete: Cascade)
+  promptVersion PromptVersion @relation(fields: [promptVersionHash], references: [versionHash])
 
   @@index([experimentId])
   @@index([promptVersionHash])
@@ -2127,25 +2141,25 @@ model ABVariant {
 
 // Predictive Intelligence - Storage for predictions
 model Prediction {
-  id                      String   @id @default(uuid())
-  auditId                 String?  // Associated audit
-  predictionType          String   // traffic, ranking, competitor, revenue, algorithm
+  id                      String    @id @default(uuid())
+  auditId                 String? // Associated audit
+  predictionType          String // traffic, ranking, competitor, revenue, algorithm
   predictedValue          Float
   confidenceIntervalLower Float
   confidenceIntervalUpper Float
-  actualValue             Float?   // Set when observed
+  actualValue             Float? // Set when observed
   observedAt              DateTime? // When actual was recorded
-  predictionDate          DateTime @default(now())
-  metadata                Json     @default("{}")
-  createdAt               DateTime @default(now())
+  predictionDate          DateTime  @default(now())
+  metadata                Json      @default("{}")
+  createdAt               DateTime  @default(now())
 
   // Multi-Tenancy
-  tenantId                String
-  tenant                  Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   // Relations
-  promptVersion           PromptVersion? @relation(fields: [promptVersionHash], references: [versionHash])
-  promptVersionHash       String?
+  promptVersion     PromptVersion? @relation(fields: [promptVersionHash], references: [versionHash])
+  promptVersionHash String?
 
   @@index([auditId])
   @@index([predictionType])
@@ -2156,19 +2170,19 @@ model Prediction {
 // What-If Scenarios - Scenario planning results
 model Scenario {
   id                      String   @id @default(uuid())
-  auditId                 String   // Associated audit
-  selectedRecommendations Json     // Array of recommendation IDs
-  projectedROI            Float    // Expected ROI percentage
-  projectedTimeline       String   // e.g., "3 months"
-  projectedTraffic        Int      // Expected traffic increase
-  confidenceIntervals     Json     // { roi: [min, max], traffic: [min, max] }
-  comparisonToBaseline    Json     // { roiDelta, trafficDelta, timelineDelta }
-  calculationTimeMs       Int      // Time to calculate
+  auditId                 String // Associated audit
+  selectedRecommendations Json // Array of recommendation IDs
+  projectedROI            Float // Expected ROI percentage
+  projectedTimeline       String // e.g., "3 months"
+  projectedTraffic        Int // Expected traffic increase
+  confidenceIntervals     Json // { roi: [min, max], traffic: [min, max] }
+  comparisonToBaseline    Json // { roiDelta, trafficDelta, timelineDelta }
+  calculationTimeMs       Int // Time to calculate
   createdAt               DateTime @default(now())
 
   // Multi-Tenancy
-  tenantId                String
-  tenant                  Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([auditId])
   @@index([tenantId])

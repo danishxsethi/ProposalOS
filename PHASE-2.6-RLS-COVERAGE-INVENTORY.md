@@ -285,3 +285,8 @@ Phase closure:
 - Phase 2.6-C follow-on design is captured in `PHASE-2.6-C-SCHEMA-GAP-PLAN.md`. It classifies the remaining 9 indirect tenant-scoped candidates into:
   - direct `tenantId` + deterministic backfill (`FindingStatus`, `ClientMessage`, `ReviewSnapshot`, `ConversationState`, `ObjectionLog`, `EmailSequence`, `ABVariant`)
   - parent-join RLS only (`Account`, `Session`)
+- Phase 2.6-D implements the audit-scoped direct-column subset:
+  - complete: `FindingStatus`, `ClientMessage`, `ReviewSnapshot`
+  - remaining direct-column candidates: `ConversationState`, `ObjectionLog`, `EmailSequence`, `ABVariant`
+  - remaining parent-policy candidates: `Account`, `Session`
+  - raw SQL hardening and local `app_user + RLS` verification remain open

@@ -60,6 +60,7 @@ export async function monitorReputation() {
           await prisma.reviewSnapshot.create({
             data: {
               auditId: audit.id,
+              tenantId: audit.tenantId,
               rating: metrics.rating,
               count: metrics.reviewCount,
               source: 'google',
