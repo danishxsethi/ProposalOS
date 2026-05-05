@@ -10,12 +10,12 @@
 | Category                                                                       | Count | Notes                                                                                                       |
 | ------------------------------------------------------------------------------ | ----: | ----------------------------------------------------------------------------------------------------------- |
 | Prisma models total                                                            |    89 | Parsed from `prisma/schema.prisma`                                                                          |
-| Models with first-class `tenantId`                                             |    69 | Direct tenant-bearing schema models                                                                         |
-| Tenant-bearing models covered by `tenant_isolation`                            |    69 | `50` from Phase 2.1.5 plus `16` added in Phase 2.6-B plus `3` added in Phase 2.6-E                          |
+| Models with first-class `tenantId`                                             |    70 | Direct tenant-bearing schema models                                                                         |
+| Tenant-bearing models covered by `tenant_isolation`                            |    70 | `50` from Phase 2.1.5 plus `16` added in Phase 2.6-B plus `3` added in Phase 2.6-E plus `1` in Phase 2.6-G  |
 | Tenant-bearing models uncovered by `tenant_isolation`                          |     0 | First-class tenant-bearing coverage is still closed                                                         |
-| Models with `tenant_bypass` policy                                             |    69 | Bypass parity matches all first-class tenant-bearing tables                                                 |
+| Models with `tenant_bypass` policy                                             |    70 | Bypass parity matches all first-class tenant-bearing tables                                                 |
 | Tenant-bearing models missing `tenant_bypass`                                  |     0 | First-class tenant-bearing bypass parity is still closed                                                    |
-| Indirect tenant-scoped candidates (no `tenantId`, tenant implied by parent FK) |     3 | `ABVariant`, `Account`, and `Session` remain; `Account`/`Session` are blocked on auth-safety preflight      |
+| Indirect tenant-scoped candidates (no `tenantId`, tenant implied by parent FK) |     2 | `Account` and `Session` remain; both are blocked on auth-safety preflight                                   |
 | Tenant-agnostic / shared-system tables                                         |    14 | Includes one mixed telemetry table (`Metric`) that likely needs design, not simple RLS                      |
 | Direct executable raw SQL callsites                                            |    21 | Across 9 production files; 2 comment-only grep matches excluded                                             |
 | Hidden raw-SQL helper fan-out                                                  |     7 | Additional `executeQuery` / `executeCommand` / `executeTransaction` uses under `lib/self-evolving-prompts/` |
@@ -102,19 +102,17 @@ These are now covered by `20260504164459_rls_cover_remaining_tenant_tables`:
 
 ## Indirect Tenant-Scoped Candidates
 
-These 3 models still do not have first-class `tenantId`, but tenant ownership is implied by a parent relation and they remain the open indirect-schema candidates after Phase 2.6-E:
+These 2 models still do not have first-class `tenantId`, but tenant ownership is implied by a parent relation and they remain the open indirect-schema candidates after Phase 2.6-G:
 
-| Model       | Parent relation                 | Why it is a candidate                                                   |
-| ----------- | ------------------------------- | ----------------------------------------------------------------------- |
-| `Account`   | `User`                          | Auth account records are tenant-scoped via the owning user today        |
-| `Session`   | `User`                          | Auth sessions are tenant-scoped via the owning user today               |
-| `ABVariant` | `ABExperiment`, `PromptVersion` | Variant ownership is implied by the experiment / prompt version lineage |
+| Model     | Parent relation | Why it is a candidate                                            |
+| --------- | --------------- | ---------------------------------------------------------------- |
+| `Account` | `User`          | Auth account records are tenant-scoped via the owning user today |
+| `Session` | `User`          | Auth sessions are tenant-scoped via the owning user today        |
 
 ### Known Phase 2.6 Candidate Gaps Reconciled
 
 The previously noted candidate gap set is confirmed by the current schema:
 
-- `ABVariant`
 - `Account`
 - `Session`
 
@@ -157,7 +155,7 @@ Notes:
 
 ## Bypass Parity
 
-- `tenant_bypass` coverage is currently **69 / 69** for the first-class tenant-bearing tables covered by `tenant_isolation`.
+- `tenant_bypass` coverage is currently **70 / 70** for the first-class tenant-bearing tables covered by `tenant_isolation`.
 - There are **0** tables covered by `tenant_isolation` but missing `tenant_bypass`.
 - First-class tenant-bearing bypass parity is now closed; the remaining RLS design surface is the indirect tenant-scoped candidate set.
 
@@ -175,7 +173,7 @@ Direct grep inventory (`$queryRaw`, `$queryRawUnsafe`, `$executeRaw`, `$executeR
 | `app/api/tenants/[tenantId]/delete-data/route.ts`         |                        4 | unsafe under `app_user + RLS`             | high   | Three tenant-local deletes target models whose schema / raw-query contracts still need cleanup; one audit-trail status query reads `AuditTrailEvent` |
 | `app/api/health/route.ts`                                 |                        1 | tenant-agnostic/system query              | low    | `SELECT 1` itself is harmless, though the route’s non-raw Prisma counts still need app-user verification                                             |
 | `app/api/cron/prompt-promotion/route.ts`                  |                        1 | unknown / manual review                   | medium | Cross-tenant/system analytics query over raw prompt-performance storage; currently outside the shim’s raw-query protection                           |
-| `lib/self-evolving-prompts/data-access/ab-experiments.ts` |                        2 | unsafe under `app_user + RLS`             | high   | Direct raw writes to experiment / variant storage; `ABExperiment` is covered in 2.6-B but `ABVariant` remains an indirect candidate                  |
+| `lib/self-evolving-prompts/data-access/ab-experiments.ts` |                        2 | unsafe under `app_user + RLS`             | high   | Inventory snapshot from 2.6-A; ABVariant paired raw-SQL coverage was implemented in 2.6-G, but the broader self-evolving-prompts raw surface remains |
 | `lib/self-evolving-prompts/db.ts`                         |                        3 | unsafe abstraction under `app_user + RLS` | high   | Standalone `PrismaClient` plus generic raw query/command wrappers bypass the shared shim entirely                                                    |
 | `lib/outreach/sprint2/sniperWorker.ts`                    |                        1 | tenant-agnostic/system query              | low    | Global `EmailBlocklist` check appears intentionally system-wide                                                                                      |
 
@@ -283,7 +281,7 @@ Phase closure:
 
 ## Inventory Notes
 
-- The current base RLS migration header still says `target 50/67 multi-tenant models`, but the current Prisma schema now parses to **69** first-class tenant-bearing models after the 2.6-D and 2.6-E direct-column additions. The stale `67` appears to be an older working count rather than the current schema truth.
+- The current base RLS migration header still says `target 50/67 multi-tenant models`, but the current Prisma schema now parses to **70** first-class tenant-bearing models after the 2.6-D, 2.6-E, and 2.6-G direct-column additions. The stale `67` appears to be an older working count rather than the current schema truth.
 - That same header includes `Metric` in the “known remaining gaps” comment even though `Metric` does not expose first-class `tenantId` in Prisma today. Treat that as documentation drift, not as evidence that `Metric` is already a ready-to-policy table.
 - Phase 2.6-C follow-on design is captured in `PHASE-2.6-C-SCHEMA-GAP-PLAN.md`. It classifies the remaining 9 indirect tenant-scoped candidates into:
   - direct `tenantId` + deterministic backfill (`FindingStatus`, `ClientMessage`, `ReviewSnapshot`, `ConversationState`, `ObjectionLog`, `EmailSequence`, `ABVariant`)
@@ -301,6 +299,12 @@ Phase closure:
 - Phase 2.6-F preflighted the auth tables and intentionally did not create a migration:
   - `Account`: blocked on auth-adapter pre-tenant lookup/link flows
   - `Session`: blocked on unverified adapter/session behavior under RLS despite JWT strategy
-  - remaining direct-column candidate: `ABVariant`
+  - remaining direct-column candidate at that point: `ABVariant`
   - remaining auth-table candidates: `Account`, `Session`
   - raw SQL hardening and local `app_user + RLS` verification remain open
+- Phase 2.6-G completes the last direct-column schema gap:
+  - complete: `ABVariant`
+  - `tenantId`, deterministic backfill, `tenant_isolation`, and `tenant_bypass` added
+  - ABVariant raw SQL readers/writers were updated in the paired batch
+  - remaining indirect candidates: `Account`, `Session`
+  - broader raw SQL hardening and local `app_user + RLS` verification remain open

@@ -3,7 +3,12 @@
  * Implements experiment management and traffic routing
  */
 
-import { executeCommand, executeQuery, executeTransaction } from '../db';
+import { prisma } from '@/lib/prisma';
+import {
+  getTenantRuntimeContextFromStore,
+  runWithPrismaTransactionContext,
+} from '@/lib/tenant/context';
+
 import {
   ABExperiment,
   ABExperimentRow,
@@ -13,60 +18,147 @@ import {
   WinnerResult,
 } from '../types';
 
+import type { Prisma } from '@prisma/client';
+
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const BYPASS_TENANT_SENTINEL = '00000000-0000-0000-0000-000000000000';
+
+function assertTenantContext(operationName: string, tenantId: string | null): string {
+  if (!tenantId) {
+    throw new Error(`Tenant context required for ${operationName}: missing tenant context`);
+  }
+
+  if (!UUID_PATTERN.test(tenantId)) {
+    throw new Error(`Tenant context required for ${operationName}: invalid tenant context`);
+  }
+
+  return tenantId;
+}
+
+async function applyRawRlsContext(
+  tx: Prisma.TransactionClient,
+  operationName: string,
+  tenantIdOverride?: string
+) {
+  const { tenantId, bypassRls } = getTenantRuntimeContextFromStore();
+
+  if (bypassRls) {
+    await tx.$queryRaw`SELECT set_config('app.current_tenant_id', ${BYPASS_TENANT_SENTINEL}, true)`;
+    await tx.$queryRaw`SELECT set_config('app.bypass_rls', 'true', true)`;
+    return;
+  }
+
+  const effectiveTenantId = assertTenantContext(operationName, tenantIdOverride ?? tenantId);
+
+  await tx.$queryRaw`SELECT set_config('app.bypass_rls', 'false', true)`;
+  await tx.$queryRaw`SELECT set_config('app.current_tenant_id', ${effectiveTenantId}, true)`;
+}
+
+async function withRawTransaction<T>(
+  operationName: string,
+  callback: (tx: Prisma.TransactionClient) => Promise<T>,
+  tenantIdOverride?: string
+): Promise<T> {
+  const { currentTx } = getTenantRuntimeContextFromStore();
+
+  if (currentTx) {
+    await applyRawRlsContext(currentTx, operationName, tenantIdOverride);
+    return callback(currentTx);
+  }
+
+  return prisma.$transaction((tx) =>
+    runWithPrismaTransactionContext(tx, async () => {
+      await applyRawRlsContext(tx, operationName, tenantIdOverride);
+      return callback(tx);
+    })
+  );
+}
+
+async function runQuery<T>(
+  operationName: string,
+  query: string,
+  params: unknown[] = []
+): Promise<T[]> {
+  return withRawTransaction(operationName, (tx) => tx.$queryRawUnsafe<T[]>(query, ...params));
+}
+
+async function runCommand(
+  operationName: string,
+  command: string,
+  params: unknown[] = []
+): Promise<number> {
+  return withRawTransaction(operationName, (tx) => tx.$executeRawUnsafe(command, ...params));
+}
+
+function requireFirstRow<T>(rows: T[], operationName: string): T {
+  const row = rows[0];
+  if (!row) {
+    throw new Error(`${operationName} returned no rows`);
+  }
+  return row;
+}
+
 /**
  * Create a new A/B experiment with variants
  * Validates: Requirements 2.1
  */
 export async function createExperiment(config: ExperimentConfig): Promise<ABExperiment> {
-  // Validate configuration
   const totalPercentage = config.variants.reduce((sum, v) => sum + v.trafficPercentage, 0);
   if (Math.abs(totalPercentage - 100) > 0.01) {
     throw new Error(`Traffic percentages must sum to 100, got ${totalPercentage}`);
   }
 
-  return executeTransaction(async (tx) => {
-    // Create experiment
-    const experimentQuery = `
-      INSERT INTO ab_experiments (
-        name,
-        node_id,
-        status
-      ) VALUES ($1, $2, $3)
-      RETURNING *
-    `;
+  const tenantId = assertTenantContext('ABExperiment.create', config.tenantId ?? null);
 
-    const experimentRows = await tx.$queryRawUnsafe<ABExperimentRow[]>(
-      experimentQuery,
-      config.name,
-      config.nodeId,
-      'active'
-    );
-    const experimentRow = experimentRows[0];
-
-    // Create variants
-    const variants: ABVariant[] = [];
-    for (const variantConfig of config.variants) {
-      const variantQuery = `
-        INSERT INTO ab_variants (
-          experiment_id,
-          prompt_version_hash,
-          traffic_percentage
-        ) VALUES ($1, $2, $3)
+  return withRawTransaction(
+    'ABExperiment.create',
+    async (tx) => {
+      const experimentQuery = `
+        INSERT INTO "ABExperiment" (
+          "name",
+          "nodeId",
+          "tenantId",
+          "status"
+        ) VALUES ($1, $2, $3, $4)
         RETURNING *
       `;
 
-      const variantRows = await tx.$queryRawUnsafe<ABVariantRow[]>(
-        variantQuery,
-        experimentRow.id,
-        variantConfig.promptVersionHash,
-        variantConfig.trafficPercentage
+      const experimentRows = await tx.$queryRawUnsafe<ABExperimentRow[]>(
+        experimentQuery,
+        config.name,
+        config.nodeId,
+        tenantId,
+        'active'
       );
+      const experimentRow = requireFirstRow(experimentRows, 'ABExperiment.create');
 
-      variants.push(mapRowToVariant(variantRows[0]));
-    }
+      const variants: ABVariant[] = [];
+      for (const variantConfig of config.variants) {
+        const variantQuery = `
+          INSERT INTO "ABVariant" (
+            "experimentId",
+            "promptVersionHash",
+            "tenantId",
+            "trafficPercentage"
+          ) VALUES ($1, $2, $3, $4)
+          RETURNING *
+        `;
 
-    return mapRowToExperiment(experimentRow, variants);
-  });
+        const variantRows = await tx.$queryRawUnsafe<ABVariantRow[]>(
+          variantQuery,
+          experimentRow.id,
+          variantConfig.promptVersionHash,
+          experimentRow.tenantId,
+          variantConfig.trafficPercentage
+        );
+
+        variants.push(mapRowToVariant(requireFirstRow(variantRows, 'ABVariant.create')));
+      }
+
+      return mapRowToExperiment(experimentRow, variants);
+    },
+    tenantId
+  );
 }
 
 /**
@@ -74,20 +166,27 @@ export async function createExperiment(config: ExperimentConfig): Promise<ABExpe
  */
 export async function getExperimentById(experimentId: string): Promise<ABExperiment | null> {
   const experimentQuery = `
-    SELECT * FROM ab_experiments WHERE id = $1
+    SELECT * FROM "ABExperiment" WHERE "id" = $1
   `;
-  const experimentRows = await executeQuery<ABExperimentRow>(experimentQuery, [experimentId]);
+  const experimentRows = await runQuery<ABExperimentRow>('ABExperiment.getById', experimentQuery, [
+    experimentId,
+  ]);
 
   if (experimentRows.length === 0) {
     return null;
   }
 
   const variantQuery = `
-    SELECT * FROM ab_variants WHERE experiment_id = $1
+    SELECT * FROM "ABVariant" WHERE "experimentId" = $1
   `;
-  const variantRows = await executeQuery<ABVariantRow>(variantQuery, [experimentId]);
+  const variantRows = await runQuery<ABVariantRow>('ABVariant.listByExperiment', variantQuery, [
+    experimentId,
+  ]);
 
-  return mapRowToExperiment(experimentRows[0], variantRows.map(mapRowToVariant));
+  return mapRowToExperiment(
+    requireFirstRow(experimentRows, 'ABExperiment.getById'),
+    variantRows.map(mapRowToVariant)
+  );
 }
 
 /**
@@ -95,27 +194,28 @@ export async function getExperimentById(experimentId: string): Promise<ABExperim
  */
 export async function getActiveExperiments(nodeId?: string): Promise<ABExperiment[]> {
   let query = `
-    SELECT * FROM ab_experiments
-    WHERE status = 'active'
+    SELECT * FROM "ABExperiment"
+    WHERE "status" = 'active'
   `;
-  const params: any[] = [];
+  const params: unknown[] = [];
 
   if (nodeId) {
-    query += ` AND node_id = $1`;
+    query += ` AND "nodeId" = $1`;
     params.push(nodeId);
   }
 
-  query += ` ORDER BY created_at DESC`;
+  query += ` ORDER BY "createdAt" DESC`;
 
-  const experimentRows = await executeQuery<ABExperimentRow>(query, params);
+  const experimentRows = await runQuery<ABExperimentRow>('ABExperiment.listActive', query, params);
 
-  // Fetch variants for each experiment
   const experiments: ABExperiment[] = [];
   for (const expRow of experimentRows) {
     const variantQuery = `
-      SELECT * FROM ab_variants WHERE experiment_id = $1
+      SELECT * FROM "ABVariant" WHERE "experimentId" = $1
     `;
-    const variantRows = await executeQuery<ABVariantRow>(variantQuery, [expRow.id]);
+    const variantRows = await runQuery<ABVariantRow>('ABVariant.listByExperiment', variantQuery, [
+      expRow.id,
+    ]);
 
     experiments.push(mapRowToExperiment(expRow, variantRows.map(mapRowToVariant)));
   }
@@ -127,20 +227,19 @@ export async function getActiveExperiments(nodeId?: string): Promise<ABExperimen
  * Route a request to a variant based on traffic percentages
  * Validates: Requirements 2.2
  */
-export async function routeRequest(nodeId: string, context: any = {}): Promise<string> {
-  // Get active experiment for this node
+export async function routeRequest(nodeId: string, _context: any = {}): Promise<string> {
   const experiments = await getActiveExperiments(nodeId);
 
   if (experiments.length === 0) {
     throw new Error(`No active experiment found for node ${nodeId}`);
   }
 
-  const experiment = experiments[0]; // Use the first active experiment
-
-  // Generate a random number between 0 and 100
+  const experiment = experiments[0];
+  if (!experiment) {
+    throw new Error(`No active experiment found for node ${nodeId}`);
+  }
   const random = Math.random() * 100;
 
-  // Route based on traffic percentages
   let cumulative = 0;
   for (const variant of experiment.variants) {
     cumulative += variant.trafficPercentage;
@@ -149,8 +248,12 @@ export async function routeRequest(nodeId: string, context: any = {}): Promise<s
     }
   }
 
-  // Fallback to last variant (should not happen if percentages sum to 100)
-  return experiment.variants[experiment.variants.length - 1].promptVersionHash;
+  const fallbackVariant = experiment.variants[experiment.variants.length - 1];
+  if (!fallbackVariant) {
+    throw new Error(`No active experiment found for node ${nodeId}`);
+  }
+
+  return fallbackVariant.promptVersionHash;
 }
 
 /**
@@ -162,22 +265,22 @@ export async function updateVariantMetrics(
   downstreamImpact: number
 ): Promise<void> {
   const query = `
-    UPDATE ab_variants
+    UPDATE "ABVariant"
     SET
-      sample_size = sample_size + 1,
-      avg_quality_score = COALESCE(
-        (avg_quality_score * sample_size + $2) / (sample_size + 1),
+      "sampleSize" = "sampleSize" + 1,
+      "avgQualityScore" = COALESCE(
+        ("avgQualityScore" * "sampleSize" + $2) / ("sampleSize" + 1),
         $2
       ),
-      avg_downstream_impact = COALESCE(
-        (avg_downstream_impact * sample_size + $3) / (sample_size + 1),
+      "avgDownstreamImpact" = COALESCE(
+        ("avgDownstreamImpact" * "sampleSize" + $3) / ("sampleSize" + 1),
         $3
       ),
-      updated_at = NOW()
-    WHERE id = $1
+      "updatedAt" = NOW()
+    WHERE "id" = $1
   `;
 
-  await executeCommand(query, [variantId, qualityScore, downstreamImpact]);
+  await runCommand('ABVariant.updateMetrics', query, [variantId, qualityScore, downstreamImpact]);
 }
 
 /**
@@ -194,29 +297,26 @@ export async function checkForWinner(
     return null;
   }
 
-  // Check if all variants have minimum sample size
   const allHaveMinSamples = experiment.variants.every((v) => v.sampleSize >= minSampleSize);
   if (!allHaveMinSamples) {
     return null;
   }
 
-  // Find variant with highest quality score
   const sortedVariants = [...experiment.variants].sort(
     (a, b) => (b.avgQualityScore || 0) - (a.avgQualityScore || 0)
   );
 
   const winner = sortedVariants[0];
   const runnerUp = sortedVariants[1];
+  if (!winner || !runnerUp) {
+    return null;
+  }
 
-  // Simple statistical test (simplified t-test approximation)
-  // In production, use a proper statistical library
   const scoreDiff = (winner.avgQualityScore || 0) - (runnerUp.avgQualityScore || 0);
   const pooledStdDev = Math.sqrt(
     (winner.sampleSize + runnerUp.sampleSize) / (winner.sampleSize * runnerUp.sampleSize)
   );
   const tStat = scoreDiff / pooledStdDev;
-
-  // Approximate p-value (simplified)
   const pValue = Math.exp(-Math.abs(tStat));
 
   if (pValue < 0.05) {
@@ -240,16 +340,16 @@ export async function completeExperiment(
   winnerVariantId: string
 ): Promise<void> {
   const query = `
-    UPDATE ab_experiments
+    UPDATE "ABExperiment"
     SET
-      status = 'completed',
-      end_date = NOW(),
-      winner_variant_id = $2,
-      updated_at = NOW()
-    WHERE id = $1
+      "status" = 'completed',
+      "endDate" = NOW(),
+      "winnerVariantId" = $2,
+      "updatedAt" = NOW()
+    WHERE "id" = $1
   `;
 
-  await executeCommand(query, [experimentId, winnerVariantId]);
+  await runCommand('ABExperiment.complete', query, [experimentId, winnerVariantId]);
 }
 
 /**
@@ -257,12 +357,12 @@ export async function completeExperiment(
  */
 export async function pauseExperiment(experimentId: string): Promise<void> {
   const query = `
-    UPDATE ab_experiments
-    SET status = 'paused', updated_at = NOW()
-    WHERE id = $1
+    UPDATE "ABExperiment"
+    SET "status" = 'paused', "updatedAt" = NOW()
+    WHERE "id" = $1
   `;
 
-  await executeCommand(query, [experimentId]);
+  await runCommand('ABExperiment.pause', query, [experimentId]);
 }
 
 /**
@@ -270,61 +370,55 @@ export async function pauseExperiment(experimentId: string): Promise<void> {
  */
 export async function resumeExperiment(experimentId: string): Promise<void> {
   const query = `
-    UPDATE ab_experiments
-    SET status = 'active', updated_at = NOW()
-    WHERE id = $1
+    UPDATE "ABExperiment"
+    SET "status" = 'active', "updatedAt" = NOW()
+    WHERE "id" = $1
   `;
 
-  await executeCommand(query, [experimentId]);
+  await runCommand('ABExperiment.resume', query, [experimentId]);
 }
 
 /**
  * Get variant by ID
  */
 export async function getVariantById(variantId: string): Promise<ABVariant | null> {
-  const query = `SELECT * FROM ab_variants WHERE id = $1`;
-  const rows = await executeQuery<ABVariantRow>(query, [variantId]);
-  return rows.length > 0 ? mapRowToVariant(rows[0]) : null;
+  const query = `SELECT * FROM "ABVariant" WHERE "id" = $1`;
+  const rows = await runQuery<ABVariantRow>('ABVariant.getById', query, [variantId]);
+  return rows.length > 0 ? mapRowToVariant(requireFirstRow(rows, 'ABVariant.getById')) : null;
 }
 
-/**
- * Map database row to experiment object
- */
 function mapRowToExperiment(row: ABExperimentRow, variants: ABVariant[]): ABExperiment {
   return {
     id: row.id,
     name: row.name,
-    nodeId: row.node_id,
+    nodeId: row.nodeId,
+    tenantId: row.tenantId,
     status: row.status as 'active' | 'completed' | 'paused',
     variants,
-    startDate: row.start_date,
-    endDate: row.end_date || undefined,
-    winnerVariantId: row.winner_variant_id || undefined,
-    statisticalSignificance: row.statistical_significance
-      ? parseFloat(row.statistical_significance.toString())
+    startDate: row.startDate,
+    endDate: row.endDate || undefined,
+    winnerVariantId: row.winnerVariantId || undefined,
+    statisticalSignificance: row.statisticalSignificance
+      ? parseFloat(row.statisticalSignificance.toString())
       : undefined,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
   };
 }
 
-/**
- * Map database row to variant object
- */
 function mapRowToVariant(row: ABVariantRow): ABVariant {
   return {
     id: row.id,
-    experimentId: row.experiment_id,
-    promptVersionHash: row.prompt_version_hash,
-    trafficPercentage: row.traffic_percentage,
-    sampleSize: row.sample_size,
-    avgQualityScore: row.avg_quality_score
-      ? parseFloat(row.avg_quality_score.toString())
+    experimentId: row.experimentId,
+    promptVersionHash: row.promptVersionHash,
+    tenantId: row.tenantId,
+    trafficPercentage: row.trafficPercentage,
+    sampleSize: row.sampleSize,
+    avgQualityScore: row.avgQualityScore ? parseFloat(row.avgQualityScore.toString()) : undefined,
+    avgDownstreamImpact: row.avgDownstreamImpact
+      ? parseFloat(row.avgDownstreamImpact.toString())
       : undefined,
-    avgDownstreamImpact: row.avg_downstream_impact
-      ? parseFloat(row.avg_downstream_impact.toString())
-      : undefined,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
   };
 }

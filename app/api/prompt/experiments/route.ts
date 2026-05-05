@@ -105,6 +105,7 @@ export async function POST(request: NextRequest) {
           return tx.aBVariant.create({
             data: {
               experimentId: experiment.id,
+              tenantId: experiment.tenantId,
               promptVersionHash: variant.promptVersionHash,
               trafficPercentage: variant.trafficPercentage,
               sampleSize: 0,
@@ -121,12 +122,15 @@ export async function POST(request: NextRequest) {
       return { experiment, variants: createdVariants };
     });
 
-    logger.info({
-      experimentId: result.experiment.id,
-      name,
-      nodeId,
-      variantCount: variants.length,
-    }, 'Created A/B experiment');
+    logger.info(
+      {
+        experimentId: result.experiment.id,
+        name,
+        nodeId,
+        variantCount: variants.length,
+      },
+      'Created A/B experiment'
+    );
 
     return NextResponse.json(result, { status: 201 });
   } catch (error) {
