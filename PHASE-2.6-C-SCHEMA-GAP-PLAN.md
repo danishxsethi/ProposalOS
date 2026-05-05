@@ -85,6 +85,34 @@ Resulting open items after 2.6-F:
 
 No production DB changes were made in 2.6-F.
 
+## Phase 2.6-G ABVariant Implementation Update
+
+Implemented in Phase 2.6-G:
+
+- `ABVariant`
+
+What was added in 2.6-G:
+
+- direct `tenantId` column on `ABVariant`
+- deterministic backfill from parent `ABExperiment.tenantId`
+- `tenant_isolation` and `tenant_bypass` policies on `ABVariant`
+- raw SQL reader/writer updates in `lib/self-evolving-prompts/data-access/ab-experiments.ts`
+- required Prisma create-path update in `app/api/prompt/experiments/route.ts`
+
+Remaining schema-gap candidates after 2.6-G:
+
+- auth-table parent-policy batch pending adapter/context plan:
+  - `Account`
+  - `Session`
+
+Carry-forward after 2.6-G:
+
+- `Account` / `Session` remain blocked pending auth-adapter context planning plus local auth/RLS smoke
+- broader raw SQL hardening from the 2.6-A inventory remains open
+- local Postgres / PgBouncer verification under real `app_user + RLS` remains required before Phase 2.6 closure
+
+No production DB changes were made in 2.6-G.
+
 ## Classification Table
 
 | Model               | Table               | Parent                             | Parent tenant-bearing status                                                             | Relation shape                                        | Classification                       | Why                                                                                                                 |
@@ -474,7 +502,7 @@ Raw-SQL hits found during planning:
   - `DELETE FROM "FindingStatus" WHERE "tenantId" = $1`
   - `DELETE FROM "ReviewSnapshot" WHERE "tenantId" = $1`
 - `lib/self-evolving-prompts/data-access/ab-experiments.ts`
-  - raw `INSERT` / `SELECT` on `ab_variants`
+  - raw `INSERT` / `SELECT` on `ABVariant`
 
 No additional direct raw-SQL hits were found for:
 

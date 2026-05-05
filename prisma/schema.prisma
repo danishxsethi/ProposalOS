@@ -406,6 +406,7 @@ model Tenant {
   promptVersions        PromptVersion[]
   promptPerformanceLogs PromptPerformanceLog[]
   abExperiments         ABExperiment[]
+  abVariants            ABVariant[]
   predictions           Prediction[]
   scenarios             Scenario[]
 
@@ -2136,6 +2137,7 @@ model ABVariant {
   id                  String   @id @default(uuid())
   experimentId        String
   promptVersionHash   String
+  tenantId            String
   trafficPercentage   Int // 0-100
   sampleSize          Int      @default(0) // Number of requests routed here
   avgQualityScore     Float? // Running average
@@ -2146,9 +2148,11 @@ model ABVariant {
   // Relations
   experiment    ABExperiment  @relation(fields: [experimentId], references: [id], onDelete: Cascade)
   promptVersion PromptVersion @relation(fields: [promptVersionHash], references: [versionHash])
+  tenant        Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([experimentId])
   @@index([promptVersionHash])
+  @@index([tenantId])
 }
 
 // Predictive Intelligence - Storage for predictions
