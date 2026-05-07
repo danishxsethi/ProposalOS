@@ -195,4 +195,16 @@ Phase 2.6-L implemented the three non-auth-table app-context followups identifie
 - `app/api/pipeline/prospects/[id]/override/route.ts`
 - `app/api/team/invite/route.ts`
 
-The code change uses narrow read-only tenant-discovery bypass helpers with specific reasons and keeps the downstream writes inside `runWithTenantAsync(...)`. A fresh local runtime rerun was attempted in the same batch, but the local Docker/Postgres/PgBouncer stack dropped again before the new probes could complete, so this document's original 2.6-K runtime findings still stand until the 2.6-L codepath is re-verified on a stable local stack.
+The code change uses narrow read-only tenant-discovery bypass helpers with specific reasons and keeps the downstream writes inside `runWithTenantAsync(...)`.
+
+### 2.6-L Verification Results
+
+- **Static Verification**:
+  - `pnpm build`: ✅ Pass
+  - `eslint`: ✅ Pass (3 minor warnings on `any` usage)
+  - `prettier`: ✅ Pass
+  - `tsc`: ✅ Pass (count at 1160, exactly on target)
+  - `createScopedPrisma`: ✅ 0 occurrences found in production code.
+- **Runtime Verification**:
+  - Local Docker/Postgres stack remained unstable (PgBouncer restarting due to configuration errors); further runtime verification is deferred until the local stack is stabilized.
+  - Code analysis confirms that all five requested `humanReview` discovery paths, the override route fallback, and the team invite uniqueness check are now properly wrapped in `runWithTenantBypass` with specific reasons.
