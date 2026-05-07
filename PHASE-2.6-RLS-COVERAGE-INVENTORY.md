@@ -378,6 +378,41 @@ No remaining direct raw-SQL matches are classified as unsafe.
   - `Account` / `Session` remain intentionally blocked pending the auth-adapter context plan
 - New production DB changes made: **none**
 
+## Phase 2.6-K Local app_user + RLS Verification Update
+
+Phase 2.6-K restored the local Postgres + PgBouncer verification stack and re-ran representative `app_user` RLS checks without changing production infrastructure or production data.
+
+- Local stack status:
+  - Docker Desktop was restarted locally.
+  - `docker compose up -d postgres` restored local Postgres on `localhost:5435`.
+  - The checked-in `docker-compose.pgbouncer.yml` is still drifted locally because `bitnami/pgbouncer:latest` no longer resolves and its upstream wiring does not match the current repo network.
+  - A disposable local `pgbouncer/pgbouncer:latest` container was started on the existing Docker network for bounded verification only; no committed compose files were edited.
+- Migration verification status:
+  - `prisma migrate deploy` against an empty `proposal_rls_smoke` database still fails at `20260228_make_tenant_required` because the checked-in migration history is not replayable from empty local state.
+  - For bounded local verification only, the smoke database was rebuilt with `pnpm exec prisma db push --skip-generate`, then the checked-in RLS SQL was applied locally:
+    - `20260429093000_enable_rls`
+    - `20260501014500_rls_bypass_policies`
+    - `20260504164459_rls_cover_remaining_tenant_tables`
+    - Step 5 policy sections from `20260504184154_add_tenant_id_to_audit_scoped_models`
+    - Step 5 policy sections from `20260504224500_add_tenant_id_to_proposal_scoped_models`
+    - Step 5 policy sections from `20260504235500_add_tenant_id_to_ab_variants`
+- Verified local RLS coverage after applying those checked-in files:
+  - representative tables now show `relrowsecurity = true` and `relforcerowsecurity = true`
+  - representative tables now expose both `tenant_isolation` and `tenant_bypass`
+  - pooled `app_user` transactions with `SET LOCAL` enforce tenant isolation correctly on representative Phase 2.6 tables
+- Remaining Phase 2.6 closure blockers after 2.6-K:
+  - pooled `app_user` queries with no tenant context still fail noisily with `22P02 invalid input syntax for type uuid: ""`
+  - `lib/pipeline/humanReview.ts` tenant-discovery bootstrap lookup still fails under `app_user + RLS`
+  - `app/api/pipeline/prospects/[id]/override/route.ts` fallback lookup still fails under `app_user + RLS`
+  - `app/api/team/invite/route.ts` global user uniqueness lookup still fails under `app_user + RLS`
+  - `Account` / `Session` remain intentionally blocked pending the auth-adapter context plan
+- Raw SQL hardening status after 2.6-K:
+  - production raw SQL hardening remains complete
+  - local verification has now run
+  - remaining blockers are local migration replayability plus app-context/runtime followups, not new raw SQL findings
+- Detailed local evidence is recorded in `PHASE-2.6-K-LOCAL-RLS-VERIFICATION.md`.
+- New production DB changes made: **none**
+
 ## Preserved Phase 2.5 Followups Carried Forward
 
 These items remain intentionally visible and should stay in scope for Phase 2.6 verification / fixes:
