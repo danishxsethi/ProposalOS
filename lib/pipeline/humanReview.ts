@@ -8,7 +8,7 @@
  */
 
 import { prisma } from '@/lib/prisma';
-import { runWithTenantAsync } from '@/lib/tenant/context';
+import { runWithTenantAsync, runWithTenantBypass } from '@/lib/tenant/context';
 
 import { transition } from './stateMachine';
 
@@ -51,19 +51,36 @@ export interface ReviewAction {
   notes?: string;
 }
 
+async function resolveProspectTenantId(prospectId: string, reason: string): Promise<string | null> {
+  const prospect = await runWithTenantBypass(reason, () =>
+    prisma.prospectLead.findUnique({
+      where: { id: prospectId },
+      select: { tenantId: true },
+    })
+  );
+
+  return prospect?.tenantId ?? null;
+}
+
+async function resolveProspectTenantState(
+  prospectId: string,
+  reason: string
+): Promise<{ tenantId: string; pipelineStatus: string } | null> {
+  return runWithTenantBypass(reason, () =>
+    prisma.prospectLead.findUnique({
+      where: { id: prospectId },
+      select: { tenantId: true, pipelineStatus: true },
+    })
+  );
+}
+
 /**
  * Route a prospect to the human review queue
  * Requirement 10.3: Display full context for review
  */
 export async function routeToReview(prospectId: string, reason: string): Promise<void> {
-  const dbModule = await import('@/lib/db');
   const tenantId =
-    (
-      await dbModule.prisma.prospectLead.findUnique({
-        where: { id: prospectId },
-        select: { tenantId: true },
-      })
-    )?.tenantId || '';
+    (await resolveProspectTenantId(prospectId, 'human-review-route-tenant-discovery')) || '';
 
   await runWithTenantAsync(tenantId, async () => {
     await transition(prospectId, 'hot_lead', 'deal_closer');
@@ -197,23 +214,21 @@ export async function getReviewQueue(
 export async function approveProspect(action: ReviewAction): Promise<void> {
   const { prospectId, operatorId, operatorEmail, notes } = action;
 
-  // Get prospect from global prisma to find tenantId
-  const dbModule = await import('@/lib/db');
-  const prospectRaw = await dbModule.prisma.prospectLead.findUnique({
-    where: { id: prospectId },
-    select: { tenantId: true },
-  });
+  const tenantId = await resolveProspectTenantId(
+    prospectId,
+    'human-review-approve-tenant-discovery'
+  );
 
-  if (!prospectRaw) {
+  if (!tenantId) {
     throw new Error(`Prospect ${prospectId} not found`);
   }
 
-  await runWithTenantAsync(prospectRaw.tenantId, async () => {
+  await runWithTenantAsync(tenantId, async () => {
     await transition(prospectId, 'closing', 'human_review');
 
     await prisma.pipelineErrorLog.create({
       data: {
-        tenantId: prospectRaw.tenantId,
+        tenantId,
         stage: 'human_review',
         prospectId,
         errorType: 'APPROVED',
@@ -236,23 +251,21 @@ export async function approveProspect(action: ReviewAction): Promise<void> {
 export async function rejectProspect(action: ReviewAction): Promise<void> {
   const { prospectId, operatorId, operatorEmail, reason, notes } = action;
 
-  // Get prospect from global prisma to find tenantId
-  const dbModule = await import('@/lib/db');
-  const prospectRaw = await dbModule.prisma.prospectLead.findUnique({
-    where: { id: prospectId },
-    select: { tenantId: true },
-  });
+  const tenantId = await resolveProspectTenantId(
+    prospectId,
+    'human-review-reject-tenant-discovery'
+  );
 
-  if (!prospectRaw) {
+  if (!tenantId) {
     throw new Error(`Prospect ${prospectId} not found`);
   }
 
-  await runWithTenantAsync(prospectRaw.tenantId, async () => {
+  await runWithTenantAsync(tenantId, async () => {
     await transition(prospectId, 'closed_lost', 'human_review');
 
     await prisma.pipelineErrorLog.create({
       data: {
-        tenantId: prospectRaw.tenantId,
+        tenantId,
         stage: 'human_review',
         prospectId,
         errorType: 'REJECTED',
@@ -274,14 +287,13 @@ export async function rejectProspect(action: ReviewAction): Promise<void> {
  * Requirement 10.3: Display full context (audit, proposal, engagement, Pain Score)
  */
 export async function getProspectContext(prospectId: string): Promise<ReviewQueueItem | null> {
-  const dbModule = await import('@/lib/db');
-  const pRaw = await dbModule.prisma.prospectLead.findUnique({
-    where: { id: prospectId },
-    select: { tenantId: true },
-  });
-  if (!pRaw) return null;
+  const tenantId = await resolveProspectTenantId(
+    prospectId,
+    'human-review-context-tenant-discovery'
+  );
+  if (!tenantId) return null;
 
-  return runWithTenantAsync(pRaw.tenantId, async () => {
+  return runWithTenantAsync(tenantId, async () => {
     const prospect = await prisma.prospectLead.findUnique({
       where: { id: prospectId },
       include: {
@@ -399,11 +411,10 @@ export async function overrideProspectStatus(
   operatorEmail: string,
   reason: string
 ): Promise<void> {
-  const dbModule = await import('@/lib/db');
-  const prospectRaw = await dbModule.prisma.prospectLead.findUnique({
-    where: { id: prospectId },
-    select: { tenantId: true, pipelineStatus: true },
-  });
+  const prospectRaw = await resolveProspectTenantState(
+    prospectId,
+    'human-review-override-tenant-discovery'
+  );
 
   if (!prospectRaw) {
     throw new Error(`Prospect ${prospectId} not found`);

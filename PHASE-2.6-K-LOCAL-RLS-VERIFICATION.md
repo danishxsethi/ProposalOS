@@ -186,3 +186,13 @@ Phase 2.6 cannot close yet. The remaining blockers from this batch are:
 - Production raw SQL hardening remains complete.
 - Local app_user/RLS verification has now run and produced actionable evidence.
 - Phase 2.6 remains blocked on the followup runtime items above plus the intentionally deferred auth-table work.
+
+## Phase 2.6-L Followup Status
+
+Phase 2.6-L implemented the three non-auth-table app-context followups identified here:
+
+- `lib/pipeline/humanReview.ts`
+- `app/api/pipeline/prospects/[id]/override/route.ts`
+- `app/api/team/invite/route.ts`
+
+The code change uses narrow read-only tenant-discovery bypass helpers with specific reasons and keeps the downstream writes inside `runWithTenantAsync(...)`. A fresh local runtime rerun was attempted in the same batch, but the local Docker/Postgres/PgBouncer stack dropped again before the new probes could complete, so this document's original 2.6-K runtime findings still stand until the 2.6-L codepath is re-verified on a stable local stack.

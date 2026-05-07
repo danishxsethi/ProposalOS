@@ -6,11 +6,19 @@ import { withRole } from '@/lib/auth/rbac';
 import { checkSeatLimit } from '@/lib/billing/limits';
 import { withAuth } from '@/lib/middleware/auth';
 import { prisma } from '@/lib/prisma';
-import { getTenantId } from '@/lib/tenant/context';
+import { getTenantId, runWithTenantAsync, runWithTenantBypass } from '@/lib/tenant/context';
 
 // import { Resend } from 'resend'; // Mocking for now to avoid dependency install issues if not present
 
 // const resend = new Resend(process.env.RESEND_API_KEY);
+
+export async function lookupExistingUserByEmailForInvite(email: string) {
+  return runWithTenantBypass('team-invite-global-user-email-lookup', () =>
+    prisma.user.findUnique({
+      where: { email },
+    })
+  );
+}
 
 export const POST = withAuth(async (req: Request) => {
   // 1. RBAC Check (Admin+)
@@ -30,16 +38,9 @@ export const POST = withAuth(async (req: Request) => {
       const tenantId = await getTenantId();
       if (!tenantId) return NextResponse.json({ error: 'No Tenant' }, { status: 401 });
 
-      // 3. User Existence Check (Global)
-      // Need global prisma to check if user exists in ANY tenant
-      // Actually, we might allow user to be in multiple tenants in future, but for now:
-      // "If user exists in another tenant -> error" per requirements
-      // We need access to global prisma for this check, while the invitation write stays on current-tenant scope.
-      // Using `prisma` from global import for this specific check.
-      const globalPrisma = (await import('@/lib/prisma')).prisma;
-      const existingUser = await globalPrisma.user.findUnique({
-        where: { email },
-      });
+      // Preserve the global uniqueness check, but keep the bypass read-only and limited
+      // to resolving whether a user already exists for this immutable email address.
+      const existingUser = await lookupExistingUserByEmailForInvite(email);
 
       if (existingUser) {
         return NextResponse.json({ error: 'User already has an account' }, { status: 409 });
@@ -49,16 +50,18 @@ export const POST = withAuth(async (req: Request) => {
       const token = nanoid(32);
       const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
 
-      const invitation = await prisma.invitation.create({
-        data: {
-          email,
-          role,
-          token,
-          tenantId,
-          expiresAt,
-          invitedBy: 'current-user-id', // TODO: Get actual ID
-        },
-      });
+      const invitation = await runWithTenantAsync(tenantId, () =>
+        prisma.invitation.create({
+          data: {
+            email,
+            role,
+            token,
+            tenantId,
+            expiresAt,
+            invitedBy: 'current-user-id', // TODO: Get actual ID
+          },
+        })
+      );
 
       // 5. Send Email
       // console.log(`[Email Mock] Sending invite to ${email} with token ${token}`);
