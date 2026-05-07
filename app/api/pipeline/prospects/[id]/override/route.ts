@@ -17,12 +17,11 @@ import { z } from 'zod';
 
 import { generateTraceId, InternalError, NotFoundError, UnauthorizedError } from '@/lib/api/errors';
 import { auth } from '@/lib/auth';
-import { prisma as dbPrisma } from '@/lib/db';
 import { withRateLimit } from '@/lib/middleware/rateLimit';
 import { withRole } from '@/lib/middleware/withRole';
 import { overrideProspectStatus } from '@/lib/pipeline/humanReview';
 import { prisma } from '@/lib/prisma';
-import { getTenantId, runWithTenantAsync } from '@/lib/tenant/context';
+import { getTenantId, runWithTenantAsync, runWithTenantBypass } from '@/lib/tenant/context';
 
 interface Params {
   params: Promise<{ id: string }>;
@@ -35,6 +34,15 @@ const statusOverrideSchema = z.object({
   newStatus: z.string().min(1).max(50),
   reason: z.string().min(1).max(500),
 });
+
+export async function resolveProspectTenantForOverride(prospectId: string) {
+  return runWithTenantBypass('prospect-override-route-fallback-tenant-discovery', () =>
+    prisma.prospectLead.findUnique({
+      where: { id: prospectId },
+      select: { tenantId: true },
+    })
+  );
+}
 
 /**
  * Inner handler for status override
@@ -95,12 +103,9 @@ async function handleStatusOverride(req: NextRequest, params: Params): Promise<N
     };
 
     if (!tenantId) {
-      const prospect = await dbPrisma.prospectLead.findUnique({
-        where: { id },
-        select: { tenantId: true },
-      });
+      const prospect = await resolveProspectTenantForOverride(id);
 
-      if (!prospect) {
+      if (!prospect?.tenantId) {
         return NextResponse.json(new NotFoundError('Prospect', id).toEnvelope(req.url, traceId), {
           status: 404,
         });

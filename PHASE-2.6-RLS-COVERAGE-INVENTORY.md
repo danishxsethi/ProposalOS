@@ -413,6 +413,44 @@ Phase 2.6-K restored the local Postgres + PgBouncer verification stack and re-ra
 - Detailed local evidence is recorded in `PHASE-2.6-K-LOCAL-RLS-VERIFICATION.md`.
 - New production DB changes made: **none**
 
+## Phase 2.6-L App-Context Followup Update
+
+Phase 2.6-L addresses the three non-auth-table app-context failures discovered in 2.6-K without broadening handler access and without changing production DB state.
+
+### 2.6-L Scoped Files
+
+| File                                                | Change                                                                                                                                                                                                  | Result                                                                   |
+| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| `lib/pipeline/humanReview.ts`                       | Replaced pre-tenant global `ProspectLead` reads with narrow read-only tenant-discovery bypass helpers, then continued all queue/context/mutation work under `runWithTenantAsync(resolvedTenantId, ...)` | tenant discovery is now explicit and auditable                           |
+| `app/api/pipeline/prospects/[id]/override/route.ts` | Replaced the fallback prospect lookup with a single read-only bypass helper and kept the actual override inside tenant context                                                                          | no full-route bypass introduced                                          |
+| `app/api/team/invite/route.ts`                      | Replaced the global user-by-email lookup with a narrow read-only bypass helper and wrapped invitation creation in `runWithTenantAsync(tenantId, ...)`                                                   | global uniqueness lookup stays possible while writes remain tenant-local |
+
+### 2.6-L Bypass Reasons
+
+- `human-review-route-tenant-discovery`
+- `human-review-approve-tenant-discovery`
+- `human-review-reject-tenant-discovery`
+- `human-review-context-tenant-discovery`
+- `human-review-override-tenant-discovery`
+- `prospect-override-route-fallback-tenant-discovery`
+- `team-invite-global-user-email-lookup`
+
+### 2.6-L Guardrails Preserved
+
+- No full-handler `runWithTenantBypass(...)` was introduced.
+- No mutation path was wrapped in bypass.
+- Tenant-local writes remain under `runWithTenantAsync(...)`:
+  - human-review transitions + audit log writes
+  - prospect override mutation path
+  - team invitation create path
+
+### 2.6-L Verification Note
+
+- Static verification passed for the new bypass pattern: discovery-only reads use named bypass reasons and the tenant-local mutations remain outside bypass.
+- A targeted local app-user rerun was attempted against the restored Postgres + disposable PgBouncer setup, but the local Docker/Postgres stack became unavailable again mid-batch, so the new runtime proof could not be completed in the same pass.
+- The code change addresses the exact 2.6-K missing-tenant-context failure points, but local runtime re-verification remains advisable before Phase 2.6 closure.
+- New production DB changes made: **none**
+
 ## Preserved Phase 2.5 Followups Carried Forward
 
 These items remain intentionally visible and should stay in scope for Phase 2.6 verification / fixes:
