@@ -53,6 +53,7 @@ export interface PromptVersion {
   branchName: string;
   changelog: string;
   isActive: boolean;
+  tenantId?: string;
   performanceDelta?: PerformanceDelta;
 }
 
@@ -219,6 +220,7 @@ export interface PromptVersionRow {
   branch_name: string;
   changelog: string;
   is_active: boolean;
+  tenant_id: string | null;
 }
 
 export interface ABExperimentRow {

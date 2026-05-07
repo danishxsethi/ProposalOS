@@ -5,9 +5,98 @@
 
 import { createHash } from 'crypto';
 
+import { getTenantRuntimeContextFromStore } from '@/lib/tenant/context';
+
 import { executeCommand, executeQuery } from '../db';
 import { PerformanceDelta, PromptVersion, PromptVersionRow, VersionComparison } from '../types';
 import { getAggregateMetrics } from './prompt-performance';
+
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const PROMPT_VERSION_SELECT = `
+  SELECT
+    "versionHash" AS version_hash,
+    "nodeId" AS node_id,
+    "promptText" AS prompt_text,
+    "createdAt" AS created_at,
+    "createdBy" AS created_by,
+    "parentVersionHash" AS parent_version_hash,
+    "branchName" AS branch_name,
+    changelog,
+    "isActive" AS is_active,
+    "tenantId" AS tenant_id
+  FROM "PromptVersion"
+`;
+
+function requireFirstRow<T>(rows: T[], operationName: string): T {
+  const row = rows[0];
+
+  if (!row) {
+    throw new Error(`${operationName} returned no rows`);
+  }
+
+  return row;
+}
+
+function getOptionalTenantId(operationName: string): string | null {
+  const { tenantId } = getTenantRuntimeContextFromStore();
+
+  if (!tenantId) {
+    return null;
+  }
+
+  if (!UUID_PATTERN.test(tenantId)) {
+    throw new Error(`Tenant context required for ${operationName}: invalid tenant context`);
+  }
+
+  return tenantId;
+}
+
+function buildAccessibleTenantScope(
+  operationName: string,
+  parameterIndex: number
+): {
+  tenantId: string | null;
+  clause: string;
+  params: unknown[];
+  requireTenant: boolean;
+} {
+  const tenantId = getOptionalTenantId(operationName);
+
+  if (!tenantId) {
+    return {
+      tenantId: null,
+      clause: `"tenantId" IS NULL`,
+      params: [],
+      requireTenant: false,
+    };
+  }
+
+  return {
+    tenantId,
+    clause: `("tenantId" = $${parameterIndex} OR "tenantId" IS NULL)`,
+    params: [tenantId],
+    requireTenant: true,
+  };
+}
+
+function buildExactTenantScope(
+  parameterIndex: number,
+  tenantId: string | null | undefined
+): { clause: string; params: unknown[]; requireTenant: boolean } {
+  if (!tenantId) {
+    return {
+      clause: `"tenantId" IS NULL`,
+      params: [],
+      requireTenant: false,
+    };
+  }
+
+  return {
+    clause: `"tenantId" = $${parameterIndex}`,
+    params: [tenantId],
+    requireTenant: true,
+  };
+}
 
 /**
  * Generate version hash from node ID, prompt text, and timestamp
@@ -34,53 +123,75 @@ export async function createVersion(
   parentVersionHash?: string,
   branchName: string = 'main'
 ): Promise<PromptVersion> {
-  // Validate changelog is not empty
   if (!changelog || changelog.trim().length === 0) {
     throw new Error('Changelog cannot be empty');
   }
 
   const versionHash = generateVersionHash(nodeId, promptText);
-
+  const tenantId = getOptionalTenantId('PromptVersion.create');
   const query = `
-    INSERT INTO prompt_versions (
-      version_hash,
-      node_id,
-      prompt_text,
-      created_by,
-      parent_version_hash,
-      branch_name,
+    INSERT INTO "PromptVersion" (
+      "versionHash",
+      "nodeId",
+      "promptText",
+      "createdBy",
+      "parentVersionHash",
+      "branchName",
       changelog,
-      is_active
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-    RETURNING *
+      "isActive",
+      "tenantId"
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+    RETURNING
+      "versionHash" AS version_hash,
+      "nodeId" AS node_id,
+      "promptText" AS prompt_text,
+      "createdAt" AS created_at,
+      "createdBy" AS created_by,
+      "parentVersionHash" AS parent_version_hash,
+      "branchName" AS branch_name,
+      changelog,
+      "isActive" AS is_active,
+      "tenantId" AS tenant_id
   `;
 
-  const params = [
-    versionHash,
-    nodeId,
-    promptText,
-    createdBy,
-    parentVersionHash || null,
-    branchName,
-    changelog,
-    false, // New versions start as inactive
-  ];
-
-  const rows = await executeQuery<PromptVersionRow>(query, params);
-  return mapRowToVersion(rows[0]);
+  const rows = await executeQuery<PromptVersionRow>(
+    query,
+    [
+      versionHash,
+      nodeId,
+      promptText,
+      createdBy,
+      parentVersionHash || null,
+      branchName,
+      changelog,
+      false,
+      tenantId,
+    ],
+    {
+      operationName: 'PromptVersion.create',
+      requireTenant: tenantId !== null,
+    }
+  );
+  return mapRowToVersion(requireFirstRow(rows, 'PromptVersion.create'));
 }
 
 /**
  * Get version by hash
  */
 export async function getVersionByHash(versionHash: string): Promise<PromptVersion | null> {
+  const scope = buildAccessibleTenantScope('PromptVersion.getByHash', 2);
   const query = `
-    SELECT * FROM prompt_versions
-    WHERE version_hash = $1
+    ${PROMPT_VERSION_SELECT}
+    WHERE "versionHash" = $1
+      AND ${scope.clause}
   `;
 
-  const rows = await executeQuery<PromptVersionRow>(query, [versionHash]);
-  return rows.length > 0 ? mapRowToVersion(rows[0]) : null;
+  const rows = await executeQuery<PromptVersionRow>(query, [versionHash, ...scope.params], {
+    operationName: 'PromptVersion.getByHash',
+    requireTenant: scope.requireTenant,
+  });
+  const row = rows[0];
+  return row ? mapRowToVersion(row) : null;
 }
 
 /**
@@ -91,20 +202,26 @@ export async function getVersionHistory(
   nodeId: string,
   branchName?: string
 ): Promise<PromptVersion[]> {
+  const params: unknown[] = [nodeId];
   let query = `
-    SELECT * FROM prompt_versions
-    WHERE node_id = $1
+    ${PROMPT_VERSION_SELECT}
+    WHERE "nodeId" = $1
   `;
-  const params: any[] = [nodeId];
 
   if (branchName) {
-    query += ` AND branch_name = $2`;
+    query += ` AND "branchName" = $2`;
     params.push(branchName);
   }
 
-  query += ` ORDER BY created_at DESC`;
+  const scope = buildAccessibleTenantScope('PromptVersion.getHistory', branchName ? 3 : 2);
+  query += ` AND ${scope.clause}`;
+  query += ` ORDER BY "createdAt" DESC`;
+  params.push(...scope.params);
 
-  const rows = await executeQuery<PromptVersionRow>(query, params);
+  const rows = await executeQuery<PromptVersionRow>(query, params, {
+    operationName: 'PromptVersion.getHistory',
+    requireTenant: scope.requireTenant,
+  });
   return rows.map(mapRowToVersion);
 }
 
@@ -112,14 +229,21 @@ export async function getVersionHistory(
  * Get active version for a node
  */
 export async function getActiveVersion(nodeId: string): Promise<PromptVersion | null> {
+  const scope = buildAccessibleTenantScope('PromptVersion.getActive', 2);
   const query = `
-    SELECT * FROM prompt_versions
-    WHERE node_id = $1 AND is_active = TRUE
+    ${PROMPT_VERSION_SELECT}
+    WHERE "nodeId" = $1
+      AND "isActive" = TRUE
+      AND ${scope.clause}
     LIMIT 1
   `;
 
-  const rows = await executeQuery<PromptVersionRow>(query, [nodeId]);
-  return rows.length > 0 ? mapRowToVersion(rows[0]) : null;
+  const rows = await executeQuery<PromptVersionRow>(query, [nodeId, ...scope.params], {
+    operationName: 'PromptVersion.getActive',
+    requireTenant: scope.requireTenant,
+  });
+  const row = rows[0];
+  return row ? mapRowToVersion(row) : null;
 }
 
 /**
@@ -127,21 +251,30 @@ export async function getActiveVersion(nodeId: string): Promise<PromptVersion | 
  * Validates: Requirements 4.4
  */
 export async function setActiveVersion(versionHash: string): Promise<void> {
-  // First, get the node_id for this version
   const version = await getVersionByHash(versionHash);
   if (!version) {
     throw new Error(`Version ${versionHash} not found`);
   }
 
-  // Deactivate all versions for this node
-  await executeCommand(`UPDATE prompt_versions SET is_active = FALSE WHERE node_id = $1`, [
-    version.nodeId,
-  ]);
+  const deactivateScope = buildExactTenantScope(2, version.tenantId ?? null);
+  await executeCommand(
+    `UPDATE "PromptVersion" SET "isActive" = FALSE WHERE "nodeId" = $1 AND ${deactivateScope.clause}`,
+    [version.nodeId, ...deactivateScope.params],
+    {
+      operationName: 'PromptVersion.deactivateSiblings',
+      requireTenant: deactivateScope.requireTenant,
+    }
+  );
 
-  // Activate the target version
-  await executeCommand(`UPDATE prompt_versions SET is_active = TRUE WHERE version_hash = $1`, [
-    versionHash,
-  ]);
+  const activateScope = buildExactTenantScope(2, version.tenantId ?? null);
+  await executeCommand(
+    `UPDATE "PromptVersion" SET "isActive" = TRUE WHERE "versionHash" = $1 AND ${activateScope.clause}`,
+    [versionHash, ...activateScope.params],
+    {
+      operationName: 'PromptVersion.activate',
+      requireTenant: activateScope.requireTenant,
+    }
+  );
 }
 
 /**
@@ -195,7 +328,6 @@ export async function compareVersions(hash1: string, hash2: string): Promise<Ver
     throw new Error('One or both versions not found');
   }
 
-  // Get performance metrics for both versions
   const [metrics1, metrics2] = await Promise.all([
     getAggregateMetrics(hash1),
     getAggregateMetrics(hash2),
@@ -208,7 +340,6 @@ export async function compareVersions(hash1: string, hash2: string): Promise<Ver
     comparedToVersion: hash1,
   };
 
-  // Simple text diff (line-by-line comparison)
   const textDiff = generateTextDiff(version1.promptText, version2.promptText);
 
   return {
@@ -226,10 +357,9 @@ export async function compareVersions(hash1: string, hash2: string): Promise<Ver
 export async function getVersionHistoryWithDeltas(nodeId: string): Promise<PromptVersion[]> {
   const versions = await getVersionHistory(nodeId);
 
-  // Calculate performance deltas for each version compared to its parent
-  for (let i = 0; i < versions.length; i++) {
-    const version = versions[i];
-    if (version.parentVersionHash) {
+  for (let index = 0; index < versions.length; index += 1) {
+    const version = versions[index];
+    if (version?.parentVersionHash) {
       const [currentMetrics, parentMetrics] = await Promise.all([
         getAggregateMetrics(version.versionHash),
         getAggregateMetrics(version.parentVersionHash),
@@ -257,9 +387,9 @@ function generateTextDiff(text1: string, text2: string): string {
   const diff: string[] = [];
   const maxLines = Math.max(lines1.length, lines2.length);
 
-  for (let i = 0; i < maxLines; i++) {
-    const line1 = lines1[i] || '';
-    const line2 = lines2[i] || '';
+  for (let index = 0; index < maxLines; index += 1) {
+    const line1 = lines1[index] || '';
+    const line2 = lines2[index] || '';
 
     if (line1 !== line2) {
       if (line1) diff.push(`- ${line1}`);
@@ -286,5 +416,6 @@ function mapRowToVersion(row: PromptVersionRow): PromptVersion {
     branchName: row.branch_name,
     changelog: row.changelog,
     isActive: row.is_active,
+    tenantId: row.tenant_id || undefined,
   };
 }

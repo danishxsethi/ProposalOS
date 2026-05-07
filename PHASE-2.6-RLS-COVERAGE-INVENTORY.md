@@ -255,6 +255,70 @@ Phase 2.6-H hardens the first highest-risk production batch without changing pro
 - `Account` / `Session` remain intentionally blocked pending auth-adapter context planning and local auth/RLS smoke.
 - Local `app_user + RLS` verification remains required before Phase 2.6 closure.
 
+## Phase 2.6-I Self-Evolving Prompt Raw SQL Hardening Update
+
+Phase 2.6-I hardens the scoped self-evolving prompts raw SQL surface without changing production DB state. The batch removes every remaining scoped `\$queryRawUnsafe` / `\$executeRawUnsafe` call, narrows the prompt-promotion cron bypass to tenant enumeration only, and adds tenant-compatible inserts / filters across the targeted prompt experiment, prediction, scenario, and prompt-version flows.
+
+| File                                                       | Before (direct / helper) | After (direct / helper) | Unsafe after | Notes                                                                                                                                        |
+| ---------------------------------------------------------- | -----------------------: | ----------------------: | -----------: | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `lib/self-evolving-prompts/db.ts`                          |                `3 / n/a` |               `7 / n/a` |          `0` | Replaced standalone unsafe wrappers with shared-prisma `Prisma.sql` execution plus tenant-aware raw context setup                            |
+| `lib/self-evolving-prompts/data-access/ab-experiments.ts`  |                  `8 / 0` |                 `8 / 0` |          `0` | Kept static raw SQL for experiment/variant writes and metric updates, but removed all unsafe execution and added explicit `tenantId` filters |
+| `lib/self-evolving-prompts/data-access/predictions.ts`     |                  `0 / 8` |                 `0 / 8` |          `0` | Retained helper-backed raw SQL only; aligned reads/writes to `Prediction` and enforced tenant-scoped inserts / filters                       |
+| `lib/self-evolving-prompts/data-access/scenarios.ts`       |                  `0 / 7` |                 `0 / 7` |          `0` | Retained helper-backed raw SQL only; aligned reads/writes to `Scenario` and enforced tenant-scoped inserts / filters                         |
+| `lib/self-evolving-prompts/data-access/prompt-versions.ts` |                  `0 / 6` |                 `0 / 6` |          `0` | Retained helper-backed raw SQL only; aligned reads/writes to `PromptVersion` and added tenant-local + system-row scope handling              |
+| `app/api/cron/prompt-promotion/route.ts`                   |                  `1 / 0` |                 `0 / 0` |          `0` | Replaced the cross-tenant raw aggregate with tenant enumeration under bypass plus per-tenant Prisma `groupBy(...)`                           |
+
+### 2.6-I Scoped Notes
+
+- `lib/self-evolving-prompts/db.ts`
+  - `executeQuery(...)` / `executeCommand(...)` no longer hide unsafe execution.
+  - Added `buildParameterizedSql(...)` so static `$1`-style SQL can flow through `Prisma.sql` instead of `*Unsafe`.
+  - Raw helper fan-out before: `prompt-performance.ts`, `predictions.ts`, `scenarios.ts`, `prompt-versions.ts`.
+  - Raw helper fan-out after: same downstream files, but on safe parameterized execution; `ab-experiments.ts` now also reuses `buildParameterizedSql(...)` for its direct raw statements.
+- `lib/self-evolving-prompts/data-access/ab-experiments.ts`
+  - Verified 2.6-G `ABVariant.tenantId` coverage was not missed.
+  - Added explicit `tenantId` filters to experiment reads, variant reads, variant metric updates, and experiment status transitions.
+  - Preserved creation, routing, weighting, and winner-selection semantics.
+- `lib/self-evolving-prompts/data-access/predictions.ts`
+  - Moved the file onto the RLS-covered `Prediction` table/column names.
+  - Added `tenantId` on inserts plus explicit tenant filters on outcome updates, by-audit reads, by-type reads, calibration, trend, and by-id reads.
+  - Preserved prediction record shape, ordering, and calibration math.
+- `lib/self-evolving-prompts/data-access/scenarios.ts`
+  - Moved the file onto the RLS-covered `Scenario` table/column names.
+  - Added `tenantId` on inserts plus explicit tenant filters on history, comparison, cleanup, statistics, and similarity reads.
+  - Preserved scenario comparison, ordering, and return shape semantics.
+- `lib/self-evolving-prompts/data-access/prompt-versions.ts`
+  - Moved the file onto the RLS-covered `PromptVersion` table/column names.
+  - Added `tenantId`-compatible inserts and explicit scope rules:
+    - tenant-local reads include the caller tenant plus shared (`tenantId IS NULL`) rows
+    - tenantless reads stay restricted to shared rows only
+    - active-version toggles only touch rows in the selected version's exact tenant scope
+  - Preserved version hashing, rollback, branching, diffing, and delta semantics.
+- `app/api/cron/prompt-promotion/route.ts`
+  - Classified as tenant-looped, not blanket cross-tenant.
+  - Narrow bypass reason used: `cron-prompt-promotion-tenant-enumeration`.
+  - Per-tenant aggregation now runs inside `runWithTenantAsync(tenant.id, ...)` with an explicit `tenantId` predicate on `PromptPerformanceLog`.
+  - Cron auth / token / header behavior is unchanged.
+
+### 2.6-I Outcome
+
+- Scoped unsafe raw SQL removed: **6 / 6**
+- Scoped direct raw SQL removed entirely: **1 / 1** (`app/api/cron/prompt-promotion/route.ts`)
+- Scoped unsafe raw SQL retained: **0**
+- Bypass reasons added in this batch:
+  - `cron-prompt-promotion-tenant-enumeration`
+- Remaining raw SQL files after 2.6-I:
+  - `app/api/health/route.ts`
+  - `lib/outreach/sprint2/sniperWorker.ts`
+  - `lib/self-evolving-prompts/db.ts`
+  - `lib/self-evolving-prompts/data-access/ab-experiments.ts`
+  - `lib/self-evolving-prompts/data-access/prompt-performance.ts`
+- Residual self-evolving prompt raw SQL risk:
+  - `db.ts` intentionally retains raw helper internals for static parameterized SQL and RLS `set_config(...)` setup
+  - `ab-experiments.ts` intentionally retains static raw SQL because the batch avoided a broad behavioral rewrite of experiment inserts / weighted updates
+  - `prompt-performance.ts` still uses the shared helper and was not otherwise reworked in 2.6-I
+- New production DB changes made: **none**
+
 ## Preserved Phase 2.5 Followups Carried Forward
 
 These items remain intentionally visible and should stay in scope for Phase 2.6 verification / fixes:
