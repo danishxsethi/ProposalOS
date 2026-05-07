@@ -9,6 +9,7 @@ import {
   runWithPrismaTransactionContext,
 } from '@/lib/tenant/context';
 
+import { buildParameterizedSql } from '../db';
 import {
   ABExperiment,
   ABExperimentRow,
@@ -33,6 +34,10 @@ function assertTenantContext(operationName: string, tenantId: string | null): st
   }
 
   return tenantId;
+}
+
+function getRequiredTenantId(operationName: string): string {
+  return assertTenantContext(operationName, getTenantRuntimeContextFromStore().tenantId);
 }
 
 async function applyRawRlsContext(
@@ -79,7 +84,8 @@ async function runQuery<T>(
   query: string,
   params: unknown[] = []
 ): Promise<T[]> {
-  return withRawTransaction(operationName, (tx) => tx.$queryRawUnsafe<T[]>(query, ...params));
+  const sql = buildParameterizedSql(query, params);
+  return withRawTransaction(operationName, (tx) => tx.$queryRaw<T[]>(sql));
 }
 
 async function runCommand(
@@ -87,7 +93,8 @@ async function runCommand(
   command: string,
   params: unknown[] = []
 ): Promise<number> {
-  return withRawTransaction(operationName, (tx) => tx.$executeRawUnsafe(command, ...params));
+  const sql = buildParameterizedSql(command, params);
+  return withRawTransaction(operationName, (tx) => tx.$executeRaw(sql));
 }
 
 function requireFirstRow<T>(rows: T[], operationName: string): T {
@@ -123,12 +130,8 @@ export async function createExperiment(config: ExperimentConfig): Promise<ABExpe
         RETURNING *
       `;
 
-      const experimentRows = await tx.$queryRawUnsafe<ABExperimentRow[]>(
-        experimentQuery,
-        config.name,
-        config.nodeId,
-        tenantId,
-        'active'
+      const experimentRows = await tx.$queryRaw<ABExperimentRow[]>(
+        buildParameterizedSql(experimentQuery, [config.name, config.nodeId, tenantId, 'active'])
       );
       const experimentRow = requireFirstRow(experimentRows, 'ABExperiment.create');
 
@@ -144,12 +147,13 @@ export async function createExperiment(config: ExperimentConfig): Promise<ABExpe
           RETURNING *
         `;
 
-        const variantRows = await tx.$queryRawUnsafe<ABVariantRow[]>(
-          variantQuery,
-          experimentRow.id,
-          variantConfig.promptVersionHash,
-          experimentRow.tenantId,
-          variantConfig.trafficPercentage
+        const variantRows = await tx.$queryRaw<ABVariantRow[]>(
+          buildParameterizedSql(variantQuery, [
+            experimentRow.id,
+            variantConfig.promptVersionHash,
+            experimentRow.tenantId,
+            variantConfig.trafficPercentage,
+          ])
         );
 
         variants.push(mapRowToVariant(requireFirstRow(variantRows, 'ABVariant.create')));
@@ -165,11 +169,13 @@ export async function createExperiment(config: ExperimentConfig): Promise<ABExpe
  * Get experiment by ID
  */
 export async function getExperimentById(experimentId: string): Promise<ABExperiment | null> {
+  const tenantId = getRequiredTenantId('ABExperiment.getById');
   const experimentQuery = `
-    SELECT * FROM "ABExperiment" WHERE "id" = $1
+    SELECT * FROM "ABExperiment" WHERE "id" = $1 AND "tenantId" = $2
   `;
   const experimentRows = await runQuery<ABExperimentRow>('ABExperiment.getById', experimentQuery, [
     experimentId,
+    tenantId,
   ]);
 
   if (experimentRows.length === 0) {
@@ -177,10 +183,11 @@ export async function getExperimentById(experimentId: string): Promise<ABExperim
   }
 
   const variantQuery = `
-    SELECT * FROM "ABVariant" WHERE "experimentId" = $1
+    SELECT * FROM "ABVariant" WHERE "experimentId" = $1 AND "tenantId" = $2
   `;
   const variantRows = await runQuery<ABVariantRow>('ABVariant.listByExperiment', variantQuery, [
     experimentId,
+    tenantId,
   ]);
 
   return mapRowToExperiment(
@@ -193,14 +200,16 @@ export async function getExperimentById(experimentId: string): Promise<ABExperim
  * Get active experiments for a node
  */
 export async function getActiveExperiments(nodeId?: string): Promise<ABExperiment[]> {
+  const tenantId = getRequiredTenantId('ABExperiment.listActive');
   let query = `
     SELECT * FROM "ABExperiment"
     WHERE "status" = 'active'
+      AND "tenantId" = $1
   `;
-  const params: unknown[] = [];
+  const params: unknown[] = [tenantId];
 
   if (nodeId) {
-    query += ` AND "nodeId" = $1`;
+    query += ` AND "nodeId" = $2`;
     params.push(nodeId);
   }
 
@@ -211,10 +220,11 @@ export async function getActiveExperiments(nodeId?: string): Promise<ABExperimen
   const experiments: ABExperiment[] = [];
   for (const expRow of experimentRows) {
     const variantQuery = `
-      SELECT * FROM "ABVariant" WHERE "experimentId" = $1
+      SELECT * FROM "ABVariant" WHERE "experimentId" = $1 AND "tenantId" = $2
     `;
     const variantRows = await runQuery<ABVariantRow>('ABVariant.listByExperiment', variantQuery, [
       expRow.id,
+      tenantId,
     ]);
 
     experiments.push(mapRowToExperiment(expRow, variantRows.map(mapRowToVariant)));
@@ -227,7 +237,10 @@ export async function getActiveExperiments(nodeId?: string): Promise<ABExperimen
  * Route a request to a variant based on traffic percentages
  * Validates: Requirements 2.2
  */
-export async function routeRequest(nodeId: string, _context: any = {}): Promise<string> {
+export async function routeRequest(
+  nodeId: string,
+  _context: Record<string, unknown> = {}
+): Promise<string> {
   const experiments = await getActiveExperiments(nodeId);
 
   if (experiments.length === 0) {
@@ -264,6 +277,7 @@ export async function updateVariantMetrics(
   qualityScore: number,
   downstreamImpact: number
 ): Promise<void> {
+  const tenantId = getRequiredTenantId('ABVariant.updateMetrics');
   const query = `
     UPDATE "ABVariant"
     SET
@@ -277,10 +291,15 @@ export async function updateVariantMetrics(
         $3
       ),
       "updatedAt" = NOW()
-    WHERE "id" = $1
+    WHERE "id" = $1 AND "tenantId" = $4
   `;
 
-  await runCommand('ABVariant.updateMetrics', query, [variantId, qualityScore, downstreamImpact]);
+  await runCommand('ABVariant.updateMetrics', query, [
+    variantId,
+    qualityScore,
+    downstreamImpact,
+    tenantId,
+  ]);
 }
 
 /**
@@ -339,6 +358,7 @@ export async function completeExperiment(
   experimentId: string,
   winnerVariantId: string
 ): Promise<void> {
+  const tenantId = getRequiredTenantId('ABExperiment.complete');
   const query = `
     UPDATE "ABExperiment"
     SET
@@ -346,44 +366,47 @@ export async function completeExperiment(
       "endDate" = NOW(),
       "winnerVariantId" = $2,
       "updatedAt" = NOW()
-    WHERE "id" = $1
+    WHERE "id" = $1 AND "tenantId" = $3
   `;
 
-  await runCommand('ABExperiment.complete', query, [experimentId, winnerVariantId]);
+  await runCommand('ABExperiment.complete', query, [experimentId, winnerVariantId, tenantId]);
 }
 
 /**
  * Pause an experiment
  */
 export async function pauseExperiment(experimentId: string): Promise<void> {
+  const tenantId = getRequiredTenantId('ABExperiment.pause');
   const query = `
     UPDATE "ABExperiment"
     SET "status" = 'paused', "updatedAt" = NOW()
-    WHERE "id" = $1
+    WHERE "id" = $1 AND "tenantId" = $2
   `;
 
-  await runCommand('ABExperiment.pause', query, [experimentId]);
+  await runCommand('ABExperiment.pause', query, [experimentId, tenantId]);
 }
 
 /**
  * Resume a paused experiment
  */
 export async function resumeExperiment(experimentId: string): Promise<void> {
+  const tenantId = getRequiredTenantId('ABExperiment.resume');
   const query = `
     UPDATE "ABExperiment"
     SET "status" = 'active', "updatedAt" = NOW()
-    WHERE "id" = $1
+    WHERE "id" = $1 AND "tenantId" = $2
   `;
 
-  await runCommand('ABExperiment.resume', query, [experimentId]);
+  await runCommand('ABExperiment.resume', query, [experimentId, tenantId]);
 }
 
 /**
  * Get variant by ID
  */
 export async function getVariantById(variantId: string): Promise<ABVariant | null> {
-  const query = `SELECT * FROM "ABVariant" WHERE "id" = $1`;
-  const rows = await runQuery<ABVariantRow>('ABVariant.getById', query, [variantId]);
+  const tenantId = getRequiredTenantId('ABVariant.getById');
+  const query = `SELECT * FROM "ABVariant" WHERE "id" = $1 AND "tenantId" = $2`;
+  const rows = await runQuery<ABVariantRow>('ABVariant.getById', query, [variantId, tenantId]);
   return rows.length > 0 ? mapRowToVariant(requireFirstRow(rows, 'ABVariant.getById')) : null;
 }
 
