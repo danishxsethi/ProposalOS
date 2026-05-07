@@ -191,28 +191,6 @@ async function sendWithResend(params: {
   return { messageId: response.data?.id ?? null };
 }
 
-async function markLeadDropped(leadId: string, tenantId: string, reason: string): Promise<void> {
-  await prisma.$transaction([
-    prisma.prospectLead.update({
-      where: { id: leadId },
-      data: {
-        outreachStage: OutreachLeadStage.DROPPED,
-        outreachDroppedAt: new Date(),
-        outreachDropReason: reason,
-        outreachNextActionAt: null,
-      },
-    }),
-    prisma.outreachEmailEvent.create({
-      data: {
-        tenantId,
-        leadId,
-        type: OutreachEventType.LEAD_DROPPED,
-        metadata: { reason },
-      },
-    }),
-  ]);
-}
-
 async function fetchEligibleLeads(tenantId: string, limit: number): Promise<LeadWithOutreach[]> {
   const now = new Date();
   return prisma.prospectLead.findMany({
@@ -344,25 +322,21 @@ export async function processSniperOutreach(
     }
 
     // P2: Webhook Sync Fallback
-    // Explicitly check the Db blocklist since webhooks can fail or get out of sync
+    // Explicitly check the shared blocklist since webhooks can fail or get out of sync.
     let isBlocklisted = false;
     try {
-      // Check if domain or email is in global blocklist
-      const domainParts = lead.decisionMakerEmail?.split('@') || [];
-      const domain = domainParts.length === 2 ? domainParts[1] : '';
+      const blocked = lead.decisionMakerEmail
+        ? await prisma.emailBlocklist.findUnique({
+            where: { email: lead.decisionMakerEmail },
+            select: { id: true },
+          })
+        : null;
 
-      // Only try checking if the model actually exists. We don't want a crash here if
-      // no blocklist model exists yet in the Prisma client, but we should assume it might.
-      // Using raw query as a safe fallback if emailBlocklist doesn't exist on prisma yet:
-      const blockCheck: { count: number }[] = await prisma.$queryRaw`
-                SELECT COUNT(*) as count FROM "EmailBlocklist" 
-                WHERE email = ${lead.decisionMakerEmail} OR domain = ${domain}
-            `;
-      if (blockCheck[0] && Number(blockCheck[0].count) > 0) {
+      if (blocked) {
         isBlocklisted = true;
       }
-    } catch (err) {
-      // Model missing or query failed, ignore
+    } catch {
+      // Shared blocklist check is best-effort only.
     }
 
     const history: BranchingEventHistory = {
@@ -383,7 +357,7 @@ export async function processSniperOutreach(
     ) {
       if (!dryRun) {
         let newStage: OutreachLeadStage = OutreachLeadStage.DROPPED;
-        let reason = branchDecision.reason;
+        const reason = branchDecision.reason;
 
         if (branchDecision.kind === 'trigger_closing_agent') {
           newStage = OutreachLeadStage.PROPOSAL_QUEUED; // The orchestrator or next loop handles actually creating it
@@ -493,7 +467,7 @@ export async function processSniperOutreach(
       : null;
     const trackingPixelUrl = `${baseUrl}/api/outreach/track/open/${emailId}.png`;
 
-    let trackedBody = replaceUrl(
+    const trackedBody = replaceUrl(
       replaceUrl(nextEmail.body, proposalUrl, trackedProposalUrl),
       scorecardUrl,
       trackedScorecardUrl
