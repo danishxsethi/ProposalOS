@@ -20,6 +20,7 @@ export interface PromptPerformanceLog {
   outputTokens: number;
   experimentId?: string;
   variantId?: string;
+  tenantId?: string;
   metadata: Record<string, any>;
 }
 
@@ -207,6 +208,7 @@ export interface PromptPerformanceLogRow {
   output_tokens: number;
   experiment_id: string | null;
   variant_id: string | null;
+  tenant_id: string;
   metadata: any;
 }
 

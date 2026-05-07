@@ -7,18 +7,18 @@
 
 ## Summary
 
-| Category                                                                       | Count | Notes                                                                                                       |
-| ------------------------------------------------------------------------------ | ----: | ----------------------------------------------------------------------------------------------------------- |
-| Prisma models total                                                            |    89 | Parsed from `prisma/schema.prisma`                                                                          |
-| Models with first-class `tenantId`                                             |    70 | Direct tenant-bearing schema models                                                                         |
-| Tenant-bearing models covered by `tenant_isolation`                            |    70 | `50` from Phase 2.1.5 plus `16` added in Phase 2.6-B plus `3` added in Phase 2.6-E plus `1` in Phase 2.6-G  |
-| Tenant-bearing models uncovered by `tenant_isolation`                          |     0 | First-class tenant-bearing coverage is still closed                                                         |
-| Models with `tenant_bypass` policy                                             |    70 | Bypass parity matches all first-class tenant-bearing tables                                                 |
-| Tenant-bearing models missing `tenant_bypass`                                  |     0 | First-class tenant-bearing bypass parity is still closed                                                    |
-| Indirect tenant-scoped candidates (no `tenantId`, tenant implied by parent FK) |     2 | `Account` and `Session` remain; both are blocked on auth-safety preflight                                   |
-| Tenant-agnostic / shared-system tables                                         |    14 | Includes one mixed telemetry table (`Metric`) that likely needs design, not simple RLS                      |
-| Direct executable raw SQL callsites                                            |    21 | Across 9 production files; 2 comment-only grep matches excluded                                             |
-| Hidden raw-SQL helper fan-out                                                  |     7 | Additional `executeQuery` / `executeCommand` / `executeTransaction` uses under `lib/self-evolving-prompts/` |
+| Category                                                                       | Count | Notes                                                                                                      |
+| ------------------------------------------------------------------------------ | ----: | ---------------------------------------------------------------------------------------------------------- |
+| Prisma models total                                                            |    89 | Parsed from `prisma/schema.prisma`                                                                         |
+| Models with first-class `tenantId`                                             |    70 | Direct tenant-bearing schema models                                                                        |
+| Tenant-bearing models covered by `tenant_isolation`                            |    70 | `50` from Phase 2.1.5 plus `16` added in Phase 2.6-B plus `3` added in Phase 2.6-E plus `1` in Phase 2.6-G |
+| Tenant-bearing models uncovered by `tenant_isolation`                          |     0 | First-class tenant-bearing coverage is still closed                                                        |
+| Models with `tenant_bypass` policy                                             |    70 | Bypass parity matches all first-class tenant-bearing tables                                                |
+| Tenant-bearing models missing `tenant_bypass`                                  |     0 | First-class tenant-bearing bypass parity is still closed                                                   |
+| Indirect tenant-scoped candidates (no `tenantId`, tenant implied by parent FK) |     2 | `Account` and `Session` remain; both are blocked on auth-safety preflight                                  |
+| Tenant-agnostic / shared-system tables                                         |    14 | Includes one mixed telemetry table (`Metric`) that likely needs design, not simple RLS                     |
+| Direct executable raw SQL callsites                                            |    21 | Across 4 production files after 2.6-J; helper-backed prompt-performance usage is classified separately     |
+| Hidden raw-SQL helper fan-out                                                  |    12 | Additional `executeQuery` / `executeCommand` uses remain under `lib/self-evolving-prompts/`                |
 
 ## Covered Tenant-Bearing Models
 
@@ -316,7 +316,66 @@ Phase 2.6-I hardens the scoped self-evolving prompts raw SQL surface without cha
 - Residual self-evolving prompt raw SQL risk:
   - `db.ts` intentionally retains raw helper internals for static parameterized SQL and RLS `set_config(...)` setup
   - `ab-experiments.ts` intentionally retains static raw SQL because the batch avoided a broad behavioral rewrite of experiment inserts / weighted updates
-  - `prompt-performance.ts` still uses the shared helper and was not otherwise reworked in 2.6-I
+- `prompt-performance.ts` still uses the shared helper and was not otherwise reworked in 2.6-I
+- New production DB changes made: **none**
+
+## Phase 2.6-J Residual Raw SQL Reconciliation Update
+
+Phase 2.6-J reconciles the final residual production raw-SQL scope after 2.6-H and 2.6-I. No production DB changes were made. The remaining direct raw-SQL inventory across `app/` and `lib/` excluding tests is now entirely classified as safe helper internals, tenant-local protected raw SQL, or a tenant-agnostic health probe.
+
+### Fresh Direct Raw SQL Inventory After 2.6-J
+
+Fresh grep scope:
+
+- directories: `app/`, `lib/`
+- excluded: tests, property tests, specs, `node_modules`
+- patterns: `$queryRaw`, `$queryRawUnsafe`, `$executeRaw`, `$executeRawUnsafe`, `prisma.$queryRaw`, `prisma.$executeRaw`
+
+Direct executable matches remaining after 2.6-J: **21**
+
+| File                                                      | Direct matches | Classification               | Notes                                                                                                                                                |
+| --------------------------------------------------------- | -------------: | ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `lib/prisma.ts`                                           |              5 | safe helper internal         | Shared RLS shim internals only: `set_config(...)` plus the documented raw-query limitation comment                                                   |
+| `lib/self-evolving-prompts/db.ts`                         |              7 | safe helper internal         | Shared self-evolving raw helper internals only: `set_config(...)`, safe parameterized `\$queryRaw` / `\$executeRaw`, and `SELECT 1` connection check |
+| `lib/self-evolving-prompts/data-access/ab-experiments.ts` |              8 | tenant-local protected       | Static parameterized raw SQL under explicit tenant-aware transaction context; no unsafe execution remains                                            |
+| `app/api/health/route.ts`                                 |              1 | tenant-agnostic/system query | Safe `SELECT 1` liveness probe; intentionally not tenant-scoped                                                                                      |
+
+No remaining direct raw-SQL matches are classified as unsafe.
+
+### 2.6-J Scoped File Results
+
+| File                                                          |              Before |               After | Classification after 2.6-J                        | What changed                                                                                                                                                                              |
+| ------------------------------------------------------------- | ------------------: | ------------------: | ------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `app/api/health/route.ts`                                     |                   1 |                   1 | tenant-agnostic/system query                      | No code change needed; retained safe parameterized `SELECT 1` liveness probe and documented it as intentionally tenant-agnostic                                                           |
+| `lib/outreach/sprint2/sniperWorker.ts`                        |                   1 |                   0 | tenant-agnostic/shared model lookup               | Replaced raw `EmailBlocklist` query with Prisma `emailBlocklist.findUnique(...)` best-effort lookup                                                                                       |
+| `lib/self-evolving-prompts/data-access/prompt-performance.ts` | 0 direct / 8 helper | 0 direct / 8 helper | tenant-aware helper call with documented contract | Kept helper-backed raw SQL only, but aligned to `PromptPerformanceLog`, added `tenantId` writes, explicit tenant filters when tenant context exists, and operation-level helper contracts |
+
+### 2.6-J Prompt Performance Classification
+
+`lib/self-evolving-prompts/data-access/prompt-performance.ts` now falls into the "tenant-aware helper call with documented contract" bucket:
+
+- writes:
+  - `logPerformance(...)` now requires tenant scope from runtime context or an explicit caller-supplied `tenantId`
+  - inserts now write `"tenantId"` into `PromptPerformanceLog`
+- reads:
+  - tenant-local callers now get explicit `"tenantId"` filters when a runtime tenant exists
+  - helper execution stays safe and parameterized through `executeQuery(...)`
+  - no-context analytics reads remain allowed and are explicitly classified as helper-backed system analytics behavior, not unsafe SQL
+
+### 2.6-J Outcome
+
+- Unsafe raw SQL removed in scoped files this batch: **1 / 1** (`lib/outreach/sprint2/sniperWorker.ts`)
+- Unsafe raw SQL retained after 2.6-J: **0**
+- Remaining production raw SQL files:
+  - `app/api/health/route.ts`
+  - `lib/prisma.ts`
+  - `lib/self-evolving-prompts/db.ts`
+  - `lib/self-evolving-prompts/data-access/ab-experiments.ts`
+- Remaining helper-backed self-evolving prompt raw SQL file:
+  - `lib/self-evolving-prompts/data-access/prompt-performance.ts`
+- Raw SQL hardening is now complete **except**:
+  - local `app_user + RLS` verification remains blocked while `localhost:5435` refuses connections
+  - `Account` / `Session` remain intentionally blocked pending the auth-adapter context plan
 - New production DB changes made: **none**
 
 ## Preserved Phase 2.5 Followups Carried Forward
