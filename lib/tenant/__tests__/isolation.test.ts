@@ -54,61 +54,70 @@ describe('Multi-Tenant Isolation', () => {
     });
 
     // Create test data for Tenant A
-    const auditA = await prisma.audit.create({
-      data: {
-        id: uuidv4(),
-        tenantId: tenantAId,
-        businessName: "Tenant A's Business",
-        businessUrl: 'https://tenant-a-business.com',
-        status: 'COMPLETE',
-        overallScore: 75,
-        modulesCompleted: ['website', 'gbp'],
-      },
-    });
+    const { runWithTenantAsync } = await import('../context');
+    const auditA = await runWithTenantAsync(tenantAId, () =>
+      prisma.audit.create({
+        data: {
+          id: uuidv4(),
+          tenantId: tenantAId,
+          businessName: "Tenant A's Business",
+          businessUrl: 'https://tenant-a-business.com',
+          status: 'COMPLETE',
+          overallScore: 75,
+          modulesCompleted: ['website', 'gbp'],
+        },
+      })
+    );
     testAuditAId = auditA.id;
 
-    await prisma.finding.create({
-      data: {
-        id: uuidv4(),
-        tenantId: tenantAId,
-        auditId: testAuditAId,
-        module: 'website',
-        category: 'SEO',
-        type: 'PAINKILLER',
-        title: "Tenant A's Finding",
-        description: 'This finding belongs to Tenant A',
-        impactScore: 8,
-        confidenceScore: 95,
-      },
-    });
+    await runWithTenantAsync(tenantAId, () =>
+      prisma.finding.create({
+        data: {
+          id: uuidv4(),
+          tenantId: tenantAId,
+          auditId: testAuditAId,
+          module: 'website',
+          category: 'SEO',
+          type: 'PAINKILLER',
+          title: "Tenant A's Finding",
+          description: 'This finding belongs to Tenant A',
+          impactScore: 8,
+          confidenceScore: 95,
+        },
+      })
+    );
     // Create test data for Tenant B
-    const auditB = await prisma.audit.create({
-      data: {
-        id: uuidv4(),
-        tenantId: tenantBId,
-        businessName: "Tenant B's Business",
-        businessUrl: 'https://tenant-b-business.com',
-        status: 'COMPLETE',
-        overallScore: 60,
-        modulesCompleted: ['website'],
-      },
-    });
+    const auditB = await runWithTenantAsync(tenantBId, () =>
+      prisma.audit.create({
+        data: {
+          id: uuidv4(),
+          tenantId: tenantBId,
+          businessName: "Tenant B's Business",
+          businessUrl: 'https://tenant-b-business.com',
+          status: 'COMPLETE',
+          overallScore: 60,
+          modulesCompleted: ['website'],
+        },
+      })
+    );
     testAuditBId = auditB.id;
 
-    const findingB = await prisma.finding.create({
-      data: {
-        id: uuidv4(),
-        tenantId: tenantBId,
-        auditId: testAuditBId,
-        module: 'gbp',
-        category: 'Reputation',
-        type: 'VITAMIN',
-        title: "Tenant B's Finding",
-        description: 'This finding belongs to Tenant B',
-        impactScore: 5,
-        confidenceScore: 80,
-      },
-    });
+    const findingB = await runWithTenantAsync(tenantBId, () =>
+      prisma.finding.create({
+        data: {
+          id: uuidv4(),
+          tenantId: tenantBId,
+          auditId: testAuditBId,
+          module: 'gbp',
+          category: 'Reputation',
+          type: 'VITAMIN',
+          title: "Tenant B's Finding",
+          description: 'This finding belongs to Tenant B',
+          impactScore: 5,
+          confidenceScore: 80,
+        },
+      })
+    );
     testFindingBId = findingB.id;
   });
 

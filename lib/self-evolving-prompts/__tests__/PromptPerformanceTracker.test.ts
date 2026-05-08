@@ -8,7 +8,6 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { prisma } from '../db';
 import { PromptPerformanceTracker } from '../PromptPerformanceTracker';
-import { PromptPerformanceLog } from '../types';
 
 describe('PromptPerformanceTracker', () => {
   let tracker: PromptPerformanceTracker;
@@ -23,7 +22,7 @@ describe('PromptPerformanceTracker', () => {
 
   afterAll(async () => {
     // Clean up all test data
-    await prisma.$executeRaw`DELETE FROM prompt_performance_logs WHERE node_id = ${testNodeId}`;
+    await prisma.$executeRaw`DELETE FROM "PromptPerformanceLog" WHERE "nodeId" = ${testNodeId}`;
     await prisma.$disconnect();
   });
 
@@ -32,18 +31,38 @@ describe('PromptPerformanceTracker', () => {
   });
 
   describe('logPerformance', () => {
-    it('should log performance with all required fields', async () => {
-      const log = await tracker.logPerformance({
-        promptVersionHash: testVersionHash,
-        nodeId: testNodeId,
-        qualityScore: 85.5,
-        downstreamImpact: 92.3,
-        costUSD: 0.0025,
-        latencyMs: 1250,
-        inputTokens: 500,
-        outputTokens: 200,
-        metadata: { test: 'data' },
+    const testTenantId = '00000000-0000-0000-0000-000000000001';
+
+    beforeAll(async () => {
+      // Ensure the test tenant exists
+      await prisma.tenant.upsert({
+        where: { id: testTenantId },
+        update: {},
+        create: {
+          id: testTenantId,
+          name: 'Tracker Test Tenant',
+          planTier: 'pro',
+          status: 'active',
+        },
       });
+    });
+
+    it('should log performance with all required fields', async () => {
+      // Use runWithTenantAsync to provide context
+      const { runWithTenantAsync } = await import('@/lib/tenant/context');
+      const log = await runWithTenantAsync(testTenantId, () =>
+        tracker.logPerformance({
+          promptVersionHash: testVersionHash,
+          nodeId: testNodeId,
+          qualityScore: 85.5,
+          downstreamImpact: 92.3,
+          costUSD: 0.0025,
+          latencyMs: 1250,
+          inputTokens: 500,
+          outputTokens: 200,
+          metadata: { test: 'data' },
+        })
+      );
 
       createdLogIds.push(log.id);
 
@@ -62,29 +81,34 @@ describe('PromptPerformanceTracker', () => {
     });
 
     it('should auto-generate UUID for id', async () => {
-      const log1 = await tracker.logPerformance({
-        promptVersionHash: testVersionHash,
-        nodeId: testNodeId,
-        qualityScore: 80,
-        downstreamImpact: 85,
-        costUSD: 0.002,
-        latencyMs: 1000,
-        inputTokens: 400,
-        outputTokens: 150,
-        metadata: {},
-      });
+      const { runWithTenantAsync } = await import('@/lib/tenant/context');
+      const log1 = await runWithTenantAsync(testTenantId, () =>
+        tracker.logPerformance({
+          promptVersionHash: testVersionHash,
+          nodeId: testNodeId,
+          qualityScore: 80,
+          downstreamImpact: 85,
+          costUSD: 0.002,
+          latencyMs: 1000,
+          inputTokens: 400,
+          outputTokens: 150,
+          metadata: {},
+        })
+      );
 
-      const log2 = await tracker.logPerformance({
-        promptVersionHash: testVersionHash,
-        nodeId: testNodeId,
-        qualityScore: 80,
-        downstreamImpact: 85,
-        costUSD: 0.002,
-        latencyMs: 1000,
-        inputTokens: 400,
-        outputTokens: 150,
-        metadata: {},
-      });
+      const log2 = await runWithTenantAsync(testTenantId, () =>
+        tracker.logPerformance({
+          promptVersionHash: testVersionHash,
+          nodeId: testNodeId,
+          qualityScore: 80,
+          downstreamImpact: 85,
+          costUSD: 0.002,
+          latencyMs: 1000,
+          inputTokens: 400,
+          outputTokens: 150,
+          metadata: {},
+        })
+      );
 
       createdLogIds.push(log1.id, log2.id);
 
@@ -94,21 +118,24 @@ describe('PromptPerformanceTracker', () => {
     });
 
     it('should auto-generate timestamp', async () => {
+      const { runWithTenantAsync } = await import('@/lib/tenant/context');
       const beforeLog = new Date();
       // Add small delay to ensure timestamp is after beforeLog
       await new Promise((resolve) => setTimeout(resolve, 10));
 
-      const log = await tracker.logPerformance({
-        promptVersionHash: testVersionHash,
-        nodeId: testNodeId,
-        qualityScore: 75,
-        downstreamImpact: 80,
-        costUSD: 0.003,
-        latencyMs: 1500,
-        inputTokens: 600,
-        outputTokens: 250,
-        metadata: {},
-      });
+      const log = await runWithTenantAsync(testTenantId, () =>
+        tracker.logPerformance({
+          promptVersionHash: testVersionHash,
+          nodeId: testNodeId,
+          qualityScore: 75,
+          downstreamImpact: 80,
+          costUSD: 0.003,
+          latencyMs: 1500,
+          inputTokens: 600,
+          outputTokens: 250,
+          metadata: {},
+        })
+      );
 
       createdLogIds.push(log.id);
 
@@ -120,6 +147,7 @@ describe('PromptPerformanceTracker', () => {
     });
 
     it('should serialize metadata to JSONB', async () => {
+      const { runWithTenantAsync } = await import('@/lib/tenant/context');
       const complexMetadata = {
         nested: {
           object: {
@@ -132,17 +160,19 @@ describe('PromptPerformanceTracker', () => {
         boolean: true,
       };
 
-      const log = await tracker.logPerformance({
-        promptVersionHash: testVersionHash,
-        nodeId: testNodeId,
-        qualityScore: 90,
-        downstreamImpact: 95,
-        costUSD: 0.001,
-        latencyMs: 800,
-        inputTokens: 300,
-        outputTokens: 100,
-        metadata: complexMetadata,
-      });
+      const log = await runWithTenantAsync(testTenantId, () =>
+        tracker.logPerformance({
+          promptVersionHash: testVersionHash,
+          nodeId: testNodeId,
+          qualityScore: 90,
+          downstreamImpact: 95,
+          costUSD: 0.001,
+          latencyMs: 800,
+          inputTokens: 300,
+          outputTokens: 100,
+          metadata: complexMetadata,
+        })
+      );
 
       createdLogIds.push(log.id);
 
@@ -151,19 +181,22 @@ describe('PromptPerformanceTracker', () => {
     });
 
     it('should handle optional experimentId and variantId', async () => {
-      const log = await tracker.logPerformance({
-        promptVersionHash: testVersionHash,
-        nodeId: testNodeId,
-        qualityScore: 88,
-        downstreamImpact: 90,
-        costUSD: 0.0022,
-        latencyMs: 1100,
-        inputTokens: 450,
-        outputTokens: 180,
-        experimentId: '550e8400-e29b-41d4-a716-446655440000',
-        variantId: '550e8400-e29b-41d4-a716-446655440001',
-        metadata: {},
-      });
+      const { runWithTenantAsync } = await import('@/lib/tenant/context');
+      const log = await runWithTenantAsync(testTenantId, () =>
+        tracker.logPerformance({
+          promptVersionHash: testVersionHash,
+          nodeId: testNodeId,
+          qualityScore: 88,
+          downstreamImpact: 90,
+          costUSD: 0.0022,
+          latencyMs: 1100,
+          inputTokens: 450,
+          outputTokens: 180,
+          experimentId: '550e8400-e29b-41d4-a716-446655440000',
+          variantId: '550e8400-e29b-41d4-a716-446655440001',
+          metadata: {},
+        })
+      );
 
       createdLogIds.push(log.id);
 

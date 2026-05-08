@@ -1,63 +1,44 @@
 version: '3.8'
 
-# PgBouncer Connection Pooler for Local Development
-# Usage: docker-compose -f docker-compose.pgbouncer.yml up -d
-#
-# This provides connection pooling between your app and PostgreSQL,
-# simulating the production Cloud Run + PgBouncer architecture.
-
 services:
   pgbouncer:
-    image: bitnami/pgbouncer:latest
+    image: edoburu/pgbouncer:latest
     container_name: proposalos-pgbouncer
     ports:
-      - '6432:6432'
+      - '6432:5432'
     environment:
-      # PostgreSQL connection settings
-      - POSTGRESQL_HOST=host.docker.internal
-      - POSTGRESQL_PORT=5432
-      - POSTGRESQL_USERNAME=${DB_USER:-postgres}
-      - POSTGRESQL_PASSWORD=${DB_PASSWORD:-postgres}
-      - POSTGRESQL_DATABASE=${DB_NAME:-proposalos}
+      # PostgreSQL connection settings (aligned with edoburu/pgbouncer)
+      - DB_HOST=host.docker.internal
+      - DB_PORT=5435
+      - DB_USER=${DB_USER:-postgres}
+      - DB_PASSWORD=${DB_PASSWORD:-password}
+      - DB_NAME=${DB_NAME:-proposal_rls_smoke}
 
       # PgBouncer pool settings (optimized for local dev)
-      - PGBOUNCER_PORT=6432
-      - PGBOUNCER_BIND_ADDRESS=0.0.0.0
-      - PGBOUNCER_POOL_MODE=transaction
-      - PGBOUNCER_MAX_CLIENT_CONN=100
-      - PGBOUNCER_DEFAULT_POOL_SIZE=10
-      - PGBOUNCER_MIN_POOL_SIZE=2
-      - PGBOUNCER_RESERVE_POOL_SIZE=2
-      - PGBOUNCER_RESERVE_POOL_TIMEOUT=3
-      - PGBOUNCER_SERVER_LIFETIME=3600
-      - PGBOUNCER_SERVER_IDLE_TIMEOUT=600
-      - PGBOUNCER_SERVER_CONNECT_TIMEOUT=15
-      - PGBOUNCER_SERVER_LOGIN_RETRY=5
-      - PGBOUNCER_QUERY_TIMEOUT=300
-      - PGBOUNCER_QUERY_WAIT_TIMEOUT=120
-      - PGBOUNCER_CLIENT_IDLE_TIMEOUT=3600
-      - PGBOUNCER_CLIENT_LOGIN_TIMEOUT=60
-      - PGBOUNCER_IDLE_CLIENT_TIMEOUT=3600
+      - POOL_MODE=transaction
+      - MAX_CLIENT_CONN=100
+      - DEFAULT_POOL_SIZE=10
+      - MIN_POOL_SIZE=2
+      - RESERVE_POOL_SIZE=2
+      - RESERVE_POOL_TIMEOUT=3
 
       # Authentication
-      - PGBOUNCER_AUTH_TYPE=scram-sha-256
-      - PGBOUNCER_AUTH_FILE=/etc/pgbouncer/userlist.txt
+      - AUTH_TYPE=scram-sha-256
+      - AUTH_FILE=/etc/pgbouncer/userlist.txt
 
       # Logging
-      - PGBOUNCER_LOG_CONNECTIONS=1
-      - PGBOUNCER_LOG_DISCONNECTIONS=1
-      - PGBOUNCER_LOG_POOLER_ERRORS=1
-      - PGBOUNCER_LOG_STATS=1
+      - LOG_CONNECTIONS=1
+      - LOG_DISCONNECTIONS=1
+      - LOG_POOLER_ERRORS=1
+      - LOG_STATS=1
 
     volumes:
       # Custom userlist.txt for authentication
       - ./docker/pgbouncer/userlist.txt:/etc/pgbouncer/userlist.txt:ro
-      # Custom pgbouncer.ini for advanced config
-      - ./docker/pgbouncer/pgbouncer.ini:/opt/bitnami/pgbouncer/conf/pgbouncer.ini:ro
 
     restart: unless-stopped
     healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U ${DB_USER:-postgres} -p 6432 -h localhost']
+      test: ['CMD-SHELL', 'pg_isready -U ${DB_USER:-postgres} -p 5432 -h localhost']
       interval: 10s
       timeout: 5s
       retries: 5
@@ -65,36 +46,3 @@ services:
     # For macOS/Linux - connect to host PostgreSQL
     extra_hosts:
       - 'host.docker.internal:host-gateway'
-
-# Alternative: Include PostgreSQL in the same compose file
-# Uncomment if you want a fully self-contained dev environment
-#
-# services:
-#   postgres:
-#     image: postgres:16-alpine
-#     container_name: proposalos-postgres
-#     ports:
-#       - '5432:5432'
-#     environment:
-#       - POSTGRES_USER=postgres
-#       - POSTGRES_PASSWORD=postgres
-#       - POSTGRES_DB=proposalos
-#     volumes:
-#       - postgres_data:/var/lib/postgresql/data
-#     healthcheck:
-#       test: ['CMD-SHELL', 'pg_isready -U postgres']
-#       interval: 5s
-#       timeout: 5s
-#       retries: 5
-#
-#   pgbouncer:
-#     # ... same as above, but change:
-#     environment:
-#       - POSTGRESQL_HOST=postgres
-#       # ... rest of settings
-#     depends_on:
-#       postgres:
-#         condition: service_healthy
-#
-# volumes:
-#   postgres_data:
