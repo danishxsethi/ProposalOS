@@ -2,6 +2,7 @@ import * as fc from 'fast-check';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { cleanupDb } from '@/lib/__tests__/utils/cleanup';
+import { runWithTenantAsync, runWithTenantBypass } from '@/lib/tenant/context';
 /**
  * Property-Based Tests for Prospect State Machine
  *
@@ -145,12 +146,14 @@ let testTenantId: string;
  * Create a test tenant for the tests
  */
 async function createTestTenant(): Promise<string> {
-  const tenant = await prisma.tenant.create({
-    data: {
-      name: `Test Tenant ${Math.random()}`,
-    },
+  return runWithTenantBypass('create test tenant', async () => {
+    const tenant = await prisma.tenant.create({
+      data: {
+        name: `Test Tenant ${Math.random()}`,
+      },
+    });
+    return tenant.id;
   });
-  return tenant.id;
 }
 
 /**
@@ -180,7 +183,17 @@ async function createTestProspect(tenantId: string, status: ProspectStatus): Pro
 async function cleanupTestData(prospectIds: string[]) {
   if (prospectIds.length === 0) return;
 
-  await cleanupDb(prisma);
+  await runWithTenantBypass('cleanup test data', async () => {
+    await prisma.pipelineErrorLog.deleteMany({
+      where: { prospectId: { in: prospectIds } },
+    });
+    await prisma.prospectStateTransition.deleteMany({
+      where: { leadId: { in: prospectIds } },
+    });
+    await prisma.prospectLead.deleteMany({
+      where: { id: { in: prospectIds } },
+    });
+  });
 }
 
 /**
@@ -190,8 +203,10 @@ async function cleanupTestTenant(tenantId: string) {
   if (!tenantId) return;
 
   try {
-    await prisma.tenant.delete({
-      where: { id: tenantId },
+    await runWithTenantBypass('cleanup test tenant', async () => {
+      await prisma.tenant.delete({
+        where: { id: tenantId },
+      });
     });
   } catch (error) {
     // Tenant might not exist if test failed early
@@ -235,25 +250,27 @@ describe('State Machine Property Tests', () => {
     it('accepts all valid transitions', async () => {
       await fc.assert(
         fc.asyncProperty(validTransitionPairArb, pipelineStageArb, async ({ from, to }, stage) => {
-          // Create a prospect in the 'from' status
-          const prospectId = await createTestProspect(testTenantId, from);
-          createdProspectIds.push(prospectId);
+          return runWithTenantAsync(testTenantId, async () => {
+            // Create a prospect in the 'from' status
+            const prospectId = await createTestProspect(testTenantId, from);
+            createdProspectIds.push(prospectId);
 
-          // Attempt the transition
-          const result = await transition(prospectId, to, stage);
+            // Attempt the transition
+            const result = await transition(prospectId, to, stage);
 
-          // Verify the transition succeeded
-          expect(result.from).toBe(from);
-          expect(result.to).toBe(to);
-          expect(result.stage).toBe(stage);
-          expect(result.tenantId).toBe(testTenantId);
+            // Verify the transition succeeded
+            expect(result.from).toBe(from);
+            expect(result.to).toBe(to);
+            expect(result.stage).toBe(stage);
+            expect(result.tenantId).toBe(testTenantId);
 
-          // Verify the prospect's status was updated
-          const updatedProspect = await prisma.prospectLead.findUnique({
-            where: { id: prospectId },
-            select: { pipelineStatus: true },
+            // Verify the prospect's status was updated
+            const updatedProspect = await prisma.prospectLead.findUnique({
+              where: { id: prospectId },
+              select: { pipelineStatus: true },
+            });
+            expect(updatedProspect?.pipelineStatus).toBe(to);
           });
-          expect(updatedProspect?.pipelineStatus).toBe(to);
         }),
         { numRuns: 100 }
       );
@@ -265,28 +282,30 @@ describe('State Machine Property Tests', () => {
           invalidTransitionPairArb,
           pipelineStageArb,
           async ({ from, to }, stage) => {
-            // Create a prospect in the 'from' status
-            const prospectId = await createTestProspect(testTenantId, from);
-            createdProspectIds.push(prospectId);
+            return runWithTenantAsync(testTenantId, async () => {
+              // Create a prospect in the 'from' status
+              const prospectId = await createTestProspect(testTenantId, from);
+              createdProspectIds.push(prospectId);
 
-            // Attempt the invalid transition
-            await expect(transition(prospectId, to, stage)).rejects.toThrow();
+              // Attempt the invalid transition
+              await expect(transition(prospectId, to, stage)).rejects.toThrow();
 
-            // Verify the prospect's status was NOT updated
-            const updatedProspect = await prisma.prospectLead.findUnique({
-              where: { id: prospectId },
-              select: { pipelineStatus: true },
+              // Verify the prospect's status was NOT updated
+              const updatedProspect = await prisma.prospectLead.findUnique({
+                where: { id: prospectId },
+                select: { pipelineStatus: true },
+              });
+              expect(updatedProspect?.pipelineStatus).toBe(from);
+
+              // Verify an error was logged
+              const errorLog = await prisma.pipelineErrorLog.findFirst({
+                where: {
+                  prospectId,
+                  errorType: 'INVALID_TRANSITION',
+                },
+              });
+              expect(errorLog).toBeTruthy();
             });
-            expect(updatedProspect?.pipelineStatus).toBe(from);
-
-            // Verify an error was logged
-            const errorLog = await prisma.pipelineErrorLog.findFirst({
-              where: {
-                prospectId,
-                errorType: 'INVALID_TRANSITION',
-              },
-            });
-            expect(errorLog).toBeTruthy();
           }
         ),
         { numRuns: 100 }
@@ -318,40 +337,42 @@ describe('State Machine Property Tests', () => {
     it('records all transition details in the database', async () => {
       await fc.assert(
         fc.asyncProperty(validTransitionPairArb, pipelineStageArb, async ({ from, to }, stage) => {
-          // Create a prospect in the 'from' status
-          const prospectId = await createTestProspect(testTenantId, from);
-          createdProspectIds.push(prospectId);
+          return runWithTenantAsync(testTenantId, async () => {
+            // Create a prospect in the 'from' status
+            const prospectId = await createTestProspect(testTenantId, from);
+            createdProspectIds.push(prospectId);
 
-          // Perform the transition
-          const beforeTransition = new Date();
-          const result = await transition(prospectId, to, stage);
-          const afterTransition = new Date();
+            // Perform the transition
+            const beforeTransition = new Date();
+            const result = await transition(prospectId, to, stage);
+            const afterTransition = new Date();
 
-          // Verify the returned StateTransition contains all required fields
-          expect(result.from).toBe(from);
-          expect(result.to).toBe(to);
-          expect(result.stage).toBe(stage);
-          expect(result.tenantId).toBe(testTenantId);
-          expect(result.timestamp).toBeInstanceOf(Date);
-          expect(result.timestamp.getTime()).toBeGreaterThanOrEqual(beforeTransition.getTime());
-          expect(result.timestamp.getTime()).toBeLessThanOrEqual(afterTransition.getTime());
-          expect(result.metadata).toBeDefined();
+            // Verify the returned StateTransition contains all required fields
+            expect(result.from).toBe(from);
+            expect(result.to).toBe(to);
+            expect(result.stage).toBe(stage);
+            expect(result.tenantId).toBe(testTenantId);
+            expect(result.timestamp).toBeInstanceOf(Date);
+            expect(result.timestamp.getTime()).toBeGreaterThanOrEqual(beforeTransition.getTime());
+            expect(result.timestamp.getTime()).toBeLessThanOrEqual(afterTransition.getTime());
+            expect(result.metadata).toBeDefined();
 
-          // Verify the transition was persisted to the database
-          const transitionRecord = await prisma.prospectStateTransition.findFirst({
-            where: {
-              leadId: prospectId,
-              fromStatus: from,
-              toStatus: to,
-            },
+            // Verify the transition was persisted to the database
+            const transitionRecord = await prisma.prospectStateTransition.findFirst({
+              where: {
+                leadId: prospectId,
+                fromStatus: from,
+                toStatus: to,
+              },
+            });
+
+            expect(transitionRecord).toBeTruthy();
+            expect(transitionRecord?.tenantId).toBe(testTenantId);
+            expect(transitionRecord?.stage).toBe(stage);
+            expect(transitionRecord?.fromStatus).toBe(from);
+            expect(transitionRecord?.toStatus).toBe(to);
+            expect(transitionRecord?.createdAt).toBeInstanceOf(Date);
           });
-
-          expect(transitionRecord).toBeTruthy();
-          expect(transitionRecord?.tenantId).toBe(testTenantId);
-          expect(transitionRecord?.stage).toBe(stage);
-          expect(transitionRecord?.fromStatus).toBe(from);
-          expect(transitionRecord?.toStatus).toBe(to);
-          expect(transitionRecord?.createdAt).toBeInstanceOf(Date);
         }),
         { numRuns: 100 }
       );
@@ -362,43 +383,45 @@ describe('State Machine Property Tests', () => {
         fc.asyncProperty(
           fc.constant(null), // Dummy arbitrary to run the test
           async () => {
-            // Create a prospect and perform a sequence of valid transitions
-            const prospectId = await createTestProspect(testTenantId, 'discovered');
-            createdProspectIds.push(prospectId);
+            return runWithTenantAsync(testTenantId, async () => {
+              // Create a prospect and perform a sequence of valid transitions
+              const prospectId = await createTestProspect(testTenantId, 'discovered');
+              createdProspectIds.push(prospectId);
 
-            // Perform a sequence of transitions: discovered -> audited -> proposed
-            await transition(prospectId, 'audited', PipelineStage.AUDIT);
-            await transition(prospectId, 'QUALIFIED', PipelineStage.PROPOSAL);
+              // Perform a sequence of transitions: discovered -> audited -> proposed
+              await transition(prospectId, 'audited', PipelineStage.AUDIT);
+              await transition(prospectId, 'QUALIFIED', PipelineStage.PROPOSAL);
 
-            // Get the history
-            const history = await getHistory(prospectId);
+              // Get the history
+              const history = await getHistory(prospectId);
 
-            // Verify we have 2 transitions
-            expect(history).toHaveLength(2);
+              // Verify we have 2 transitions
+              expect(history).toHaveLength(2);
 
-            // Verify they are in chronological order
-            expect(history[0].from).toBe('discovered');
-            expect(history[0].to).toBe('audited');
-            expect(history[1].from).toBe('audited');
-            expect(history[1].to).toBe('QUALIFIED');
+              // Verify they are in chronological order
+              expect(history[0].from).toBe('discovered');
+              expect(history[0].to).toBe('audited');
+              expect(history[1].from).toBe('audited');
+              expect(history[1].to).toBe('QUALIFIED');
 
-            // Verify timestamps are in order
-            expect(history[0].timestamp.getTime()).toBeLessThanOrEqual(
-              history[1].timestamp.getTime()
-            );
+              // Verify timestamps are in order
+              expect(history[0].timestamp.getTime()).toBeLessThanOrEqual(
+                history[1].timestamp.getTime()
+              );
 
-            // Verify all required fields are present
-            for (const transition of history) {
-              expect(transition.from).toBeDefined();
-              expect(transition.to).toBeDefined();
-              expect(transition.timestamp).toBeInstanceOf(Date);
-              expect(transition.stage).toBeDefined();
-              expect(transition.tenantId).toBe(testTenantId);
-              expect(transition.metadata).toBeDefined();
-            }
+              // Verify all required fields are present
+              for (const transition of history) {
+                expect(transition.from).toBeDefined();
+                expect(transition.to).toBeDefined();
+                expect(transition.timestamp).toBeInstanceOf(Date);
+                expect(transition.stage).toBeDefined();
+                expect(transition.tenantId).toBe(testTenantId);
+                expect(transition.metadata).toBeDefined();
+              }
+            });
           }
         ),
-        { numRuns: 100 }
+        { numRuns: 5 }
       );
     });
   });

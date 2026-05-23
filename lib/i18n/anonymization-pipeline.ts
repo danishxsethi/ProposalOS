@@ -202,8 +202,10 @@ export class AnonymizationPipeline {
     const cleanedResults = await this.removeIdentifyingInfo(rawMetrics.auditResults ?? {});
 
     // 3. Extract industry, locale, and business size from audit results
-    const industry = this.extractField(cleanedResults, 'industry') ?? 'unknown';
-    const locale = this.extractField(cleanedResults, 'locale') ?? 'en-US';
+    const rawIndustry = this.extractField(cleanedResults, 'industry');
+    const industry = rawIndustry && rawIndustry.trim() !== '' ? rawIndustry.trim() : 'unknown';
+    const rawLocale = this.extractField(cleanedResults, 'locale');
+    const locale = rawLocale && rawLocale.trim() !== '' ? rawLocale.trim() : 'en-US';
     const rawSize = this.extractField(rawMetrics.auditResults, 'businessSize') ?? 'unknown';
     const businessSize = generalizeBusinessSize(rawSize);
 
