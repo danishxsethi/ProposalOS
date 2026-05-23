@@ -22,18 +22,25 @@ import { type LocaleConfig, LocaleExtensibilityFramework } from '../locale-exten
 // Arbitraries
 // ---------------------------------------------------------------------------
 
+/** Helper to generate non-whitespace strings of a certain length range */
+const nonWhitespaceString = (minLength: number, maxLength: number) =>
+  fc
+    .string({ minLength, maxLength })
+    .map((s) => s.trim())
+    .filter((s) => s.length >= minLength);
+
 /**
  * Arbitrary for a fully valid locale configuration.
  * nativeSpeakerReviewRequired is always true so addLocale() can reach 'deployed'.
  */
 const validLocaleConfigArb = fc.record<LocaleConfig>({
-  locale: fc.string({ minLength: 2, maxLength: 10 }),
-  language: fc.string({ minLength: 2, maxLength: 50 }),
+  locale: nonWhitespaceString(2, 10),
+  language: nonWhitespaceString(2, 50),
   primarySearchEngine: fc.constantFrom('google', 'yandex', 'baidu', 'naver') as fc.Arbitrary<
     'google' | 'yandex' | 'baidu' | 'naver'
   >,
-  currency: fc.string({ minLength: 3, maxLength: 3 }),
-  regulations: fc.array(fc.string({ minLength: 2, maxLength: 20 })),
+  currency: nonWhitespaceString(3, 3),
+  regulations: fc.array(nonWhitespaceString(2, 20)),
   tone: fc.constantFrom('formal', 'casual', 'professional') as fc.Arbitrary<
     'formal' | 'casual' | 'professional'
   >,
@@ -41,7 +48,7 @@ const validLocaleConfigArb = fc.record<LocaleConfig>({
 });
 
 /** Arbitrary for a locale string. */
-const localeStringArb = fc.string({ minLength: 2, maxLength: 10 });
+const localeStringArb = nonWhitespaceString(2, 10);
 
 // ---------------------------------------------------------------------------
 // Property 60: Locale Configuration Extensibility
@@ -271,13 +278,13 @@ describe('Property 63: New Locale Variant Approval', () => {
    */
   it('should return pending_review when nativeSpeakerReviewRequired is not true', async () => {
     const configWithoutReview = fc.record<LocaleConfig>({
-      locale: fc.string({ minLength: 2, maxLength: 10 }),
-      language: fc.string({ minLength: 2, maxLength: 50 }),
+      locale: nonWhitespaceString(2, 10),
+      language: nonWhitespaceString(2, 50),
       primarySearchEngine: fc.constantFrom('google', 'yandex', 'baidu', 'naver') as fc.Arbitrary<
         'google' | 'yandex' | 'baidu' | 'naver'
       >,
-      currency: fc.string({ minLength: 3, maxLength: 3 }),
-      regulations: fc.array(fc.string({ minLength: 2, maxLength: 20 })),
+      currency: nonWhitespaceString(3, 3),
+      regulations: fc.array(nonWhitespaceString(2, 20)),
       tone: fc.constantFrom('formal', 'casual', 'professional') as fc.Arbitrary<
         'formal' | 'casual' | 'professional'
       >,
@@ -371,13 +378,13 @@ describe('Property 64: New Locale Benchmark Collection', () => {
    */
   it('should not start benchmark collection for pending_review locales', async () => {
     const configWithoutReview = fc.record<LocaleConfig>({
-      locale: fc.string({ minLength: 2, maxLength: 10 }),
-      language: fc.string({ minLength: 2, maxLength: 50 }),
+      locale: nonWhitespaceString(2, 10),
+      language: nonWhitespaceString(2, 50),
       primarySearchEngine: fc.constantFrom('google', 'yandex', 'baidu', 'naver') as fc.Arbitrary<
         'google' | 'yandex' | 'baidu' | 'naver'
       >,
-      currency: fc.string({ minLength: 3, maxLength: 3 }),
-      regulations: fc.array(fc.string({ minLength: 2, maxLength: 20 })),
+      currency: nonWhitespaceString(3, 3),
+      regulations: fc.array(nonWhitespaceString(2, 20)),
       tone: fc.constantFrom('formal', 'casual', 'professional') as fc.Arbitrary<
         'formal' | 'casual' | 'professional'
       >,

@@ -1,8 +1,9 @@
 import * as cheerio from 'cheerio';
 import robotsParser from 'robots-parser';
 
-import { cachedFetch } from '@/lib/cache/apiCache';
+import { withModuleCache } from '@/lib/cache/moduleCache';
 import { logger } from '@/lib/logger';
+import { withProviderResilience } from '@/lib/resilience/withProviderResilience';
 
 interface PageMetrics {
   url: string;
@@ -20,6 +21,7 @@ interface PageMetrics {
   loadTimeMs: number;
   pageSizeKB: number;
   error?: string;
+  failureClassification: 'ANTI_BOT' | 'TIMEOUT' | 'HTTP_ERROR' | 'NONE';
 }
 
 export interface CrawlResult {
@@ -33,6 +35,7 @@ export interface CrawlResult {
   avgWordCount: number;
   schemaOrgCoverage: number;
   duplicateTitles: Map<string, string[]>;
+  failureClassification: 'ANTI_BOT' | 'TIMEOUT' | 'HTTP_ERROR' | 'NONE';
 }
 
 interface WebsiteCrawlerInput {
@@ -89,17 +92,28 @@ function isInternalUrl(url: string, baseDomain: string): boolean {
 async function isAllowedByRobots(url: string, baseUrl: URL): Promise<boolean> {
   try {
     const robotsUrl = `${baseUrl.protocol}//${baseUrl.hostname}/robots.txt`;
-    const robotsTxt = await cachedFetch(
-      'robots_txt',
-      { url: robotsUrl },
-      async () => {
-        const res = await fetch(robotsUrl, {
-          signal: AbortSignal.timeout(3000),
-        });
-        if (!res.ok) return ''; // No robots.txt means allow all
-        return await res.text();
+    const robotsTxt = await withModuleCache<string>(
+      {
+        module: 'website',
+        version: 1,
+        input: { type: 'robots_txt', url: robotsUrl },
       },
-      { ttlHours: 24 }
+      { ttlSeconds: 24 * 3600 },
+      async () => {
+        return withProviderResilience<string>(
+          {
+            provider: 'crawler',
+            operation: 'websiteCrawler:robots_txt',
+            degrade: true,
+            fallbackValue: '',
+          },
+          async ({ signal }) => {
+            const res = await fetch(robotsUrl, { signal });
+            if (!res.ok) return '';
+            return await res.text();
+          }
+        );
+      }
     );
 
     if (!robotsTxt) return true;
@@ -113,30 +127,133 @@ async function isAllowedByRobots(url: string, baseUrl: URL): Promise<boolean> {
 }
 
 /**
+ * Classify scraper failures cleanly to prevent silent degraded crawls
+ */
+export function classifyFailure(
+  status: number,
+  html: string,
+  headers: Record<string, string>,
+  errorMsg?: string,
+  errorName?: string
+): 'ANTI_BOT' | 'TIMEOUT' | 'HTTP_ERROR' | 'NONE' {
+  const normalizedErrorMsg = (errorMsg || '').toLowerCase();
+  const normalizedErrorName = (errorName || '').toLowerCase();
+
+  // 1. TIMEOUT check
+  if (
+    status === 408 ||
+    normalizedErrorName === 'aborterror' ||
+    normalizedErrorName === 'providertimeouterror' ||
+    normalizedErrorMsg.includes('timeout') ||
+    normalizedErrorMsg.includes('timed out') ||
+    normalizedErrorMsg.includes('time out') ||
+    normalizedErrorMsg.includes('abort') ||
+    normalizedErrorMsg.includes('deadline')
+  ) {
+    return 'TIMEOUT';
+  }
+
+  // 2. ANTI_BOT check
+  const serverHeader = (headers['server'] || headers['Server'] || '').toLowerCase();
+  const hasCfRay = !!(headers['cf-ray'] || headers['CF-Ray']);
+  const lowerHtml = html.toLowerCase();
+  const antiBotKeywords = [
+    'cf-challenge',
+    'challenge-platform',
+    'incapsula',
+    'recaptcha',
+    'just a moment...',
+    'one more step',
+    'ddos-guard',
+    'captcha',
+  ];
+  const hasAntiBotKeyword = antiBotKeywords.some((keyword) => lowerHtml.includes(keyword));
+
+  if (
+    status === 403 ||
+    status === 429 ||
+    serverHeader.includes('cloudflare') ||
+    serverHeader.includes('sucuri') ||
+    serverHeader.includes('imperva') ||
+    hasCfRay ||
+    hasAntiBotKeyword
+  ) {
+    return 'ANTI_BOT';
+  }
+
+  // 3. HTTP_ERROR check
+  if (status !== 200 && status !== 404) {
+    return 'HTTP_ERROR';
+  }
+
+  if (errorMsg) {
+    return 'HTTP_ERROR';
+  }
+
+  return 'NONE';
+}
+
+/**
  * Fetch and analyze a single page
  */
 async function analyzePage(url: string): Promise<PageMetrics> {
   const startTime = Date.now();
 
   try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), PAGE_TIMEOUT_MS);
-
-    const response = await fetch(url, {
-      signal: controller.signal,
-      headers: {
-        'User-Agent':
-          'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        'Accept-Language': 'en-US,en;q=0.9',
+    const response = await withProviderResilience<Response>(
+      {
+        provider: 'crawler',
+        operation: 'websiteCrawler:analyzePage',
+        degrade: false,
       },
-    });
-
-    clearTimeout(timeout);
+      async ({ signal }) => {
+        const res = await fetch(url, {
+          signal,
+          headers: {
+            'User-Agent':
+              'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.9',
+          },
+        });
+        if (!res.ok && res.status !== 404) {
+          throw new Error(`HTTP error ${res.status}: ${res.statusText}`);
+        }
+        return res;
+      }
+    );
 
     const loadTimeMs = Date.now() - startTime;
     const html = await response.text();
     const pageSizeKB = Math.round(Buffer.byteLength(html, 'utf8') / 1024);
+
+    const headers: Record<string, string> = {};
+    response.headers.forEach((value, key) => {
+      headers[key] = value;
+    });
+
+    const classification = classifyFailure(response.status, html, headers);
+
+    if (classification !== 'NONE') {
+      return {
+        url,
+        status: response.status,
+        title: null,
+        metaDescription: null,
+        h1Count: 0,
+        h1Contents: [],
+        wordCount: 0,
+        imageCount: 0,
+        imagesWithAlt: 0,
+        internalLinks: 0,
+        externalLinks: 0,
+        hasStructuredData: false,
+        loadTimeMs,
+        pageSizeKB,
+        failureClassification: classification,
+        error: classification === 'ANTI_BOT' ? 'WAF challenge/block page detected' : undefined,
+      };
+    }
 
     const $ = cheerio.load(html);
 
@@ -196,12 +313,31 @@ async function analyzePage(url: string): Promise<PageMetrics> {
       hasStructuredData,
       loadTimeMs,
       pageSizeKB,
+      failureClassification: 'NONE',
     };
   } catch (error) {
     const loadTimeMs = Date.now() - startTime;
+    const errorName = error instanceof Error ? error.name : '';
+    const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+
+    const status = (() => {
+      if (error instanceof Error) {
+        if (error.name === 'AbortError' || error.name === 'ProviderTimeoutError') {
+          return 408;
+        }
+        const match = error.message.match(/HTTP error (\d+)/);
+        if (match && match[1]) {
+          return parseInt(match[1], 10);
+        }
+      }
+      return 500;
+    })();
+
+    const classification = classifyFailure(status, '', {}, errorMsg, errorName);
+
     return {
       url,
-      status: error instanceof Error && error.name === 'AbortError' ? 408 : 500,
+      status,
       title: null,
       metaDescription: null,
       h1Count: 0,
@@ -214,7 +350,8 @@ async function analyzePage(url: string): Promise<PageMetrics> {
       hasStructuredData: false,
       loadTimeMs,
       pageSizeKB: 0,
-      error: error instanceof Error ? error.message : 'Unknown error',
+      error: errorMsg,
+      failureClassification: classification,
     };
   }
 }
@@ -294,17 +431,27 @@ export async function crawlWebsite(input: WebsiteCrawlerInput): Promise<CrawlRes
     // Extract links only from successful pages
     if (metrics.status === 200 && depth < MAX_DEPTH) {
       try {
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), PAGE_TIMEOUT_MS);
-        const response = await fetch(url, {
-          signal: controller.signal,
-          headers: {
-            'User-Agent':
-              'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        const html = await withProviderResilience<string>(
+          {
+            provider: 'crawler',
+            operation: 'websiteCrawler:extractLinks',
+            degrade: true,
+            fallbackValue: '',
           },
-        });
-        clearTimeout(timeout);
-        const html = await response.text();
+          async ({ signal }) => {
+            const response = await fetch(url, {
+              signal,
+              headers: {
+                'User-Agent':
+                  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+              },
+            });
+            if (!response.ok) {
+              throw new Error(`HTTP error ${response.status}: ${response.statusText}`);
+            }
+            return await response.text();
+          }
+        );
         const links = extractInternalLinks(html, baseUrl);
 
         for (const link of links) {
@@ -392,6 +539,9 @@ export async function crawlWebsite(input: WebsiteCrawlerInput): Promise<CrawlRes
     'Website crawl complete'
   );
 
+  const homepageMetrics = crawledPages.find((p) => p.url === input.url) || crawledPages[0];
+  const overallClassification = homepageMetrics ? homepageMetrics.failureClassification : 'NONE';
+
   return {
     crawledPages,
     totalPagesFound: allFoundUrls.size,
@@ -403,5 +553,6 @@ export async function crawlWebsite(input: WebsiteCrawlerInput): Promise<CrawlRes
     avgWordCount,
     schemaOrgCoverage,
     duplicateTitles,
+    failureClassification: overallClassification,
   };
 }
