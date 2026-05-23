@@ -1,5 +1,6 @@
 import { logger } from '@/lib/logger';
 
+import { normalizeConfidence } from './findingGenerator';
 import { AuditModuleResult, EvidenceItem, Finding } from './types';
 import { CrawlResult, crawlWebsite } from './websiteCrawler';
 
@@ -12,6 +13,70 @@ interface WebsiteCrawlerModuleInput {
  * Generate findings from crawl results
  */
 function generateFindingsFromCrawl(crawlResult: CrawlResult, businessUrl: string): Finding[] {
+  // If crawl result is blocked by anti-bot, generate a specific high-impact finding and exit early
+  if (crawlResult.failureClassification === 'ANTI_BOT') {
+    return [
+      {
+        type: 'PAINKILLER',
+        category: 'Technical SEO',
+        title: 'Scraper Blocked by Anti-Bot Protection (WAF)',
+        description:
+          'Active firewall rules (such as Cloudflare, Imperva, or Sucuri) are blocking scraper crawl requests. This prevents automated audit tools and friendly third-party integrations from crawling and indexing your site correctly.',
+        impactScore: 9,
+        confidenceScore: normalizeConfidence(95, '0-100'),
+        evidence: [
+          {
+            type: 'text',
+            value: 'WAF block page detected',
+            label: 'WAF Status',
+          },
+        ],
+        metrics: {
+          failureClassification: 'ANTI_BOT',
+        },
+        effortEstimate: 'LOW',
+        recommendedFix: [
+          'Review and update web application firewall (WAF) rule sets',
+          'Add scraper user-agents and IP addresses to the WAF allowlist',
+          'Verify robots.txt configuration does not block friendly bots',
+          'Use custom headers or API access for verified integrations',
+        ],
+      },
+    ];
+  }
+
+  // If crawl result timed out, generate a specific high-impact finding and exit early
+  if (crawlResult.failureClassification === 'TIMEOUT') {
+    return [
+      {
+        type: 'PAINKILLER',
+        category: 'Technical SEO',
+        title: 'Scraper Connection Timeout (Extremely High Latency)',
+        description:
+          'The scraper encountered extreme response times or artificial connection throttling (timeouts >45s). This indicates poor origin responsiveness, severe hosting constraints, or aggressive rate-limiting.',
+        impactScore: 9,
+        confidenceScore: normalizeConfidence(95, '0-100'),
+        evidence: [
+          {
+            type: 'text',
+            value: 'Connection timed out after 45000ms',
+            label: 'Timeout Status',
+          },
+        ],
+        metrics: {
+          failureClassification: 'TIMEOUT',
+        },
+        effortEstimate: 'MEDIUM',
+        recommendedFix: [
+          'Analyze origin Time to First Byte (TTFB) and server resources',
+          'Implement robust Content Delivery Network (CDN) caching policies',
+          'Investigate web server or hosting resource bottlenecks',
+          'Review rate limiting or traffic shaping rules',
+        ],
+      },
+    ];
+  }
+
   const findings: Finding[] = [];
 
   // 1. PAINKILLER: Broken links (404/5xx)
