@@ -58,7 +58,7 @@ export class GoogleProvider implements LLMProviderInterface {
   }
 
   getModelInfo(modelName: string): ProviderModel {
-    return GOOGLE_MODELS[modelName] || GOOGLE_MODELS['gemini-2.0-flash'];
+    return GOOGLE_MODELS[modelName] ?? GOOGLE_MODELS['gemini-2.0-flash']!;
   }
 
   async generateContent(options: ProviderCallOptions): Promise<ProviderResponse> {

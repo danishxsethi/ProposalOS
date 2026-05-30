@@ -1,7 +1,12 @@
+import { createHash } from 'crypto';
+
+import { RunTree } from 'langsmith';
+
+import { runWithConcurrency } from '@/lib/audit/concurrency';
+import { redisCache } from '@/lib/cache/redisCache';
+import { CostTracker } from '@/lib/costs/costTracker';
+import { logger } from '@/lib/logger';
 import { Metrics } from '@/lib/metrics';
-import { recordAuditTrailEvent } from '@/lib/observability/auditTrail';
-import { withChildObservabilityContext } from '@/lib/observability/context';
-import { MetricsRecorder } from '@/lib/observability/MetricsRecorder';
 import {
   generateCompetitorFindings,
   generateGBPFindings,
@@ -9,11 +14,15 @@ import {
   generateSocialFindings,
   generateWebsiteFindings,
 } from '@/lib/modules/findingGenerator';
+import { recordAuditTrailEvent } from '@/lib/observability/auditTrail';
+import { withChildObservabilityContext } from '@/lib/observability/context';
+import { MetricsRecorder } from '@/lib/observability/MetricsRecorder';
 import { detectVertical } from '@/lib/playbooks';
 import { prisma } from '@/lib/prisma';
 import { createParentTrace } from '@/lib/tracing';
 
 // --- Step 1: Import all modules ---
+import { CANONICAL_MODULES } from './modules';
 import { runAccessibilityModule } from '../modules/accessibility';
 import { runBacklinksModule } from '../modules/backlinks';
 import { runCitationsModule } from '../modules/citations';
@@ -425,7 +434,7 @@ const coreWebVitalsAdapter = async (input: ModuleInput): Promise<ModuleResult> =
     findings.push({
       module: 'coreWebVitals',
       category: 'Performance',
-      type: cwv.lcp.rating === 'poor' ? 'CRITICAL' : 'WARNING',
+      type: cwv.lcp.rating === 'poor' ? 'PAINKILLER' : 'VITAMIN',
       title: `Largest Contentful Paint: ${cwv.lcp.value.toFixed(2)}s`,
       description: `LCP is ${cwv.lcp.rating} (threshold: good < ${cwv.lcp.thresholdGood}s). Slow LCP hurts SEO rankings and user experience.`,
       impactScore: cwv.lcp.rating === 'poor' ? 8 : 5,
@@ -443,7 +452,7 @@ const coreWebVitalsAdapter = async (input: ModuleInput): Promise<ModuleResult> =
     findings.push({
       module: 'coreWebVitals',
       category: 'Performance',
-      type: cwv.cls.rating === 'poor' ? 'CRITICAL' : 'WARNING',
+      type: cwv.cls.rating === 'poor' ? 'PAINKILLER' : 'VITAMIN',
       title: `Cumulative Layout Shift: ${cwv.cls.value.toFixed(3)}`,
       description: `CLS is ${cwv.cls.rating} (threshold: good < ${cwv.cls.thresholdGood}). Layout shifts hurt UX and SEO.`,
       impactScore: cwv.cls.rating === 'poor' ? 7 : 4,
@@ -460,7 +469,7 @@ const coreWebVitalsAdapter = async (input: ModuleInput): Promise<ModuleResult> =
     findings.push({
       module: 'coreWebVitals',
       category: 'Performance',
-      type: cwv.tbt.rating === 'poor' ? 'CRITICAL' : 'WARNING',
+      type: cwv.tbt.rating === 'poor' ? 'PAINKILLER' : 'VITAMIN',
       title: `Total Blocking Time: ${cwv.tbt.value}ms`,
       description: `TBT is ${cwv.tbt.rating} (threshold: good < ${cwv.tbt.thresholdGood}ms). High TBT means the main thread is blocked, delaying user interaction.`,
       impactScore: cwv.tbt.rating === 'poor' ? 7 : 4,
@@ -508,7 +517,7 @@ const schemaAnalysisAdapter = async (input: ModuleInput): Promise<ModuleResult> 
     findings.push({
       module: 'schemaAnalysis',
       category: 'SEO',
-      type: 'CRITICAL',
+      type: 'PAINKILLER',
       title: 'Missing LocalBusiness/Organization Schema',
       description: analysis.hasLocalBusinessOrOrganization.recommendation,
       impactScore: 8,
@@ -523,7 +532,7 @@ const schemaAnalysisAdapter = async (input: ModuleInput): Promise<ModuleResult> 
     findings.push({
       module: 'schemaAnalysis',
       category: 'SEO',
-      type: 'WARNING',
+      type: 'VITAMIN',
       title: 'Missing AggregateRating Schema',
       description: analysis.hasReviewAggregateRating.recommendation,
       impactScore: 5,
@@ -538,7 +547,7 @@ const schemaAnalysisAdapter = async (input: ModuleInput): Promise<ModuleResult> 
     findings.push({
       module: 'schemaAnalysis',
       category: 'SEO',
-      type: 'OPPORTUNITY',
+      type: 'VITAMIN',
       title: 'No FAQPage Schema Detected',
       description: analysis.hasFaq.recommendation,
       impactScore: 3,
@@ -733,7 +742,7 @@ function extractFindingsFromRegistryResult(
       findings.push({
         module: 'emailFinder',
         category: 'Contact & Outreach',
-        type: 'POSITIVE',
+        type: 'VITAMIN',
         title: `${rd.emails.length} Emails Found`,
         description: `Discovered emails: ${rd.emails.join(', ')}`,
         evidence: rd.emails.map((e: string) => ({ type: 'text', value: e, label: 'Email' })),
@@ -761,6 +770,23 @@ function extractFindingsFromRegistryResult(
 
 // --- Step 3: Replace the current execution logic ---
 
+/**
+ * Per-phase concurrency limit.
+ *
+ * Phase 2 has the most modules (≈18) and many of them call AI providers.
+ * A bounded limit prevents thundering herd on Gemini/Vertex/Lighthouse and
+ * keeps tail latency predictable.  Tunable via env without code change.
+ *
+ * Default of 6 is conservative for free-tier quotas; production should
+ * tune AUDIT_PHASE_CONCURRENCY based on observed throttling.
+ */
+function getPhaseConcurrency(): number {
+  const raw = process.env.AUDIT_PHASE_CONCURRENCY;
+  const parsed = raw ? parseInt(raw, 10) : NaN;
+  if (Number.isFinite(parsed) && parsed > 0) return parsed;
+  return 6;
+}
+
 async function executePhase(
   phase: number,
   registry: ModuleConfig[],
@@ -771,8 +797,20 @@ async function executePhase(
   signal?: AbortSignal
 ): Promise<void> {
   const phaseModules = registry.filter((m) => m.phase === phase);
+  const phaseStart = Date.now();
+  const concurrency = getPhaseConcurrency();
 
-  const executions = phaseModules.map(async (mod) => {
+  logger.info(
+    {
+      event: 'audit.phase_start',
+      phase,
+      moduleCount: phaseModules.length,
+      concurrency,
+    },
+    `[Audit] Phase ${phase} start (${phaseModules.length} modules, concurrency=${concurrency})`
+  );
+
+  const tasks = phaseModules.map((mod) => async () => {
     // Check dependencies
     if (mod.dependsOn) {
       const missingDeps = mod.dependsOn.filter(
@@ -789,6 +827,7 @@ async function executePhase(
       }
     }
 
+    const moduleStart = Date.now();
     try {
       if (signal?.aborted) return;
 
@@ -816,13 +855,45 @@ async function executePhase(
       const result = await withTimeout(runPromise(), mod.timeoutMs || 30000);
 
       results.set(mod.name, result);
+
+      logger.info(
+        {
+          event: 'audit.module_complete',
+          phase,
+          module: mod.name,
+          status: result.status,
+          durationMs: Date.now() - moduleStart,
+        },
+        `[Audit] Module ${mod.name} complete`
+      );
     } catch (error) {
-      logger.error({ module: mod.name, error }, 'Module execution failed');
+      const durationMs = Date.now() - moduleStart;
+      logger.error(
+        {
+          event: 'audit.module_failed',
+          phase,
+          module: mod.name,
+          durationMs,
+          error: String(error),
+        },
+        'Module execution failed'
+      );
       results.set(mod.name, { status: 'FAILED', data: null, error: String(error) });
     }
   });
 
-  await Promise.allSettled(executions);
+  // Bounded concurrency — caps the number of in-flight provider calls
+  await runWithConcurrency(tasks, { limit: concurrency });
+
+  logger.info(
+    {
+      event: 'audit.phase_complete',
+      phase,
+      moduleCount: phaseModules.length,
+      durationMs: Date.now() - phaseStart,
+    },
+    `[Audit] Phase ${phase} complete in ${Date.now() - phaseStart}ms`
+  );
 }
 
 // ─── P2-3: Finding deduplication ────────────────────────────────────────────
@@ -841,12 +912,14 @@ export function deduplicateFindings(findings: any[]): any[] {
 }
 
 // ─── P2-1: Global audit timeout ──────────────────────────────────────────────
-/** 
+/**
  * Wall-clock limit for an entire audit run (all phases + DB writes).
  * P0 FIX: Reduced from 5 minutes to 30 seconds to meet performance target.
  * If audit exceeds 30s, it will be marked as FAILED and cached result will be checked.
  */
-const GLOBAL_AUDIT_TIMEOUT_MS = 30 * 1000; // 30 seconds (P0 target)
+const GLOBAL_AUDIT_TIMEOUT_MS = process.env.GLOBAL_AUDIT_TIMEOUT_MS
+  ? parseInt(process.env.GLOBAL_AUDIT_TIMEOUT_MS, 10)
+  : 60 * 1000; // 60 seconds (adjusted to support slower local Puppeteer navigations)
 
 // Module-level timeout - each module should complete within this time
 const MODULE_TIMEOUT_MS = 10 * 1000; // 10 seconds per module
@@ -866,16 +939,13 @@ class AuditPerformanceTimer {
     const now = Date.now();
     const elapsed = now - this.startTime;
     const prevMark = this.timings.get(label);
-    
+
     if (prevMark) {
-      logger.info(
-        { label, elapsed, delta: elapsed - prevMark },
-        `[AuditPerformance] ${label}`
-      );
+      logger.info({ label, elapsed, delta: elapsed - prevMark }, `[AuditPerformance] ${label}`);
     } else {
       logger.info({ label, elapsed }, `[AuditPerformance] ${label}`);
     }
-    
+
     this.timings.set(label, elapsed);
   }
 
@@ -902,13 +972,13 @@ class AuditPerformanceTimer {
     const phases: Record<string, number> = {};
     const entries = Array.from(this.timings.entries());
     let prevTime = 0;
-    
+
     for (const entry of entries) {
       const [label, time] = entry;
       phases[label] = time - prevTime;
       prevTime = time;
     }
-    
+
     // Identify bottlenecks (phases taking > 20% of total time)
     const bottlenecks: string[] = [];
     const total = this.totalDuration || 1; // Avoid division by zero
@@ -917,7 +987,7 @@ class AuditPerformanceTimer {
         bottlenecks.push(phase);
       }
     }
-    
+
     return {
       totalMs: this.totalDuration,
       phases,
@@ -961,7 +1031,7 @@ export async function runAudit(auditId: string) {
  */
 function generateUrlHash(url: string | null | undefined): string | null {
   if (!url) return null;
-  return crypto.createHash('sha256').update(url).digest('hex');
+  return createHash('sha256').update(url).digest('hex');
 }
 
 /** Internal implementation — called only by runAudit() above. */
@@ -1061,13 +1131,37 @@ async function runAuditInternal(auditId: string, signal?: AbortSignal) {
       const results = new Map<string, ModuleResult>();
 
       // Phase 1: Foundation
-      await executePhase(1, MODULE_REGISTRY, results, moduleInput, costTracker, parentTrace, signal);
+      await executePhase(
+        1,
+        MODULE_REGISTRY,
+        results,
+        moduleInput,
+        costTracker,
+        parentTrace,
+        signal
+      );
 
       // Phase 2: Analysis (uses Phase 1 outputs)
-      await executePhase(2, MODULE_REGISTRY, results, moduleInput, costTracker, parentTrace, signal);
+      await executePhase(
+        2,
+        MODULE_REGISTRY,
+        results,
+        moduleInput,
+        costTracker,
+        parentTrace,
+        signal
+      );
 
       // Phase 3: Synthesis (uses Phase 1 + 2 outputs)
-      await executePhase(3, MODULE_REGISTRY, results, moduleInput, costTracker, parentTrace, signal);
+      await executePhase(
+        3,
+        MODULE_REGISTRY,
+        results,
+        moduleInput,
+        costTracker,
+        parentTrace,
+        signal
+      );
 
       const allFindings: any[] = [];
       const modulesCompleted: string[] = [];
@@ -1076,58 +1170,58 @@ async function runAuditInternal(auditId: string, signal?: AbortSignal) {
 
       // Synthesize results into discoveries and evidence
       for (const [modName, res] of Array.from(results.entries())) {
-    if (res.status === 'COMPLETE') {
-      modulesCompleted.push(modName);
-      const ext = extractFindingsFromRegistryResult(modName, res, moduleInput);
-      allFindings.push(...ext.findings);
+        if (res.status === 'COMPLETE') {
+          modulesCompleted.push(modName);
+          const ext = extractFindingsFromRegistryResult(modName, res, moduleInput);
+          allFindings.push(...ext.findings);
 
-      for (const snap of ext.snapshots) {
-        try {
-          await prisma.evidenceSnapshot.create({
-            data: {
-              auditId: audit.id,
-              module: modName,
-              source: snap.source || modName,
-              rawResponse: snap.rawResponse ?? snap,
-              tenantId: audit.tenantId,
-            },
-          });
-        } catch (error) {
-          failedEvidenceWrites += 1;
-          Metrics.increment('failed_evidence_writes' as any);
-          logger.warn(
-            {
-              event: 'audit.evidence_snapshot_write_failed',
-              auditId: audit.id,
-              module: modName,
-              source: snap.source || modName,
-              error: String(error),
-            },
-            'Failed to persist evidence snapshot (non-fatal)'
-          );
+          for (const snap of ext.snapshots) {
+            try {
+              await prisma.evidenceSnapshot.create({
+                data: {
+                  auditId: audit.id,
+                  module: modName,
+                  source: snap.source || modName,
+                  rawResponse: snap.rawResponse ?? snap,
+                  tenantId: audit.tenantId,
+                },
+              });
+            } catch (error) {
+              failedEvidenceWrites += 1;
+              Metrics.increment('failed_evidence_writes' as any);
+              logger.warn(
+                {
+                  event: 'audit.evidence_snapshot_write_failed',
+                  auditId: audit.id,
+                  module: modName,
+                  source: snap.source || modName,
+                  error: String(error),
+                },
+                'Failed to persist evidence snapshot (non-fatal)'
+              );
+            }
+          }
+        } else if (res.status === 'FAILED') {
+          modulesFailed.push({ module: modName, error: res.error });
         }
-      }
-    } else if (res.status === 'FAILED') {
-      modulesFailed.push({ module: modName, error: res.error });
-    }
       }
 
       // GBP missing fallback (Preserves original behavior)
       if (!modulesCompleted.includes('gbp') && name && city) {
-    allFindings.push({
-      module: 'gbp',
-      category: 'Local SEO',
-      type: 'PAINKILLER',
-      title: 'No Google Business Listing Detected',
-      description:
-        'No Google Business listing was found for this business. This is a major missed opportunity.',
-      evidence: [{ type: 'text', value: 'Places API returned no results', label: 'Search' }],
-      metrics: { businessName: name, city },
-      impactScore: 9,
-      confidenceScore: 90,
-      effortEstimate: 'MEDIUM',
-      recommendedFix: ['Create a Google Business Profile'],
-    });
+        allFindings.push({
+          module: 'gbp',
+          category: 'Local SEO',
+          type: 'PAINKILLER',
+          title: 'No Google Business Listing Detected',
+          description:
+            'No Google Business listing was found for this business. This is a major missed opportunity.',
+          evidence: [{ type: 'text', value: 'Places API returned no results', label: 'Search' }],
+          metrics: { businessName: name, city },
+          impactScore: 9,
+          confidenceScore: 90,
+          effortEstimate: 'MEDIUM',
+          recommendedFix: ['Create a Google Business Profile'],
+        });
       }
 
       // P2-3: Deduplicate findings before persisting
@@ -1135,15 +1229,18 @@ async function runAuditInternal(auditId: string, signal?: AbortSignal) {
 
       // Create Finding records in DB
       if (dedupedFindings.length > 0) {
-    await prisma.finding.createMany({
-      data: dedupedFindings.map((f) => ({
-        ...f,
-        auditId: audit.id,
-        tenantId: audit.tenantId,
-        manuallyEdited: false,
-        excluded: false,
-      })),
-    });
+        await prisma.finding.createMany({
+          data: dedupedFindings.map((f) => ({
+            ...f,
+            evidence: f.evidence ?? [],
+            metrics: f.metrics ?? {},
+            recommendedFix: f.recommendedFix ?? [],
+            auditId: audit.id,
+            tenantId: audit.tenantId,
+            manuallyEdited: false,
+            excluded: false,
+          })),
+        });
       }
 
       // Calculate total API cost
@@ -1152,84 +1249,85 @@ async function runAuditInternal(auditId: string, signal?: AbortSignal) {
       // Determine final status
       const totalModules = MODULE_REGISTRY.filter((m) => !m.optional).length;
       const completedRequiredModules = [...results.entries()].filter(([n, r]) => {
-    const specs = MODULE_REGISTRY.find((x) => x.name === n);
-    return specs && !specs.optional && r.status === 'COMPLETE';
+        const specs = MODULE_REGISTRY.find((x) => x.name === n);
+        return specs && !specs.optional && r.status === 'COMPLETE';
       }).length;
 
       let finalStatus =
-    completedRequiredModules >= totalModules * 0.8
-      ? 'COMPLETE'
-      : completedRequiredModules >= totalModules * 0.5
-        ? 'PARTIAL'
-        : completedRequiredModules >= 1
-          ? 'DEGRADED'
-          : 'FAILED';
+        completedRequiredModules >= totalModules * 0.8
+          ? 'COMPLETE'
+          : completedRequiredModules >= totalModules * 0.5
+            ? 'PARTIAL'
+            : completedRequiredModules >= 1
+              ? 'DEGRADED'
+              : 'FAILED';
 
-      const failedCriticalModules = CANONICAL_MODULES.filter((moduleName) => {
-    const moduleResult = results.get(moduleName);
-    return !moduleResult || moduleResult.status !== 'COMPLETE';
+      const failedCriticalModules = CANONICAL_MODULES.filter((moduleName: string) => {
+        const moduleResult = results.get(moduleName);
+        return !moduleResult || moduleResult.status !== 'COMPLETE';
       });
 
       // Guardrail: never emit COMPLETE if any critical module failed/skipped.
       if (finalStatus === 'COMPLETE' && failedCriticalModules.length > 0) {
-    finalStatus = 'PARTIAL';
-    logger.warn(
-      {
-        event: 'audit.final_status_downgraded_for_critical_failures',
-        auditId: audit.id,
-        failedCriticalModules,
-      },
-      'Downgrading audit status from COMPLETE because critical modules were not completed'
-    );
+        finalStatus = 'PARTIAL';
+        logger.warn(
+          {
+            event: 'audit.final_status_downgraded_for_critical_failures',
+            auditId: audit.id,
+            failedCriticalModules,
+          },
+          'Downgrading audit status from COMPLETE because critical modules were not completed'
+        );
       }
 
       const detectIndustryFromCategory = (type: string): string => {
-    const t = type.toLowerCase();
-    if (t.includes('law') || t.includes('attorney') || t.includes('legal')) return 'legal';
-    if (t.includes('dent') || t.includes('ortho')) return 'dental';
-    if (t.includes('med') || t.includes('health') || t.includes('clinic')) return 'medical';
-    if (t.includes('construct') || t.includes('build')) return 'construction';
-    if (t.includes('plumb')) return 'plumbing';
-    if (t.includes('hvac') || t.includes('air')) return 'hvac';
-    if (t.includes('real') || t.includes('estate') || t.includes('realtor')) return 'real_estate';
-    if (t.includes('roof')) return 'roofing';
-    return 'general';
+        const t = type.toLowerCase();
+        if (t.includes('law') || t.includes('attorney') || t.includes('legal')) return 'legal';
+        if (t.includes('dent') || t.includes('ortho')) return 'dental';
+        if (t.includes('med') || t.includes('health') || t.includes('clinic')) return 'medical';
+        if (t.includes('construct') || t.includes('build')) return 'construction';
+        if (t.includes('plumb')) return 'plumbing';
+        if (t.includes('hvac') || t.includes('air')) return 'hvac';
+        if (t.includes('real') || t.includes('estate') || t.includes('realtor'))
+          return 'real_estate';
+        if (t.includes('roof')) return 'roofing';
+        return 'general';
       };
 
       let detectedIndustry: string | null = null;
       const gbpData = results.get('gbp')?.data;
       const gbpTypes = gbpData?.types || [];
       if (gbpTypes.length > 0) {
-    for (const type of gbpTypes) {
-      const industry = detectIndustryFromCategory(type);
-      if (industry !== 'general') {
-        detectedIndustry = industry;
-        break;
-      }
-    }
+        for (const type of gbpTypes) {
+          const industry = detectIndustryFromCategory(type);
+          if (industry !== 'general') {
+            detectedIndustry = industry;
+            break;
+          }
+        }
       }
 
       const verticalPlaybookId = detectVertical({
-    businessName: name,
-    businessIndustry: detectedIndustry,
-    businessCity: city,
-    businessUrl: url,
-    gbpCategories: gbpTypes,
-    reviewCount: gbpData?.reviewCount,
-    rating: gbpData?.rating,
+        businessName: name,
+        businessIndustry: detectedIndustry,
+        businessCity: city,
+        businessUrl: url,
+        gbpCategories: gbpTypes,
+        reviewCount: gbpData?.reviewCount,
+        rating: gbpData?.rating,
       });
 
       await prisma.audit.update({
-    where: { id: audit.id },
-    data: {
-      status: finalStatus as any,
-      modulesCompleted,
-      modulesFailed,
-      apiCostCents: totalCostCents,
-      completedAt: new Date(),
-      businessIndustry: detectedIndustry ?? undefined,
-      verticalPlaybookId: verticalPlaybookId !== 'general' ? verticalPlaybookId : undefined,
-    },
+        where: { id: audit.id },
+        data: {
+          status: finalStatus as any,
+          modulesCompleted,
+          modulesFailed,
+          apiCostCents: totalCostCents,
+          completedAt: new Date(),
+          businessIndustry: detectedIndustry ?? undefined,
+          verticalPlaybookId: verticalPlaybookId !== 'general' ? verticalPlaybookId : undefined,
+        },
       });
 
       const duration_ms = Date.now() - startTime;
@@ -1259,52 +1357,52 @@ async function runAuditInternal(auditId: string, signal?: AbortSignal) {
       });
 
       logger.info(
-    {
-      event: 'audit.complete',
-      auditId: audit.id,
-      status: finalStatus,
-      findingsCount: allFindings.length,
-      modulesCompleted: modulesCompleted.length,
-      modulesFailed: modulesFailed.length,
-      failedEvidenceWrites,
-      failedCriticalModules,
-      duration_ms,
-      apiCostCents: totalCostCents,
-    },
-    'Audit complete'
-  );
+        {
+          event: 'audit.complete',
+          auditId: audit.id,
+          status: finalStatus,
+          findingsCount: allFindings.length,
+          modulesCompleted: modulesCompleted.length,
+          modulesFailed: modulesFailed.length,
+          failedEvidenceWrites,
+          failedCriticalModules,
+          duration_ms,
+          apiCostCents: totalCostCents,
+        },
+        'Audit complete'
+      );
 
       const result = {
-    success: true,
-    auditId: audit.id,
-    status: finalStatus,
-    modulesCompleted,
-    modulesFailed,
-    findingsCount: allFindings.length,
-    costCents: totalCostCents,
-    duration_ms,
-  };
+        success: true,
+        auditId: audit.id,
+        status: finalStatus,
+        modulesCompleted,
+        modulesFailed,
+        findingsCount: allFindings.length,
+        costCents: totalCostCents,
+        duration_ms,
+      };
 
       // P0 FIX: Cache successful audit results for 24h
       if (urlHash && finalStatus === 'COMPLETE') {
-    try {
-      await redisCache.set(
-        'audit',
-        urlHash,
-        {
-          status: finalStatus,
-          modulesCompleted,
-          findingsCount: allFindings.length,
-          costCents: totalCostCents,
-          duration_ms,
-          completedAt: new Date().toISOString(),
-        },
-        { ttl: 24 * 60 * 60 } // 24 hours
-      );
-      logger.info({ auditId, urlHash }, '[runAudit] Cached audit result');
-    } catch (error) {
-      logger.warn({ error }, '[runAudit] Failed to cache audit result');
-    }
+        try {
+          await redisCache.set(
+            'audit',
+            urlHash,
+            {
+              status: finalStatus,
+              modulesCompleted,
+              findingsCount: allFindings.length,
+              costCents: totalCostCents,
+              duration_ms,
+              completedAt: new Date().toISOString(),
+            },
+            { ttl: 24 * 60 * 60 } // 24 hours
+          );
+          logger.info({ auditId, urlHash }, '[runAudit] Cached audit result');
+        } catch (error) {
+          logger.warn({ error }, '[runAudit] Failed to cache audit result');
+        }
       }
 
       return result;

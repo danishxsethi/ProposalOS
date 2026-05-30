@@ -8,6 +8,7 @@
  * Requirements: 12.1, 12.2, 12.3, 12.4
  */
 
+import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 
 import type { PipelineStage, ProspectStatus, StateTransition } from './types';
@@ -222,6 +223,6 @@ async function logInvalidTransition(
     });
   } catch (logError) {
     // If logging fails, log to console but don't throw
-    console.error('Failed to log invalid transition:', logError);
+    logger.error({ error: logError }, 'Failed to log invalid transition');
   }
 }

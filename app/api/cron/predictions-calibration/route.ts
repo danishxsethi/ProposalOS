@@ -174,7 +174,7 @@ async function handlePredictionsCalibration(req: NextRequest): Promise<NextRespo
 
 // Auth wrapper
 const authHandler = async (req: NextRequest): Promise<NextResponse> => {
-  const authError = verifyCronAuth(req);
+  const authError = await verifyCronAuth(req);
   if (authError) return authError;
   return handlePredictionsCalibration(req);
 };

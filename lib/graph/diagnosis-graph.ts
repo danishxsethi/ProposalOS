@@ -340,7 +340,7 @@ async function prepare_retry(state: State): Promise<Partial<State>> {
     }
 
     const delayMs = exponentialBackoffMs(retryCount);
-    console.warn(`[LangGraph:prepare_retry] Retry ${retryCount}, waiting ${delayMs}ms`);
+    logger.warn({ retryCount, delayMs }, '[LangGraph:prepare_retry] Retrying');
     await sleep(delayMs);
     return { retryCount };
   } catch (error) {
@@ -359,7 +359,7 @@ function route_prepare_retry(state: State): string {
 
 async function degrade_and_continue(state: State): Promise<Partial<State>> {
   try {
-    console.warn('[LangGraph:degrade_and_continue] Diagnosis degraded after max retries');
+    logger.warn('[LangGraph:degrade_and_continue] Diagnosis degraded after max retries');
     // Persist degraded state to DB
     if (state.auditId) {
       const { prisma } = await import('@/lib/prisma');
@@ -373,7 +373,7 @@ async function degrade_and_continue(state: State): Promise<Partial<State>> {
     }
     return { degraded: true };
   } catch (error) {
-    console.error('[LangGraph:degrade_and_continue] Error persisting degraded state:', error);
+    logger.error({ error }, '[LangGraph:degrade_and_continue] Error persisting degraded state');
     return { degraded: true, errors: [nodeError('degrade_and_continue', error)] };
   }
 }
@@ -480,7 +480,7 @@ async function qa_delay(state: State): Promise<Partial<State>> {
   }
 
   const delayMs = exponentialBackoffMs(retryCount);
-  console.warn(`[LangGraph:qa_delay] QA Retry ${retryCount}, waiting ${delayMs}ms`);
+  logger.warn({ retryCount, delayMs }, '[LangGraph:qa_delay] QA Retry');
   await sleep(delayMs);
   return { qaRetryCount: retryCount };
 }

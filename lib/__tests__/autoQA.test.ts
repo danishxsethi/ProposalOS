@@ -26,7 +26,7 @@ describe('AutoQA System', () => {
       nextSteps: [
         'Top Action 1: Fix title tags | Impact: 9/10 | Effort: LOW | Timeline: 7 days',
         'Top Action 2: Speed optimization | Impact: 8/10 | Effort: MEDIUM | Timeline: 14-21 days',
-        'Top Action 3: GBP review growth | Impact: 8/10 | Effort: MEDIUM | Timeline: 14-21 days',
+        'Top Action 3: Review profile growth | Impact: 8/10 | Effort: MEDIUM | Timeline: 14-21 days',
         'Reply to approve the Growth plan and we can start this week.',
       ],
     };
@@ -115,5 +115,135 @@ describe('AutoQA System', () => {
     expect(result.clientPerfect.hardFails.some((f) => f.code === 'GENERIC_SUMMARY_NO_IMPACT')).toBe(
       true
     );
+  });
+
+  it('should flag local SEO copy for non-SMB targets in Non-SMB Local Copy Suppression check', () => {
+    const mockProposal: any = {
+      executiveSummary:
+        'Stanford Healthcare in Stanford is performing at 45/100, 3.8 seconds LCP, and has 4 critical accessibility errors, which reduces conversion and patient trust; Sutter Health is leading on speed and search.',
+      tiers: {
+        essentials: {
+          findingIds: ['1', '2'],
+          roi: { scenarios: { best: 3200, base: 2400, worst: 1400, assumptions: ['A1', 'A2'] } },
+        },
+        growth: {
+          findingIds: ['1', '2', '3'],
+          roi: { scenarios: { best: 5200, base: 4100, worst: 2500, assumptions: ['A1', 'A2'] } },
+        },
+        premium: {
+          findingIds: ['1', '2', '3'],
+          roi: { scenarios: { best: 7800, base: 6200, worst: 3600, assumptions: ['A1', 'A2'] } },
+        },
+      },
+      pricing: { essentials: 500, growth: 1000, premium: 2000 },
+      assumptions: ['Assumption 1', 'Assumption 2'],
+      nextSteps: [
+        'Top Action 1: Fix title tags | Impact: 9/10 | Effort: LOW | Timeline: 7 days',
+        'Top Action 2: Speed optimization | Impact: 8/10 | Effort: MEDIUM | Timeline: 14-21 days',
+        'Top Action 3: Optimize Google Business Profile | Impact: 8/10 | Effort: MEDIUM | Timeline: 14-21 days',
+        'Reply to approve the Growth plan and we can start this week.',
+      ],
+    };
+    const mockFindings: any[] = [
+      {
+        id: '1',
+        module: 'website',
+        title: 'Slow load speed',
+        impactScore: 9,
+        type: 'PAINKILLER',
+        evidence: [{ pointer: 'psi:lcp', collected_at: '2026-02-17T00:00:00.000Z' }],
+      },
+      {
+        id: '2',
+        module: 'seo',
+        title: 'Weak SEO signals',
+        impactScore: 8,
+        type: 'PAINKILLER',
+        evidence: [{ pointer: 'serp:rank', collected_at: '2026-02-17T00:00:00.000Z' }],
+      },
+      {
+        id: '3',
+        module: 'accessibility',
+        title: 'High accessibility errors',
+        impactScore: 7,
+        type: 'VITAMIN',
+        evidence: [{ pointer: 'a11y:errors', collected_at: '2026-02-17T00:00:00.000Z' }],
+      },
+    ];
+
+    const result = runAutoQA(mockProposal, mockFindings, 'Stanford Healthcare', 'Stanford', {
+      industry: 'Healthcare / hospital system',
+      businessUrl: 'https://www.stanfordhealthcare.org',
+    });
+
+    const check = result.results.find((c) => c.check === 'Non-SMB Local Copy Suppression');
+    expect(check).toBeDefined();
+    expect(check!.passed).toBe(false);
+    expect(check!.details).toContain('Flagged: Found local marketing terms');
+  });
+
+  it('should pass Non-SMB Local Copy Suppression check for a non-SMB target with clean copy', () => {
+    const mockProposal: any = {
+      executiveSummary:
+        'Stanford Healthcare in Stanford is performing at 45/100, 3.8 seconds LCP, and has 4 critical accessibility errors, which reduces conversion and patient trust; Sutter Health is leading on speed and search.',
+      tiers: {
+        essentials: {
+          findingIds: ['1', '2'],
+          roi: { scenarios: { best: 3200, base: 2400, worst: 1400, assumptions: ['A1', 'A2'] } },
+        },
+        growth: {
+          findingIds: ['1', '2', '3'],
+          roi: { scenarios: { best: 5200, base: 4100, worst: 2500, assumptions: ['A1', 'A2'] } },
+        },
+        premium: {
+          findingIds: ['1', '2', '3'],
+          roi: { scenarios: { best: 7800, base: 6200, worst: 3600, assumptions: ['A1', 'A2'] } },
+        },
+      },
+      pricing: { essentials: 500, growth: 1000, premium: 2000 },
+      assumptions: ['Assumption 1', 'Assumption 2'],
+      nextSteps: [
+        'Top Action 1: Fix title tags | Impact: 9/10 | Effort: LOW | Timeline: 7 days',
+        'Top Action 2: Speed optimization | Impact: 8/10 | Effort: MEDIUM | Timeline: 14-21 days',
+        'Top Action 3: Standard SEO overhaul | Impact: 8/10 | Effort: MEDIUM | Timeline: 14-21 days',
+        'Reply to approve the Growth plan and we can start this week.',
+      ],
+    };
+    const mockFindings: any[] = [
+      {
+        id: '1',
+        module: 'website',
+        title: 'Slow load speed',
+        impactScore: 9,
+        type: 'PAINKILLER',
+        evidence: [{ pointer: 'psi:lcp', collected_at: '2026-02-17T00:00:00.000Z' }],
+      },
+      {
+        id: '2',
+        module: 'seo',
+        title: 'Weak SEO signals',
+        impactScore: 8,
+        type: 'PAINKILLER',
+        evidence: [{ pointer: 'serp:rank', collected_at: '2026-02-17T00:00:00.000Z' }],
+      },
+      {
+        id: '3',
+        module: 'accessibility',
+        title: 'High accessibility errors',
+        impactScore: 7,
+        type: 'VITAMIN',
+        evidence: [{ pointer: 'a11y:errors', collected_at: '2026-02-17T00:00:00.000Z' }],
+      },
+    ];
+
+    const result = runAutoQA(mockProposal, mockFindings, 'Stanford Healthcare', 'Stanford', {
+      industry: 'Healthcare / hospital system',
+      businessUrl: 'https://www.stanfordhealthcare.org',
+    });
+
+    const check = result.results.find((c) => c.check === 'Non-SMB Local Copy Suppression');
+    expect(check).toBeDefined();
+    expect(check!.passed).toBe(true);
+    expect(check!.details).toContain('Valid non-SMB proposal');
   });
 });

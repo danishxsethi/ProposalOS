@@ -1,6 +1,7 @@
-import { cachedFetch } from '@/lib/cache/apiCache';
+import { withModuleCache } from '@/lib/cache/moduleCache';
 import { CostTracker } from '@/lib/costs/costTracker';
 import { logger } from '@/lib/logger';
+import { withProviderResilience } from '@/lib/resilience/withProviderResilience';
 
 import { GBPModuleInput, LegacyAuditModuleResult } from './types';
 
@@ -23,7 +24,7 @@ function checkNameMatchesWebsite(
   if (!gbpName || !websiteUrl) return true; // No mismatch if either missing
   try {
     const url = new URL(websiteUrl.startsWith('http') ? websiteUrl : `https://${websiteUrl}`);
-    const host = url.hostname.replace(/^www\./, '').split('.')[0];
+    const host = url.hostname.replace(/^www\./, '').split('.')[0] || '';
     const nameWords = normalize(gbpName)
       .split(/\s+/)
       .filter((w) => w.length > 2);
@@ -48,31 +49,44 @@ export async function runGBPModule(
     // 1. Find Place ID via Text Search (Cached 24 hours)
     tracker?.addApiCall('PLACES_TEXT_SEARCH');
 
-    const searchData = await cachedFetch(
-      'places_text_search',
-      { businessName: input.businessName, city: input.city },
-      async () => {
-        const searchRes = await fetch(`${PLACES_API_BASE}/places:searchText`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-Goog-Api-Key': process.env.GOOGLE_PLACES_API_KEY!,
-            'X-Goog-FieldMask':
-              'places.name,places.id,places.formattedAddress,places.rating,places.userRatingCount',
-          },
-          body: JSON.stringify({
-            textQuery: `${input.businessName} in ${input.city}`,
-            maxResultCount: 1,
-          }),
-        });
-
-        if (!searchRes.ok) {
-          throw new Error(`Places Text Search failed: ${searchRes.statusText}`);
-        }
-
-        return searchRes.json();
+    const searchData = await withModuleCache<any>(
+      {
+        module: 'gbp',
+        version: 1,
+        input: { type: 'places_text_search', businessName: input.businessName, city: input.city },
       },
-      { ttlHours: 24 }
+      { ttlSeconds: 24 * 60 * 60 },
+      async () => {
+        return withProviderResilience<any>(
+          {
+            provider: 'google-places',
+            operation: 'gbp:places_text_search',
+            degrade: true,
+            fallbackValue: { places: [] },
+          },
+          async () => {
+            const searchRes = await fetch(`${PLACES_API_BASE}/places:searchText`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'X-Goog-Api-Key': process.env.GOOGLE_PLACES_API_KEY!,
+                'X-Goog-FieldMask':
+                  'places.name,places.id,places.formattedAddress,places.rating,places.userRatingCount',
+              },
+              body: JSON.stringify({
+                textQuery: `${input.businessName} in ${input.city}`,
+                maxResultCount: 1,
+              }),
+            });
+
+            if (!searchRes.ok) {
+              throw new Error(`Places Text Search failed: ${searchRes.statusText}`);
+            }
+
+            return searchRes.json();
+          }
+        );
+      }
     );
 
     if (!searchData.places || searchData.places.length === 0) {
@@ -106,20 +120,36 @@ export async function runGBPModule(
       'accessibilityOptions',
       'amenities',
     ].join(',');
-    const details = await cachedFetch(
-      'places_details',
-      { placeId },
-      async () => {
-        const detailsRes = await fetch(`${PLACES_API_BASE}/places/${placeId}`, {
-          headers: {
-            'Content-Type': 'application/json',
-            'X-Goog-Api-Key': process.env.GOOGLE_PLACES_API_KEY!,
-            'X-Goog-FieldMask': fieldMask,
-          },
-        });
-        return await detailsRes.json();
+    const details = await withModuleCache<any>(
+      {
+        module: 'gbp',
+        version: 1,
+        input: { type: 'places_details', placeId },
       },
-      { ttlHours: 24 * 7 }
+      { ttlSeconds: 7 * 24 * 60 * 60 },
+      async () => {
+        return withProviderResilience<any>(
+          {
+            provider: 'google-places',
+            operation: 'gbp:places_details',
+            degrade: true,
+            fallbackValue: {},
+          },
+          async () => {
+            const detailsRes = await fetch(`${PLACES_API_BASE}/places/${placeId}`, {
+              headers: {
+                'Content-Type': 'application/json',
+                'X-Goog-Api-Key': process.env.GOOGLE_PLACES_API_KEY!,
+                'X-Goog-FieldMask': fieldMask,
+              },
+            });
+            if (!detailsRes.ok) {
+              throw new Error(`Places Details failed: ${detailsRes.statusText}`);
+            }
+            return await detailsRes.json();
+          }
+        );
+      }
     );
 
     const phone = details.nationalPhoneNumber || details.internationalPhoneNumber;

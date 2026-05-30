@@ -75,13 +75,13 @@ async function evaluateExperiment(
 
   if (!hasMinSamples) {
     logger.debug(
-      `Experiment ${experiment.id} - insufficient samples`,
-      JSON.stringify({
+      {
         variants: variants.map((v: any) => ({
           id: v.id,
           sampleSize: v.sampleSize,
         })),
-      })
+      },
+      `Experiment ${experiment.id} - insufficient samples`
     );
     return null;
   }
@@ -105,11 +105,11 @@ async function evaluateExperiment(
   // Check if statistically significant
   if (pValue >= config.pValueThreshold) {
     logger.debug(
-      `Experiment ${experiment.id} - not statistically significant`,
-      JSON.stringify({
+      {
         pValue,
         threshold: config.pValueThreshold,
-      })
+      },
+      `Experiment ${experiment.id} - not statistically significant`
     );
     return null;
   }
@@ -122,11 +122,11 @@ async function evaluateExperiment(
 
   if (qualityImprovementPct < config.minQualityImprovement) {
     logger.debug(
-      `Experiment ${experiment.id} - quality improvement too small`,
-      JSON.stringify({
+      {
         qualityImprovementPct,
         minRequired: config.minQualityImprovement,
-      })
+      },
+      `Experiment ${experiment.id} - quality improvement too small`
     );
     return null;
   }
@@ -138,11 +138,11 @@ async function evaluateExperiment(
 
   if (latencyIncreasePct > config.maxLatencyIncrease) {
     logger.debug(
-      `Experiment ${experiment.id} - latency increase too high`,
-      JSON.stringify({
+      {
         latencyIncreasePct,
         maxAllowed: config.maxLatencyIncrease,
-      })
+      },
+      `Experiment ${experiment.id} - latency increase too high`
     );
     return null;
   }
@@ -234,12 +234,12 @@ async function promoteWinner(
   });
 
   logger.info(
-    `Auto-promoted prompt ${winner.promptVersionHash}`,
-    JSON.stringify({
+    {
       experimentId: experiment.id,
       pValue: stats.pValue,
       qualityImprovement: stats.qualityImprovementPct,
-    })
+    },
+    `Auto-promoted prompt ${winner.promptVersionHash}`
   );
 
   return tx;

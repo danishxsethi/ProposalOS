@@ -245,7 +245,7 @@ describe('Locale Detection Properties', () => {
             fc.constant('manual_override'),
             fc.constant('default')
           ),
-          fc.float({ min: 0, max: 1 }),
+          fc.float({ min: 0, max: 1, noNaN: true }),
           (locale: string, method: any, confidence: number) => {
             const result: LocaleDetectionResult = {
               detectedLocale: locale,

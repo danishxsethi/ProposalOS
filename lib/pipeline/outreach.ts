@@ -13,6 +13,7 @@
 
 import { v4 as uuidv4 } from 'uuid';
 
+import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 
 import { DEFAULT_EMAIL_QA_CONFIG, score as scoreEmail } from './emailQaScorer';
@@ -92,17 +93,17 @@ const VERTICAL_PAIN_MAP: Record<string, Record<string, string>> = {
  * Maps finding module names to pain categories for vertical translation.
  */
 function findingToCategory(finding: any): string {
-  const module = (finding.module || finding.type || '').toLowerCase();
-  if (module.includes('speed') || module.includes('performance') || module.includes('pagespeed'))
+  const moduleName = (finding.module || finding.type || '').toLowerCase();
+  if (moduleName.includes('speed') || moduleName.includes('performance') || moduleName.includes('pagespeed'))
     return 'page_speed';
-  if (module.includes('mobile') || module.includes('responsive')) return 'mobile_responsiveness';
-  if (module.includes('ssl') || module.includes('security') || module.includes('https'))
+  if (moduleName.includes('mobile') || moduleName.includes('responsive')) return 'mobile_responsiveness';
+  if (moduleName.includes('ssl') || moduleName.includes('security') || moduleName.includes('https'))
     return 'ssl_missing';
-  if (module.includes('gbp') || module.includes('google_business')) return 'gbp_neglected';
-  if (module.includes('review')) return 'review_response';
-  if (module.includes('social')) return 'social_media';
-  if (module.includes('competitor')) return 'competitor_gap';
-  if (module.includes('accessibility') || module.includes('a11y')) return 'accessibility';
+  if (moduleName.includes('gbp') || moduleName.includes('google_business')) return 'gbp_neglected';
+  if (moduleName.includes('review')) return 'review_response';
+  if (moduleName.includes('social')) return 'social_media';
+  if (moduleName.includes('competitor')) return 'competitor_gap';
+  if (moduleName.includes('accessibility') || moduleName.includes('a11y')) return 'accessibility';
   return 'page_speed'; // fallback
 }
 
@@ -116,9 +117,10 @@ function findingToCategory(finding: any): string {
 export function translateFinding(finding: any, vertical: string): string {
   const category = findingToCategory(finding);
   const verticalMap = VERTICAL_PAIN_MAP[vertical.toLowerCase()] || VERTICAL_PAIN_MAP['default'];
+  const fallbackMap = VERTICAL_PAIN_MAP['default'];
   return (
-    verticalMap[category] ||
-    VERTICAL_PAIN_MAP['default'][category] ||
+    (verticalMap && verticalMap[category]) ||
+    (fallbackMap && fallbackMap[category]) ||
     "an issue that's costing you customers"
   );
 }
@@ -194,7 +196,7 @@ export async function generateEmail(context: OutreachContext): Promise<Generated
   const brandName = tenantBranding?.brandName || 'Our Team';
 
   // Build the email subject
-  const subject = buildSubject(businessName, painPoints[0], vertical);
+  const subject = buildSubject(businessName, painPoints[0] || "an issue that's costing you customers", vertical);
 
   const emailId = uuidv4();
 
@@ -247,7 +249,7 @@ function buildSubject(businessName: string, primaryPain: string, vertical: strin
     `Found something about ${businessName}`,
   ];
   // Use first template for consistency in testing; in production this could be randomized
-  return templates[0];
+  return templates[0] || '';
 }
 
 interface EmailBodyParams {
@@ -342,8 +344,9 @@ export async function generateAndQualifyEmail(
     }
 
     // Log the QA failure for observability
-    console.warn(
-      `Email QA failed (attempt ${attempt}/${maxAttempts}): score=${qaResult.compositeScore}, suggestions=${qaResult.suggestions.join('; ')}`
+    logger.warn(
+      { attempt, maxAttempts, score: qaResult.compositeScore },
+      'Email QA failed'
     );
   }
 
@@ -388,8 +391,10 @@ export async function scheduleFollowUps(
   ];
 
   for (let i = 0; i < followUpDays.length; i++) {
+    const days = followUpDays[i];
+    if (days === undefined) continue;
     const scheduledDate = new Date(baseDate);
-    scheduledDate.setDate(scheduledDate.getDate() + followUpDays[i]);
+    scheduledDate.setDate(scheduledDate.getDate() + days);
 
     await prisma.outreachEmail.create({
       data: {
@@ -436,15 +441,15 @@ export async function processBehaviorBranch(
       // Clicked audit link → full proposal delivery within 2 hours
       await updatePendingFollowUps(leadId, 'FOLLOWUP_PROPOSAL');
       // Schedule an immediate follow-up for proposal delivery
-      const emails = await prisma.outreachEmail.findMany({
+      const [email] = await prisma.outreachEmail.findMany({
         where: { leadId, type: 'INITIAL', status: 'SENT' },
         orderBy: { createdAt: 'desc' },
         take: 1,
       });
-      if (emails.length > 0) {
+      if (email) {
         await prisma.outreachEmail.create({
           data: {
-            tenantId: emails[0].tenantId,
+            tenantId: email.tenantId,
             leadId,
             type: 'FOLLOWUP_PROPOSAL',
             status: 'PENDING',

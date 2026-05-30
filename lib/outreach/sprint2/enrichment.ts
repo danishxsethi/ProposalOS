@@ -1,4 +1,5 @@
 import { logger } from '@/lib/logger';
+import { withProviderResilience } from '@/lib/resilience/withProviderResilience';
 
 export type EnrichmentProvider = 'APOLLO' | 'HUNTER' | 'PROXYCURL' | 'CLEARBIT';
 export type EnrichmentRunStatus = 'SUCCESS' | 'FAILED' | 'SKIPPED';
@@ -104,30 +105,33 @@ async function runApollo(lead: EnrichmentLeadInput): Promise<ProviderRunResult> 
   }
 
   try {
-    const res = await fetch('https://api.apollo.io/v1/mixed_people/search', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Api-Key': apiKey,
+    const { res, data } = await withProviderResilience<{ res: Response; data: any }>(
+      {
+        provider: 'generic',
+        operation: 'enrichment:apollo_search',
+        degrade: false,
       },
-      body: JSON.stringify({
-        q_organization_domains: [domain],
-        person_titles: ['Owner', 'Founder', 'CEO', 'Marketing Director', 'General Manager'],
-        page: 1,
-        per_page: 5,
-      }),
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      return {
-        provider: 'APOLLO',
-        status: 'FAILED',
-        costCents: 8,
-        contact: null,
-        payload: data,
-        error: `Apollo request failed (${res.status})`,
-      };
-    }
+      async () => {
+        const response = await fetch('https://api.apollo.io/v1/mixed_people/search', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Api-Key': apiKey,
+          },
+          body: JSON.stringify({
+            q_organization_domains: [domain],
+            person_titles: ['Owner', 'Founder', 'CEO', 'Marketing Director', 'General Manager'],
+            page: 1,
+            per_page: 5,
+          }),
+        });
+        const responseData = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(`Apollo request failed (${response.status})`);
+        }
+        return { res: response, data: responseData };
+      }
+    );
 
     const people: Array<Record<string, unknown>> = Array.isArray(
       (data as Record<string, unknown>).people
@@ -197,18 +201,21 @@ async function runHunter(lead: EnrichmentLeadInput): Promise<ProviderRunResult> 
     endpoint.searchParams.set('domain', domain);
     endpoint.searchParams.set('api_key', apiKey);
 
-    const res = await fetch(endpoint.toString());
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      return {
-        provider: 'HUNTER',
-        status: 'FAILED',
-        costCents: 5,
-        contact: null,
-        payload: data,
-        error: `Hunter request failed (${res.status})`,
-      };
-    }
+    const { res, data } = await withProviderResilience<{ res: Response; data: any }>(
+      {
+        provider: 'generic',
+        operation: 'enrichment:hunter_search',
+        degrade: false,
+      },
+      async () => {
+        const response = await fetch(endpoint.toString());
+        const responseData = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(`Hunter request failed (${response.status})`);
+        }
+        return { res: response, data: responseData };
+      }
+    );
 
     const payload = data as Record<string, unknown>;
     const hunterData =
@@ -284,22 +291,25 @@ async function runProxycurl(lead: EnrichmentLeadInput): Promise<ProviderRunResul
     endpoint.searchParams.set('role_search', 'owner');
     endpoint.searchParams.set('page_size', '5');
 
-    const res = await fetch(endpoint.toString(), {
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
+    const { res, data } = await withProviderResilience<{ res: Response; data: any }>(
+      {
+        provider: 'generic',
+        operation: 'enrichment:proxycurl_search',
+        degrade: false,
       },
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      return {
-        provider: 'PROXYCURL',
-        status: 'FAILED',
-        costCents: 8,
-        contact: null,
-        payload: data,
-        error: `Proxycurl request failed (${res.status})`,
-      };
-    }
+      async () => {
+        const response = await fetch(endpoint.toString(), {
+          headers: {
+            Authorization: `Bearer ${apiKey}`,
+          },
+        });
+        const responseData = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(`Proxycurl request failed (${response.status})`);
+        }
+        return { res: response, data: responseData };
+      }
+    );
 
     const employees = Array.isArray((data as Record<string, unknown>).employees)
       ? ((data as Record<string, unknown>).employees as Array<Record<string, unknown>>)
@@ -366,22 +376,25 @@ async function runClearbit(lead: EnrichmentLeadInput): Promise<ProviderRunResult
     const endpoint = new URL('https://person.clearbit.com/v2/combined/find');
     endpoint.searchParams.set('domain', domain);
 
-    const res = await fetch(endpoint.toString(), {
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
+    const { res, data } = await withProviderResilience<{ res: Response; data: any }>(
+      {
+        provider: 'generic',
+        operation: 'enrichment:clearbit_search',
+        degrade: false,
       },
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      return {
-        provider: 'CLEARBIT',
-        status: 'FAILED',
-        costCents: 6,
-        contact: null,
-        payload: data,
-        error: `Clearbit request failed (${res.status})`,
-      };
-    }
+      async () => {
+        const response = await fetch(endpoint.toString(), {
+          headers: {
+            Authorization: `Bearer ${apiKey}`,
+          },
+        });
+        const responseData = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(`Clearbit request failed (${response.status})`);
+        }
+        return { res: response, data: responseData };
+      }
+    );
 
     const person = ((data as Record<string, unknown>).person ?? {}) as Record<string, unknown>;
     const personName = ((person.name ?? {}) as Record<string, unknown>).fullName;
@@ -439,16 +452,28 @@ async function verifyEmail(email: string | null | undefined): Promise<EmailVerif
       endpoint.searchParams.set('api_key', zeroBounceKey);
       endpoint.searchParams.set('email', email);
 
-      const res = await fetch(endpoint.toString());
-      const data = await res.json().catch(() => ({}));
-      if (res.ok) {
-        const status = (data as Record<string, unknown>).status;
-        return {
-          provider: 'zerobounce',
-          status: status === 'valid' ? 'valid' : status === 'invalid' ? 'invalid' : 'unknown',
-          raw: data,
-        };
-      }
+      const { res, data } = await withProviderResilience<{ res: Response; data: any }>(
+        {
+          provider: 'generic',
+          operation: 'verification:zerobounce',
+          degrade: false,
+        },
+        async () => {
+          const response = await fetch(endpoint.toString());
+          const responseData = await response.json().catch(() => ({}));
+          if (!response.ok) {
+            throw new Error(`ZeroBounce validation failed (${response.status})`);
+          }
+          return { res: response, data: responseData };
+        }
+      );
+
+      const status = (data as Record<string, unknown>).status;
+      return {
+        provider: 'zerobounce',
+        status: status === 'valid' ? 'valid' : status === 'invalid' ? 'invalid' : 'unknown',
+        raw: data,
+      };
     } catch {
       // Continue to NeverBounce fallback.
     }
@@ -461,17 +486,29 @@ async function verifyEmail(email: string | null | undefined): Promise<EmailVerif
       endpoint.searchParams.set('key', neverBounceKey);
       endpoint.searchParams.set('email', email);
 
-      const res = await fetch(endpoint.toString());
-      const data = await res.json().catch(() => ({}));
-      if (res.ok) {
-        const result = ((data as Record<string, unknown>).result || '').toString().toLowerCase();
-        const status = result === 'valid' ? 'valid' : result === 'invalid' ? 'invalid' : 'unknown';
-        return {
-          provider: 'neverbounce',
-          status,
-          raw: data,
-        };
-      }
+      const { res, data } = await withProviderResilience<{ res: Response; data: any }>(
+        {
+          provider: 'generic',
+          operation: 'verification:neverbounce',
+          degrade: false,
+        },
+        async () => {
+          const response = await fetch(endpoint.toString());
+          const responseData = await response.json().catch(() => ({}));
+          if (!response.ok) {
+            throw new Error(`NeverBounce validation failed (${response.status})`);
+          }
+          return { res: response, data: responseData };
+        }
+      );
+
+      const result = ((data as Record<string, unknown>).result || '').toString().toLowerCase();
+      const status = result === 'valid' ? 'valid' : result === 'invalid' ? 'invalid' : 'unknown';
+      return {
+        provider: 'neverbounce',
+        status,
+        raw: data,
+      };
     } catch {
       // Fall through.
     }
@@ -509,7 +546,7 @@ export async function runEnrichmentWaterfall(lead: EnrichmentLeadInput): Promise
     // Filter out generic role-based emails
     if (result.contact?.email) {
       anyCandidatesFound = true;
-      const emailPrefix = result.contact.email.split('@')[0].toLowerCase();
+      const emailPrefix = (result.contact.email.split('@')[0] || '').toLowerCase();
       if (allGenericPrefixes.includes(emailPrefix)) {
         logger.info(
           { email: result.contact.email },

@@ -208,7 +208,7 @@ async function resolveTemplatePlaceholders(template: string, proposalId: string)
 
     return resolved;
   } catch (e) {
-    console.error('Error resolving template placeholders:', e);
+    logger.error({ error: e }, 'Error resolving template placeholders');
     return template;
   }
 }
@@ -493,7 +493,7 @@ async function escalationHandler(state: ClosingState) {
       state.sessionId
     );
   } catch (slackError) {
-    console.error('Slack escalation notification failed:', slackError);
+    logger.error({ error: slackError }, 'Slack escalation notification failed');
     // Don't fail the main flow if Slack notification fails
   }
 

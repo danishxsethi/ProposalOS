@@ -12,9 +12,9 @@
  * - Service access during grace period
  */
 
-import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
 import { sendEmail } from '@/lib/outreach/emailSender';
+import { prisma } from '@/lib/prisma';
 
 export interface GracePeriodConfig {
   gracePeriodDays: number;
@@ -128,6 +128,10 @@ export async function sendGracePeriodNotification(
   }
 
   const ownerEmail = tenant.users[0]?.email;
+  if (!ownerEmail) {
+    logger.warn({ tenantId }, 'Owner user has no email defined for grace period notification');
+    return;
+  }
   const ownerName = tenant.users[0]?.name || tenant.name;
 
   const subjectMap = {
@@ -145,7 +149,7 @@ export async function sendGracePeriodNotification(
 
   try {
     await sendEmail({
-      to: ownerEmail || ownerEmail,
+      to: ownerEmail,
       subject: subjectMap[type],
       body: bodyHtml,
       fromName: 'ProposalOS Billing',

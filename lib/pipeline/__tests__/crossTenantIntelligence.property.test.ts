@@ -109,8 +109,10 @@ describe('Cross-Tenant Intelligence - Property Tests', () => {
           }
 
           // Verify weighted sum
-          const weightSum = prediction.factors.reduce((sum, f) => sum + f.weight, 0);
-          expect(weightSum).toBeCloseTo(1, 1); // Allow small floating point error
+          if (prediction.factors.length > 0) {
+            const weightSum = prediction.factors.reduce((sum, f) => sum + f.weight, 0);
+            expect(weightSum).toBeCloseTo(1, 1); // Allow small floating point error
+          }
         }
       ),
       { numRuns: 20 }

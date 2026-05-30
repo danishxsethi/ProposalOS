@@ -1,9 +1,9 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
-import { cachedFetch } from '@/lib/cache/apiCache';
 import { CostTracker } from '@/lib/costs/costTracker';
 import { logger } from '@/lib/logger';
 
+import { normalizeConfidence } from './findingGenerator';
 import { runGbpDeepModule } from './gbpDeep';
 import { AuditModuleResult, Finding } from './types';
 import { crawlWebsite } from './websiteCrawler';

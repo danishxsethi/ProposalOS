@@ -5,6 +5,7 @@ import { MODEL_CONFIG } from '@/lib/config/models';
 import { getThinkingBudgetForNode } from '@/lib/config/thinking-budgets';
 import { CostTracker } from '@/lib/costs/costTracker';
 import { generateWithGemini } from '@/lib/llm/provider';
+import { logger } from '@/lib/logger';
 import type { VerticalPlaybook } from '@/lib/playbooks/types';
 import { traceLlmCall } from '@/lib/tracing';
 
@@ -229,7 +230,7 @@ export async function generateExecutiveSummary(
           const numericValues: number[] = [];
           for (const s of numbersToCite) {
             const fromPair = /:\s*(\d+(?:\.\d+)?)/.exec(s);
-            if (fromPair) numericValues.push(parseFloat(fromPair[1]));
+            if (fromPair) numericValues.push(parseFloat(fromPair[1]!));
             const fromDesc = /\d+(?:\.\d+)?/.exec(s);
             if (fromDesc && !fromPair) numericValues.push(parseFloat(fromDesc[0]));
           }
@@ -260,7 +261,7 @@ export async function generateExecutiveSummary(
 
         return hardenExecutiveSummaryForQA(text, businessName, city, findings.length, painkillers);
       } catch (error) {
-        console.error('Error generating executive summary:', error);
+        logger.error({ error }, 'Error generating executive summary');
         throw error;
       }
     }

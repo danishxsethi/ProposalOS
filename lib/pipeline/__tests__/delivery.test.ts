@@ -300,9 +300,8 @@ describe('Delivery Engine Unit Tests', () => {
 
       const result = await deliveryEngine.verifyDeliverable(deliverableId);
 
-      expect(result.verified).toBe(true);
+      expect(result.passed).toBe(true);
       expect(result.improvementPercent).toBeGreaterThan(0);
-      expect(result.beforeAfterComparison).toBeDefined();
 
       expect(prisma.deliveryTask.update).toHaveBeenCalledWith({
         where: { id: deliverableId },

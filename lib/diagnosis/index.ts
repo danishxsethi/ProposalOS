@@ -12,6 +12,7 @@ import { RunTree } from 'langsmith';
 
 import { CostTracker } from '@/lib/costs/costTracker';
 import { invokeDiagnosisGraphWithTimeout } from '@/lib/graph/diagnosis-graph';
+import { logger } from '@/lib/logger';
 import type { VerticalPlaybook } from '@/lib/playbooks/types';
 import { prisma } from '@/lib/prisma';
 
@@ -28,7 +29,18 @@ export async function runDiagnosisPipeline(
   parentTrace?: RunTree,
   playbook?: VerticalPlaybook | null
 ): Promise<DiagnosisResult> {
-  console.warn('[DEPRECATED] runDiagnosisPipeline called — delegating to diagnosisGraph');
+  if (findings.length === 0) {
+    return {
+      clusters: [],
+      metadata: {
+        totalFindings: 0,
+        clusteredFindings: 0,
+        clusteringConfidence: 1.0,
+      },
+    };
+  }
+
+  logger.warn('[DEPRECATED] runDiagnosisPipeline called — delegating to diagnosisGraph');
 
   // Assume all findings belong to the same audit
   const auditId = findings.length > 0 ? findings[0]?.auditId : undefined;

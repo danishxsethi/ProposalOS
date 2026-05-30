@@ -23,6 +23,7 @@ import {
 } from '@/lib/api/errors';
 import { auth } from '@/lib/auth';
 import { FEATURE_FLAGS } from '@/lib/config/feature-flags';
+import { logger } from '@/lib/logger';
 import { withRateLimit } from '@/lib/middleware/rateLimit';
 import { prisma } from '@/lib/prisma';
 
@@ -43,12 +44,9 @@ const featureFlagSchema = z.object({
   key: z
     .string()
     .min(1, { message: 'Key is required' })
-    .refine(
-      (key) => VALID_FLAG_KEYS.includes(key),
-      {
-        message: `Invalid flag key. Must be one of: ${VALID_FLAG_KEYS.join(', ')}`,
-      }
-    ),
+    .refine((key) => VALID_FLAG_KEYS.includes(key), {
+      message: `Invalid flag key. Must be one of: ${VALID_FLAG_KEYS.join(', ')}`,
+    }),
   value: z.union([
     z.string(),
     z.boolean(),
@@ -114,9 +112,9 @@ async function logFlagChange(data: {
       timestamp: new Date().toISOString(),
     });
 
-    // Log to console for audit trail
+    // Log to structured logger for audit trail
     // Note: If you want persistent audit logging, create a FeatureFlagAudit model in Prisma
-    console.log('[Feature Flag Audit]', auditLog);
+    logger.info({ event: 'feature_flag.audit', ...auditLog }, 'Feature flag changed');
   } catch (error) {
     console.error('Failed to log feature flag change:', error);
   }

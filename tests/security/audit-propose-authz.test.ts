@@ -19,7 +19,10 @@ const mocks = vi.hoisted(() => ({
   generateComparison: vi.fn(),
   loggerInfo: vi.fn(),
   loggerWarn: vi.fn(),
+  loggerDebug: vi.fn(),
   logError: vi.fn(),
+  getTenantId: vi.fn(),
+  runWithTenantAsync: vi.fn(),
 }));
 
 vi.mock('@/lib/auth', () => ({
@@ -34,6 +37,7 @@ vi.mock('@/lib/logger', () => ({
   logger: {
     info: mocks.loggerInfo,
     warn: mocks.loggerWarn,
+    debug: mocks.loggerDebug,
   },
   logError: mocks.logError,
 }));
@@ -60,12 +64,32 @@ vi.mock('@/lib/analysis/competitorComparison', () => ({
   generateComparison: mocks.generateComparison,
 }));
 
+vi.mock('@/lib/tenant/context', () => ({
+  getTenantId: mocks.getTenantId,
+  runWithTenantAsync: mocks.runWithTenantAsync,
+}));
+
 vi.mock('@/lib/costs/costTracker', () => ({
   CostTracker: class CostTracker {
     getTotalCents() {
       return 7;
     }
   },
+  checkDailyAuditLimit: vi.fn().mockReturnValue({
+    allowed: true,
+    limit: 100,
+    todayCount: 5,
+    remaining: 95,
+  }),
+}));
+
+vi.mock('@/lib/middleware/rateLimit', () => ({
+  withRateLimit: () => (req: any, handler: any) => handler(),
+  checkRateLimit: vi.fn().mockResolvedValue({ success: true }),
+}));
+
+vi.mock('@/lib/middleware/idempotency', () => ({
+  withIdempotency: (handler: any) => handler,
 }));
 
 vi.mock('@/lib/graph/diagnosis-graph', () => ({
@@ -94,6 +118,11 @@ import { POST } from '@/app/api/audit/[id]/propose/route';
 describe('audit propose authorization', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.getTenantId.mockResolvedValue('tenant-a');
+    mocks.runWithTenantAsync.mockImplementation(async (tenantId, fn) => {
+      mocks.getTenantId.mockResolvedValue(tenantId);
+      return fn();
+    });
     mocks.validateApiKey.mockResolvedValue(null);
     mocks.detectVertical.mockReturnValue('general');
     mocks.getPlaybook.mockReturnValue({ id: 'general' });

@@ -1,9 +1,11 @@
 import { detectConversionElements } from '@/lib/analysis/conversionDetector';
-import { cachedFetch } from '@/lib/cache/apiCache';
+import { withModuleCache } from '@/lib/cache/moduleCache';
 import { CostTracker } from '@/lib/costs/costTracker';
 import { logger } from '@/lib/logger';
+import { withProviderResilience } from '@/lib/resilience/withProviderResilience';
 
 import { type CoreWebVitalsFull, extractCoreWebVitalsFromAudits } from './coreWebVitals';
+import { normalizeConfidence } from './findingGenerator';
 import { analyzeSchemaMarkup } from './schemaAnalysis';
 import { AuditModuleResult, createEvidence, Finding, WebsiteModuleInput } from './types';
 import { runWebsiteCrawlerModule } from './websiteCrawlerModule';
@@ -31,14 +33,24 @@ export async function runWebsiteModule(
     let schemaAnalysis = null;
     let conversionAnalysis = null;
     try {
-      const htmlRes = await fetch(input.url, {
-        headers: {
-          'User-Agent':
-            'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      const html = await withProviderResilience<string>(
+        {
+          provider: 'crawler',
+          operation: 'website:fetchHtmlSchema',
+          degrade: false,
         },
-        signal: AbortSignal.timeout(45000),
-      });
-      const html = await htmlRes.text();
+        async ({ signal }) => {
+          const htmlRes = await fetch(input.url, {
+            signal,
+            headers: {
+              'User-Agent':
+                'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            },
+          });
+          if (!htmlRes.ok) throw new Error(`HTTP ${htmlRes.status}: ${htmlRes.statusText}`);
+          return await htmlRes.text();
+        }
+      );
       schemaAnalysis = analyzeSchemaMarkup(html);
       const schemaFindings = generateSchemaFindings(schemaAnalysis, input.url);
       psiResult.findings.push(...schemaFindings);
@@ -312,15 +324,27 @@ async function getPageSpeedFindings(url: string): Promise<PageSpeedResult> {
       params.append('category', c)
     );
 
-    const data = await cachedFetch(
-      'pagespeed',
-      { url },
-      async () => {
-        const res = await fetch(`${PSI_API_URL}?${params.toString()}`);
-        if (!res.ok) throw new Error(`PSI API failed: ${res.status}`);
-        return await res.json();
+    const data = await withModuleCache<any>(
+      {
+        module: 'website',
+        version: 1,
+        input: { type: 'pagespeed', url },
       },
-      { ttlHours: 24 }
+      { ttlSeconds: 24 * 3600 },
+      async () => {
+        return withProviderResilience<any>(
+          {
+            provider: 'pagespeed',
+            operation: 'website:getPageSpeedFindings',
+            degrade: false,
+          },
+          async ({ signal }) => {
+            const res = await fetch(`${PSI_API_URL}?${params.toString()}`, { signal });
+            if (!res.ok) throw new Error(`PSI API failed: ${res.status}`);
+            return await res.json();
+          }
+        );
+      }
     );
 
     const lighthouse = data.lighthouseResult;

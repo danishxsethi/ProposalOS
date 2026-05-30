@@ -3,11 +3,12 @@ import { NextResponse } from 'next/server';
 import { generateApiKey } from '@/lib/auth/apiKeys';
 import { withAuth } from '@/lib/middleware/auth';
 import { withRole } from '@/lib/middleware/withRole';
+import { recordAuditTrailEvent } from '@/lib/observability/auditTrail';
 import { prisma } from '@/lib/prisma';
 import { getTenantId } from '@/lib/tenant/context';
 
 // List Keys — any authenticated tenant member can view
-export const GET = withAuth(async (req: Request) => {
+export const GET = withAuth(async (_req: Request) => {
   const tenantId = await getTenantId();
   if (!tenantId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
@@ -32,7 +33,7 @@ export const GET = withAuth(async (req: Request) => {
 // Create Key — admin or above
 // P1-9: Only admins may create API keys (they provide programmatic tenant access)
 export const POST = withRole(
-  'admin',
+  'agency_admin',
   withAuth(async (req: Request) => {
     try {
       const tenantId = await getTenantId();
@@ -61,6 +62,17 @@ export const POST = withRole(
           expiresAt,
         },
       });
+
+      await recordAuditTrailEvent({
+        eventType: 'apikey.created',
+        tenantId,
+        payload: {
+          apiKeyId: apiKey.id,
+          name: apiKey.name,
+          prefix: apiKey.keyPrefix,
+          scopes: apiKey.scopes,
+        },
+      }).catch(() => {});
 
       // Return the raw key ONLY ONCE — never stored in plaintext
       return NextResponse.json({

@@ -9,6 +9,7 @@
 
 import { Prisma } from '@prisma/client';
 
+import { logger } from '@/lib/logger';
 import { prisma as sharedPrisma } from '@/lib/prisma';
 import {
   getTenantRuntimeContextFromStore,
@@ -169,7 +170,7 @@ export async function checkConnection(): Promise<boolean> {
     await prisma.$queryRaw`SELECT 1`;
     return true;
   } catch (error) {
-    console.error('Database connection check failed:', error);
+    logger.error({ error }, 'Database connection check failed');
     return false;
   }
 }

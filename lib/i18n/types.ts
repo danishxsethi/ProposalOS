@@ -175,7 +175,7 @@ export interface BenchmarkMetric {
   p25: number | undefined;
   p75: number | undefined;
   p95: number | undefined;
-  sampleSize
+  sampleSize: number;
 }
 
 export interface BenchmarkQuery {

@@ -26,6 +26,12 @@ import type { GeneratedEmail } from '../types';
 // Mock Prisma
 vi.mock('@/lib/prisma', () => ({
   prisma: {
+    prospectLead: {
+      findUnique: vi.fn().mockResolvedValue({
+        decisionMakerEmail: 'owner@business.com',
+        businessName: 'Business Name',
+      }),
+    },
     outreachSendingDomain: {
       findMany: vi.fn(),
       findUnique: vi.fn(),
@@ -45,6 +51,10 @@ vi.mock('@/lib/prisma', () => ({
       findFirst: vi.fn(),
     },
   },
+}));
+
+vi.mock('../../outreach/emailSender', () => ({
+  sendEmail: vi.fn().mockResolvedValue({ success: true, messageId: 'resend-msg-123' }),
 }));
 
 describe('Inbox Rotation Manager', () => {

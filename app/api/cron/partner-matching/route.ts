@@ -10,7 +10,7 @@ import { deliverLead, matchLeadsToPartner } from '@/lib/pipeline/partnerPortal';
  * Runs daily to identify leads matching partner preferences
  */
 export async function POST(request: NextRequest) {
-  const authError = verifyCronAuth(request);
+  const authError = await verifyCronAuth(request);
   if (authError) return authError;
 
   const startTime = Date.now();

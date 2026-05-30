@@ -9,6 +9,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { prisma } from '@/lib/prisma';
 
+import { logger } from '@/lib/logger';
 import { alertAdmin, checkCircuitBreaker, getMetrics, logStageFailure } from '../metrics';
 import { PipelineStage } from '../types';
 
@@ -313,13 +314,15 @@ describe('Pipeline Metrics', () => {
       const tenantId = 'tenant-1';
       const message = 'Circuit breaker tripped';
 
-      const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const loggerErrorSpy = vi.spyOn(logger, 'error').mockImplementation(() => {});
       vi.mocked(prisma.pipelineErrorLog.create).mockResolvedValue({} as any);
 
       await alertAdmin(tenantId, message);
 
-      expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining(tenantId));
-      expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining(message));
+      expect(loggerErrorSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ tenantId }),
+        expect.stringContaining(message)
+      );
 
       expect(prisma.pipelineErrorLog.create).toHaveBeenCalledWith({
         data: {
@@ -334,7 +337,7 @@ describe('Pipeline Metrics', () => {
         },
       });
 
-      consoleErrorSpy.mockRestore();
+      loggerErrorSpy.mockRestore();
     });
   });
 });

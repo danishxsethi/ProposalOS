@@ -1,3 +1,4 @@
+import { logger } from '@/lib/logger';
 /**
  * Widget Performance Monitoring
  * 
@@ -84,7 +85,7 @@ export async function recordWidgetPerformance(
     });
   } catch (error) {
     // Silently fail - don't break widget functionality
-    console.error('[Widget Performance] Failed to record metrics:', error);
+    logger.error({ error }, '[Widget Performance] Failed to record metrics');
   }
 }
 
@@ -353,11 +354,7 @@ export function startWidgetPerformanceObserver(
     for (const entry of list.getEntries()) {
       if (entry.name.includes('widget.js')) {
         // Widget resource loaded
-        console.log('[Widget Performance] Resource loaded:', {
-          name: entry.name,
-          duration: entry.duration,
-          transferSize: (entry as PerformanceResourceTiming).transferSize,
-        });
+        logger.info({ name: entry.name, duration: entry.duration, transferSize: (entry as PerformanceResourceTiming).transferSize }, '[Widget Performance] Resource loaded');
       }
     }
   });

@@ -12,6 +12,8 @@
  * Requirements: 7.1, 7.4, 7.5, 7.6
  */
 
+import { logger } from '@/lib/logger';
+
 import { query } from './db/connection';
 import { LocalizedPrompt, PromptLibraryEntry, PromptLibraryStats, ValidationResult } from './types';
 
@@ -68,7 +70,7 @@ export class LocalizedPromptLibrary {
 
       return null;
     } catch (error) {
-      console.error(`Error retrieving prompt for node ${nodeId}, locale ${locale}:`, error);
+      logger.error({ nodeId, locale, error }, 'Error retrieving prompt');
       return null;
     }
   }
@@ -105,7 +107,7 @@ export class LocalizedPromptLibrary {
 
       return this.rowToLocalizedPrompt(result.rows[0]);
     } catch (error) {
-      console.error(`Error creating variant for node ${nodeId}, locale ${locale}:`, error);
+      logger.error({ nodeId, locale, error }, 'Error creating variant');
       throw new Error(`Failed to create variant: ${(error as Error).message}`);
     }
   }
@@ -130,7 +132,7 @@ export class LocalizedPromptLibrary {
         throw new Error(`Variant not found: ${variantId}`);
       }
     } catch (error) {
-      console.error(`Error submitting variant ${variantId} for approval:`, error);
+      logger.error({ variantId, error }, 'Error submitting variant for approval');
       throw new Error(`Failed to submit for approval: ${(error as Error).message}`);
     }
   }
@@ -155,7 +157,7 @@ export class LocalizedPromptLibrary {
         throw new Error(`Variant not found: ${variantId}`);
       }
     } catch (error) {
-      console.error(`Error approving variant ${variantId}:`, error);
+      logger.error({ variantId, error }, 'Error approving variant');
       throw new Error(`Failed to approve variant: ${(error as Error).message}`);
     }
   }
@@ -180,7 +182,7 @@ export class LocalizedPromptLibrary {
         throw new Error(`Variant not found: ${variantId}`);
       }
     } catch (error) {
-      console.error(`Error rejecting variant ${variantId}:`, error);
+      logger.error({ variantId, error }, 'Error rejecting variant');
       throw new Error(`Failed to reject variant: ${(error as Error).message}`);
     }
   }
@@ -206,7 +208,7 @@ export class LocalizedPromptLibrary {
         approvedVariants: parseInt(approvedResult.rows[0]?.total ?? '0', 10),
       };
     } catch (error) {
-      console.error('Error retrieving prompt library stats:', error);
+      logger.error({ error }, 'Error retrieving prompt library stats');
       throw new Error(`Failed to get stats: ${(error as Error).message}`);
     }
   }
@@ -279,7 +281,7 @@ export class LocalizedPromptLibrary {
         warnings,
       };
     } catch (error) {
-      console.error(`Error validating completeness for locale ${locale}:`, error);
+      logger.error({ locale, error }, 'Error validating completeness');
       return {
         isValid: false,
         errors: [`Failed to validate completeness: ${(error as Error).message}`],
@@ -332,7 +334,7 @@ export class LocalizedPromptLibrary {
         versionHistory,
       };
     } catch (error) {
-      console.error(`Error retrieving library entry for node ${nodeId}:`, error);
+      logger.error({ nodeId, error }, 'Error retrieving library entry');
       return null;
     }
   }

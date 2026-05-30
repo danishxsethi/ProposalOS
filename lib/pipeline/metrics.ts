@@ -7,6 +7,7 @@
  * Requirements: 10.1, 10.2, 10.6, 10.7
  */
 
+import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 
 import { pauseStage } from './orchestrator';
@@ -255,7 +256,7 @@ export async function checkCircuitBreaker(
  */
 export async function alertAdmin(tenantId: string, message: string): Promise<void> {
   // Log to console
-  console.error(`[ADMIN ALERT] Tenant ${tenantId}: ${message}`);
+  logger.error({ tenantId }, `[ADMIN ALERT] ${message}`);
 
   // TODO: In production, integrate with:
   // - Email service (SendGrid, AWS SES)

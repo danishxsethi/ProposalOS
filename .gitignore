@@ -3,6 +3,9 @@
 /.pnp
 .pnp.js
 
+# lockfiles — only package-lock.json is canonical; pnpm-lock.yaml is not used
+pnpm-lock.yaml
+
 # testing
 /coverage
 
@@ -23,8 +26,7 @@ yarn-debug.log*
 yarn-error.log*
 
 # local env files
-.env*.local
-.env
+.env*
 
 # vercel
 .vercel
@@ -36,8 +38,16 @@ next-env.d.ts
 # prisma
 
 # gcp
-service-account.json
+*service-account*.json
 .db_password_temp
+
+# Local Postgres dumps
+*.dump
+*.sql.gz
+
+# Scratch outputs containing data
+scratch/proposal_summaries.txt
+scratch/*.log
 
 # GCP binaries
 cloud-sql-proxy

@@ -2,6 +2,7 @@ import { VertexAI } from '@google-cloud/vertexai';
 import { RunTree } from 'langsmith';
 
 import { CostTracker } from '@/lib/costs/costTracker';
+import { logger } from '@/lib/logger';
 import { traceLlmCall } from '@/lib/tracing';
 
 import { LegacyAuditModuleResult } from './types';
@@ -50,11 +51,11 @@ export async function runReputationModule(
   tracker?: CostTracker,
   parentTrace?: RunTree
 ): Promise<LegacyAuditModuleResult> {
-  console.log(`[ReputationModule] Analyzing reviews for ${input.businessName}...`);
+  logger.info({ businessName: input.businessName }, '[ReputationModule] Analyzing reviews');
 
   // Gracefully skip if no reviews
   if (!input.reviews || input.reviews.length === 0) {
-    console.log('[ReputationModule] No reviews available, skipping...');
+    logger.info('[ReputationModule] No reviews available, skipping');
     return {
       moduleId: 'reputation-analysis',
       status: 'success',
@@ -187,7 +188,7 @@ Return JSON in this exact format:
       }
     );
   } catch (error) {
-    console.error('[ReputationModule] Error:', error);
+    logger.error({ error }, '[ReputationModule] Error');
     return {
       moduleId: 'reputation-analysis',
       status: 'failed',

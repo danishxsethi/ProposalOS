@@ -5,9 +5,10 @@
  * Acceptance Criteria: ≥8/10 average across 50+ audits
  */
 
-import { ProposalResult } from '@/lib/proposal/types';
 import { logger } from '@/lib/logger';
+import { inferOrganizationSegment } from '@/lib/proposal';
 import { FindingRuntime } from '@/lib/proposal/schemas';
+import { ProposalResult } from '@/lib/proposal/types';
 
 export interface ProposalQualityScore {
   auditId: string;
@@ -342,6 +343,7 @@ export function scoreProposal(
     businessName?: string;
     city?: string;
     industry?: string;
+    businessUrl?: string;
   }
 ): ProposalQualityScore {
   const clarity = calculateClarity(proposal);
@@ -366,7 +368,25 @@ export function scoreProposal(
   ) / 6;
   
   // Scale to 1-10
-  const scaledOverall = Math.round(overall * 10 * 10) / 10;
+  let scaledOverall = Math.round(overall * 10 * 10) / 10;
+  
+  // Apply non-SMB penalty if generic local SEO or GBP is mentioned
+  const segment = inferOrganizationSegment(options?.businessUrl, options?.businessName, options?.industry);
+  const isNonSmb = segment !== 'smb_local' && segment !== 'baseline_unknown';
+  let localSeoPenalty = 0;
+  
+  if (isNonSmb) {
+    const fullText = JSON.stringify(proposal).toLowerCase();
+    const localTermsFound = ['google business profile', 'gbp', 'google maps', 'local reviews', 'local marketing', 'local seo'].filter(term => fullText.includes(term));
+    if (localTermsFound.length > 0) {
+      localSeoPenalty = Math.min(5.0, localTermsFound.length * 1.5);
+      scaledOverall = Math.max(1.0, Math.round((scaledOverall - localSeoPenalty) * 10) / 10);
+      logger.warn(
+        { segment, localSeoPenalty, originalScore: Math.round(overall * 10 * 10) / 10, scaledOverall },
+        '[ProposalQualityScorer] Non-SMB target proposal penalized for generic local SEO / GBP mentions'
+      );
+    }
+  }
   
   return {
     auditId: options?.auditId || 'unknown',

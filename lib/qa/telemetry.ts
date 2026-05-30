@@ -10,6 +10,7 @@
 import crypto from 'crypto';
 
 import { ConsistencyFlag, HallucinationFlag } from '@/lib/graph/adversarial-qa-graph';
+import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 
 export interface QARunResult {
@@ -81,6 +82,6 @@ export async function logQATelemetry(input: QATelemetryInput): Promise<void> {
       },
     });
   } catch (err) {
-    console.error('[QATelemetry] Failed to write telemetry record:', err);
+    logger.error({ error: err }, '[QATelemetry] Failed to write telemetry record');
   }
 }

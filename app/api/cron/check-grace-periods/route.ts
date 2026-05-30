@@ -13,6 +13,7 @@
 import { NextResponse } from 'next/server';
 
 import { generateTraceId, InternalError } from '@/lib/api/errors';
+import { logger } from '@/lib/logger';
 import { verifyCronAuth } from '@/lib/middleware/cronAuth';
 import { withRateLimit } from '@/lib/middleware/rateLimit';
 import { prisma } from '@/lib/prisma';
@@ -82,8 +83,9 @@ async function handleCheckGracePeriods(req: Request): Promise<NextResponse> {
 
       suspendedCount++;
 
-      console.log(
-        `[GracePeriodCheck] Suspended tenant ${tenant.id} (${tenant.name}) - grace period expired`
+      logger.info(
+        { event: 'grace_period.tenant_suspended', tenantId: tenant.id, tenantName: tenant.name },
+        'Tenant suspended — grace period expired'
       );
     }
 
@@ -113,8 +115,9 @@ async function handleCheckGracePeriods(req: Request): Promise<NextResponse> {
         const daysRemaining = Math.ceil(
           (gracePeriodEndsAt.getTime() - now.getTime()) / (24 * 60 * 60 * 1000)
         );
-        console.log(
-          `[GracePeriodCheck] Tenant ${tenant.id} (${tenant.name}) has ${daysRemaining} days remaining in grace period`
+        logger.info(
+          { event: 'grace_period.expiry_warning', tenantId: tenant.id, daysRemaining },
+          'Tenant approaching grace period expiry'
         );
       }
     }
@@ -142,7 +145,7 @@ async function handleCheckGracePeriods(req: Request): Promise<NextResponse> {
 
 // Auth wrapper
 const authHandler = async (req: Request): Promise<NextResponse> => {
-  const authError = verifyCronAuth(req);
+  const authError = await verifyCronAuth(req);
   if (authError) return authError;
   return handleCheckGracePeriods(req);
 };

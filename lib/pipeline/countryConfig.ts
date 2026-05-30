@@ -173,7 +173,7 @@ export function applyCountryPricing(basePrice: number, countryCode: CountryCode)
  */
 export function getEmailTemplate(countryCode: CountryCode, templateType: string): string {
   const config = getCountryConfig(countryCode);
-  return config.emailTemplates[templateType] || config.emailTemplates['outreach'];
+  return config.emailTemplates[templateType] || config.emailTemplates['outreach'] || '';
 }
 
 /**

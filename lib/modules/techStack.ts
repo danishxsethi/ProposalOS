@@ -5,7 +5,9 @@ import * as cheerio from 'cheerio';
 
 import { CostTracker } from '@/lib/costs/costTracker';
 import { logger } from '@/lib/logger';
+import { withProviderResilience } from '@/lib/resilience/withProviderResilience';
 
+import { normalizeConfidence } from './findingGenerator';
 import { AuditModuleResult, Finding } from './types';
 
 export interface TechStackModuleInput {
@@ -42,13 +44,29 @@ export async function runTechStackModule(
 
     // Fetch if HTML not provided
     if (!html) {
-      const response = await fetch(input.url, {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (compatible; ProposalOS/1.0; +http://proposalos.com)',
+      const fetchResult = await withProviderResilience<{ text: string; headers: Headers }>(
+        {
+          provider: 'generic',
+          operation: 'tech_stack_fetch_website',
+          policy: {
+            timeoutMs: 10000,
+            maxAttempts: 2,
+          },
         },
-      });
-      html = await response.text();
-      headers = response.headers;
+        async ({ signal }) => {
+          const response = await fetch(input.url, {
+            signal,
+            headers: {
+              'User-Agent': 'Mozilla/5.0 (compatible; ProposalOS/1.0; +http://proposalos.com)',
+            },
+          });
+          if (!response.ok) throw new Error(`HTTP error ${response.status}`);
+          const text = await response.text();
+          return { text, headers: response.headers };
+        }
+      );
+      html = fetchResult.text;
+      headers = fetchResult.headers;
     }
 
     const $ = cheerio.load(html);

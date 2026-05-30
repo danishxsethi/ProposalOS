@@ -8,8 +8,8 @@
  */
 
 import { Finding } from '@/lib/diagnosis/types';
-import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
+import { prisma } from '@/lib/prisma';
 
 export interface TestUrl {
   url: string;
@@ -190,7 +190,7 @@ export async function verifyFinding(
   }
   
   // Check 3: Verify confidence score is justified
-  if (finding.confidenceScore > 90 && !finding.evidence?.length) {
+  if (finding.confidenceScore > 90 && (!finding.evidence || !Array.isArray(finding.evidence) || finding.evidence.length === 0)) {
     return { verified: false, reason: 'unsupported_claim' };
   }
   
@@ -428,18 +428,23 @@ export async function runFullAccuracyTest(): Promise<{
 if (require.main === module) {
   runFullAccuracyTest()
     .then((result) => {
-      console.log('\n=== ACCURACY TEST RESULTS ===');
-      console.log(`Total Audits: ${result.totalAudits}`);
-      console.log(`Passed: ${result.passedAudits}`);
-      console.log(`Failed: ${result.failedAudits}`);
-      console.log(`Total Findings: ${result.totalFindings}`);
-      console.log(`Hallucinated Findings: ${result.hallucinatedFindings}`);
-      console.log(`Accuracy Rate: ${(result.accuracyRate * 100).toFixed(2)}%`);
-      console.log(`OVERALL: ${result.passed ? 'PASS' : 'FAIL'}`);
+      logger.info(
+        {
+          event: 'qa.accuracy_test.result',
+          totalAudits: result.totalAudits,
+          passedAudits: result.passedAudits,
+          failedAudits: result.failedAudits,
+          totalFindings: result.totalFindings,
+          hallucinatedFindings: result.hallucinatedFindings,
+          accuracyRate: result.accuracyRate,
+          passed: result.passed,
+        },
+        'Accuracy test results'
+      );
       process.exit(result.passed ? 0 : 1);
     })
     .catch((error) => {
-      console.error('Accuracy test failed:', error);
+      logger.error({ error, event: 'qa.accuracy_test.failed' }, 'Accuracy test failed');
       process.exit(1);
     });
 }

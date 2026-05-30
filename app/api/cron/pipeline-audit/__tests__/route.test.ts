@@ -178,8 +178,8 @@ describe('GET /api/cron/pipeline-audit', () => {
     const body = await res.json();
 
     expect(res.status).toBe(500);
-    expect(body.error).toBe('Internal Server Error');
-    expect(body.message).toBe('Connection refused');
+    expect(body.error.code).toBe('INTERNAL_ERROR');
+    expect(body.error.message).toBe('Pipeline audit cron failed');
   });
 
   it('processes multiple tenants, skipping paused ones', async () => {

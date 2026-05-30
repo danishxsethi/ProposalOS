@@ -1,3 +1,4 @@
+import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 
 // 1. BENCHMARK AUTO-CALIBRATION
@@ -37,9 +38,9 @@ export async function updateBenchmark(industry: string, metrics: any) {
       },
     });
 
-    console.log(`[Flywheel] Updated benchmark for ${industry}. Size: ${n + 1}`);
+    logger.info({ industry, sampleSize: n + 1 }, '[Flywheel] Updated benchmark');
   } catch (error) {
-    console.error('[Flywheel] Benchmark update failed', error);
+    logger.error({ error }, '[Flywheel] Benchmark update failed');
   }
 }
 
@@ -64,7 +65,7 @@ export async function trackFindingOutcome(findingType: string, accepted: boolean
       },
     });
   } catch (error) {
-    console.error('[Flywheel] Finding tracking failed', error);
+    logger.error({ error }, '[Flywheel] Finding tracking failed');
   }
 }
 
@@ -80,7 +81,7 @@ export async function trackPromptOutcome(
       update: {},
     });
 
-    let newUses = stat.uses + 1;
+    const newUses = stat.uses + 1;
     let newQa = stat.avgQaScore;
     let newRate = stat.acceptanceRate;
 
@@ -106,6 +107,6 @@ export async function trackPromptOutcome(
       },
     });
   } catch (error) {
-    console.error('[Flywheel] Prompt tracking failed', error);
+    logger.error({ error }, '[Flywheel] Prompt tracking failed');
   }
 }

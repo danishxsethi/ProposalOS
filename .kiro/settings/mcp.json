@@ -1,0 +1,37 @@
+{
+  "mcpServers": {
+    "notion": {
+      "url": "https://mcp.notion.com/mcp",
+      "autoApprove": ["notion-search", "notion-fetch", "notion-create-pages"]
+    },
+    "browser": {
+      "command": "npx",
+      "args": ["-y", "@playwright/mcp@latest"],
+      "env": {
+        "PLAYWRIGHT_HEADLESS": "true"
+      },
+      "autoApprove": [
+        "playwright-goto",
+        "playwright-screenshot",
+        "playwright-click",
+        "playwright-fill",
+        "playwright-hover",
+        "playwright-press",
+        "browser_navigate",
+        "browser_console_messages",
+        "browser_take_screenshot",
+        "browser_snapshot",
+        "browser_fill_form",
+        "browser_click",
+        "browser_wait_for",
+        "browser_network_requests",
+        "browser_close",
+        "browser_resize",
+        "browser_press_key",
+        "browser_tabs",
+        "browser_type",
+        "browser_run_code_unsafe"
+      ]
+    }
+  }
+}

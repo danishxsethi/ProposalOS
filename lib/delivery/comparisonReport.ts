@@ -10,6 +10,7 @@
 
 import { Finding } from '@prisma/client';
 
+import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 
 export interface ModuleComparison {
@@ -56,8 +57,9 @@ export async function generateComparisonReport(
   ]);
 
   if (!original || !reAudit) {
-    console.warn(
-      `[ComparisonReport] Could not find one or both audits: ${originalAuditId}, ${reAuditId}`
+    logger.warn(
+      { originalAuditId, reAuditId },
+      '[ComparisonReport] Could not find one or both audits'
     );
     return null;
   }

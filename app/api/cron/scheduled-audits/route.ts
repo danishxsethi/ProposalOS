@@ -357,7 +357,7 @@ function calculateNextRun(frequency: string, current: Date): Date {
 
 // Auth wrapper
 const authHandler = async (req: Request): Promise<NextResponse> => {
-  const authError = verifyCronAuth(req);
+  const authError = await verifyCronAuth(req);
   if (authError) return authError;
   return handleScheduledAudits(req);
 };

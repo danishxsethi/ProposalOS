@@ -1,5 +1,8 @@
 import { Resend } from 'resend';
 
+import { logger } from '@/lib/logger';
+import { withProviderResilience } from '@/lib/resilience/withProviderResilience';
+
 interface EmailParams {
   to: string;
   businessName: string;
@@ -9,18 +12,24 @@ interface EmailParams {
 
 export async function sendProposalEmail({ to, businessName, proposalUrl, pdfUrl }: EmailParams) {
   if (!process.env.RESEND_API_KEY) {
-    console.warn('RESEND_API_KEY is missing. Email sending skipped.');
+    logger.warn('RESEND_API_KEY is missing. Email sending skipped.');
     return { success: false, error: 'Missing API key' };
   }
 
   const resend = new Resend(process.env.RESEND_API_KEY);
 
   try {
-    const { data, error } = await resend.emails.send({
-      from: 'ProposalOS <onboarding@resend.dev>', // Default Resend testing domain
-      to: [to],
-      subject: `Proposal for ${businessName} - Action Required`,
-      html: `
+    const data = await withProviderResilience(
+      {
+        provider: 'resend',
+        operation: 'send-onboarding-email',
+      },
+      async () => {
+        const response = await resend.emails.send({
+          from: 'ProposalOS <onboarding@resend.dev>', // Default Resend testing domain
+          to: [to],
+          subject: `Proposal for ${businessName} - Action Required`,
+          html: `
                 <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
                     <h1 style="color: #2563eb;">Your Audit & Proposal is Ready</h1>
                     <p>Hello,</p>
@@ -42,16 +51,19 @@ export async function sendProposalEmail({ to, businessName, proposalUrl, pdfUrl 
                     </p>
                 </div>
             `,
-    });
+        });
 
-    if (error) {
-      console.error('Resend API Error:', error);
-      return { success: false, error: error.message };
-    }
+        if (response.error) {
+          throw new Error(response.error.message);
+        }
+
+        return response.data;
+      }
+    );
 
     return { success: true, data };
   } catch (error) {
-    console.error('Email sending failed:', error);
+    logger.error({ error }, 'Email sending failed');
     return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
   }
 }

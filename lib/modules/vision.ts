@@ -5,6 +5,7 @@ import { ScreenshotResult } from '@/lib/evidence/screenshotCapture';
 import { generateWithGemini } from '@/lib/llm/provider';
 import { logger } from '@/lib/logger';
 
+import { normalizeConfidence } from './findingGenerator';
 import { AuditModuleResult, Finding } from './types';
 
 interface VisionModuleInput {

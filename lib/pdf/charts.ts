@@ -133,6 +133,7 @@ export function generateComparisonChartSVG(
 
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i];
+      if (!row) continue;
       const val = (row[metric.key] as number) ?? 0;
       const barWidth = maxVal > 0 ? (val / maxVal) * chartWidth : 0;
       const isProspect = i === 0;

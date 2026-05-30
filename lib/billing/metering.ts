@@ -1,5 +1,6 @@
 import Stripe from 'stripe';
 
+import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 
 const stripe = process.env.STRIPE_SECRET_KEY
@@ -46,11 +47,12 @@ export async function trackUsage(tenantId: string, event: BillableEvent, quantit
         }
         */
 
-    console.log(`[Metering] Recorded ${credits} credits for ${tenantId} (${event})`);
+    logger.info({ tenantId, credits, event }, '[Metering] Recorded credits');
     return record;
   } catch (error) {
-    console.error('[Metering] Failed to track usage', error);
+    logger.error({ error }, '[Metering] Failed to track usage');
     // Don't block the user flow if metering fails, but log heavily
+    return null;
   }
 }
 

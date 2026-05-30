@@ -31,7 +31,7 @@ model Audit {
 
   // Multi-Tenancy
   tenantId String
-  tenant   Tenant @relation(fields: [tenantId], references: [id])
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   findings       Finding[]
   proposals      Proposal[]
@@ -44,6 +44,32 @@ model Audit {
   @@index([createdAt])
   @@index([tenantId])
   @@index([batchId])
+}
+
+// ─── Durable Audit Job Queue ─────────────────────────────────────────────────
+// Each row represents one audit item from a batch, with retry tracking and
+// per-item idempotency.  Worker endpoint claims QUEUED rows one at a time.
+model AuditJob {
+  id              String    @id @default(uuid())
+  tenantId        String
+  batchId         String
+  auditId         String    // FK to Audit (not a Prisma relation to avoid cascade complexity)
+  idempotencyKey  String    @unique
+  status          String    @default("QUEUED") // QUEUED | RUNNING | SUCCEEDED | FAILED | DEAD
+  attempts        Int       @default(0)
+  maxAttempts     Int       @default(3)
+  errorMessage    String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  startedAt       DateTime?
+  completedAt     DateTime?
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId, batchId])
+  @@index([status, createdAt])
+  @@index([batchId])
+  @@map("audit_jobs")
 }
 
 model Finding {
@@ -409,6 +435,7 @@ model Tenant {
   abVariants            ABVariant[]
   predictions           Prediction[]
   scenarios             Scenario[]
+  auditJobs             AuditJob[]
 
   @@index([domain])
   @@index([isActive])
@@ -810,6 +837,11 @@ model TenantBranding {
   customDomainVerified   Boolean   @default(false)
   customDomainVerifiedAt DateTime?
 
+  // Widget origin allow-list (Task #13)
+  // Exact-match origins permitted to call POST /api/widget/quick-audit.
+  // Empty array = widget disabled for this tenant. No wildcards supported.
+  allowedWidgetOrigins   String[]  @default([])
+
   footerText    String?
   showPoweredBy Boolean @default(true)
 
@@ -838,11 +870,18 @@ model Account {
 }
 
 model Session {
-  id           String   @id @default(cuid())
-  sessionToken String   @unique
-  userId       String
-  expires      DateTime
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id            String    @id @default(cuid())
+  sessionToken  String    @unique
+  userId        String
+  expires       DateTime
+  userAgentHash String?
+  ipHash        String?
+  createdAt     DateTime  @default(now())
+  lastSeenAt    DateTime  @updatedAt
+  revokedAt     DateTime?
+  revokeReason  String?
+
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model VerificationToken {

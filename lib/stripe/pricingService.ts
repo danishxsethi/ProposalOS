@@ -1,6 +1,8 @@
+import { Prisma } from '@prisma/client';
 import Stripe from 'stripe';
 
 import { prisma } from '@/lib/prisma';
+import { withProviderResilience } from '@/lib/resilience/withProviderResilience';
 import { stripe } from '@/lib/stripe/stripe';
 
 // Currency configuration per locale
@@ -63,7 +65,7 @@ export class PricingService {
    * Get currency config for a locale
    */
   static getCurrencyForLocale(locale: string): CurrencyConfig {
-    return LOCALE_CURRENCY_MAP[locale] || LOCALE_CURRENCY_MAP['en-US'];
+    return LOCALE_CURRENCY_MAP[locale] || LOCALE_CURRENCY_MAP['en-US']!;
   }
 
   /**
@@ -106,11 +108,14 @@ export class PricingService {
     // Create Stripe product first
     let stripeProduct: Stripe.Product | undefined;
     if (config.type === 'saas' || config.type === 'proposal') {
-      stripeProduct = await stripe.products.create({
-        name: config.name,
-        description: config.description,
-        type: 'service',
-      });
+      stripeProduct = await withProviderResilience(
+        { provider: 'stripe', operation: 'create-product' },
+        () => stripe.products.create({
+          name: config.name,
+          description: config.description,
+          type: 'service',
+        })
+      );
     }
 
     // Create Stripe prices for each tier and currency
@@ -123,23 +128,29 @@ export class PricingService {
           const priceInCurrency =
             tier.prices?.[currency] ?? this.convertPrice(tier.price, currency);
 
-          const price = await stripe.prices.create({
-            unit_amount: Math.round(priceInCurrency * 100), // Convert to cents/smallest unit
-            currency: currency.toLowerCase(),
-            product: stripeProduct.id,
-            recurring: config.interval
-              ? {
-                  interval: config.interval,
-                  interval_count: 1,
-                }
-              : undefined,
-            metadata: {
-              tierId: tier.id,
-              planId: config.name.toLowerCase().replace(/\s+/g, '-'),
-              currency: currency,
-            },
-          });
-          stripePriceIds[tier.id][currency] = price.id;
+          const price = await withProviderResilience(
+            { provider: 'stripe', operation: 'create-price' },
+            () => stripe.prices.create({
+              unit_amount: Math.round(priceInCurrency * 100), // Convert to cents/smallest unit
+              currency: currency.toLowerCase(),
+              product: stripeProduct!.id,
+              recurring: config.interval
+                ? {
+                    interval: config.interval,
+                    interval_count: 1,
+                  }
+                : undefined,
+              metadata: {
+                tierId: tier.id,
+                planId: config.name.toLowerCase().replace(/\s+/g, '-'),
+                currency: currency,
+              },
+            })
+          );
+          const tierPriceMap = stripePriceIds[tier.id];
+          if (tierPriceMap) {
+            tierPriceMap[currency] = price.id;
+          }
         }
       }
     }
@@ -153,11 +164,11 @@ export class PricingService {
         interval: config.interval,
         status: config.status,
         sortOrder: config.sortOrder,
-        tiers: config.tiers,
-        features: config.features,
-        limits: config.limits,
+        tiers: config.tiers as unknown as Prisma.InputJsonValue,
+        features: config.features as unknown as Prisma.InputJsonValue,
+        limits: config.limits as unknown as Prisma.InputJsonValue,
         stripeProductId: stripeProduct?.id,
-        stripePriceIds: stripePriceIds as any,
+        stripePriceIds: stripePriceIds as unknown as Prisma.InputJsonValue,
       },
     });
 
@@ -186,16 +197,16 @@ export class PricingService {
     return plans.map((plan) => ({
       id: plan.id,
       name: plan.name,
-      description: plan.description,
+      description: plan.description || '',
       type: plan.type as 'saas' | 'proposal',
       interval: plan.interval as 'month' | 'year' | undefined,
-      tiers: plan.tiers as PricingTier[],
+      tiers: plan.tiers as unknown as PricingTier[],
       features: plan.features as Record<string, any>,
       limits: plan.limits as Record<string, any>,
       status: plan.status as 'active' | 'inactive' | 'archived',
       sortOrder: plan.sortOrder,
       stripeProductId: plan.stripeProductId || undefined,
-      stripePriceIds: plan.stripePriceIds as
+      stripePriceIds: plan.stripePriceIds as unknown as
         | Record<string, Record<SupportedCurrency, string>>
         | undefined,
     }));
@@ -214,16 +225,16 @@ export class PricingService {
     return {
       id: plan.id,
       name: plan.name,
-      description: plan.description,
+      description: plan.description || '',
       type: plan.type as 'saas' | 'proposal',
       interval: plan.interval as 'month' | 'year' | undefined,
-      tiers: plan.tiers as PricingTier[],
+      tiers: plan.tiers as unknown as PricingTier[],
       features: plan.features as Record<string, any>,
       limits: plan.limits as Record<string, any>,
       status: plan.status as 'active' | 'inactive' | 'archived',
       sortOrder: plan.sortOrder,
       stripeProductId: plan.stripeProductId || undefined,
-      stripePriceIds: plan.stripePriceIds as
+      stripePriceIds: plan.stripePriceIds as unknown as
         | Record<string, Record<SupportedCurrency, string>>
         | undefined,
     };
@@ -249,12 +260,13 @@ export class PricingService {
 
     const priceInCurrency = tier.prices?.[currency] ?? this.convertPrice(tier.price, currency);
     const stripePriceId = plan.stripePriceIds?.[tierId]?.[currency];
-    const currencyConfig =
-      LOCALE_CURRENCY_MAP[
-        Object.keys(LOCALE_CURRENCY_MAP).find(
-          (key) => LOCALE_CURRENCY_MAP[key].code === currency
-        ) || 'en-US'
-      ];
+    const foundKey = Object.keys(LOCALE_CURRENCY_MAP).find(
+      (key) => {
+        const item = LOCALE_CURRENCY_MAP[key];
+        return item !== undefined && item.code === currency;
+      }
+    ) || 'en-US';
+    const currencyConfig = LOCALE_CURRENCY_MAP[foundKey] || LOCALE_CURRENCY_MAP['en-US']!;
 
     return {
       price: priceInCurrency,
@@ -279,12 +291,15 @@ export class PricingService {
     }
 
     // Update Stripe product if name/description changed
-    let updatedStripeProduct = existingPlan.stripeProductId;
+    const updatedStripeProduct = existingPlan.stripeProductId;
     if (updates.name || updates.description) {
-      await stripe.products.update(existingPlan.stripeProductId!, {
-        name: updates.name || existingPlan.name,
-        description: updates.description || existingPlan.description,
-      });
+      await withProviderResilience(
+        { provider: 'stripe', operation: 'update-product' },
+        () => stripe.products.update(existingPlan.stripeProductId!, {
+          name: updates.name || existingPlan.name,
+          description: updates.description || existingPlan.description,
+        })
+      );
     }
 
     // Update the plan in database
@@ -296,26 +311,26 @@ export class PricingService {
         interval: updates.interval,
         status: updates.status,
         sortOrder: updates.sortOrder,
-        tiers: updates.tiers,
-        features: updates.features,
-        limits: updates.limits,
-        stripePriceIds: updates.stripePriceIds,
+        tiers: updates.tiers as unknown as Prisma.InputJsonValue,
+        features: updates.features as unknown as Prisma.InputJsonValue,
+        limits: updates.limits as unknown as Prisma.InputJsonValue,
+        stripePriceIds: updates.stripePriceIds as unknown as Prisma.InputJsonValue,
       },
     });
 
     return {
       id: updatedPlan.id,
       name: updatedPlan.name,
-      description: updatedPlan.description,
+      description: updatedPlan.description || '',
       type: updatedPlan.type as 'saas' | 'proposal',
       interval: updatedPlan.interval as 'month' | 'year' | undefined,
-      tiers: updatedPlan.tiers as PricingTier[],
+      tiers: updatedPlan.tiers as unknown as PricingTier[],
       features: updatedPlan.features as Record<string, any>,
       limits: updatedPlan.limits as Record<string, any>,
       status: updatedPlan.status as 'active' | 'inactive' | 'archived',
       sortOrder: updatedPlan.sortOrder,
       stripeProductId: updatedStripeProduct || undefined,
-      stripePriceIds: updatedPlan.stripePriceIds as
+      stripePriceIds: updatedPlan.stripePriceIds as unknown as
         | Record<string, Record<SupportedCurrency, string>>
         | undefined,
     };
@@ -342,7 +357,7 @@ export class PricingService {
       return (bHighestTier?.features?.length || 0) - (aHighestTier?.features?.length || 0);
     });
 
-    return sortedPlans[0];
+    return sortedPlans[0] || null;
   }
 
   /**
@@ -376,43 +391,52 @@ export class PricingService {
         );
         const existingPriceId = plan.stripePriceIds?.[tier.id]?.[currency];
 
-        if (existingPriceId) {
-          try {
-            const existingPrice = await stripe.prices.retrieve(existingPriceId);
-            if (existingPrice.unit_amount === expectedPriceCents) {
-              updatedPriceIds[tier.id][currency] = existingPriceId;
-              continue;
-            }
-          } catch (error) {
-            // Price doesn't exist, create new one
-          }
-        }
-
-        // Create new price for this currency
-        const newPrice = await stripe.prices.create({
-          unit_amount: expectedPriceCents,
-          currency: currency.toLowerCase(),
-          product: plan.stripeProductId,
-          recurring: plan.interval
-            ? {
-                interval: plan.interval,
-                interval_count: 1,
+        const tierPriceMap = updatedPriceIds[tier.id];
+        if (tierPriceMap) {
+          if (existingPriceId) {
+            try {
+              const existingPrice = await withProviderResilience(
+                { provider: 'stripe', operation: 'retrieve-price' },
+                () => stripe.prices.retrieve(existingPriceId)
+              );
+              if (existingPrice.unit_amount === expectedPriceCents) {
+                tierPriceMap[currency] = existingPriceId;
+                continue;
               }
-            : undefined,
-          metadata: {
-            tierId: tier.id,
-            planId: plan.name.toLowerCase().replace(/\s+/g, '-'),
-            currency: currency,
-          },
-        });
-        updatedPriceIds[tier.id][currency] = newPrice.id;
+            } catch (error) {
+              // Price doesn't exist, create new one
+            }
+          }
+
+          // Create new price for this currency
+          const newPrice = await withProviderResilience(
+            { provider: 'stripe', operation: 'create-price' },
+            () => stripe.prices.create({
+              unit_amount: expectedPriceCents,
+              currency: currency.toLowerCase(),
+              product: plan.stripeProductId!,
+              recurring: plan.interval
+                ? {
+                    interval: plan.interval,
+                    interval_count: 1,
+                  }
+                : undefined,
+              metadata: {
+                tierId: tier.id,
+                planId: plan.name.toLowerCase().replace(/\s+/g, '-'),
+                currency: currency,
+              },
+            })
+          );
+          tierPriceMap[currency] = newPrice.id;
+        }
       }
     }
 
     // Update database with new price IDs
     await prisma.pricingPlan.update({
       where: { id: planId },
-      data: { stripePriceIds: updatedPriceIds as any },
+      data: { stripePriceIds: updatedPriceIds as unknown as Prisma.InputJsonValue },
     });
   }
 
@@ -478,25 +502,28 @@ export class PricingService {
       throw new Error(`Price not found for currency ${currency}`);
     }
 
-    return await stripe.checkout.sessions.create({
-      mode: 'subscription',
-      customer_email: customerEmail,
-      line_items: [
-        {
-          price: stripePriceId,
-          quantity: 1,
+    return await withProviderResilience(
+      { provider: 'stripe', operation: 'create-checkout-session' },
+      () => stripe.checkout.sessions.create({
+        mode: 'subscription',
+        customer_email: customerEmail,
+        line_items: [
+          {
+            price: stripePriceId,
+            quantity: 1,
+          },
+        ],
+        success_url: successUrl,
+        cancel_url: cancelUrl,
+        locale: locale.toLowerCase().replace('-', '_') as Stripe.Checkout.Session.Locale,
+        currency: currency.toLowerCase(),
+        metadata: {
+          planId,
+          tierId,
+          locale,
+          currency,
         },
-      ],
-      success_url: successUrl,
-      cancel_url: cancelUrl,
-      locale: locale.toLowerCase().replace('-', '_') as Stripe.Checkout.Session.Locale,
-      currency: currency.toLowerCase(),
-      metadata: {
-        planId,
-        tierId,
-        locale,
-        currency,
-      },
-    });
+      })
+    );
   }
 }

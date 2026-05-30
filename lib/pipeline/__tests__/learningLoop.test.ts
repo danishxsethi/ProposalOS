@@ -13,6 +13,7 @@ import { cleanupDb } from '@/lib/__tests__/utils/cleanup';
  */
 
 import { prisma } from '@/lib/prisma';
+import { runWithTenantAsync, runWithTenantBypass } from '@/lib/tenant/context';
 
 import {
   getVerticalInsights,
@@ -34,11 +35,13 @@ let testLeadIds: string[] = [];
  * Create a test tenant
  */
 async function createTestTenant(): Promise<string> {
-  const tenant = await prisma.tenant.create({
-    data: {
-      name: `Test Tenant ${Math.random()}`,
-    },
-  });
+  const tenant = await runWithTenantBypass('test-setup:create-test-tenant', () =>
+    prisma.tenant.create({
+      data: {
+        name: `Test Tenant ${Math.random()}`,
+      },
+    })
+  );
   return tenant.id;
 }
 
@@ -46,20 +49,22 @@ async function createTestTenant(): Promise<string> {
  * Create a test prospect lead
  */
 async function createTestLead(tenantId: string, vertical: string, city: string): Promise<string> {
-  const lead = await prisma.prospectLead.create({
-    data: {
-      tenantId,
-      businessName: `Test Business ${Math.random()}`,
-      website: `https://test-${Math.random()}.com`,
-      city,
-      vertical,
-      source: 'test',
-      sourceExternalId: `test-${Math.random()}`,
-      painScore: 75,
-      painBreakdown: {},
-      pipelineStatus: 'discovered',
-    },
-  });
+  const lead = await runWithTenantAsync(tenantId, () =>
+    prisma.prospectLead.create({
+      data: {
+        tenantId,
+        businessName: `Test Business ${Math.random()}`,
+        website: `https://test-${Math.random()}.com`,
+        city,
+        vertical,
+        source: 'test',
+        sourceExternalId: `test-${Math.random()}`,
+        painScore: 75,
+        painBreakdown: {},
+        pipelineStatus: 'discovered',
+      },
+    })
+  );
   return lead.id;
 }
 
@@ -67,28 +72,30 @@ async function createTestLead(tenantId: string, vertical: string, city: string):
  * Clean up test data
  */
 async function cleanupTestData() {
-  // Clean up win/loss records
-  if (testTenantId) {
-    await cleanupDb(prisma);
-  }
-
-  // Clean up outreach template performance
-  await cleanupDb(prisma);
-  // Clean up leads
-  if (testLeadIds.length > 0) {
-    await cleanupDb(prisma);
-  }
-
-  // Clean up tenant
-  if (testTenantId) {
-    try {
-      await prisma.tenant.delete({
-        where: { id: testTenantId },
-      });
-    } catch (error) {
-      console.warn(`Failed to delete tenant ${testTenantId}:`, error);
+  await runWithTenantBypass('test-cleanup:db-cleanup', async () => {
+    // Clean up win/loss records
+    if (testTenantId) {
+      await cleanupDb(prisma);
     }
-  }
+
+    // Clean up outreach template performance
+    await cleanupDb(prisma);
+    // Clean up leads
+    if (testLeadIds.length > 0) {
+      await cleanupDb(prisma);
+    }
+
+    // Clean up tenant
+    if (testTenantId) {
+      try {
+        await prisma.tenant.delete({
+          where: { id: testTenantId },
+        });
+      } catch (error) {
+        console.warn(`Failed to delete tenant ${testTenantId}:`, error);
+      }
+    }
+  });
 
   // Reset arrays
   testLeadIds = [];
@@ -97,6 +104,10 @@ async function cleanupTestData() {
 // ============================================================================
 // Unit Tests
 // ============================================================================
+
+const itWithTenant = (name: string, fn: () => any, timeout?: number) => {
+  return it(name, () => runWithTenantAsync(testTenantId, fn), timeout);
+};
 
 describe('Learning Loop Unit Tests', () => {
   beforeEach(async () => {
@@ -108,7 +119,7 @@ describe('Learning Loop Unit Tests', () => {
   });
 
   describe('trackOutreachOutcome', () => {
-    it('should create a new performance record for first outcome', async () => {
+    itWithTenant('should create a new performance record for first outcome', async () => {
       const templateId = 'unit-test-template-1';
       const outcome: OutreachOutcome = {
         openRate: 0.5,
@@ -123,7 +134,8 @@ describe('Learning Loop Unit Tests', () => {
 
       const performance = await prisma.outreachTemplatePerformance.findUnique({
         where: {
-          templateId_vertical_city: {
+          tenantId_templateId_vertical_city: {
+            tenantId: testTenantId,
             templateId,
             vertical: 'dentist',
             city: 'New York',
@@ -139,7 +151,7 @@ describe('Learning Loop Unit Tests', () => {
       expect(performance!.conversionRate).toBe(0.05);
     });
 
-    it('should update existing performance record with rolling averages', async () => {
+    itWithTenant('should update existing performance record with rolling averages', async () => {
       const templateId = 'unit-test-template-2';
       const vertical = 'hvac';
       const city = 'Los Angeles';
@@ -166,7 +178,8 @@ describe('Learning Loop Unit Tests', () => {
 
       const performance = await prisma.outreachTemplatePerformance.findUnique({
         where: {
-          templateId_vertical_city: {
+          tenantId_templateId_vertical_city: {
+            tenantId: testTenantId,
             templateId,
             vertical,
             city,
@@ -180,7 +193,7 @@ describe('Learning Loop Unit Tests', () => {
       expect(performance!.openRate).toBeLessThanOrEqual(1);
     });
 
-    it('should handle NaN and Infinity rates gracefully', async () => {
+    itWithTenant('should handle NaN and Infinity rates gracefully', async () => {
       const templateId = 'unit-test-template-3';
       const outcome: OutreachOutcome = {
         openRate: NaN,
@@ -195,7 +208,8 @@ describe('Learning Loop Unit Tests', () => {
 
       const performance = await prisma.outreachTemplatePerformance.findUnique({
         where: {
-          templateId_vertical_city: {
+          tenantId_templateId_vertical_city: {
+            tenantId: testTenantId,
             templateId,
             vertical: 'plumber',
             city: 'Chicago',
@@ -210,7 +224,7 @@ describe('Learning Loop Unit Tests', () => {
       expect(performance!.conversionRate).toBe(0.05);
     });
 
-    it('should handle empty city string', async () => {
+    itWithTenant('should handle empty city string', async () => {
       const templateId = 'unit-test-template-4';
       const outcome: OutreachOutcome = {
         openRate: 0.5,
@@ -225,7 +239,8 @@ describe('Learning Loop Unit Tests', () => {
 
       const performance = await prisma.outreachTemplatePerformance.findUnique({
         where: {
-          templateId_vertical_city: {
+          tenantId_templateId_vertical_city: {
+            tenantId: testTenantId,
             templateId,
             vertical: 'lawyer',
             city: '',
@@ -239,7 +254,7 @@ describe('Learning Loop Unit Tests', () => {
   });
 
   describe('trackWinLoss', () => {
-    it('should record a won outcome with all fields', async () => {
+    itWithTenant('should record a won outcome with all fields', async () => {
       const leadId = await createTestLead(testTenantId, 'dentist', 'New York');
       testLeadIds.push(leadId);
       const proposalId = 'unit-test-proposal-1';
@@ -267,7 +282,7 @@ describe('Learning Loop Unit Tests', () => {
       expect(record!.objectionsRaised).toEqual(['price_concern']);
     });
 
-    it('should record a lost outcome with reason codes', async () => {
+    itWithTenant('should record a lost outcome with reason codes', async () => {
       const leadId = await createTestLead(testTenantId, 'hvac', 'Los Angeles');
       testLeadIds.push(leadId);
       const proposalId = 'unit-test-proposal-2';
@@ -294,7 +309,7 @@ describe('Learning Loop Unit Tests', () => {
       expect(record!.competitorMentioned).toBe('Competitor A');
     });
 
-    it('should record a ghosted outcome', async () => {
+    itWithTenant('should record a ghosted outcome', async () => {
       const leadId = await createTestLead(testTenantId, 'plumber', 'Chicago');
       testLeadIds.push(leadId);
       const proposalId = 'unit-test-proposal-3';
@@ -320,7 +335,7 @@ describe('Learning Loop Unit Tests', () => {
       expect(record!.dealValue).toBeNull();
     });
 
-    it('should handle null city', async () => {
+    itWithTenant('should handle null city', async () => {
       const leadId = await createTestLead(testTenantId, 'lawyer', 'Boston');
       testLeadIds.push(leadId);
       const proposalId = 'unit-test-proposal-4';
@@ -343,7 +358,7 @@ describe('Learning Loop Unit Tests', () => {
   });
 
   describe('recalibratePricing', () => {
-    it('should return default pricing when no data exists', async () => {
+    itWithTenant('should return default pricing when no data exists', async () => {
       const calibration = await recalibratePricing('restaurant', 'Phoenix');
 
       expect(calibration.vertical).toBe('restaurant');
@@ -357,7 +372,7 @@ describe('Learning Loop Unit Tests', () => {
       expect(calibration.recommendedPricing.premium).toBe(3000);
     });
 
-    it('should increase pricing when conversion rate is high (>50%)', async () => {
+    itWithTenant('should increase pricing when conversion rate is high (>50%)', async () => {
       const vertical = 'dentist';
       const city = 'New York';
 
@@ -385,7 +400,7 @@ describe('Learning Loop Unit Tests', () => {
       expect(calibration.recommendedPricing.essentials).toBe(600); // 500 * 1.2
     });
 
-    it('should decrease pricing when conversion rate is low (<10%)', async () => {
+    itWithTenant('should decrease pricing when conversion rate is low (<10%)', async () => {
       const vertical = 'hvac';
       const city = 'Los Angeles';
 
@@ -421,7 +436,7 @@ describe('Learning Loop Unit Tests', () => {
       expect(calibration.recommendedPricing.growth).toBe(1200); // 1500 * 0.8
     });
 
-    it('should keep base pricing when conversion rate is moderate (10-50%)', async () => {
+    itWithTenant('should keep base pricing when conversion rate is moderate (10-50%)', async () => {
       const vertical = 'plumber';
       const city = 'Chicago';
 
@@ -466,7 +481,7 @@ describe('Learning Loop Unit Tests', () => {
       expect(calibration.recommendedPricing.premium).toBe(3000); // No change
     });
 
-    it('should calculate conversion rates for multiple tiers', async () => {
+    itWithTenant('should calculate conversion rates for multiple tiers', async () => {
       const vertical = 'lawyer';
       const city = 'Houston';
 
@@ -545,7 +560,7 @@ describe('Learning Loop Unit Tests', () => {
   });
 
   describe('getVerticalInsights', () => {
-    it('should return empty insights for vertical with no data', async () => {
+    itWithTenant('should return empty insights for vertical with no data', async () => {
       const insights = await getVerticalInsights('retail');
 
       expect(insights.vertical).toBe('retail');
@@ -559,7 +574,7 @@ describe('Learning Loop Unit Tests', () => {
       expect(Array.isArray(insights.bestEmailPatterns)).toBe(true);
     });
 
-    it('should calculate win rate correctly', async () => {
+    itWithTenant('should calculate win rate correctly', async () => {
       const vertical = 'fitness';
 
       // Create 3 won and 2 lost records
@@ -604,7 +619,7 @@ describe('Learning Loop Unit Tests', () => {
       expect(insights.avgDealValue).toBe(1500); // Average of won deals
     });
 
-    it('should aggregate top lost reasons', async () => {
+    itWithTenant('should aggregate top lost reasons', async () => {
       const vertical = 'restaurant';
 
       // Create lost records with various reasons
@@ -626,7 +641,7 @@ describe('Learning Loop Unit Tests', () => {
       expect(insights.topLostReasons[0].count).toBe(3);
     });
 
-    it('should calculate average deal value from won deals only', async () => {
+    itWithTenant('should calculate average deal value from won deals only', async () => {
       const vertical = 'retail';
 
       // Create won deals with different values

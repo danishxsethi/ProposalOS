@@ -11,6 +11,7 @@ import { NextResponse } from 'next/server';
 
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
+import { runWithTenantBypass } from '@/lib/tenant/context';
 
 /**
  * Health check response structure
@@ -50,10 +51,12 @@ async function checkDatabase(): Promise<HealthCheck> {
     const latency = Date.now() - startTime;
 
     // Check if any critical tables are accessible
-    const [tenantCount, prospectCount] = await Promise.all([
-      prisma.tenant.count().catch(() => -1),
-      prisma.prospectLead.count().catch(() => -1),
-    ]);
+    const [tenantCount, prospectCount] = await runWithTenantBypass('health-check', () =>
+      Promise.all([
+        prisma.tenant.count().catch(() => -1),
+        prisma.prospectLead.count().catch(() => -1),
+      ])
+    );
 
     if (tenantCount >= 0 && prospectCount >= 0) {
       return {
@@ -81,53 +84,55 @@ async function checkDatabase(): Promise<HealthCheck> {
  */
 async function checkCron(): Promise<HealthCheck> {
   try {
-    const now = new Date();
-    const fiveMinutesAgo = new Date(now.getTime() - 5 * 60 * 1000);
+    return await runWithTenantBypass('health-check', async () => {
+      const now = new Date();
+      const fiveMinutesAgo = new Date(now.getTime() - 5 * 60 * 1000);
 
-    // Check for recent pipeline activity
-    const recentTransitions = await prisma.prospectStateTransition.count({
-      where: {
-        createdAt: { gte: fiveMinutesAgo },
-      },
-    });
+      // Check for recent pipeline activity
+      const recentTransitions = await prisma.prospectStateTransition.count({
+        where: {
+          createdAt: { gte: fiveMinutesAgo },
+        },
+      });
 
-    // Check for recent error logs (too many errors could indicate issues)
-    const recentErrors = await prisma.pipelineErrorLog.count({
-      where: {
-        createdAt: { gte: fiveMinutesAgo },
-      },
-    });
+      // Check for recent error logs (too many errors could indicate issues)
+      const recentErrors = await prisma.pipelineErrorLog.count({
+        where: {
+          createdAt: { gte: fiveMinutesAgo },
+        },
+      });
 
-    // Check for stalled jobs (jobs in RUNNING state for too long)
-    const stalledJobs = await prisma.prospectDiscoveryJob.count({
-      where: {
-        status: 'RUNNING',
-        startedAt: { lt: new Date(now.getTime() - 30 * 60 * 1000) }, // Running for > 30 min
-      },
-    });
+      // Check for stalled jobs (jobs in RUNNING state for too long)
+      const stalledJobs = await prisma.prospectDiscoveryJob.count({
+        where: {
+          status: 'RUNNING',
+          startedAt: { lt: new Date(now.getTime() - 30 * 60 * 1000) }, // Running for > 30 min
+        },
+      });
 
-    const errorRate = recentTransitions > 0 ? recentErrors / recentTransitions : 0;
+      const errorRate = recentTransitions > 0 ? recentErrors / recentTransitions : 0;
 
-    if (stalledJobs > 0) {
+      if (stalledJobs > 0) {
+        return {
+          status: 'degraded',
+          message: `${stalledJobs} stalled jobs detected`,
+          details: { recentTransitions, recentErrors, stalledJobs, errorRate },
+        };
+      }
+
+      if (errorRate > 0.5) {
+        return {
+          status: 'degraded',
+          message: `High error rate: ${(errorRate * 100).toFixed(1)}%`,
+          details: { recentTransitions, recentErrors, errorRate },
+        };
+      }
+
       return {
-        status: 'degraded',
-        message: `${stalledJobs} stalled jobs detected`,
-        details: { recentTransitions, recentErrors, stalledJobs, errorRate },
-      };
-    }
-
-    if (errorRate > 0.5) {
-      return {
-        status: 'degraded',
-        message: `High error rate: ${(errorRate * 100).toFixed(1)}%`,
+        status: 'healthy',
         details: { recentTransitions, recentErrors, errorRate },
       };
-    }
-
-    return {
-      status: 'healthy',
-      details: { recentTransitions, recentErrors, errorRate },
-    };
+    });
   } catch (error) {
     return {
       status: 'unhealthy',
@@ -141,33 +146,35 @@ async function checkCron(): Promise<HealthCheck> {
  */
 async function checkQueue(): Promise<HealthCheck> {
   try {
-    const queueCounts = await prisma.prospectLead.groupBy({
-      by: ['pipelineStatus'],
-      _count: true,
-      where: {
-        pipelineStatus: { in: ['discovered', 'audited', 'QUALIFIED'] },
-      },
-    });
+    return await runWithTenantBypass('health-check', async () => {
+      const queueCounts = await prisma.prospectLead.groupBy({
+        by: ['pipelineStatus'],
+        _count: true,
+        where: {
+          pipelineStatus: { in: ['discovered', 'audited', 'QUALIFIED'] },
+        },
+      });
 
-    const totalQueued = queueCounts.reduce((sum, q) => sum + q._count, 0);
+      const totalQueued = queueCounts.reduce((sum, q) => sum + q._count, 0);
 
-    // Check DLQ depth
-    const dlqCount = await prisma.deadLetterQueue.count({
-      where: { status: 'pending' },
-    });
+      // Check DLQ depth
+      const dlqCount = await prisma.deadLetterQueue.count({
+        where: { status: 'pending' },
+      });
 
-    if (dlqCount > 100) {
+      if (dlqCount > 100) {
+        return {
+          status: 'degraded',
+          message: `High DLQ depth: ${dlqCount}`,
+          details: { totalQueued, dlqCount, byStage: queueCounts },
+        };
+      }
+
       return {
-        status: 'degraded',
-        message: `High DLQ depth: ${dlqCount}`,
+        status: 'healthy',
         details: { totalQueued, dlqCount, byStage: queueCounts },
       };
-    }
-
-    return {
-      status: 'healthy',
-      details: { totalQueued, dlqCount, byStage: queueCounts },
-    };
+    });
   } catch (error) {
     return {
       status: 'unhealthy',
@@ -254,15 +261,17 @@ export async function GET(): Promise<NextResponse<HealthResponse>> {
   }
 
   // Get additional metrics
-  const [dlqCount, openCircuits, queuedJobs] = await Promise.all([
-    prisma.deadLetterQueue.count({ where: { status: 'pending' } }).catch(() => 0),
-    prisma.circuitBreakerState.count({ where: { state: 'OPEN' } }).catch(() => 0),
-    prisma.prospectLead
-      .count({
-        where: { pipelineStatus: { in: ['discovered', 'audited', 'QUALIFIED'] } },
-      })
-      .catch(() => 0),
-  ]);
+  const [dlqCount, openCircuits, queuedJobs] = await runWithTenantBypass('health-check', () =>
+    Promise.all([
+      prisma.deadLetterQueue.count({ where: { status: 'pending' } }).catch(() => 0),
+      prisma.circuitBreakerState.count({ where: { state: 'OPEN' } }).catch(() => 0),
+      prisma.prospectLead
+        .count({
+          where: { pipelineStatus: { in: ['discovered', 'audited', 'QUALIFIED'] } },
+        })
+        .catch(() => 0),
+    ])
+  );
 
   const response: HealthResponse = {
     status: overallStatus,

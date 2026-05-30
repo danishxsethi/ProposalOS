@@ -1,10 +1,12 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import * as cheerio from 'cheerio';
 
-import { cachedFetch } from '@/lib/cache/apiCache';
+import { withModuleCache } from '@/lib/cache/moduleCache';
 import { CostTracker } from '@/lib/costs/costTracker';
 import { logger } from '@/lib/logger';
+import { withProviderResilience } from '@/lib/resilience/withProviderResilience';
 
+import { normalizeConfidence } from './findingGenerator';
 import { AuditModuleResult, Finding } from './types';
 
 const genAI = new GoogleGenerativeAI(process.env.GOOGLE_AI_API_KEY!);
@@ -235,18 +237,34 @@ async function findYouTubeChannel(
 
   // We strive to use SerpAPI to find the channel
   const query = `site:youtube.com "${name}" "${city}"`;
-  const results = await cachedFetch(
-    `youtube_search_${name}_${city}`,
-    { query },
+  const results = await withModuleCache<any>(
+    {
+      module: 'video',
+      version: 1,
+      input: { type: 'youtube_search', name, city, query },
+    },
+    { ttlSeconds: 7 * 24 * 60 * 60 },
     async () => {
       const apiKey = process.env.SERP_API_KEY;
       if (!apiKey) return null;
 
       const url = `https://serpapi.com/search.json?engine=google&q=${encodeURIComponent(query)}&api_key=${apiKey}&num=5`;
-      const res = await fetch(url);
-      return await res.json();
-    },
-    { ttlHours: 24 * 7 }
+      return withProviderResilience<any>(
+        {
+          provider: 'serpapi',
+          operation: 'video:youtube_search',
+          degrade: true,
+          fallbackValue: { organic_results: [] },
+        },
+        async () => {
+          const res = await fetch(url);
+          if (!res.ok) {
+            throw new Error(`HTTP error ${res.status}: ${res.statusText}`);
+          }
+          return await res.json();
+        }
+      );
+    }
   );
 
   if (!results || !results.organic_results || results.organic_results.length === 0) return null;
@@ -277,8 +295,21 @@ async function findYouTubeChannel(
 
 async function analyzeWebsiteVideo(url: string): Promise<WebsiteVideoAnalysis> {
   try {
-    const res = await fetch(url);
-    const html = await res.text();
+    const html = await withProviderResilience<string>(
+      {
+        provider: 'crawler',
+        operation: 'video:website_fetch',
+        degrade: true,
+        fallbackValue: '',
+      },
+      async () => {
+        const res = await fetch(url);
+        if (!res.ok) {
+          throw new Error(`HTTP error ${res.status}: ${res.statusText}`);
+        }
+        return await res.text();
+      }
+    );
     const $ = cheerio.load(html);
 
     const youtube = $('iframe[src*="youtube.com"], iframe[src*="youtu.be"]').length;

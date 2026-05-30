@@ -5,6 +5,7 @@
 import * as cheerio from 'cheerio';
 
 import type { CostTracker } from '@/lib/costs/costTracker';
+import { withProviderResilience } from '@/lib/resilience/withProviderResilience';
 
 import { LegacyAuditModuleResult } from './types';
 
@@ -275,22 +276,28 @@ export async function runSchemaMarkupModule(
   }
 
   try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 15000);
-
-    const response = await fetch(url, {
-      signal: controller.signal,
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (compatible; ProposalOS-SchemaBot/1.0)',
+    const html = await withProviderResilience<string>(
+      {
+        provider: 'generic',
+        operation: 'schema_markup_fetch',
+        policy: {
+          timeoutMs: 15000,
+          maxAttempts: 2,
+        },
       },
-    });
-    clearTimeout(timeoutId);
-
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`);
-    }
-
-    const html = await response.text();
+      async ({ signal }) => {
+        const response = await fetch(url, {
+          signal,
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (compatible; ProposalOS-SchemaBot/1.0)',
+          },
+        });
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+        return await response.text();
+      }
+    );
 
     const jsonLdItems = parseJsonLd(html);
     const microdataItems = parseMicrodata(html);

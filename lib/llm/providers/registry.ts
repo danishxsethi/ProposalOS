@@ -18,8 +18,6 @@ import {
   ProviderHealth,
   ProviderResponse,
 } from '../types';
-
-// Import provider implementations
 import { anthropicProvider, AnthropicProvider } from './anthropic';
 import { GoogleProvider, googleProvider } from './google';
 import { openAIProvider, OpenAIProvider } from './openai';

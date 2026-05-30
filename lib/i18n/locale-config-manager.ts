@@ -8,6 +8,8 @@
  * - Configuration completeness checks
  */
 
+import { logger } from '@/lib/logger';
+
 import { query } from './db/connection';
 import { LocaleConfig, ValidationResult } from './types';
 
@@ -45,7 +47,7 @@ export class LocaleConfigManager {
       // Cache supported locales list
       this.supportedLocalesCache = Array.from(this.configCache.keys());
     } catch (error) {
-      console.error('Error loading locale configurations from database:', error);
+      logger.error({ error }, 'Error loading locale configurations from database');
       throw new Error('Failed to load locale configurations');
     }
   }
@@ -87,7 +89,7 @@ export class LocaleConfigManager {
 
       return config;
     } catch (error) {
-      console.error(`Error retrieving locale config for ${locale}:`, error);
+      logger.error({ locale, error }, 'Error retrieving locale config');
       return null;
     }
   }
@@ -118,7 +120,7 @@ export class LocaleConfigManager {
 
       return [...locales];
     } catch (error) {
-      console.error('Error retrieving supported locales:', error);
+      logger.error({ error }, 'Error retrieving supported locales');
       return [];
     }
   }

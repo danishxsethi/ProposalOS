@@ -1,5 +1,6 @@
 import { unstable_cache } from 'next/cache';
 
+import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 
 export interface PlaybookConfig {
@@ -72,7 +73,7 @@ export const getPlaybook = unstable_cache(
       // 3. Fallback to Generic
       return GENERIC_PLAYBOOK;
     } catch (error) {
-      console.error('Failed to fetch playbook:', error);
+      logger.error({ error }, 'Failed to fetch playbook');
       return GENERIC_PLAYBOOK;
     }
   },

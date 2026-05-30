@@ -1,11 +1,27 @@
 import { unstable_cache } from 'next/cache';
 
+import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 
-import { BRANDING, BrandingConfig, DEFAULT_BRANDING, getBrandColor, getBrandingCssVariables, getSafeFontFamily, isWhiteLabeled } from './branding-client';
+import {
+  BRANDING,
+  BrandingConfig,
+  DEFAULT_BRANDING,
+  getBrandColor,
+  getBrandingCssVariables,
+  getSafeFontFamily,
+  isWhiteLabeled,
+} from './branding-client';
 
 export type { BrandingConfig };
-export { DEFAULT_BRANDING, BRANDING, getBrandColor, getBrandingCssVariables, getSafeFontFamily, isWhiteLabeled };
+export {
+  DEFAULT_BRANDING,
+  BRANDING,
+  getBrandColor,
+  getBrandingCssVariables,
+  getSafeFontFamily,
+  isWhiteLabeled,
+};
 
 // Cache for 5 minutes
 export const getBranding = unstable_cache(
@@ -39,7 +55,7 @@ export const getBranding = unstable_cache(
         // These fields will be added in a future migration
       };
     } catch (error) {
-      console.error('Failed to fetch branding:', error);
+      logger.error({ error }, 'Failed to fetch branding');
       return DEFAULT_BRANDING; // Fallback safely
     }
   },

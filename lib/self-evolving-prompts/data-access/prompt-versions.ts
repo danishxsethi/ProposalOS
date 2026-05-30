@@ -3,7 +3,7 @@
  * Implements version control operations
  */
 
-import { createHash } from 'crypto';
+import { createHash, randomUUID } from 'crypto';
 
 import { getTenantRuntimeContextFromStore } from '@/lib/tenant/context';
 
@@ -129,8 +129,11 @@ export async function createVersion(
 
   const versionHash = generateVersionHash(nodeId, promptText);
   const tenantId = getOptionalTenantId('PromptVersion.create');
+  const id = randomUUID();
+  const now = new Date();
   const query = `
     INSERT INTO "PromptVersion" (
+      "id",
       "versionHash",
       "nodeId",
       "promptText",
@@ -139,8 +142,9 @@ export async function createVersion(
       "branchName",
       changelog,
       "isActive",
-      "tenantId"
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      "tenantId",
+      "updatedAt"
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
     RETURNING
       "versionHash" AS version_hash,
       "nodeId" AS node_id,
@@ -157,6 +161,7 @@ export async function createVersion(
   const rows = await executeQuery<PromptVersionRow>(
     query,
     [
+      id,
       versionHash,
       nodeId,
       promptText,
@@ -166,6 +171,7 @@ export async function createVersion(
       changelog,
       false,
       tenantId,
+      now,
     ],
     {
       operationName: 'PromptVersion.create',

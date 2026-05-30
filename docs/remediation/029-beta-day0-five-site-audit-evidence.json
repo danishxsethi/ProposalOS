@@ -1,0 +1,3249 @@
+{
+  "runName": "beta-day0-five-site-audit",
+  "environment": "cloud-staging",
+  "runAt": "2026-05-22T09:44:21.994Z",
+  "baseUrl": "https://proposal-engine-staging-ouitkhk5xq-uc.a.run.app",
+  "results": [
+    {
+      "name": "Example",
+      "url": "https://www.example.com",
+      "category": "baseline",
+      "auditId": "cc5f818f-df22-4c38-8366-886cf219571c",
+      "status": "PARTIAL",
+      "latencyMs": 16605,
+      "findingsCount": 28,
+      "modulesCompleted": [
+        "techStack",
+        "emailFinder",
+        "websiteCrawler",
+        "website",
+        "security",
+        "socialDeep",
+        "accessibility",
+        "contentQuality",
+        "mobileUX",
+        "conversion",
+        "backlinks",
+        "privacyCompliance",
+        "social",
+        "seoDeep",
+        "paidSearch",
+        "videoPresence"
+      ],
+      "modulesFailed": [
+        {
+          "error": "Error: GOOGLE_PLACES_API_KEY is missing",
+          "module": "gbp"
+        },
+        {
+          "error": "Error: Missing API keys for Competitor Module (SERP, PLACES, or PAGESPEED)",
+          "module": "competitor"
+        },
+        {
+          "error": "Error: GOOGLE_PLACES_API_KEY is missing",
+          "module": "gbpDeep"
+        }
+      ],
+      "topFindings": [
+        "No Analytics Tools Detected",
+        "No Email Marketing Integration",
+        "Homepage Has Thin Content"
+      ],
+      "proposalId": "4dfb2535-cadc-469b-8d4b-aa35be4e2a15",
+      "proposalStatus": "DRAFT",
+      "autoQaScore": null,
+      "clientScore": null,
+      "webLinkToken": "8c1db246-172b-4f6a-bef2-8fbd0c821a7f",
+      "proposalUrl": "https://proposal-engine-staging-ouitkhk5xq-uc.a.run.app/proposal/8c1db246-172b-4f6a-bef2-8fbd0c821a7f",
+      "rawProposal": {
+        "executiveSummary": "Based on our audit of Example, we've identified 28 critical issues that need immediate attention. Our analysis shows significant opportunities for improvement in your online presence and customer experience.",
+        "pricing": {
+          "essentials": 1500,
+          "growth": 3500,
+          "premium": 7500,
+          "currency": "USD"
+        },
+        "assumptions": [
+          "Example will provide necessary access to accounts",
+          "Implementation timeline assumes standard business hours",
+          "Pricing is based on the scope outlined in each tier",
+          "Monthly reporting and ongoing support not included"
+        ],
+        "disclaimers": [
+          "Audit data collected on the date of analysis",
+          "Competitor data is based on publicly available information",
+          "Results may vary based on industry and market conditions",
+          "SEO improvements can take 3-6 months to materialize"
+        ],
+        "nextSteps": [
+          "Review this proposal and select your preferred tier",
+          "Reply to this email or schedule a 15-minute call to discuss",
+          "We'll send a simple contract and invoice",
+          "Kickoff call within 3 business days of signing"
+        ],
+        "painClusters": [
+          {
+            "id": "cluster-1",
+            "title": "Issues with websiteCrawler:Content",
+            "description": "Issues with websiteCrawler:Content",
+            "severity": "high",
+            "findingIds": [
+              "1b5013c0-7cda-442c-9875-74c8614076eb",
+              "9b0e84cb-e0b0-4036-9781-2b906fe99559"
+            ],
+            "findings": [
+              {
+                "id": "9b0e84cb-e0b0-4036-9781-2b906fe99559",
+                "auditId": "cc5f818f-df22-4c38-8366-886cf219571c",
+                "module": "websiteCrawler",
+                "category": "Content",
+                "type": "PAINKILLER",
+                "title": "Homepage Has Thin Content",
+                "description": "Homepage only has 17 words. Search engines may view this as low-quality content, harming SEO rankings.",
+                "evidence": [
+                  {
+                    "type": "metric",
+                    "label": "Homepage Word Count",
+                    "value": 17
+                  }
+                ],
+                "metrics": {
+                  "wordCount": 17,
+                  "recommendedMinimum": 300
+                },
+                "impactScore": 7,
+                "confidenceScore": 9,
+                "effortEstimate": "MEDIUM",
+                "recommendedFix": [
+                  "Add comprehensive description of services/products (300-500 words)",
+                  "Include unique value proposition",
+                  "Add customer testimonials or case studies",
+                  "Ensure content is engaging and keyword-optimized"
+                ],
+                "manuallyEdited": false,
+                "excluded": false,
+                "confidenceLevel": null,
+                "createdAt": "2026-05-22T09:39:58.715Z",
+                "tenantId": "40aaeade-8c22-4848-ae44-79fb030b4553",
+                "unverified": true,
+                "stale": false
+              },
+              {
+                "id": "1b5013c0-7cda-442c-9875-74c8614076eb",
+                "auditId": "cc5f818f-df22-4c38-8366-886cf219571c",
+                "module": "websiteCrawler",
+                "category": "Content",
+                "type": "VITAMIN",
+                "title": "Website Has Very Few Pages",
+                "description": "Only 1 pages found. Search engines favor sites with more comprehensive content.",
+                "evidence": [
+                  {
+                    "type": "metric",
+                    "label": "Total Pages",
+                    "value": 1
+                  }
+                ],
+                "metrics": {
+                  "totalPages": 1,
+                  "recommendedMinimum": 10
+                },
+                "impactScore": 5,
+                "confidenceScore": 9,
+                "effortEstimate": "HIGH",
+                "recommendedFix": [
+                  "Create dedicated pages for each service/product offering",
+                  "Add an About page and Contact page",
+                  "Start a blog with industry insights",
+                  "Create FAQ or Resources section",
+                  "Add location-specific pages if applicable"
+                ],
+                "manuallyEdited": false,
+                "excluded": false,
+                "confidenceLevel": null,
+                "createdAt": "2026-05-22T09:39:58.715Z",
+                "tenantId": "40aaeade-8c22-4848-ae44-79fb030b4553",
+                "unverified": true,
+                "stale": false
+              }
+            ],
+            "rootCause": "Issues with websiteCrawler:Content",
+            "narrative": "Issues with websiteCrawler:Content"
+          },
+          {
+            "id": "cluster-2",
+            "title": "Issues with website:Technical SEO",
+            "description": "Issues with website:Technical SEO",
+            "severity": "high",
+            "findingIds": [
+              "541fc0de-ec48-41dc-b6d1-f23393d432fe",
+              "7942cf4d-48f0-43d9-9aff-bbfe1cc87902",
+              "8f93b935-a8d5-46f1-8747-0fd522fed7da",
+              "e8da8b02-5147-4eec-b4d1-422f65013eb8",
+              "f0bd3f70-99fb-4746-95a6-83a3f76ac543",
+              "fc4b0503-4bb8-4633-b1fc-900d4b2abfa6"
+            ],
+            "findings": [
+              {
+                "id": "8f93b935-a8d5-46f1-8747-0fd522fed7da",
+                "auditId": "cc5f818f-df22-4c38-8366-886cf219571c",
+                "module": "website",
+                "category": "Technical SEO",
+                "type": "VITAMIN",
+                "title": "No LocalBusiness or Organization schema",
+                "description": "Add LocalBusiness or Organization schema so Google can understand your business type, hours, and location.",
+                "evidence": [
+                  {
+                    "type": "text",
+                    "label": "local-business-organization",
+                    "value": "Missing",
+                    "source": "schema_analysis",
+                    "pointer": "https://www.example.com",
+                    "collected_at": "2026-05-22T09:39:53.166Z"
+                  }
+                ],
+                "metrics": {
+                  "present": false,
+                  "schemaCheck": "local-business-organization"
+                },
+                "impactScore": 8,
+                "confidenceScore": 10,
+                "effortEstimate": "MEDIUM",
+                "recommendedFix": [
+                  "Add LocalBusiness or Organization schema so Google can understand your business type, hours, and location.",
+                  "Add this JSON-LD to your homepage: {\"@context\":\"https://schema.org\",\"@type\":\"LocalBusiness\",\"name\":\"Your Business\",\"url\":\"https://yoursite.com\",\"address\":{\"@type\":\"PostalAddress\",\"streetAddress\":\"123 Main St\",\"addressLocality\":\"City\",\"addressRegion\":\"ST\"}}"
+                ],
+                "manuallyEdited": false,
+                "excluded": false,
+                "confidenceLevel": null,
+                "createdAt": "2026-05-22T09:39:58.715Z",
+                "tenantId": "40aaeade-8c22-4848-ae44-79fb030b4553",
+                "unverified": false,
+                "stale": false
+              },
+              {
+                "id": "f0bd3f70-99fb-4746-95a6-83a3f76ac543",
+                "auditId": "cc5f818f-df22-4c38-8366-886cf219571c",
+                "module": "website",
+                "category": "Technical SEO",
+                "type": "VITAMIN",
+                "title": "No industry-specific schema",
+                "description": "Add industry-specific schema (e.g., Dentist, LegalService, Restaurant) for better rich results.",
+                "evidence": [
+                  {
+                    "type": "text",
+                    "label": "industry-specific",
+                    "value": "Missing",
+                    "source": "schema_analysis",
+                    "pointer": "https://www.example.com",
+                    "collected_at": "2026-05-22T09:39:53.166Z"
+                  }
+                ],
+                "metrics": {
+                  "present": false,
+                  "schemaCheck": "industry-specific"
+                },
+                "impactScore": 6,
+                "confidenceScore": 10,
+                "effortEstimate": "MEDIUM",
+                "recommendedFix": [
+                  "Add industry-specific schema (e.g., Dentist, LegalService, Restaurant) for better rich results."
+                ],
+                "manuallyEdited": false,
+                "excluded": false,
+                "confidenceLevel": null,
+                "createdAt": "2026-05-22T09:39:58.715Z",
+                "tenantId": "40aaeade-8c22-4848-ae44-79fb030b4553",
+                "unverified": false,
+                "stale": false
+              },
+              {
+                "id": "fc4b0503-4bb8-4633-b1fc-900d4b2abfa6",
+                "auditId": "cc5f818f-df22-4c38-8366-886cf219571c",
+                "module": "website",
+                "category": "Technical SEO",
+                "type": "VITAMIN",
+                "title": "No breadcrumb schema",
+                "description": "Add BreadcrumbList schema to help Google understand your site structure and show breadcrumbs in search.",
+                "evidence": [
+                  {
+                    "type": "text",
+                    "label": "breadcrumb",
+                    "value": "Missing",
+                    "source": "schema_analysis",
+                    "pointer": "https://www.example.com",
+                    "collected_at": "2026-05-22T09:39:53.166Z"
+                  }
+                ],
+                "metrics": {
+                  "present": false,
+                  "schemaCheck": "breadcrumb"
+                },
+                "impactScore": 4,
+                "confidenceScore": 10,
+                "effortEstimate": "MEDIUM",
+                "recommendedFix": [
+                  "Add BreadcrumbList schema to help Google understand your site structure and show breadcrumbs in search."
+                ],
+                "manuallyEdited": false,
+                "excluded": false,
+                "confidenceLevel": null,
+                "createdAt": "2026-05-22T09:39:58.715Z",
+                "tenantId": "40aaeade-8c22-4848-ae44-79fb030b4553",
+                "unverified": false,
+                "stale": false
+              },
+              {
+                "id": "e8da8b02-5147-4eec-b4d1-422f65013eb8",
+                "auditId": "cc5f818f-df22-4c38-8366-886cf219571c",
+                "module": "website",
+                "category": "Technical SEO",
+                "type": "VITAMIN",
+                "title": "No FAQ schema",
+                "description": "Add FAQPage schema for pages with Q&A content to enable FAQ rich results in search.",
+                "evidence": [
+                  {
+                    "type": "text",
+                    "label": "faq",
+                    "value": "Missing",
+                    "source": "schema_analysis",
+                    "pointer": "https://www.example.com",
+                    "collected_at": "2026-05-22T09:39:53.166Z"
+                  }
+                ],
+                "metrics": {
+                  "present": false,
+                  "schemaCheck": "faq"
+                },
+                "impactScore": 4,
+                "confidenceScore": 10,
+                "effortEstimate": "MEDIUM",
+                "recommendedFix": [
+                  "Add FAQPage schema for pages with Q&A content to enable FAQ rich results in search."
+                ],
+                "manuallyEdited": false,
+                "excluded": false,
+                "confidenceLevel": null,
+                "createdAt": "2026-05-22T09:39:58.715Z",
+                "tenantId": "40aaeade-8c22-4848-ae44-79fb030b4553",
+                "unverified": false,
+                "stale": false
+              },
+              {
+                "id": "7942cf4d-48f0-43d9-9aff-bbfe1cc87902",
+                "auditId": "cc5f818f-df22-4c38-8366-886cf219571c",
+                "module": "website",
+                "category": "Technical SEO",
+                "type": "VITAMIN",
+                "title": "No review/aggregate rating schema",
+                "description": "Add AggregateRating schema to display star ratings in search results and build trust.",
+                "evidence": [
+                  {
+                    "type": "text",
+                    "label": "review-aggregate",
+                    "value": "Missing",
+                    "source": "schema_analysis",
+                    "pointer": "https://www.example.com",
+                    "collected_at": "2026-05-22T09:39:53.166Z"
+                  }
+                ],
+                "metrics": {
+                  "present": false,
+                  "schemaCheck": "review-aggregate"
+                },
+                "impactScore": 6,
+                "confidenceScore": 10,
+                "effortEstimate": "MEDIUM",
+                "recommendedFix": [
+                  "Add AggregateRating schema to display star ratings in search results and build trust."
+                ],
+                "manuallyEdited": false,
+                "excluded": false,
+                "confidenceLevel": null,
+                "createdAt": "2026-05-22T09:39:58.715Z",
+                "tenantId": "40aaeade-8c22-4848-ae44-79fb030b4553",
+                "unverified": false,
+                "stale": false
+              },
+              {
+                "id": "541fc0de-ec48-41dc-b6d1-f23393d432fe",
+                "auditId": "cc5f818f-df22-4c38-8366-886cf219571c",
+                "module": "website",
+                "category": "Technical SEO",
+                "type": "VITAMIN",
+                "title": "No sitelinks searchbox schema",
+                "description": "Add WebSite schema with potentialAction SearchAction to enable sitelinks search box in Google.",
+                "evidence": [
+                  {
+                    "type": "text",
+                    "label": "sitelinks-searchbox",
+                    "value": "Missing",
+                    "source": "schema_analysis",
+                    "pointer": "https://www.example.com",
+                    "collected_at": "2026-05-22T09:39:53.166Z"
+                  }
+                ],
+                "metrics": {
+                  "present": false,
+                  "schemaCheck": "sitelinks-searchbox"
+                },
+                "impactScore": 3,
+                "confidenceScore": 10,
+                "effortEstimate": "MEDIUM",
+                "recommendedFix": [
+                  "Add WebSite schema with potentialAction SearchAction to enable sitelinks search box in Google."
+                ],
+                "manuallyEdited": false,
+                "excluded": false,
+                "confidenceLevel": null,
+                "createdAt": "2026-05-22T09:39:58.715Z",
+                "tenantId": "40aaeade-8c22-4848-ae44-79fb030b4553",
+                "unverified": false,
+                "stale": false
+              }
+            ],
+            "rootCause": "Issues with website:Technical SEO",
+            "narrative": "Issues with website:Technical SEO"
+          },
+          {
+            "id": "cluster-3",
+            "title": "Issues with website:Conversion",
+            "description": "Issues with website:Conversion",
+            "severity": "high",
+            "findingIds": [
+              "c990fc6d-4984-461f-8457-4e7d3fe90f50",
+              "eb4d4e81-be80-46b6-8309-61e408825f24"
+            ],
+            "findings": [
+              {
+                "id": "c990fc6d-4984-461f-8457-4e7d3fe90f50",
+                "auditId": "cc5f818f-df22-4c38-8366-886cf219571c",
+                "module": "website",
+                "category": "Conversion",
+                "type": "PAINKILLER",
+                "title": "Conversion readiness: 0/100",
+                "description": "Conversion readiness score: 0/100. Click-to-call phone number — Add a click-to-call phone link in the header/hero — mobile visitors can't contact you with one tap (your highest-intent traffic)",
+                "evidence": [
+                  {
+                    "raw": {
+                      "score": 0,
+                      "criticalMissing": [
+                        "Click-to-call phone number",
+                        "Contact form",
+                        "Clear CTA buttons"
+                      ]
+                    },
+                    "type": "metric",
+                    "label": "Conversion Score",
+                    "value": 0,
+                    "source": "conversion_detector",
+                    "pointer": "https://www.example.com",
+                    "collected_at": "2026-05-22T09:39:53.169Z"
+                  }
+                ],
+                "metrics": {
+                  "conversionScore": 0,
+                  "criticalMissing": [
+                    "Click-to-call phone number",
+                    "Contact form",
+                    "Clear CTA buttons"
+                  ],
+                  "elementsDetected": 0
+                },
+                "impactScore": 8,
+                "confidenceScore": 9,
+                "effortEstimate": "MEDIUM",
+                "recommendedFix": [
+                  "Add a click-to-call phone link in the header/hero — mobile visitors can't contact you with one tap (your highest-intent traffic)",
+                  "Add a contact form — visitors ready to inquire need an easy way to reach you",
+                  "Add prominent CTAs (Book, Schedule, Call, Get Quote) — visitors need a clear next step",
+                  "Consider a chat widget (Intercom, Tidio, etc.) — capture leads who prefer instant messaging",
+                  "Add online booking (Calendly, Acuity, etc.) — reduce friction for appointment-based businesses"
+                ],
+                "manuallyEdited": false,
+                "excluded": false,
+                "confidenceLevel": null,
+                "createdAt": "2026-05-22T09:39:58.715Z",
+                "tenantId": "40aaeade-8c22-4848-ae44-79fb030b4553",
+                "unverified": false,
+                "stale": false
+              },
+              {
+                "id": "eb4d4e81-be80-46b6-8309-61e408825f24",
+                "auditId": "cc5f818f-df22-4c38-8366-886cf219571c",
+                "module": "website",
+                "category": "Conversion",
+                "type": "PAINKILLER",
+                "title": "No click-to-call phone number",
+                "description": "Mobile visitors can't contact you with one tap — that's your highest-intent traffic. Add a tel: link in your header or hero.",
+                "evidence": [
+                  {
+                    "type": "text",
+                    "label": "tel: link",
+                    "value": "Missing",
+                    "source": "conversion_detector",
+                    "pointer": "https://www.example.com",
+                    "collected_at": "2026-05-22T09:39:53.169Z"
+                  }
+                ],
+                "metrics": {
+                  "element": "phone"
+                },
+                "impactScore": 8,
+                "confidenceScore": 10,
+                "effortEstimate": "LOW",
+                "recommendedFix": [
+                  "Add <a href=\"tel:+1234567890\">Call Now</a> in header/hero",
+                  "Ensure phone is visible above the fold on mobile"
+                ],
+                "manuallyEdited": false,
+                "excluded": false,
+                "confidenceLevel": null,
+                "createdAt": "2026-05-22T09:39:58.715Z",
+                "tenantId": "40aaeade-8c22-4848-ae44-79fb030b4553",
+                "unverified": false,
+                "stale": false
+              }
+            ],
+            "rootCause": "Issues with website:Conversion",
+            "narrative": "Issues with website:Conversion"
+          },
+          {
+            "id": "cluster-4",
+            "title": "Issues with socialDeep:Visibility",
+            "description": "Issues with socialDeep:Visibility",
+            "severity": "high",
+            "findingIds": [
+              "3d4bae62-eb5a-41b7-bd2c-ee0bbdf716ba",
+              "4e70316a-8801-4ecc-b9fa-b5039598f9d8"
+            ],
+            "findings": [
+              {
+                "id": "3d4bae62-eb5a-41b7-bd2c-ee0bbdf716ba",
+                "auditId": "cc5f818f-df22-4c38-8366-886cf219571c",
+                "module": "socialDeep",
+                "category": "Visibility",
+                "type": "VITAMIN",
+                "title": "Missing Facebook Profile",
+                "description": "No Facebook profile found. For Generic, this is a key channel.",
+                "evidence": [
+                  {
+                    "type": "text",
+                    "label": "Missing",
+                    "value": "Profile not found"
+                  }
+                ],
+                "metrics": {
+                  "status": "missing",
+                  "platform": "facebook"
+                },
+                "impactScore": 4,
+                "confidenceScore": 9,
+                "effortEstimate": "LOW",
+                "recommendedFix": ["Create a Facebook page", "Optimise bio and link to website"],
+                "manuallyEdited": false,
+                "excluded": false,
+                "confidenceLevel": null,
+                "createdAt": "2026-05-22T09:39:58.715Z",
+                "tenantId": "40aaeade-8c22-4848-ae44-79fb030b4553",
+                "unverified": true,
+                "stale": false
+              },
+              {
+                "id": "4e70316a-8801-4ecc-b9fa-b5039598f9d8",
+                "auditId": "cc5f818f-df22-4c38-8366-886cf219571c",
+                "module": "socialDeep",
+                "category": "Visibility",
+                "type": "PAINKILLER",
+                "title": "No Active Social Presence",
+                "description": "We could not find any active social media profiles. In 2026, social proof is critical for trust.",
+                "evidence": [],
+                "metrics": {
+                  "activeCount": 0
+                },
+                "impactScore": 8,
+                "confidenceScore": 10,
+                "effortEstimate": "MEDIUM",
+                "recommendedFix": ["Claim operational profiles", "Post at least once a week"],
+                "manuallyEdited": false,
+                "excluded": false,
+                "confidenceLevel": null,
+                "createdAt": "2026-05-22T09:39:58.715Z",
+                "tenantId": "40aaeade-8c22-4848-ae44-79fb030b4553",
+                "unverified": true,
+                "stale": false
+              }
+            ],
+            "rootCause": "Issues with socialDeep:Visibility",
+            "narrative": "Issues with socialDeep:Visibility"
+          },
+          {
+            "id": "cluster-5",
+            "title": "Issues with backlinks:Authority",
+            "description": "Issues with backlinks:Authority",
+            "severity": "medium",
+            "findingIds": [
+              "cb4cbd53-69df-4be8-8d83-696b6af8b1da",
+              "da713875-30d7-4b6d-9d8b-213a4830147a"
+            ],
+            "findings": [
+              {
+                "id": "cb4cbd53-69df-4be8-8d83-696b6af8b1da",
+                "auditId": "cc5f818f-df22-4c38-8366-886cf219571c",
+                "module": "backlinks",
+                "category": "Authority",
+                "type": "VITAMIN",
+                "title": "Low Domain Authority",
+                "description": "Your website lacks authority signals. This makes it hard to rank for competitive keywords.",
+                "evidence": [
+                  {
+                    "type": "metric",
+                    "label": "Authority Score",
+                    "value": 0
+                  }
+                ],
+                "metrics": {
+                  "score": 0
+                },
+                "impactScore": 6,
+                "confidenceScore": 9,
+                "effortEstimate": "HIGH",
+                "recommendedFix": [
+                  "Get citations from local chamber",
+                  "Partner with local charities",
+                  "Link from social profiles"
+                ],
+                "manuallyEdited": false,
+                "excluded": false,
+                "confidenceLevel": null,
+                "createdAt": "2026-05-22T09:39:58.715Z",
+                "tenantId": "40aaeade-8c22-4848-ae44-79fb030b4553",
+                "unverified": true,
+                "stale": false
+              },
+              {
+                "id": "da713875-30d7-4b6d-9d8b-213a4830147a",
+                "auditId": "cc5f818f-df22-4c38-8366-886cf219571c",
+                "module": "backlinks",
+                "category": "Authority",
+                "type": "VITAMIN",
+                "title": "Missing Chamber of Commerce Link",
+                "description": "No link found from the local Chamber of Commerce. This is a powerful trust signal for Google.",
+                "evidence": [],
+                "metrics": {},
+                "impactScore": 4,
+                "confidenceScore": 6,
+                "effortEstimate": "LOW",
+                "recommendedFix": ["Join local chamber", "Ensure they link to your website"],
+                "manuallyEdited": false,
+                "excluded": false,
+                "confidenceLevel": null,
+                "createdAt": "2026-05-22T09:39:58.715Z",
+                "tenantId": "40aaeade-8c22-4848-ae44-79fb030b4553",
+                "unverified": true,
+                "stale": false
+              }
+            ],
+            "rootCause": "Issues with backlinks:Authority",
+            "narrative": "Issues with backlinks:Authority"
+          },
+          {
+            "id": "cluster-6",
+            "title": "Issues with seo:visibility",
+            "description": "Issues with seo:visibility",
+            "severity": "low",
+            "findingIds": [
+              "27286dec-9ddb-4c3e-b27a-9e2929fa1270",
+              "dc6ab385-0bd6-47ea-b3b9-5ff3ea1ed0b7"
+            ],
+            "findings": [
+              {
+                "id": "27286dec-9ddb-4c3e-b27a-9e2929fa1270",
+                "auditId": "cc5f818f-df22-4c38-8366-886cf219571c",
+                "module": "seo",
+                "category": "visibility",
+                "type": "VITAMIN",
+                "title": "Missing or short meta title",
+                "description": "Meta titles under 30 characters may be truncated in search results.",
+                "evidence": [
+                  {
+                    "raw": {
+                      "metaTitle": "Example Domain"
+                    },
+                    "type": "metric",
+                    "label": "Title length",
+                    "value": 14,
+                    "source": "seo_deep",
+                    "pointer": "https://www.example.com",
+                    "collected_at": "2026-05-22T09:39:58.404Z"
+                  }
+                ],
+                "metrics": {
+                  "metaTitleLength": 14
+                },
+                "impactScore": 5,
+                "confidenceScore": 9,
+                "effortEstimate": "LOW",
+                "recommendedFix": ["Add a descriptive meta title between 30-60 characters"],
+                "manuallyEdited": false,
+                "excluded": false,
+                "confidenceLevel": null,
+                "createdAt": "2026-05-22T09:39:58.715Z",
+                "tenantId": "40aaeade-8c22-4848-ae44-79fb030b4553",
+                "unverified": false,
+                "stale": false
+              },
+              {
+                "id": "dc6ab385-0bd6-47ea-b3b9-5ff3ea1ed0b7",
+                "auditId": "cc5f818f-df22-4c38-8366-886cf219571c",
+                "module": "seo",
+                "category": "visibility",
+                "type": "VITAMIN",
+                "title": "Missing or short meta description",
+                "description": "Meta descriptions help search engines and users understand your page.",
+                "evidence": [
+                  {
+                    "raw": {
+                      "metaDesc": ""
+                    },
+                    "type": "metric",
+                    "label": "Desc length",
+                    "value": 0,
+                    "source": "seo_deep",
+                    "pointer": "https://www.example.com",
+                    "collected_at": "2026-05-22T09:39:58.404Z"
+                  }
+                ],
+                "metrics": {
+                  "metaDescLength": 0
+                },
+                "impactScore": 4,
+                "confidenceScore": 9,
+                "effortEstimate": "LOW",
+                "recommendedFix": ["Add a meta description between 120-160 characters"],
+                "manuallyEdited": false,
+                "excluded": false,
+                "confidenceLevel": null,
+                "createdAt": "2026-05-22T09:39:58.715Z",
+                "tenantId": "40aaeade-8c22-4848-ae44-79fb030b4553",
+                "unverified": false,
+                "stale": false
+              }
+            ],
+            "rootCause": "Issues with seo:visibility",
+            "narrative": "Issues with seo:visibility"
+          },
+          {
+            "id": "cluster-7",
+            "title": "Issues with paidSearch:Visibility",
+            "description": "Issues with paidSearch:Visibility",
+            "severity": "medium",
+            "findingIds": [
+              "16fddec3-31f9-4615-b473-b11af83bcd23",
+              "fc88d268-3b90-4241-ad22-0d58332f6f7e"
+            ],
+            "findings": [
+              {
+                "id": "16fddec3-31f9-4615-b473-b11af83bcd23",
+                "auditId": "cc5f818f-df22-4c38-8366-886cf219571c",
+                "module": "paidSearch",
+                "category": "Visibility",
+                "type": "VITAMIN",
+                "title": "No Analytics Tracking Installed",
+                "description": "Your website has no Google Analytics. You have zero visibility into who visits your site, where they come from, or what they do. Flying blind.",
+                "evidence": [
+                  {
+                    "type": "text",
+                    "label": "Analytics Status",
+                    "value": "No GA4 or Universal Analytics detected"
+                  }
+                ],
+                "metrics": {
+                  "hasGA4": false,
+                  "hasUniversalAnalytics": false
+                },
+                "impactScore": 6,
+                "confidenceScore": 10,
+                "effortEstimate": "LOW",
+                "recommendedFix": [
+                  "Install Google Analytics 4 (GA4)",
+                  "Set up conversion tracking for form submissions and calls",
+                  "Configure goals for key actions",
+                  "Link to Google Search Console",
+                  "Takes 30 minutes to set up"
+                ],
+                "manuallyEdited": false,
+                "excluded": false,
+                "confidenceLevel": null,
+                "createdAt": "2026-05-22T09:39:58.715Z",
+                "tenantId": "40aaeade-8c22-4848-ae44-79fb030b4553",
+                "unverified": true,
+                "stale": false
+              },
+              {
+                "id": "fc88d268-3b90-4241-ad22-0d58332f6f7e",
+                "auditId": "cc5f818f-df22-4c38-8366-886cf219571c",
+                "module": "paidSearch",
+                "category": "Visibility",
+                "type": "VITAMIN",
+                "title": "No Facebook Pixel Installed",
+                "description": "No Facebook Pixel detected. Can't run retargeting ads or build custom audiences from website visitors.",
+                "evidence": [
+                  {
+                    "type": "text",
+                    "label": "Facebook Pixel",
+                    "value": "No Facebook Pixel detected"
+                  }
+                ],
+                "metrics": {
+                  "hasFacebookPixel": false
+                },
+                "impactScore": 4,
+                "confidenceScore": 10,
+                "effortEstimate": "LOW",
+                "recommendedFix": [
+                  "Install Facebook Pixel on all pages",
+                  "Enables retargeting ads to people who visited your site",
+                  "Build lookalike audiences for better targeting",
+                  "Track conversions from Facebook ads"
+                ],
+                "manuallyEdited": false,
+                "excluded": false,
+                "confidenceLevel": null,
+                "createdAt": "2026-05-22T09:39:58.715Z",
+                "tenantId": "40aaeade-8c22-4848-ae44-79fb030b4553",
+                "unverified": true,
+                "stale": false
+              }
+            ],
+            "rootCause": "Issues with paidSearch:Visibility",
+            "narrative": "Issues with paidSearch:Visibility"
+          },
+          {
+            "id": "cluster-8",
+            "title": "Issues with other:misc",
+            "description": "Issues with other:misc",
+            "severity": "critical",
+            "findingIds": [
+              "578fff51-8921-490e-b74f-9039ad52f0b1",
+              "72eccac7-ecaa-4b77-a5d2-34c160560996",
+              "87529ea5-4dde-4979-ac01-8ad62757ffed",
+              "96279677-67eb-4e5a-a4c9-c1008c481afe",
+              "9d5ca767-539a-45cf-86f3-aae3368422e2",
+              "b1a07460-ee43-43f4-b220-2da629187637",
+              "c179eb77-3318-4a8f-9c61-499d49efac8e",
+              "c316c927-eb3c-4c05-aeb3-70bd63905962",
+              "e22c78cd-ff0c-462d-86d4-cb659819977b",
+              "fc6983fe-ed30-4c24-b337-1bdad033bca7"
+            ],
+            "findings": [
+              {
+                "id": "b1a07460-ee43-43f4-b220-2da629187637",
+                "auditId": "cc5f818f-df22-4c38-8366-886cf219571c",
+                "module": "techStack",
+                "category": "Performance",
+                "type": "VITAMIN",
+                "title": "No Analytics Tools Detected",
+                "description": "We could not detect Google Analytics or similar tools. You are flying blind without data on visitor behavior.",
+                "evidence": [],
+                "metrics": {},
+                "impactScore": 6,
+                "confidenceScore": 9,
+                "effortEstimate": "LOW",
+                "recommendedFix": [
+                  "Install Google Analytics 4 (GA4)",
+                  "Set up Google Search Console"
+                ],
+                "manuallyEdited": false,
+                "excluded": false,
+                "confidenceLevel": null,
+                "createdAt": "2026-05-22T09:39:58.715Z",
+                "tenantId": "40aaeade-8c22-4848-ae44-79fb030b4553",
+                "unverified": true,
+                "stale": false
+              },
+              {
+                "id": "e22c78cd-ff0c-462d-86d4-cb659819977b",
+                "auditId": "cc5f818f-df22-4c38-8366-886cf219571c",
+                "module": "techStack",
+                "category": "Conversion",
+                "type": "VITAMIN",
+                "title": "No Email Marketing Integration",
+                "description": "You have no email marketing tools detected (e.g., Mailchimp, Klaviyo). You're missing the #1 ROI channel (avg $42 return per $1 spent).",
+                "evidence": [],
+                "metrics": {},
+                "impactScore": 5,
+                "confidenceScore": 7,
+                "effortEstimate": "MEDIUM",
+                "recommendedFix": [
+                  "Integrate an email capture form",
+                  "Set up an automated welcome sequence"
+                ],
+                "manuallyEdited": false,
+                "excluded": false,
+                "confidenceLevel": null,
+                "createdAt": "2026-05-22T09:39:58.715Z",
+                "tenantId": "40aaeade-8c22-4848-ae44-79fb030b4553",
+                "unverified": true,
+                "stale": false
+              },
+              {
+                "id": "c316c927-eb3c-4c05-aeb3-70bd63905962",
+                "auditId": "cc5f818f-df22-4c38-8366-886cf219571c",
+                "module": "websiteCrawler",
+                "category": "Technical SEO",
+                "type": "VITAMIN",
+                "title": "No Structured Data Detected",
+                "description": "None of the 1 crawled pages have structured data (Schema.org). This limits rich snippet opportunities in search results.",
+                "evidence": [
+                  {
+                    "type": "text",
+                    "label": "Structured Data Coverage",
+                    "value": "0% schema coverage"
+                  }
+                ],
+                "metrics": {
+                  "totalPages": 1,
+                  "schemaOrgCoverage": 0
+                },
+                "impactScore": 6,
+                "confidenceScore": 9,
+                "effortEstimate": "MEDIUM",
+                "recommendedFix": [
+                  "Add JSON-LD structured data to homepage (Organization schema)",
+                  "Implement LocalBusiness schema if applicable",
+                  "Add Product/Service schema for offering pages",
+                  "Include BreadcrumbList schema for navigation",
+                  "Validate with Google's Rich Results Test"
+                ],
+                "manuallyEdited": false,
+                "excluded": false,
+                "confidenceLevel": null,
+                "createdAt": "2026-05-22T09:39:58.715Z",
+                "tenantId": "40aaeade-8c22-4848-ae44-79fb030b4553",
+                "unverified": true,
+                "stale": false
+              },
+              {
+                "id": "fc6983fe-ed30-4c24-b337-1bdad033bca7",
+                "auditId": "cc5f818f-df22-4c38-8366-886cf219571c",
+                "module": "contentQuality",
+                "category": "Conversion",
+                "type": "VITAMIN",
+                "title": "Content Analysis Unavailable",
+                "description": "Unable to complete content quality analysis. This may indicate API issues or missing page content.",
+                "evidence": [],
+                "metrics": {},
+                "impactScore": 1,
+                "confidenceScore": 5,
+                "effortEstimate": "LOW",
+                "recommendedFix": ["Try running content analysis again later"],
+                "manuallyEdited": false,
+                "excluded": false,
+                "confidenceLevel": null,
+                "createdAt": "2026-05-22T09:39:58.715Z",
+                "tenantId": "40aaeade-8c22-4848-ae44-79fb030b4553",
+                "unverified": true,
+                "stale": false
+              },
+              {
+                "id": "9d5ca767-539a-45cf-86f3-aae3368422e2",
+                "auditId": "cc5f818f-df22-4c38-8366-886cf219571c",
+                "module": "mobileUX",
+                "category": "Performance",
+                "type": "VITAMIN",
+                "title": "Mobile Analysis Unavailable",
+                "description": "Unable to complete mobile UX analysis. This may indicate browser issues or network problems.",
+                "evidence": [],
+                "metrics": {},
+                "impactScore": 1,
+                "confidenceScore": 5,
+                "effortEstimate": "LOW",
+                "recommendedFix": ["Try running mobile analysis again later"],
+                "manuallyEdited": false,
+                "excluded": false,
+                "confidenceLevel": null,
+                "createdAt": "2026-05-22T09:39:58.715Z",
+                "tenantId": "40aaeade-8c22-4848-ae44-79fb030b4553",
+                "unverified": true,
+                "stale": false
+              },
+              {
+                "id": "578fff51-8921-490e-b74f-9039ad52f0b1",
+                "auditId": "cc5f818f-df22-4c38-8366-886cf219571c",
+                "module": "backlinks",
+                "category": "Visibility",
+                "type": "PAINKILLER",
+                "title": "Website Not Properly Indexed",
+                "description": "Google has only indexed 0 pages of your website. Most customers effectively cannot find you.",
+                "evidence": [
+                  {
+                    "type": "metric",
+                    "label": "Indexed Pages",
+                    "value": 0
+                  }
+                ],
+                "metrics": {
+                  "indexed": 0
+                },
+                "impactScore": 8,
+                "confidenceScore": 10,
+                "effortEstimate": "HIGH",
+                "recommendedFix": [
+                  "Submit sitemap to Google Search Console",
+                  "Fix \"noindex\" tags",
+                  "Create more content"
+                ],
+                "manuallyEdited": false,
+                "excluded": false,
+                "confidenceLevel": null,
+                "createdAt": "2026-05-22T09:39:58.715Z",
+                "tenantId": "40aaeade-8c22-4848-ae44-79fb030b4553",
+                "unverified": true,
+                "stale": false
+              },
+              {
+                "id": "72eccac7-ecaa-4b77-a5d2-34c160560996",
+                "auditId": "cc5f818f-df22-4c38-8366-886cf219571c",
+                "module": "social",
+                "category": "visibility",
+                "type": "PAINKILLER",
+                "title": "No social media links found on website",
+                "description": "Your website has no links to social media profiles. Customers expect to find you on social platforms to see reviews, photos, and updates.",
+                "evidence": [
+                  {
+                    "raw": {
+                      "platformsFound": 0
+                    },
+                    "type": "metric",
+                    "label": "Platforms Found",
+                    "value": 0,
+                    "source": "website_html",
+                    "pointer": "https://www.example.com",
+                    "collected_at": "2026-05-22T09:39:58.630Z"
+                  }
+                ],
+                "metrics": {
+                  "total_count": 0,
+                  "platforms_found": [],
+                  "platforms_missing": [
+                    "facebook",
+                    "instagram",
+                    "twitter",
+                    "linkedin",
+                    "youtube",
+                    "tiktok"
+                  ]
+                },
+                "impactScore": 7,
+                "confidenceScore": 7,
+                "effortEstimate": "LOW",
+                "recommendedFix": [
+                  "Create business profiles on Facebook and Instagram (minimum)",
+                  "Add social media icons/links to your website footer",
+                  "Post regularly to build an active presence"
+                ],
+                "manuallyEdited": false,
+                "excluded": false,
+                "confidenceLevel": null,
+                "createdAt": "2026-05-22T09:39:58.715Z",
+                "tenantId": "40aaeade-8c22-4848-ae44-79fb030b4553",
+                "unverified": false,
+                "stale": false
+              },
+              {
+                "id": "c179eb77-3318-4a8f-9c61-499d49efac8e",
+                "auditId": "cc5f818f-df22-4c38-8366-886cf219571c",
+                "module": "videoPresence",
+                "category": "Visibility",
+                "type": "VITAMIN",
+                "title": "No YouTube Channel Found",
+                "description": "We couldn't find a YouTube channel for Example. YouTube is the #2 search engine in the world and a massive opportunity for Generic businesses.",
+                "evidence": [
+                  {
+                    "type": "text",
+                    "label": "YouTube Search",
+                    "value": "No channel found in Top 20 search results"
+                  }
+                ],
+                "metrics": {
+                  "hasChannel": false
+                },
+                "impactScore": 6,
+                "confidenceScore": 9,
+                "effortEstimate": "MEDIUM",
+                "recommendedFix": [
+                  "Create a branded YouTube channel",
+                  "Upload simple \"Welcome\" or \"Service Overview\" videos",
+                  "Optimize channel with business info and website link"
+                ],
+                "manuallyEdited": false,
+                "excluded": false,
+                "confidenceLevel": null,
+                "createdAt": "2026-05-22T09:39:58.715Z",
+                "tenantId": "40aaeade-8c22-4848-ae44-79fb030b4553",
+                "unverified": true,
+                "stale": false
+              },
+              {
+                "id": "87529ea5-4dde-4979-ac01-8ad62757ffed",
+                "auditId": "cc5f818f-df22-4c38-8366-886cf219571c",
+                "module": "videoPresence",
+                "category": "Engagement",
+                "type": "VITAMIN",
+                "title": "No Video Content on Website",
+                "description": "Websites with video convert 80% better. You have no video content embedded on your main pages.",
+                "evidence": [
+                  {
+                    "type": "text",
+                    "label": "Website Scan",
+                    "value": "0 iframes or video tags found"
+                  }
+                ],
+                "metrics": {
+                  "videoCount": 0
+                },
+                "impactScore": 5,
+                "confidenceScore": 10,
+                "effortEstimate": "MEDIUM",
+                "recommendedFix": [
+                  "Embed a welcome video on the homepage",
+                  "Add video testimonials"
+                ],
+                "manuallyEdited": false,
+                "excluded": false,
+                "confidenceLevel": null,
+                "createdAt": "2026-05-22T09:39:58.715Z",
+                "tenantId": "40aaeade-8c22-4848-ae44-79fb030b4553",
+                "unverified": true,
+                "stale": false
+              },
+              {
+                "id": "96279677-67eb-4e5a-a4c9-c1008c481afe",
+                "auditId": "cc5f818f-df22-4c38-8366-886cf219571c",
+                "module": "gbp",
+                "category": "Local SEO",
+                "type": "PAINKILLER",
+                "title": "No Google Business Listing Detected",
+                "description": "No Google Business listing was found for this business. This is a major missed opportunity.",
+                "evidence": [
+                  {
+                    "type": "text",
+                    "label": "Search",
+                    "value": "Places API returned no results"
+                  }
+                ],
+                "metrics": {
+                  "city": "Saskatoon",
+                  "businessName": "Example"
+                },
+                "impactScore": 9,
+                "confidenceScore": 90,
+                "effortEstimate": "MEDIUM",
+                "recommendedFix": ["Create a Google Business Profile"],
+                "manuallyEdited": false,
+                "excluded": false,
+                "confidenceLevel": null,
+                "createdAt": "2026-05-22T09:39:58.715Z",
+                "tenantId": "40aaeade-8c22-4848-ae44-79fb030b4553",
+                "unverified": true,
+                "stale": false
+              }
+            ],
+            "rootCause": "Issues with other:misc",
+            "narrative": "Issues with other:misc"
+          }
+        ],
+        "tiers": {
+          "essentials": {
+            "name": "Essentials",
+            "description": "Quick wins and critical fixes",
+            "findingIds": [
+              "eb4d4e81-be80-46b6-8309-61e408825f24",
+              "72eccac7-ecaa-4b77-a5d2-34c160560996",
+              "1b5013c0-7cda-442c-9875-74c8614076eb"
+            ],
+            "deliveryTime": "5 business days",
+            "price": 1500,
+            "badge": "QUICK WIN"
+          },
+          "growth": {
+            "name": "Growth",
+            "description": "Competitive improvements and optimizations",
+            "findingIds": [
+              "eb4d4e81-be80-46b6-8309-61e408825f24",
+              "72eccac7-ecaa-4b77-a5d2-34c160560996",
+              "1b5013c0-7cda-442c-9875-74c8614076eb",
+              "9b0e84cb-e0b0-4036-9781-2b906fe99559",
+              "541fc0de-ec48-41dc-b6d1-f23393d432fe",
+              "7942cf4d-48f0-43d9-9aff-bbfe1cc87902",
+              "8f93b935-a8d5-46f1-8747-0fd522fed7da",
+              "e8da8b02-5147-4eec-b4d1-422f65013eb8",
+              "f0bd3f70-99fb-4746-95a6-83a3f76ac543",
+              "fc4b0503-4bb8-4633-b1fc-900d4b2abfa6",
+              "c990fc6d-4984-461f-8457-4e7d3fe90f50",
+              "4e70316a-8801-4ecc-b9fa-b5039598f9d8",
+              "cb4cbd53-69df-4be8-8d83-696b6af8b1da",
+              "27286dec-9ddb-4c3e-b27a-9e2929fa1270",
+              "16fddec3-31f9-4615-b473-b11af83bcd23",
+              "578fff51-8921-490e-b74f-9039ad52f0b1",
+              "87529ea5-4dde-4979-ac01-8ad62757ffed",
+              "96279677-67eb-4e5a-a4c9-c1008c481afe",
+              "b1a07460-ee43-43f4-b220-2da629187637",
+              "c179eb77-3318-4a8f-9c61-499d49efac8e",
+              "c316c927-eb3c-4c05-aeb3-70bd63905962",
+              "e22c78cd-ff0c-462d-86d4-cb659819977b"
+            ],
+            "deliveryTime": "10 business days",
+            "price": 3500,
+            "recommended": true
+          },
+          "premium": {
+            "name": "Premium",
+            "description": "Comprehensive solution",
+            "findingIds": [
+              "eb4d4e81-be80-46b6-8309-61e408825f24",
+              "72eccac7-ecaa-4b77-a5d2-34c160560996",
+              "1b5013c0-7cda-442c-9875-74c8614076eb",
+              "9b0e84cb-e0b0-4036-9781-2b906fe99559",
+              "541fc0de-ec48-41dc-b6d1-f23393d432fe",
+              "7942cf4d-48f0-43d9-9aff-bbfe1cc87902",
+              "8f93b935-a8d5-46f1-8747-0fd522fed7da",
+              "e8da8b02-5147-4eec-b4d1-422f65013eb8",
+              "f0bd3f70-99fb-4746-95a6-83a3f76ac543",
+              "fc4b0503-4bb8-4633-b1fc-900d4b2abfa6",
+              "c990fc6d-4984-461f-8457-4e7d3fe90f50",
+              "4e70316a-8801-4ecc-b9fa-b5039598f9d8",
+              "cb4cbd53-69df-4be8-8d83-696b6af8b1da",
+              "27286dec-9ddb-4c3e-b27a-9e2929fa1270",
+              "16fddec3-31f9-4615-b473-b11af83bcd23",
+              "578fff51-8921-490e-b74f-9039ad52f0b1",
+              "87529ea5-4dde-4979-ac01-8ad62757ffed",
+              "96279677-67eb-4e5a-a4c9-c1008c481afe",
+              "b1a07460-ee43-43f4-b220-2da629187637",
+              "c179eb77-3318-4a8f-9c61-499d49efac8e",
+              "c316c927-eb3c-4c05-aeb3-70bd63905962",
+              "e22c78cd-ff0c-462d-86d4-cb659819977b",
+              "3d4bae62-eb5a-41b7-bd2c-ee0bbdf716ba",
+              "da713875-30d7-4b6d-9d8b-213a4830147a",
+              "dc6ab385-0bd6-47ea-b3b9-5ff3ea1ed0b7",
+              "fc88d268-3b90-4241-ad22-0d58332f6f7e",
+              "9d5ca767-539a-45cf-86f3-aae3368422e2",
+              "fc6983fe-ed30-4c24-b337-1bdad033bca7"
+            ],
+            "deliveryTime": "15 business days",
+            "price": 7500,
+            "badge": "BEST VALUE"
+          }
+        },
+        "aiDisclaimer": {
+          "disclaimer": "Generated by AI. Verify recommendations with a qualified professional.",
+          "verificationRequired": true
+        }
+      }
+    },
+    {
+      "name": "GNU",
+      "url": "https://www.gnu.org",
+      "category": "nonprofit-content",
+      "auditId": "7776dedd-e674-4add-92cf-171e8f7e13e2",
+      "status": "DEGRADED",
+      "latencyMs": 53711,
+      "findingsCount": 20,
+      "modulesCompleted": [
+        "emailFinder",
+        "techStack",
+        "websiteCrawler",
+        "socialDeep",
+        "contentQuality",
+        "backlinks",
+        "videoPresence",
+        "paidSearch"
+      ],
+      "modulesFailed": [
+        {
+          "error": "Error: GOOGLE_PLACES_API_KEY is missing",
+          "module": "gbp"
+        },
+        {
+          "error": "Error: Missing API keys for Competitor Module (SERP, PLACES, or PAGESPEED)",
+          "module": "competitor"
+        },
+        {
+          "error": "Error: Timed out after 20000ms",
+          "module": "security"
+        },
+        {
+          "error": "Error: Timed out after 30000ms",
+          "module": "website"
+        },
+        {
+          "error": "Error: GOOGLE_PLACES_API_KEY is missing",
+          "module": "gbpDeep"
+        }
+      ],
+      "topFindings": [
+        "2 Emails Found",
+        "No Analytics Tools Detected",
+        "No Email Marketing Integration"
+      ],
+      "proposalId": "7505b1a3-73c9-4b60-82c3-3482f348973c",
+      "proposalStatus": "DRAFT",
+      "autoQaScore": null,
+      "clientScore": null,
+      "webLinkToken": "16e5383e-2eb1-4425-a404-367c72d13fac",
+      "proposalUrl": "https://proposal-engine-staging-ouitkhk5xq-uc.a.run.app/proposal/16e5383e-2eb1-4425-a404-367c72d13fac",
+      "rawProposal": {
+        "executiveSummary": "Based on our audit of GNU, we've identified 20 critical issues that need immediate attention. Our analysis shows significant opportunities for improvement in your online presence and customer experience.",
+        "pricing": {
+          "essentials": 1500,
+          "growth": 3500,
+          "premium": 7500,
+          "currency": "USD"
+        },
+        "assumptions": [
+          "GNU will provide necessary access to accounts",
+          "Implementation timeline assumes standard business hours",
+          "Pricing is based on the scope outlined in each tier",
+          "Monthly reporting and ongoing support not included"
+        ],
+        "disclaimers": [
+          "Audit data collected on the date of analysis",
+          "Competitor data is based on publicly available information",
+          "Results may vary based on industry and market conditions",
+          "SEO improvements can take 3-6 months to materialize"
+        ],
+        "nextSteps": [
+          "Review this proposal and select your preferred tier",
+          "Reply to this email or schedule a 15-minute call to discuss",
+          "We'll send a simple contract and invoice",
+          "Kickoff call within 3 business days of signing"
+        ],
+        "painClusters": [
+          {
+            "id": "cluster-1",
+            "title": "Issues with websiteCrawler:Technical SEO",
+            "description": "Issues with websiteCrawler:Technical SEO",
+            "severity": "high",
+            "findingIds": [
+              "62b71e0e-1d90-46d2-a9b7-ca749118985d",
+              "7caa506d-0549-4369-b2a0-8535d0352197",
+              "c200db37-2559-414b-b2e8-5c41894d062f"
+            ],
+            "findings": [
+              {
+                "id": "62b71e0e-1d90-46d2-a9b7-ca749118985d",
+                "auditId": "7776dedd-e674-4add-92cf-171e8f7e13e2",
+                "module": "websiteCrawler",
+                "category": "Technical SEO",
+                "type": "PAINKILLER",
+                "title": "1 Broken Links Detected",
+                "description": "Found 1 pages returning 4xx or 5xx errors. Broken links damage SEO rankings and user experience.",
+                "evidence": [
+                  {
+                    "type": "url",
+                    "label": "Broken Link",
+                    "value": "https://www.gnu.org"
+                  }
+                ],
+                "metrics": {
+                  "affectedUrls": ["https://www.gnu.org"],
+                  "brokenLinkCount": 1
+                },
+                "impactScore": 8,
+                "confidenceScore": 10,
+                "effortEstimate": "MEDIUM",
+                "recommendedFix": [
+                  "Fix or redirect all broken links",
+                  "Implement 301 redirects for moved pages",
+                  "Remove links to non-existent pages",
+                  "Set up automated broken link monitoring"
+                ],
+                "manuallyEdited": false,
+                "excluded": false,
+                "confidenceLevel": null,
+                "createdAt": "2026-05-22T09:40:56.893Z",
+                "tenantId": "40aaeade-8c22-4848-ae44-79fb030b4553",
+                "unverified": true,
+                "stale": false
+              },
+              {
+                "id": "7caa506d-0549-4369-b2a0-8535d0352197",
+                "auditId": "7776dedd-e674-4add-92cf-171e8f7e13e2",
+                "module": "websiteCrawler",
+                "category": "Technical SEO",
+                "type": "VITAMIN",
+                "title": "No Structured Data Detected",
+                "description": "None of the 1 crawled pages have structured data (Schema.org). This limits rich snippet opportunities in search results.",
+                "evidence": [
+                  {
+                    "type": "text",
+                    "label": "Structured Data Coverage",
+                    "value": "0% schema coverage"
+                  }
+                ],
+                "metrics": {
+                  "totalPages": 1,
+                  "schemaOrgCoverage": 0
+                },
+                "impactScore": 6,
+                "confidenceScore": 9,
+                "effortEstimate": "MEDIUM",
+                "recommendedFix": [
+                  "Add JSON-LD structured data to homepage (Organization schema)",
+                  "Implement LocalBusiness schema if applicable",
+                  "Add Product/Service schema for offering pages",
+                  "Include BreadcrumbList schema for navigation",
+                  "Validate with Google's Rich Results Test"
+                ],
+                "manuallyEdited": false,
+                "excluded": false,
+                "confidenceLevel": null,
+                "createdAt": "2026-05-22T09:40:56.893Z",
+                "tenantId": "40aaeade-8c22-4848-ae44-79fb030b4553",
+                "unverified": true,
+                "stale": false
+              },
+              {
+                "id": "c200db37-2559-414b-b2e8-5c41894d062f",
+                "auditId": "7776dedd-e674-4add-92cf-171e8f7e13e2",
+                "module": "websiteCrawler",
+                "category": "Technical SEO",
+                "type": "PAINKILLER",
+                "title": "Limited Data: Site May Block Crawlers or Be JavaScript-Heavy",
+                "description": "Could not retrieve full page content. Analysis uses PageSpeed API data only. Consider adding a sitemap and ensuring critical content is server-rendered.",
+                "evidence": [
+                  {
+                    "type": "text",
+                    "label": "Limited Data",
+                    "value": "Crawler returned no successful pages"
+                  }
+                ],
+                "metrics": {
+                  "pagesAttempted": 1
+                },
+                "impactScore": 6,
+                "confidenceScore": 8,
+                "effortEstimate": "MEDIUM",
+                "recommendedFix": [
+                  "Ensure site is accessible to search engines",
+                  "Consider server-side rendering for key content",
+                  "Check robots.txt and firewall rules"
+                ],
+                "manuallyEdited": false,
+                "excluded": false,
+                "confidenceLevel": null,
+                "createdAt": "2026-05-22T09:40:56.893Z",
+                "tenantId": "40aaeade-8c22-4848-ae44-79fb030b4553",
+                "unverified": true,
+                "stale": false
+              }
+            ],
+            "rootCause": "Issues with websiteCrawler:Technical SEO",
+            "narrative": "Issues with websiteCrawler:Technical SEO"
+          },
+          {
+            "id": "cluster-2",
+            "title": "Issues with websiteCrawler:Content",
+            "description": "Issues with websiteCrawler:Content",
+            "severity": "high",
+            "findingIds": [
+              "2b9a1c65-a1d8-4677-97d6-abc6310083eb",
+              "4d58f250-0709-448f-8ca1-351fccf6f9e9"
+            ],
+            "findings": [
+              {
+                "id": "2b9a1c65-a1d8-4677-97d6-abc6310083eb",
+                "auditId": "7776dedd-e674-4add-92cf-171e8f7e13e2",
+                "module": "websiteCrawler",
+                "category": "Content",
+                "type": "PAINKILLER",
+                "title": "Homepage Has Thin Content",
+                "description": "Homepage only has 0 words. Search engines may view this as low-quality content, harming SEO rankings.",
+                "evidence": [
+                  {
+                    "type": "metric",
+                    "label": "Homepage Word Count",
+                    "value": 0
+                  }
+                ],
+                "metrics": {
+                  "wordCount": 0,
+                  "recommendedMinimum": 300
+                },
+                "impactScore": 7,
+                "confidenceScore": 9,
+                "effortEstimate": "MEDIUM",
+                "recommendedFix": [
+                  "Add comprehensive description of services/products (300-500 words)",
+                  "Include unique value proposition",
+                  "Add customer testimonials or case studies",
+                  "Ensure content is engaging and keyword-optimized"
+                ],
+                "manuallyEdited": false,
+                "excluded": false,
+                "confidenceLevel": null,
+                "createdAt": "2026-05-22T09:40:56.893Z",
+                "tenantId": "40aaeade-8c22-4848-ae44-79fb030b4553",
+                "unverified": true,
+                "stale": false
+              },
+              {
+                "id": "4d58f250-0709-448f-8ca1-351fccf6f9e9",
+                "auditId": "7776dedd-e674-4add-92cf-171e8f7e13e2",
+                "module": "websiteCrawler",
+                "category": "Content",
+                "type": "VITAMIN",
+                "title": "Website Has Very Few Pages",
+                "description": "Only 1 pages found. Search engines favor sites with more comprehensive content.",
+                "evidence": [
+                  {
+                    "type": "metric",
+                    "label": "Total Pages",
+                    "value": 1
+                  }
+                ],
+                "metrics": {
+                  "totalPages": 1,
+                  "recommendedMinimum": 10
+                },
+                "impactScore": 5,
+                "confidenceScore": 9,
+                "effortEstimate": "HIGH",
+                "recommendedFix": [
+                  "Create dedicated pages for each service/product offering",
+                  "Add an About page and Contact page",
+                  "Start a blog with industry insights",
+                  "Create FAQ or Resources section",
+                  "Add location-specific pages if applicable"
+                ],
+                "manuallyEdited": false,
+                "excluded": false,
+                "confidenceLevel": null,
+                "createdAt": "2026-05-22T09:40:56.893Z",
+                "tenantId": "40aaeade-8c22-4848-ae44-79fb030b4553",
+                "unverified": true,
+                "stale": false
+              }
+            ],
+            "rootCause": "Issues with websiteCrawler:Content",
+            "narrative": "Issues with websiteCrawler:Content"
+          },
+          {
+            "id": "cluster-3",
+            "title": "Issues with socialDeep:Visibility",
+            "description": "Issues with socialDeep:Visibility",
+            "severity": "high",
+            "findingIds": [
+              "1ef73d5e-19c8-4f95-8047-67ff3bc7a3ab",
+              "ef85c2b4-61b2-40f0-8086-fb1bf4ca126d"
+            ],
+            "findings": [
+              {
+                "id": "1ef73d5e-19c8-4f95-8047-67ff3bc7a3ab",
+                "auditId": "7776dedd-e674-4add-92cf-171e8f7e13e2",
+                "module": "socialDeep",
+                "category": "Visibility",
+                "type": "VITAMIN",
+                "title": "Missing Facebook Profile",
+                "description": "No Facebook profile found. For Generic, this is a key channel.",
+                "evidence": [
+                  {
+                    "type": "text",
+                    "label": "Missing",
+                    "value": "Profile not found"
+                  }
+                ],
+                "metrics": {
+                  "status": "missing",
+                  "platform": "facebook"
+                },
+                "impactScore": 4,
+                "confidenceScore": 9,
+                "effortEstimate": "LOW",
+                "recommendedFix": ["Create a Facebook page", "Optimise bio and link to website"],
+                "manuallyEdited": false,
+                "excluded": false,
+                "confidenceLevel": null,
+                "createdAt": "2026-05-22T09:40:56.893Z",
+                "tenantId": "40aaeade-8c22-4848-ae44-79fb030b4553",
+                "unverified": true,
+                "stale": false
+              },
+              {
+                "id": "ef85c2b4-61b2-40f0-8086-fb1bf4ca126d",
+                "auditId": "7776dedd-e674-4add-92cf-171e8f7e13e2",
+                "module": "socialDeep",
+                "category": "Visibility",
+                "type": "PAINKILLER",
+                "title": "No Active Social Presence",
+                "description": "We could not find any active social media profiles. In 2026, social proof is critical for trust.",
+                "evidence": [],
+                "metrics": {
+                  "activeCount": 0
+                },
+                "impactScore": 8,
+                "confidenceScore": 10,
+                "effortEstimate": "MEDIUM",
+                "recommendedFix": ["Claim operational profiles", "Post at least once a week"],
+                "manuallyEdited": false,
+                "excluded": false,
+                "confidenceLevel": null,
+                "createdAt": "2026-05-22T09:40:56.893Z",
+                "tenantId": "40aaeade-8c22-4848-ae44-79fb030b4553",
+                "unverified": true,
+                "stale": false
+              }
+            ],
+            "rootCause": "Issues with socialDeep:Visibility",
+            "narrative": "Issues with socialDeep:Visibility"
+          },
+          {
+            "id": "cluster-4",
+            "title": "Issues with backlinks:Authority",
+            "description": "Issues with backlinks:Authority",
+            "severity": "medium",
+            "findingIds": [
+              "6b70a323-becd-47c0-ad5e-823996315441",
+              "7e77bb3e-493b-43c2-b9b5-ba617967d6fc"
+            ],
+            "findings": [
+              {
+                "id": "6b70a323-becd-47c0-ad5e-823996315441",
+                "auditId": "7776dedd-e674-4add-92cf-171e8f7e13e2",
+                "module": "backlinks",
+                "category": "Authority",
+                "type": "VITAMIN",
+                "title": "Low Domain Authority",
+                "description": "Your website lacks authority signals. This makes it hard to rank for competitive keywords.",
+                "evidence": [
+                  {
+                    "type": "metric",
+                    "label": "Authority Score",
+                    "value": 0
+                  }
+                ],
+                "metrics": {
+                  "score": 0
+                },
+                "impactScore": 6,
+                "confidenceScore": 9,
+                "effortEstimate": "HIGH",
+                "recommendedFix": [
+                  "Get citations from local chamber",
+                  "Partner with local charities",
+                  "Link from social profiles"
+                ],
+                "manuallyEdited": false,
+                "excluded": false,
+                "confidenceLevel": null,
+                "createdAt": "2026-05-22T09:40:56.893Z",
+                "tenantId": "40aaeade-8c22-4848-ae44-79fb030b4553",
+                "unverified": true,
+                "stale": false
+              },
+              {
+                "id": "7e77bb3e-493b-43c2-b9b5-ba617967d6fc",
+                "auditId": "7776dedd-e674-4add-92cf-171e8f7e13e2",
+                "module": "backlinks",
+                "category": "Authority",
+                "type": "VITAMIN",
+                "title": "Missing Chamber of Commerce Link",
+                "description": "No link found from the local Chamber of Commerce. This is a powerful trust signal for Google.",
+                "evidence": [],
+                "metrics": {},
+                "impactScore": 4,
+                "confidenceScore": 6,
+                "effortEstimate": "LOW",
+                "recommendedFix": ["Join local chamber", "Ensure they link to your website"],
+                "manuallyEdited": false,
+                "excluded": false,
+                "confidenceLevel": null,
+                "createdAt": "2026-05-22T09:40:56.893Z",
+                "tenantId": "40aaeade-8c22-4848-ae44-79fb030b4553",
+                "unverified": true,
+                "stale": false
+              }
+            ],
+            "rootCause": "Issues with backlinks:Authority",
+            "narrative": "Issues with backlinks:Authority"
+          },
+          {
+            "id": "cluster-5",
+            "title": "Issues with paidSearch:Visibility",
+            "description": "Issues with paidSearch:Visibility",
+            "severity": "medium",
+            "findingIds": [
+              "7c04a3ba-2150-4ea3-8730-0b490f69f9a8",
+              "e92aa608-6e8f-40c6-8a23-c1c9022e80ae"
+            ],
+            "findings": [
+              {
+                "id": "e92aa608-6e8f-40c6-8a23-c1c9022e80ae",
+                "auditId": "7776dedd-e674-4add-92cf-171e8f7e13e2",
+                "module": "paidSearch",
+                "category": "Visibility",
+                "type": "VITAMIN",
+                "title": "No Analytics Tracking Installed",
+                "description": "Your website has no Google Analytics. You have zero visibility into who visits your site, where they come from, or what they do. Flying blind.",
+                "evidence": [
+                  {
+                    "type": "text",
+                    "label": "Analytics Status",
+                    "value": "No GA4 or Universal Analytics detected"
+                  }
+                ],
+                "metrics": {
+                  "hasGA4": false,
+                  "hasUniversalAnalytics": false
+                },
+                "impactScore": 6,
+                "confidenceScore": 10,
+                "effortEstimate": "LOW",
+                "recommendedFix": [
+                  "Install Google Analytics 4 (GA4)",
+                  "Set up conversion tracking for form submissions and calls",
+                  "Configure goals for key actions",
+                  "Link to Google Search Console",
+                  "Takes 30 minutes to set up"
+                ],
+                "manuallyEdited": false,
+                "excluded": false,
+                "confidenceLevel": null,
+                "createdAt": "2026-05-22T09:40:56.893Z",
+                "tenantId": "40aaeade-8c22-4848-ae44-79fb030b4553",
+                "unverified": true,
+                "stale": false
+              },
+              {
+                "id": "7c04a3ba-2150-4ea3-8730-0b490f69f9a8",
+                "auditId": "7776dedd-e674-4add-92cf-171e8f7e13e2",
+                "module": "paidSearch",
+                "category": "Visibility",
+                "type": "VITAMIN",
+                "title": "No Facebook Pixel Installed",
+                "description": "No Facebook Pixel detected. Can't run retargeting ads or build custom audiences from website visitors.",
+                "evidence": [
+                  {
+                    "type": "text",
+                    "label": "Facebook Pixel",
+                    "value": "No Facebook Pixel detected"
+                  }
+                ],
+                "metrics": {
+                  "hasFacebookPixel": false
+                },
+                "impactScore": 4,
+                "confidenceScore": 10,
+                "effortEstimate": "LOW",
+                "recommendedFix": [
+                  "Install Facebook Pixel on all pages",
+                  "Enables retargeting ads to people who visited your site",
+                  "Build lookalike audiences for better targeting",
+                  "Track conversions from Facebook ads"
+                ],
+                "manuallyEdited": false,
+                "excluded": false,
+                "confidenceLevel": null,
+                "createdAt": "2026-05-22T09:40:56.893Z",
+                "tenantId": "40aaeade-8c22-4848-ae44-79fb030b4553",
+                "unverified": true,
+                "stale": false
+              }
+            ],
+            "rootCause": "Issues with paidSearch:Visibility",
+            "narrative": "Issues with paidSearch:Visibility"
+          },
+          {
+            "id": "cluster-6",
+            "title": "Issues with other:misc",
+            "description": "Issues with other:misc",
+            "severity": "critical",
+            "findingIds": [
+              "07a809e0-fa7e-4186-92a8-dd5bcb7aad1d",
+              "0be2d975-6e77-46f5-b47b-71474d620c1b",
+              "0cf81493-0aa6-4992-83b0-7fc720f8e5b5",
+              "27f2bb41-d46a-4ec0-a588-6a8a2a132225",
+              "3a78a558-7829-46b8-9341-eba4d1a69421",
+              "9c51c019-9e6b-42ca-8edb-34dfb05db0dd",
+              "ad7dd9d3-af99-4fe3-9d71-9927541302a9",
+              "ba456946-05bd-4340-af0e-c6b9249ddb15",
+              "ce3a0b51-e37f-47e9-a04a-661c743a3b0b"
+            ],
+            "findings": [
+              {
+                "id": "0be2d975-6e77-46f5-b47b-71474d620c1b",
+                "auditId": "7776dedd-e674-4add-92cf-171e8f7e13e2",
+                "module": "emailFinder",
+                "category": "Contact & Outreach",
+                "type": "VITAMIN",
+                "title": "2 Emails Found",
+                "description": "Discovered emails: gnu@gnu.org, webmasters@gnu.org",
+                "evidence": [
+                  {
+                    "type": "text",
+                    "label": "Email",
+                    "value": "gnu@gnu.org"
+                  },
+                  {
+                    "type": "text",
+                    "label": "Email",
+                    "value": "webmasters@gnu.org"
+                  }
+                ],
+                "metrics": {
+                  "emailCount": 2
+                },
+                "impactScore": 3,
+                "confidenceScore": 90,
+                "effortEstimate": "LOW",
+                "recommendedFix": ["Use for outreach"],
+                "manuallyEdited": false,
+                "excluded": false,
+                "confidenceLevel": null,
+                "createdAt": "2026-05-22T09:40:56.893Z",
+                "tenantId": "40aaeade-8c22-4848-ae44-79fb030b4553",
+                "unverified": true,
+                "stale": false
+              },
+              {
+                "id": "3a78a558-7829-46b8-9341-eba4d1a69421",
+                "auditId": "7776dedd-e674-4add-92cf-171e8f7e13e2",
+                "module": "techStack",
+                "category": "Performance",
+                "type": "VITAMIN",
+                "title": "No Analytics Tools Detected",
+                "description": "We could not detect Google Analytics or similar tools. You are flying blind without data on visitor behavior.",
+                "evidence": [],
+                "metrics": {},
+                "impactScore": 6,
+                "confidenceScore": 9,
+                "effortEstimate": "LOW",
+                "recommendedFix": [
+                  "Install Google Analytics 4 (GA4)",
+                  "Set up Google Search Console"
+                ],
+                "manuallyEdited": false,
+                "excluded": false,
+                "confidenceLevel": null,
+                "createdAt": "2026-05-22T09:40:56.893Z",
+                "tenantId": "40aaeade-8c22-4848-ae44-79fb030b4553",
+                "unverified": true,
+                "stale": false
+              },
+              {
+                "id": "ad7dd9d3-af99-4fe3-9d71-9927541302a9",
+                "auditId": "7776dedd-e674-4add-92cf-171e8f7e13e2",
+                "module": "techStack",
+                "category": "Conversion",
+                "type": "VITAMIN",
+                "title": "No Email Marketing Integration",
+                "description": "You have no email marketing tools detected (e.g., Mailchimp, Klaviyo). You're missing the #1 ROI channel (avg $42 return per $1 spent).",
+                "evidence": [],
+                "metrics": {},
+                "impactScore": 5,
+                "confidenceScore": 7,
+                "effortEstimate": "MEDIUM",
+                "recommendedFix": [
+                  "Integrate an email capture form",
+                  "Set up an automated welcome sequence"
+                ],
+                "manuallyEdited": false,
+                "excluded": false,
+                "confidenceLevel": null,
+                "createdAt": "2026-05-22T09:40:56.893Z",
+                "tenantId": "40aaeade-8c22-4848-ae44-79fb030b4553",
+                "unverified": true,
+                "stale": false
+              },
+              {
+                "id": "ce3a0b51-e37f-47e9-a04a-661c743a3b0b",
+                "auditId": "7776dedd-e674-4add-92cf-171e8f7e13e2",
+                "module": "websiteCrawler",
+                "category": "On-Page SEO",
+                "type": "PAINKILLER",
+                "title": "100% of Pages Missing Title Tags",
+                "description": "1 out of 1 pages are missing title tags. This severely impacts SEO visibility.",
+                "evidence": [
+                  {
+                    "type": "url",
+                    "label": "Page Missing Title",
+                    "value": "https://www.gnu.org"
+                  }
+                ],
+                "metrics": {
+                  "totalPages": 1,
+                  "percentageMissing": 100,
+                  "pagesMissingTitles": 1
+                },
+                "impactScore": 8,
+                "confidenceScore": 10,
+                "effortEstimate": "HIGH",
+                "recommendedFix": [
+                  "Add unique, descriptive title tags to all pages (50-60 characters)",
+                  "Include primary keywords in titles",
+                  "Follow format: \"Primary Keyword | Secondary Keyword | Brand\"",
+                  "Ensure titles match page content"
+                ],
+                "manuallyEdited": false,
+                "excluded": false,
+                "confidenceLevel": null,
+                "createdAt": "2026-05-22T09:40:56.893Z",
+                "tenantId": "40aaeade-8c22-4848-ae44-79fb030b4553",
+                "unverified": true,
+                "stale": false
+              },
+              {
+                "id": "0cf81493-0aa6-4992-83b0-7fc720f8e5b5",
+                "auditId": "7776dedd-e674-4add-92cf-171e8f7e13e2",
+                "module": "contentQuality",
+                "category": "Conversion",
+                "type": "VITAMIN",
+                "title": "Content Analysis Unavailable",
+                "description": "Unable to complete content quality analysis. This may indicate API issues or missing page content.",
+                "evidence": [],
+                "metrics": {},
+                "impactScore": 1,
+                "confidenceScore": 5,
+                "effortEstimate": "LOW",
+                "recommendedFix": ["Try running content analysis again later"],
+                "manuallyEdited": false,
+                "excluded": false,
+                "confidenceLevel": null,
+                "createdAt": "2026-05-22T09:40:56.893Z",
+                "tenantId": "40aaeade-8c22-4848-ae44-79fb030b4553",
+                "unverified": true,
+                "stale": false
+              },
+              {
+                "id": "9c51c019-9e6b-42ca-8edb-34dfb05db0dd",
+                "auditId": "7776dedd-e674-4add-92cf-171e8f7e13e2",
+                "module": "backlinks",
+                "category": "Visibility",
+                "type": "PAINKILLER",
+                "title": "Website Not Properly Indexed",
+                "description": "Google has only indexed 0 pages of your website. Most customers effectively cannot find you.",
+                "evidence": [
+                  {
+                    "type": "metric",
+                    "label": "Indexed Pages",
+                    "value": 0
+                  }
+                ],
+                "metrics": {
+                  "indexed": 0
+                },
+                "impactScore": 8,
+                "confidenceScore": 10,
+                "effortEstimate": "HIGH",
+                "recommendedFix": [
+                  "Submit sitemap to Google Search Console",
+                  "Fix \"noindex\" tags",
+                  "Create more content"
+                ],
+                "manuallyEdited": false,
+                "excluded": false,
+                "confidenceLevel": null,
+                "createdAt": "2026-05-22T09:40:56.893Z",
+                "tenantId": "40aaeade-8c22-4848-ae44-79fb030b4553",
+                "unverified": true,
+                "stale": false
+              },
+              {
+                "id": "27f2bb41-d46a-4ec0-a588-6a8a2a132225",
+                "auditId": "7776dedd-e674-4add-92cf-171e8f7e13e2",
+                "module": "videoPresence",
+                "category": "Visibility",
+                "type": "VITAMIN",
+                "title": "No YouTube Channel Found",
+                "description": "We couldn't find a YouTube channel for GNU. YouTube is the #2 search engine in the world and a massive opportunity for Generic businesses.",
+                "evidence": [
+                  {
+                    "type": "text",
+                    "label": "YouTube Search",
+                    "value": "No channel found in Top 20 search results"
+                  }
+                ],
+                "metrics": {
+                  "hasChannel": false
+                },
+                "impactScore": 6,
+                "confidenceScore": 9,
+                "effortEstimate": "MEDIUM",
+                "recommendedFix": [
+                  "Create a branded YouTube channel",
+                  "Upload simple \"Welcome\" or \"Service Overview\" videos",
+                  "Optimize channel with business info and website link"
+                ],
+                "manuallyEdited": false,
+                "excluded": false,
+                "confidenceLevel": null,
+                "createdAt": "2026-05-22T09:40:56.893Z",
+                "tenantId": "40aaeade-8c22-4848-ae44-79fb030b4553",
+                "unverified": true,
+                "stale": false
+              },
+              {
+                "id": "07a809e0-fa7e-4186-92a8-dd5bcb7aad1d",
+                "auditId": "7776dedd-e674-4add-92cf-171e8f7e13e2",
+                "module": "videoPresence",
+                "category": "Engagement",
+                "type": "VITAMIN",
+                "title": "No Video Content on Website",
+                "description": "Websites with video convert 80% better. You have no video content embedded on your main pages.",
+                "evidence": [
+                  {
+                    "type": "text",
+                    "label": "Website Scan",
+                    "value": "0 iframes or video tags found"
+                  }
+                ],
+                "metrics": {
+                  "videoCount": 0
+                },
+                "impactScore": 5,
+                "confidenceScore": 10,
+                "effortEstimate": "MEDIUM",
+                "recommendedFix": [
+                  "Embed a welcome video on the homepage",
+                  "Add video testimonials"
+                ],
+                "manuallyEdited": false,
+                "excluded": false,
+                "confidenceLevel": null,
+                "createdAt": "2026-05-22T09:40:56.893Z",
+                "tenantId": "40aaeade-8c22-4848-ae44-79fb030b4553",
+                "unverified": true,
+                "stale": false
+              },
+              {
+                "id": "ba456946-05bd-4340-af0e-c6b9249ddb15",
+                "auditId": "7776dedd-e674-4add-92cf-171e8f7e13e2",
+                "module": "gbp",
+                "category": "Local SEO",
+                "type": "PAINKILLER",
+                "title": "No Google Business Listing Detected",
+                "description": "No Google Business listing was found for this business. This is a major missed opportunity.",
+                "evidence": [
+                  {
+                    "type": "text",
+                    "label": "Search",
+                    "value": "Places API returned no results"
+                  }
+                ],
+                "metrics": {
+                  "city": "Saskatoon",
+                  "businessName": "GNU"
+                },
+                "impactScore": 9,
+                "confidenceScore": 90,
+                "effortEstimate": "MEDIUM",
+                "recommendedFix": ["Create a Google Business Profile"],
+                "manuallyEdited": false,
+                "excluded": false,
+                "confidenceLevel": null,
+                "createdAt": "2026-05-22T09:40:56.893Z",
+                "tenantId": "40aaeade-8c22-4848-ae44-79fb030b4553",
+                "unverified": true,
+                "stale": false
+              }
+            ],
+            "rootCause": "Issues with other:misc",
+            "narrative": "Issues with other:misc"
+          }
+        ],
+        "tiers": {
+          "essentials": {
+            "name": "Essentials",
+            "description": "Quick wins and critical fixes",
+            "findingIds": [
+              "62b71e0e-1d90-46d2-a9b7-ca749118985d",
+              "7caa506d-0549-4369-b2a0-8535d0352197",
+              "c200db37-2559-414b-b2e8-5c41894d062f"
+            ],
+            "deliveryTime": "5 business days",
+            "price": 1500,
+            "badge": "QUICK WIN"
+          },
+          "growth": {
+            "name": "Growth",
+            "description": "Competitive improvements and optimizations",
+            "findingIds": [
+              "62b71e0e-1d90-46d2-a9b7-ca749118985d",
+              "7caa506d-0549-4369-b2a0-8535d0352197",
+              "c200db37-2559-414b-b2e8-5c41894d062f",
+              "2b9a1c65-a1d8-4677-97d6-abc6310083eb",
+              "4d58f250-0709-448f-8ca1-351fccf6f9e9",
+              "ef85c2b4-61b2-40f0-8086-fb1bf4ca126d",
+              "6b70a323-becd-47c0-ad5e-823996315441",
+              "e92aa608-6e8f-40c6-8a23-c1c9022e80ae",
+              "07a809e0-fa7e-4186-92a8-dd5bcb7aad1d",
+              "27f2bb41-d46a-4ec0-a588-6a8a2a132225",
+              "3a78a558-7829-46b8-9341-eba4d1a69421",
+              "9c51c019-9e6b-42ca-8edb-34dfb05db0dd",
+              "ad7dd9d3-af99-4fe3-9d71-9927541302a9",
+              "ba456946-05bd-4340-af0e-c6b9249ddb15",
+              "ce3a0b51-e37f-47e9-a04a-661c743a3b0b"
+            ],
+            "deliveryTime": "10 business days",
+            "price": 3500,
+            "recommended": true
+          },
+          "premium": {
+            "name": "Premium",
+            "description": "Comprehensive solution",
+            "findingIds": [
+              "62b71e0e-1d90-46d2-a9b7-ca749118985d",
+              "7caa506d-0549-4369-b2a0-8535d0352197",
+              "c200db37-2559-414b-b2e8-5c41894d062f",
+              "2b9a1c65-a1d8-4677-97d6-abc6310083eb",
+              "4d58f250-0709-448f-8ca1-351fccf6f9e9",
+              "ef85c2b4-61b2-40f0-8086-fb1bf4ca126d",
+              "6b70a323-becd-47c0-ad5e-823996315441",
+              "e92aa608-6e8f-40c6-8a23-c1c9022e80ae",
+              "07a809e0-fa7e-4186-92a8-dd5bcb7aad1d",
+              "27f2bb41-d46a-4ec0-a588-6a8a2a132225",
+              "3a78a558-7829-46b8-9341-eba4d1a69421",
+              "9c51c019-9e6b-42ca-8edb-34dfb05db0dd",
+              "ad7dd9d3-af99-4fe3-9d71-9927541302a9",
+              "ba456946-05bd-4340-af0e-c6b9249ddb15",
+              "ce3a0b51-e37f-47e9-a04a-661c743a3b0b",
+              "1ef73d5e-19c8-4f95-8047-67ff3bc7a3ab",
+              "7e77bb3e-493b-43c2-b9b5-ba617967d6fc",
+              "7c04a3ba-2150-4ea3-8730-0b490f69f9a8",
+              "0be2d975-6e77-46f5-b47b-71474d620c1b",
+              "0cf81493-0aa6-4992-83b0-7fc720f8e5b5"
+            ],
+            "deliveryTime": "15 business days",
+            "price": 7500,
+            "badge": "BEST VALUE"
+          }
+        },
+        "aiDisclaimer": {
+          "disclaimer": "Generated by AI. Verify recommendations with a qualified professional.",
+          "verificationRequired": true
+        }
+      }
+    },
+    {
+      "name": "Python",
+      "url": "https://www.python.org",
+      "category": "technical-community",
+      "auditId": "9461cb5f-d725-490b-9d4e-afc2e1421433",
+      "status": "FAILED",
+      "latencyMs": 59665,
+      "findingsCount": 0,
+      "modulesCompleted": [],
+      "modulesFailed": [],
+      "topFindings": [],
+      "proposalId": null,
+      "proposalStatus": null,
+      "autoQaScore": null,
+      "clientScore": null,
+      "webLinkToken": null,
+      "proposalUrl": null,
+      "rawProposal": null
+    },
+    {
+      "name": "PostgreSQL",
+      "url": "https://www.postgresql.org",
+      "category": "technical-product",
+      "auditId": "71e4bca8-40bb-4b8b-a2e1-7b9b986cc7a9",
+      "status": "DEGRADED",
+      "latencyMs": 54274,
+      "findingsCount": 12,
+      "modulesCompleted": [
+        "techStack",
+        "emailFinder",
+        "socialDeep",
+        "backlinks",
+        "paidSearch",
+        "videoPresence"
+      ],
+      "modulesFailed": [
+        {
+          "error": "Error: GOOGLE_PLACES_API_KEY is missing",
+          "module": "gbp"
+        },
+        {
+          "error": "Error: Missing API keys for Competitor Module (SERP, PLACES, or PAGESPEED)",
+          "module": "competitor"
+        },
+        {
+          "error": "Error: Timed out after 20000ms",
+          "module": "security"
+        },
+        {
+          "error": "Error: Timed out after 30000ms",
+          "module": "website"
+        },
+        {
+          "error": "Error: Timed out after 45000ms",
+          "module": "websiteCrawler"
+        },
+        {
+          "error": "Error: GOOGLE_PLACES_API_KEY is missing",
+          "module": "gbpDeep"
+        }
+      ],
+      "topFindings": [
+        "No Analytics Tools Detected",
+        "No Email Marketing Integration",
+        "Missing Facebook Profile"
+      ],
+      "proposalId": "8de7bd8c-63fd-4427-b5ac-7587a707a79e",
+      "proposalStatus": "DRAFT",
+      "autoQaScore": null,
+      "clientScore": null,
+      "webLinkToken": "e9eb8fba-376a-4418-8900-9b4df59e75c9",
+      "proposalUrl": "https://proposal-engine-staging-ouitkhk5xq-uc.a.run.app/proposal/e9eb8fba-376a-4418-8900-9b4df59e75c9",
+      "rawProposal": {
+        "executiveSummary": "Based on our audit of PostgreSQL, we've identified 12 critical issues that need immediate attention. Our analysis shows significant opportunities for improvement in your online presence and customer experience.",
+        "pricing": {
+          "essentials": 1500,
+          "growth": 3500,
+          "premium": 7500,
+          "currency": "USD"
+        },
+        "assumptions": [
+          "PostgreSQL will provide necessary access to accounts",
+          "Implementation timeline assumes standard business hours",
+          "Pricing is based on the scope outlined in each tier",
+          "Monthly reporting and ongoing support not included"
+        ],
+        "disclaimers": [
+          "Audit data collected on the date of analysis",
+          "Competitor data is based on publicly available information",
+          "Results may vary based on industry and market conditions",
+          "SEO improvements can take 3-6 months to materialize"
+        ],
+        "nextSteps": [
+          "Review this proposal and select your preferred tier",
+          "Reply to this email or schedule a 15-minute call to discuss",
+          "We'll send a simple contract and invoice",
+          "Kickoff call within 3 business days of signing"
+        ],
+        "painClusters": [
+          {
+            "id": "cluster-1",
+            "title": "Issues with socialDeep:Visibility",
+            "description": "Issues with socialDeep:Visibility",
+            "severity": "high",
+            "findingIds": [
+              "a8e519f3-72a9-47e8-bca0-45630afa8030",
+              "cc8e1857-9b59-41bd-8f07-9e82f266515d"
+            ],
+            "findings": [
+              {
+                "id": "a8e519f3-72a9-47e8-bca0-45630afa8030",
+                "auditId": "71e4bca8-40bb-4b8b-a2e1-7b9b986cc7a9",
+                "module": "socialDeep",
+                "category": "Visibility",
+                "type": "VITAMIN",
+                "title": "Missing Facebook Profile",
+                "description": "No Facebook profile found. For Generic, this is a key channel.",
+                "evidence": [
+                  {
+                    "type": "text",
+                    "label": "Missing",
+                    "value": "Profile not found"
+                  }
+                ],
+                "metrics": {
+                  "status": "missing",
+                  "platform": "facebook"
+                },
+                "impactScore": 4,
+                "confidenceScore": 9,
+                "effortEstimate": "LOW",
+                "recommendedFix": ["Create a Facebook page", "Optimise bio and link to website"],
+                "manuallyEdited": false,
+                "excluded": false,
+                "confidenceLevel": null,
+                "createdAt": "2026-05-22T09:43:06.779Z",
+                "tenantId": "40aaeade-8c22-4848-ae44-79fb030b4553",
+                "unverified": true,
+                "stale": false
+              },
+              {
+                "id": "cc8e1857-9b59-41bd-8f07-9e82f266515d",
+                "auditId": "71e4bca8-40bb-4b8b-a2e1-7b9b986cc7a9",
+                "module": "socialDeep",
+                "category": "Visibility",
+                "type": "PAINKILLER",
+                "title": "No Active Social Presence",
+                "description": "We could not find any active social media profiles. In 2026, social proof is critical for trust.",
+                "evidence": [],
+                "metrics": {
+                  "activeCount": 0
+                },
+                "impactScore": 8,
+                "confidenceScore": 10,
+                "effortEstimate": "MEDIUM",
+                "recommendedFix": ["Claim operational profiles", "Post at least once a week"],
+                "manuallyEdited": false,
+                "excluded": false,
+                "confidenceLevel": null,
+                "createdAt": "2026-05-22T09:43:06.779Z",
+                "tenantId": "40aaeade-8c22-4848-ae44-79fb030b4553",
+                "unverified": true,
+                "stale": false
+              }
+            ],
+            "rootCause": "Issues with socialDeep:Visibility",
+            "narrative": "Issues with socialDeep:Visibility"
+          },
+          {
+            "id": "cluster-2",
+            "title": "Issues with backlinks:Authority",
+            "description": "Issues with backlinks:Authority",
+            "severity": "medium",
+            "findingIds": [
+              "93038473-93c7-4202-8489-5f9f2eb8a1f0",
+              "ef544756-6161-4dda-bf9b-03d0d59a8189"
+            ],
+            "findings": [
+              {
+                "id": "93038473-93c7-4202-8489-5f9f2eb8a1f0",
+                "auditId": "71e4bca8-40bb-4b8b-a2e1-7b9b986cc7a9",
+                "module": "backlinks",
+                "category": "Authority",
+                "type": "VITAMIN",
+                "title": "Low Domain Authority",
+                "description": "Your website lacks authority signals. This makes it hard to rank for competitive keywords.",
+                "evidence": [
+                  {
+                    "type": "metric",
+                    "label": "Authority Score",
+                    "value": 0
+                  }
+                ],
+                "metrics": {
+                  "score": 0
+                },
+                "impactScore": 6,
+                "confidenceScore": 9,
+                "effortEstimate": "HIGH",
+                "recommendedFix": [
+                  "Get citations from local chamber",
+                  "Partner with local charities",
+                  "Link from social profiles"
+                ],
+                "manuallyEdited": false,
+                "excluded": false,
+                "confidenceLevel": null,
+                "createdAt": "2026-05-22T09:43:06.779Z",
+                "tenantId": "40aaeade-8c22-4848-ae44-79fb030b4553",
+                "unverified": true,
+                "stale": false
+              },
+              {
+                "id": "ef544756-6161-4dda-bf9b-03d0d59a8189",
+                "auditId": "71e4bca8-40bb-4b8b-a2e1-7b9b986cc7a9",
+                "module": "backlinks",
+                "category": "Authority",
+                "type": "VITAMIN",
+                "title": "Missing Chamber of Commerce Link",
+                "description": "No link found from the local Chamber of Commerce. This is a powerful trust signal for Google.",
+                "evidence": [],
+                "metrics": {},
+                "impactScore": 4,
+                "confidenceScore": 6,
+                "effortEstimate": "LOW",
+                "recommendedFix": ["Join local chamber", "Ensure they link to your website"],
+                "manuallyEdited": false,
+                "excluded": false,
+                "confidenceLevel": null,
+                "createdAt": "2026-05-22T09:43:06.779Z",
+                "tenantId": "40aaeade-8c22-4848-ae44-79fb030b4553",
+                "unverified": true,
+                "stale": false
+              }
+            ],
+            "rootCause": "Issues with backlinks:Authority",
+            "narrative": "Issues with backlinks:Authority"
+          },
+          {
+            "id": "cluster-3",
+            "title": "Issues with paidSearch:Visibility",
+            "description": "Issues with paidSearch:Visibility",
+            "severity": "medium",
+            "findingIds": [
+              "d7198ec0-01ef-4b23-9896-6ddf4ad4531f",
+              "d7a8188a-22d6-44ac-a969-93b5c560e86a"
+            ],
+            "findings": [
+              {
+                "id": "d7198ec0-01ef-4b23-9896-6ddf4ad4531f",
+                "auditId": "71e4bca8-40bb-4b8b-a2e1-7b9b986cc7a9",
+                "module": "paidSearch",
+                "category": "Visibility",
+                "type": "VITAMIN",
+                "title": "No Analytics Tracking Installed",
+                "description": "Your website has no Google Analytics. You have zero visibility into who visits your site, where they come from, or what they do. Flying blind.",
+                "evidence": [
+                  {
+                    "type": "text",
+                    "label": "Analytics Status",
+                    "value": "No GA4 or Universal Analytics detected"
+                  }
+                ],
+                "metrics": {
+                  "hasGA4": false,
+                  "hasUniversalAnalytics": false
+                },
+                "impactScore": 6,
+                "confidenceScore": 10,
+                "effortEstimate": "LOW",
+                "recommendedFix": [
+                  "Install Google Analytics 4 (GA4)",
+                  "Set up conversion tracking for form submissions and calls",
+                  "Configure goals for key actions",
+                  "Link to Google Search Console",
+                  "Takes 30 minutes to set up"
+                ],
+                "manuallyEdited": false,
+                "excluded": false,
+                "confidenceLevel": null,
+                "createdAt": "2026-05-22T09:43:06.779Z",
+                "tenantId": "40aaeade-8c22-4848-ae44-79fb030b4553",
+                "unverified": true,
+                "stale": false
+              },
+              {
+                "id": "d7a8188a-22d6-44ac-a969-93b5c560e86a",
+                "auditId": "71e4bca8-40bb-4b8b-a2e1-7b9b986cc7a9",
+                "module": "paidSearch",
+                "category": "Visibility",
+                "type": "VITAMIN",
+                "title": "No Facebook Pixel Installed",
+                "description": "No Facebook Pixel detected. Can't run retargeting ads or build custom audiences from website visitors.",
+                "evidence": [
+                  {
+                    "type": "text",
+                    "label": "Facebook Pixel",
+                    "value": "No Facebook Pixel detected"
+                  }
+                ],
+                "metrics": {
+                  "hasFacebookPixel": false
+                },
+                "impactScore": 4,
+                "confidenceScore": 10,
+                "effortEstimate": "LOW",
+                "recommendedFix": [
+                  "Install Facebook Pixel on all pages",
+                  "Enables retargeting ads to people who visited your site",
+                  "Build lookalike audiences for better targeting",
+                  "Track conversions from Facebook ads"
+                ],
+                "manuallyEdited": false,
+                "excluded": false,
+                "confidenceLevel": null,
+                "createdAt": "2026-05-22T09:43:06.779Z",
+                "tenantId": "40aaeade-8c22-4848-ae44-79fb030b4553",
+                "unverified": true,
+                "stale": false
+              }
+            ],
+            "rootCause": "Issues with paidSearch:Visibility",
+            "narrative": "Issues with paidSearch:Visibility"
+          },
+          {
+            "id": "cluster-4",
+            "title": "Issues with other:misc",
+            "description": "Issues with other:misc",
+            "severity": "critical",
+            "findingIds": [
+              "3c2620b6-a713-48fd-a44a-7c98e4f957b7",
+              "792fd475-eb58-457e-a597-527840c99846",
+              "7b8e8307-0b73-455b-ae64-78bfbd172179",
+              "948f9b1b-e82f-457a-9480-8be4e777043d",
+              "9ce99dd4-2080-4a8e-bd1d-3ce4702c06d4",
+              "fc9a8f31-a217-4644-bb68-f203cf359988"
+            ],
+            "findings": [
+              {
+                "id": "9ce99dd4-2080-4a8e-bd1d-3ce4702c06d4",
+                "auditId": "71e4bca8-40bb-4b8b-a2e1-7b9b986cc7a9",
+                "module": "techStack",
+                "category": "Performance",
+                "type": "VITAMIN",
+                "title": "No Analytics Tools Detected",
+                "description": "We could not detect Google Analytics or similar tools. You are flying blind without data on visitor behavior.",
+                "evidence": [],
+                "metrics": {},
+                "impactScore": 6,
+                "confidenceScore": 9,
+                "effortEstimate": "LOW",
+                "recommendedFix": [
+                  "Install Google Analytics 4 (GA4)",
+                  "Set up Google Search Console"
+                ],
+                "manuallyEdited": false,
+                "excluded": false,
+                "confidenceLevel": null,
+                "createdAt": "2026-05-22T09:43:06.779Z",
+                "tenantId": "40aaeade-8c22-4848-ae44-79fb030b4553",
+                "unverified": true,
+                "stale": false
+              },
+              {
+                "id": "3c2620b6-a713-48fd-a44a-7c98e4f957b7",
+                "auditId": "71e4bca8-40bb-4b8b-a2e1-7b9b986cc7a9",
+                "module": "techStack",
+                "category": "Conversion",
+                "type": "VITAMIN",
+                "title": "No Email Marketing Integration",
+                "description": "You have no email marketing tools detected (e.g., Mailchimp, Klaviyo). You're missing the #1 ROI channel (avg $42 return per $1 spent).",
+                "evidence": [],
+                "metrics": {},
+                "impactScore": 5,
+                "confidenceScore": 7,
+                "effortEstimate": "MEDIUM",
+                "recommendedFix": [
+                  "Integrate an email capture form",
+                  "Set up an automated welcome sequence"
+                ],
+                "manuallyEdited": false,
+                "excluded": false,
+                "confidenceLevel": null,
+                "createdAt": "2026-05-22T09:43:06.779Z",
+                "tenantId": "40aaeade-8c22-4848-ae44-79fb030b4553",
+                "unverified": true,
+                "stale": false
+              },
+              {
+                "id": "fc9a8f31-a217-4644-bb68-f203cf359988",
+                "auditId": "71e4bca8-40bb-4b8b-a2e1-7b9b986cc7a9",
+                "module": "backlinks",
+                "category": "Visibility",
+                "type": "PAINKILLER",
+                "title": "Website Not Properly Indexed",
+                "description": "Google has only indexed 0 pages of your website. Most customers effectively cannot find you.",
+                "evidence": [
+                  {
+                    "type": "metric",
+                    "label": "Indexed Pages",
+                    "value": 0
+                  }
+                ],
+                "metrics": {
+                  "indexed": 0
+                },
+                "impactScore": 8,
+                "confidenceScore": 10,
+                "effortEstimate": "HIGH",
+                "recommendedFix": [
+                  "Submit sitemap to Google Search Console",
+                  "Fix \"noindex\" tags",
+                  "Create more content"
+                ],
+                "manuallyEdited": false,
+                "excluded": false,
+                "confidenceLevel": null,
+                "createdAt": "2026-05-22T09:43:06.779Z",
+                "tenantId": "40aaeade-8c22-4848-ae44-79fb030b4553",
+                "unverified": true,
+                "stale": false
+              },
+              {
+                "id": "948f9b1b-e82f-457a-9480-8be4e777043d",
+                "auditId": "71e4bca8-40bb-4b8b-a2e1-7b9b986cc7a9",
+                "module": "videoPresence",
+                "category": "Visibility",
+                "type": "VITAMIN",
+                "title": "No YouTube Channel Found",
+                "description": "We couldn't find a YouTube channel for PostgreSQL. YouTube is the #2 search engine in the world and a massive opportunity for Generic businesses.",
+                "evidence": [
+                  {
+                    "type": "text",
+                    "label": "YouTube Search",
+                    "value": "No channel found in Top 20 search results"
+                  }
+                ],
+                "metrics": {
+                  "hasChannel": false
+                },
+                "impactScore": 6,
+                "confidenceScore": 9,
+                "effortEstimate": "MEDIUM",
+                "recommendedFix": [
+                  "Create a branded YouTube channel",
+                  "Upload simple \"Welcome\" or \"Service Overview\" videos",
+                  "Optimize channel with business info and website link"
+                ],
+                "manuallyEdited": false,
+                "excluded": false,
+                "confidenceLevel": null,
+                "createdAt": "2026-05-22T09:43:06.779Z",
+                "tenantId": "40aaeade-8c22-4848-ae44-79fb030b4553",
+                "unverified": true,
+                "stale": false
+              },
+              {
+                "id": "792fd475-eb58-457e-a597-527840c99846",
+                "auditId": "71e4bca8-40bb-4b8b-a2e1-7b9b986cc7a9",
+                "module": "videoPresence",
+                "category": "Engagement",
+                "type": "VITAMIN",
+                "title": "No Video Content on Website",
+                "description": "Websites with video convert 80% better. You have no video content embedded on your main pages.",
+                "evidence": [
+                  {
+                    "type": "text",
+                    "label": "Website Scan",
+                    "value": "0 iframes or video tags found"
+                  }
+                ],
+                "metrics": {
+                  "videoCount": 0
+                },
+                "impactScore": 5,
+                "confidenceScore": 10,
+                "effortEstimate": "MEDIUM",
+                "recommendedFix": [
+                  "Embed a welcome video on the homepage",
+                  "Add video testimonials"
+                ],
+                "manuallyEdited": false,
+                "excluded": false,
+                "confidenceLevel": null,
+                "createdAt": "2026-05-22T09:43:06.779Z",
+                "tenantId": "40aaeade-8c22-4848-ae44-79fb030b4553",
+                "unverified": true,
+                "stale": false
+              },
+              {
+                "id": "7b8e8307-0b73-455b-ae64-78bfbd172179",
+                "auditId": "71e4bca8-40bb-4b8b-a2e1-7b9b986cc7a9",
+                "module": "gbp",
+                "category": "Local SEO",
+                "type": "PAINKILLER",
+                "title": "No Google Business Listing Detected",
+                "description": "No Google Business listing was found for this business. This is a major missed opportunity.",
+                "evidence": [
+                  {
+                    "type": "text",
+                    "label": "Search",
+                    "value": "Places API returned no results"
+                  }
+                ],
+                "metrics": {
+                  "city": "Saskatoon",
+                  "businessName": "PostgreSQL"
+                },
+                "impactScore": 9,
+                "confidenceScore": 90,
+                "effortEstimate": "MEDIUM",
+                "recommendedFix": ["Create a Google Business Profile"],
+                "manuallyEdited": false,
+                "excluded": false,
+                "confidenceLevel": null,
+                "createdAt": "2026-05-22T09:43:06.779Z",
+                "tenantId": "40aaeade-8c22-4848-ae44-79fb030b4553",
+                "unverified": true,
+                "stale": false
+              }
+            ],
+            "rootCause": "Issues with other:misc",
+            "narrative": "Issues with other:misc"
+          }
+        ],
+        "tiers": {
+          "essentials": {
+            "name": "Essentials",
+            "description": "Quick wins and critical fixes",
+            "findingIds": [
+              "cc8e1857-9b59-41bd-8f07-9e82f266515d",
+              "93038473-93c7-4202-8489-5f9f2eb8a1f0",
+              "d7198ec0-01ef-4b23-9896-6ddf4ad4531f"
+            ],
+            "deliveryTime": "5 business days",
+            "price": 1500,
+            "badge": "QUICK WIN"
+          },
+          "growth": {
+            "name": "Growth",
+            "description": "Competitive improvements and optimizations",
+            "findingIds": [
+              "cc8e1857-9b59-41bd-8f07-9e82f266515d",
+              "93038473-93c7-4202-8489-5f9f2eb8a1f0",
+              "d7198ec0-01ef-4b23-9896-6ddf4ad4531f",
+              "3c2620b6-a713-48fd-a44a-7c98e4f957b7",
+              "792fd475-eb58-457e-a597-527840c99846",
+              "7b8e8307-0b73-455b-ae64-78bfbd172179",
+              "948f9b1b-e82f-457a-9480-8be4e777043d",
+              "9ce99dd4-2080-4a8e-bd1d-3ce4702c06d4",
+              "fc9a8f31-a217-4644-bb68-f203cf359988"
+            ],
+            "deliveryTime": "10 business days",
+            "price": 3500,
+            "recommended": true
+          },
+          "premium": {
+            "name": "Premium",
+            "description": "Comprehensive solution",
+            "findingIds": [
+              "cc8e1857-9b59-41bd-8f07-9e82f266515d",
+              "93038473-93c7-4202-8489-5f9f2eb8a1f0",
+              "d7198ec0-01ef-4b23-9896-6ddf4ad4531f",
+              "3c2620b6-a713-48fd-a44a-7c98e4f957b7",
+              "792fd475-eb58-457e-a597-527840c99846",
+              "7b8e8307-0b73-455b-ae64-78bfbd172179",
+              "948f9b1b-e82f-457a-9480-8be4e777043d",
+              "9ce99dd4-2080-4a8e-bd1d-3ce4702c06d4",
+              "fc9a8f31-a217-4644-bb68-f203cf359988",
+              "a8e519f3-72a9-47e8-bca0-45630afa8030",
+              "ef544756-6161-4dda-bf9b-03d0d59a8189",
+              "d7a8188a-22d6-44ac-a969-93b5c560e86a"
+            ],
+            "deliveryTime": "15 business days",
+            "price": 7500,
+            "badge": "BEST VALUE"
+          }
+        },
+        "aiDisclaimer": {
+          "disclaimer": "Generated by AI. Verify recommendations with a qualified professional.",
+          "verificationRequired": true
+        }
+      }
+    },
+    {
+      "name": "Stanford Health Care",
+      "url": "https://www.stanfordhealthcare.org",
+      "category": "healthcare-service",
+      "auditId": "8221fe69-6ef8-447c-aeea-41676c6c6fe1",
+      "status": "DEGRADED",
+      "latencyMs": 62037,
+      "findingsCount": 11,
+      "modulesCompleted": [
+        "emailFinder",
+        "security",
+        "socialDeep",
+        "backlinks",
+        "paidSearch",
+        "videoPresence"
+      ],
+      "modulesFailed": [
+        {
+          "error": "Error: GOOGLE_PLACES_API_KEY is missing",
+          "module": "gbp"
+        },
+        {
+          "error": "Error: Missing API keys for Competitor Module (SERP, PLACES, or PAGESPEED)",
+          "module": "competitor"
+        },
+        {
+          "error": "Error: Timed out after 15000ms",
+          "module": "techStack"
+        },
+        {
+          "error": "Error: Timed out after 30000ms",
+          "module": "website"
+        },
+        {
+          "error": "Error: Timed out after 45000ms",
+          "module": "websiteCrawler"
+        },
+        {
+          "error": "Error: GOOGLE_PLACES_API_KEY is missing",
+          "module": "gbpDeep"
+        }
+      ],
+      "topFindings": ["1 Emails Found", "Missing Facebook Profile", "No Active Social Presence"],
+      "proposalId": "691bcec9-d0da-497a-a22e-7a2b6bcdce6a",
+      "proposalStatus": "DRAFT",
+      "autoQaScore": null,
+      "clientScore": null,
+      "webLinkToken": "5afe51f8-1351-4a67-8b55-a2fc77a9d28a",
+      "proposalUrl": "https://proposal-engine-staging-ouitkhk5xq-uc.a.run.app/proposal/5afe51f8-1351-4a67-8b55-a2fc77a9d28a",
+      "rawProposal": {
+        "executiveSummary": "Based on our audit of Stanford Health Care, we've identified 11 critical issues that need immediate attention. Our analysis shows significant opportunities for improvement in your online presence and customer experience.",
+        "pricing": {
+          "essentials": 1500,
+          "growth": 3500,
+          "premium": 7500,
+          "currency": "USD"
+        },
+        "assumptions": [
+          "Stanford Health Care will provide necessary access to accounts",
+          "Implementation timeline assumes standard business hours",
+          "Pricing is based on the scope outlined in each tier",
+          "Monthly reporting and ongoing support not included"
+        ],
+        "disclaimers": [
+          "Audit data collected on the date of analysis",
+          "Competitor data is based on publicly available information",
+          "Results may vary based on industry and market conditions",
+          "SEO improvements can take 3-6 months to materialize"
+        ],
+        "nextSteps": [
+          "Review this proposal and select your preferred tier",
+          "Reply to this email or schedule a 15-minute call to discuss",
+          "We'll send a simple contract and invoice",
+          "Kickoff call within 3 business days of signing"
+        ],
+        "painClusters": [
+          {
+            "id": "cluster-1",
+            "title": "Issues with socialDeep:Visibility",
+            "description": "Issues with socialDeep:Visibility",
+            "severity": "high",
+            "findingIds": [
+              "2bc09e37-fe05-4812-9eec-8838e33f695d",
+              "8805080c-c18b-4b9a-aac5-7ce8ebc3c4b5"
+            ],
+            "findings": [
+              {
+                "id": "2bc09e37-fe05-4812-9eec-8838e33f695d",
+                "auditId": "8221fe69-6ef8-447c-aeea-41676c6c6fe1",
+                "module": "socialDeep",
+                "category": "Visibility",
+                "type": "VITAMIN",
+                "title": "Missing Facebook Profile",
+                "description": "No Facebook profile found. For Generic, this is a key channel.",
+                "evidence": [
+                  {
+                    "type": "text",
+                    "label": "Missing",
+                    "value": "Profile not found"
+                  }
+                ],
+                "metrics": {
+                  "status": "missing",
+                  "platform": "facebook"
+                },
+                "impactScore": 4,
+                "confidenceScore": 9,
+                "effortEstimate": "LOW",
+                "recommendedFix": ["Create a Facebook page", "Optimise bio and link to website"],
+                "manuallyEdited": false,
+                "excluded": false,
+                "confidenceLevel": null,
+                "createdAt": "2026-05-22T09:44:12.868Z",
+                "tenantId": "40aaeade-8c22-4848-ae44-79fb030b4553",
+                "unverified": true,
+                "stale": false
+              },
+              {
+                "id": "8805080c-c18b-4b9a-aac5-7ce8ebc3c4b5",
+                "auditId": "8221fe69-6ef8-447c-aeea-41676c6c6fe1",
+                "module": "socialDeep",
+                "category": "Visibility",
+                "type": "PAINKILLER",
+                "title": "No Active Social Presence",
+                "description": "We could not find any active social media profiles. In 2026, social proof is critical for trust.",
+                "evidence": [],
+                "metrics": {
+                  "activeCount": 0
+                },
+                "impactScore": 8,
+                "confidenceScore": 10,
+                "effortEstimate": "MEDIUM",
+                "recommendedFix": ["Claim operational profiles", "Post at least once a week"],
+                "manuallyEdited": false,
+                "excluded": false,
+                "confidenceLevel": null,
+                "createdAt": "2026-05-22T09:44:12.868Z",
+                "tenantId": "40aaeade-8c22-4848-ae44-79fb030b4553",
+                "unverified": true,
+                "stale": false
+              }
+            ],
+            "rootCause": "Issues with socialDeep:Visibility",
+            "narrative": "Issues with socialDeep:Visibility"
+          },
+          {
+            "id": "cluster-2",
+            "title": "Issues with backlinks:Authority",
+            "description": "Issues with backlinks:Authority",
+            "severity": "medium",
+            "findingIds": [
+              "f1903860-51b8-4b40-a072-9f6e9463a6ca",
+              "f30dbabe-11ab-4708-8893-bb2f07edea45"
+            ],
+            "findings": [
+              {
+                "id": "f30dbabe-11ab-4708-8893-bb2f07edea45",
+                "auditId": "8221fe69-6ef8-447c-aeea-41676c6c6fe1",
+                "module": "backlinks",
+                "category": "Authority",
+                "type": "VITAMIN",
+                "title": "Low Domain Authority",
+                "description": "Your website lacks authority signals. This makes it hard to rank for competitive keywords.",
+                "evidence": [
+                  {
+                    "type": "metric",
+                    "label": "Authority Score",
+                    "value": 0
+                  }
+                ],
+                "metrics": {
+                  "score": 0
+                },
+                "impactScore": 6,
+                "confidenceScore": 9,
+                "effortEstimate": "HIGH",
+                "recommendedFix": [
+                  "Get citations from local chamber",
+                  "Partner with local charities",
+                  "Link from social profiles"
+                ],
+                "manuallyEdited": false,
+                "excluded": false,
+                "confidenceLevel": null,
+                "createdAt": "2026-05-22T09:44:12.868Z",
+                "tenantId": "40aaeade-8c22-4848-ae44-79fb030b4553",
+                "unverified": true,
+                "stale": false
+              },
+              {
+                "id": "f1903860-51b8-4b40-a072-9f6e9463a6ca",
+                "auditId": "8221fe69-6ef8-447c-aeea-41676c6c6fe1",
+                "module": "backlinks",
+                "category": "Authority",
+                "type": "VITAMIN",
+                "title": "Missing Chamber of Commerce Link",
+                "description": "No link found from the local Chamber of Commerce. This is a powerful trust signal for Google.",
+                "evidence": [],
+                "metrics": {},
+                "impactScore": 4,
+                "confidenceScore": 6,
+                "effortEstimate": "LOW",
+                "recommendedFix": ["Join local chamber", "Ensure they link to your website"],
+                "manuallyEdited": false,
+                "excluded": false,
+                "confidenceLevel": null,
+                "createdAt": "2026-05-22T09:44:12.868Z",
+                "tenantId": "40aaeade-8c22-4848-ae44-79fb030b4553",
+                "unverified": true,
+                "stale": false
+              }
+            ],
+            "rootCause": "Issues with backlinks:Authority",
+            "narrative": "Issues with backlinks:Authority"
+          },
+          {
+            "id": "cluster-3",
+            "title": "Issues with paidSearch:Visibility",
+            "description": "Issues with paidSearch:Visibility",
+            "severity": "medium",
+            "findingIds": [
+              "4adf9ad9-7ff4-414c-8a4a-8247a07fa048",
+              "a8563627-86a4-423c-adb1-b2f3b16533d0"
+            ],
+            "findings": [
+              {
+                "id": "4adf9ad9-7ff4-414c-8a4a-8247a07fa048",
+                "auditId": "8221fe69-6ef8-447c-aeea-41676c6c6fe1",
+                "module": "paidSearch",
+                "category": "Visibility",
+                "type": "VITAMIN",
+                "title": "No Analytics Tracking Installed",
+                "description": "Your website has no Google Analytics. You have zero visibility into who visits your site, where they come from, or what they do. Flying blind.",
+                "evidence": [
+                  {
+                    "type": "text",
+                    "label": "Analytics Status",
+                    "value": "No GA4 or Universal Analytics detected"
+                  }
+                ],
+                "metrics": {
+                  "hasGA4": false,
+                  "hasUniversalAnalytics": false
+                },
+                "impactScore": 6,
+                "confidenceScore": 10,
+                "effortEstimate": "LOW",
+                "recommendedFix": [
+                  "Install Google Analytics 4 (GA4)",
+                  "Set up conversion tracking for form submissions and calls",
+                  "Configure goals for key actions",
+                  "Link to Google Search Console",
+                  "Takes 30 minutes to set up"
+                ],
+                "manuallyEdited": false,
+                "excluded": false,
+                "confidenceLevel": null,
+                "createdAt": "2026-05-22T09:44:12.868Z",
+                "tenantId": "40aaeade-8c22-4848-ae44-79fb030b4553",
+                "unverified": true,
+                "stale": false
+              },
+              {
+                "id": "a8563627-86a4-423c-adb1-b2f3b16533d0",
+                "auditId": "8221fe69-6ef8-447c-aeea-41676c6c6fe1",
+                "module": "paidSearch",
+                "category": "Visibility",
+                "type": "VITAMIN",
+                "title": "No Facebook Pixel Installed",
+                "description": "No Facebook Pixel detected. Can't run retargeting ads or build custom audiences from website visitors.",
+                "evidence": [
+                  {
+                    "type": "text",
+                    "label": "Facebook Pixel",
+                    "value": "No Facebook Pixel detected"
+                  }
+                ],
+                "metrics": {
+                  "hasFacebookPixel": false
+                },
+                "impactScore": 4,
+                "confidenceScore": 10,
+                "effortEstimate": "LOW",
+                "recommendedFix": [
+                  "Install Facebook Pixel on all pages",
+                  "Enables retargeting ads to people who visited your site",
+                  "Build lookalike audiences for better targeting",
+                  "Track conversions from Facebook ads"
+                ],
+                "manuallyEdited": false,
+                "excluded": false,
+                "confidenceLevel": null,
+                "createdAt": "2026-05-22T09:44:12.868Z",
+                "tenantId": "40aaeade-8c22-4848-ae44-79fb030b4553",
+                "unverified": true,
+                "stale": false
+              }
+            ],
+            "rootCause": "Issues with paidSearch:Visibility",
+            "narrative": "Issues with paidSearch:Visibility"
+          },
+          {
+            "id": "cluster-4",
+            "title": "Issues with other:misc",
+            "description": "Issues with other:misc",
+            "severity": "critical",
+            "findingIds": [
+              "4526ea2e-d0f0-43c5-a97d-e20bb2066441",
+              "7b7b674f-745d-4cf4-9fee-ec3ab81548ac",
+              "7c9ec321-230f-4203-ad73-07799c998438",
+              "e551319f-89ec-4767-b5c5-7940a8ffd400",
+              "f97f93e5-69a2-4c12-a5b5-d5360be40f82"
+            ],
+            "findings": [
+              {
+                "id": "7b7b674f-745d-4cf4-9fee-ec3ab81548ac",
+                "auditId": "8221fe69-6ef8-447c-aeea-41676c6c6fe1",
+                "module": "emailFinder",
+                "category": "Contact & Outreach",
+                "type": "VITAMIN",
+                "title": "1 Emails Found",
+                "description": "Discovered emails: GuestServices@stanfordhealthcare.org",
+                "evidence": [
+                  {
+                    "type": "text",
+                    "label": "Email",
+                    "value": "GuestServices@stanfordhealthcare.org"
+                  }
+                ],
+                "metrics": {
+                  "emailCount": 1
+                },
+                "impactScore": 3,
+                "confidenceScore": 90,
+                "effortEstimate": "LOW",
+                "recommendedFix": ["Use for outreach"],
+                "manuallyEdited": false,
+                "excluded": false,
+                "confidenceLevel": null,
+                "createdAt": "2026-05-22T09:44:12.868Z",
+                "tenantId": "40aaeade-8c22-4848-ae44-79fb030b4553",
+                "unverified": true,
+                "stale": false
+              },
+              {
+                "id": "e551319f-89ec-4767-b5c5-7940a8ffd400",
+                "auditId": "8221fe69-6ef8-447c-aeea-41676c6c6fe1",
+                "module": "backlinks",
+                "category": "Visibility",
+                "type": "PAINKILLER",
+                "title": "Website Not Properly Indexed",
+                "description": "Google has only indexed 0 pages of your website. Most customers effectively cannot find you.",
+                "evidence": [
+                  {
+                    "type": "metric",
+                    "label": "Indexed Pages",
+                    "value": 0
+                  }
+                ],
+                "metrics": {
+                  "indexed": 0
+                },
+                "impactScore": 8,
+                "confidenceScore": 10,
+                "effortEstimate": "HIGH",
+                "recommendedFix": [
+                  "Submit sitemap to Google Search Console",
+                  "Fix \"noindex\" tags",
+                  "Create more content"
+                ],
+                "manuallyEdited": false,
+                "excluded": false,
+                "confidenceLevel": null,
+                "createdAt": "2026-05-22T09:44:12.868Z",
+                "tenantId": "40aaeade-8c22-4848-ae44-79fb030b4553",
+                "unverified": true,
+                "stale": false
+              },
+              {
+                "id": "7c9ec321-230f-4203-ad73-07799c998438",
+                "auditId": "8221fe69-6ef8-447c-aeea-41676c6c6fe1",
+                "module": "videoPresence",
+                "category": "Visibility",
+                "type": "VITAMIN",
+                "title": "No YouTube Channel Found",
+                "description": "We couldn't find a YouTube channel for Stanford Health Care. YouTube is the #2 search engine in the world and a massive opportunity for Generic businesses.",
+                "evidence": [
+                  {
+                    "type": "text",
+                    "label": "YouTube Search",
+                    "value": "No channel found in Top 20 search results"
+                  }
+                ],
+                "metrics": {
+                  "hasChannel": false
+                },
+                "impactScore": 6,
+                "confidenceScore": 9,
+                "effortEstimate": "MEDIUM",
+                "recommendedFix": [
+                  "Create a branded YouTube channel",
+                  "Upload simple \"Welcome\" or \"Service Overview\" videos",
+                  "Optimize channel with business info and website link"
+                ],
+                "manuallyEdited": false,
+                "excluded": false,
+                "confidenceLevel": null,
+                "createdAt": "2026-05-22T09:44:12.868Z",
+                "tenantId": "40aaeade-8c22-4848-ae44-79fb030b4553",
+                "unverified": true,
+                "stale": false
+              },
+              {
+                "id": "f97f93e5-69a2-4c12-a5b5-d5360be40f82",
+                "auditId": "8221fe69-6ef8-447c-aeea-41676c6c6fe1",
+                "module": "videoPresence",
+                "category": "Engagement",
+                "type": "VITAMIN",
+                "title": "No Video Content on Website",
+                "description": "Websites with video convert 80% better. You have no video content embedded on your main pages.",
+                "evidence": [
+                  {
+                    "type": "text",
+                    "label": "Website Scan",
+                    "value": "0 iframes or video tags found"
+                  }
+                ],
+                "metrics": {
+                  "videoCount": 0
+                },
+                "impactScore": 5,
+                "confidenceScore": 10,
+                "effortEstimate": "MEDIUM",
+                "recommendedFix": [
+                  "Embed a welcome video on the homepage",
+                  "Add video testimonials"
+                ],
+                "manuallyEdited": false,
+                "excluded": false,
+                "confidenceLevel": null,
+                "createdAt": "2026-05-22T09:44:12.868Z",
+                "tenantId": "40aaeade-8c22-4848-ae44-79fb030b4553",
+                "unverified": true,
+                "stale": false
+              },
+              {
+                "id": "4526ea2e-d0f0-43c5-a97d-e20bb2066441",
+                "auditId": "8221fe69-6ef8-447c-aeea-41676c6c6fe1",
+                "module": "gbp",
+                "category": "Local SEO",
+                "type": "PAINKILLER",
+                "title": "No Google Business Listing Detected",
+                "description": "No Google Business listing was found for this business. This is a major missed opportunity.",
+                "evidence": [
+                  {
+                    "type": "text",
+                    "label": "Search",
+                    "value": "Places API returned no results"
+                  }
+                ],
+                "metrics": {
+                  "city": "Saskatoon",
+                  "businessName": "Stanford Health Care"
+                },
+                "impactScore": 9,
+                "confidenceScore": 90,
+                "effortEstimate": "MEDIUM",
+                "recommendedFix": ["Create a Google Business Profile"],
+                "manuallyEdited": false,
+                "excluded": false,
+                "confidenceLevel": null,
+                "createdAt": "2026-05-22T09:44:12.868Z",
+                "tenantId": "40aaeade-8c22-4848-ae44-79fb030b4553",
+                "unverified": true,
+                "stale": false
+              }
+            ],
+            "rootCause": "Issues with other:misc",
+            "narrative": "Issues with other:misc"
+          }
+        ],
+        "tiers": {
+          "essentials": {
+            "name": "Essentials",
+            "description": "Quick wins and critical fixes",
+            "findingIds": [
+              "8805080c-c18b-4b9a-aac5-7ce8ebc3c4b5",
+              "f30dbabe-11ab-4708-8893-bb2f07edea45",
+              "4adf9ad9-7ff4-414c-8a4a-8247a07fa048"
+            ],
+            "deliveryTime": "5 business days",
+            "price": 1500,
+            "badge": "QUICK WIN"
+          },
+          "growth": {
+            "name": "Growth",
+            "description": "Competitive improvements and optimizations",
+            "findingIds": [
+              "8805080c-c18b-4b9a-aac5-7ce8ebc3c4b5",
+              "f30dbabe-11ab-4708-8893-bb2f07edea45",
+              "4adf9ad9-7ff4-414c-8a4a-8247a07fa048",
+              "4526ea2e-d0f0-43c5-a97d-e20bb2066441",
+              "7c9ec321-230f-4203-ad73-07799c998438",
+              "e551319f-89ec-4767-b5c5-7940a8ffd400",
+              "f97f93e5-69a2-4c12-a5b5-d5360be40f82"
+            ],
+            "deliveryTime": "10 business days",
+            "price": 3500,
+            "recommended": true
+          },
+          "premium": {
+            "name": "Premium",
+            "description": "Comprehensive solution",
+            "findingIds": [
+              "8805080c-c18b-4b9a-aac5-7ce8ebc3c4b5",
+              "f30dbabe-11ab-4708-8893-bb2f07edea45",
+              "4adf9ad9-7ff4-414c-8a4a-8247a07fa048",
+              "4526ea2e-d0f0-43c5-a97d-e20bb2066441",
+              "7c9ec321-230f-4203-ad73-07799c998438",
+              "e551319f-89ec-4767-b5c5-7940a8ffd400",
+              "f97f93e5-69a2-4c12-a5b5-d5360be40f82",
+              "2bc09e37-fe05-4812-9eec-8838e33f695d",
+              "f1903860-51b8-4b40-a072-9f6e9463a6ca",
+              "a8563627-86a4-423c-adb1-b2f3b16533d0",
+              "7b7b674f-745d-4cf4-9fee-ec3ab81548ac"
+            ],
+            "deliveryTime": "15 business days",
+            "price": 7500,
+            "badge": "BEST VALUE"
+          }
+        },
+        "aiDisclaimer": {
+          "disclaimer": "Generated by AI. Verify recommendations with a qualified professional.",
+          "verificationRequired": true
+        }
+      }
+    }
+  ]
+}

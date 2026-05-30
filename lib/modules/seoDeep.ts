@@ -1,10 +1,12 @@
-import { AuditModuleResult, EffortLevel, Finding, FindingType } from './types';
-
 import * as cheerio from 'cheerio';
 
-import { cachedFetch } from '@/lib/cache/apiCache';
+import { withModuleCache } from '@/lib/cache/moduleCache';
 import { CostTracker } from '@/lib/costs/costTracker';
 import { logger } from '@/lib/logger';
+import { withProviderResilience } from '@/lib/resilience/withProviderResilience';
+
+import { generateSEOFindings, normalizeConfidence } from './findingGenerator';
+import { AuditModuleResult, EffortLevel, Finding, FindingType } from './types';
 
 const SERP_API_BASE = 'https://serpapi.com/search';
 
@@ -85,9 +87,18 @@ export async function runSeoDeepModule(
 // Helper: Fetch and Analyze HTML
 async function fetchHtmlAnalysis(url: string) {
   try {
-    const res = await fetch(url, { headers: { 'User-Agent': 'ProposalOS-Audit-Bot/1.0' } });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const html = await res.text();
+    const html = await withProviderResilience<string>(
+      {
+        provider: 'crawler',
+        operation: 'seoDeep:fetchHtmlAnalysis',
+        degrade: false,
+      },
+      async () => {
+        const res = await fetch(url, { headers: { 'User-Agent': 'ProposalOS-Audit-Bot/1.0' } });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return await res.text();
+      }
+    );
     const $ = cheerio.load(html);
 
     const metaTitle = $('title').text().trim();
@@ -156,8 +167,19 @@ async function fetchHtmlAnalysis(url: string) {
 async function checkEndpoint(baseUrl: string, path: string) {
   try {
     const u = new URL(path, baseUrl).toString();
-    const res = await fetch(u, { method: 'HEAD' });
-    return res.status;
+    const status = await withProviderResilience<number>(
+      {
+        provider: 'crawler',
+        operation: 'seoDeep:checkEndpoint',
+        degrade: true,
+        fallbackValue: 404,
+      },
+      async () => {
+        const res = await fetch(u, { method: 'HEAD' });
+        return res.status;
+      }
+    );
+    return status;
   } catch {
     return 404;
   }
@@ -176,10 +198,6 @@ async function fetchOrganicRanking(
 
   // Check cache first
   try {
-    const cacheKey = `serp_organic_${query.replace(/\s/g, '_')}`;
-    // We can reuse cachedFetch if we want, but logic is custom here for finding rank
-    // Let's us cachedFetch to return the raw JSON
-
     if (tracker) tracker.addApiCall('SERP_API');
 
     const params = {
@@ -190,15 +208,32 @@ async function fetchOrganicRanking(
       hl: 'en',
     };
 
-    const data = await cachedFetch(
-      cacheKey,
-      params,
+    const data = await withModuleCache<any>(
+      {
+        module: 'seo_deep',
+        version: 1,
+        input: { type: 'organic_ranking', query },
+      },
+      { ttlSeconds: 24 * 60 * 60 },
       async () => {
         const p = new URLSearchParams(params as any);
-        const res = await fetch(`${SERP_API_BASE}?${p.toString()}`);
-        return await res.json();
-      },
-      { ttlHours: 24 }
+        const serpUrl = `${SERP_API_BASE}?${p.toString()}`;
+        return withProviderResilience<any>(
+          {
+            provider: 'serpapi',
+            operation: 'seoDeep:fetchOrganicRanking',
+            degrade: true,
+            fallbackValue: { organic_results: [] },
+          },
+          async () => {
+            const res = await fetch(serpUrl);
+            if (!res.ok) {
+              throw new Error(`HTTP error ${res.status}: ${res.statusText}`);
+            }
+            return await res.json();
+          }
+        );
+      }
     );
 
     if (data.organic_results) {
@@ -245,5 +280,3 @@ export interface SeoDeepData {
   inTop10: boolean;
 }
 
-// Placeholder to be replaced by import
-import { generateSEOFindings } from './findingGenerator';

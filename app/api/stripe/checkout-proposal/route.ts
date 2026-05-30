@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+
 import { z } from 'zod';
 
 import { generateTraceId, InternalError } from '@/lib/api/errors';
@@ -6,7 +7,11 @@ import { prisma } from '@/lib/prisma';
 import { getProposalPriceId, stripe } from '@/lib/stripe/stripe';
 import type { ProposalPlanId } from '@/lib/stripe/stripe';
 
-const ALLOWED_TIERS = ['essentials', 'growth', 'premium'] as const satisfies readonly ProposalPlanId[];
+const ALLOWED_TIERS = [
+  'essentials',
+  'growth',
+  'premium',
+] as const satisfies readonly ProposalPlanId[];
 
 // In-memory idempotency cache (24 hour TTL)
 const IDEMPOTENCY_CACHE = new Map<

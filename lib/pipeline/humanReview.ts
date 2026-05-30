@@ -11,6 +11,7 @@ import { prisma } from '@/lib/prisma';
 import { runWithTenantAsync, runWithTenantBypass } from '@/lib/tenant/context';
 
 import { transition } from './stateMachine';
+import { PipelineStage } from './types';
 
 import type { Audit, Proposal, ProspectLead } from '@prisma/client';
 
@@ -83,7 +84,7 @@ export async function routeToReview(prospectId: string, reason: string): Promise
     (await resolveProspectTenantId(prospectId, 'human-review-route-tenant-discovery')) || '';
 
   await runWithTenantAsync(tenantId, async () => {
-    await transition(prospectId, 'hot_lead', 'deal_closer');
+    await transition(prospectId, 'hot_lead', PipelineStage.CLOSING);
 
     await prisma.pipelineErrorLog.create({
       data: {
@@ -141,11 +142,11 @@ export async function getReviewQueue(
       where.engagementScore = { gte: minEngagementScore };
     }
 
+    const total = await prisma.prospectLead.count({ where });
+
     const prospects = await prisma.prospectLead.findMany({
       where,
       include: {
-        audit: true,
-        proposal: true,
         stateTransitions: {
           orderBy: { createdAt: 'asc' },
         },
@@ -160,20 +161,37 @@ export async function getReviewQueue(
       take: pageSize,
     });
 
+    const auditIds = prospects.map((p) => p.auditId).filter((id): id is string => !!id);
+    const proposalIds = prospects.map((p) => p.proposalId).filter((id): id is string => !!id);
+
+    const [audits, proposals] = await Promise.all([
+      auditIds.length > 0
+        ? prisma.audit.findMany({ where: { id: { in: auditIds } } })
+        : Promise.resolve([]),
+      proposalIds.length > 0
+        ? prisma.proposal.findMany({ where: { id: { in: proposalIds } } })
+        : Promise.resolve([]),
+    ]);
+
+    const auditMap = new Map(audits.map((a) => [a.id, a]));
+    const proposalMap = new Map(proposals.map((p) => [p.id, p]));
+
     const items: ReviewQueueItem[] = prospects.map((prospect) => {
       const painBreakdown = (prospect.painBreakdown as Record<string, number>) || {};
       const painScore = Object.values(painBreakdown).reduce((sum, val) => sum + val, 0);
+      const audit = prospect.auditId ? (auditMap.get(prospect.auditId) ?? null) : null;
+      const proposal = prospect.proposalId ? (proposalMap.get(prospect.proposalId) ?? null) : null;
 
       return {
         prospect: {
           ...prospect,
-          audit: prospect.audit || null,
-          proposal: prospect.proposal || null,
+          audit,
+          proposal,
         },
         painScore,
         painBreakdown,
         engagementScore: prospect.engagementScore || 0,
-        stateHistory: prospect.stateTransitions.map((t) => ({
+        stateHistory: (prospect.stateTransitions || []).map((t: any) => ({
           from: t.fromStatus,
           to: t.toStatus,
           timestamp: t.createdAt,
@@ -199,10 +217,10 @@ export async function getReviewQueue(
 
     return {
       items: filteredItems,
-      total: filteredItems.length,
+      total,
       page,
       pageSize,
-      totalPages: Math.ceil(filteredItems.length / pageSize),
+      totalPages: Math.ceil(total / pageSize),
     };
   });
 }
@@ -224,7 +242,7 @@ export async function approveProspect(action: ReviewAction): Promise<void> {
   }
 
   await runWithTenantAsync(tenantId, async () => {
-    await transition(prospectId, 'closing', 'human_review');
+    await transition(prospectId, 'closing', PipelineStage.CLOSING);
 
     await prisma.pipelineErrorLog.create({
       data: {
@@ -261,7 +279,7 @@ export async function rejectProspect(action: ReviewAction): Promise<void> {
   }
 
   await runWithTenantAsync(tenantId, async () => {
-    await transition(prospectId, 'closed_lost', 'human_review');
+    await transition(prospectId, 'closed_lost', PipelineStage.CLOSING);
 
     await prisma.pipelineErrorLog.create({
       data: {
@@ -297,12 +315,6 @@ export async function getProspectContext(prospectId: string): Promise<ReviewQueu
     const prospect = await prisma.prospectLead.findUnique({
       where: { id: prospectId },
       include: {
-        audit: {
-          include: {
-            findings: true,
-          },
-        },
-        proposal: true,
         stateTransitions: {
           orderBy: { createdAt: 'asc' },
         },
@@ -313,19 +325,33 @@ export async function getProspectContext(prospectId: string): Promise<ReviewQueu
       return null;
     }
 
+    const [audit, proposal] = await Promise.all([
+      prospect.auditId
+        ? prisma.audit.findUnique({
+            where: { id: prospect.auditId },
+            include: { findings: true },
+          })
+        : Promise.resolve(null),
+      prospect.proposalId
+        ? prisma.proposal.findUnique({
+            where: { id: prospect.proposalId },
+          })
+        : Promise.resolve(null),
+    ]);
+
     const painBreakdown = (prospect.painBreakdown as Record<string, number>) || {};
     const painScore = Object.values(painBreakdown).reduce((sum, val) => sum + val, 0);
 
     return {
       prospect: {
         ...prospect,
-        audit: prospect.audit || null,
-        proposal: prospect.proposal || null,
+        audit,
+        proposal,
       },
       painScore,
       painBreakdown,
       engagementScore: prospect.engagementScore || 0,
-      stateHistory: prospect.stateTransitions.map((t) => ({
+      stateHistory: (prospect.stateTransitions || []).map((t: any) => ({
         from: t.fromStatus,
         to: t.toStatus,
         timestamp: t.createdAt,
@@ -421,7 +447,7 @@ export async function overrideProspectStatus(
   }
 
   await runWithTenantAsync(prospectRaw.tenantId, async () => {
-    await transition(prospectId, newStatus as any, 'manual_override');
+    await transition(prospectId, newStatus as any, PipelineStage.CLOSING);
 
     await prisma.pipelineErrorLog.create({
       data: {

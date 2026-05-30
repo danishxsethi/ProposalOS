@@ -16,14 +16,29 @@
  * - No admin endpoint bypasses tenant scope accidentally
  */
 
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { PrismaClient } from '@prisma/client';
 import { v4 as uuidv4 } from 'uuid';
-import { prisma as appPrisma } from '@/lib/prisma';
-import { runWithTenantAsync } from '../context';
 
-// Use a test-specific Prisma client
-const prisma = new PrismaClient();
+import type { prisma as appPrismaType } from '@/lib/prisma';
+import type { runWithTenantAsync as runWithTenantAsyncType } from '../context';
+
+const TEST_DB = 'proposal_rls_smoke';
+const POSTGRES_PASSWORD = 'password';
+const DIRECT_URL = `postgresql://postgres:${POSTGRES_PASSWORD}@localhost:5435/${TEST_DB}`;
+const POOLED_APP_USER_URL = `postgresql://app_user:${POSTGRES_PASSWORD}@localhost:6432/${TEST_DB}?pgbouncer=true`;
+
+// Use a test-specific Prisma client running as superuser for setup and teardown
+const prisma = new PrismaClient({
+  datasources: {
+    db: {
+      url: DIRECT_URL,
+    },
+  },
+});
+
+let appPrisma: typeof appPrismaType;
+let runWithTenantAsync: typeof runWithTenantAsyncType;
 
 // Test configuration
 const TENANT_COUNT = 100;
@@ -44,6 +59,19 @@ describe('Multi-Tenant Isolation Stress Test (100 Tenants)', () => {
   let globalFindingId: string;
 
   beforeAll(async () => {
+    // Set database URL to the non-superuser app_user to enforce RLS
+    const env = process.env as Record<string, string | undefined>;
+    env.DATABASE_URL = POOLED_APP_USER_URL;
+    env.DIRECT_URL = DIRECT_URL;
+
+    vi.resetModules();
+
+    const prismaModule = await import('@/lib/prisma');
+    const contextModule = await import('../context');
+
+    appPrisma = prismaModule.prisma;
+    runWithTenantAsync = contextModule.runWithTenantAsync;
+
     console.log(`🏗️  Setting up ${TENANT_COUNT} test tenants...`);
 
     // Create 100 isolated tenants
@@ -115,11 +143,24 @@ describe('Multi-Tenant Isolation Stress Test (100 Tenants)', () => {
       }
     }
 
+    // Create a real tenant for the global record to avoid Audit_tenantId_fkey violation
+    const globalTenantId = uuidv4();
+    await prisma.tenant.create({
+      data: {
+        id: globalTenantId,
+        name: 'Global Stress Test Tenant',
+        slug: `stress-tenant-global-${uuidv4().slice(0, 8)}`,
+        domain: `global.stress.test.local`,
+        planTier: 'starter',
+        status: 'active',
+      },
+    });
+
     // Create one global record that should NOT be accessible to any tenant
     const globalAudit = await prisma.audit.create({
       data: {
         id: uuidv4(),
-        tenantId: uuidv4(), // Different tenant
+        tenantId: globalTenantId, // Different tenant
         businessName: 'Global Test Business',
         businessUrl: 'https://global-test.com',
         status: 'COMPLETE',

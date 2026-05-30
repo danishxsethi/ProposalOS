@@ -78,7 +78,7 @@ type PrismaWithPromptPromotionModels = typeof prisma & {
 };
 
 export async function GET(req: Request) {
-  const authError = verifyCronAuth(req);
+  const authError = await verifyCronAuth(req);
   if (authError) return authError;
 
   const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);

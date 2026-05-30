@@ -248,6 +248,7 @@ export interface OutreachOutcome {
   conversionRate: number;
   vertical: string;
   city: string;
+  tenantId?: string;
 }
 
 // ============================================================================

@@ -1,7 +1,9 @@
-import { cachedFetch } from '@/lib/cache/apiCache';
+import { withModuleCache } from '@/lib/cache/moduleCache';
 import { CostTracker } from '@/lib/costs/costTracker';
 import { logger } from '@/lib/logger';
+import { withProviderResilience } from '@/lib/resilience/withProviderResilience';
 
+import { normalizeConfidence } from './findingGenerator';
 import { AuditModuleResult, Finding } from './types';
 
 export interface PaidSearchModuleInput {
@@ -136,14 +138,30 @@ async function checkPrimaryKeywordAds(input: PaidSearchModuleInput): Promise<AdP
   try {
     const serpUrl = `https://serpapi.com/search.json?q=${encodeURIComponent(query)}&location=${encodeURIComponent(input.city)}&hl=en&gl=us&google_domain=google.com&api_key=${serpApiKey}`;
 
-    const data = await cachedFetch(
-      'paid_search_primary',
-      { query, city: input.city },
-      async () => {
-        const res = await fetch(serpUrl);
-        return await res.json();
+    const data = await withModuleCache<any>(
+      {
+        module: 'paid_search',
+        version: 1,
+        input: { type: 'paid_search_primary', query, city: input.city },
       },
-      { ttlHours: 24 }
+      { ttlSeconds: 24 * 60 * 60 },
+      async () => {
+        return withProviderResilience<any>(
+          {
+            provider: 'serpapi',
+            operation: 'paidSearch:checkPrimaryKeywordAds',
+            degrade: true,
+            fallbackValue: { ads: [] },
+          },
+          async () => {
+            const res = await fetch(serpUrl);
+            if (!res.ok) {
+              throw new Error(`HTTP error ${res.status}: ${res.statusText}`);
+            }
+            return await res.json();
+          }
+        );
+      }
     );
 
     // Extract ads from response
@@ -198,14 +216,30 @@ async function checkBusinessNameAds(input: PaidSearchModuleInput): Promise<AdPre
   try {
     const serpUrl = `https://serpapi.com/search.json?q=${encodeURIComponent(query)}&location=${encodeURIComponent(input.city)}&hl=en&gl=us&google_domain=google.com&api_key=${serpApiKey}`;
 
-    const data = await cachedFetch(
-      'paid_search_name',
-      { businessName: input.businessName, city: input.city },
-      async () => {
-        const res = await fetch(serpUrl);
-        return await res.json();
+    const data = await withModuleCache<any>(
+      {
+        module: 'paid_search',
+        version: 1,
+        input: { type: 'paid_search_name', businessName: input.businessName, city: input.city },
       },
-      { ttlHours: 24 }
+      { ttlSeconds: 24 * 60 * 60 },
+      async () => {
+        return withProviderResilience<any>(
+          {
+            provider: 'serpapi',
+            operation: 'paidSearch:checkBusinessNameAds',
+            degrade: true,
+            fallbackValue: { ads: [] },
+          },
+          async () => {
+            const res = await fetch(serpUrl);
+            if (!res.ok) {
+              throw new Error(`HTTP error ${res.status}: ${res.statusText}`);
+            }
+            return await res.json();
+          }
+        );
+      }
     );
 
     const ads = data.ads || [];
@@ -247,10 +281,23 @@ async function detectTrackingPixels(url: string): Promise<TrackingPixels> {
   try {
     logger.info({ url }, '[PaidSearch] Detecting tracking pixels');
 
-    const response = await fetch(url, {
-      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; ProposalOSBot/1.0)' },
-    });
-    const html = await response.text();
+    const html = await withProviderResilience<string>(
+      {
+        provider: 'crawler',
+        operation: 'paidSearch:detectTrackingPixels',
+        degrade: true,
+        fallbackValue: '',
+      },
+      async () => {
+        const response = await fetch(url, {
+          headers: { 'User-Agent': 'Mozilla/5.0 (compatible; ProposalOSBot/1.0)' },
+        });
+        if (!response.ok) {
+          throw new Error(`HTTP error ${response.status}: ${response.statusText}`);
+        }
+        return await response.text();
+      }
+    );
 
     const detectedTags: string[] = [];
 

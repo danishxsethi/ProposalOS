@@ -99,7 +99,7 @@ async function handleIntelligenceAggregation(req: NextRequest): Promise<NextResp
 
 // Auth wrapper
 const authHandler = async (req: NextRequest): Promise<NextResponse> => {
-  const authError = verifyCronAuth(req);
+  const authError = await verifyCronAuth(req);
   if (authError) return authError;
   return handleIntelligenceAggregation(req);
 };

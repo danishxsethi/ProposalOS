@@ -516,7 +516,12 @@ describe('LocalizedPromptLibrary - Property-Based Tests', () => {
           fc.array(
             fc.record({
               locale: supportedLocaleArb,
-              createdAt: fc.date({ min: new Date('2020-01-01'), max: new Date('2024-12-31') }),
+              createdAt: fc
+                .integer({
+                  min: new Date('2020-01-01T00:00:00Z').getTime(),
+                  max: new Date('2024-12-31T23:59:59Z').getTime(),
+                })
+                .map((t) => new Date(t)),
             }),
             { minLength: 1, maxLength: 5 }
           ),

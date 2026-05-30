@@ -1,8 +1,9 @@
 import { Resend } from 'resend';
 
+import { recordIntegrationFailure, recordIntegrationSuccess } from '@/lib/integrations';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
-import { withRetry, recordIntegrationSuccess, recordIntegrationFailure } from '@/lib/integrations';
+import { withProviderResilience } from '@/lib/resilience/withProviderResilience';
 
 function getResend(): Resend | null {
   const key = process.env.RESEND_API_KEY;
@@ -30,42 +31,36 @@ export async function sendEmail({
     return { success: false, error: 'RESEND_API_KEY is required to send emails' };
   }
 
-  // Use retry wrapper with 3 attempts, exponential backoff
-  const result = await withRetry(
-    async () => {
-      const data = await resend.emails.send({
-        from: `${fromName} <${fromEmail}>`,
-        to,
-        subject,
-        html: body,
-      });
-
-      if (data.error) {
-        throw new Error(data.error.message);
-      }
-
-      recordIntegrationSuccess('RESEND');
-      return { messageId: data.data?.id };
-    },
-    {
-      operationName: 'Resend email',
-      maxRetries: 3,
-      onRetry: (attempt, error, delayMs) => {
-        logger.warn(
-          { attempt, error: error.message, delayMs },
-          `Email send retry ${attempt}/3`
-        );
+  try {
+    const messageId = await withProviderResilience(
+      {
+        provider: 'resend',
+        operation: 'send-outreach-email',
       },
-    }
-  );
+      async () => {
+        const data = await resend.emails.send({
+          from: `${fromName} <${fromEmail}>`,
+          to,
+          subject,
+          html: body,
+        });
 
-  if (result.success && result.data) {
-    return { success: true, messageId: result.data.messageId };
-  } else {
-    recordIntegrationFailure('RESEND', result.error);
+        if (data.error) {
+          throw new Error(data.error.message);
+        }
+
+        recordIntegrationSuccess('RESEND');
+        return data.data?.id;
+      }
+    );
+
+    return { success: true, messageId };
+  } catch (err) {
+    const error = err instanceof Error ? err : new Error(String(err));
+    recordIntegrationFailure('RESEND', error);
     return {
       success: false,
-      error: result.error?.message || 'Unknown email send error',
+      error: error.message,
     };
   }
 }
@@ -95,7 +90,7 @@ export async function sendProposalEmail({
 
   // 2. Fetch Branding
   let brandName = 'ProposalOS';
-  let fromEmail = 'updates@metricvoid.com'; // Default verified domain
+  const fromEmail = 'updates@metricvoid.com'; // Default verified domain
 
   if (tenantId) {
     const tenant = await prisma.tenant.findUnique({
@@ -108,8 +103,6 @@ export async function sendProposalEmail({
   }
 
   // 3. Construct Email with CAN-SPAM compliant footer
-  // Note: TenantBranding model uses contactEmail/contactPhone, not contactAddress
-  // Use environment variable for company address or default
   const physicalAddress = process.env.COMPANY_PHYSICAL_ADDRESS || 
                           'ProposalOS\n123 Business Street, Suite 100\nCity, ST 12345\nUnited States';
   
@@ -132,43 +125,46 @@ export async function sendProposalEmail({
             </div>
         `;
 
-  // 4. Send via Resend with retry logic
+  // 4. Send via Resend with retry logic wrapped in provider resilience
   const resend = getResend();
   if (!resend) {
     throw new Error('RESEND_API_KEY is required to send emails');
   }
 
-  const result = await withRetry(
-    async () => {
-      const data = await resend.emails.send({
-        from: `${brandName} <${fromEmail}>`,
-        to: recipientEmail,
-        subject: subject,
-        html: finalHtml,
-        tags: [
-          { name: 'category', value: 'proposal' },
-          { name: 'proposal_id', value: proposalId },
-          { name: 'tenant_id', value: tenantId || 'system' },
-        ],
-      });
+  let messageId: string | undefined;
+  try {
+    messageId = await withProviderResilience(
+      {
+        provider: 'resend',
+        operation: 'send-proposal-email',
+        tenantId,
+      },
+      async () => {
+        const data = await resend.emails.send({
+          from: `${brandName} <${fromEmail}>`,
+          to: recipientEmail,
+          subject: subject,
+          html: finalHtml,
+          tags: [
+            { name: 'category', value: 'proposal' },
+            { name: 'proposal_id', value: proposalId },
+            { name: 'tenant_id', value: tenantId || 'system' },
+          ],
+        });
 
-      if (data.error) {
-        throw new Error(data.error.message);
+        if (data.error) {
+          throw new Error(data.error.message);
+        }
+
+        recordIntegrationSuccess('RESEND');
+        return data.data?.id;
       }
-
-      recordIntegrationSuccess('RESEND');
-      return { messageId: data.data?.id };
-    },
-    {
-      operationName: 'Send proposal email',
-      maxRetries: 3,
-    }
-  );
-
-  if (!result.success || !result.data) {
-    recordIntegrationFailure('RESEND', result.error);
-    logger.error({ err: result.error, proposalId, recipientEmail }, 'Failed to send proposal email after retries');
-    throw result.error || new Error('Failed to send proposal email');
+    );
+  } catch (err) {
+    const error = err instanceof Error ? err : new Error(String(err));
+    recordIntegrationFailure('RESEND', error);
+    logger.error({ err: error, proposalId, recipientEmail }, 'Failed to send proposal email after retries');
+    throw error;
   }
 
   // 5. Update Database
@@ -193,5 +189,6 @@ export async function sendProposalEmail({
     }),
   ]);
 
-  return { success: true, messageId: result.data.messageId };
+  return { success: true, messageId };
 }
+

@@ -4,6 +4,7 @@ import { NextResponse } from 'next/server';
 
 import { clearCache } from '@/lib/cache/apiCache';
 import { logger } from '@/lib/logger';
+import { getSharedStore } from '@/lib/store/shared';
 
 function secureCompare(a: string, b: string): boolean {
   const bufA = Buffer.from(a, 'utf8');
@@ -30,6 +31,10 @@ export async function POST(request: Request) {
     }
 
     await clearCache();
+    const sharedStore = await getSharedStore();
+    if (sharedStore.clear) {
+      await sharedStore.clear();
+    }
     logger.warn({ clearedBy: 'admin' }, 'cache.cleared');
 
     return NextResponse.json({ success: true, message: 'Cache cleared successfully' });

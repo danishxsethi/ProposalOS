@@ -6,7 +6,7 @@ import { monitorReputation } from '@/lib/monitoring/reputationMonitor';
 export const maxDuration = 300; // 5 minutes
 
 export async function GET(req: Request) {
-  const authError = verifyCronAuth(req);
+  const authError = await verifyCronAuth(req);
   if (authError) return authError;
 
   try {

@@ -139,10 +139,13 @@ export function parseAcceptLanguage(header: string): string | null {
   if (!header) return null;
 
   const languages = header.split(',').map((lang) => {
-    const [locale, quality = 'q=1'] = lang.trim().split(';');
+    const parts = lang.trim().split(';');
+    const locale = parts[0]?.trim() || '';
+    const quality = parts[1] || 'q=1';
+    const qualityValue = quality.split('=')[1];
     return {
-      locale: locale.trim(),
-      quality: parseFloat(quality.split('=')[1]) || 1,
+      locale,
+      quality: parseFloat(qualityValue ?? '1') || 1,
     };
   });
 

@@ -63,6 +63,9 @@ steps:
       - '--cache-from'
       - '${_REGION}-docker.pkg.dev/$PROJECT_ID/proposal-engine/proposal-engine:${_ENVIRONMENT}-latest'
       - '--build-arg'
+      # SKIP_ENV_VALIDATION=true is intentional: secrets are not available at Docker image
+      # build time. They are injected at Cloud Run startup via Secret Manager.
+      # The running container validates env via instrumentation.ts on first request.
       - 'SKIP_ENV_VALIDATION=true'
       - '.'
     id: 'build-image'

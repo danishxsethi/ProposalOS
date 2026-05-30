@@ -1,5 +1,7 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
+import { logger } from '@/lib/logger';
+
 import { getGenerator } from './generators';
 import { ValidatedArtifact } from './validationPipeline';
 
@@ -54,7 +56,7 @@ export async function packageArtifact(
     try {
       wordpressPlugin = await generator.generateWordPressPlugin(finding as any, artifact);
     } catch (error) {
-      console.error('Failed to generate WordPress plugin:', error);
+      logger.error({ error }, 'Failed to generate WordPress plugin');
     }
   }
 
@@ -106,7 +108,7 @@ Provide concise, numbered steps that a non-technical person can follow.`;
 
     return response || 'See artifact content for implementation details.';
   } catch (error) {
-    console.error('Failed to generate installation instructions:', error);
+    logger.error({ error }, 'Failed to generate installation instructions');
     return 'See artifact content for implementation details.';
   }
 }

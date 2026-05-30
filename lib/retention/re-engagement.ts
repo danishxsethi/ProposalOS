@@ -37,7 +37,7 @@ export async function findInactiveClients(daysInactive: number = 30): Promise<
   const inactiveProposals = await prisma.proposal.findMany({
     where: {
       status: 'ACCEPTED',
-      updatedAt: { lt: cutoffDate },
+      createdAt: { lt: cutoffDate },
       audit: {
         status: 'COMPLETE',
       },
@@ -50,14 +50,14 @@ export async function findInactiveClients(daysInactive: number = 30): Promise<
         },
       },
     },
-    orderBy: { updatedAt: 'asc' },
+    orderBy: { createdAt: 'asc' },
     take: 100,
   });
 
   return inactiveProposals
     .filter((p) => {
       const daysSince = Math.floor(
-        (Date.now() - new Date(p.updatedAt).getTime()) / (1000 * 60 * 60 * 24)
+        (Date.now() - new Date(p.createdAt).getTime()) / (1000 * 60 * 60 * 24)
       );
       return daysSince >= daysInactive;
     })
@@ -66,9 +66,9 @@ export async function findInactiveClients(daysInactive: number = 30): Promise<
       tenantId: p.audit.tenantId,
       businessName: p.audit.businessName,
       prospectEmail: p.prospectEmail,
-      lastEngagement: new Date(p.updatedAt),
+      lastEngagement: new Date(p.createdAt),
       daysSinceEngagement: Math.floor(
-        (Date.now() - new Date(p.updatedAt).getTime()) / (1000 * 60 * 60 * 24)
+        (Date.now() - new Date(p.createdAt).getTime()) / (1000 * 60 * 60 * 24)
       ),
     }));
 }

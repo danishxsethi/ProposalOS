@@ -2,11 +2,16 @@ import { NextResponse } from 'next/server';
 
 import { CostTracker } from '@/lib/costs/costTracker';
 import { invokeDiagnosisGraphWithTimeout } from '@/lib/graph/diagnosis-graph';
+import { logger } from '@/lib/logger';
 import { withAuth } from '@/lib/middleware/auth';
+import { withIdempotency } from '@/lib/middleware/idempotency';
+import { withRateLimit } from '@/lib/middleware/rateLimit';
+import { recordAuditTrailEvent } from '@/lib/observability/auditTrail';
 import { prisma } from '@/lib/prisma';
 import { runProposalPipeline } from '@/lib/proposal';
+import { determineProposalStatus } from '@/lib/proposal/status';
+import { runAutoQA } from '@/lib/qa/autoQA';
 import { getTenantId } from '@/lib/tenant/context';
-// P0-3: Use LangGraph path
 
 interface Params {
   params: Promise<{ id: string }>;
@@ -16,13 +21,43 @@ interface Params {
  * POST /api/audit/[id]/regenerate
  * Regenerate proposal with edited findings
  */
-export const POST = withAuth(async (request: Request, { params }: Params) => {
+async function handleRegeneration(request: Request, { params }: Params): Promise<NextResponse> {
   try {
     const { id: auditId } = await params;
     const tenantId = await getTenantId();
 
     if (!tenantId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    // Check Daily Quota / Cost Budget
+    const { checkDailyAuditLimit } = await import('@/lib/costs/costTracker');
+    const dailyLimit = checkDailyAuditLimit(tenantId);
+    if (!dailyLimit.allowed) {
+      const { recordAuditTrailEvent } = await import('@/lib/observability/auditTrail');
+      await recordAuditTrailEvent({
+        eventType: 'abuse.quota_exceeded',
+        tenantId,
+        payload: {
+          routeClass: 'proposal_generation',
+          limit: dailyLimit.limit,
+          todayCount: dailyLimit.todayCount,
+          remaining: dailyLimit.remaining,
+          auditId,
+        },
+      }).catch(() => {});
+
+      return NextResponse.json(
+        {
+          error: {
+            code: 'QUOTA_EXCEEDED',
+            message: 'Daily Audit Limit Exceeded',
+            details: { reason: 'DAILY_CAP_REACHED', upgrade: true },
+            timestamp: new Date().toISOString(),
+          },
+        },
+        { status: 429 }
+      );
     }
 
     // Verify audit exists
@@ -68,7 +103,10 @@ export const POST = withAuth(async (request: Request, { params }: Params) => {
 
     const tracker = new CostTracker();
 
-    console.log(`[Regenerate] Starting regeneration v${nextVersion} for audit ${auditId}`);
+    logger.info(
+      { event: 'regenerate.start', auditId, version: nextVersion },
+      'Starting regeneration'
+    );
 
     const evidenceSnapshots = await prisma.evidenceSnapshot.findMany({
       where: {
@@ -85,8 +123,13 @@ export const POST = withAuth(async (request: Request, { params }: Params) => {
       auditId: audit.id,
       mode: 'MULTI_STEP',
     });
-    console.log(
-      `[Regenerate] Diagnosis complete: ${diagnosisResult.clusters?.length || 0} clusters`
+    logger.info(
+      {
+        event: 'regenerate.diagnosis_complete',
+        auditId,
+        clusterCount: diagnosisResult.clusters?.length ?? 0,
+      },
+      'Diagnosis complete'
     );
 
     // Re-run proposal generation
@@ -95,18 +138,35 @@ export const POST = withAuth(async (request: Request, { params }: Params) => {
       audit.businessIndustry || 'general',
       diagnosisResult.clusters,
       audit.findings,
-      tracker
+      tracker,
+      undefined,
+      null,
+      null,
+      audit.businessCity,
+      audit.businessUrl
     );
-    console.log(`[Regenerate] Proposal generated`);
+    logger.info({ event: 'regenerate.generated', auditId }, 'Proposal generated');
 
     // Log costs
-    console.log(`[Regenerate] Cost: ${tracker.getTotalCents()} cents`, tracker.getReport());
+    logger.info(
+      { event: 'regenerate.cost', auditId, costCents: tracker.getTotalCents() },
+      'Regeneration cost'
+    );
 
     // Save new proposal version
+    const qaStatus = runAutoQA(
+      proposalResult,
+      audit.findings,
+      audit.businessName,
+      audit.businessCity,
+      { industry: audit.businessIndustry }
+    );
+    const proposalStatus = determineProposalStatus(qaStatus);
+
     const proposal = await prisma.proposal.create({
       data: {
         auditId,
-        tenantId: audit.tenantId, // Fixed TS error
+        tenantId: audit.tenantId,
         version: nextVersion,
         executiveSummary: proposalResult.executiveSummary,
         painClusters: JSON.parse(JSON.stringify(diagnosisResult.clusters)),
@@ -117,7 +177,11 @@ export const POST = withAuth(async (request: Request, { params }: Params) => {
         assumptions: proposalResult.assumptions,
         disclaimers: proposalResult.disclaimers,
         nextSteps: proposalResult.nextSteps,
-        status: 'DRAFT',
+        status: proposalStatus,
+        qaScore: qaStatus.score,
+        clientScore: qaStatus.clientPerfect.score,
+        qaResults: JSON.parse(JSON.stringify(qaStatus)),
+        clientScoreResults: JSON.parse(JSON.stringify(qaStatus.clientPerfect)),
       },
     });
 
@@ -129,12 +193,31 @@ export const POST = withAuth(async (request: Request, { params }: Params) => {
       },
     });
 
-    console.log(`[Regenerate] New proposal saved: ${proposal.id} (v${nextVersion})`);
+    await recordAuditTrailEvent({
+      eventType: 'proposal.generated',
+      tenantId: audit.tenantId,
+      auditId,
+      proposalId: proposal.id,
+      payload: {
+        version: nextVersion,
+        status: proposalStatus,
+        qaScore: qaStatus.score,
+        costCents: tracker.getTotalCents(),
+        isRegeneration: true,
+      },
+    }).catch(() => {});
+
+    logger.info(
+      { event: 'regenerate.saved', auditId, proposalId: proposal.id, version: nextVersion },
+      'New proposal saved'
+    );
 
     return NextResponse.json({
       id: proposal.id,
       version: proposal.version,
       webLinkToken: proposal.webLinkToken,
+      status: proposalStatus,
+      qaScore: qaStatus.score,
       executiveSummary: proposal.executiveSummary?.slice(0, 200) + '...',
       pricing: proposal.pricing,
       regenerationsRemaining: 3 - nextVersion,
@@ -144,4 +227,19 @@ export const POST = withAuth(async (request: Request, { params }: Params) => {
     console.error('[Regenerate] Error:', error);
     return NextResponse.json({ error: 'Failed to regenerate proposal' }, { status: 500 });
   }
-});
+}
+
+const rateLimitedHandler = (req: Request, ...args: any[]) =>
+  withRateLimit({
+    routeClass: 'proposal_generation',
+    windowMs: 60 * 1000,
+    max: 5,
+    failClosed: true,
+    auditOnBlock: false,
+    message: 'Too many proposal requests. Please wait before trying again.',
+  })(req, () => handleRegeneration(req, args[0] as Params));
+
+const idempotentHandler = (req: Request, ...args: any[]) =>
+  withIdempotency(rateLimitedHandler)(req, ...args);
+
+export const POST = withAuth(idempotentHandler);

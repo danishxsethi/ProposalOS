@@ -26,25 +26,20 @@ describe('Human Review Queue', () => {
   const testTenantId = uuidv4();
   const testProspectIds: string[] = [];
 
-  beforeAll(async () => {
-    // Ensure the test tenant exists using bypass
+  beforeEach(async () => {
+    // Clean up test data and recreate test tenant with bypass
     const { runWithTenantBypass } = await import('@/lib/tenant/context');
-    await runWithTenantBypass('test-setup', () =>
-      prisma.tenant.create({
+    await runWithTenantBypass('test-cleanup', async () => {
+      await cleanupDb(prisma);
+      await prisma.tenant.create({
         data: {
           id: testTenantId,
           name: 'Review Test Tenant',
           planTier: 'pro',
           status: 'active',
         },
-      })
-    );
-  });
-
-  beforeEach(async () => {
-    // Clean up test data with bypass
-    const { runWithTenantBypass } = await import('@/lib/tenant/context');
-    await runWithTenantBypass('test-cleanup', () => cleanupDb(prisma));
+      });
+    });
   });
 
   afterEach(async () => {
@@ -67,7 +62,7 @@ describe('Human Review Queue', () => {
             vertical: 'dental',
             source: 'google_maps',
             sourceExternalId: 'test-123',
-            pipelineStatus: 'QUALIFIED',
+            pipelineStatus: 'outreach_sent',
             painBreakdown: { websiteSpeed: 20, mobileBroken: 15 },
             engagementScore: 85,
           },
@@ -406,7 +401,7 @@ describe('Human Review Queue', () => {
           vertical: 'dental',
           source: 'google_maps',
           sourceExternalId: 'override-1',
-          pipelineStatus: 'hot_lead',
+          pipelineStatus: 'closing',
           painBreakdown: { websiteSpeed: 20 },
           engagementScore: 90,
         },

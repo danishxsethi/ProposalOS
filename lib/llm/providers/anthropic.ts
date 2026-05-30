@@ -78,7 +78,7 @@ export class AnthropicProvider implements LLMProviderInterface {
   }
 
   getModelInfo(modelName: string): ProviderModel {
-    return ANTHROPIC_MODELS[modelName] || ANTHROPIC_MODELS['claude-3-haiku-20240307'];
+    return ANTHROPIC_MODELS[modelName] ?? ANTHROPIC_MODELS['claude-3-haiku-20240307']!;
   }
 
   async generateContent(options: ProviderCallOptions): Promise<ProviderResponse> {

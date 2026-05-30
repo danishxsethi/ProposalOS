@@ -2,6 +2,9 @@ import { createHash, timingSafeEqual } from 'crypto';
 
 import { NextRequest, NextResponse } from 'next/server';
 
+import { logger } from '@/lib/logger';
+import { checkRateLimit } from '@/lib/middleware/rateLimit';
+
 function unauthorizedResponse(): NextResponse {
   return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 }
@@ -26,14 +29,14 @@ function timingSafeTokenEquals(a: string, b: string): boolean {
  *   - Returns null if authentication passes (caller should proceed)
  *
  * Usage:
- *   const authError = verifyCronAuth(req);
+ *   const authError = await verifyCronAuth(req);
  *   if (authError) return authError;
  */
-export function verifyCronAuth(req: Request | NextRequest): NextResponse | null {
+export async function verifyCronAuth(req: Request | NextRequest): Promise<NextResponse | null> {
   const cronSecret = process.env.CRON_SECRET;
 
   if (!cronSecret) {
-    console.error('[CRON] FATAL: CRON_SECRET environment variable is not set');
+    logger.error('[CRON] FATAL: CRON_SECRET environment variable is not set');
     return unauthorizedResponse();
   }
 
@@ -41,6 +44,23 @@ export function verifyCronAuth(req: Request | NextRequest): NextResponse | null 
   const expected = `Bearer ${cronSecret}`;
 
   if (!timingSafeTokenEquals(authHeader, expected)) {
+    // Increment the failure rate limit counter on invalid attempts by IP
+    const limitResult = await checkRateLimit(req, {
+      windowMs: 15 * 60 * 1000, // 15 minutes
+      max: 5,
+      endpoint: 'cron-auth-failure',
+      routeClass: 'cron',
+      auditOnBlock: true,
+      failClosed: true,
+    });
+
+    if (!limitResult.success) {
+      return NextResponse.json(
+        { error: 'Too many authentication attempts' },
+        { status: 429, headers: { 'Retry-After': String(limitResult.retryAfter ?? 900) } }
+      );
+    }
+
     return unauthorizedResponse();
   }
 

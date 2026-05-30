@@ -66,7 +66,7 @@ export function calculateReportCard(findings: Finding[], industry: Industry): Re
  */
 function calculateCategoryScores(findings: Finding[]): CategoryScores {
   // Initialize scores
-  let scores = {
+  const scores = {
     performance: 40,
     visibility: 30,
     trust: 30,
@@ -195,7 +195,8 @@ function getIndustryAverages(industry: Industry): number[] {
  * Generate narrative explaining the grade
  */
 function generateGradingNarrative(score: number, grade: string, scores: CategoryScores): string {
-  const lowestCategory = Object.entries(scores).sort(([, a], [, b]) => a - b)[0][0];
+  const entries = Object.entries(scores).sort(([, a], [, b]) => a - b);
+  const lowestCategory = entries[0]?.[0] || 'performance';
 
   let narrative = `Your Digital Presence Score is ${score}/100, giving you a grade of ${grade}. `;
 

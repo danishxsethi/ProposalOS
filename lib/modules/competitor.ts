@@ -1,5 +1,7 @@
-import { cachedFetch } from '@/lib/cache/apiCache';
+import { withModuleCache } from '@/lib/cache/moduleCache';
 import { CostTracker } from '@/lib/costs/costTracker';
+import { logger } from '@/lib/logger';
+import { withProviderResilience } from '@/lib/resilience/withProviderResilience';
 
 import {
   ComparisonGap,
@@ -17,7 +19,7 @@ export async function runCompetitorModule(
   input: CompetitorModuleInput,
   tracker?: CostTracker
 ): Promise<LegacyAuditModuleResult> {
-  console.log(`[CompetitorModule] Searching for '${input.keyword}' in ${input.location}...`);
+  logger.info({ keyword: input.keyword, location: input.location }, '[CompetitorModule] Searching');
 
   if (
     !process.env.SERP_API_KEY ||
@@ -40,15 +42,31 @@ export async function runCompetitorModule(
       hl: 'en',
     };
 
-    const response = await cachedFetch(
-      'serpapi_local',
-      params,
+    const response = await withModuleCache<any>(
+      {
+        module: 'competitor',
+        version: 1,
+        input: { type: 'local_search', keyword: input.keyword, location: input.location },
+      },
+      { ttlSeconds: 24 * 3600 },
       async () => {
         const p = new URLSearchParams(params);
-        const res = await fetch(`${SERP_API_BASE}?${p.toString()}`);
-        return await res.json();
-      },
-      { ttlHours: 24 }
+        return withProviderResilience<any>(
+          {
+            provider: 'serpapi',
+            operation: 'competitor:top_competitors_search',
+            degrade: true,
+            fallbackValue: { local_results: [] },
+          },
+          async () => {
+            const res = await fetch(`${SERP_API_BASE}?${p.toString()}`);
+            if (!res.ok) {
+              throw new Error(`HTTP error ${res.status}: ${res.statusText}`);
+            }
+            return await res.json();
+          }
+        );
+      }
     );
 
     const data = response;
@@ -64,24 +82,40 @@ export async function runCompetitorModule(
     const fetchPlaceDetails = async (placeId: string, name: string): Promise<any> => {
       tracker?.addApiCall('PLACES_DETAILS');
       try {
-        return await cachedFetch(
-          'places_details_competitor',
-          { placeId },
-          async () => {
-            const res = await fetch(`${PLACES_API_BASE}/places/${placeId}`, {
-              headers: {
-                'Content-Type': 'application/json',
-                'X-Goog-Api-Key': process.env.GOOGLE_PLACES_API_KEY as string,
-                'X-Goog-FieldMask':
-                  'id,displayName,rating,userRatingCount,websiteUri,photos,regularOpeningHours,primaryTypeDisplayName',
-              },
-            });
-            return await res.json();
+        return await withModuleCache<any>(
+          {
+            module: 'competitor',
+            version: 1,
+            input: { type: 'place_details', placeId },
           },
-          { ttlHours: 24 * 7 }
+          { ttlSeconds: 7 * 24 * 3600 },
+          async () => {
+            return withProviderResilience<any>(
+              {
+                provider: 'google-places',
+                operation: 'competitor:place_details',
+                degrade: true,
+                fallbackValue: {},
+              },
+              async () => {
+                const res = await fetch(`${PLACES_API_BASE}/places/${placeId}`, {
+                  headers: {
+                    'Content-Type': 'application/json',
+                    'X-Goog-Api-Key': process.env.GOOGLE_PLACES_API_KEY as string,
+                    'X-Goog-FieldMask':
+                      'id,displayName,rating,userRatingCount,websiteUri,photos,regularOpeningHours,primaryTypeDisplayName',
+                  },
+                });
+                if (!res.ok) {
+                  throw new Error(`HTTP error ${res.status}: ${res.statusText}`);
+                }
+                return await res.json();
+              }
+            );
+          }
         );
       } catch (e) {
-        console.warn(`Failed to fetch place details for ${name}`);
+        logger.warn({ businessName: name }, 'Failed to fetch place details');
         return null;
       }
     };
@@ -112,15 +146,37 @@ export async function runCompetitorModule(
           strategy: 'mobile',
         });
         ['performance', 'accessibility', 'seo'].forEach((c) => psParams.append('category', c));
-        const psData = await cachedFetch(
-          'psi_light',
-          { url },
-          async () => {
-            const res = await fetch(`${PSI_API_URL}?${psParams.toString()}`);
-            if (!res.ok) throw new Error('PSI Failed');
-            return await res.json();
+        const psData = await withModuleCache<any>(
+          {
+            module: 'competitor',
+            version: 1,
+            input: { type: 'psi_light', url },
           },
-          { ttlHours: 24 }
+          { ttlSeconds: 24 * 3600 },
+          async () => {
+            return withProviderResilience<any>(
+              {
+                provider: 'pagespeed',
+                operation: 'competitor:psi_light',
+                degrade: true,
+                fallbackValue: {
+                  lighthouseResult: {
+                    categories: {
+                      performance: { score: 0 },
+                      seo: { score: 0 },
+                      accessibility: { score: 0 },
+                    },
+                    audits: {},
+                  },
+                },
+              },
+              async () => {
+                const res = await fetch(`${PSI_API_URL}?${psParams.toString()}`);
+                if (!res.ok) throw new Error(`HTTP error ${res.status}: ${res.statusText}`);
+                return await res.json();
+              }
+            );
+          }
         );
 
         const lh = psData.lighthouseResult;
@@ -142,7 +198,7 @@ export async function runCompetitorModule(
           loadTimeSeconds: Math.round(loadTimeSeconds * 10) / 10,
         };
       } catch (e) {
-        console.warn(`Failed to run PageSpeed for ${url}`);
+        logger.warn({ url }, 'Failed to run PageSpeed');
         return empty;
       }
     };
@@ -157,15 +213,31 @@ export async function runCompetitorModule(
       api_key: process.env.SERP_API_KEY,
     };
 
-    const selfData = await cachedFetch(
-      'serpapi_local_self',
-      selfParams,
+    const selfData = await withModuleCache<any>(
+      {
+        module: 'competitor',
+        version: 1,
+        input: { type: 'local_self_search', keyword: input.keyword, location: input.location },
+      },
+      { ttlSeconds: 24 * 3600 },
       async () => {
         const p = new URLSearchParams(selfParams);
-        const res = await fetch(`${SERP_API_BASE}?${p.toString()}`);
-        return await res.json();
-      },
-      { ttlHours: 24 }
+        return withProviderResilience<any>(
+          {
+            provider: 'serpapi',
+            operation: 'competitor:local_self_search',
+            degrade: true,
+            fallbackValue: { local_results: [] },
+          },
+          async () => {
+            const res = await fetch(`${SERP_API_BASE}?${p.toString()}`);
+            if (!res.ok) {
+              throw new Error(`HTTP error ${res.status}: ${res.statusText}`);
+            }
+            return await res.json();
+          }
+        );
+      }
     );
 
     const selfResult = selfData.local_results?.[0]; // Best match
@@ -214,15 +286,31 @@ export async function runCompetitorModule(
         api_key: process.env.SERP_API_KEY,
       };
 
-      const compData = await cachedFetch(
-        'serpapi_local_comp',
-        compParams,
+      const compData = await withModuleCache<any>(
+        {
+          module: 'competitor',
+          version: 1,
+          input: { type: 'local_competitors_search', category, location: input.location },
+        },
+        { ttlSeconds: 24 * 3600 },
         async () => {
           const p = new URLSearchParams(compParams);
-          const res = await fetch(`${SERP_API_BASE}?${p.toString()}`);
-          return await res.json();
-        },
-        { ttlHours: 24 }
+          return withProviderResilience<any>(
+            {
+              provider: 'serpapi',
+              operation: 'competitor:local_competitors_search',
+              degrade: true,
+              fallbackValue: { local_results: [] },
+            },
+            async () => {
+              const res = await fetch(`${SERP_API_BASE}?${p.toString()}`);
+              if (!res.ok) {
+                throw new Error(`HTTP error ${res.status}: ${res.statusText}`);
+              }
+              return await res.json();
+            }
+          );
+        }
       );
 
       // Filter out self
@@ -342,7 +430,7 @@ export async function runCompetitorModule(
       },
     };
   } catch (error) {
-    console.error('[CompetitorModule] Error:', error);
+    logger.error({ error }, '[CompetitorModule] Error');
     return {
       moduleId: 'competitor-audit',
       status: 'failed',

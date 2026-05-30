@@ -117,7 +117,7 @@ async function runCustomChecks(page: {
     headings.forEach((h) => {
       const match = h.tagName.match(/h(\d)/i);
       if (match) {
-        const level = parseInt(match[1], 10);
+        const level = parseInt(match[1] || '', 10);
         levels.push(level);
         result.headings.structure.push(
           `${h.tagName}: ${(h.textContent || '').trim().slice(0, 40)}`
@@ -155,6 +155,7 @@ async function runCustomChecks(page: {
     try {
       for (let i = 0; i < styleSheets.length; i++) {
         const sheet = styleSheets[i];
+        if (!sheet) continue;
         try {
           const rules = sheet.cssRules || sheet.rules;
           if (rules) {
@@ -195,7 +196,7 @@ async function runCustomChecks(page: {
 function hasHeadingSkipLevels(levels: number[]): boolean {
   if (levels.length < 2) return false;
   for (let i = 1; i < levels.length; i++) {
-    if (levels[i] - levels[i - 1] > 1) return true;
+    if (levels[i]! - levels[i - 1]! > 1) return true;
   }
   return false;
 }
@@ -274,7 +275,7 @@ export async function runAccessibilityModule(
 
       if (topIssues.length < 8) {
         const node = v.nodes?.[0];
-        const el = node?.html?.slice(0, 80) ?? node?.target?.[0] ?? 'element';
+        const el = node?.html?.slice(0, 80) ?? String(node?.target?.[0] || 'element');
         topIssues.push({
           severity: v.impact || 'moderate',
           description: v.description || v.help,

@@ -130,7 +130,7 @@ export class ProposalTemplateSystem {
   async loadPromptFromDB(
     nodeId: string,
     options?: { environment?: string; useCache?: boolean }
-  ): Promise<string> {
+  ): Promise<string | null> {
     const cacheKey = `${nodeId}:${options?.environment || this.environment}`;
     const useCache = options?.useCache ?? true;
 
@@ -179,10 +179,10 @@ export class ProposalTemplateSystem {
       // No DB prompt found - return null to use local fallback
       return null;
     } catch (error) {
-      logger.warn('Failed to load prompt from DB, using local fallback', {
+      logger.warn({
         nodeId,
         error: String(error),
-      });
+      }, 'Failed to load prompt from DB, using local fallback');
       return null;
     }
   }

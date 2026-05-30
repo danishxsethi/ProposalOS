@@ -33,7 +33,7 @@ function toEmailSender(value: string): ParsedSender | null {
   if (!emailMatch) return null;
 
   return {
-    domain: emailMatch[1].toLowerCase(),
+    domain: emailMatch[1]!.toLowerCase(),
     fromEmail,
     fromName: fallbackName,
   };
@@ -129,7 +129,7 @@ export async function selectDomainForSend(tenantId: string): Promise<{
 
   if (candidates.length === 0) return null;
   candidates.sort((a, b) => a.todaysSent - b.todaysSent);
-  return candidates[0];
+  return candidates[0]!;
 }
 
 export async function incrementDomainCounter(

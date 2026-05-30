@@ -1,4 +1,5 @@
 import { generateWithGemini } from '@/lib/llm/provider';
+import { logger } from '@/lib/logger';
 import {
   formatCurrency,
   formatDate,
@@ -116,7 +117,7 @@ export class LocalizationEngine {
       };
     } catch (error) {
       // Error handling with fallback to en-US variant
-      console.error(`Error localizing prompt for locale ${locale}:`, error);
+      logger.error({ locale, error }, 'Error localizing prompt');
       return this.createFallbackPrompt(nodeId, basePrompt);
     }
   }
@@ -321,7 +322,7 @@ and create a culturally appropriate prompt.`;
       this.translationCache.set(cacheKey, translated);
       return translated;
     } catch (error) {
-      console.error(`[LocalizationEngine] Translation failed for locale ${targetLocale}:`, error);
+      logger.error({ targetLocale, error }, '[LocalizationEngine] Translation failed');
       return text; // Graceful fallback to original
     }
   }

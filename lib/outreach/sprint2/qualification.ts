@@ -1,6 +1,7 @@
-import { cachedFetch } from '@/lib/cache/apiCache';
+import { withModuleCache } from '@/lib/cache/moduleCache';
 import { logger } from '@/lib/logger';
 import { runSocialModule } from '@/lib/modules/social';
+import { withProviderResilience } from '@/lib/resilience/withProviderResilience';
 
 import { normalizeVertical, VERTICAL_SEARCH_QUERIES } from './config';
 
@@ -119,20 +120,33 @@ async function fetchWebsiteSignals(website: string | null | undefined): Promise<
   params.append('category', 'performance');
   params.append('category', 'accessibility');
 
-  const data = await cachedFetch(
-    'outreach_pagespeed_mobile',
-    { website: normalizedWebsite },
-    async () => {
-      const res = await fetch(
-        `https://www.googleapis.com/pagespeedonline/v5/runPagespeed?${params.toString()}`
-      );
-      if (!res.ok) {
-        const text = await res.text();
-        throw new Error(`PageSpeed failed (${res.status}): ${text}`);
-      }
-      return res.json();
+  const data = await withModuleCache<any>(
+    {
+      module: 'outreach_qualification',
+      version: 1,
+      input: { type: 'pagespeed_mobile', website: normalizedWebsite },
     },
-    { ttlHours: 12 }
+    { ttlSeconds: 12 * 3600 },
+    async () => {
+      return withProviderResilience<any>(
+        {
+          provider: 'pagespeed',
+          operation: 'outreach_qualification:pagespeed_mobile',
+          degrade: true,
+          fallbackValue: { lighthouseResult: {} },
+        },
+        async () => {
+          const res = await fetch(
+            `https://www.googleapis.com/pagespeedonline/v5/runPagespeed?${params.toString()}`
+          );
+          if (!res.ok) {
+            const text = await res.text();
+            throw new Error(`PageSpeed failed (${res.status}): ${text}`);
+          }
+          return await res.json();
+        }
+      );
+    }
   );
 
   const lighthouse =
@@ -173,29 +187,42 @@ async function fetchGbpSignals(input: QualifiableLeadInput): Promise<GbpSignals>
   }
 
   const location = toLocation(input.city, input.state);
-  const searchData = await cachedFetch(
-    'outreach_places_text_search',
-    { businessName: input.businessName, location },
-    async () => {
-      const res = await fetch('https://places.googleapis.com/v1/places:searchText', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Goog-Api-Key': placesKey,
-          'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress',
-        },
-        body: JSON.stringify({
-          textQuery: `${input.businessName} in ${location}`,
-          maxResultCount: 1,
-        }),
-      });
-      if (!res.ok) {
-        const text = await res.text();
-        throw new Error(`Places search failed (${res.status}): ${text}`);
-      }
-      return res.json() as Promise<{ places?: Array<{ id?: string }> }>;
+  const searchData = await withModuleCache<{ places?: Array<{ id?: string }> }>(
+    {
+      module: 'outreach_qualification',
+      version: 1,
+      input: { type: 'places_text_search', businessName: input.businessName, location },
     },
-    { ttlHours: 24 }
+    { ttlSeconds: 24 * 3600 },
+    async () => {
+      return withProviderResilience<{ places?: Array<{ id?: string }> }>(
+        {
+          provider: 'google-places',
+          operation: 'outreach_qualification:places_text_search',
+          degrade: true,
+          fallbackValue: { places: [] },
+        },
+        async () => {
+          const res = await fetch('https://places.googleapis.com/v1/places:searchText', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Goog-Api-Key': placesKey,
+              'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress',
+            },
+            body: JSON.stringify({
+              textQuery: `${input.businessName} in ${location}`,
+              maxResultCount: 1,
+            }),
+          });
+          if (!res.ok) {
+            const text = await res.text();
+            throw new Error(`Places search failed (${res.status}): ${text}`);
+          }
+          return await res.json() as { places?: Array<{ id?: string }> };
+        }
+      );
+    }
   );
 
   const placeId = searchData.places?.[0]?.id;
@@ -211,35 +238,48 @@ async function fetchGbpSignals(input: QualifiableLeadInput): Promise<GbpSignals>
     };
   }
 
-  const details = await cachedFetch(
-    'outreach_places_details',
-    { placeId },
+  const details = await withModuleCache<Record<string, unknown>>(
+    {
+      module: 'outreach_qualification',
+      version: 1,
+      input: { type: 'places_details', placeId },
+    },
+    { ttlSeconds: 7 * 24 * 3600 },
     async () => {
-      const res = await fetch(
-        `https://places.googleapis.com/v1/places/${placeId.replace(/^places\//, '')}`,
+      return withProviderResilience<Record<string, unknown>>(
         {
-          headers: {
-            'Content-Type': 'application/json',
-            'X-Goog-Api-Key': placesKey,
-            'X-Goog-FieldMask': [
-              'id',
-              'rating',
-              'userRatingCount',
-              'photos',
-              'reviews',
-              'regularOpeningHours',
-              'websiteUri',
-            ].join(','),
-          },
+          provider: 'google-places',
+          operation: 'outreach_qualification:places_details',
+          degrade: true,
+          fallbackValue: {},
+        },
+        async () => {
+          const res = await fetch(
+            `https://places.googleapis.com/v1/places/${placeId.replace(/^places\//, '')}`,
+            {
+              headers: {
+                'Content-Type': 'application/json',
+                'X-Goog-Api-Key': placesKey,
+                'X-Goog-FieldMask': [
+                  'id',
+                  'rating',
+                  'userRatingCount',
+                  'photos',
+                  'reviews',
+                  'regularOpeningHours',
+                  'websiteUri',
+                ].join(','),
+              },
+            }
+          );
+          if (!res.ok) {
+            const text = await res.text();
+            throw new Error(`Places details failed (${res.status}): ${text}`);
+          }
+          return await res.json() as Record<string, unknown>;
         }
       );
-      if (!res.ok) {
-        const text = await res.text();
-        throw new Error(`Places details failed (${res.status}): ${text}`);
-      }
-      return res.json() as Promise<Record<string, unknown>>;
-    },
-    { ttlHours: 24 * 7 }
+    }
   );
 
   const reviews = Array.isArray(details.reviews)
@@ -331,18 +371,31 @@ async function fetchCompetitorSignals(
     api_key: serpApiKey,
   });
 
-  const data = await cachedFetch(
-    'outreach_serp_competitors',
-    { vertical, location },
-    async () => {
-      const res = await fetch(`https://serpapi.com/search.json?${params.toString()}`);
-      if (!res.ok) {
-        const text = await res.text();
-        throw new Error(`SerpAPI competitors failed (${res.status}): ${text}`);
-      }
-      return res.json() as Promise<{ local_results?: Array<Record<string, unknown>> }>;
+  const data = await withModuleCache<{ local_results?: Array<Record<string, unknown>> }>(
+    {
+      module: 'outreach_qualification',
+      version: 1,
+      input: { type: 'serp_competitors', vertical, location },
     },
-    { ttlHours: 12 }
+    { ttlSeconds: 12 * 3600 },
+    async () => {
+      return withProviderResilience<{ local_results?: Array<Record<string, unknown>> }>(
+        {
+          provider: 'serpapi',
+          operation: 'outreach_qualification:serp_competitors',
+          degrade: true,
+          fallbackValue: { local_results: [] },
+        },
+        async () => {
+          const res = await fetch(`https://serpapi.com/search.json?${params.toString()}`);
+          if (!res.ok) {
+            const text = await res.text();
+            throw new Error(`SerpAPI competitors failed (${res.status}): ${text}`);
+          }
+          return await res.json() as { local_results?: Array<Record<string, unknown>> };
+        }
+      );
+    }
   );
 
   const localResults = Array.isArray(data.local_results) ? data.local_results : [];

@@ -2,6 +2,7 @@ import chromium from '@sparticuz/chromium';
 import puppeteer from 'puppeteer-core';
 
 import { BRANDING, getBranding } from '@/lib/config/branding';
+import { logger } from '@/lib/logger';
 
 export type PdfFormat = 'A4' | 'Letter';
 
@@ -78,7 +79,7 @@ export async function generatePdf(
 
     // Navigate to PDF template page (premium agency design)
     const url = `${baseUrl}/proposal/${token}/pdf`;
-    console.log(`Generating PDF for: ${url}`);
+    logger.info({ url: `${baseUrl}/proposal/[REDACTED_TOKEN]/pdf` }, 'Generating PDF');
 
     // Use 'load' instead of 'networkidle0' — networkidle0 often never fires on SPAs
     await page.goto(url, {
@@ -163,7 +164,7 @@ export async function generatePdf(
 
     return Buffer.from(pdfBuffer);
   } catch (error) {
-    console.error('PDF generation error:', error);
+    logger.error({ error }, 'PDF generation error');
     throw error;
   } finally {
     if (browser) {

@@ -3,6 +3,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { LocalizationEngine } from '../localization-engine';
 import { LocaleConfig } from '../types';
 
+vi.mock('@/lib/llm/provider', () => ({
+  generateWithGemini: vi.fn().mockImplementation(async ({ model, input }) => {
+    if (model?.includes('flash') || input?.includes('professional translator')) {
+      const textToTranslate = input.split('\n\n').pop() || 'Translated Text';
+      return { text: `[Translated] ${textToTranslate}` };
+    }
+    return { text: 'Mock adapted prompt text\nWith some cultural context details.' };
+  }),
+}));
+
 // Mock LocaleConfigManager
 class MockLocaleConfigManager {
   private configs: Map<string, LocaleConfig> = new Map();

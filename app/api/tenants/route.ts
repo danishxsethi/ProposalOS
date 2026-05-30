@@ -12,7 +12,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { v4 as uuidv4 } from 'uuid';
 
 import { generateTraceId, InternalError, UnauthorizedError } from '@/lib/api/errors';
-import { generateApiKey, API_KEY_SCOPES, validateApiKey } from '@/lib/auth/apiKeys';
+import { API_KEY_SCOPES, generateApiKey, validateApiKey } from '@/lib/auth/apiKeys';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 
@@ -140,7 +140,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
           name: 'Default API Key',
           scopes: [API_KEY_SCOPES.ALL],
           isActive: true,
-          rateLimitPerDay: body.planTier === 'agency' ? 10000 : body.planTier === 'pro' ? 5000 : 1000,
+          rateLimitPerDay:
+            body.planTier === 'agency' ? 10000 : body.planTier === 'pro' ? 5000 : 1000,
         },
       });
 
@@ -170,7 +171,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     const response: CreateTenantResponse = {
       tenantId: result.tenant.id,
       name: result.tenant.name,
-      slug: result.tenant.slug,
+      slug: result.tenant.slug!,
       planTier: result.tenant.planTier,
       apiKey: result.key, // Return full key only once
       apiKeyPrefix: result.apiKey.keyPrefix,
@@ -222,8 +223,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
     // Check for admin scope
     const hasAdminScope =
-      validation.scopes.includes(API_KEY_SCOPES.ALL) ||
-      validation.scopes.includes('admin:*');
+      validation.scopes.includes(API_KEY_SCOPES.ALL) || validation.scopes.includes('admin:*');
 
     if (!hasAdminScope) {
       throw new UnauthorizedError('Admin scope required');
@@ -250,7 +250,6 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         _count: {
           select: {
             audits: true,
-            proposals: true,
             users: true,
           },
         },

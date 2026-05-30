@@ -1,0 +1,31 @@
+{
+  "runName": "beta-day0-five-site-audit",
+  "environment": "cloud-staging",
+  "websites": [
+    {
+      "name": "Example",
+      "url": "https://www.example.com",
+      "category": "baseline"
+    },
+    {
+      "name": "GNU",
+      "url": "https://www.gnu.org",
+      "category": "nonprofit-content"
+    },
+    {
+      "name": "Python",
+      "url": "https://www.python.org",
+      "category": "technical-community"
+    },
+    {
+      "name": "PostgreSQL",
+      "url": "https://www.postgresql.org",
+      "category": "technical-product"
+    },
+    {
+      "name": "Stanford Health Care",
+      "url": "https://www.stanfordhealthcare.org",
+      "category": "healthcare-service"
+    }
+  ]
+}

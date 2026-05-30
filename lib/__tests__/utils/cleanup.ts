@@ -1,4 +1,5 @@
 import { PrismaClient } from '@prisma/client';
+import { runWithTenantBypass } from '@/lib/tenant/context';
 
 export async function cleanupDb(prisma: PrismaClient) {
   // Enforce explicit reverse dependency depth order for Prisma to avoid P2003 Foreign Key Constraint violations during vitest resets
@@ -67,15 +68,17 @@ export async function cleanupDb(prisma: PrismaClient) {
     'sharedIntelligenceModel',
   ];
 
-  for (const model of models) {
-    try {
-      await (prisma as any)[model].deleteMany();
-    } catch (e: any) {
-      if (e.code === 'P2003' || e.code === '40P01') {
-        // Ignore deadlocks and foreign key issues on cleanup, we'll try again if needed next test
-      } else {
-        throw e;
+  await runWithTenantBypass('cleanup-db', async () => {
+    for (const model of models) {
+      try {
+        await (prisma as any)[model].deleteMany();
+      } catch (e: any) {
+        if (e.code === 'P2003' || e.code === '40P01') {
+          // Ignore deadlocks and foreign key issues on cleanup, we'll try again if needed next test
+        } else {
+          throw e;
+        }
       }
     }
-  }
+  });
 }

@@ -19,7 +19,7 @@ import { sendNPSSurvey } from '@/lib/retention/nps';
 export const dynamic = 'force-dynamic';
 
 export async function GET(req: Request) {
-  const authError = verifyCronAuth(req);
+  const authError = await verifyCronAuth(req);
   if (authError) return authError;
 
   try {

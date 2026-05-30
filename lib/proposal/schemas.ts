@@ -1,7 +1,7 @@
+import { FindingType, Finding as PrismaFinding } from '@prisma/client';
 import { z } from 'zod';
 
 import { PainCluster } from '../diagnosis/types';
-import { Finding as PrismaFinding, FindingType } from '@prisma/client';
 
 // Runtime Finding type - extends Prisma Finding with relaxed types for runtime flexibility
 // The metrics field uses Record<string, unknown> instead of JsonValue for easier runtime access

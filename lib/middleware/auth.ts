@@ -39,11 +39,11 @@ export function withAuth(handler: AuthHandler) {
           return NextResponse.json({ error: 'Invalid API Key' }, { status: 401 });
         }
 
-        if (validation.error) {
+        if ('error' in validation) {
           return NextResponse.json({ error: validation.error }, { status: 429 });
         }
 
-        const tenantId = validation.tenantId ?? '';
+        const tenantId = validation.tenantId;
         logger.info({ authMethod: 'api_key', tenantId }, 'Auth: database API key');
 
         return runWithTenantAsync(tenantId, () => handler(req, ...args));

@@ -279,7 +279,7 @@ export function escapeHtml(text: string): string {
     '=': '&#x3D;',
   };
 
-  return text.replace(/[&<>"'`=\/]/g, (char) => escapeMap[char]);
+  return text.replace(/[&<>"'`=\/]/g, (char) => escapeMap[char] ?? char);
 }
 
 /**

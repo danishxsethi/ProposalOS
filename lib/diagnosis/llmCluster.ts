@@ -4,12 +4,12 @@ import { MODEL_CONFIG } from '@/lib/config/models';
 import { getThinkingBudgetForNode } from '@/lib/config/thinking-budgets';
 import { CostTracker } from '@/lib/costs/costTracker';
 import { generateWithGemini } from '@/lib/llm/provider';
+import { logger } from '@/lib/logger';
 import { traceLlmCall } from '@/lib/tracing';
 
 import { Finding, PainCluster, PreCluster } from './types';
 import { scoreCluster } from './validation';
 import { AggregatedContext } from '../context/aggregator';
-
 // Import A/B testing system
 import { fillTemplate, getPromptVariant } from '../experiments/promptAB';
 
@@ -136,7 +136,7 @@ export async function llmClusterFindings(
 
         return painClusters;
       } catch (error) {
-        console.error('[LLM Clustering] Error:', error);
+        logger.error({ error }, '[LLM Clustering] Error');
         // Fallback: use pre-clusters as-is
         return preClusters.map((pc, idx) => ({
           id: `cluster-${idx + 1}`,
@@ -241,7 +241,7 @@ Make sure every finding ID you list actually exists in the provided context. Do 
 
         return painClusters;
       } catch (error) {
-        console.error('[LLM Single-Pass Clustering] Error:', error);
+        logger.error({ error }, '[LLM Single-Pass Clustering] Error');
         // Fallback gracefully to basic severity bucket if massive fail
         return [
           {
@@ -348,7 +348,7 @@ export async function generateNarratives(
           });
           return narrative;
         } catch (error) {
-          console.error(`[Narrative Generation] Error for cluster ${cluster.id}:`, error);
+          logger.error({ clusterId: cluster.id, error }, '[Narrative Generation] Error');
           // Fallback
           narrativeClusters.push({
             ...cluster,

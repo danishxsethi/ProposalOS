@@ -8,8 +8,8 @@ services:
       - '6432:5432'
     environment:
       # PostgreSQL connection settings (aligned with edoburu/pgbouncer)
-      - DB_HOST=host.docker.internal
-      - DB_PORT=5435
+      - DB_HOST=proposal_engine_db
+      - DB_PORT=5432
       - DB_USER=${DB_USER:-postgres}
       - DB_PASSWORD=${DB_PASSWORD:-password}
       - DB_NAME=${DB_NAME:-proposal_rls_smoke}
@@ -43,6 +43,8 @@ services:
       timeout: 5s
       retries: 5
 
-    # For macOS/Linux - connect to host PostgreSQL
-    extra_hosts:
-      - 'host.docker.internal:host-gateway'
+networks:
+  default:
+    name: proposal_engine_network
+    external: true
+

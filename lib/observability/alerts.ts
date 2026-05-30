@@ -6,6 +6,7 @@
  * Defines configurable alert rules and fires POST webhooks to ALERT_WEBHOOK_URL
  * when thresholds are breached. Evaluated on every MetricsRecorder flush cycle.
  */
+import { logger } from '@/lib/logger';
 
 interface MetricEntry {
   name: string;
@@ -202,9 +203,7 @@ function accumulateAndSum(metric: string, value: number, windowMs: number): numb
 async function fireWebhook(rule: AlertRule, observedValue: number): Promise<void> {
   const webhookUrl = process.env.ALERT_WEBHOOK_URL;
   if (!webhookUrl) {
-    console.warn(
-      `[Alerts] ${rule.name} triggered (${observedValue}) but ALERT_WEBHOOK_URL not set`
-    );
+    logger.warn({ rule: rule.name, observedValue }, `[Alerts] triggered but ALERT_WEBHOOK_URL not set`);
     return;
   }
 
@@ -224,9 +223,9 @@ async function fireWebhook(rule: AlertRule, observedValue: number): Promise<void
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     });
-    console.info(`[Alerts] Fired webhook for rule "${rule.name}" (value=${observedValue})`);
+    logger.info({ rule: rule.name, observedValue }, '[Alerts] Fired webhook');
   } catch (err) {
-    console.error(`[Alerts] Webhook failed for rule "${rule.name}":`, err);
+    logger.error({ rule: rule.name, error: err }, '[Alerts] Webhook failed');
   }
 }
 

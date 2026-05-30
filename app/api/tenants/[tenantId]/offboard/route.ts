@@ -35,10 +35,10 @@ export interface OffboardTenantRequest {
  */
 export async function POST(
   request: NextRequest,
-  { params }: { params: { tenantId: string } }
+  context: { params: Promise<{ tenantId: string }> }
 ): Promise<NextResponse> {
   const traceId = generateTraceId();
-  const { tenantId } = params;
+  const { tenantId } = await context.params;
 
   try {
     // Verify admin access or tenant owner
@@ -163,10 +163,10 @@ export async function POST(
  */
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { tenantId: string } }
+  context: { params: Promise<{ tenantId: string }> }
 ): Promise<NextResponse> {
   const traceId = generateTraceId();
-  const { tenantId } = params;
+  const { tenantId } = await context.params;
 
   try {
     // Verify admin access only

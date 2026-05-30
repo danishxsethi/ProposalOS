@@ -26,7 +26,7 @@ const MAX_TENANTS_PER_RUN = 5;
  * Requirements: 14.6
  */
 export async function GET(req: Request) {
-  const authError = verifyCronAuth(req);
+  const authError = await verifyCronAuth(req);
   if (authError) return authError;
 
   try {

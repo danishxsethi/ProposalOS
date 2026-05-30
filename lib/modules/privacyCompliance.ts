@@ -5,7 +5,9 @@ import puppeteer from 'puppeteer-core';
 
 import { CostTracker } from '@/lib/costs/costTracker';
 import { logger } from '@/lib/logger';
+import { withProviderResilience } from '@/lib/resilience/withProviderResilience';
 
+import { normalizeConfidence } from './findingGenerator';
 import { AuditModuleResult, Finding } from './types';
 
 const genAI = new GoogleGenerativeAI(process.env.GOOGLE_AI_API_KEY!);
@@ -313,8 +315,22 @@ export async function runPrivacyModule(
 
 async function fetchPolicyText(url: string): Promise<string | null> {
   try {
-    const res = await fetch(url);
-    const html = await res.text();
+    const html = await withProviderResilience<string>(
+      {
+        provider: 'generic',
+        operation: 'privacy_fetch_policy_text',
+        policy: {
+          timeoutMs: 15000,
+          maxAttempts: 2,
+        },
+      },
+      async () => {
+        const res = await fetch(url);
+        if (!res.ok) throw new Error(`HTTP error ${res.status}`);
+        return await res.text();
+      }
+    );
+    if (typeof html !== 'string') return null;
     const $ = cheerio.load(html);
     // Try to get main content
     return $('main, article, .content, body').text().replace(/\s+/g, ' ').trim();
@@ -324,18 +340,39 @@ async function fetchPolicyText(url: string): Promise<string | null> {
 }
 
 async function launchBrowser() {
-  const isLocal = process.env.NODE_ENV === 'development';
-  if (isLocal) {
-    return await puppeteer.launch({
-      headless: true,
-      args: ['--no-sandbox', '--disable-setuid-sandbox'],
-    });
-  } else {
-    return await puppeteer.launch({
-      args: chromium.args,
-      defaultViewport: { width: 1920, height: 1080, deviceScaleFactor: 1 },
-      executablePath: await chromium.executablePath(),
-      headless: true,
-    });
+  const fs = require('fs');
+  const localPaths = [
+    process.env.CHROME_EXECUTABLE_PATH,
+    '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+    '/Applications/Chromium.app/Contents/MacOS/Chromium',
+    '/usr/bin/google-chrome',
+    '/usr/bin/chromium-browser',
+  ].filter(Boolean) as string[];
+
+  let executablePath: string | undefined;
+  for (const p of localPaths) {
+    if (p && fs.existsSync(p)) {
+      executablePath = p;
+      break;
+    }
   }
+
+  if (!executablePath) {
+    try {
+      executablePath = await chromium.executablePath();
+    } catch {
+      // Ignore
+    }
+  }
+
+  if (!executablePath) {
+    throw new Error('Chromium not found. Install Chrome or set CHROME_EXECUTABLE_PATH.');
+  }
+
+  return puppeteer.launch({
+    args: ['--no-sandbox', '--disable-setuid-sandbox'],
+    defaultViewport: { width: 1920, height: 1080, deviceScaleFactor: 1 },
+    executablePath,
+    headless: true,
+  });
 }

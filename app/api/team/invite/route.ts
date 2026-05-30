@@ -22,7 +22,7 @@ export async function lookupExistingUserByEmailForInvite(email: string) {
 
 export const POST = withAuth(async (req: Request) => {
   // 1. RBAC Check (Admin+)
-  const rbacMiddleware = withRole('admin', async () => {
+  const rbacMiddleware = withRole('agency_admin', async () => {
     try {
       const body = await req.json();
       const { email, role } = body;

@@ -2,6 +2,7 @@
  * Extract business information from a URL
  * Fetches title from the website to use as business name
  */
+import { logger } from '@/lib/logger';
 export async function extractBusinessFromUrl(url: string): Promise<{
   url: string;
   name: string;
@@ -33,14 +34,12 @@ export async function extractBusinessFromUrl(url: string): Promise<{
 
     // Extract title from HTML
     const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
-    let name = titleMatch ? titleMatch[1].trim() : domain;
+    const rawName = titleMatch?.[1]?.trim() || domain;
 
     // Clean up common title suffixes
-    name = name
-      .replace(/\s*[-|–]\s*/g, ' - ')
-      .split(' - ')[0] // Take first part before dash
+    let name = ((rawName.replace(/\s*[-|–]\s*/g, ' - ').split(' - ')[0] ?? '')
       .replace(/\s*\|\s*/g, ' | ')
-      .split(' | ')[0] // Take first part before pipe
+      .split(' | ')[0] ?? '')
       .trim();
 
     // Fallback to domain-based name if title is too generic
@@ -50,25 +49,25 @@ export async function extractBusinessFromUrl(url: string): Promise<{
       name.toLowerCase() === 'welcome'
     ) {
       // Convert domain to business name (remove TLD, capitalize)
-      name = domain
-        .split('.')[0]
+      const domainPrefix = domain.split('.')[0] ?? '';
+      name = domainPrefix
         .split('-')
-        .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+        .map((word) => (word.charAt(0) || '').toUpperCase() + word.slice(1))
         .join(' ');
     }
 
     return { url, name, domain };
   } catch (error) {
-    console.error('Error extracting business from URL:', error);
+    logger.error({ error }, 'Error extracting business from URL');
 
     // Fallback: use domain as name
     try {
       const urlObj = new URL(url.startsWith('http') ? url : 'https://' + url);
       const domain = urlObj.hostname.replace('www.', '');
-      const name = domain
-        .split('.')[0]
+      const domainPrefix = domain.split('.')[0] ?? '';
+      const name = domainPrefix
         .split('-')
-        .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+        .map((word) => (word.charAt(0) || '').toUpperCase() + word.slice(1))
         .join(' ');
 
       return { url: urlObj.toString(), name, domain };

@@ -33,10 +33,17 @@ vi.mock('@/lib/costs/costTracker', () => {
       addApiCall() {}
       addLlmCall() {}
     },
+    checkDailyAuditLimit: vi.fn(() => ({
+      allowed: true,
+      limit: 100,
+      todayCount: 5,
+      remaining: 95,
+    })),
+    incrementAuditCount: vi.fn(),
   };
 });
 vi.mock('@/lib/logger', () => ({
-  logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn() },
+  logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
   logError: vi.fn(),
 }));
 vi.mock('@/lib/metrics', () => ({
@@ -55,13 +62,29 @@ vi.mock('langsmith', () => ({
 vi.mock('@/lib/middleware/auth', () => ({
   withAuth: (handler: any) => handler,
 }));
+vi.mock('@/lib/auth', () => ({
+  auth: vi.fn(async () => ({
+    user: {
+      id: 'user-123',
+      email: 'member@test.com',
+      role: 'agency_member',
+    },
+  })),
+  getServerSession: vi.fn(async () => ({
+    user: {
+      id: 'user-123',
+      email: 'member@test.com',
+      role: 'agency_member',
+    },
+  })),
+}));
 vi.mock('@/lib/tenant/context', () => ({
   getTenantId: vi.fn(() => 'tenant-123'),
   runWithTenantAsync: vi.fn(async (_tenantId: string, fn: () => unknown) => await fn()),
 }));
 vi.mock('@/lib/prisma', () => ({
   prisma: {
-    audit: { create: vi.fn(() => ({ id: 'audit-123' })), update: vi.fn() },
+    audit: { create: vi.fn(() => ({ id: 'audit-123' })), update: vi.fn(() => Promise.resolve({})) },
   },
 }));
 vi.mock('@/lib/billing/limits', () => ({
@@ -83,8 +106,8 @@ describe('Integration: POST /api/audit', () => {
     const data = await res.json();
 
     expect(res.status).toBe(400);
-    expect(data.error).toBe('Invalid input');
-    expect(data.details[0].path).toContain('url');
+    expect(data.error.message).toBe('Invalid input');
+    expect(data.error.details[0].field).toBe('url');
   });
 
   it('should return 400 for invalid URL (Zod Validation)', async () => {
@@ -97,8 +120,8 @@ describe('Integration: POST /api/audit', () => {
     const data = await res.json();
 
     expect(res.status).toBe(400);
-    expect(data.error).toBe('Invalid input');
-    expect(data.details[0].message).toBe('Invalid url');
+    expect(data.error.message).toBe('Invalid input');
+    expect(data.error.details[0].field).toBe('url');
   });
 
   it('should return 200 for valid request', async () => {
