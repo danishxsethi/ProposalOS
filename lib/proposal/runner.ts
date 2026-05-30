@@ -14,6 +14,7 @@ import { withChildObservabilityContext } from '@/lib/observability/context';
 import { MetricsRecorder } from '@/lib/observability/MetricsRecorder';
 import { prisma } from '@/lib/prisma';
 import { runProposalPipeline } from '@/lib/proposal';
+import { ProposalQAService } from '@/lib/proposal/ProposalQAService';
 import { determineProposalStatus } from '@/lib/proposal/status';
 import { runAutoQA } from '@/lib/qa/autoQA';
 import { createParentTrace } from '@/lib/tracing';
@@ -115,81 +116,134 @@ export async function generateProposal(auditId: string) {
           );
         }
 
-        // Step 2: Generate proposal via canonical timeout wrapper
-        const proposalGraphState = await invokeProposalGraphWithTimeout({
-          businessName: audit.businessName,
-          businessIndustry: audit.businessIndustry || undefined,
-          clusters: diagnosisResult.clusters,
-          findings: audit.findings,
-          tenantId: audit.tenantId,
-          auditId: audit.id,
-          // P0-1: Pass evidence snapshots for QA grounding
-          evidenceSnapshots: await prisma.evidenceSnapshot.findMany({
-            where: { auditId: audit.id },
-          }),
-        });
+        let version = 1;
+        let proposal = null;
+        let evaluationResult = null;
 
-        const pipelineResult = {
-          ...proposalGraphState.proposalDef,
-          normalizedFindings: audit.findings,
-        };
-        const { normalizedFindings: _nf, ...proposalResult } = pipelineResult;
-
-        // Use complete proposal if available, otherwise fall back to old format
-        const finalProposal = proposalGraphState.completeProposal || proposalResult;
-
-        // Step 3: Run automated QA to determine proposal status.
-        // This mirrors the logic in app/api/audit/[id]/propose/route.ts so both
-        // the interactive route and the background runner use identical criteria.
-        const qaStatus = runAutoQA(
-          finalProposal,
-          audit.findings,
-          audit.businessName,
-          audit.businessCity,
-          {
-            industry: audit.businessIndustry,
-            comparisonReport: comparisonReport ?? undefined,
-          }
-        );
-
-        const proposalStatus = determineProposalStatus(qaStatus);
-
-        logger.info(
-          {
-            event: 'proposal.status.decided',
-            auditId,
-            qaScore: qaStatus.score,
-            passedChecks: qaStatus.passedChecks,
-            totalChecks: qaStatus.totalChecks,
-            hardFails: qaStatus.clientPerfect.hardFails.length,
-            needsReview: qaStatus.needsReview,
-            status: proposalStatus,
-          },
-          'Proposal status decided'
-        );
-
-        // Step 4: Save proposal to database (serialize to JSON)
-        const proposal = await prisma.proposal.create({
-          data: {
-            auditId,
+        while (version <= 3) {
+          // Step 2: Generate proposal via canonical timeout wrapper
+          const proposalGraphState = await invokeProposalGraphWithTimeout({
+            businessName: audit.businessName,
+            businessIndustry: audit.businessIndustry || undefined,
+            clusters: diagnosisResult.clusters,
+            findings: audit.findings,
             tenantId: audit.tenantId,
-            executiveSummary: finalProposal.executiveSummary,
-            painClusters: finalProposal.painClusters as any,
-            tierEssentials: finalProposal.tiers.essentials as any,
-            tierGrowth: finalProposal.tiers.growth as any,
-            tierPremium: finalProposal.tiers.premium as any,
-            pricing: finalProposal.pricing as any,
-            assumptions: finalProposal.assumptions,
-            disclaimers: finalProposal.disclaimers,
-            nextSteps: finalProposal.nextSteps,
-            comparisonReport: comparisonReport ? (comparisonReport as any) : undefined,
-            status: proposalStatus,
-            qaScore: qaStatus.score,
-            clientScore: qaStatus.clientPerfect.score,
-            qaResults: JSON.parse(JSON.stringify(qaStatus)),
-            clientScoreResults: JSON.parse(JSON.stringify(qaStatus.clientPerfect)),
-          },
-        });
+            auditId: audit.id,
+            // P0-1: Pass evidence snapshots for QA grounding
+            evidenceSnapshots: await prisma.evidenceSnapshot.findMany({
+              where: { auditId: audit.id },
+            }),
+          });
+
+          const pipelineResult = {
+            ...proposalGraphState.proposalDef,
+            normalizedFindings: audit.findings,
+          };
+          const { normalizedFindings: _nf, ...proposalResult } = pipelineResult;
+
+          // Use complete proposal if available, otherwise fall back to old format
+          const finalProposal = proposalGraphState.completeProposal || proposalResult;
+
+          // Step 3: Run automated QA evaluation via ProposalQAService
+          const evaluation = ProposalQAService.evaluateProposal(
+            finalProposal,
+            audit.findings,
+            audit.businessName,
+            audit.businessCity,
+            {
+              industry: audit.businessIndustry,
+              comparisonReport: comparisonReport ?? undefined,
+            }
+          );
+
+          const proposalStatus = evaluation.passed ? 'READY' : 'DRAFT';
+
+          logger.info(
+            {
+              event: 'proposal.status.decided',
+              auditId,
+              version,
+              overallScore: evaluation.overallScore,
+              passedChecks: evaluation.autoQAStatus.passedChecks,
+              totalChecks: evaluation.autoQAStatus.totalChecks,
+              status: proposalStatus,
+            },
+            'Proposal status decided'
+          );
+
+          // Step 4: Save proposal to database (serialize to JSON)
+          proposal = await prisma.proposal.create({
+            data: {
+              auditId,
+              tenantId: audit.tenantId,
+              version,
+              executiveSummary: finalProposal.executiveSummary,
+              painClusters: finalProposal.painClusters as any,
+              tierEssentials: finalProposal.tiers.essentials as any,
+              tierGrowth: finalProposal.tiers.growth as any,
+              tierPremium: finalProposal.tiers.premium as any,
+              pricing: finalProposal.pricing as any,
+              assumptions: finalProposal.assumptions,
+              disclaimers: finalProposal.disclaimers,
+              nextSteps: finalProposal.nextSteps,
+              comparisonReport: comparisonReport ? (comparisonReport as any) : undefined,
+              status: proposalStatus,
+              qaScore: evaluation.autoQAStatus.score,
+              clientScore: evaluation.autoQAStatus.clientPerfect.score,
+              qaResults: JSON.parse(
+                JSON.stringify({
+                  ...evaluation.autoQAStatus,
+                  evaluation: {
+                    dimensions: evaluation.dimensions,
+                    overallScore: evaluation.overallScore,
+                    feedbackLogs: evaluation.feedbackLogs,
+                    passed: evaluation.passed,
+                    metadataStatus: evaluation.passed ? 'ready' : 'in_review',
+                  },
+                })
+              ),
+              clientScoreResults: JSON.parse(JSON.stringify(evaluation.autoQAStatus.clientPerfect)),
+            },
+          });
+
+          evaluationResult = evaluation;
+
+          if (evaluation.passed) {
+            logger.info(
+              {
+                event: 'proposal.promotion.passed',
+                auditId,
+                version,
+                overallScore: evaluation.overallScore,
+              },
+              'Proposal passed QA and is promoted to READY'
+            );
+            break;
+          } else {
+            logger.warn(
+              {
+                event: 'proposal.promotion.failed',
+                auditId,
+                version,
+                overallScore: evaluation.overallScore,
+                feedbackLogs: evaluation.feedbackLogs,
+              },
+              'Proposal failed QA auto-promotion'
+            );
+            if (version < 3) {
+              version++;
+            } else {
+              logger.info({ auditId }, 'Max automated QA regenerations reached.');
+              break;
+            }
+          }
+        }
+
+        if (!proposal || !evaluationResult) {
+          throw new Error('Failed to generate any proposal version');
+        }
+
+        const finalStatus = proposal.status;
 
         // Update audit cost
         await prisma.audit.update({
@@ -200,7 +254,7 @@ export async function generateProposal(auditId: string) {
         });
 
         const duration_ms = Date.now() - startTime;
-        MetricsRecorder.proposalGenerated(audit.tenantId, proposalStatus, undefined);
+        MetricsRecorder.proposalGenerated(audit.tenantId, finalStatus, undefined);
         await recordAuditTrailEvent({
           eventType: 'proposal.generated',
           tenantId: audit.tenantId,
@@ -209,10 +263,14 @@ export async function generateProposal(auditId: string) {
           findingsCount: audit.findings.length,
           proposalGenerated: true,
           payload: {
-            status: proposalStatus,
-            qaScore: qaStatus.score,
+            status: finalStatus,
+            qaScore: evaluationResult.autoQAStatus.score,
             durationMs: duration_ms,
             costCents: tracker.getTotalCents(),
+            overallScore: evaluationResult.overallScore,
+            dimensions: evaluationResult.dimensions,
+            feedbackLogs: evaluationResult.feedbackLogs,
+            passed: evaluationResult.passed,
           },
         });
 
@@ -247,9 +305,15 @@ export async function generateProposal(auditId: string) {
           auditId,
           proposalId: proposal.id,
           webLinkToken: proposal.webLinkToken,
-          status: proposalStatus,
-          qaScore: qaStatus.score,
+          status: finalStatus,
+          qaScore: evaluationResult.autoQAStatus.score,
           costCents: tracker.getTotalCents(),
+          evaluation: {
+            dimensions: evaluationResult.dimensions,
+            overallScore: evaluationResult.overallScore,
+            passed: evaluationResult.passed,
+            feedbackLogs: evaluationResult.feedbackLogs,
+          },
         };
       } catch (error) {
         logError('Error generating proposal', error, { auditId });

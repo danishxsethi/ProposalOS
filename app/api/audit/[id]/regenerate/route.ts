@@ -9,6 +9,7 @@ import { withRateLimit } from '@/lib/middleware/rateLimit';
 import { recordAuditTrailEvent } from '@/lib/observability/auditTrail';
 import { prisma } from '@/lib/prisma';
 import { runProposalPipeline } from '@/lib/proposal';
+import { ProposalQAService } from '@/lib/proposal/ProposalQAService';
 import { determineProposalStatus } from '@/lib/proposal/status';
 import { runAutoQA } from '@/lib/qa/autoQA';
 import { getTenantId } from '@/lib/tenant/context';
@@ -153,15 +154,17 @@ async function handleRegeneration(request: Request, { params }: Params): Promise
       'Regeneration cost'
     );
 
-    // Save new proposal version
-    const qaStatus = runAutoQA(
+    // Save new proposal version via ProposalQAService
+    const evaluation = ProposalQAService.evaluateProposal(
       proposalResult,
       audit.findings,
       audit.businessName,
       audit.businessCity,
-      { industry: audit.businessIndustry }
+      {
+        industry: audit.businessIndustry,
+      }
     );
-    const proposalStatus = determineProposalStatus(qaStatus);
+    const proposalStatus = evaluation.passed ? 'READY' : 'DRAFT';
 
     const proposal = await prisma.proposal.create({
       data: {
@@ -178,10 +181,21 @@ async function handleRegeneration(request: Request, { params }: Params): Promise
         disclaimers: proposalResult.disclaimers,
         nextSteps: proposalResult.nextSteps,
         status: proposalStatus,
-        qaScore: qaStatus.score,
-        clientScore: qaStatus.clientPerfect.score,
-        qaResults: JSON.parse(JSON.stringify(qaStatus)),
-        clientScoreResults: JSON.parse(JSON.stringify(qaStatus.clientPerfect)),
+        qaScore: evaluation.autoQAStatus.score,
+        clientScore: evaluation.autoQAStatus.clientPerfect.score,
+        qaResults: JSON.parse(
+          JSON.stringify({
+            ...evaluation.autoQAStatus,
+            evaluation: {
+              dimensions: evaluation.dimensions,
+              overallScore: evaluation.overallScore,
+              feedbackLogs: evaluation.feedbackLogs,
+              passed: evaluation.passed,
+              metadataStatus: evaluation.passed ? 'ready' : 'in_review',
+            },
+          })
+        ),
+        clientScoreResults: JSON.parse(JSON.stringify(evaluation.autoQAStatus.clientPerfect)),
       },
     });
 
@@ -201,9 +215,13 @@ async function handleRegeneration(request: Request, { params }: Params): Promise
       payload: {
         version: nextVersion,
         status: proposalStatus,
-        qaScore: qaStatus.score,
+        qaScore: evaluation.autoQAStatus.score,
         costCents: tracker.getTotalCents(),
         isRegeneration: true,
+        overallScore: evaluation.overallScore,
+        dimensions: evaluation.dimensions,
+        feedbackLogs: evaluation.feedbackLogs,
+        passed: evaluation.passed,
       },
     }).catch(() => {});
 
@@ -217,11 +235,17 @@ async function handleRegeneration(request: Request, { params }: Params): Promise
       version: proposal.version,
       webLinkToken: proposal.webLinkToken,
       status: proposalStatus,
-      qaScore: qaStatus.score,
+      qaScore: evaluation.autoQAStatus.score,
       executiveSummary: proposal.executiveSummary?.slice(0, 200) + '...',
       pricing: proposal.pricing,
       regenerationsRemaining: 3 - nextVersion,
       costCents: tracker.getTotalCents(),
+      evaluation: {
+        dimensions: evaluation.dimensions,
+        overallScore: evaluation.overallScore,
+        passed: evaluation.passed,
+        feedbackLogs: evaluation.feedbackLogs,
+      },
     });
   } catch (error) {
     console.error('[Regenerate] Error:', error);

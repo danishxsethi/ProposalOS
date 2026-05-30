@@ -12,10 +12,36 @@ function requireEnv(name: string): string {
   return value;
 }
 
-export const stripeSecretKey = () => requireEnv('STRIPE_SECRET_KEY');
+export const stripeSecretKey = () => {
+  validateStripeEnvironment();
+  return requireEnv('STRIPE_SECRET_KEY');
+};
+
 export const stripeWebhookSecret = () => requireEnv('STRIPE_WEBHOOK_SECRET');
 
 let stripeInstance: Stripe | null = null;
+
+function validateStripeEnvironment() {
+  if (isBuildTime) return;
+
+  const isProduction = process.env.NODE_ENV === 'production';
+  const secretKey = process.env.STRIPE_SECRET_KEY || '';
+  const publishableKey = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || '';
+
+  const hasLiveSecret = secretKey.startsWith('sk_live_');
+  const hasLivePublishable = publishableKey.startsWith('pk_live_');
+
+  if (!isProduction && (hasLiveSecret || hasLivePublishable)) {
+    throw new Error(
+      `[FATAL SECURITY CHECK] Live Stripe keys detected in a non-production environment (${process.env.NODE_ENV || 'development'}). Boot blocked to prevent accidental live charges.`
+    );
+  }
+}
+
+// Call validate immediately on import if not at build time
+if (!isBuildTime) {
+  validateStripeEnvironment();
+}
 
 function getStripeInstance() {
   if (isBuildTime) {
@@ -24,6 +50,8 @@ function getStripeInstance() {
       typescript: true,
     });
   }
+
+  validateStripeEnvironment();
 
   if (!stripeInstance) {
     stripeInstance = new Stripe(stripeSecretKey(), {

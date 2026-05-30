@@ -54,6 +54,8 @@ export type AuditTrailEventType =
   // Settings & Membership (P1)
   | 'tenant.branding_changed'
   | 'role.membership_changed'
+  // Provisioning
+  | 'tenant.provisioned'
   // Advanced Abuse & Security Blocking
   | 'abuse.rate_limited'
   | 'abuse.idempotency_replay'
