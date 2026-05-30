@@ -2,11 +2,13 @@ import { NextResponse } from 'next/server';
 
 import { withAuth } from '@/lib/middleware/auth';
 import { prisma } from '@/lib/prisma';
-import { getSaasPlanById, stripe } from '@/lib/stripe/stripe';
+import { assertBillingNotFrozen, getSaasPlanById, stripe } from '@/lib/stripe/stripe';
 import { getTenantId } from '@/lib/tenant/context';
 
 export const POST = withAuth(async (req: Request) => {
   try {
+    assertBillingNotFrozen();
+
     const tenantId = await getTenantId();
     if (!tenantId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });

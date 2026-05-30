@@ -91,7 +91,12 @@ export async function handleStripeWebhookEvent(
   let tenantId: string | null = null;
   let triggerDelivery: { proposalId: string; tenantId: string } | null = null;
 
+  // Global Kill Switch: Freeze all mutations
+  const { assertBillingNotFrozen } = await import('@/lib/stripe/stripe');
+  assertBillingNotFrozen();
+
   // Livemode in test mode environment safeguard
+
   if (event.livemode && stripeSecretKey().startsWith('sk_test')) {
     logger.warn(
       { eventId: event.id },
