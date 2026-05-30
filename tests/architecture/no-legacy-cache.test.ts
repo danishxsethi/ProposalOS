@@ -10,7 +10,12 @@ function getAllFiles(dirPath: string, arrayOfFiles: string[] = []): string[] {
     const fullPath = path.join(dirPath, file);
     if (fs.statSync(fullPath).isDirectory()) {
       getAllFiles(fullPath, arrayOfFiles);
-    } else if (file.endsWith('.ts') || file.endsWith('.tsx') || file.endsWith('.js') || file.endsWith('.jsx')) {
+    } else if (
+      file.endsWith('.ts') ||
+      file.endsWith('.tsx') ||
+      file.endsWith('.js') ||
+      file.endsWith('.jsx')
+    ) {
       arrayOfFiles.push(fullPath);
     }
   });
@@ -33,7 +38,11 @@ describe('Architecture boundary guard: No legacy cache import in production modu
 
     allScannedFiles.forEach((filePath) => {
       // Skip test files themselves
-      if (filePath.includes('/__tests__/') || filePath.endsWith('.test.ts') || filePath.endsWith('.spec.ts')) {
+      if (
+        filePath.includes('/__tests__/') ||
+        filePath.endsWith('.test.ts') ||
+        filePath.endsWith('.spec.ts')
+      ) {
         return;
       }
 
@@ -44,7 +53,9 @@ describe('Architecture boundary guard: No legacy cache import in production modu
         // Look for imports or requires of apiCache
         if (
           (line.includes('apiCache') || line.includes('cachedFetch')) &&
-          (line.trim().startsWith('import') || line.trim().startsWith('const') || line.trim().startsWith('let'))
+          (line.trim().startsWith('import') ||
+            line.trim().startsWith('const') ||
+            line.trim().startsWith('let'))
         ) {
           violations.push({
             file: path.relative(path.resolve(__dirname, '../..'), filePath),
@@ -62,6 +73,9 @@ describe('Architecture boundary guard: No legacy cache import in production modu
       });
     }
 
-    expect(violations, 'No production modules or outreach should import or require apiCache/cachedFetch').toHaveLength(0);
+    expect(
+      violations,
+      'No production modules or outreach should import or require apiCache/cachedFetch'
+    ).toHaveLength(0);
   });
 });

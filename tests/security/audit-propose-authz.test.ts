@@ -166,9 +166,12 @@ describe('audit propose authorization', () => {
   it('returns 401 when unauthenticated', async () => {
     mocks.auth.mockResolvedValue(null);
 
-    const response = await POST(new Request('http://localhost/api/audit/audit-1/propose', { method: 'POST' }), {
-      params: Promise.resolve({ id: 'audit-1' }),
-    });
+    const response = await POST(
+      new Request('http://localhost/api/audit/audit-1/propose', { method: 'POST' }),
+      {
+        params: Promise.resolve({ id: 'audit-1' }),
+      }
+    );
 
     expect(response.status).toBe(401);
     expect(mocks.auditFindFirst).not.toHaveBeenCalled();
@@ -180,9 +183,12 @@ describe('audit propose authorization', () => {
     });
     mocks.auditFindFirst.mockResolvedValue(null);
 
-    const response = await POST(new Request('http://localhost/api/audit/audit-2/propose', { method: 'POST' }), {
-      params: Promise.resolve({ id: 'audit-2' }),
-    });
+    const response = await POST(
+      new Request('http://localhost/api/audit/audit-2/propose', { method: 'POST' }),
+      {
+        params: Promise.resolve({ id: 'audit-2' }),
+      }
+    );
 
     expect(response.status).toBe(404);
     expect(mocks.auditFindFirst).toHaveBeenCalledWith({

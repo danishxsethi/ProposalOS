@@ -42,7 +42,9 @@ describe('Resilience - Circuit Breaker', () => {
     await recordCircuitFailure(provider, undefined, policy);
 
     // Now it should throw CircuitBreakerOpenError
-    await expect(checkCircuitBreaker(provider, 'test', undefined, policy)).rejects.toThrow(CircuitBreakerOpenError);
+    await expect(checkCircuitBreaker(provider, 'test', undefined, policy)).rejects.toThrow(
+      CircuitBreakerOpenError
+    );
   });
 
   it('should transition to HALF-OPEN after cooldown expires and CLOSE on success', async () => {
@@ -62,7 +64,9 @@ describe('Resilience - Circuit Breaker', () => {
 
     // 1. Force circuit open
     await recordCircuitFailure(provider, undefined, policy);
-    await expect(checkCircuitBreaker(provider, 'test', undefined, policy)).rejects.toThrow(CircuitBreakerOpenError);
+    await expect(checkCircuitBreaker(provider, 'test', undefined, policy)).rejects.toThrow(
+      CircuitBreakerOpenError
+    );
 
     // 2. Advance time past cooldown
     await vi.advanceTimersByTimeAsync(1100);
@@ -75,7 +79,7 @@ describe('Resilience - Circuit Breaker', () => {
 
     // 5. Verify the circuit is closed
     await expect(checkCircuitBreaker(provider, 'test', undefined, policy)).resolves.toBeUndefined();
-    
+
     vi.useRealTimers();
   });
 });

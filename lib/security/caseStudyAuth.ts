@@ -4,7 +4,12 @@ import { runWithTenantBypass } from '@/lib/tenant/context';
 export interface CaseStudyAuthResult {
   authorized: boolean;
   tenantId?: string;
-  error?: 'NOT_FOUND' | 'MISSING_TOKEN' | 'INVALID_TOKEN' | 'EXPIRED_TOKEN' | 'CROSS_TENANT_MISMATCH';
+  error?:
+    | 'NOT_FOUND'
+    | 'MISSING_TOKEN'
+    | 'INVALID_TOKEN'
+    | 'EXPIRED_TOKEN'
+    | 'CROSS_TENANT_MISMATCH';
 }
 
 /**

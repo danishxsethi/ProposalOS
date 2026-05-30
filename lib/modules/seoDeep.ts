@@ -279,4 +279,3 @@ export interface SeoDeepData {
   organicRank: number | null;
   inTop10: boolean;
 }
-

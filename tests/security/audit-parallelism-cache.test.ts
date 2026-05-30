@@ -140,7 +140,9 @@ describe('runWithConcurrency — mock benchmark', () => {
 
     // Log for visibility — captured by reporter
     // eslint-disable-next-line no-console
-    console.info(`[benchmark] sequential=${seqMs}ms parallel=${parMs}ms ratio=${(seqMs / parMs).toFixed(2)}x`);
+    console.info(
+      `[benchmark] sequential=${seqMs}ms parallel=${parMs}ms ratio=${(seqMs / parMs).toFixed(2)}x`
+    );
   });
 });
 
@@ -243,8 +245,16 @@ describe('moduleCache — get/set with in-memory store', () => {
       { ttlSeconds: 60 }
     );
 
-    const a = await getCached<{ value: string }>({ module: 'mod-a', version: 1, input: { id: '1' } });
-    const b = await getCached<{ value: string }>({ module: 'mod-b', version: 1, input: { id: '1' } });
+    const a = await getCached<{ value: string }>({
+      module: 'mod-a',
+      version: 1,
+      input: { id: '1' },
+    });
+    const b = await getCached<{ value: string }>({
+      module: 'mod-b',
+      version: 1,
+      input: { id: '1' },
+    });
 
     expect(a.value).toEqual({ value: 'A' });
     expect(b.value).toEqual({ value: 'B' });

@@ -85,7 +85,7 @@ describe('Resilience - Rate Limiter', () => {
       setIfNotExists: async () => true,
       del: async () => {},
     };
-    
+
     // Inject mock failure into internal SharedStore singleton via vi.spyOn
     const spy = vi.spyOn(sharedStoreModule, 'getSharedStore').mockResolvedValue(mockStore as any);
 

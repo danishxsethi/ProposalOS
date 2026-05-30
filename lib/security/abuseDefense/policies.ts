@@ -8,7 +8,6 @@ import { createHash } from 'crypto';
 
 import { AbusePolicy, AbuseRouteClass } from './types';
 
-
 /**
  * Computes a secure SHA-256 hash of sensitive identifiers (API keys, tokens, session IDs, IPs)
  * to prevent raw secret leakage in the Redis/SharedStore keys.

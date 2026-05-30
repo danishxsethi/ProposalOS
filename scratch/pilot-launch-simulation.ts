@@ -17,7 +17,10 @@ async function main() {
     await prisma.$connect();
     console.log('✅ Connection to Local Staging Database (localhost:5435) is healthy.');
   } catch (err: any) {
-    console.error('❌ Failed to connect to local staging database. Is PostgreSQL running?', err.message);
+    console.error(
+      '❌ Failed to connect to local staging database. Is PostgreSQL running?',
+      err.message
+    );
     process.exit(1);
   }
 
@@ -38,7 +41,7 @@ async function main() {
 
   // Task 5 & 6: Create or simulate one pilot tenant and owner
   console.log('\n🌱 Task 5 & 6: Provisioning Tenant "Pilot Agency Alpha" and Operator Owner...');
-  
+
   const slug = 'pilot-alpha';
   const domain = 'pilot-alpha.proposalengine.app';
   const email = 'owner@pilot-alpha.com';
@@ -87,7 +90,9 @@ async function main() {
   });
 
   console.log(`✅ Tenant Created: ID=${tenant.id}, Slug=${tenant.slug}`);
-  console.log(`✅ Primary User Created: Email=${owner.email}, Role=${owner.role}, TenantID=${owner.tenantId}`);
+  console.log(
+    `✅ Primary User Created: Email=${owner.email}, Role=${owner.role}, TenantID=${owner.tenantId}`
+  );
 
   // Seed playbooks for the new tenant
   console.log('\n📚 Seeding playbooks for Tenant RLS context...');
@@ -101,7 +106,11 @@ async function main() {
           pricingConfig: { starter: 1000, growth: 2500, premium: 4000 },
           proposalLanguage: {
             valueProp: 'Maximize compliance, security, and digital foundation efficiency.',
-            painPoints: ['Missing security headers', 'Inefficient caching', 'Obsolete web technology'],
+            painPoints: [
+              'Missing security headers',
+              'Inefficient caching',
+              'Obsolete web technology',
+            ],
           },
           isDefault: true,
         },
@@ -112,7 +121,7 @@ async function main() {
 
   // Task 7: Run safe end-to-end audit flow against an approved test website (GNU.org)
   console.log('\n🕷️ Task 7: Initiating Safe End-to-End Audit against https://www.gnu.org...');
-  
+
   const audit = await runWithTenantAsync(tenant.id, async () => {
     return await prisma.audit.create({
       data: {
@@ -157,7 +166,7 @@ async function main() {
 
   // Task 9: Move proposal through manual QA workflow
   console.log('\n🔍 Task 9: Simulating Manual QA Workflow Transitions...');
-  
+
   // State: generated
   console.log('➡️ State 1: "generated"');
   let proposal = await runWithTenantAsync(tenant.id, async () => {
@@ -165,11 +174,15 @@ async function main() {
       where: { id: proposalResult.proposalId },
     });
   });
-  console.log(`   Persisted DB Status: ${proposal?.status} (Expect DRAFT due to requireHumanReview=true)`);
+  console.log(
+    `   Persisted DB Status: ${proposal?.status} (Expect DRAFT due to requireHumanReview=true)`
+  );
 
   // State: needs_review
   console.log('➡️ State 2: "needs_review"');
-  console.log('   Flagging proposal for Operator inspection due to active manual review policies...');
+  console.log(
+    '   Flagging proposal for Operator inspection due to active manual review policies...'
+  );
   // Simulating operator assigning and prioritizing
   console.log('   Proposal marked as: [Needs Operator Review]');
 
@@ -223,8 +236,12 @@ async function main() {
   });
 
   if (publicAccess) {
-    console.log('✅ Public preview successfully fetched via webLinkToken (Bypassing RLS securely).');
-    console.log(`   Fetched Proposal: ID=${publicAccess.id}, Status=${publicAccess.status}, Token=${publicAccess.webLinkToken}`);
+    console.log(
+      '✅ Public preview successfully fetched via webLinkToken (Bypassing RLS securely).'
+    );
+    console.log(
+      `   Fetched Proposal: ID=${publicAccess.id}, Status=${publicAccess.status}, Token=${publicAccess.webLinkToken}`
+    );
     console.log(`   Tenant isolation bounds verified: Linked Tenant=${publicAccess.tenantId}`);
   } else {
     console.error('❌ Failed to fetch proposal via anonymous webLinkToken!');
@@ -238,15 +255,18 @@ async function main() {
     console.log('✅ Stripe checkout billing verified to be in sandbox mode.');
     console.log(`   Secret key prefix check: ${stripeKey.slice(0, 7)}...`);
   } else {
-    console.error('⚠️ WARNING: Stripe key does not appear to be a test key!', stripeKey.slice(0, 7));
+    console.error(
+      '⚠️ WARNING: Stripe key does not appear to be a test key!',
+      stripeKey.slice(0, 7)
+    );
   }
 
   // Task 12: Verify stale job cleanup and operator runbook checks
   console.log('\n🧹 Task 12: Verifying Stale Job Cleanup and Runbook checks...');
-  
+
   // Create a mock stale audit and a mock stale audit job (older than 2 hours)
   const twoHoursAndTenMinsAgo = new Date(Date.now() - 130 * 60 * 1000);
-  
+
   const staleAudit = await runWithTenantBypass('create-mock-stale', async () => {
     return await prisma.audit.create({
       data: {
@@ -276,13 +296,17 @@ async function main() {
     });
   });
 
-  console.log(`   Created mock stale running audit (ID=${staleAudit.id}) and job (ID=${staleJob.id}) created 130 minutes ago.`);
+  console.log(
+    `   Created mock stale running audit (ID=${staleAudit.id}) and job (ID=${staleJob.id}) created 130 minutes ago.`
+  );
 
   // Run the cleanup logic matching app/api/cron/cleanup-stale-jobs/route.ts
   const now = new Date();
   const cutoffTime = new Date(now.getTime() - 120 * 60 * 1000); // 2 hours
 
-  console.log(`   Sweeping database for RUNNING jobs created before ${cutoffTime.toISOString()}...`);
+  console.log(
+    `   Sweeping database for RUNNING jobs created before ${cutoffTime.toISOString()}...`
+  );
   const cleanupResult = await runWithTenantBypass('simulation-cleanup-stale-audits', async () => {
     const staleAuditsToClean = await prisma.audit.findMany({
       where: {
@@ -326,7 +350,9 @@ async function main() {
     };
   });
 
-  console.log(`✅ Stale job cleanup completed: Swept ${cleanupResult.auditsCleaned} audits and ${cleanupResult.jobsCleaned} jobs.`);
+  console.log(
+    `✅ Stale job cleanup completed: Swept ${cleanupResult.auditsCleaned} audits and ${cleanupResult.jobsCleaned} jobs.`
+  );
 
   // Verify states have updated
   const updatedAudit = await runWithTenantBypass('verify-stale', async () => {

@@ -14,7 +14,7 @@ describe('Resilience - Timeouts', () => {
           return;
         }
         signal.addEventListener('abort', onAbort);
-        
+
         // Use a small timeout that is longer than the policy's timeoutMs (10ms)
         const timer = setTimeout(() => {
           signal.removeEventListener('abort', onAbort);

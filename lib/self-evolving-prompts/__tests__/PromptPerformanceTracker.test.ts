@@ -306,7 +306,9 @@ describe('PromptPerformanceTracker', () => {
     });
 
     it('should retrieve logs by version hash', async () => {
-      const logs = await withTenant(() => tracker.getPerformanceByVersion('test-version-query-123'));
+      const logs = await withTenant(() =>
+        tracker.getPerformanceByVersion('test-version-query-123')
+      );
 
       expect(logs.length).toBe(5);
       expect(logs.every((log) => log.promptVersionHash === 'test-version-query-123')).toBe(true);
@@ -316,10 +318,12 @@ describe('PromptPerformanceTracker', () => {
       const now = new Date();
       const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
 
-      const logs = await withTenant(() => tracker.getPerformanceByVersion('test-version-query-123', {
-        start: oneHourAgo,
-        end: now,
-      }));
+      const logs = await withTenant(() =>
+        tracker.getPerformanceByVersion('test-version-query-123', {
+          start: oneHourAgo,
+          end: now,
+        })
+      );
 
       expect(logs.length).toBeGreaterThan(0);
       expect(logs.every((log) => log.timestamp >= oneHourAgo && log.timestamp <= now)).toBe(true);
@@ -359,7 +363,9 @@ describe('PromptPerformanceTracker', () => {
     });
 
     it('should calculate aggregate metrics correctly', async () => {
-      const metrics = await withTenant(() => tracker.getAggregateMetrics('test-version-aggregate-123'));
+      const metrics = await withTenant(() =>
+        tracker.getAggregateMetrics('test-version-aggregate-123')
+      );
 
       expect(metrics.totalCalls).toBe(2);
       expect(metrics.avgQualityScore).toBeCloseTo(85, 1);

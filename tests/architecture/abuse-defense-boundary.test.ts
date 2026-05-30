@@ -126,8 +126,9 @@ describe('Abuse Defense Architectural Boundaries', () => {
       // We should not write directly to SharedStore with unhashed raw tokens or keys
       // Search for .set or .increment or .setIfNotExists on store using raw token identifiers
       // E.g., store.increment(token) or store.set(ip, ...)
-      const rawStoreKeysRegex = /store\.(set|increment|setIfNotExists)\(\s*(token|ip|apiKey|req\.url|session|cookie)/i;
-      
+      const rawStoreKeysRegex =
+        /store\.(set|increment|setIfNotExists)\(\s*(token|ip|apiKey|req\.url|session|cookie)/i;
+
       if (rawStoreKeysRegex.test(content)) {
         offendingFiles.push(filePath);
       }

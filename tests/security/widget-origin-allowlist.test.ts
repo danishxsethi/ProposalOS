@@ -101,10 +101,7 @@ function setupPassthroughTenantHelpers() {
   );
 }
 
-function makePostRequest(opts: {
-  body: Record<string, unknown>;
-  origin?: string | null;
-}): Request {
+function makePostRequest(opts: { body: Record<string, unknown>; origin?: string | null }): Request {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   if (opts.origin !== null && opts.origin !== undefined) headers.Origin = opts.origin;
   return new Request('http://localhost/api/widget/quick-audit', {

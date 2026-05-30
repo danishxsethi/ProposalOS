@@ -46,8 +46,7 @@ export interface SmokeResult {
 
 // ─── Config ──────────────────────────────────────────────────────────────────
 
-const BASE_URL =
-  process.env.BASE_URL || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+const BASE_URL = process.env.BASE_URL || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
 const API_KEY = process.env.API_KEY || '';
 const TENANT_ID = process.env.DEFAULT_TENANT_ID || '00000000-0000-0000-0000-000000000000';
 const STRIPE_KEY = process.env.STRIPE_SECRET_KEY || '';
@@ -57,8 +56,18 @@ const RESEND_KEY = process.env.RESEND_API_KEY || '';
 const ONLY_SMOKE = process.argv.find((a) => a.startsWith('--smoke='))?.split('=')[1];
 const SKIP_SERVER = process.argv.includes('--skip-server');
 
-const REPORT_MD_PATH = path.join(process.cwd(), 'docs', 'remediation', '010-phase-z-smoke-readiness.md');
-const REPORT_JSON_PATH = path.join(process.cwd(), 'docs', 'remediation', '010-phase-z-smoke-evidence.json');
+const REPORT_MD_PATH = path.join(
+  process.cwd(),
+  'docs',
+  'remediation',
+  '010-phase-z-smoke-readiness.md'
+);
+const REPORT_JSON_PATH = path.join(
+  process.cwd(),
+  'docs',
+  'remediation',
+  '010-phase-z-smoke-evidence.json'
+);
 
 const results: SmokeResult[] = [];
 
@@ -75,18 +84,29 @@ function isPlaceholder(val: string): boolean {
   );
 }
 
-async function httpGet(url: string, headers: Record<string, string> = {}): Promise<{ ok: boolean; status: number; body: unknown }> {
+async function httpGet(
+  url: string,
+  headers: Record<string, string> = {}
+): Promise<{ ok: boolean; status: number; body: unknown }> {
   try {
     const res = await fetch(url, { headers });
     let body: unknown;
-    try { body = await res.json(); } catch { body = await res.text().catch(() => ''); }
+    try {
+      body = await res.json();
+    } catch {
+      body = await res.text().catch(() => '');
+    }
     return { ok: res.ok, status: res.status, body };
   } catch (e) {
     return { ok: false, status: 0, body: e instanceof Error ? e.message : String(e) };
   }
 }
 
-async function httpPost(url: string, data: unknown, headers: Record<string, string> = {}): Promise<{ ok: boolean; status: number; body: unknown }> {
+async function httpPost(
+  url: string,
+  data: unknown,
+  headers: Record<string, string> = {}
+): Promise<{ ok: boolean; status: number; body: unknown }> {
   try {
     const res = await fetch(url, {
       method: 'POST',
@@ -94,7 +114,11 @@ async function httpPost(url: string, data: unknown, headers: Record<string, stri
       body: JSON.stringify(data),
     });
     let body: unknown;
-    try { body = await res.json(); } catch { body = await res.text().catch(() => ''); }
+    try {
+      body = await res.json();
+    } catch {
+      body = await res.text().catch(() => '');
+    }
     return { ok: res.ok, status: res.status, body };
   } catch (e) {
     return { ok: false, status: 0, body: e instanceof Error ? e.message : String(e) };
@@ -132,16 +156,35 @@ async function runSmokeA(preflight: PreflightResult): Promise<SmokeResult> {
     return {
       smoke: 'A - 10-URL Audit',
       status: 'BLOCKED_SERVER_NOT_RUNNING',
-      steps: [{ step: 'server-check', status: 'BLOCKED_SERVER_NOT_RUNNING', detail: 'Server is not running or --skip-server flag set' }],
+      steps: [
+        {
+          step: 'server-check',
+          status: 'BLOCKED_SERVER_NOT_RUNNING',
+          detail: 'Server is not running or --skip-server flag set',
+        },
+      ],
       blockedReason: 'Server dependency not satisfied. Start the Next.js server first: npm run dev',
       durationMs: Date.now() - start,
       timestamp: ts,
     };
   }
 
-  steps.push({ step: 'server-health-preflight', status: 'PASS', detail: `Server at ${BASE_URL} responded successfully` });
+  steps.push({
+    step: 'server-health-preflight',
+    status: 'PASS',
+    detail: `Server at ${BASE_URL} responded successfully`,
+  });
 
-  const auditResults: Array<{ label: string; url: string; auditId?: string; status: string; latencyMs: number; findingsCount?: number; proposalsCount?: number; error?: string }> = [];
+  const auditResults: Array<{
+    label: string;
+    url: string;
+    auditId?: string;
+    status: string;
+    latencyMs: number;
+    findingsCount?: number;
+    proposalsCount?: number;
+    error?: string;
+  }> = [];
   let passCount = 0;
 
   console.log(`\nTriggering ${SMOKE_A_URLS.length} audits and polling progress...`);
@@ -149,18 +192,22 @@ async function runSmokeA(preflight: PreflightResult): Promise<SmokeResult> {
   for (const target of SMOKE_A_URLS) {
     const auditStart = Date.now();
     try {
-      const res = await httpPost(`${BASE_URL}/api/audit`, {
-        url: target.url,
-        name: target.label,
-        city: 'Test City',
-        industry: target.industry,
-      }, authHeaders());
+      const res = await httpPost(
+        `${BASE_URL}/api/audit`,
+        {
+          url: target.url,
+          name: target.label,
+          city: 'Test City',
+          industry: target.industry,
+        },
+        authHeaders()
+      );
 
       const body = res.body as Record<string, any>;
 
       if (res.ok && body.id) {
         const auditId = body.id;
-        
+
         // Polling loop until COMPLETED or FAILED (with max timeout 15s for local/dev smoke test speed)
         let status = body.status || 'QUEUED';
         let pollAttempts = 0;
@@ -169,7 +216,10 @@ async function runSmokeA(preflight: PreflightResult): Promise<SmokeResult> {
         let findingsCount = 0;
         let proposalsCount = 0;
 
-        while ((status === 'QUEUED' || status === 'PROCESSING' || status === 'RUNNING') && pollAttempts < maxPollAttempts) {
+        while (
+          (status === 'QUEUED' || status === 'PROCESSING' || status === 'RUNNING') &&
+          pollAttempts < maxPollAttempts
+        ) {
           await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
           pollAttempts++;
 
@@ -187,7 +237,12 @@ async function runSmokeA(preflight: PreflightResult): Promise<SmokeResult> {
 
         const latencyMs = Date.now() - auditStart;
 
-        if (status === 'COMPLETE' || status === 'COMPLETED' || status === 'PARTIAL' || status === 'DEGRADED') {
+        if (
+          status === 'COMPLETE' ||
+          status === 'COMPLETED' ||
+          status === 'PARTIAL' ||
+          status === 'DEGRADED'
+        ) {
           passCount++;
           auditResults.push({
             label: target.label,
@@ -281,7 +336,11 @@ async function runSmokeB(): Promise<SmokeResult> {
   const steps: SmokeStepResult[] = [];
   const ts = new Date().toISOString();
 
-  steps.push({ step: 'rls-preflight-check', status: 'PASS', detail: 'Running authoritative scripts/rls-smoke-test.ts' });
+  steps.push({
+    step: 'rls-preflight-check',
+    status: 'PASS',
+    detail: 'Running authoritative scripts/rls-smoke-test.ts',
+  });
 
   try {
     const output = execSync('npx tsx scripts/rls-smoke-test.ts', {
@@ -352,7 +411,13 @@ async function runSmokeC(preflight: PreflightResult): Promise<SmokeResult> {
     return {
       smoke: 'C - Cold Outreach / Email',
       status: 'BLOCKED_NEEDS_OPERATOR_KEY',
-      steps: [{ step: 'resend-key-check', status: 'BLOCKED_NEEDS_OPERATOR_KEY', detail: 'RESEND_API_KEY is missing or placeholder.' }],
+      steps: [
+        {
+          step: 'resend-key-check',
+          status: 'BLOCKED_NEEDS_OPERATOR_KEY',
+          detail: 'RESEND_API_KEY is missing or placeholder.',
+        },
+      ],
       blockedReason: 'RESEND_API_KEY operator key is required for real sandbox send path.',
       durationMs: Date.now() - start,
       timestamp: ts,
@@ -392,11 +457,13 @@ async function runSmokeC(preflight: PreflightResult): Promise<SmokeResult> {
       comparisonReport: null,
     };
 
-    const { sequence, qualityPassed, finalReports } = await runWithTenantAsync(
-      TENANT_ID,
-      () => runEmailPipeline(mockAudit as any, mockProposal as any, null)
+    const { sequence, qualityPassed, finalReports } = await runWithTenantAsync(TENANT_ID, () =>
+      runEmailPipeline(mockAudit as any, mockProposal as any, null)
     );
-    const avgScore = finalReports.length > 0 ? finalReports.reduce((s, r) => s + r.score, 0) / finalReports.length : 0;
+    const avgScore =
+      finalReports.length > 0
+        ? finalReports.reduce((s, r) => s + r.score, 0) / finalReports.length
+        : 0;
 
     steps.push({
       step: 'email-generation',
@@ -407,11 +474,15 @@ async function runSmokeC(preflight: PreflightResult): Promise<SmokeResult> {
     const firstEmail = sequence.emails[0];
     if (firstEmail) {
       // Unsubscribe check
-      const hasUnsubscribe = firstEmail.body?.toLowerCase().includes('unsubscribe') || firstEmail.body?.toLowerCase().includes('opt out');
+      const hasUnsubscribe =
+        firstEmail.body?.toLowerCase().includes('unsubscribe') ||
+        firstEmail.body?.toLowerCase().includes('opt out');
       steps.push({
         step: 'can-spam-unsubscribe',
         status: hasUnsubscribe ? 'PASS' : 'FAIL',
-        detail: hasUnsubscribe ? 'Unsubscribe link/opt-out pattern present' : 'Missing unsubscribe link/opt-out pattern',
+        detail: hasUnsubscribe
+          ? 'Unsubscribe link/opt-out pattern present'
+          : 'Missing unsubscribe link/opt-out pattern',
       });
 
       // Non-deceptive subject check
@@ -420,7 +491,9 @@ async function runSmokeC(preflight: PreflightResult): Promise<SmokeResult> {
       steps.push({
         step: 'can-spam-subject',
         status: !hasDeceptivePrefix ? 'PASS' : 'FAIL',
-        detail: !hasDeceptivePrefix ? `Subject is safe: "${subject.slice(0, 50)}"` : 'Subject has deceptive prefix (Re/Fwd)',
+        detail: !hasDeceptivePrefix
+          ? `Subject is safe: "${subject.slice(0, 50)}"`
+          : 'Subject has deceptive prefix (Re/Fwd)',
       });
 
       // No unresolved placeholders check
@@ -428,7 +501,9 @@ async function runSmokeC(preflight: PreflightResult): Promise<SmokeResult> {
       steps.push({
         step: 'no-unresolved-placeholders',
         status: !hasPlaceholders ? 'PASS' : 'FAIL',
-        detail: !hasPlaceholders ? 'No unresolved liquid/mustache placeholders' : 'Found unresolved placeholders in email body',
+        detail: !hasPlaceholders
+          ? 'No unresolved liquid/mustache placeholders'
+          : 'Found unresolved placeholders in email body',
       });
     }
   } catch (e) {
@@ -443,7 +518,7 @@ async function runSmokeC(preflight: PreflightResult): Promise<SmokeResult> {
   try {
     const resend = new Resend(RESEND_KEY);
     const recipient = process.env.PHASE_Z_EMAIL_RECIPIENT || 'onboarding@resend.dev';
-    
+
     // Send safe sandboxed test email using default sandbox settings
     const sendRes = await resend.emails.send({
       from: 'ProposalOS <onboarding@resend.dev>',
@@ -497,11 +572,20 @@ async function runSmokeD(preflight: PreflightResult): Promise<SmokeResult> {
   const ts = new Date().toISOString();
 
   // If preflight failed Stripe key presence
-  if (preflight.missingKeys.includes('STRIPE_SECRET_KEY') || preflight.missingKeys.includes('STRIPE_WEBHOOK_SECRET')) {
+  if (
+    preflight.missingKeys.includes('STRIPE_SECRET_KEY') ||
+    preflight.missingKeys.includes('STRIPE_WEBHOOK_SECRET')
+  ) {
     return {
       smoke: 'D - Billing',
       status: 'BLOCKED_NEEDS_OPERATOR_KEY',
-      steps: [{ step: 'stripe-preflight-check', status: 'BLOCKED_NEEDS_OPERATOR_KEY', detail: 'Stripe credentials are missing or placeholders.' }],
+      steps: [
+        {
+          step: 'stripe-preflight-check',
+          status: 'BLOCKED_NEEDS_OPERATOR_KEY',
+          detail: 'Stripe credentials are missing or placeholders.',
+        },
+      ],
       blockedReason: 'Stripe keys are required for real checkout/webhook assertions.',
       durationMs: Date.now() - start,
       timestamp: ts,
@@ -535,16 +619,16 @@ async function runSmokeD(preflight: PreflightResult): Promise<SmokeResult> {
         'Content-Type': 'application/x-www-form-urlencoded',
       },
       body: new URLSearchParams({
-        'mode': 'payment',
-        'success_url': 'https://example.com/success',
-        'cancel_url': 'https://example.com/cancel',
+        mode: 'payment',
+        success_url: 'https://example.com/success',
+        cancel_url: 'https://example.com/cancel',
         'line_items[0][price_data][currency]': 'usd',
         'line_items[0][price_data][product_data][name]': 'Smoke Test Product',
         'line_items[0][price_data][unit_amount]': '100',
         'line_items[0][quantity]': '1',
       }).toString(),
     });
-    const sessionBody = await sessionRes.json() as any;
+    const sessionBody = (await sessionRes.json()) as any;
     if (sessionRes.ok && sessionBody.id) {
       steps.push({
         step: 'stripe-session-create',
@@ -569,9 +653,13 @@ async function runSmokeD(preflight: PreflightResult): Promise<SmokeResult> {
   // 3. Webhook signature rejection assertion
   if (!SKIP_SERVER && preflight.status !== 'BLOCKED_SERVER_NOT_RUNNING') {
     try {
-      const fakeWebhookRes = await httpPost(`${BASE_URL}/api/billing/webhook`, { type: 'smoke.test' }, {
-        'stripe-signature': 'smoke-test-invalid-sig',
-      });
+      const fakeWebhookRes = await httpPost(
+        `${BASE_URL}/api/billing/webhook`,
+        { type: 'smoke.test' },
+        {
+          'stripe-signature': 'smoke-test-invalid-sig',
+        }
+      );
       // 400 Bad Request is expected because the signature is invalid!
       steps.push({
         step: 'stripe-webhook-signature-rejection',
@@ -642,7 +730,10 @@ function renderEvidenceReport(preflight: PreflightResult, results: SmokeResult[]
 
   md += `## Safety Controls\n`;
   md += `- **Production safeguards**: The preflight script checks and rejects any Base URL that matches production domain lists.\n`;
-  md += `- **Stripe live-key refusal**: Validates ` + '`STRIPE_SECRET_KEY`' + ` starting format. Any live keys (\`sk_live_\`) trigger an immediate unsafe preflight abort.\n`;
+  md +=
+    `- **Stripe live-key refusal**: Validates ` +
+    '`STRIPE_SECRET_KEY`' +
+    ` starting format. Any live keys (\`sk_live_\`) trigger an immediate unsafe preflight abort.\n`;
   md += `- **Resend/email sandbox controls**: Test sends are strictly confined to Resend's sandboxed email addresses (\`onboarding@resend.dev\`).\n`;
   md += `- **Base URL restrictions**: Base URL is restricted to \`localhost\`, \`127.0.0.1\`, or verified dev/staging.\n`;
   md += `- **Secret redaction**: Password patterns are filtered and replaced with asterisks before writing any logs.\n`;
@@ -672,7 +763,14 @@ function renderEvidenceReport(preflight: PreflightResult, results: SmokeResult[]
     md += `\n| Step | Status | Detail |\n`;
     md += `|---|---|---|\n`;
     r.steps.forEach((s) => {
-      const icon = s.status === 'PASS' ? '✅' : s.status.startsWith('BLOCKED') ? '⚠️' : s.status === 'SKIPPED_WITH_REASON' ? '⏭️' : '❌';
+      const icon =
+        s.status === 'PASS'
+          ? '✅'
+          : s.status.startsWith('BLOCKED')
+            ? '⚠️'
+            : s.status === 'SKIPPED_WITH_REASON'
+              ? '⏭️'
+              : '❌';
       md += `| ${s.step} | ${icon} ${s.status} | ${s.detail.replace(/\|/g, '\\|')} |\n`;
     });
     md += `\n`;
@@ -688,9 +786,11 @@ async function main(): Promise<void> {
 
   // 1. Centralized Preflight
   const preflight = await runPreflight();
-  
+
   if (preflight.status === 'BLOCKED_UNSAFE_ENV') {
-    console.error(`\n❌ PREFLIGHT CRITICAL SECURITY ALARM: Aborting execution due to Unsafe Environment Configuration.`);
+    console.error(
+      `\n❌ PREFLIGHT CRITICAL SECURITY ALARM: Aborting execution due to Unsafe Environment Configuration.`
+    );
     preflight.details.forEach((d) => console.error(` - ${d}`));
     process.exit(1);
   }
@@ -709,7 +809,10 @@ async function main(): Promise<void> {
 
   for (const key of toRun) {
     const fn = smokeMap[key];
-    if (!fn) { console.error(`Unknown smoke: ${key}`); continue; }
+    if (!fn) {
+      console.error(`Unknown smoke: ${key}`);
+      continue;
+    }
     console.log(`\nRunning Smoke ${key}...`);
     const r = await fn();
     results.push(r);
@@ -753,7 +856,9 @@ async function main(): Promise<void> {
     console.log('\n❌ Suite finished with Failures. (NO-GO)');
     process.exit(1);
   } else {
-    console.log('\n✅ Suite finished successfully (or was safely blocked/skipped due to keys/offline server).');
+    console.log(
+      '\n✅ Suite finished successfully (or was safely blocked/skipped due to keys/offline server).'
+    );
     process.exit(0);
   }
 }

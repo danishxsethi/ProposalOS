@@ -46,12 +46,9 @@ export async function runPreflight(): Promise<PreflightResult> {
   }
 
   // 2. BASE_URL Check
-  const baseUrl = process.env.BASE_URL || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
-  const prodPatterns = [
-    /proposalengine\.com/i,
-    /proposal-engine\.run\.app/i,
-    /claraud\.com/i,
-  ];
+  const baseUrl =
+    process.env.BASE_URL || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+  const prodPatterns = [/proposalengine\.com/i, /proposal-engine\.run\.app/i, /claraud\.com/i];
   if (prodPatterns.some((p) => p.test(baseUrl))) {
     overallStatus = 'BLOCKED_UNSAFE_ENV';
     details.push(`Unsafe Environment: BASE_URL points to a production domain: ${baseUrl}`);
@@ -89,7 +86,9 @@ export async function runPreflight(): Promise<PreflightResult> {
     details.push('Unsafe Environment: STRIPE_SECRET_KEY is a LIVE key! Refusing to run.');
   } else if (!stripeKey.startsWith('sk_test_')) {
     overallStatus = 'BLOCKED_UNSAFE_ENV';
-    details.push(`Unsafe Environment: STRIPE_SECRET_KEY is not a test key: ${stripeKey.slice(0, 10)}...`);
+    details.push(
+      `Unsafe Environment: STRIPE_SECRET_KEY is not a test key: ${stripeKey.slice(0, 10)}...`
+    );
   } else {
     details.push('STRIPE_SECRET_KEY starts with sk_test_ (safe test key)');
   }
@@ -123,14 +122,20 @@ export async function runPreflight(): Promise<PreflightResult> {
     try {
       const res = await fetch(`${baseUrl}/api/health`, { signal: AbortSignal.timeout(15000) });
       if (res.ok || res.status === 503) {
-        details.push(`Local server at ${baseUrl}/api/health is reachable and responded with ${res.status} (expected degraded/sandbox health status is safe)`);
+        details.push(
+          `Local server at ${baseUrl}/api/health is reachable and responded with ${res.status} (expected degraded/sandbox health status is safe)`
+        );
       } else {
         if (overallStatus === 'PASS') overallStatus = 'BLOCKED_SERVER_NOT_RUNNING';
-        details.push(`Local server at ${baseUrl}/api/health responded with unexpected error status ${res.status}`);
+        details.push(
+          `Local server at ${baseUrl}/api/health responded with unexpected error status ${res.status}`
+        );
       }
     } catch (e) {
       if (overallStatus === 'PASS') overallStatus = 'BLOCKED_SERVER_NOT_RUNNING';
-      details.push(`Local server at ${baseUrl} is NOT reachable. Reason: ${e instanceof Error ? e.message : String(e)}`);
+      details.push(
+        `Local server at ${baseUrl} is NOT reachable. Reason: ${e instanceof Error ? e.message : String(e)}`
+      );
     }
   } else {
     details.push('Skipping local server reachability check (--skip-server is active)');
@@ -144,21 +149,26 @@ export async function runPreflight(): Promise<PreflightResult> {
 }
 
 // Running script directly
-if (require.main === module || (typeof process !== 'undefined' && process.argv[1] && process.argv[1].endsWith('preflight.ts'))) {
-  runPreflight().then((result) => {
-    console.log('\n=== PHASE Z SMOKE PREFLIGHT ===');
-    console.log(`Verdict: ${result.status}`);
-    console.log('\nDetails:');
-    result.details.forEach((d) => console.log(` - ${d}`));
+if (
+  require.main === module ||
+  (typeof process !== 'undefined' && process.argv[1] && process.argv[1].endsWith('preflight.ts'))
+) {
+  runPreflight()
+    .then((result) => {
+      console.log('\n=== PHASE Z SMOKE PREFLIGHT ===');
+      console.log(`Verdict: ${result.status}`);
+      console.log('\nDetails:');
+      result.details.forEach((d) => console.log(` - ${d}`));
 
-    if (result.missingKeys.length > 0) {
-      console.log('\nMissing Operator Variables (names only, no values):');
-      result.missingKeys.forEach((k) => console.log(` - ${k}`));
-    }
+      if (result.missingKeys.length > 0) {
+        console.log('\nMissing Operator Variables (names only, no values):');
+        result.missingKeys.forEach((k) => console.log(` - ${k}`));
+      }
 
-    process.exit(result.status === 'PASS' ? 0 : 1);
-  }).catch((err) => {
-    console.error('Preflight runner crashed:', err);
-    process.exit(1);
-  });
+      process.exit(result.status === 'PASS' ? 0 : 1);
+    })
+    .catch((err) => {
+      console.error('Preflight runner crashed:', err);
+      process.exit(1);
+    });
 }

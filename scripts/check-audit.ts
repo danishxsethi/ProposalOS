@@ -15,7 +15,7 @@ async function main() {
       modulesCompleted: true,
       modulesFailed: true,
       createdAt: true,
-    }
+    },
   });
   console.log('Latest 20 Audits:', JSON.stringify(audits, null, 2));
 
@@ -34,4 +34,3 @@ main()
   .finally(async () => {
     await prisma.$disconnect();
   });
-

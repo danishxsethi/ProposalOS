@@ -155,10 +155,12 @@ export const TopActionSchema = z
 
 // AI Disclaimer - Required for all proposals
 export const AIDisclaimerSchema = z.object({
-  disclaimer: z.string().refine(
-    (val) => val.includes('AI') || val.includes('artificial intelligence'),
-    'Disclaimer must mention AI-generated content'
-  ),
+  disclaimer: z
+    .string()
+    .refine(
+      (val) => val.includes('AI') || val.includes('artificial intelligence'),
+      'Disclaimer must mention AI-generated content'
+    ),
   verificationRequired: z.boolean().default(true),
 });
 

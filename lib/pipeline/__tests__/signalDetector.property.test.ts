@@ -83,7 +83,9 @@ const detectedSignalArb = fc
     id: fc.uuid(),
     leadId: fc.option(fc.uuid(), { nil: undefined }),
     signalType: signalTypeArb,
-    detectedAt: fc.date({ min: new Date('2024-01-01'), max: new Date('2025-12-31') }).filter((d) => !isNaN(d.getTime())),
+    detectedAt: fc
+      .date({ min: new Date('2024-01-01'), max: new Date('2025-12-31') })
+      .filter((d) => !isNaN(d.getTime())),
     priority: fc.constantFrom<'high' | 'medium' | 'low'>('high', 'medium', 'low'),
     outreachTriggered: fc.constant(false),
   })
@@ -104,9 +106,7 @@ const signalArrayWithDuplicatesArb = fc.array(detectedSignalArb, { minLength: 1,
 const createdTenantIds: string[] = [];
 const createdLeadIds: string[] = [];
 
-async function runPropertyWithTenant(
-  fn: (tenantId: string) => Promise<void>
-): Promise<void> {
+async function runPropertyWithTenant(fn: (tenantId: string) => Promise<void>): Promise<void> {
   const tenantId = randomUUID();
   createdTenantIds.push(tenantId);
   await runWithTenantBypass('create-property-tenant', async () => {
@@ -198,7 +198,9 @@ describe('Signal Detector Property Tests', () => {
       fc.assert(
         fc.property(
           fc.uuid(),
-          fc.date({ min: new Date('2024-01-01'), max: new Date('2025-12-31') }).filter((d) => !isNaN(d.getTime())),
+          fc
+            .date({ min: new Date('2024-01-01'), max: new Date('2025-12-31') })
+            .filter((d) => !isNaN(d.getTime())),
           (leadId, detectedAt) => {
             // Create signals with same leadId but different types
             const signals: DetectedSignal[] = [
@@ -251,7 +253,9 @@ describe('Signal Detector Property Tests', () => {
       fc.assert(
         fc.property(
           signalTypeArb,
-          fc.date({ min: new Date('2024-01-01'), max: new Date('2025-12-31') }).filter((d) => !isNaN(d.getTime())),
+          fc
+            .date({ min: new Date('2024-01-01'), max: new Date('2025-12-31') })
+            .filter((d) => !isNaN(d.getTime())),
           fc.array(fc.uuid(), { minLength: 2, maxLength: 10 }),
           (signalType, detectedAt, leadIds) => {
             // Create signals with same type but different leadIds
@@ -286,7 +290,9 @@ describe('Signal Detector Property Tests', () => {
         fc.property(
           fc.uuid(),
           signalTypeArb,
-          fc.date({ min: new Date('2024-01-01'), max: new Date('2025-12-31') }).filter((d) => !isNaN(d.getTime())),
+          fc
+            .date({ min: new Date('2024-01-01'), max: new Date('2025-12-31') })
+            .filter((d) => !isNaN(d.getTime())),
           fc.integer({ min: 2, max: 10 }),
           (leadId, signalType, detectedAt, duplicateCount) => {
             // Create multiple identical signals with same exact timestamp
@@ -320,7 +326,9 @@ describe('Signal Detector Property Tests', () => {
         fc.property(
           fc.uuid(),
           signalTypeArb,
-          fc.date({ min: new Date('2024-01-01'), max: new Date('2025-01-01') }).filter((d) => !isNaN(d.getTime())),
+          fc
+            .date({ min: new Date('2024-01-01'), max: new Date('2025-01-01') })
+            .filter((d) => !isNaN(d.getTime())),
           (leadId, signalType, baseDate) => {
             // Create signals 25 hours apart (different windows)
             const signal1: DetectedSignal = {
@@ -356,7 +364,9 @@ describe('Signal Detector Property Tests', () => {
     it('deduplicateSignals handles signals without leadId (new businesses)', () => {
       fc.assert(
         fc.property(
-          fc.date({ min: new Date('2024-01-01'), max: new Date('2025-12-31') }).filter((d) => !isNaN(d.getTime())),
+          fc
+            .date({ min: new Date('2024-01-01'), max: new Date('2025-12-31') })
+            .filter((d) => !isNaN(d.getTime())),
           fc.integer({ min: 2, max: 5 }),
           (detectedAt, count) => {
             // Create multiple new_business_license signals without leadId, same timestamp

@@ -70,14 +70,17 @@ describe('Property 37: Version History Data Completeness', () => {
       fc.asyncProperty(
         // Generate test data: node ID, number of versions, and version details
         fc.record({
-          nodeId: fc.string({ minLength: 5, maxLength: 20 })
+          nodeId: fc
+            .string({ minLength: 5, maxLength: 20 })
             .filter((s) => s.trim().length >= 5)
             .map((s) => `test-node-${s}`),
           versions: fc.array(
             fc.record({
-              promptText: fc.string({ minLength: 10, maxLength: 200 })
+              promptText: fc
+                .string({ minLength: 10, maxLength: 200 })
                 .filter((s) => s.trim().length >= 10),
-              changelog: fc.string({ minLength: 5, maxLength: 100 })
+              changelog: fc
+                .string({ minLength: 5, maxLength: 100 })
                 .filter((s) => s.trim().length >= 5),
               createdBy: fc.constantFrom('system', 'user', 'evolution-engine'),
             }),
@@ -204,12 +207,15 @@ describe('Property 37: Version History Data Completeness', () => {
     await fc.assert(
       fc.asyncProperty(
         fc.record({
-          nodeId: fc.string({ minLength: 5, maxLength: 20 })
+          nodeId: fc
+            .string({ minLength: 5, maxLength: 20 })
             .filter((s) => s.trim().length >= 5)
             .map((s) => `test-node-persist-${s}`),
-          promptText: fc.string({ minLength: 10, maxLength: 200 })
+          promptText: fc
+            .string({ minLength: 10, maxLength: 200 })
             .filter((s) => s.trim().length >= 10),
-          changelog: fc.string({ minLength: 5, maxLength: 100 })
+          changelog: fc
+            .string({ minLength: 5, maxLength: 100 })
             .filter((s) => s.trim().length >= 5),
           createdBy: fc.constantFrom('system', 'user', 'evolution-engine'),
           branchName: fc.constantFrom('main', 'experimental', 'feature-test'),

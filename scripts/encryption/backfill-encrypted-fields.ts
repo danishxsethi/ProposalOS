@@ -19,7 +19,8 @@ async function main() {
   const forceProd = args.includes('--force-production');
 
   const isProdEnv = process.env.NODE_ENV === 'production';
-  const isProdDb = process.env.DATABASE_URL?.includes('prod') || process.env.DATABASE_URL?.includes('production');
+  const isProdDb =
+    process.env.DATABASE_URL?.includes('prod') || process.env.DATABASE_URL?.includes('production');
 
   console.log('================================================================');
   console.log('🔐 Database Field Encryption Backfill Utility');
@@ -30,7 +31,9 @@ async function main() {
   // Safety boundaries
   if ((isProdEnv || isProdDb) && isApply && !forceProd) {
     console.error('\n❌ ERROR: Production database or environment detected.');
-    console.error('To run this backfill in production, you must explicitly supply the --force-production override flag.');
+    console.error(
+      'To run this backfill in production, you must explicitly supply the --force-production override flag.'
+    );
     process.exit(1);
   }
 
@@ -94,11 +97,15 @@ async function main() {
       console.log('----------------------------------------------------------------');
 
       if (isApply) {
-        console.log(`\n✅ SUCCESS: Successfully backfilled and encrypted ${accountsToUpdate} records.`);
+        console.log(
+          `\n✅ SUCCESS: Successfully backfilled and encrypted ${accountsToUpdate} records.`
+        );
       } else {
         console.log('\n💡 Dry-run complete. No database changes were made.');
         if (accountsToUpdate > 0) {
-          console.log('Run the command with the "--apply" flag to perform the encryption backfill.');
+          console.log(
+            'Run the command with the "--apply" flag to perform the encryption backfill.'
+          );
         } else {
           console.log('All fields are already fully encrypted.');
         }

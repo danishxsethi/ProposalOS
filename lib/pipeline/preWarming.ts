@@ -147,7 +147,10 @@ export async function executeAction(action: PreWarmingAction): Promise<void> {
     // - Instagram: Like post, comment, follow
 
     // For now, we simulate the action execution
-    logger.info({ actionType: action.actionType, platform: action.platform, leadId: action.leadId }, 'Executing pre-warming action');
+    logger.info(
+      { actionType: action.actionType, platform: action.platform, leadId: action.leadId },
+      'Executing pre-warming action'
+    );
 
     // Simulate API call delay
     await new Promise((resolve) => setTimeout(resolve, 100));

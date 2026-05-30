@@ -366,7 +366,7 @@ describe('Session Security, Device Context & RTR', () => {
           tenantId: 'tenant-a',
         },
       };
-      
+
       // Import the captured session auth mock
       const { auth } = await import('@/lib/auth');
       vi.mocked(auth).mockResolvedValue(mockSession as any);

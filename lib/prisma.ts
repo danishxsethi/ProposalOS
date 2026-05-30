@@ -127,7 +127,9 @@ function wrapTransactionMethod(client: ExtendedPrismaClient): ExtendedPrismaClie
   return client;
 }
 
-export function createExtendedPrismaClient(baseClient: PrismaClient = new PrismaClient()): ExtendedPrismaClient {
+export function createExtendedPrismaClient(
+  baseClient: PrismaClient = new PrismaClient()
+): ExtendedPrismaClient {
   const wrappedClientRef: { current?: ExtendedPrismaClient } = {};
 
   const extendedClient = baseClient.$extends({
@@ -135,7 +137,8 @@ export function createExtendedPrismaClient(baseClient: PrismaClient = new Prisma
       $allModels: {
         async $allOperations({ args, model, operation, query }): Promise<unknown> {
           const operationName = getOperationName(model, operation);
-          const { tenantId, bypassRls, currentTx, isDispatching } = getTenantRuntimeContextFromStore();
+          const { tenantId, bypassRls, currentTx, isDispatching } =
+            getTenantRuntimeContextFromStore();
           const runQuery = query as (queryArgs: typeof args) => Promise<unknown>;
 
           if (!model) {

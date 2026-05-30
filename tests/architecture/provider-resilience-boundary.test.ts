@@ -58,9 +58,11 @@ describe('Provider Resilience Architectural Boundary', () => {
             if (hasFetch) reasons.push('raw fetch() call');
             if (hasStripeCall) reasons.push('raw stripe client call');
             if (hasResendCall) reasons.push('raw resend client call');
-            
+
             const relativePath = path.relative(path.resolve(__dirname, '../..'), file);
-            violations.push(`${relativePath} makes ${reasons.join(', ')} but is not wrapped in withProviderResilience`);
+            violations.push(
+              `${relativePath} makes ${reasons.join(', ')} but is not wrapped in withProviderResilience`
+            );
           }
         }
       }
@@ -73,7 +75,7 @@ describe('Provider Resilience Architectural Boundary', () => {
         '',
         ...violations.map((v) => ` - ${v}`),
       ].join('\n');
-      
+
       throw new Error(errorMsg);
     }
 

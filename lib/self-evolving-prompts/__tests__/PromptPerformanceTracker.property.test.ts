@@ -276,7 +276,10 @@ describe('PromptPerformanceTracker Property-Based Tests', () => {
               expect(versionLogs.every((log) => log.promptVersionHash === versionHash)).toBe(true);
 
               // Test quality threshold filter (>=)
-              const highQualityLogs = await tracker.getPerformanceByQualityThreshold(threshold, '>=');
+              const highQualityLogs = await tracker.getPerformanceByQualityThreshold(
+                threshold,
+                '>='
+              );
               const relevantHighQuality = highQualityLogs.filter((log) =>
                 createdIds.includes(log.id)
               );
@@ -284,7 +287,9 @@ describe('PromptPerformanceTracker Property-Based Tests', () => {
 
               // Test quality threshold filter (<)
               const lowQualityLogs = await tracker.getPerformanceByQualityThreshold(threshold, '<');
-              const relevantLowQuality = lowQualityLogs.filter((log) => createdIds.includes(log.id));
+              const relevantLowQuality = lowQualityLogs.filter((log) =>
+                createdIds.includes(log.id)
+              );
               expect(relevantLowQuality.every((log) => log.qualityScore < threshold)).toBe(true);
 
               // Test time range filter
@@ -383,7 +388,8 @@ describe('PromptPerformanceTracker Property-Based Tests', () => {
               const expectedAvgImpact =
                 logs.reduce((sum, l) => sum + l.downstreamImpact, 0) / logs.length;
               const expectedAvgCost = logs.reduce((sum, l) => sum + l.costUSD, 0) / logs.length;
-              const expectedAvgLatency = logs.reduce((sum, l) => sum + l.latencyMs, 0) / logs.length;
+              const expectedAvgLatency =
+                logs.reduce((sum, l) => sum + l.latencyMs, 0) / logs.length;
 
               // Verify aggregate metrics match manual calculations
               expect(metrics.totalCalls).toBe(logs.length);

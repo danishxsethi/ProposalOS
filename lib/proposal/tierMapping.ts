@@ -19,7 +19,10 @@ export function mapToTiers(clusters: PainCluster[], findings: Finding[]): TierMa
   const findingMap = new Map(findings.map((f) => [f.id, f]));
 
   for (const cluster of clusters) {
-    const findingIds = cluster.findingIds || (cluster as any).findings?.map((f: any) => typeof f === 'string' ? f : f.id) || [];
+    const findingIds =
+      cluster.findingIds ||
+      (cluster as any).findings?.map((f: any) => (typeof f === 'string' ? f : f.id)) ||
+      [];
     for (const findingId of findingIds) {
       const finding = findingMap.get(findingId);
       if (!finding) continue;

@@ -19,7 +19,10 @@ function makeTestStore() {
     _data: data,
     async get(key: string) {
       const e = data.get(key);
-      if (!e || isExpired(e)) { data.delete(key); return null; }
+      if (!e || isExpired(e)) {
+        data.delete(key);
+        return null;
+      }
       return e.value;
     },
     async set(key: string, value: string, ttlSeconds: number) {
@@ -41,7 +44,9 @@ function makeTestStore() {
       data.set(key, { value: String(next), expiresAt: e.expiresAt });
       return next;
     },
-    async del(key: string) { data.delete(key); },
+    async del(key: string) {
+      data.delete(key);
+    },
   };
 }
 
@@ -113,7 +118,7 @@ function makeWidgetAuditRequest(body: any, ip: string, origin: string, idempoten
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     'x-real-ip': ip,
-    'origin': origin,
+    origin: origin,
   };
   if (idempotencyKey) {
     headers['idempotency-key'] = idempotencyKey;

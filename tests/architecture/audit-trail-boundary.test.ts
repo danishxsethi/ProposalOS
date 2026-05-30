@@ -23,7 +23,12 @@ describe('Audit trail architectural boundary and immutability tests', () => {
         }
       } else if (stat.isFile()) {
         // Only inspect TS/JS files
-        if (filePath.endsWith('.ts') || filePath.endsWith('.tsx') || filePath.endsWith('.js') || filePath.endsWith('.jsx')) {
+        if (
+          filePath.endsWith('.ts') ||
+          filePath.endsWith('.tsx') ||
+          filePath.endsWith('.js') ||
+          filePath.endsWith('.jsx')
+        ) {
           callback(filePath);
         }
       }
@@ -44,7 +49,7 @@ describe('Audit trail architectural boundary and immutability tests', () => {
       }
 
       const content = fs.readFileSync(filePath, 'utf8');
-      
+
       // Match prisma.auditTrailEvent.update, prisma.auditTrailEvent.delete, prisma.auditTrailEvent.updateMany, prisma.auditTrailEvent.deleteMany
       const updateRegex = /prisma\.auditTrailEvent\.(update|delete)/i;
       if (updateRegex.test(content)) {

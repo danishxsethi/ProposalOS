@@ -27,11 +27,7 @@ import {
   selectSendingDomain,
   sendWithRotation,
 } from '../inboxRotation';
-import {
-  generateAndQualifyEmail,
-  generateEmail,
-  scheduleFollowUps,
-} from '../outreach';
+import { generateAndQualifyEmail, generateEmail, scheduleFollowUps } from '../outreach';
 import { pauseFollowUpSequence } from '../followUpSequence';
 
 import type { EmailQAConfig, GeneratedEmail, OutreachContext } from '../types';

@@ -280,7 +280,9 @@ export function applyBrandingToEmail(
 
   // Requirement: Ensure CAN-SPAM physical address compliance if it's missing in the content but exists in settings
   const settings =
-    branding && typeof (branding as any).settings === 'object' && (branding as any).settings ? ((branding as any).settings as any) : {};
+    branding && typeof (branding as any).settings === 'object' && (branding as any).settings
+      ? ((branding as any).settings as any)
+      : {};
   const physicalAddress = settings?.physicalAddress;
   if (physicalAddress && !branded.includes(physicalAddress)) {
     branded += `\n<br><br><div style="font-size: 10px; color: #999;">${physicalAddress}</div>`;

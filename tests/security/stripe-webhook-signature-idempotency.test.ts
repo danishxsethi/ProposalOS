@@ -316,7 +316,10 @@ describe('Stripe webhook security & idempotency suite', () => {
     expect(res.status).toBe(200);
 
     // Verify lookup was executed under bypass
-    expect(mocks.runWithTenantBypass).toHaveBeenCalledWith('stripe-webhook-customer-lookup', expect.any(Function));
+    expect(mocks.runWithTenantBypass).toHaveBeenCalledWith(
+      'stripe-webhook-customer-lookup',
+      expect.any(Function)
+    );
     // Verify processing was isolated to the resolved tenant
     expect(mocks.runWithTenantAsync).toHaveBeenCalledWith('tenant_xyz', expect.any(Function));
     expect(mocks.paymentUpsert).toHaveBeenCalledWith(
@@ -359,7 +362,9 @@ describe('Stripe webhook security & idempotency suite', () => {
     expect(mocks.paymentUpsert).not.toHaveBeenCalled();
     expect(mocks.loggerWarn).toHaveBeenCalledWith(
       expect.objectContaining({ invoiceId: 'in_paid_already' }),
-      expect.stringContaining('Skipped invoice.payment_failed since invoice is already marked paid in DB')
+      expect.stringContaining(
+        'Skipped invoice.payment_failed since invoice is already marked paid in DB'
+      )
     );
   });
 
@@ -464,7 +469,10 @@ describe('Stripe webhook security & idempotency suite', () => {
     expect(res.status).toBe(200);
 
     // Verified: No tenant lookup is done, processed under system bypass
-    expect(mocks.runWithTenantBypass).toHaveBeenCalledWith('stripe-webhook-system-event', expect.any(Function));
+    expect(mocks.runWithTenantBypass).toHaveBeenCalledWith(
+      'stripe-webhook-system-event',
+      expect.any(Function)
+    );
     expect(mocks.processedWebhookCreate).toHaveBeenCalledWith(
       expect.objectContaining({
         data: { id: 'evt_unsupported', type: 'charge.dispute.created' },

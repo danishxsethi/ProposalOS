@@ -152,11 +152,11 @@ export function redactPayload(val: any, seen = new WeakSet()): any {
   for (const key of Object.keys(val)) {
     const lowerKey = key.toLowerCase();
     const isContainer = typeof val[key] === 'object' && val[key] !== null;
-    
+
     // Check if key is in EXACT list or matches substrings
-    const shouldRedact = 
+    const shouldRedact =
       EXACT_REDACT_KEYS.has(lowerKey) ||
-      SUBSTRING_REDACT_KEYS.some(sub => lowerKey.includes(sub));
+      SUBSTRING_REDACT_KEYS.some((sub) => lowerKey.includes(sub));
 
     if (shouldRedact && !isContainer) {
       redactedObj[key] = '[REDACTED]';
@@ -205,8 +205,11 @@ export function computeCanonicalHash(event: {
   payload?: any;
   targetUrlHash?: string | null;
 }): string {
-  const ISOString = event.occurredAt instanceof Date ? event.occurredAt.toISOString() : new Date(event.occurredAt).toISOString();
-  
+  const ISOString =
+    event.occurredAt instanceof Date
+      ? event.occurredAt.toISOString()
+      : new Date(event.occurredAt).toISOString();
+
   const canonicalObj = canonicalize({
     eventType: event.eventType,
     occurredAt: ISOString,
@@ -375,7 +378,7 @@ export async function verifyAuditChain(tenantId?: string): Promise<{
         orderBy: { occurredAt: 'asc' },
       });
 
-      const eventMap = new Map<string, typeof events[0]>();
+      const eventMap = new Map<string, (typeof events)[0]>();
       for (const event of events) {
         eventMap.set(event.eventHash, event);
       }
@@ -397,7 +400,9 @@ export async function verifyAuditChain(tenantId?: string): Promise<{
 
         if (calculatedHash !== event.eventHash) {
           tamperedCount++;
-          errors.push(`Event ${event.id} hash mismatch. DB eventHash: ${event.eventHash}, calculated: ${calculatedHash}`);
+          errors.push(
+            `Event ${event.id} hash mismatch. DB eventHash: ${event.eventHash}, calculated: ${calculatedHash}`
+          );
           continue;
         }
 
@@ -411,12 +416,16 @@ export async function verifyAuditChain(tenantId?: string): Promise<{
             });
             if (!existsInDb) {
               tamperedCount++;
-              errors.push(`Event ${event.id} previousHash ${event.previousHash} not found (chain broken/deleted).`);
+              errors.push(
+                `Event ${event.id} previousHash ${event.previousHash} not found (chain broken/deleted).`
+              );
             }
           } else {
             // Predecessor is found, verify its timestamp is <= current event
             if (new Date(predecessor.occurredAt) > new Date(event.occurredAt)) {
-              errors.push(`Temporal anomaly: Predecessor event ${predecessor.id} occurred after event ${event.id}.`);
+              errors.push(
+                `Temporal anomaly: Predecessor event ${predecessor.id} occurred after event ${event.id}.`
+              );
             }
           }
         }

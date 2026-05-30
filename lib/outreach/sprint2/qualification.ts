@@ -219,7 +219,7 @@ async function fetchGbpSignals(input: QualifiableLeadInput): Promise<GbpSignals>
             const text = await res.text();
             throw new Error(`Places search failed (${res.status}): ${text}`);
           }
-          return await res.json() as { places?: Array<{ id?: string }> };
+          return (await res.json()) as { places?: Array<{ id?: string }> };
         }
       );
     }
@@ -276,7 +276,7 @@ async function fetchGbpSignals(input: QualifiableLeadInput): Promise<GbpSignals>
             const text = await res.text();
             throw new Error(`Places details failed (${res.status}): ${text}`);
           }
-          return await res.json() as Record<string, unknown>;
+          return (await res.json()) as Record<string, unknown>;
         }
       );
     }
@@ -392,7 +392,7 @@ async function fetchCompetitorSignals(
             const text = await res.text();
             throw new Error(`SerpAPI competitors failed (${res.status}): ${text}`);
           }
-          return await res.json() as { local_results?: Array<Record<string, unknown>> };
+          return (await res.json()) as { local_results?: Array<Record<string, unknown>> };
         }
       );
     }

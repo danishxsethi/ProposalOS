@@ -94,9 +94,14 @@ const VERTICAL_PAIN_MAP: Record<string, Record<string, string>> = {
  */
 function findingToCategory(finding: any): string {
   const moduleName = (finding.module || finding.type || '').toLowerCase();
-  if (moduleName.includes('speed') || moduleName.includes('performance') || moduleName.includes('pagespeed'))
+  if (
+    moduleName.includes('speed') ||
+    moduleName.includes('performance') ||
+    moduleName.includes('pagespeed')
+  )
     return 'page_speed';
-  if (moduleName.includes('mobile') || moduleName.includes('responsive')) return 'mobile_responsiveness';
+  if (moduleName.includes('mobile') || moduleName.includes('responsive'))
+    return 'mobile_responsiveness';
   if (moduleName.includes('ssl') || moduleName.includes('security') || moduleName.includes('https'))
     return 'ssl_missing';
   if (moduleName.includes('gbp') || moduleName.includes('google_business')) return 'gbp_neglected';
@@ -196,7 +201,11 @@ export async function generateEmail(context: OutreachContext): Promise<Generated
   const brandName = tenantBranding?.brandName || 'Our Team';
 
   // Build the email subject
-  const subject = buildSubject(businessName, painPoints[0] || "an issue that's costing you customers", vertical);
+  const subject = buildSubject(
+    businessName,
+    painPoints[0] || "an issue that's costing you customers",
+    vertical
+  );
 
   const emailId = uuidv4();
 
@@ -344,10 +353,7 @@ export async function generateAndQualifyEmail(
     }
 
     // Log the QA failure for observability
-    logger.warn(
-      { attempt, maxAttempts, score: qaResult.compositeScore },
-      'Email QA failed'
-    );
+    logger.warn({ attempt, maxAttempts, score: qaResult.compositeScore }, 'Email QA failed');
   }
 
   throw new Error('generation_failed');

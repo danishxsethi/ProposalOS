@@ -86,7 +86,7 @@ async function fetchWithRedirect(
       (res) => {
         const headers: Record<string, string> = {};
         for (const [k, v] of Object.entries(res.headers)) {
-          if (k && v != null) headers[k.toLowerCase()] = Array.isArray(v) ? (v[0] || '') : String(v);
+          if (k && v != null) headers[k.toLowerCase()] = Array.isArray(v) ? v[0] || '' : String(v);
         }
 
         if (followRedirects && res.statusCode && res.statusCode >= 300 && res.statusCode < 400) {
@@ -130,7 +130,8 @@ async function getSslCertificate(
         return;
       }
 
-      const getVal = (v: string | string[] | undefined) => Array.isArray(v) ? (v[0] || '') : (v || '');
+      const getVal = (v: string | string[] | undefined) =>
+        Array.isArray(v) ? v[0] || '' : v || '';
       const valid = new Date(cert.valid_to) > new Date();
       resolve({
         valid,

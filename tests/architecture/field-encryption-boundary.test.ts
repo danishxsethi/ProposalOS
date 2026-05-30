@@ -109,9 +109,10 @@ describe('Field Encryption Architectural Boundaries', () => {
 
     const checkConsoleLogs = (filePath: string) => {
       const content = fs.readFileSync(filePath, 'utf8');
-      
+
       // Match console.log calling with variables matching credential keywords
-      const consoleLogRegex = /console\.log\(.*(access_token|refresh_token|id_token|apiKey|password).*/i;
+      const consoleLogRegex =
+        /console\.log\(.*(access_token|refresh_token|id_token|apiKey|password).*/i;
       if (consoleLogRegex.test(content)) {
         offendingFiles.push(filePath);
       }

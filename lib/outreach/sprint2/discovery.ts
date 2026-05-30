@@ -223,7 +223,7 @@ async function discoverFromGooglePlaces(input: DiscoveryInput): Promise<SourceDi
               throw new Error(`Places search failed (${res.status}): ${errorText}`);
             }
 
-            return await res.json() as { places?: Array<Record<string, unknown>> };
+            return (await res.json()) as { places?: Array<Record<string, unknown>> };
           }
         );
       }
@@ -306,7 +306,7 @@ async function discoverFromYelp(input: DiscoveryInput): Promise<SourceDiscoveryR
             const text = await res.text();
             throw new Error(`SerpAPI Yelp failed (${res.status}): ${text}`);
           }
-          return await res.json() as { organic_results?: Array<Record<string, unknown>> };
+          return (await res.json()) as { organic_results?: Array<Record<string, unknown>> };
         }
       );
     }
@@ -385,7 +385,7 @@ async function discoverFromDirectoryFallback(
             const text = await res.text();
             throw new Error(`SerpAPI local failed (${res.status}): ${text}`);
           }
-          return await res.json() as { local_results?: Array<Record<string, unknown>> };
+          return (await res.json()) as { local_results?: Array<Record<string, unknown>> };
         }
       );
     }

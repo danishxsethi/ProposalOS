@@ -85,7 +85,10 @@ export async function reconcileSubscriptions() {
   });
 
   if (abandoned.length > 0) {
-    logger.warn({ abandonedCount: abandoned.length }, '[BillingReconcile] Found abandoned checkout attempts older than 1 hour');
+    logger.warn(
+      { abandonedCount: abandoned.length },
+      '[BillingReconcile] Found abandoned checkout attempts older than 1 hour'
+    );
   }
 
   return {
@@ -93,4 +96,3 @@ export async function reconcileSubscriptions() {
     abandonedAttempts: abandoned.length,
   };
 }
-

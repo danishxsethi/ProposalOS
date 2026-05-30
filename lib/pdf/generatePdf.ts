@@ -112,7 +112,8 @@ export async function generatePdf(
     // Use provided branding or fall back to defaults
     const brandName = branding?.name || BRANDING.name;
     const brandPrimary = branding?.colors?.primary || BRANDING.colors.primary;
-    const contactEmail = branding?.contact?.email || process.env.BRAND_CONTACT_EMAIL || BRANDING.contact?.email;
+    const contactEmail =
+      branding?.contact?.email || process.env.BRAND_CONTACT_EMAIL || BRANDING.contact?.email;
 
     // Header with logo (if available)
     const headerLogo = branding?.logoUrl

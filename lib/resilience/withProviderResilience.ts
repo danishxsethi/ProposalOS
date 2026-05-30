@@ -7,11 +7,7 @@
 
 import { logger } from '@/lib/logger';
 
-import {
-  checkCircuitBreaker,
-  recordCircuitFailure,
-  recordCircuitSuccess,
-} from './circuitBreaker';
+import { checkCircuitBreaker, recordCircuitFailure, recordCircuitSuccess } from './circuitBreaker';
 import { getProviderPolicy } from './providerPolicy';
 import { checkProviderRateLimit } from './rateLimiter';
 import {
@@ -53,7 +49,7 @@ export function sanitizeError(err: unknown): Error {
   const sanitizedMessage = redactSecrets(err.message);
   const sanitizedError = new Error(sanitizedMessage);
   sanitizedError.name = err.name;
-  
+
   if (err.stack) {
     sanitizedError.stack = redactSecrets(err.stack);
   }
@@ -88,14 +84,12 @@ function isRetryableStatus(status: number, policy: ProviderPolicy): boolean {
  */
 function isRetryableErrorKind(err: unknown, policy: ProviderPolicy): boolean {
   if (!err) return false;
-  
+
   const errObj = err as any;
   const message = String(errObj.message || '').toLowerCase();
   const code = String(errObj.code || '').toLowerCase();
 
-  return policy.retryableErrorKinds.some(
-    (kind) => message.includes(kind) || code.includes(kind)
-  );
+  return policy.retryableErrorKinds.some((kind) => message.includes(kind) || code.includes(kind));
 }
 
 // ─── Sleep Utility ───────────────────────────────────────────────────────────
@@ -121,7 +115,12 @@ export async function withProviderResilience<T>(
   // 1. Check Rate Limit
   const rateLimit = await checkProviderRateLimit(provider, tenantId, policy);
   if (!rateLimit.success) {
-    const error = new ProviderRateLimitError(provider, operation, rateLimit.limit, rateLimit.resetMs);
+    const error = new ProviderRateLimitError(
+      provider,
+      operation,
+      rateLimit.limit,
+      rateLimit.resetMs
+    );
     logger.warn(
       { provider, operation, tenantId, limit: rateLimit.limit, resetMs: rateLimit.resetMs },
       `Provider rate limit blocked: ${error.message}`
@@ -144,7 +143,7 @@ export async function withProviderResilience<T>(
   while (attempt < policy.maxAttempts) {
     attempt++;
     const controller = new AbortController();
-    
+
     // Setup Timeout Timer
     const timeoutTimer = setTimeout(() => {
       controller.abort();
@@ -157,7 +156,7 @@ export async function withProviderResilience<T>(
       );
 
       const result = await fn({ signal: controller.signal });
-      
+
       // Success! Clear timeout timer and record success in circuit breaker
       clearTimeout(timeoutTimer);
       await recordCircuitSuccess(provider, tenantId);
@@ -172,7 +171,7 @@ export async function withProviderResilience<T>(
       return result;
     } catch (err) {
       clearTimeout(timeoutTimer);
-      
+
       const sanitizedErr = sanitizeError(err);
       lastError = sanitizedErr;
 
@@ -240,7 +239,7 @@ export async function withProviderResilience<T>(
           { provider, operation, tenantId, sleepMs },
           `Retrying ${provider}:${operation} in ${sleepMs.toFixed(0)}ms...`
         );
-        
+
         await sleep(sleepMs);
       } else {
         // Not retryable or exhausted all attempts
@@ -264,7 +263,8 @@ async function handleFailure<T>(
   policy: ProviderPolicy
 ): Promise<T> {
   const { provider, operation, degrade } = options;
-  const degradationAllowed = degrade !== false && (degrade === true || policy.degradationAllowed === true);
+  const degradationAllowed =
+    degrade !== false && (degrade === true || policy.degradationAllowed === true);
 
   if (degradationAllowed) {
     if (options.hasOwnProperty('fallbackValue')) {

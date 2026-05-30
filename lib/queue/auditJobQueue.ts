@@ -27,12 +27,7 @@ export const JOB_LOCK_TTL_SECONDS = 90; // Worker holds lock for max 90 s per jo
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-export type AuditJobStatus =
-  | 'QUEUED'
-  | 'RUNNING'
-  | 'SUCCEEDED'
-  | 'FAILED'
-  | 'DEAD'; // Exhausted retries
+export type AuditJobStatus = 'QUEUED' | 'RUNNING' | 'SUCCEEDED' | 'FAILED' | 'DEAD'; // Exhausted retries
 
 export interface AuditJobRecord {
   id: string;
@@ -108,7 +103,10 @@ export async function enqueueAuditJob(input: EnqueueJobInput): Promise<AuditJobR
 
   // Best-effort dispatch trigger to worker endpoint (if configured)
   dispatchJobTrigger(job.id).catch((err) =>
-    logger.warn({ event: 'audit_job.dispatch_failed', jobId: job.id, err }, 'AuditJob: dispatch trigger failed')
+    logger.warn(
+      { event: 'audit_job.dispatch_failed', jobId: job.id, err },
+      'AuditJob: dispatch trigger failed'
+    )
   );
 
   return job as AuditJobRecord;
@@ -178,7 +176,10 @@ export async function claimJob(jobId: string): Promise<AuditJobRecord | null> {
 
   const locked = await store.setIfNotExists(lockKey, '1', JOB_LOCK_TTL_SECONDS);
   if (!locked) {
-    logger.debug({ event: 'audit_job.lock_contention', jobId }, 'AuditJob: lock held by another worker');
+    logger.debug(
+      { event: 'audit_job.lock_contention', jobId },
+      'AuditJob: lock held by another worker'
+    );
     return null;
   }
 

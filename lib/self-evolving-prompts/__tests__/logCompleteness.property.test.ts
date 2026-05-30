@@ -112,7 +112,7 @@ describe('Property 1: Performance Log Completeness', () => {
                 'main',
                 'Changelog',
                 false,
-                testTenantId
+                testTenantId,
               ]
             );
 
@@ -199,7 +199,7 @@ describe('Property 1: Performance Log Completeness', () => {
                 'main',
                 'Changelog',
                 false,
-                testTenantId
+                testTenantId,
               ]
             );
 
@@ -285,7 +285,7 @@ describe('Property 1: Performance Log Completeness', () => {
                 'main',
                 'Changelog',
                 false,
-                testTenantId
+                testTenantId,
               ]
             );
 
@@ -360,7 +360,7 @@ describe('Property 1: Performance Log Completeness', () => {
                 'main',
                 'Changelog',
                 false,
-                testTenantId
+                testTenantId,
               ]
             );
 
@@ -441,7 +441,7 @@ describe('Property 1: Performance Log Completeness', () => {
                 'main',
                 'Changelog',
                 false,
-                testTenantId
+                testTenantId,
               ]
             );
 
