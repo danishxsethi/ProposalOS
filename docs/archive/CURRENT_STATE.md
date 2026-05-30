@@ -142,7 +142,7 @@ export function runWithTenant<T>(tenantId: string, fn: () => T): T {
 }
 
 // Layer 3: Scoped Prisma Extension (lib/tenant/context.ts)
-export function createScopedPrisma(tenantId: string) {
+export function legacy tenant-scoped Prisma helper(tenantId: string) {
   return prisma.$extends({
     query: {
       audit: {
@@ -165,7 +165,7 @@ export function createScopedPrisma(tenantId: string) {
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                        HTTP REQUEST: POST /api/audit                     │
-│  withAuth() → getTenantId() → createScopedPrisma()                       │
+│  withAuth() → getTenantId() → legacy tenant-scoped Prisma helper()                       │
 └─────────────────────────────────────────────────────────────────────────┘
                                     │
                                     ▼
@@ -400,22 +400,22 @@ __end__
 
 ### A. Multi-Tenancy
 
-| Rule                               | Enforcement                                                  |
-| ---------------------------------- | ------------------------------------------------------------ |
-| **Always filter by `tenantId`**    | Use `createScopedPrisma()` or explicit `where: { tenantId }` |
-| **Never bypass `withAuth()`**      | All protected routes must use auth middleware                |
-| **Never expose cross-tenant data** | List/aggregate endpoints must always scope queries           |
-| **API keys are tenant-scoped**     | `pe_live_*` keys resolve to single tenant                    |
+| Rule                               | Enforcement                                                                  |
+| ---------------------------------- | ---------------------------------------------------------------------------- |
+| **Always filter by `tenantId`**    | Use `legacy tenant-scoped Prisma helper()` or explicit `where: { tenantId }` |
+| **Never bypass `withAuth()`**      | All protected routes must use auth middleware                                |
+| **Never expose cross-tenant data** | List/aggregate endpoints must always scope queries                           |
+| **API keys are tenant-scoped**     | `pe_live_*` keys resolve to single tenant                                    |
 
 ```typescript
 // ✅ CORRECT
 const audits = await prisma.audit.findMany({
-  where: { tenantId, status: "COMPLETE" },
+  where: { tenantId, status: 'COMPLETE' },
 });
 
 // ❌ WRONG
 const audits = await prisma.audit.findMany({
-  where: { status: "COMPLETE" }, // Missing tenantId!
+  where: { status: 'COMPLETE' }, // Missing tenantId!
 });
 ```
 
@@ -476,7 +476,7 @@ if (tracker && result.usageMetadata) {
 // ✅ CORRECT
 const validation = validateClusters(clusters, findings);
 if (!validation.valid) {
-  console.error("Validation failed:", validation.errors);
+  console.error('Validation failed:', validation.errors);
   // Fallback to pre-clusters
 }
 

@@ -5,6 +5,7 @@ This document outlines all remaining work that needs to be completed manually to
 ## Current Status: 25/29 Tasks Complete (86%)
 
 ### ✅ Completed (Tasks 1-25)
+
 - Core pipeline infrastructure (orchestrator, state machine, metrics)
 - Discovery → Audit → Diagnose → Propose → Outreach → Close → Deliver → Learn loop
 - All property-based tests and unit tests for completed components
@@ -26,6 +27,7 @@ This document outlines all remaining work that needs to be completed manually to
 ### 26.1 Implement Partner Portal (`lib/pipeline/partnerPortal.ts`)
 
 **What to implement:**
+
 ```typescript
 // Functions needed:
 - onboardPartner(config: PartnerConfig): Promise<void>
@@ -36,6 +38,7 @@ This document outlines all remaining work that needs to be completed manually to
 ```
 
 **Requirements:**
+
 - Support per-lead ($200-$500) and subscription ($1K-$2K/month) pricing models
 - Isolate partner data from direct pipeline and other partners
 - Package complete lead data (audit, proposal, pain score, contact)
@@ -45,9 +48,11 @@ This document outlines all remaining work that needs to be completed manually to
 ### 26.2 Property Tests (`lib/pipeline/__tests__/partnerPortal.property.test.ts`)
 
 **Property to test:**
+
 - Property 38: Partner lead isolation
 
 **Test that:**
+
 - Partner queries only return leads delivered to that partner
 - No cross-partner data leakage
 - No direct pipeline data visible to partners
@@ -55,6 +60,7 @@ This document outlines all remaining work that needs to be completed manually to
 ### 26.3 Unit Tests (`lib/pipeline/__tests__/partnerPortal.test.ts`)
 
 **Test cases needed:**
+
 - Lead matching logic (vertical, geography, volume limits)
 - Lead packaging (includes all required data)
 - Pricing model calculations (per-lead vs subscription)
@@ -63,10 +69,12 @@ This document outlines all remaining work that needs to be completed manually to
 ### 26.4 API Endpoints
 
 **Files to create:**
+
 - `app/api/pipeline/partners/route.ts` - CRUD operations for partners
 - `app/api/pipeline/partners/[id]/leads/route.ts` - Lead delivery and status updates
 
 **Endpoints:**
+
 - GET /api/pipeline/partners - List all partners
 - POST /api/pipeline/partners - Create new partner
 - PUT /api/pipeline/partners/[id] - Update partner config
@@ -78,6 +86,7 @@ This document outlines all remaining work that needs to be completed manually to
 ### 26.5 Partner Dashboard UI (`app/(partner)/dashboard/page.tsx`)
 
 **UI Components needed:**
+
 - Delivered leads list with filtering
 - Lead detail view with audit/proposal data
 - Status update controls
@@ -86,6 +95,7 @@ This document outlines all remaining work that needs to be completed manually to
 ### 26.6 Cron Job (`app/api/cron/partner-matching/route.ts`)
 
 **Functionality:**
+
 - Run daily
 - Match qualified leads to partners based on preferences
 - Respect partner volume limits
@@ -102,6 +112,7 @@ This document outlines all remaining work that needs to be completed manually to
 ### 27.1 Implement Cross-Tenant Intelligence (`lib/pipeline/crossTenantIntelligence.ts`)
 
 **What to implement:**
+
 ```typescript
 // Functions needed:
 - aggregatePatterns(tenantId: string, outcomes: WinLossData[]): Promise<void>
@@ -112,6 +123,7 @@ This document outlines all remaining work that needs to be completed manually to
 ```
 
 **Critical requirements:**
+
 - Strip ALL tenant-identifiable data (business names, contacts, tenant IDs)
 - Version models and support rollback
 - Compute predictive close probability (0-100)
@@ -122,10 +134,12 @@ This document outlines all remaining work that needs to be completed manually to
 ### 27.2 Property Tests (`lib/pipeline/__tests__/crossTenantIntelligence.property.test.ts`)
 
 **Properties to test:**
+
 - Property 39: Cross-tenant intelligence contains no PII
 - Property 40: Predictive close probability is bounded (0-100)
 
 **Test that:**
+
 - No tenant-identifiable data in shared model
 - Close probability always between 0-100
 - Confidence score between 0-1
@@ -134,6 +148,7 @@ This document outlines all remaining work that needs to be completed manually to
 ### 27.3 Unit Tests (`lib/pipeline/__tests__/crossTenantIntelligence.test.ts`)
 
 **Test cases needed:**
+
 - PII detection and removal (business names, emails, phone numbers, addresses)
 - Pattern aggregation from multiple tenants
 - Predictive scoring with various inputs
@@ -143,6 +158,7 @@ This document outlines all remaining work that needs to be completed manually to
 ### 27.4 Cron Job (`app/api/cron/intelligence-aggregation/route.ts`)
 
 **Functionality:**
+
 - Run weekly
 - Aggregate patterns from recent outcomes (last 7 days)
 - Ensure anonymization before aggregation
@@ -152,9 +168,11 @@ This document outlines all remaining work that needs to be completed manually to
 ### 27.5 Integration with Pipeline Orchestrator
 
 **Files to modify:**
+
 - `lib/pipeline/orchestrator.ts`
 
 **Changes needed:**
+
 - Compute close probability for each prospect
 - Prioritize higher probability prospects in processing queue
 - Use predictive score in hot lead routing decisions
@@ -170,6 +188,7 @@ This document outlines all remaining work that needs to be completed manually to
 ### 28.1 Implement Country Config (`lib/pipeline/countryConfig.ts`)
 
 **What to implement:**
+
 ```typescript
 // Functions needed:
 - getCountryConfig(country: string): CountryConfig
@@ -180,6 +199,7 @@ This document outlines all remaining work that needs to be completed manually to
 ```
 
 **Countries to support:**
+
 - US (English, USD)
 - UK (English-GB, GBP)
 - Canada (English-CA, CAD)
@@ -189,9 +209,11 @@ This document outlines all remaining work that needs to be completed manually to
 ### 28.2 Property Tests (`lib/pipeline/__tests__/countryConfig.property.test.ts`)
 
 **Property to test:**
+
 - Property 31: Country-specific configuration application
 
 **Test that:**
+
 - Correct language applied based on country
 - Correct currency used in pricing
 - Correct data providers selected
@@ -199,6 +221,7 @@ This document outlines all remaining work that needs to be completed manually to
 ### 28.3 Unit Tests (`lib/pipeline/__tests__/countryConfig.test.ts`)
 
 **Test cases needed:**
+
 - Configuration selection by country
 - Language template selection
 - Currency conversion (USD ↔ GBP ↔ CAD)
@@ -207,11 +230,13 @@ This document outlines all remaining work that needs to be completed manually to
 ### 28.4 Update Pipeline Stages
 
 **Files to modify:**
+
 - `lib/pipeline/discovery.ts` - Detect prospect country
 - `lib/pipeline/outreach.ts` - Use country-specific templates
 - `lib/pipeline/stages/diagnosisProposalStage.ts` - Apply country config to pricing
 
 **Changes needed:**
+
 - Detect country from discovery data (address, phone, business registration)
 - Apply country config throughout pipeline
 - Use language-specific email templates
@@ -226,6 +251,7 @@ This document outlines all remaining work that needs to be completed manually to
 **Estimated Effort:** 4-6 hours
 
 ### What to do:
+
 1. Run full test suite: `npm test -- lib/pipeline`
 2. Run property tests: `npm test -- lib/pipeline --grep "Property"`
 3. Check test coverage: `npm test -- --coverage lib/pipeline`
@@ -257,6 +283,7 @@ npx prisma migrate status
 ```
 
 **Models added:**
+
 - ProspectStateTransition ✅
 - DeliveryTask ✅
 - PipelineConfig ✅
@@ -275,6 +302,7 @@ npx prisma migrate status
 **File:** `.env` or `.env.local`
 
 **Required variables:**
+
 ```bash
 # Existing (verify these are set)
 DATABASE_URL="postgresql://..."
@@ -307,19 +335,20 @@ STRIPE_WEBHOOK_SECRET="..."
 
 **Cron jobs to configure:**
 
-| Endpoint | Schedule | Description |
-|----------|----------|-------------|
-| `/api/cron/discovery` | Every 6 hours | Discover new prospects |
-| `/api/cron/pipeline-audit` | Every 2 hours | Process discovered prospects |
-| `/api/cron/pipeline-outreach` | Every hour | Send outreach emails |
-| `/api/cron/signal-detection` | Daily at 2am | Detect business signals |
-| `/api/cron/pipeline-closing` | Every 4 hours | Process hot leads |
-| `/api/cron/pipeline-delivery` | Daily at 8am | Process delivery tasks |
-| `/api/cron/partner-matching` | Daily at 10am | Match leads to partners |
-| `/api/cron/intelligence-aggregation` | Weekly (Sunday 3am) | Aggregate patterns |
+| Endpoint                             | Schedule            | Description                  |
+| ------------------------------------ | ------------------- | ---------------------------- |
+| `/api/cron/discovery`                | Every 6 hours       | Discover new prospects       |
+| `/api/cron/pipeline-audit`           | Every 2 hours       | Process discovered prospects |
+| `/api/cron/pipeline-outreach`        | Every hour          | Send outreach emails         |
+| `/api/cron/signal-detection`         | Daily at 2am        | Detect business signals      |
+| `/api/cron/pipeline-closing`         | Every 4 hours       | Process hot leads            |
+| `/api/cron/pipeline-delivery`        | Daily at 8am        | Process delivery tasks       |
+| `/api/cron/partner-matching`         | Daily at 10am       | Match leads to partners      |
+| `/api/cron/intelligence-aggregation` | Weekly (Sunday 3am) | Aggregate patterns           |
 
 **Vercel configuration:**
 Add to `vercel.json`:
+
 ```json
 {
   "crons": [
@@ -362,16 +391,19 @@ Add to `vercel.json`:
 ### 4. Authentication & Authorization
 
 **Files to check:**
+
 - `lib/auth.ts` - Verify NextAuth configuration
 - Middleware for admin routes
 
 **Required roles:**
+
 - ADMIN - Full access to pipeline dashboard and configuration
 - OWNER - Full access to pipeline dashboard and configuration
 - PARTNER - Access to partner portal only
 - USER - No pipeline access
 
 **Routes to protect:**
+
 - `/admin/pipeline/*` - ADMIN/OWNER only
 - `/admin/pipeline/config` - ADMIN/OWNER only
 - `/api/pipeline/config/*` - ADMIN/OWNER only
@@ -464,6 +496,7 @@ Add to `vercel.json`:
 ## Priority Order for Completion
 
 ### High Priority (Complete First)
+
 1. ✅ Task 23: Multi-Tenant Configuration - COMPLETE
 2. ✅ Task 25: Human Review Queue - COMPLETE
 3. ✅ Missing API endpoints - COMPLETE
@@ -472,12 +505,14 @@ Add to `vercel.json`:
 6. Cron job configuration
 
 ### Medium Priority (Complete Second)
+
 7. Task 26: Agency Partner Network
 8. Task 27: Cross-Tenant Intelligence
 9. Authentication & authorization
 10. Monitoring & alerting setup
 
 ### Low Priority (Complete Last)
+
 11. Task 28: Country-Specific Configuration
 12. UI polish and enhancements
 13. Performance optimization

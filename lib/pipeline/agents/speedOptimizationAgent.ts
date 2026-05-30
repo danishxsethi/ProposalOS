@@ -1,6 +1,6 @@
 /**
  * Speed Optimization Agent
- * 
+ *
  * Handles performance and speed-related findings by optimizing:
  * - Image compression and lazy loading
  * - Code minification and bundling
@@ -9,7 +9,7 @@
  * - Critical CSS extraction
  */
 
-import { BaseAgent, type AgentContext, type AgentResult } from './baseAgent';
+import { type AgentContext, type AgentResult, BaseAgent } from './baseAgent';
 
 export class SpeedOptimizationAgent extends BaseAgent {
   getType(): string {

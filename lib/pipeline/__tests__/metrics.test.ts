@@ -1,13 +1,16 @@
 /**
  * Unit tests for Pipeline Metrics and Observability
- * 
+ *
  * These tests verify specific examples and edge cases for metrics calculation,
  * stage failure logging, circuit breaker functionality, and admin alerting.
  */
 
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { prisma } from '@/lib/prisma';
-import { getMetrics, logStageFailure, checkCircuitBreaker, alertAdmin } from '../metrics';
+
+import { logger } from '@/lib/logger';
+import { alertAdmin, checkCircuitBreaker, getMetrics, logStageFailure } from '../metrics';
 import { PipelineStage } from '../types';
 
 // Mock prisma
@@ -61,10 +64,10 @@ describe('Pipeline Metrics', () => {
       // Mock prospect counts
       vi.mocked(prisma.prospectLead.count)
         .mockResolvedValueOnce(10) // discovered
-        .mockResolvedValueOnce(8)  // audited
-        .mockResolvedValueOnce(6)  // proposed
-        .mockResolvedValueOnce(2)  // conversions
-        .mockResolvedValueOnce(1)  // human touch
+        .mockResolvedValueOnce(8) // audited
+        .mockResolvedValueOnce(6) // proposed
+        .mockResolvedValueOnce(2) // conversions
+        .mockResolvedValueOnce(1) // human touch
         .mockResolvedValueOnce(10); // total prospects
 
       // Mock email counts
@@ -143,7 +146,7 @@ describe('Pipeline Metrics', () => {
         .mockResolvedValueOnce(56) // audited
         .mockResolvedValueOnce(42) // proposed
         .mockResolvedValueOnce(14) // conversions
-        .mockResolvedValueOnce(7)  // human touch
+        .mockResolvedValueOnce(7) // human touch
         .mockResolvedValueOnce(70); // total
 
       vi.mocked(prisma.outreachEmail.count).mockResolvedValue(35);
@@ -311,15 +314,13 @@ describe('Pipeline Metrics', () => {
       const tenantId = 'tenant-1';
       const message = 'Circuit breaker tripped';
 
-      const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const loggerErrorSpy = vi.spyOn(logger, 'error').mockImplementation(() => {});
       vi.mocked(prisma.pipelineErrorLog.create).mockResolvedValue({} as any);
 
       await alertAdmin(tenantId, message);
 
-      expect(consoleErrorSpy).toHaveBeenCalledWith(
-        expect.stringContaining(tenantId)
-      );
-      expect(consoleErrorSpy).toHaveBeenCalledWith(
+      expect(loggerErrorSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ tenantId }),
         expect.stringContaining(message)
       );
 
@@ -336,7 +337,7 @@ describe('Pipeline Metrics', () => {
         },
       });
 
-      consoleErrorSpy.mockRestore();
+      loggerErrorSpy.mockRestore();
     });
   });
 });

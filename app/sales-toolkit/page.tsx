@@ -1,4 +1,5 @@
 import Link from 'next/link';
+
 import { PrintButton } from '@/components/sales-toolkit/PrintButton';
 
 const DOCUMENTS = [

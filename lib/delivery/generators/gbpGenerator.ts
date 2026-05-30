@@ -1,5 +1,6 @@
 import { Finding } from '@prisma/client';
-import { RawArtifact, ArtifactGenerator } from './schemaGenerator';
+
+import { ArtifactGenerator, RawArtifact } from './schemaGenerator';
 
 /**
  * GBP Generator - Generates Google Business Profile content drafts

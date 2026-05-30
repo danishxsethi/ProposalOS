@@ -18,7 +18,7 @@ graph TB
     subgraph "LangGraph Audit Pipeline"
         A[Audit Nodes] --> B[LLM Call Interceptor]
     end
-    
+
     subgraph "Self-Evolving Prompt System"
         B --> C[A/B Testing Router]
         C --> D[Prompt Performance Tracker]
@@ -30,7 +30,7 @@ graph TB
         J --> C
         E --> G
     end
-    
+
     subgraph "Predictive Intelligence System"
         K[Predictive Intelligence Engine] --> L[LangGraph Subgraph<br/>8,192 Token Budget]
         L --> M[5 Prediction Types]
@@ -38,7 +38,7 @@ graph TB
         N --> O[PostgreSQL: Predictions & Outcomes]
         P[What If Scenario Engine] --> K
     end
-    
+
     D --> N
     A --> K
 ```
@@ -57,6 +57,7 @@ graph TB
 **Purpose**: Logs every LLM call with comprehensive metadata for analysis and optimization.
 
 **Data Model**:
+
 ```typescript
 interface PromptPerformanceLog {
   id: string;
@@ -76,10 +77,14 @@ interface PromptPerformanceLog {
 ```
 
 **Interface**:
+
 ```typescript
 class PromptPerformanceTracker {
   async logPerformance(log: PromptPerformanceLog): Promise<void>;
-  async getPerformanceByVersion(versionHash: string, timeRange?: TimeRange): Promise<PromptPerformanceLog[]>;
+  async getPerformanceByVersion(
+    versionHash: string,
+    timeRange?: TimeRange
+  ): Promise<PromptPerformanceLog[]>;
   async getAggregateMetrics(versionHash: string): Promise<AggregateMetrics>;
   async getUnderperformingPrompts(threshold: number): Promise<PromptVersion[]>;
 }
@@ -103,6 +108,7 @@ interface AggregateMetrics {
 **Purpose**: Runs controlled experiments comparing prompt variants with automatic winner detection.
 
 **Data Model**:
+
 ```typescript
 interface ABExperiment {
   id: string;
@@ -127,6 +133,7 @@ interface ABVariant {
 ```
 
 **Interface**:
+
 ```typescript
 class ABTestingFramework {
   async createExperiment(config: ExperimentConfig): Promise<ABExperiment>;
@@ -160,6 +167,7 @@ interface WinnerResult {
 **Purpose**: Analyzes underperforming prompts and generates improved variants using Gemini.
 
 **Data Model**:
+
 ```typescript
 interface PromptEvolutionJob {
   id: string;
@@ -187,16 +195,21 @@ interface AnalysisResults {
 ```
 
 **Interface**:
+
 ```typescript
 class PromptEvolutionEngine {
   async analyzeUnderperformingPrompts(): Promise<PromptVersion[]>;
-  async generateVariants(promptVersion: PromptVersion, performance: AggregateMetrics): Promise<GeneratedVariant[]>;
+  async generateVariants(
+    promptVersion: PromptVersion,
+    performance: AggregateMetrics
+  ): Promise<GeneratedVariant[]>;
   async submitForApproval(variants: GeneratedVariant[]): Promise<void>;
   async deployApprovedVariant(variantId: string): Promise<ABExperiment>;
 }
 ```
 
 **Gemini Prompt Structure**:
+
 ```typescript
 const EVOLUTION_PROMPT_TEMPLATE = `
 You are an expert prompt engineer analyzing LLM prompt performance.
@@ -226,6 +239,7 @@ identify weaknesses, and design improvements.
 **Purpose**: Provides Git-like versioning for prompts with rollback and branching capabilities.
 
 **Data Model**:
+
 ```typescript
 interface PromptVersion {
   versionHash: string;
@@ -249,6 +263,7 @@ interface PerformanceDelta {
 ```
 
 **Interface**:
+
 ```typescript
 class PromptVersionControl {
   async createVersion(prompt: string, nodeId: string, changelog: string): Promise<PromptVersion>;
@@ -274,6 +289,7 @@ interface VersionComparison {
 **Purpose**: Generates forward-looking predictions using a LangGraph subgraph with 8,192 token thinking budget.
 
 **Data Model**:
+
 ```typescript
 interface PredictionRequest {
   auditId: string;
@@ -335,6 +351,7 @@ interface AlgorithmRisk {
 ```
 
 **Interface**:
+
 ```typescript
 class PredictiveIntelligenceEngine {
   async generatePredictions(request: PredictionRequest): Promise<PredictionResponse>;
@@ -343,6 +360,7 @@ class PredictiveIntelligenceEngine {
 ```
 
 **LangGraph Subgraph Structure**:
+
 ```typescript
 const predictiveSubgraph = new StateGraph({
   channels: {
@@ -353,21 +371,21 @@ const predictiveSubgraph = new StateGraph({
     revenueAnalysis: null,
     algorithmAnalysis: null,
     predictions: null,
-  }
+  },
 })
-  .addNode("analyzeTraffic", analyzeTrafficNode)
-  .addNode("analyzeRankings", analyzeRankingsNode)
-  .addNode("analyzeCompetitors", analyzeCompetitorsNode)
-  .addNode("analyzeRevenue", analyzeRevenueNode)
-  .addNode("analyzeAlgorithm", analyzeAlgorithmNode)
-  .addNode("synthesizePredictions", synthesizePredictionsNode)
-  .addEdge(START, "analyzeTraffic")
-  .addEdge("analyzeTraffic", "analyzeRankings")
-  .addEdge("analyzeRankings", "analyzeCompetitors")
-  .addEdge("analyzeCompetitors", "analyzeRevenue")
-  .addEdge("analyzeRevenue", "analyzeAlgorithm")
-  .addEdge("analyzeAlgorithm", "synthesizePredictions")
-  .addEdge("synthesizePredictions", END);
+  .addNode('analyzeTraffic', analyzeTrafficNode)
+  .addNode('analyzeRankings', analyzeRankingsNode)
+  .addNode('analyzeCompetitors', analyzeCompetitorsNode)
+  .addNode('analyzeRevenue', analyzeRevenueNode)
+  .addNode('analyzeAlgorithm', analyzeAlgorithmNode)
+  .addNode('synthesizePredictions', synthesizePredictionsNode)
+  .addEdge(START, 'analyzeTraffic')
+  .addEdge('analyzeTraffic', 'analyzeRankings')
+  .addEdge('analyzeRankings', 'analyzeCompetitors')
+  .addEdge('analyzeCompetitors', 'analyzeRevenue')
+  .addEdge('analyzeRevenue', 'analyzeAlgorithm')
+  .addEdge('analyzeAlgorithm', 'synthesizePredictions')
+  .addEdge('synthesizePredictions', END);
 ```
 
 Each node uses Gemini with a portion of the 8,192 token budget, with the synthesis node having the largest allocation.
@@ -377,6 +395,7 @@ Each node uses Gemini with a portion of the 8,192 token budget, with the synthes
 **Purpose**: Tracks prediction accuracy and adjusts confidence intervals over time.
 
 **Data Model**:
+
 ```typescript
 interface PredictionRecord {
   id: string;
@@ -401,6 +420,7 @@ interface CalibrationMetrics {
 ```
 
 **Interface**:
+
 ```typescript
 class PredictionCalibrationSystem {
   async recordPrediction(prediction: PredictionRecord): Promise<void>;
@@ -424,6 +444,7 @@ interface AccuracyTrend {
 **Purpose**: Enables interactive exploration of different recommendation combinations with real-time recalculation.
 
 **Data Model**:
+
 ```typescript
 interface ScenarioRequest {
   auditId: string;
@@ -450,6 +471,7 @@ interface ScenarioResult {
 ```
 
 **Interface**:
+
 ```typescript
 class WhatIfScenarioEngine {
   async calculateScenario(request: ScenarioRequest): Promise<ScenarioResult>;
@@ -466,7 +488,8 @@ interface ScenarioComparison {
 }
 ```
 
-**Performance Optimization**: 
+**Performance Optimization**:
+
 - Caches baseline predictions for each audit
 - Uses incremental recalculation for recommendation changes
 - Parallelizes independent prediction calculations
@@ -635,6 +658,7 @@ The testing strategy employs both unit tests and property-based tests to ensure 
 ### Unit Testing Approach
 
 Unit tests focus on:
+
 - Specific examples demonstrating correct behavior
 - Edge cases (empty inputs, boundary values, null handling)
 - Error conditions and failure modes
@@ -644,6 +668,7 @@ Unit tests focus on:
 ### Property-Based Testing Approach
 
 Property tests verify universal correctness properties across randomized inputs:
+
 - Each property test runs minimum 100 iterations
 - Tests reference design document properties using tags
 - Tag format: `Feature: self-evolving-prompts-predictive-intelligence, Property {N}: {property_text}`
@@ -673,229 +698,228 @@ const propertyTestConfig = {
 - All correctness properties must have corresponding property tests
 - All error conditions must have unit tests
 
-
 ## Correctness Properties
 
 A property is a characteristic or behavior that should hold true across all valid executions of a system—essentially, a formal statement about what the system should do. Properties serve as the bridge between human-readable specifications and machine-verifiable correctness guarantees.
 
 ### Property 1: Performance Log Completeness
 
-*For any* LLM call, when logged by the Prompt_Performance_Tracker, the stored record SHALL contain all required fields: version hash, quality score, downstream impact, cost, latency, input tokens, and output tokens.
+_For any_ LLM call, when logged by the Prompt_Performance_Tracker, the stored record SHALL contain all required fields: version hash, quality score, downstream impact, cost, latency, input tokens, and output tokens.
 
 **Validates: Requirements 1.1, 10.2**
 
 ### Property 2: Append-Only Log Integrity
 
-*For any* performance log record, once written to PostgreSQL, the record SHALL never be modified or deleted, and the total record count SHALL only increase over time.
+_For any_ performance log record, once written to PostgreSQL, the record SHALL never be modified or deleted, and the total record count SHALL only increase over time.
 
 **Validates: Requirements 1.2, 10.1**
 
 ### Property 3: Query Filter Correctness
 
-*For any* query with filters (version hash, time range, or quality score threshold), all returned performance logs SHALL match the specified filter criteria.
+_For any_ query with filters (version hash, time range, or quality score threshold), all returned performance logs SHALL match the specified filter criteria.
 
 **Validates: Requirements 1.3**
 
 ### Property 4: Aggregate Metric Accuracy
 
-*For any* set of performance logs for a given prompt version, the calculated aggregate metrics (average quality score, average cost, average latency, percentiles) SHALL match the values computed directly from the raw logs.
+_For any_ set of performance logs for a given prompt version, the calculated aggregate metrics (average quality score, average cost, average latency, percentiles) SHALL match the values computed directly from the raw logs.
 
 **Validates: Requirements 1.4**
 
 ### Property 5: Quality Score Comparability
 
-*For any* two quality scores from different prompt versions, the scores SHALL be numeric values that support comparison operations (greater than, less than, equal to).
+_For any_ two quality scores from different prompt versions, the scores SHALL be numeric values that support comparison operations (greater than, less than, equal to).
 
 **Validates: Requirements 1.5**
 
 ### Property 6: A/B Configuration Validation
 
-*For any* A/B test configuration, if the configuration is valid (traffic percentages sum to 100, variants reference existing prompts), it SHALL be accepted; if invalid, it SHALL be rejected with a specific error message.
+_For any_ A/B test configuration, if the configuration is valid (traffic percentages sum to 100, variants reference existing prompts), it SHALL be accepted; if invalid, it SHALL be rejected with a specific error message.
 
 **Validates: Requirements 2.1**
 
 ### Property 7: Traffic Distribution Accuracy
 
-*For any* A/B experiment with configured traffic split percentages, over a sufficiently large sample of requests (n > 1000), the actual distribution of traffic to each variant SHALL be within 5% of the configured percentages.
+_For any_ A/B experiment with configured traffic split percentages, over a sufficiently large sample of requests (n > 1000), the actual distribution of traffic to each variant SHALL be within 5% of the configured percentages.
 
 **Validates: Requirements 2.2**
 
 ### Property 8: Statistical Significance Detection
 
-*For any* A/B experiment where one variant has significantly better performance (p < 0.05), the A/B_Testing_Framework SHALL detect the winner and report the correct variant ID.
+_For any_ A/B experiment where one variant has significantly better performance (p < 0.05), the A/B_Testing_Framework SHALL detect the winner and report the correct variant ID.
 
 **Validates: Requirements 2.3**
 
 ### Property 9: Variant Metric Isolation
 
-*For any* A/B experiment with multiple variants, performance metrics logged for one variant SHALL not affect the metrics calculated for other variants.
+_For any_ A/B experiment with multiple variants, performance metrics logged for one variant SHALL not affect the metrics calculated for other variants.
 
 **Validates: Requirements 2.5**
 
 ### Property 10: Underperforming Prompt Identification
 
-*For any* set of prompts with various quality scores, when the Prompt_Evolution_Engine identifies underperforming prompts using a threshold, all identified prompts SHALL have quality scores below the threshold, and all non-identified prompts SHALL have scores at or above the threshold.
+_For any_ set of prompts with various quality scores, when the Prompt_Evolution_Engine identifies underperforming prompts using a threshold, all identified prompts SHALL have quality scores below the threshold, and all non-identified prompts SHALL have scores at or above the threshold.
 
 **Validates: Requirements 3.1**
 
 ### Property 11: Generated Prompt Validity
 
-*For any* prompt variant generated by the Prompt_Evolution_Engine, the variant SHALL conform to the expected prompt structure and be compatible with the target LangGraph node's input requirements.
+_For any_ prompt variant generated by the Prompt_Evolution_Engine, the variant SHALL conform to the expected prompt structure and be compatible with the target LangGraph node's input requirements.
 
 **Validates: Requirements 3.4**
 
 ### Property 12: Version Hash Uniqueness
 
-*For any* two different prompt versions (different text, node ID, or timestamp), the generated version hashes SHALL be unique.
+_For any_ two different prompt versions (different text, node ID, or timestamp), the generated version hashes SHALL be unique.
 
 **Validates: Requirements 4.1**
 
 ### Property 13: Version Changelog Completeness
 
-*For any* prompt version created, the version record SHALL include a non-empty changelog entry.
+_For any_ prompt version created, the version record SHALL include a non-empty changelog entry.
 
 **Validates: Requirements 4.2**
 
 ### Property 14: Version History Completeness
 
-*For any* prompt with multiple versions, querying the version history SHALL return all versions with complete data: timestamps, changelogs, and performance deltas (where applicable).
+_For any_ prompt with multiple versions, querying the version history SHALL return all versions with complete data: timestamps, changelogs, and performance deltas (where applicable).
 
 **Validates: Requirements 4.3**
 
 ### Property 15: Rollback Round-Trip
 
-*For any* prompt version A, if we create a new version B, then rollback to A, the active version SHALL be equivalent to the original version A.
+_For any_ prompt version A, if we create a new version B, then rollback to A, the active version SHALL be equivalent to the original version A.
 
 **Validates: Requirements 4.4**
 
 ### Property 16: Branch Parent Relationship
 
-*For any* branch created from a parent version, the branch's first version SHALL correctly reference the parent version hash.
+_For any_ branch created from a parent version, the branch's first version SHALL correctly reference the parent version hash.
 
 **Validates: Requirements 4.5**
 
 ### Property 17: Performance Delta Accuracy
 
-*For any* two prompt versions with performance data, the calculated performance delta (quality score change, cost change, latency change) SHALL match the difference between their aggregate metrics.
+_For any_ two prompt versions with performance data, the calculated performance delta (quality score change, cost change, latency change) SHALL match the difference between their aggregate metrics.
 
 **Validates: Requirements 4.6**
 
 ### Property 18: Prediction Output Completeness
 
-*For any* prediction request, the Predictive_Intelligence_Engine SHALL produce all five prediction types: traffic forecast, ranking trajectory, competitor threat, revenue impact, and algorithm risk.
+_For any_ prediction request, the Predictive_Intelligence_Engine SHALL produce all five prediction types: traffic forecast, ranking trajectory, competitor threat, revenue impact, and algorithm risk.
 
 **Validates: Requirements 5.1**
 
 ### Property 19: Prediction Confidence Intervals
 
-*For any* prediction generated, each prediction type SHALL include confidence interval bounds (lower and upper).
+_For any_ prediction generated, each prediction type SHALL include confidence interval bounds (lower and upper).
 
 **Validates: Requirements 5.3, 7.5**
 
 ### Property 20: Traffic Forecast Structure
 
-*For any* traffic forecast prediction, the output SHALL include a time horizon, projected traffic value, confidence interval, and key drivers list.
+_For any_ traffic forecast prediction, the output SHALL include a time horizon, projected traffic value, confidence interval, and key drivers list.
 
 **Validates: Requirements 5.4**
 
 ### Property 21: Competitor Threat Structure
 
-*For any* competitor threat assessment, the output SHALL include a threat level (low/medium/high) and a list of competitors with threat scores.
+_For any_ competitor threat assessment, the output SHALL include a threat level (low/medium/high) and a list of competitors with threat scores.
 
 **Validates: Requirements 5.5**
 
 ### Property 22: Revenue Impact Structure
 
-*For any* revenue impact prediction, the output SHALL include projected revenue, confidence interval, ROI, and payback period.
+_For any_ revenue impact prediction, the output SHALL include projected revenue, confidence interval, ROI, and payback period.
 
 **Validates: Requirements 5.6**
 
 ### Property 23: Prediction Storage Completeness
 
-*For any* prediction made, the stored prediction record SHALL include the predicted value, confidence interval, timestamp, and prediction type.
+_For any_ prediction made, the stored prediction record SHALL include the predicted value, confidence interval, timestamp, and prediction type.
 
 **Validates: Requirements 6.1**
 
 ### Property 24: Accuracy Calculation Correctness
 
-*For any* prediction with an observed outcome, the calculated accuracy metric SHALL equal the absolute difference between the predicted value and actual value, normalized appropriately.
+_For any_ prediction with an observed outcome, the calculated accuracy metric SHALL equal the absolute difference between the predicted value and actual value, normalized appropriately.
 
 **Validates: Requirements 6.2**
 
 ### Property 25: Calibration Type Isolation
 
-*For any* prediction type, the calibration metrics calculated SHALL be based only on predictions of that type, not mixed with other types.
+_For any_ prediction type, the calibration metrics calculated SHALL be based only on predictions of that type, not mixed with other types.
 
 **Validates: Requirements 6.3**
 
 ### Property 26: Confidence Interval Adjustment
 
-*For any* prediction type with poor calibration (observed coverage significantly different from expected), the Prediction_Calibration_System SHALL adjust future confidence intervals in the direction that improves calibration.
+_For any_ prediction type with poor calibration (observed coverage significantly different from expected), the Prediction_Calibration_System SHALL adjust future confidence intervals in the direction that improves calibration.
 
 **Validates: Requirements 6.4**
 
 ### Property 27: Scenario Input Validation
 
-*For any* scenario request, if the recommendation IDs are valid, the request SHALL be accepted; if any ID is invalid, the request SHALL either reject the invalid IDs or reject the entire request with an error message.
+_For any_ scenario request, if the recommendation IDs are valid, the request SHALL be accepted; if any ID is invalid, the request SHALL either reject the invalid IDs or reject the entire request with an error message.
 
 **Validates: Requirements 7.1**
 
 ### Property 28: Scenario Calculation Performance
 
-*For any* scenario request, the What_If_Scenario_Engine SHALL return results within 5 seconds.
+_For any_ scenario request, the What_If_Scenario_Engine SHALL return results within 5 seconds.
 
 **Validates: Requirements 7.2, 9.4**
 
 ### Property 29: Scenario Baseline Comparison
 
-*For any* scenario result, the output SHALL include both the projected metrics and the comparison to baseline (deltas for ROI, traffic, and timeline).
+_For any_ scenario result, the output SHALL include both the projected metrics and the comparison to baseline (deltas for ROI, traffic, and timeline).
 
 **Validates: Requirements 7.3**
 
 ### Property 30: Multi-Scenario Comparison Completeness
 
-*For any* set of scenarios being compared, the comparison output SHALL include all scenarios and identify which scenario is best for each metric (ROI, timeline, traffic).
+_For any_ set of scenarios being compared, the comparison output SHALL include all scenarios and identify which scenario is best for each metric (ROI, timeline, traffic).
 
 **Validates: Requirements 7.4**
 
 ### Property 31: LangGraph Interface Stability
 
-*For any* LangGraph node, whether or not an A/B experiment is active, the node's input and output types SHALL remain unchanged.
+_For any_ LangGraph node, whether or not an A/B experiment is active, the node's input and output types SHALL remain unchanged.
 
 **Validates: Requirements 8.3**
 
 ### Property 32: Node Execution Logging
 
-*For any* LangGraph node execution, a corresponding performance log entry SHALL be created in the Prompt_Performance_Tracker.
+_For any_ LangGraph node execution, a corresponding performance log entry SHALL be created in the Prompt_Performance_Tracker.
 
 **Validates: Requirements 8.4**
 
 ### Property 33: Performance Tracker Write Latency
 
-*For any* performance log write operation, the operation SHALL complete within 100ms.
+_For any_ performance log write operation, the operation SHALL complete within 100ms.
 
 **Validates: Requirements 9.1**
 
 ### Property 34: A/B Routing Overhead
 
-*For any* LLM call routed through the A/B_Testing_Framework, the routing overhead SHALL add no more than 10ms to the total latency.
+_For any_ LLM call routed through the A/B_Testing_Framework, the routing overhead SHALL add no more than 10ms to the total latency.
 
 **Validates: Requirements 9.2**
 
 ### Property 35: Prediction Token Budget Compliance
 
-*For any* prediction generation, the total tokens used by the Predictive_Intelligence_Engine SHALL not exceed 8,192 tokens.
+_For any_ prediction generation, the total tokens used by the Predictive_Intelligence_Engine SHALL not exceed 8,192 tokens.
 
 **Validates: Requirements 9.3**
 
 ### Property 36: Time-Range Query Efficiency
 
-*For any* time-range query on performance logs, the query SHALL use database indexes and complete efficiently (sub-second response for queries over millions of records).
+_For any_ time-range query on performance logs, the query SHALL use database indexes and complete efficiently (sub-second response for queries over millions of records).
 
 **Validates: Requirements 10.4**
 
 ### Property 37: Version History Data Completeness
 
-*For any* stored prompt version, the record SHALL include complete changelog and performance delta information (where performance data is available).
+_For any_ stored prompt version, the record SHALL include complete changelog and performance delta information (where performance data is available).
 
 **Validates: Requirements 10.3**

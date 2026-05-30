@@ -11,7 +11,10 @@
  * Requirements: 1.5, 1.8
  */
 
+import { Prisma } from '@prisma/client';
+
 import { prisma } from '@/lib/prisma';
+
 import type { EnrichmentResult } from './types';
 
 // ============================================================================
@@ -34,10 +37,7 @@ export interface ProviderResult {
  * A pluggable enrichment provider function.
  * Takes a business name and website, returns contact info.
  */
-export type EnrichmentProvider = (
-  businessName: string,
-  website: string
-) => Promise<ProviderResult>;
+export type EnrichmentProvider = (businessName: string, website: string) => Promise<ProviderResult>;
 
 /**
  * The ordered list of providers in the waterfall sequence.
@@ -53,10 +53,7 @@ export type ProviderName = (typeof PROVIDER_ORDER)[number];
  * Default Apollo provider stub.
  * In production, this would call the Apollo.io API.
  */
-export const defaultApolloProvider: EnrichmentProvider = async (
-  _businessName,
-  _website
-) => {
+export const defaultApolloProvider: EnrichmentProvider = async (_businessName, _website) => {
   return {};
 };
 
@@ -64,10 +61,7 @@ export const defaultApolloProvider: EnrichmentProvider = async (
  * Default Hunter provider stub.
  * In production, this would call the Hunter.io API.
  */
-export const defaultHunterProvider: EnrichmentProvider = async (
-  _businessName,
-  _website
-) => {
+export const defaultHunterProvider: EnrichmentProvider = async (_businessName, _website) => {
   return {};
 };
 
@@ -75,10 +69,7 @@ export const defaultHunterProvider: EnrichmentProvider = async (
  * Default Proxycurl provider stub.
  * In production, this would call the Proxycurl (LinkedIn) API.
  */
-export const defaultProxycurlProvider: EnrichmentProvider = async (
-  _businessName,
-  _website
-) => {
+export const defaultProxycurlProvider: EnrichmentProvider = async (_businessName, _website) => {
   return {};
 };
 
@@ -86,10 +77,7 @@ export const defaultProxycurlProvider: EnrichmentProvider = async (
  * Default Clearbit provider stub.
  * In production, this would call the Clearbit API.
  */
-export const defaultClearbitProvider: EnrichmentProvider = async (
-  _businessName,
-  _website
-) => {
+export const defaultClearbitProvider: EnrichmentProvider = async (_businessName, _website) => {
   return {};
 };
 
@@ -121,10 +109,7 @@ const DEFAULT_COST_PER_CALL_CENTS = 1;
  * Wraps a provider call with a timeout. Rejects if the provider
  * doesn't respond within the given milliseconds.
  */
-export function withTimeout<T>(
-  promise: Promise<T>,
-  ms: number
-): Promise<T> {
+export function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     const timer = setTimeout(() => {
       reject(new Error(`Provider timed out after ${ms}ms`));
@@ -223,17 +208,14 @@ export async function enrichProspect(
 
     try {
       // 4. Apply timeout to provider call
-      const result = await withTimeout(
-        providerFn(businessName, website),
-        timeoutMs
-      );
+      const result = await withTimeout(providerFn(businessName, website), timeoutMs);
 
       // Record success
       await prisma.prospectEnrichmentRun.update({
         where: { id: enrichmentRun.id },
         data: {
           status: 'SUCCESS',
-          responsePayload: result as Record<string, unknown>,
+          responsePayload: result as unknown as Prisma.InputJsonValue,
           completedAt: new Date(),
         },
       });
@@ -246,8 +228,7 @@ export async function enrichProspect(
       }
     } catch (error) {
       // 4. Skip providers that error or timeout — continue with next
-      const errorMessage =
-        error instanceof Error ? error.message : String(error);
+      const errorMessage = error instanceof Error ? error.message : String(error);
 
       await prisma.prospectEnrichmentRun.update({
         where: { id: enrichmentRun.id },

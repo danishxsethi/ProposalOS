@@ -1,21 +1,24 @@
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+
 import { cleanupDb } from '@/lib/__tests__/utils/cleanup';
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import {
-  onboardPartner,
-  matchLeadsToPartner,
-  deliverLead,
-  updateLeadStatus,
-  getPartnerMetrics,
-  PartnerConfig,
-} from '../partnerPortal';
 import { prisma } from '@/lib/db';
+
+import {
+  deliverLead,
+  getPartnerMetrics,
+  matchLeadsToPartner,
+  onboardPartner,
+  PartnerConfig,
+  updateLeadStatus,
+} from '../partnerPortal';
 
 describe('Partner Portal', () => {
   let partnerId: string;
   let leadId: string;
   let tenantId: string;
 
-  beforeEach(async () => {
+  beforeEach(async (context) => {
+    console.log('START beforeEach for:', context.task.name, new Date().toISOString());
     // Create test tenant
     const tenant = await prisma.tenant.create({
       data: {
@@ -66,11 +69,21 @@ describe('Partner Portal', () => {
       },
     });
     leadId = prospect.id;
+    console.log(
+      'END beforeEach for:',
+      context.task.name,
+      'tenantId =',
+      tenantId,
+      'leadId =',
+      leadId
+    );
   });
 
-  afterEach(async () => {
+  afterEach(async (context) => {
+    console.log('START afterEach for:', context.task.name, new Date().toISOString());
     // Cleanup
     await cleanupDb(prisma);
+    console.log('END afterEach for:', context.task.name, new Date().toISOString());
   });
 
   describe('onboardPartner', () => {
@@ -144,15 +157,11 @@ describe('Partner Portal', () => {
     });
 
     it('should throw error for non-existent partner', async () => {
-      await expect(deliverLead('invalid-partner', leadId)).rejects.toThrow(
-        'Partner not found'
-      );
+      await expect(deliverLead('invalid-partner', leadId)).rejects.toThrow('Partner not found');
     });
 
     it('should throw error for non-existent lead', async () => {
-      await expect(deliverLead(partnerId, 'invalid-lead')).rejects.toThrow(
-        'Prospect not found'
-      );
+      await expect(deliverLead(partnerId, 'invalid-lead')).rejects.toThrow('Prospect not found');
     });
   });
 
@@ -271,9 +280,7 @@ describe('Partner Portal', () => {
     });
 
     it('should throw error for non-existent partner', async () => {
-      await expect(getPartnerMetrics('invalid-partner')).rejects.toThrow(
-        'Partner not found'
-      );
+      await expect(getPartnerMetrics('invalid-partner')).rejects.toThrow('Partner not found');
     });
   });
 
@@ -352,6 +359,12 @@ describe('Partner Portal', () => {
     });
 
     it('should exclude already delivered leads', async () => {
+      console.log('DEBUG: leadId =', leadId);
+      const allProspects = await prisma.prospectLead.findMany();
+      console.log(
+        'DEBUG: allProspects ids =',
+        allProspects.map((p) => p.id)
+      );
       // Deliver first lead
       await deliverLead(partnerId, leadId);
 

@@ -7,7 +7,8 @@
  * Requirements: 3.1, 3.2, 3.3, 3.4, 3.5, 3.6
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 import type { StageResult } from '../../types';
 
 // --- Mocks ---
@@ -19,6 +20,7 @@ const mockProspectUpdate = vi.fn();
 const mockProposalCreate = vi.fn();
 const mockErrorLogCreate = vi.fn();
 const mockPipelineConfigFindUnique = vi.fn();
+const mockEvidenceSnapshotFindMany = vi.fn();
 
 vi.mock('@/lib/prisma', () => ({
   prisma: {
@@ -39,6 +41,9 @@ vi.mock('@/lib/prisma', () => ({
     pipelineErrorLog: {
       create: (...args: any[]) => mockErrorLogCreate(...args),
     },
+    evidenceSnapshot: {
+      findMany: (...args: any[]) => mockEvidenceSnapshotFindMany(...args),
+    },
   },
 }));
 
@@ -53,13 +58,13 @@ vi.mock('../../metrics', () => ({
 }));
 
 const mockRunDiagnosisPipeline = vi.fn();
-vi.mock('@/lib/diagnosis/index', () => ({
-  runDiagnosisPipeline: (...args: any[]) => mockRunDiagnosisPipeline(...args),
+vi.mock('@/lib/graph/diagnosis-graph', () => ({
+  invokeDiagnosisGraphWithTimeout: (...args: any[]) => mockRunDiagnosisPipeline(...args),
 }));
 
 const mockRunProposalPipeline = vi.fn();
-vi.mock('@/lib/proposal/index', () => ({
-  runProposalPipeline: (...args: any[]) => mockRunProposalPipeline(...args),
+vi.mock('@/lib/graph/proposal-graph', () => ({
+  invokeProposalGraphWithTimeout: (...args: any[]) => mockRunProposalPipeline(...args),
 }));
 
 vi.mock('@/lib/costs/costTracker', () => ({
@@ -137,16 +142,19 @@ function makeDiagnosisResult(clusterCount = 2) {
 function makeProposalResult() {
   return {
     executiveSummary: 'Your dental practice needs help.',
-    painClusters: [{ id: 'cluster-1', rootCause: 'Speed', severity: 'high', findingIds: ['f1'] }],
+    clusters: [{ id: 'cluster-1', rootCause: 'Speed', severity: 'high', findingIds: ['f1'] }],
     tiers: {
       essentials: { name: 'Starter', findingIds: ['f1'], price: 500 },
       growth: { name: 'Growth', findingIds: ['f1', 'f2'], price: 1000 },
       premium: { name: 'Premium', findingIds: ['f1', 'f2'], price: 2000 },
     },
     pricing: { essentials: 500, growth: 1000, premium: 2000, currency: 'USD' },
-    assumptions: ['Assumption 1'],
-    disclaimers: ['Disclaimer 1'],
-    nextSteps: ['Step 1'],
+    proposalDef: {
+      assumptions: ['Assumption 1'],
+      disclaimers: ['Disclaimer 1'],
+      nextSteps: ['Step 1'],
+      comparisonReport: undefined,
+    },
     normalizedFindings: [],
   };
 }
@@ -168,6 +176,7 @@ describe('Diagnosis & Proposal Stage', () => {
     mockErrorLogCreate.mockResolvedValue({});
     mockLogStageFailure.mockResolvedValue(undefined);
     mockPipelineConfigFindUnique.mockResolvedValue({ pricingMultiplier: 1.0 });
+    mockEvidenceSnapshotFindMany.mockResolvedValue([]);
   });
 
   describe('processOneDiagnosisProposal', () => {
@@ -197,7 +206,7 @@ describe('Diagnosis & Proposal Stage', () => {
       expect(mockRunProposalPipeline).not.toHaveBeenCalled();
     });
 
-    it('fetches audit with findings', async () => {
+    it('fetches audit with findings and evidence', async () => {
       mockFindUnique.mockResolvedValue(makeProspect());
       mockAuditFindUnique.mockResolvedValue(makeAudit());
       mockRunDiagnosisPipeline.mockResolvedValue(makeDiagnosisResult(2));
@@ -207,7 +216,7 @@ describe('Diagnosis & Proposal Stage', () => {
 
       expect(mockAuditFindUnique).toHaveBeenCalledWith({
         where: { id: 'audit-1' },
-        include: { findings: true },
+        include: { findings: true, evidence: true },
       });
     });
 
@@ -220,12 +229,12 @@ describe('Diagnosis & Proposal Stage', () => {
 
       await processOneDiagnosisProposal('prospect-1');
 
-      expect(mockRunDiagnosisPipeline).toHaveBeenCalledWith(
-        audit.findings,
-        expect.any(Object), // CostTracker
-        undefined,
-        expect.objectContaining({ id: 'dentist' })
-      );
+      expect(mockRunDiagnosisPipeline).toHaveBeenCalledWith({
+        findings: audit.findings,
+        tenantId: 'tenant-1',
+        mode: expect.any(String),
+        aggregatedContext: expect.any(Object),
+      });
     });
 
     it('creates a Proposal record with unique web link token', async () => {
@@ -275,9 +284,9 @@ describe('Diagnosis & Proposal Stage', () => {
         data: expect.objectContaining({
           pricing: JSON.parse(
             JSON.stringify({
-              essentials: 750,  // 500 * 1.5
-              growth: 1500,     // 1000 * 1.5
-              premium: 3000,    // 2000 * 1.5
+              essentials: 750, // 500 * 1.5
+              growth: 1500, // 1000 * 1.5
+              premium: 3000, // 2000 * 1.5
               currency: 'USD',
             })
           ),
@@ -343,9 +352,7 @@ describe('Diagnosis & Proposal Stage', () => {
     it('throws when prospect is not in "audited" status', async () => {
       mockFindUnique.mockResolvedValue(makeProspect({ pipelineStatus: 'discovered' }));
 
-      await expect(processOneDiagnosisProposal('prospect-1')).rejects.toThrow(
-        'expected "audited"'
-      );
+      await expect(processOneDiagnosisProposal('prospect-1')).rejects.toThrow('expected "audited"');
     });
 
     it('throws when prospect has no linked audit', async () => {
@@ -360,9 +367,7 @@ describe('Diagnosis & Proposal Stage', () => {
       mockFindUnique.mockResolvedValue(makeProspect());
       mockAuditFindUnique.mockResolvedValue(null);
 
-      await expect(processOneDiagnosisProposal('prospect-1')).rejects.toThrow(
-        'Audit not found'
-      );
+      await expect(processOneDiagnosisProposal('prospect-1')).rejects.toThrow('Audit not found');
     });
 
     it('includes metadata with proposalId, clusterCount, and webLinkToken', async () => {
@@ -405,9 +410,7 @@ describe('Diagnosis & Proposal Stage', () => {
       const prospects = [makeProspect({ id: 'p1' }), makeProspect({ id: 'p2' })];
       mockFindMany.mockResolvedValue(prospects);
       // First prospect: not found (will throw)
-      mockFindUnique
-        .mockResolvedValueOnce(null)
-        .mockResolvedValueOnce(makeProspect({ id: 'p2' }));
+      mockFindUnique.mockResolvedValueOnce(null).mockResolvedValueOnce(makeProspect({ id: 'p2' }));
       mockAuditFindUnique.mockResolvedValue(makeAudit());
       mockRunDiagnosisPipeline.mockResolvedValue(makeDiagnosisResult(2));
       mockRunProposalPipeline.mockResolvedValue(makeProposalResult());

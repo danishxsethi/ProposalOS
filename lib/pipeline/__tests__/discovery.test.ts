@@ -7,26 +7,24 @@
  * Requirements: 1.1, 1.2, 1.3, 1.4, 1.6, 1.7, 1.9
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 import {
-  queryExternalSources,
   deduplicateRecords,
-  qualifyProspect,
-  persistQualifiedProspect,
   deriveTopFindings,
   discover,
-  getTodayDiscoveredCount,
   getRemainingDailyCapacity,
-  triggerEnrichment,
+  getTodayDiscoveredCount,
+  persistQualifiedProspect,
+  type QualificationProvider,
+  qualifyProspect,
+  queryExternalSources,
   type RawBusinessRecord,
   type SourceProvider,
-  type QualificationProvider,
+  triggerEnrichment,
 } from '../discovery';
-import type {
-  DiscoveryConfig,
-  QualificationSignals,
-  PainScoreBreakdown,
-} from '../types';
+
+import type { DiscoveryConfig, PainScoreBreakdown, QualificationSignals } from '../types';
 
 // Mock Prisma
 vi.mock('@/lib/prisma', () => ({
@@ -141,10 +139,14 @@ describe('Prospect Discovery Engine', () => {
     });
 
     it('should handle provider errors gracefully and continue', async () => {
-      const gpProvider = vi.fn().mockRejectedValue(new Error('API error')) as unknown as SourceProvider;
-      const yelpProvider = vi.fn().mockResolvedValue([
-        makeRecord({ source: 'yelp', sourceExternalId: 'y-1' }),
-      ]) as unknown as SourceProvider;
+      const gpProvider = vi
+        .fn()
+        .mockRejectedValue(new Error('API error')) as unknown as SourceProvider;
+      const yelpProvider = vi
+        .fn()
+        .mockResolvedValue([
+          makeRecord({ source: 'yelp', sourceExternalId: 'y-1' }),
+        ]) as unknown as SourceProvider;
 
       const config = makeConfig({
         sources: { googlePlaces: true, yelp: true, directories: false },
@@ -526,7 +528,9 @@ describe('Prospect Discovery Engine', () => {
         googlePlaces: vi.fn().mockResolvedValue(records) as unknown as SourceProvider,
         yelp: vi.fn().mockResolvedValue([]) as unknown as SourceProvider,
         directories: vi.fn().mockResolvedValue([]) as unknown as SourceProvider,
-        qualification: vi.fn().mockResolvedValue(lowPainSignals) as unknown as QualificationProvider,
+        qualification: vi
+          .fn()
+          .mockResolvedValue(lowPainSignals) as unknown as QualificationProvider,
       };
 
       const config = makeConfig({ painThreshold: 60 });

@@ -3,13 +3,50 @@
  * Implements scenario storage and comparison
  */
 
-import { executeQuery, executeCommand } from '../db';
-import {
-  ScenarioResult,
-  ScenarioRow,
-  ScenarioComparison,
-  ScenarioRequest,
-} from '../types';
+import { getTenantRuntimeContextFromStore } from '@/lib/tenant/context';
+
+import { executeCommand, executeQuery } from '../db';
+import { ScenarioComparison, ScenarioRequest, ScenarioResult, ScenarioRow } from '../types';
+
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const SCENARIO_SELECT = `
+  SELECT
+    id,
+    "auditId" AS audit_id,
+    "selectedRecommendations" AS selected_recommendations,
+    "projectedROI" AS projected_roi,
+    "projectedTimeline" AS projected_timeline,
+    "projectedTraffic" AS projected_traffic,
+    "confidenceIntervals" AS confidence_intervals,
+    "comparisonToBaseline" AS comparison_to_baseline,
+    "calculationTimeMs" AS calculation_time_ms,
+    "createdAt" AS created_at
+  FROM "Scenario"
+`;
+
+function requireFirstRow<T>(rows: T[], operationName: string): T {
+  const row = rows[0];
+
+  if (!row) {
+    throw new Error(`${operationName} returned no rows`);
+  }
+
+  return row;
+}
+
+function getRequiredTenantId(operationName: string): string {
+  const { tenantId } = getTenantRuntimeContextFromStore();
+
+  if (!tenantId) {
+    throw new Error(`Tenant context required for ${operationName}: missing tenant context`);
+  }
+
+  if (!UUID_PATTERN.test(tenantId)) {
+    throw new Error(`Tenant context required for ${operationName}: invalid tenant context`);
+  }
+
+  return tenantId;
+}
 
 /**
  * Save a scenario result
@@ -18,60 +55,84 @@ import {
 export async function saveScenario(
   scenario: Omit<ScenarioResult, 'id' | 'createdAt'>
 ): Promise<ScenarioResult> {
+  const tenantId = getRequiredTenantId('Scenario.save');
   const query = `
-    INSERT INTO scenarios (
-      audit_id,
-      selected_recommendations,
-      projected_roi,
-      projected_timeline,
-      projected_traffic,
-      confidence_intervals,
-      comparison_to_baseline,
-      calculation_time_ms
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-    RETURNING *
+    INSERT INTO "Scenario" (
+      "auditId",
+      "selectedRecommendations",
+      "projectedROI",
+      "projectedTimeline",
+      "projectedTraffic",
+      "confidenceIntervals",
+      "comparisonToBaseline",
+      "calculationTimeMs",
+      "tenantId"
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+    RETURNING
+      id,
+      "auditId" AS audit_id,
+      "selectedRecommendations" AS selected_recommendations,
+      "projectedROI" AS projected_roi,
+      "projectedTimeline" AS projected_timeline,
+      "projectedTraffic" AS projected_traffic,
+      "confidenceIntervals" AS confidence_intervals,
+      "comparisonToBaseline" AS comparison_to_baseline,
+      "calculationTimeMs" AS calculation_time_ms,
+      "createdAt" AS created_at
   `;
 
   const params = [
     scenario.auditId,
-    JSON.stringify(scenario.selectedRecommendations),
+    scenario.selectedRecommendations,
     scenario.projectedROI,
     scenario.projectedTimeline,
     scenario.projectedTraffic,
-    JSON.stringify(scenario.confidenceIntervals),
-    JSON.stringify(scenario.comparisonToBaseline),
+    scenario.confidenceIntervals,
+    scenario.comparisonToBaseline,
     scenario.calculationTimeMs,
+    tenantId,
   ];
 
-  const rows = await executeQuery<ScenarioRow>(query, params);
-  return mapRowToScenario(rows[0]);
+  const rows = await executeQuery<ScenarioRow>(query, params, {
+    operationName: 'Scenario.save',
+    requireTenant: true,
+  });
+  return mapRowToScenario(requireFirstRow(rows, 'Scenario.save'));
 }
 
 /**
  * Get scenario by ID
  */
-export async function getScenarioById(
-  scenarioId: string
-): Promise<ScenarioResult | null> {
-  const query = `SELECT * FROM scenarios WHERE id = $1`;
-  const rows = await executeQuery<ScenarioRow>(query, [scenarioId]);
-  return rows.length > 0 ? mapRowToScenario(rows[0]) : null;
+export async function getScenarioById(scenarioId: string): Promise<ScenarioResult | null> {
+  const tenantId = getRequiredTenantId('Scenario.getById');
+  const query = `
+    ${SCENARIO_SELECT}
+    WHERE id = $1 AND "tenantId" = $2
+  `;
+  const rows = await executeQuery<ScenarioRow>(query, [scenarioId, tenantId], {
+    operationName: 'Scenario.getById',
+    requireTenant: true,
+  });
+  const row = rows[0];
+  return row ? mapRowToScenario(row) : null;
 }
 
 /**
  * Get scenario history for an audit
  * Validates: Requirements 7.3
  */
-export async function getScenarioHistory(
-  auditId: string
-): Promise<ScenarioResult[]> {
+export async function getScenarioHistory(auditId: string): Promise<ScenarioResult[]> {
+  const tenantId = getRequiredTenantId('Scenario.getHistory');
   const query = `
-    SELECT * FROM scenarios
-    WHERE audit_id = $1
-    ORDER BY created_at DESC
+    ${SCENARIO_SELECT}
+    WHERE "auditId" = $1 AND "tenantId" = $2
+    ORDER BY "createdAt" DESC
   `;
 
-  const rows = await executeQuery<ScenarioRow>(query, [auditId]);
+  const rows = await executeQuery<ScenarioRow>(query, [auditId, tenantId], {
+    operationName: 'Scenario.getHistory',
+    requireTenant: true,
+  });
   return rows.map(mapRowToScenario);
 }
 
@@ -79,31 +140,39 @@ export async function getScenarioHistory(
  * Compare multiple scenarios
  * Validates: Requirements 7.4
  */
-export async function compareScenarios(
-  scenarioIds: string[]
-): Promise<ScenarioComparison> {
+export async function compareScenarios(scenarioIds: string[]): Promise<ScenarioComparison> {
   if (scenarioIds.length === 0) {
     throw new Error('At least one scenario ID is required');
   }
 
-  const placeholders = scenarioIds.map((_, i) => `$${i + 1}`).join(',');
+  const tenantId = getRequiredTenantId('Scenario.compare');
+  const scenarioPlaceholders = scenarioIds.map((_, index) => `$${index + 1}`).join(', ');
+  const tenantIdIndex = scenarioIds.length + 1;
   const query = `
-    SELECT * FROM scenarios
-    WHERE id IN (${placeholders})
-    ORDER BY created_at DESC
+    ${SCENARIO_SELECT}
+    WHERE id IN (${scenarioPlaceholders})
+      AND "tenantId" = $${tenantIdIndex}
+    ORDER BY "createdAt" DESC
   `;
 
-  const rows = await executeQuery<ScenarioRow>(query, scenarioIds);
+  const rows = await executeQuery<ScenarioRow>(query, [...scenarioIds, tenantId], {
+    operationName: 'Scenario.compare',
+    requireTenant: true,
+  });
   const scenarios = rows.map(mapRowToScenario);
 
   if (scenarios.length === 0) {
     throw new Error('No scenarios found with the provided IDs');
   }
 
-  // Find best scenario for each metric
-  let bestROI = scenarios[0];
-  let fastestTimeline = scenarios[0];
-  let highestTraffic = scenarios[0];
+  const firstScenario = scenarios[0];
+  if (!firstScenario) {
+    throw new Error('No scenarios found with the provided IDs');
+  }
+
+  let bestROI = firstScenario;
+  const fastestTimeline = firstScenario;
+  let highestTraffic = firstScenario;
 
   for (const scenario of scenarios) {
     if (scenario.projectedROI > bestROI.projectedROI) {
@@ -112,8 +181,6 @@ export async function compareScenarios(
     if (scenario.projectedTraffic > highestTraffic.projectedTraffic) {
       highestTraffic = scenario;
     }
-    // For timeline, we'd need to parse the string (e.g., "3 months")
-    // For simplicity, we'll use the first one
   }
 
   return {
@@ -127,21 +194,24 @@ export async function compareScenarios(
 /**
  * Delete old scenarios (for cleanup)
  */
-export async function deleteOldScenarios(
-  auditId: string,
-  keepCount: number = 10
-): Promise<number> {
+export async function deleteOldScenarios(auditId: string, keepCount: number = 10): Promise<number> {
+  const tenantId = getRequiredTenantId('Scenario.deleteOld');
   const query = `
-    DELETE FROM scenarios
+    DELETE FROM "Scenario"
     WHERE id IN (
-      SELECT id FROM scenarios
-      WHERE audit_id = $1
-      ORDER BY created_at DESC
-      OFFSET $2
+      SELECT id FROM "Scenario"
+      WHERE "auditId" = $1
+        AND "tenantId" = $2
+      ORDER BY "createdAt" DESC
+      OFFSET $3
     )
+      AND "tenantId" = $2
   `;
 
-  return executeCommand(query, [auditId, keepCount]);
+  return executeCommand(query, [auditId, tenantId, keepCount], {
+    operationName: 'Scenario.deleteOld',
+    requireTenant: true,
+  });
 }
 
 /**
@@ -153,24 +223,34 @@ export async function getScenarioStatistics(auditId: string): Promise<{
   avgTraffic: number;
   avgCalculationTime: number;
 }> {
+  const tenantId = getRequiredTenantId('Scenario.getStatistics');
   const query = `
     SELECT
       COUNT(*) as total_scenarios,
-      AVG(projected_roi) as avg_roi,
-      AVG(projected_traffic) as avg_traffic,
-      AVG(calculation_time_ms) as avg_calculation_time
-    FROM scenarios
-    WHERE audit_id = $1
+      AVG("projectedROI") as avg_roi,
+      AVG("projectedTraffic") as avg_traffic,
+      AVG("calculationTimeMs") as avg_calculation_time
+    FROM "Scenario"
+    WHERE "auditId" = $1
+      AND "tenantId" = $2
   `;
 
-  const rows = await executeQuery<any>(query, [auditId]);
+  const rows = await executeQuery<{
+    total_scenarios: string;
+    avg_roi: string | null;
+    avg_traffic: string | null;
+    avg_calculation_time: string | null;
+  }>(query, [auditId, tenantId], {
+    operationName: 'Scenario.getStatistics',
+    requireTenant: true,
+  });
   const row = rows[0];
 
   return {
-    totalScenarios: parseInt(row.total_scenarios) || 0,
-    avgROI: parseFloat(row.avg_roi) || 0,
-    avgTraffic: parseFloat(row.avg_traffic) || 0,
-    avgCalculationTime: parseFloat(row.avg_calculation_time) || 0,
+    totalScenarios: Number.parseInt(row?.total_scenarios ?? '0', 10) || 0,
+    avgROI: Number.parseFloat(row?.avg_roi ?? '0') || 0,
+    avgTraffic: Number.parseFloat(row?.avg_traffic ?? '0') || 0,
+    avgCalculationTime: Number.parseFloat(row?.avg_calculation_time ?? '0') || 0,
   };
 }
 
@@ -181,19 +261,25 @@ export async function findSimilarScenarios(
   auditId: string,
   recommendations: string[]
 ): Promise<ScenarioResult[]> {
+  const tenantId = getRequiredTenantId('Scenario.findSimilar');
   const query = `
-    SELECT * FROM scenarios
-    WHERE audit_id = $1
-      AND selected_recommendations @> $2::jsonb
-      AND selected_recommendations <@ $2::jsonb
-    ORDER BY created_at DESC
+    ${SCENARIO_SELECT}
+    WHERE "auditId" = $1
+      AND "tenantId" = $2
+      AND "selectedRecommendations" @> $3::jsonb
+      AND "selectedRecommendations" <@ $3::jsonb
+    ORDER BY "createdAt" DESC
     LIMIT 5
   `;
 
-  const rows = await executeQuery<ScenarioRow>(query, [
-    auditId,
-    JSON.stringify(recommendations),
-  ]);
+  const rows = await executeQuery<ScenarioRow>(
+    query,
+    [auditId, tenantId, JSON.stringify(recommendations)],
+    {
+      operationName: 'Scenario.findSimilar',
+      requireTenant: true,
+    }
+  );
   return rows.map(mapRowToScenario);
 }
 
@@ -235,7 +321,7 @@ function mapRowToScenario(row: ScenarioRow): ScenarioResult {
     id: row.id,
     auditId: row.audit_id,
     selectedRecommendations: row.selected_recommendations,
-    projectedROI: parseFloat(row.projected_roi.toString()),
+    projectedROI: Number.parseFloat(row.projected_roi.toString()),
     projectedTimeline: row.projected_timeline,
     projectedTraffic: row.projected_traffic,
     confidenceIntervals: row.confidence_intervals,

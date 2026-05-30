@@ -1,13 +1,14 @@
 /**
  * Email Sequence Branching - Behavioral State Machine
- * 
+ *
  * This module implements the logic for determining which email to send next
  * based on recipient engagement (opens, clicks, replies).
  */
 
+import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 
-export type EngagementState = 
+export type EngagementState =
   | 'NOT_SENT'
   | 'INITIAL_SENT'
   | 'OPENED'
@@ -36,12 +37,10 @@ export interface BranchingDecision {
 /**
  * Determine the next email to send based on engagement state
  */
-export async function getNextEmailDecision(
-  proposalId: string
-): Promise<BranchingDecision> {
+export async function getNextEmailDecision(proposalId: string): Promise<BranchingDecision> {
   // Get the email sequence for this proposal
   const emailSequence = await prisma.emailSequence.findUnique({
-    where: { proposalId }
+    where: { proposalId },
   });
 
   if (!emailSequence) {
@@ -51,7 +50,7 @@ export async function getNextEmailDecision(
       subject: '',
       body: '',
       shouldSend: false,
-      reason: 'No email sequence found for proposal'
+      reason: 'No email sequence found for proposal',
     };
   }
 
@@ -66,19 +65,22 @@ export async function getNextEmailDecision(
   // Get outreach records to determine engagement
   const outreachRecords = await prisma.proposalOutreach.findMany({
     where: { proposalId },
-    orderBy: { sentAt: 'asc' }
+    orderBy: { sentAt: 'asc' },
   });
 
-  const analytics = emailSequence.analytics as Record<string, {
-    sent: number;
-    opens: number;
-    clicks: number;
-    replies: number;
-  }>;
+  const analytics = emailSequence.analytics as Record<
+    string,
+    {
+      sent: number;
+      opens: number;
+      clicks: number;
+      replies: number;
+    }
+  >;
 
   // Determine current engagement state
   const engagementState = determineEngagementState(outreachRecords, analytics);
-  
+
   // Get the next step to send
   const sentEmails = outreachRecords.length;
   const currentStep = Math.min(sentEmails + 1, 5);
@@ -90,12 +92,12 @@ export async function getNextEmailDecision(
       subject: '',
       body: '',
       shouldSend: false,
-      reason: 'All 5 emails have been sent'
+      reason: 'All 5 emails have been sent',
     };
   }
 
-  const nextEmail = emails.find(e => e.step === currentStep);
-  
+  const nextEmail = emails.find((e) => e.step === currentStep);
+
   if (!nextEmail) {
     return {
       nextStep: currentStep,
@@ -103,16 +105,12 @@ export async function getNextEmailDecision(
       subject: '',
       body: '',
       shouldSend: false,
-      reason: `Email step ${currentStep} not found in sequence`
+      reason: `Email step ${currentStep} not found in sequence`,
     };
   }
 
   // Apply branching logic based on engagement
-  const branchingResult = applyBranchingLogic(
-    engagementState,
-    currentStep,
-    nextEmail
-  );
+  const branchingResult = applyBranchingLogic(engagementState, currentStep, nextEmail);
 
   // Update the analytics tracking
   await updateEngagementTracking(proposalId, engagementState, currentStep);
@@ -132,9 +130,9 @@ function determineEngagementState(
   }
 
   const lastRecord = outreachRecords[outreachRecords.length - 1];
-  const hasReplied = outreachRecords.some(r => r.repliedAt);
-  const hasClicked = outreachRecords.some(r => r.clickedAt);
-  const hasOpened = outreachRecords.some(r => r.openedAt);
+  const hasReplied = outreachRecords.some((r) => r.repliedAt);
+  const hasClicked = outreachRecords.some((r) => r.clickedAt);
+  const hasOpened = outreachRecords.some((r) => r.openedAt);
 
   // Check for conversion (proposal accepted)
   // We would check ProposalAcceptance here
@@ -156,7 +154,7 @@ function determineEngagementState(
     const daysSinceLastSend = Math.floor(
       (Date.now() - new Date(lastRecord.sentAt).getTime()) / (1000 * 60 * 60 * 24)
     );
-    
+
     // If 7+ days and no engagement, mark as dropped
     if (daysSinceLastSend >= 7 && !hasOpened) {
       return 'DROPPED';
@@ -184,7 +182,7 @@ function applyBranchingLogic(
         subject: email.subjectA,
         body: getColdLeadVariant(email.body, currentStep),
         shouldSend: true,
-        reason: `Cold lead - sending email ${currentStep} with stronger hooks`
+        reason: `Cold lead - sending email ${currentStep} with stronger hooks`,
       };
     }
   }
@@ -197,7 +195,7 @@ function applyBranchingLogic(
       subject: email.subjectA,
       body: getOpenedVariant(email.body, currentStep),
       shouldSend: true,
-      reason: `Lead opened previous email - sending email ${currentStep} with clearer CTA`
+      reason: `Lead opened previous email - sending email ${currentStep} with clearer CTA`,
     };
   }
 
@@ -209,7 +207,7 @@ function applyBranchingLogic(
       subject: email.subjectA,
       body: getClickedVariant(email.body, currentStep),
       shouldSend: true,
-      reason: `Lead clicked - sending email ${currentStep} with close attempt`
+      reason: `Lead clicked - sending email ${currentStep} with close attempt`,
     };
   }
 
@@ -222,7 +220,7 @@ function applyBranchingLogic(
       subject: '',
       body: '',
       shouldSend: false,
-      reason: 'Lead replied - flag for personal follow-up'
+      reason: 'Lead replied - flag for personal follow-up',
     };
   }
 
@@ -233,7 +231,7 @@ function applyBranchingLogic(
     subject: email.subjectA,
     body: email.body,
     shouldSend: true,
-    reason: `Standard sequence - sending email ${currentStep}`
+    reason: `Standard sequence - sending email ${currentStep}`,
   };
 }
 
@@ -242,13 +240,13 @@ function applyBranchingLogic(
  */
 function getColdLeadVariant(body: string, step: number): string {
   const hooks: Record<number, string> = {
-    1: "I wanted to make sure you saw this — the audit shows some significant opportunities.",
+    1: 'I wanted to make sure you saw this — the audit shows some significant opportunities.',
     2: "Quick follow-up on the audit. There's one finding I think you'll want to see.",
     3: "Curious if you had a chance to look at the audit. Here's what stood out to me.",
-    4: "I wanted to follow up personally. Your ROI potential is substantial.",
-    5: "This is my last email about the audit. I want to make sure you don't miss out."
+    4: 'I wanted to follow up personally. Your ROI potential is substantial.',
+    5: "This is my last email about the audit. I want to make sure you don't miss out.",
   };
-  
+
   const hook = hooks[step] || hooks[1];
   return `${hook}\n\n${body}`;
 }
@@ -258,13 +256,13 @@ function getColdLeadVariant(body: string, step: number): string {
  */
 function getOpenedVariant(body: string, step: number): string {
   const cta: Record<number, string> = {
-    1: "\n\nWant to discuss the findings? Just reply and we can schedule a quick call.",
-    2: "\n\nClick here to view the full report → [LINK]",
+    1: '\n\nWant to discuss the findings? Just reply and we can schedule a quick call.',
+    2: '\n\nClick here to view the full report → [LINK]',
     3: "\n\nReady to get started? Reply 'YES' and I'll send over the next steps.",
     4: "\n\nShall I walk you through the ROI model? It's pretty compelling.",
-    5: "\n\nThis offer is valid for one more week. Let's talk before it expires."
+    5: "\n\nThis offer is valid for one more week. Let's talk before it expires.",
   };
-  
+
   const ctaText = cta[step] || cta[1];
   return `${body}${ctaText}`;
 }
@@ -276,11 +274,11 @@ function getClickedVariant(body: string, step: number): string {
   const close: Record<number, string> = {
     1: "\n\nGreat to see you're interested! Let's discuss how to move forward.",
     2: "\n\nSince you checked out the report, I'd love to answer any questions.",
-    3: "\n\nI have availability this week to get started. Should we lock in your spot?",
+    3: '\n\nI have availability this week to get started. Should we lock in your spot?',
     4: "\n\nBased on your interest, I'd recommend the Growth tier. Want me to send the invoice?",
-    5: "\n\nFinal call — I'm at capacity for this month. Reply to secure your spot."
+    5: "\n\nFinal call — I'm at capacity for this month. Reply to secure your spot.",
   };
-  
+
   const closeText = close[step] || close[1];
   return `${body}${closeText}`;
 }
@@ -294,7 +292,7 @@ async function updateEngagementTracking(
   step: number
 ): Promise<void> {
   const emailSequence = await prisma.emailSequence.findUnique({
-    where: { proposalId }
+    where: { proposalId },
   });
 
   if (!emailSequence) return;
@@ -309,9 +307,9 @@ async function updateEngagementTracking(
         ...analytics,
         lastEngagementState: engagementState,
         lastStepUpdated: step,
-        lastUpdated: new Date().toISOString()
-      }
-    }
+        lastUpdated: new Date().toISOString(),
+      },
+    },
   });
 }
 
@@ -326,11 +324,11 @@ export async function processPendingEmailSequences(): Promise<{
   const proposals = await prisma.proposal.findMany({
     where: {
       status: { in: ['SENT', 'VIEWED'] },
-      sentAt: { not: null }
+      sentAt: { not: null },
     },
     include: {
-      emailSequence: true
-    }
+      emailSequence: true,
+    },
   });
 
   let sent = 0;
@@ -340,10 +338,13 @@ export async function processPendingEmailSequences(): Promise<{
     if (!proposal.emailSequence) continue;
 
     const decision = await getNextEmailDecision(proposal.id);
-    
+
     if (decision.shouldSend) {
       // TODO: Trigger actual email send via email sender
-      console.log(`Would send email ${decision.nextStep} to proposal ${proposal.id}`);
+      logger.info(
+        { event: 'email.sequence.pending_send', proposalId: proposal.id, step: decision.nextStep },
+        'Email sequence step ready to send'
+      );
       sent++;
     } else {
       skipped++;
@@ -353,6 +354,6 @@ export async function processPendingEmailSequences(): Promise<{
   return {
     processed: proposals.length,
     sent,
-    skipped
+    skipped,
   };
 }

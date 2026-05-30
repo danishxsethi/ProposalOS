@@ -1,6 +1,8 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
 import * as fc from 'fast-check';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { DeliveryEngine } from '../deliveryEngine';
+
 import type { Deliverable } from '../types';
 
 // Mock Prisma
@@ -31,12 +33,12 @@ describe('Delivery Engine Property Tests', () => {
 
   /**
    * Property 23: Deliverables map to accepted tier's findings
-   * 
+   *
    * For any accepted proposal, the generated deliverables must map one-to-one to
    * the finding IDs in the accepted tier, each deliverable must have an agent type
    * matching the finding's category, and each must have an estimated completion date
    * within the tier's delivery timeline.
-   * 
+   *
    * **Validates: Requirements 7.1, 7.2**
    */
   describe('Property 23: Deliverables map to accepted tiers findings', () => {
@@ -122,7 +124,14 @@ describe('Delivery Engine Property Tests', () => {
             proposalId: fc.uuid(),
             tenantId: fc.uuid(),
             tier: fc.constantFrom('essentials', 'growth', 'premium'),
-            category: fc.constantFrom('SPEED', 'PERFORMANCE', 'SEO', 'ACCESSIBILITY', 'SECURITY', 'CONTENT'),
+            category: fc.constantFrom(
+              'SPEED',
+              'PERFORMANCE',
+              'SEO',
+              'ACCESSIBILITY',
+              'SECURITY',
+              'CONTENT'
+            ),
           }),
           async ({ proposalId, tenantId, tier, category }) => {
             const findingId = 'test-finding-id';
@@ -218,11 +227,11 @@ describe('Delivery Engine Property Tests', () => {
 
   /**
    * Property 24: Overdue deliverables are escalated
-   * 
+   *
    * For any deliverable task whose estimated completion date has passed and whose
    * status is not "completed" or "verified", the task must be transitioned to
    * "escalated" status.
-   * 
+   *
    * **Validates: Requirements 7.5**
    */
   describe('Property 24: Overdue deliverables are escalated', () => {
@@ -250,7 +259,9 @@ describe('Delivery Engine Property Tests', () => {
           async (overdueTasks) => {
             // Setup mock
             (prisma.deliveryTask.findMany as any).mockResolvedValue(overdueTasks);
-            (prisma.deliveryTask.updateMany as any).mockResolvedValue({ count: overdueTasks.length });
+            (prisma.deliveryTask.updateMany as any).mockResolvedValue({
+              count: overdueTasks.length,
+            });
 
             // Execute
             const escalated = await deliveryEngine.escalateOverdue();
@@ -359,7 +370,7 @@ describe('Delivery Engine Property Tests', () => {
 
   /**
    * Additional property: All deliverables complete check is accurate
-   * 
+   *
    * For any proposal, checkAllComplete should return true only when all
    * deliverables are verified, and false otherwise.
    */
@@ -435,7 +446,7 @@ describe('Delivery Engine Property Tests', () => {
 
   /**
    * Additional property: Deliverable status transitions are valid
-   * 
+   *
    * For any deliverable, status transitions should follow valid state machine:
    * queued -> in_progress -> completed -> verified
    * or queued/in_progress -> failed
@@ -488,35 +499,32 @@ describe('Delivery Engine Property Tests', () => {
 
     it('should transition from completed to verified on verification', async () => {
       await fc.assert(
-        fc.asyncProperty(
-          fc.uuid(),
-          async (deliverableId) => {
-            // Setup mock
-            (prisma.deliveryTask.findUnique as any).mockResolvedValue({
-              id: deliverableId,
-              status: 'completed',
-            });
-            (prisma.deliveryTask.update as any).mockResolvedValue({
-              id: deliverableId,
+        fc.asyncProperty(fc.uuid(), async (deliverableId) => {
+          // Setup mock
+          (prisma.deliveryTask.findUnique as any).mockResolvedValue({
+            id: deliverableId,
+            status: 'completed',
+          });
+          (prisma.deliveryTask.update as any).mockResolvedValue({
+            id: deliverableId,
+            status: 'verified',
+          });
+
+          // Execute
+          const result = await deliveryEngine.verifyDeliverable(deliverableId);
+
+          // Verify status transition
+          expect(prisma.deliveryTask.update).toHaveBeenCalledWith({
+            where: { id: deliverableId },
+            data: expect.objectContaining({
               status: 'verified',
-            });
+            }),
+          });
 
-            // Execute
-            const result = await deliveryEngine.verifyDeliverable(deliverableId);
-
-            // Verify status transition
-            expect(prisma.deliveryTask.update).toHaveBeenCalledWith({
-              where: { id: deliverableId },
-              data: expect.objectContaining({
-                status: 'verified',
-              }),
-            });
-
-            // Verify result
-            expect(result.verified).toBe(true);
-            expect(result.improvementPercent).toBeGreaterThan(0);
-          }
-        ),
+          // Verify result
+          expect(result.passed).toBe(true);
+          expect(result.improvementPercent).toBeGreaterThan(0);
+        }),
         { numRuns: 100 }
       );
     });

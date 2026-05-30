@@ -1,27 +1,58 @@
+/**
+ * app/api/pipeline/partners/route.ts
+ *
+ * Agency Partner Management API
+ *
+ * Features:
+ * - Auth & role-based access (admin for create)
+ * - Rate limiting
+ * - Standardized error responses
+ */
+
 import { NextRequest, NextResponse } from 'next/server';
+
+import { z } from 'zod';
+
+import {
+  generateTraceId,
+  InternalError,
+  UnauthorizedError,
+  ValidationError,
+} from '@/lib/api/errors';
 import { auth } from '@/lib/auth';
-import { onboardPartner, getPartnerMetrics } from '@/lib/pipeline/partnerPortal';
-import { prisma } from '@/lib/db';
+import { withRateLimit } from '@/lib/middleware/rateLimit';
+import { withRole } from '@/lib/middleware/withRole';
+import { onboardPartner, PartnerConfig } from '@/lib/pipeline/partnerPortal';
+import { prisma } from '@/lib/prisma';
 
 /**
- * GET /api/pipeline/partners
- * List all partners for the authenticated tenant
+ * Partner creation schema
  */
-export async function GET(request: NextRequest) {
+const partnerCreateSchema = z.object({
+  name: z.string().min(1).max(200),
+  contactEmail: z.string().email(),
+  contactName: z.string().min(1).max(100),
+  verticals: z.array(z.string()).optional(),
+  geographies: z.array(z.string()).optional(),
+  monthlyVolume: z.number().positive().optional(),
+  pricingModel: z.enum(['subscription', 'per_lead']).optional(),
+  perLeadPriceCents: z.number().nonnegative().optional(),
+  subscriptionPriceCents: z.number().nonnegative().optional(),
+});
+
+/**
+ * Inner handler for GET partners
+ */
+async function handleGetPartners(req: NextRequest): Promise<NextResponse> {
+  const traceId = generateTraceId();
+
   try {
     const session = await auth();
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    // Get user's tenant
-    const user = await prisma.user.findUnique({
-      where: { id: session.user.id },
-      include: { tenant: true },
-    });
-
-    if (!user?.tenantId) {
-      return NextResponse.json({ error: 'No tenant found' }, { status: 400 });
+    if (!session?.user) {
+      return NextResponse.json(
+        new UnauthorizedError('Authentication required').toEnvelope(req.url, traceId),
+        { status: 401 }
+      );
     }
 
     // List all partners (partners are global, not tenant-specific)
@@ -42,50 +73,86 @@ export async function GET(request: NextRequest) {
       },
     });
 
-    return NextResponse.json({ partners });
+    const response = NextResponse.json({ partners });
+    response.headers.set('X-Trace-Id', traceId);
+    return response;
   } catch (error) {
     console.error('Error listing partners:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    const internalError = new InternalError('Failed to list partners', {
+      originalError: error instanceof Error ? error.message : String(error),
+    });
+    return NextResponse.json(internalError.toEnvelope(req.url, traceId), { status: 500 });
   }
 }
 
 /**
- * POST /api/pipeline/partners
- * Create a new partner
+ * Inner handler for POST partner
  */
-export async function POST(request: NextRequest) {
+async function handleCreatePartner(req: NextRequest): Promise<NextResponse> {
+  const traceId = generateTraceId();
+
   try {
     const session = await auth();
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    if (!session?.user) {
+      return NextResponse.json(
+        new UnauthorizedError('Authentication required').toEnvelope(req.url, traceId),
+        { status: 401 }
+      );
     }
 
-    // Verify admin access
-    const user = await prisma.user.findUnique({
-      where: { id: session.user.id },
-    });
+    const body = await req.json();
 
-    if (user?.role !== 'admin') {
-      return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
+    // Validate request body
+    const result = partnerCreateSchema.safeParse(body);
+    if (!result.success) {
+      const errorDetails = result.error.errors.map((e) => ({
+        field: e.path.join('.'),
+        message: e.message,
+      }));
+      return NextResponse.json(
+        new ValidationError('Invalid partner data', errorDetails).toEnvelope(req.url, traceId),
+        { status: 400 }
+      );
     }
-
-    const body = await request.json();
 
     const partnerId = await onboardPartner({
-      name: body.name,
-      contactEmail: body.contactEmail,
-      contactName: body.contactName,
-      verticals: body.verticals,
-      geographies: body.geographies,
-      monthlyVolume: body.monthlyVolume,
-      pricingModel: body.pricingModel,
-      perLeadPriceCents: body.perLeadPriceCents,
-      subscriptionPriceCents: body.subscriptionPriceCents,
-    });
+      name: result.data.name,
+      contactEmail: result.data.contactEmail,
+      contactName: result.data.contactName ?? undefined,
+      verticals: result.data.verticals || [],
+      geographies: result.data.geographies || [],
+      monthlyVolume: result.data.monthlyVolume || 0,
+      pricingModel: result.data.pricingModel || 'per_lead',
+      perLeadPriceCents: result.data.perLeadPriceCents ?? undefined,
+      subscriptionPriceCents: result.data.subscriptionPriceCents ?? undefined,
+    } as PartnerConfig);
 
-    return NextResponse.json({ partnerId }, { status: 201 });
+    const response = NextResponse.json({ partnerId }, { status: 201 });
+    response.headers.set('X-Trace-Id', traceId);
+    return response;
   } catch (error) {
     console.error('Error creating partner:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    const internalError = new InternalError('Failed to create partner', {
+      originalError: error instanceof Error ? error.message : String(error),
+    });
+    return NextResponse.json(internalError.toEnvelope(req.url, traceId), { status: 500 });
   }
 }
+
+// Apply rate limiting
+const rateLimitedGet = (req: NextRequest) =>
+  withRateLimit({
+    windowMs: 60 * 1000,
+    max: 30,
+    message: 'Too many partner requests. Please wait before trying again.',
+  })(req, () => handleGetPartners(req));
+
+const rateLimitedPost = (req: NextRequest) =>
+  withRateLimit({
+    windowMs: 60 * 1000,
+    max: 10,
+    message: 'Too many partner creation requests. Please wait before trying again.',
+  })(req, () => handleCreatePartner(req));
+
+export const GET = rateLimitedGet;
+export const POST = withRole('agency_admin', rateLimitedPost);

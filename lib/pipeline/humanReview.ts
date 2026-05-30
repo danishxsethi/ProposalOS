@@ -1,15 +1,19 @@
 /**
  * Human Review Queue
- * 
+ *
  * Routes high-value prospects to human operators for review and approval.
  * Provides full context (audit, proposal, engagement, Pain Score) for decision-making.
- * 
+ *
  * Requirements: 10.3, 10.4, 10.5, 10.7
  */
 
-import { prisma } from '@/lib/db';
+import { prisma } from '@/lib/prisma';
+import { runWithTenantAsync, runWithTenantBypass } from '@/lib/tenant/context';
+
 import { transition } from './stateMachine';
-import type { ProspectLead, Audit, Proposal } from '@prisma/client';
+import { PipelineStage } from './types';
+
+import type { Audit, Proposal, ProspectLead } from '@prisma/client';
 
 export interface ReviewQueueItem {
   prospect: ProspectLead & {
@@ -48,32 +52,52 @@ export interface ReviewAction {
   notes?: string;
 }
 
+async function resolveProspectTenantId(prospectId: string, reason: string): Promise<string | null> {
+  const prospect = await runWithTenantBypass(reason, () =>
+    prisma.prospectLead.findUnique({
+      where: { id: prospectId },
+      select: { tenantId: true },
+    })
+  );
+
+  return prospect?.tenantId ?? null;
+}
+
+async function resolveProspectTenantState(
+  prospectId: string,
+  reason: string
+): Promise<{ tenantId: string; pipelineStatus: string } | null> {
+  return runWithTenantBypass(reason, () =>
+    prisma.prospectLead.findUnique({
+      where: { id: prospectId },
+      select: { tenantId: true, pipelineStatus: true },
+    })
+  );
+}
+
 /**
  * Route a prospect to the human review queue
  * Requirement 10.3: Display full context for review
  */
-export async function routeToReview(
-  prospectId: string,
-  reason: string
-): Promise<void> {
-  // Transition prospect to hot_lead status (which triggers human review)
-  await transition(prospectId, 'hot_lead', 'deal_closer');
+export async function routeToReview(prospectId: string, reason: string): Promise<void> {
+  const tenantId =
+    (await resolveProspectTenantId(prospectId, 'human-review-route-tenant-discovery')) || '';
 
-  // Log the routing action
-  await prisma.pipelineErrorLog.create({
-    data: {
-      tenantId: (await prisma.prospectLead.findUnique({
-        where: { id: prospectId },
-        select: { tenantId: true },
-      }))?.tenantId || '',
-      stage: 'human_review',
-      prospectId,
-      errorType: 'ROUTED_TO_REVIEW',
-      errorMessage: reason,
-      metadata: {
-        routedAt: new Date().toISOString(),
+  await runWithTenantAsync(tenantId, async () => {
+    await transition(prospectId, 'hot_lead', PipelineStage.CLOSING);
+
+    await prisma.pipelineErrorLog.create({
+      data: {
+        tenantId,
+        stage: 'human_review',
+        prospectId,
+        errorType: 'ROUTED_TO_REVIEW',
+        errorMessage: reason,
+        metadata: {
+          routedAt: new Date().toISOString(),
+        },
       },
-    },
+    });
   });
 }
 
@@ -91,101 +115,114 @@ export async function getReviewQueue(
   pageSize: number;
   totalPages: number;
 }> {
-  const {
-    status = ['hot_lead'],
-    vertical,
-    minPainScore,
-    maxPainScore,
-    minEngagementScore,
-    sortBy = 'engagementScore',
-    sortOrder = 'desc',
-    page = 1,
-    pageSize = 20,
-  } = filters;
+  return runWithTenantAsync(tenantId, async () => {
+    const {
+      status = ['hot_lead'],
+      vertical,
+      minPainScore,
+      maxPainScore,
+      minEngagementScore,
+      sortBy = 'engagementScore',
+      sortOrder = 'desc',
+      page = 1,
+      pageSize = 20,
+    } = filters;
 
-  // Build where clause
-  const where: any = {
-    tenantId,
-    pipelineStatus: { in: status },
-  };
+    // Preserve the explicit tenantId filter even though the ALS context scopes the client.
+    const where: any = {
+      tenantId,
+      pipelineStatus: { in: status },
+    };
 
-  if (vertical && vertical.length > 0) {
-    where.vertical = { in: vertical };
-  }
+    if (vertical && vertical.length > 0) {
+      where.vertical = { in: vertical };
+    }
 
-  if (minEngagementScore !== undefined) {
-    where.engagementScore = { gte: minEngagementScore };
-  }
+    if (minEngagementScore !== undefined) {
+      where.engagementScore = { gte: minEngagementScore };
+    }
 
-  // Get total count
-  const total = await prisma.prospectLead.count({ where });
+    const total = await prisma.prospectLead.count({ where });
 
-  // Get paginated results
-  const prospects = await prisma.prospectLead.findMany({
-    where,
-    include: {
-      audit: true,
-      proposal: true,
-      stateTransitions: {
-        orderBy: { createdAt: 'asc' },
+    const prospects = await prisma.prospectLead.findMany({
+      where,
+      include: {
+        stateTransitions: {
+          orderBy: { createdAt: 'asc' },
+        },
       },
-    },
-    orderBy: sortBy === 'createdAt' || sortBy === 'updatedAt'
-      ? { [sortBy]: sortOrder }
-      : sortBy === 'engagementScore'
-      ? { engagementScore: sortOrder }
-      : { createdAt: sortOrder },
-    skip: (page - 1) * pageSize,
-    take: pageSize,
-  });
+      orderBy:
+        sortBy === 'createdAt' || sortBy === 'updatedAt'
+          ? { [sortBy]: sortOrder }
+          : sortBy === 'engagementScore'
+            ? { engagementScore: sortOrder }
+            : { createdAt: sortOrder },
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+    });
 
-  // Transform to ReviewQueueItem format
-  const items: ReviewQueueItem[] = prospects.map(prospect => {
-    const painBreakdown = (prospect.painScoreBreakdown as Record<string, number>) || {};
-    const painScore = Object.values(painBreakdown).reduce((sum, val) => sum + val, 0);
+    const auditIds = prospects.map((p) => p.auditId).filter((id): id is string => !!id);
+    const proposalIds = prospects.map((p) => p.proposalId).filter((id): id is string => !!id);
+
+    const [audits, proposals] = await Promise.all([
+      auditIds.length > 0
+        ? prisma.audit.findMany({ where: { id: { in: auditIds } } })
+        : Promise.resolve([]),
+      proposalIds.length > 0
+        ? prisma.proposal.findMany({ where: { id: { in: proposalIds } } })
+        : Promise.resolve([]),
+    ]);
+
+    const auditMap = new Map(audits.map((a) => [a.id, a]));
+    const proposalMap = new Map(proposals.map((p) => [p.id, p]));
+
+    const items: ReviewQueueItem[] = prospects.map((prospect) => {
+      const painBreakdown = (prospect.painBreakdown as Record<string, number>) || {};
+      const painScore = Object.values(painBreakdown).reduce((sum, val) => sum + val, 0);
+      const audit = prospect.auditId ? (auditMap.get(prospect.auditId) ?? null) : null;
+      const proposal = prospect.proposalId ? (proposalMap.get(prospect.proposalId) ?? null) : null;
+
+      return {
+        prospect: {
+          ...prospect,
+          audit,
+          proposal,
+        },
+        painScore,
+        painBreakdown,
+        engagementScore: prospect.engagementScore || 0,
+        stateHistory: (prospect.stateTransitions || []).map((t: any) => ({
+          from: t.fromStatus,
+          to: t.toStatus,
+          timestamp: t.createdAt,
+          stage: t.stage,
+        })),
+      };
+    });
+
+    let filteredItems = items;
+    if (minPainScore !== undefined) {
+      filteredItems = filteredItems.filter((item) => item.painScore >= minPainScore);
+    }
+    if (maxPainScore !== undefined) {
+      filteredItems = filteredItems.filter((item) => item.painScore <= maxPainScore);
+    }
+
+    if (sortBy === 'painScore') {
+      filteredItems.sort((a, b) => {
+        const diff = a.painScore - b.painScore;
+        return sortOrder === 'asc' ? diff : -diff;
+      });
+    }
 
     return {
-      prospect: {
-        ...prospect,
-        audit: prospect.audit || null,
-        proposal: prospect.proposal || null,
-      },
-      painScore,
-      painBreakdown,
-      engagementScore: prospect.engagementScore || 0,
-      stateHistory: prospect.stateTransitions.map(t => ({
-        from: t.fromStatus,
-        to: t.toStatus,
-        timestamp: t.createdAt,
-        stage: t.stage,
-      })),
+      items: filteredItems,
+      total,
+      page,
+      pageSize,
+      totalPages: Math.ceil(total / pageSize),
     };
   });
-
-  // Apply pain score filters (post-query since it's computed)
-  let filteredItems = items;
-  if (minPainScore !== undefined) {
-    filteredItems = filteredItems.filter(item => item.painScore >= minPainScore);
-  }
-  if (maxPainScore !== undefined) {
-    filteredItems = filteredItems.filter(item => item.painScore <= maxPainScore);
-  }
-
-  // Sort by pain score if requested (post-query since it's computed)
-  if (sortBy === 'painScore') {
-    filteredItems.sort((a, b) => {
-      const diff = a.painScore - b.painScore;
-      return sortOrder === 'asc' ? diff : -diff;
-    });
-  }
-
-  return {
-    items: filteredItems,
-    total: filteredItems.length,
-    page,
-    pageSize,
-    totalPages: Math.ceil(filteredItems.length / pageSize),
-  };
 }
 
 /**
@@ -195,33 +232,33 @@ export async function getReviewQueue(
 export async function approveProspect(action: ReviewAction): Promise<void> {
   const { prospectId, operatorId, operatorEmail, notes } = action;
 
-  // Get current prospect
-  const prospect = await prisma.prospectLead.findUnique({
-    where: { id: prospectId },
-  });
+  const tenantId = await resolveProspectTenantId(
+    prospectId,
+    'human-review-approve-tenant-discovery'
+  );
 
-  if (!prospect) {
+  if (!tenantId) {
     throw new Error(`Prospect ${prospectId} not found`);
   }
 
-  // Transition to closing status
-  await transition(prospectId, 'closing', 'human_review');
+  await runWithTenantAsync(tenantId, async () => {
+    await transition(prospectId, 'closing', PipelineStage.CLOSING);
 
-  // Log the approval action
-  await prisma.pipelineErrorLog.create({
-    data: {
-      tenantId: prospect.tenantId,
-      stage: 'human_review',
-      prospectId,
-      errorType: 'APPROVED',
-      errorMessage: `Approved by ${operatorEmail}`,
-      metadata: {
-        operatorId,
-        operatorEmail,
-        notes: notes || '',
-        approvedAt: new Date().toISOString(),
+    await prisma.pipelineErrorLog.create({
+      data: {
+        tenantId,
+        stage: 'human_review',
+        prospectId,
+        errorType: 'APPROVED',
+        errorMessage: `Approved by ${operatorEmail}`,
+        metadata: {
+          operatorId,
+          operatorEmail,
+          notes: notes || '',
+          approvedAt: new Date().toISOString(),
+        },
       },
-    },
+    });
   });
 }
 
@@ -232,34 +269,34 @@ export async function approveProspect(action: ReviewAction): Promise<void> {
 export async function rejectProspect(action: ReviewAction): Promise<void> {
   const { prospectId, operatorId, operatorEmail, reason, notes } = action;
 
-  // Get current prospect
-  const prospect = await prisma.prospectLead.findUnique({
-    where: { id: prospectId },
-  });
+  const tenantId = await resolveProspectTenantId(
+    prospectId,
+    'human-review-reject-tenant-discovery'
+  );
 
-  if (!prospect) {
+  if (!tenantId) {
     throw new Error(`Prospect ${prospectId} not found`);
   }
 
-  // Transition to closed_lost status
-  await transition(prospectId, 'closed_lost', 'human_review');
+  await runWithTenantAsync(tenantId, async () => {
+    await transition(prospectId, 'closed_lost', PipelineStage.CLOSING);
 
-  // Log the rejection action
-  await prisma.pipelineErrorLog.create({
-    data: {
-      tenantId: prospect.tenantId,
-      stage: 'human_review',
-      prospectId,
-      errorType: 'REJECTED',
-      errorMessage: `Rejected by ${operatorEmail}: ${reason || 'No reason provided'}`,
-      metadata: {
-        operatorId,
-        operatorEmail,
-        reason: reason || '',
-        notes: notes || '',
-        rejectedAt: new Date().toISOString(),
+    await prisma.pipelineErrorLog.create({
+      data: {
+        tenantId,
+        stage: 'human_review',
+        prospectId,
+        errorType: 'REJECTED',
+        errorMessage: `Rejected by ${operatorEmail}: ${reason || 'No reason provided'}`,
+        metadata: {
+          operatorId,
+          operatorEmail,
+          reason: reason || '',
+          notes: notes || '',
+          rejectedAt: new Date().toISOString(),
+        },
       },
-    },
+    });
   });
 }
 
@@ -268,44 +305,60 @@ export async function rejectProspect(action: ReviewAction): Promise<void> {
  * Requirement 10.3: Display full context (audit, proposal, engagement, Pain Score)
  */
 export async function getProspectContext(prospectId: string): Promise<ReviewQueueItem | null> {
-  const prospect = await prisma.prospectLead.findUnique({
-    where: { id: prospectId },
-    include: {
-      audit: {
-        include: {
-          findings: true,
+  const tenantId = await resolveProspectTenantId(
+    prospectId,
+    'human-review-context-tenant-discovery'
+  );
+  if (!tenantId) return null;
+
+  return runWithTenantAsync(tenantId, async () => {
+    const prospect = await prisma.prospectLead.findUnique({
+      where: { id: prospectId },
+      include: {
+        stateTransitions: {
+          orderBy: { createdAt: 'asc' },
         },
       },
-      proposal: true,
-      stateTransitions: {
-        orderBy: { createdAt: 'asc' },
+    });
+
+    if (!prospect) {
+      return null;
+    }
+
+    const [audit, proposal] = await Promise.all([
+      prospect.auditId
+        ? prisma.audit.findUnique({
+            where: { id: prospect.auditId },
+            include: { findings: true },
+          })
+        : Promise.resolve(null),
+      prospect.proposalId
+        ? prisma.proposal.findUnique({
+            where: { id: prospect.proposalId },
+          })
+        : Promise.resolve(null),
+    ]);
+
+    const painBreakdown = (prospect.painBreakdown as Record<string, number>) || {};
+    const painScore = Object.values(painBreakdown).reduce((sum, val) => sum + val, 0);
+
+    return {
+      prospect: {
+        ...prospect,
+        audit,
+        proposal,
       },
-    },
+      painScore,
+      painBreakdown,
+      engagementScore: prospect.engagementScore || 0,
+      stateHistory: (prospect.stateTransitions || []).map((t: any) => ({
+        from: t.fromStatus,
+        to: t.toStatus,
+        timestamp: t.createdAt,
+        stage: t.stage,
+      })),
+    };
   });
-
-  if (!prospect) {
-    return null;
-  }
-
-  const painBreakdown = (prospect.painScoreBreakdown as Record<string, number>) || {};
-  const painScore = Object.values(painBreakdown).reduce((sum, val) => sum + val, 0);
-
-  return {
-    prospect: {
-      ...prospect,
-      audit: prospect.audit || null,
-      proposal: prospect.proposal || null,
-    },
-    painScore,
-    painBreakdown,
-    engagementScore: prospect.engagementScore || 0,
-    stateHistory: prospect.stateTransitions.map(t => ({
-      from: t.fromStatus,
-      to: t.toStatus,
-      timestamp: t.createdAt,
-      stage: t.stage,
-    })),
-  };
 }
 
 /**
@@ -319,59 +372,58 @@ export async function getReviewQueueStats(tenantId: string): Promise<{
   approvalRate: number;
   avgReviewTime: number;
 }> {
-  // Get prospects currently in review
-  const inReview = await prisma.prospectLead.findMany({
-    where: {
-      tenantId,
-      pipelineStatus: 'hot_lead',
-    },
+  return runWithTenantAsync(tenantId, async () => {
+    const inReview = await prisma.prospectLead.findMany({
+      where: {
+        tenantId,
+        pipelineStatus: 'hot_lead',
+      },
+    });
+
+    const totalInReview = inReview.length;
+
+    const avgPainScore =
+      inReview.length > 0
+        ? inReview.reduce((sum, p) => {
+            const breakdown = (p.painBreakdown as Record<string, number>) || {};
+            const score = Object.values(breakdown).reduce((s, v) => s + v, 0);
+            return sum + score;
+          }, 0) / inReview.length
+        : 0;
+
+    const avgEngagementScore =
+      inReview.length > 0
+        ? inReview.reduce((sum, p) => sum + (p.engagementScore || 0), 0) / inReview.length
+        : 0;
+
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+    const reviewActions = await prisma.pipelineErrorLog.findMany({
+      where: {
+        tenantId,
+        stage: 'human_review',
+        errorType: { in: ['APPROVED', 'REJECTED'] },
+        createdAt: { gte: thirtyDaysAgo },
+      },
+    });
+
+    const approvals = reviewActions.filter((a) => a.errorType === 'APPROVED').length;
+    const rejections = reviewActions.filter((a) => a.errorType === 'REJECTED').length;
+    const total = approvals + rejections;
+
+    const approvalRate = total > 0 ? approvals / total : 0;
+
+    const avgReviewTime = 0; // TODO: Implement actual review time tracking
+
+    return {
+      totalInReview,
+      avgPainScore,
+      avgEngagementScore,
+      approvalRate,
+      avgReviewTime,
+    };
   });
-
-  const totalInReview = inReview.length;
-
-  // Calculate average pain score
-  const avgPainScore = inReview.length > 0
-    ? inReview.reduce((sum, p) => {
-        const breakdown = (p.painScoreBreakdown as Record<string, number>) || {};
-        const score = Object.values(breakdown).reduce((s, v) => s + v, 0);
-        return sum + score;
-      }, 0) / inReview.length
-    : 0;
-
-  // Calculate average engagement score
-  const avgEngagementScore = inReview.length > 0
-    ? inReview.reduce((sum, p) => sum + (p.engagementScore || 0), 0) / inReview.length
-    : 0;
-
-  // Get approval/rejection logs from last 30 days
-  const thirtyDaysAgo = new Date();
-  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-
-  const reviewActions = await prisma.pipelineErrorLog.findMany({
-    where: {
-      tenantId,
-      stage: 'human_review',
-      errorType: { in: ['APPROVED', 'REJECTED'] },
-      createdAt: { gte: thirtyDaysAgo },
-    },
-  });
-
-  const approvals = reviewActions.filter(a => a.errorType === 'APPROVED').length;
-  const rejections = reviewActions.filter(a => a.errorType === 'REJECTED').length;
-  const total = approvals + rejections;
-
-  const approvalRate = total > 0 ? approvals / total : 0;
-
-  // Calculate average review time (placeholder - would need actual timing data)
-  const avgReviewTime = 0; // TODO: Implement actual review time tracking
-
-  return {
-    totalInReview,
-    avgPainScore,
-    avgEngagementScore,
-    approvalRate,
-    avgReviewTime,
-  };
 }
 
 /**
@@ -385,33 +437,34 @@ export async function overrideProspectStatus(
   operatorEmail: string,
   reason: string
 ): Promise<void> {
-  const prospect = await prisma.prospectLead.findUnique({
-    where: { id: prospectId },
-  });
+  const prospectRaw = await resolveProspectTenantState(
+    prospectId,
+    'human-review-override-tenant-discovery'
+  );
 
-  if (!prospect) {
+  if (!prospectRaw) {
     throw new Error(`Prospect ${prospectId} not found`);
   }
 
-  // Transition to new status
-  await transition(prospectId, newStatus as any, 'manual_override');
+  await runWithTenantAsync(prospectRaw.tenantId, async () => {
+    await transition(prospectId, newStatus as any, PipelineStage.CLOSING);
 
-  // Log the override action
-  await prisma.pipelineErrorLog.create({
-    data: {
-      tenantId: prospect.tenantId,
-      stage: 'manual_override',
-      prospectId,
-      errorType: 'STATUS_OVERRIDE',
-      errorMessage: `Status overridden by ${operatorEmail}: ${reason}`,
-      metadata: {
-        operatorId,
-        operatorEmail,
-        oldStatus: prospect.pipelineStatus,
-        newStatus,
-        reason,
-        overriddenAt: new Date().toISOString(),
+    await prisma.pipelineErrorLog.create({
+      data: {
+        tenantId: prospectRaw.tenantId,
+        stage: 'manual_override',
+        prospectId,
+        errorType: 'STATUS_OVERRIDE',
+        errorMessage: `Status overridden by ${operatorEmail}: ${reason}`,
+        metadata: {
+          operatorId,
+          operatorEmail,
+          oldStatus: prospectRaw.pipelineStatus,
+          newStatus,
+          reason,
+          overriddenAt: new Date().toISOString(),
+        },
       },
-    },
+    });
   });
 }

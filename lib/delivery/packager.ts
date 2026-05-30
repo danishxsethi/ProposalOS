@@ -1,6 +1,9 @@
-import { ValidatedArtifact } from './validationPipeline';
 import { GoogleGenerativeAI } from '@google/generative-ai';
+
+import { logger } from '@/lib/logger';
+
 import { getGenerator } from './generators';
+import { ValidatedArtifact } from './validationPipeline';
 
 // Import Finding type from Prisma client
 type Finding = {
@@ -44,11 +47,16 @@ export async function packageArtifact(
   // Generate WordPress plugin if applicable
   let wordpressPlugin: string | undefined;
   const generator = getGenerator(finding.category);
-  if (generator && generator.supportsWordPress && generator.supportsWordPress() && generator.generateWordPressPlugin) {
+  if (
+    generator &&
+    generator.supportsWordPress &&
+    generator.supportsWordPress() &&
+    generator.generateWordPressPlugin
+  ) {
     try {
       wordpressPlugin = await generator.generateWordPressPlugin(finding as any, artifact);
     } catch (error) {
-      console.error('Failed to generate WordPress plugin:', error);
+      logger.error({ error }, 'Failed to generate WordPress plugin');
     }
   }
 
@@ -100,7 +108,7 @@ Provide concise, numbered steps that a non-technical person can follow.`;
 
     return response || 'See artifact content for implementation details.';
   } catch (error) {
-    console.error('Failed to generate installation instructions:', error);
+    logger.error({ error }, 'Failed to generate installation instructions');
     return 'See artifact content for implementation details.';
   }
 }

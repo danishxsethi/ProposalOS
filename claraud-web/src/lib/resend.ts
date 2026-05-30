@@ -4,84 +4,92 @@ import { Resend } from 'resend';
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 
 export async function sendReportEmail({
-    to,
-    businessName,
-    overallScore,
-    letterGrade,
-    topFindings,
-    reportUrl,
+  to,
+  businessName,
+  overallScore,
+  letterGrade,
+  topFindings,
+  reportUrl,
 }: {
-    to: string;
-    businessName: string;
-    overallScore: number;
-    letterGrade: string;
-    topFindings: { title: string; severity: string }[];
-    reportUrl: string;
+  to: string;
+  businessName: string;
+  overallScore: number;
+  letterGrade: string;
+  topFindings: { title: string; severity: string }[];
+  reportUrl: string;
 }) {
-    // Only send if RESEND_API_KEY is configured
-    if (!process.env.RESEND_API_KEY || !resend) {
-        console.log('[Resend] Skipping email — no API key configured');
-        return;
-    }
+  // Only send if RESEND_API_KEY is configured
+  if (!process.env.RESEND_API_KEY || !resend) {
+    console.log('[Resend] Skipping email — no API key configured');
+    return;
+  }
 
-    await resend.emails.send({
-        from: process.env.RESEND_FROM_EMAIL || 'Claraud <audit@claraud.com>',
-        to,
-        subject: `Your ${businessName} Audit Report is Ready`,
-        html: generateReportEmailHtml({ businessName, overallScore, letterGrade, topFindings, reportUrl }),
-    });
+  const scoreOutOf100 = Math.round(overallScore * 10);
+
+  await resend.emails.send({
+    from: process.env.RESEND_FROM_EMAIL || 'Claraud <audit@claraud.com>',
+    to,
+    subject: `Your ${businessName} Audit Report is Ready`,
+    html: generateReportEmailHtml({
+      businessName,
+      overallScore: scoreOutOf100,
+      letterGrade,
+      topFindings,
+      reportUrl,
+    }),
+  });
 }
 
 function generateReportEmailHtml({
-    businessName,
-    overallScore,
-    letterGrade,
-    topFindings,
-    reportUrl,
+  businessName,
+  overallScore,
+  letterGrade,
+  topFindings,
+  reportUrl,
 }: {
-    businessName: string;
-    overallScore: number;
-    letterGrade: string;
-    topFindings: { title: string; severity: string }[];
-    reportUrl: string;
+  businessName: string;
+  overallScore: number;
+  letterGrade: string;
+  topFindings: { title: string; severity: string }[];
+  reportUrl: string;
 }) {
-    // Color code based on score
-    const getScoreColor = (score: number) => {
-        if (score >= 80) return '#22c55e'; // green
-        if (score >= 60) return '#3b82f6'; // blue
-        if (score >= 40) return '#f59e0b'; // yellow
-        if (score >= 20) return '#f97316'; // orange
-        return '#ef4444'; // red
-    };
+  // Color code based on score
+  const getScoreColor = (score: number) => {
+    if (score >= 80) return '#22c55e'; // green
+    if (score >= 60) return '#3b82f6'; // blue
+    if (score >= 40) return '#f59e0b'; // yellow
+    if (score >= 20) return '#f97316'; // orange
+    return '#ef4444'; // red
+  };
 
-    const scoreColor = getScoreColor(overallScore);
+  const scoreColor = getScoreColor(overallScore);
 
-    // Generate findings HTML
-    const findingsHtml = topFindings
-        .slice(0, 3)
-        .map(
-            (f) => `
+  // Generate findings HTML
+  const findingsHtml = topFindings
+    .slice(0, 3)
+    .map(
+      (f) => `
             <li style="margin-bottom: 8px; color: #9ca3af; font-size: 14px;">
                 <span style="color: ${getSeverityColor(f.severity)}; font-weight: 600;">${f.severity.toUpperCase()}:</span> ${f.title}
             </li>
         `
-        )
-        .join('');
+    )
+    .join('');
 
-    function getSeverityColor(severity: string) {
-        switch (severity) {
-            case 'critical':
-                return '#ef4444';
-            case 'high':
-                return '#f97316';
-            case 'medium':
-                return '#f59e0b';
-            default:
-                return '#6b7280';
-        }
+  function getSeverityColor(severity: string) {
+    switch (severity) {
+      case 'critical':
+        return '#ef4444';
+      case 'high':
+        return '#f97316';
+      case 'medium':
+        return '#f59e0b';
+      default:
+        return '#6b7280';
     }
+  }
 
-    return `
+  return `
         <!DOCTYPE html>
         <html>
         <head>

@@ -110,10 +110,10 @@ Use this checklist to verify the proposal PDF renders correctly before release.
 
 ## Common Issues
 
-| Issue | Fix |
-|-------|-----|
-| Blank PDF | Check `data-pdf-ready` selector, increase wait time |
-| Cut-off content | Add `page-break-inside: avoid` to cards |
-| Wrong colors | Ensure `printBackground: true` in Puppeteer |
+| Issue                    | Fix                                                               |
+| ------------------------ | ----------------------------------------------------------------- |
+| Blank PDF                | Check `data-pdf-ready` selector, increase wait time               |
+| Cut-off content          | Add `page-break-inside: avoid` to cards                           |
+| Wrong colors             | Ensure `printBackground: true` in Puppeteer                       |
 | Missing competitor chart | Competitor matrix only shows when finding has `evidence[].matrix` |
-| Gauge not rendering | Verify SVG `viewBox` and `dangerouslySetInnerHTML` |
+| Gauge not rendering      | Verify SVG `viewBox` and `dangerouslySetInnerHTML`                |

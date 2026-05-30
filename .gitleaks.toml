@@ -1,0 +1,17 @@
+title = "ProposalOS gitleaks config"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Known-safe placeholders + incident docs"
+regexes = [
+  '''<password>''',
+  '''<user>:<password>''',
+  '''REDACTED''',
+  '''postgresql://<[^>]+>:<[^>]+>@''',
+]
+paths = [
+  '''SECURITY-INCIDENT\.md''',
+  '''.*\.example$''',
+]

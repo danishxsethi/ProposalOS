@@ -3,9 +3,9 @@
  */
 export * from './types';
 export {
-    PLAYBOOK_REGISTRY,
-    DEFAULT_PLAYBOOK_ID,
-    detectVertical,
-    getPlaybook,
-    type DetectVerticalInput,
+  PLAYBOOK_REGISTRY,
+  DEFAULT_PLAYBOOK_ID,
+  detectVertical,
+  getPlaybook,
+  type DetectVerticalInput,
 } from './registry';

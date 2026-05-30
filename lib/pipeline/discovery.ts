@@ -12,14 +12,19 @@
  * Requirements: 1.1, 1.2, 1.3, 1.4, 1.6, 1.7, 1.9
  */
 
-import { prisma } from '@/lib/prisma';
+import { Prisma } from '@prisma/client';
 import { v4 as uuidv4 } from 'uuid';
+
+import { logger } from '@/lib/logger';
+import { prisma } from '@/lib/prisma';
+
 import { calculate as calculatePainScore } from './painScore';
+
 import type {
   DiscoveryConfig,
   DiscoveryResult,
-  QualificationSignals,
   PainScoreBreakdown,
+  QualificationSignals,
 } from './types';
 
 // ============================================================================
@@ -59,9 +64,7 @@ export type SourceProvider = (
  * A pluggable qualification function that audits a business and returns
  * multi-signal qualification data.
  */
-export type QualificationProvider = (
-  record: RawBusinessRecord
-) => Promise<QualificationSignals>;
+export type QualificationProvider = (record: RawBusinessRecord) => Promise<QualificationSignals>;
 
 // ============================================================================
 // Default Provider Stubs
@@ -85,12 +88,7 @@ export const defaultGooglePlacesProvider: SourceProvider = async (
  * Default Yelp provider stub.
  * In production, this would call the Yelp Fusion API.
  */
-export const defaultYelpProvider: SourceProvider = async (
-  _city,
-  _vertical,
-  _limit,
-  _state
-) => {
+export const defaultYelpProvider: SourceProvider = async (_city, _vertical, _limit, _state) => {
   // Stub: replace with real Yelp API integration
   return [];
 };
@@ -114,9 +112,7 @@ export const defaultDirectoriesProvider: SourceProvider = async (
  * In production, this would run a multi-signal audit (Lighthouse, SSL check,
  * GBP API, social media checks, competitor analysis, accessibility scan).
  */
-export const defaultQualificationProvider: QualificationProvider = async (
-  _record
-) => {
+export const defaultQualificationProvider: QualificationProvider = async (_record) => {
   // Stub: returns empty signals — real implementation would run audits
   return {};
 };
@@ -151,33 +147,30 @@ export async function queryExternalSources(
   if (config.sources.googlePlaces) {
     const provider = providers.googlePlaces ?? defaultGooglePlacesProvider;
     sourceQueries.push(
-      provider(config.city, config.vertical, config.targetLeads, config.state)
-        .catch((err) => {
-          console.error('Google Places provider error:', err);
-          return [] as RawBusinessRecord[];
-        })
+      provider(config.city, config.vertical, config.targetLeads, config.state).catch((err) => {
+        logger.error({ error: err }, 'Google Places provider error');
+        return [] as RawBusinessRecord[];
+      })
     );
   }
 
   if (config.sources.yelp) {
     const provider = providers.yelp ?? defaultYelpProvider;
     sourceQueries.push(
-      provider(config.city, config.vertical, config.targetLeads, config.state)
-        .catch((err) => {
-          console.error('Yelp provider error:', err);
-          return [] as RawBusinessRecord[];
-        })
+      provider(config.city, config.vertical, config.targetLeads, config.state).catch((err) => {
+        logger.error({ error: err }, 'Yelp provider error');
+        return [] as RawBusinessRecord[];
+      })
     );
   }
 
   if (config.sources.directories) {
     const provider = providers.directories ?? defaultDirectoriesProvider;
     sourceQueries.push(
-      provider(config.city, config.vertical, config.targetLeads, config.state)
-        .catch((err) => {
-          console.error('Directories provider error:', err);
-          return [] as RawBusinessRecord[];
-        })
+      provider(config.city, config.vertical, config.targetLeads, config.state).catch((err) => {
+        logger.error({ error: err }, 'Directories provider error');
+        return [] as RawBusinessRecord[];
+      })
     );
   }
 
@@ -223,13 +216,9 @@ export async function deduplicateRecords(
   });
 
   // Build a set of existing keys for O(1) lookup
-  const existingKeys = new Set(
-    existing.map((e) => `${e.source}::${e.sourceExternalId}`)
-  );
+  const existingKeys = new Set(existing.map((e) => `${e.source}::${e.sourceExternalId}`));
 
-  return records.filter(
-    (r) => !existingKeys.has(`${r.source}::${r.sourceExternalId}`)
-  );
+  return records.filter((r) => !existingKeys.has(`${r.source}::${r.sourceExternalId}`));
 }
 
 /**
@@ -238,9 +227,7 @@ export async function deduplicateRecords(
  *
  * Requirement 1.9: Respect tenant daily prospect volume limits.
  */
-export async function getTodayDiscoveredCount(
-  tenantId: string
-): Promise<number> {
+export async function getTodayDiscoveredCount(tenantId: string): Promise<number> {
   const startOfDay = new Date();
   startOfDay.setHours(0, 0, 0, 0);
 
@@ -315,9 +302,9 @@ export async function persistQualifiedProspect(
       rating: record.rating ?? null,
       reviewCount: record.reviewCount ?? null,
       painScore: Math.round(painScore),
-      painBreakdown: breakdown as Record<string, number>,
+      painBreakdown: breakdown as unknown as Prisma.InputJsonValue,
       topFindings,
-      qualificationEvidence: signals as Record<string, unknown>,
+      qualificationEvidence: signals as unknown as Prisma.InputJsonValue,
       pipelineStatus: 'discovered',
       qualifiedAt: new Date(),
     },
@@ -344,9 +331,7 @@ export function deriveTopFindings(
     accessibilityViolations: 'Accessibility violations',
   };
 
-  const entries = (
-    Object.entries(breakdown) as [keyof PainScoreBreakdown, number][]
-  )
+  const entries = (Object.entries(breakdown) as [keyof PainScoreBreakdown, number][])
     .filter(([, score]) => score > 0)
     .sort(([, a], [, b]) => b - a)
     .slice(0, 3)
@@ -399,7 +384,7 @@ export async function discover(
 ): Promise<DiscoveryResult> {
   const jobId = uuidv4();
   const startTime = Date.now();
-  let costCents = 0;
+  const costCents = 0;
 
   // 1. Fetch tenant pipeline config for daily volume limit
   const pipelineConfig = await prisma.pipelineConfig.findUnique({
@@ -408,10 +393,7 @@ export async function discover(
   const dailyVolumeLimit = pipelineConfig?.dailyVolumeLimit ?? 200;
 
   // 2. Check remaining daily capacity (Requirement 1.9)
-  const remainingCapacity = await getRemainingDailyCapacity(
-    tenantId,
-    dailyVolumeLimit
-  );
+  const remainingCapacity = await getRemainingDailyCapacity(tenantId, dailyVolumeLimit);
   if (remainingCapacity <= 0) {
     return {
       jobId,
@@ -433,8 +415,7 @@ export async function discover(
   const cappedRecords = newRecords.slice(0, remainingCapacity);
 
   // 6. Qualify each prospect: run multi-signal audit + compute Pain Score
-  const qualificationProvider =
-    providers.qualification ?? defaultQualificationProvider;
+  const qualificationProvider = providers.qualification ?? defaultQualificationProvider;
 
   let prospectsQualified = 0;
   const qualifiedLeadIds: string[] = [];
@@ -454,10 +435,7 @@ export async function discover(
       }
 
       // Re-check daily capacity before persisting
-      const currentRemaining = await getRemainingDailyCapacity(
-        tenantId,
-        dailyVolumeLimit
-      );
+      const currentRemaining = await getRemainingDailyCapacity(tenantId, dailyVolumeLimit);
       if (currentRemaining <= 0) {
         break;
       }
@@ -479,10 +457,7 @@ export async function discover(
       await triggerEnrichment(leadId);
     } catch (err) {
       // Log error but continue processing remaining records
-      console.error(
-        `Error qualifying prospect ${record.businessName}:`,
-        err
-      );
+      logger.error({ businessName: record.businessName, error: err }, 'Error qualifying prospect');
     }
   }
 

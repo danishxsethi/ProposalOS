@@ -75,7 +75,11 @@ add_action('wp_head', function() {
     return 'LocalBusiness';
   }
 
-  private generateJsonLd(schemaType: string, finding: Finding, context: Record<string, any>): string {
+  private generateJsonLd(
+    schemaType: string,
+    finding: Finding,
+    context: Record<string, any>
+  ): string {
     const businessName = context.businessName || 'Your Business';
     const businessUrl = context.businessUrl || 'https://example.com';
 

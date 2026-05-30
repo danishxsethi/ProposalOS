@@ -2,7 +2,7 @@ const fs = require('fs');
 const path = require('path');
 
 const files = {
-    'src/lib/constants.ts': `
+  'src/lib/constants.ts': `
 export const AUDIT_CATEGORIES = [
   {id: 'website', name: 'Website Performance', icon: '🌐', color: '#3b82f6'},
   {id: 'google', name: 'Google Business Profile', icon: '📍', color: '#22c55e'},
@@ -26,7 +26,7 @@ export const PRICING_TIERS = {
 };
   `.trim(),
 
-    'src/lib/types.ts': `
+  'src/lib/types.ts': `
 export interface ScanRequest {
   url: string;
   businessName?: string;
@@ -93,7 +93,7 @@ export interface Lead {
 }
   `.trim(),
 
-    'src/lib/api-client.ts': `
+  'src/lib/api-client.ts': `
 import { ScanRequest, ScanStatus, ReportData } from './types';
 
 const BASE_URL = process.env.PROPOSAL_ENGINE_API_URL || '';
@@ -136,7 +136,7 @@ export const apiClient = {
 };
   `.trim(),
 
-    'src/lib/posthog.ts': `
+  'src/lib/posthog.ts': `
 import posthog from 'posthog-js';
 
 export const initPostHog = () => {
@@ -152,13 +152,13 @@ export const initPostHog = () => {
 };
   `.trim(),
 
-    'src/lib/resend.ts': `
+  'src/lib/resend.ts': `
 import { Resend } from 'resend';
 
 export const resend = new Resend(process.env.RESEND_API_KEY);
   `.trim(),
 
-    'src/lib/stripe.ts': `
+  'src/lib/stripe.ts': `
 import Stripe from 'stripe';
 
 export const stripeClient = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
@@ -166,7 +166,7 @@ export const stripeClient = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
 });
   `.trim(),
 
-    'src/providers/posthog-provider.tsx': `
+  'src/providers/posthog-provider.tsx': `
 "use client";
 
 import { useEffect } from 'react';
@@ -196,7 +196,7 @@ export function PostHogProvider({ children }: { children: React.ReactNode }) {
 }
   `.trim(),
 
-    'src/providers/theme-provider.tsx': `
+  'src/providers/theme-provider.tsx': `
 "use client";
 
 import { ThemeProvider as NextThemesProvider } from 'next-themes';
@@ -210,7 +210,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 }
   `.trim(),
 
-    'src/hooks/use-posthog.ts': `
+  'src/hooks/use-posthog.ts': `
 "use client";
 import posthog from 'posthog-js';
 
@@ -222,7 +222,7 @@ export function usePostHog() {
 }
   `.trim(),
 
-    'src/hooks/use-scan-progress.ts': `
+  'src/hooks/use-scan-progress.ts': `
 "use client";
 import { useState, useEffect } from 'react';
 import { apiClient } from '@/lib/api-client';
@@ -265,7 +265,7 @@ export function useScanProgress(token: string) {
 }
   `.trim(),
 
-    'src/components/layout/navbar.tsx': `
+  'src/components/layout/navbar.tsx': `
 "use client";
 import Link from 'next/link';
 import { motion } from 'framer-motion';
@@ -322,7 +322,7 @@ export function Navbar() {
 }
   `.trim(),
 
-    'src/components/layout/footer.tsx': `
+  'src/components/layout/footer.tsx': `
 import Link from 'next/link';
 import { NAV_LINKS } from '@/lib/constants';
 
@@ -373,7 +373,7 @@ export function Footer() {
 }
   `.trim(),
 
-    'src/components/shared/section-wrapper.tsx': `
+  'src/components/shared/section-wrapper.tsx': `
 "use client";
 import { motion } from 'framer-motion';
 import { ReactNode } from 'react';
@@ -397,7 +397,7 @@ export function SectionWrapper({ children, id, className = "" }: { children: Rea
 }
   `.trim(),
 
-    'src/components/shared/animated-counter.tsx': `
+  'src/components/shared/animated-counter.tsx': `
 "use client";
 import { useEffect, useState } from 'react';
 import { motion, useMotionValue, useTransform, animate } from 'framer-motion';
@@ -420,7 +420,7 @@ export function AnimatedCounter({ value, duration = 0.8 }: { value: number; dura
 }
   `.trim(),
 
-    'src/components/shared/severity-badge.tsx': `
+  'src/components/shared/severity-badge.tsx': `
 import { Badge } from '@/components/ui/badge';
 
 export function SeverityBadge({ severity }: { severity: 'critical' | 'high' | 'medium' | 'low' }) {
@@ -440,7 +440,7 @@ export function SeverityBadge({ severity }: { severity: 'critical' | 'high' | 'm
 }
   `.trim(),
 
-    'src/components/scan/scan-input.tsx': `
+  'src/components/scan/scan-input.tsx': `
 "use client";
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -512,12 +512,12 @@ export function ScanInput({ variant = 'large' }: { variant?: 'large' | 'compact'
     </div>
   );
 }
-  `.trim()
+  `.trim(),
 };
 
 for (const [filepath, content] of Object.entries(files)) {
-    const dir = path.dirname(filepath);
-    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-    fs.writeFileSync(filepath, content);
+  const dir = path.dirname(filepath);
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(filepath, content);
 }
 console.log('Done creating shared components');

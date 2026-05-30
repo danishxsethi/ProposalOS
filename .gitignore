@@ -3,6 +3,9 @@
 /.pnp
 .pnp.js
 
+# lockfiles — only package-lock.json is canonical; pnpm-lock.yaml is not used
+pnpm-lock.yaml
+
 # testing
 /coverage
 
@@ -23,8 +26,7 @@ yarn-debug.log*
 yarn-error.log*
 
 # local env files
-.env*.local
-.env
+.env*
 
 # vercel
 .vercel
@@ -34,11 +36,18 @@ yarn-error.log*
 next-env.d.ts
 
 # prisma
-/prisma/migrations/
 
 # gcp
-service-account.json
+*service-account*.json
 .db_password_temp
+
+# Local Postgres dumps
+*.dump
+*.sql.gz
+
+# Scratch outputs containing data
+scratch/proposal_summaries.txt
+scratch/*.log
 
 # GCP binaries
 cloud-sql-proxy
@@ -49,8 +58,12 @@ backups/
 # One-off fix scripts
 fix_confidence.js
 fix_confidence.ts
+
 # Terraform
 .terraform/
 *.tfstate
 *.tfstate.backup
 crash.log
+
+# Cache store
+lib/cache/store/

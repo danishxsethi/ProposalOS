@@ -8,13 +8,15 @@
  *   npm run build-targets -- --import  # Build and import to database
  */
 
-import * as dotenv from 'dotenv';
 import * as path from 'path';
+
+import * as dotenv from 'dotenv';
 
 dotenv.config({ path: path.join(process.cwd(), '.env.local') });
 dotenv.config({ path: path.join(process.cwd(), '.env') });
 
 import * as fs from 'fs-extra';
+
 import * as crypto from 'crypto';
 
 const PLACES_API_BASE = 'https://places.googleapis.com/v1';
@@ -32,24 +34,76 @@ const VERTICALS: { key: string; queries: string[] }[] = [
   { key: 'gym', queries: ['gym Saskatoon', 'fitness center Saskatoon'] },
   { key: 'veterinarian', queries: ['veterinarian Saskatoon', 'vet clinic Saskatoon'] },
   { key: 'hair-salon', queries: ['hair salon Saskatoon', 'hair stylist Saskatoon'] },
-  { key: 'home-contractor', queries: ['home contractor Saskatoon', 'general contractor Saskatoon'] },
+  {
+    key: 'home-contractor',
+    queries: ['home contractor Saskatoon', 'general contractor Saskatoon'],
+  },
   { key: 'retail', queries: ['retail store Saskatoon', 'local store Saskatoon'] },
 ];
 
 // Known chains/franchises to exclude (case-insensitive partial match)
 const CHAIN_BLOCKLIST = [
-  "mcdonald's", "mcdonalds", "walmart", "tim hortons", "tim Horton's",
-  "subway", "starbucks", "dollarama", "canadian tire", "home depot",
-  "lowes", "costco", "best buy", "winners", "marshalls", "pet smart",
-  "petco", "petsmart", "dental corp", "123 dentist", "dental choice",
-  "dental associates", "law depot", "legal shield", "h&r block",
-  "minuteman press", "staples", "ups store", "fedex", "dominos",
-  "pizza hut", "kfc", "burger king", "wendy's", "wendys", "a&w",
-  "harvey's", "swiss chalet", "east side mario", "montana's",
-  "the keg", "milestones", "earls", "cactus club", "boston pizza",
-  "sport chek", "marks", "reitmans", "la senza", "roots",
-  "lululemon", "gap", "old navy", "h&m", "zara", "indigo",
-  "chapters", "coles", "shoppers drug mart", "rexall", "london drugs",
+  "mcdonald's",
+  'mcdonalds',
+  'walmart',
+  'tim hortons',
+  "tim Horton's",
+  'subway',
+  'starbucks',
+  'dollarama',
+  'canadian tire',
+  'home depot',
+  'lowes',
+  'costco',
+  'best buy',
+  'winners',
+  'marshalls',
+  'pet smart',
+  'petco',
+  'petsmart',
+  'dental corp',
+  '123 dentist',
+  'dental choice',
+  'dental associates',
+  'law depot',
+  'legal shield',
+  'h&r block',
+  'minuteman press',
+  'staples',
+  'ups store',
+  'fedex',
+  'dominos',
+  'pizza hut',
+  'kfc',
+  'burger king',
+  "wendy's",
+  'wendys',
+  'a&w',
+  "harvey's",
+  'swiss chalet',
+  'east side mario',
+  "montana's",
+  'the keg',
+  'milestones',
+  'earls',
+  'cactus club',
+  'boston pizza',
+  'sport chek',
+  'marks',
+  'reitmans',
+  'la senza',
+  'roots',
+  'lululemon',
+  'gap',
+  'old navy',
+  'h&m',
+  'zara',
+  'indigo',
+  'chapters',
+  'coles',
+  'shoppers drug mart',
+  'rexall',
+  'london drugs',
 ];
 
 interface PlaceResult {
@@ -171,10 +225,8 @@ function placeToTarget(place: PlaceResult, vertical: string): TargetBusiness | n
   if (reviewCount < 5) return null;
 
   const placeId = extractPlaceId(place);
-  const phone =
-    place.nationalPhoneNumber ?? place.internationalPhoneNumber ?? '';
-  const category =
-    place.primaryTypeDisplayName?.text ?? place.types?.[0] ?? '';
+  const phone = place.nationalPhoneNumber ?? place.internationalPhoneNumber ?? '';
+  const category = place.primaryTypeDisplayName?.text ?? place.types?.[0] ?? '';
 
   return {
     businessName: name,
@@ -246,25 +298,16 @@ function printSummary(targets: TargetBusiness[]): void {
 
   for (const [vertical, arr] of byVertical) {
     const count = arr.length;
-    const avgRating =
-      count > 0
-        ? (arr.reduce((s, x) => s + x.rating, 0) / count).toFixed(1)
-        : '0';
+    const avgRating = count > 0 ? (arr.reduce((s, x) => s + x.rating, 0) / count).toFixed(1) : '0';
     const avgReviews =
-      count > 0
-        ? Math.round(
-            arr.reduce((s, x) => s + x.reviewCount, 0) / count
-          ).toString()
-        : '0';
+      count > 0 ? Math.round(arr.reduce((s, x) => s + x.reviewCount, 0) / count).toString() : '0';
     const allWebsites = arr.every((x) => !!x.website) ? 'Yes' : 'No';
     console.log(
       `| ${vertical.padEnd(15)} | ${String(count).padStart(5)} | ${String(avgRating).padStart(10)} | ${String(avgReviews).padStart(11)} | ${allWebsites.padEnd(17)} |`
     );
   }
 
-  console.log(
-    `\nTotal: ${targets.length} businesses across ${byVertical.size} verticals\n`
-  );
+  console.log(`\nTotal: ${targets.length} businesses across ${byVertical.size} verticals\n`);
 }
 
 async function writeOutputs(targets: TargetBusiness[]): Promise<void> {
@@ -287,11 +330,13 @@ async function writeOutputs(targets: TargetBusiness[]): Promise<void> {
     'vertical',
   ];
   const rows = targets.map((t) =>
-    headers.map((h) => {
-      const v = (t as unknown as Record<string, unknown>)[h];
-      const s = String(v ?? '');
-      return s.includes(',') || s.includes('"') ? `"${s.replace(/"/g, '""')}"` : s;
-    }).join(',')
+    headers
+      .map((h) => {
+        const v = (t as unknown as Record<string, unknown>)[h];
+        const s = String(v ?? '');
+        return s.includes(',') || s.includes('"') ? `"${s.replace(/"/g, '""')}"` : s;
+      })
+      .join(',')
   );
   await fs.writeFile(csvPath, [headers.join(','), ...rows].join('\n'));
   console.log(`Wrote ${csvPath}`);
@@ -336,9 +381,7 @@ async function importToDb(targets: TargetBusiness[]): Promise<void> {
   }
 
   await prisma.$disconnect();
-  console.log(
-    `\nImport complete: ${created} created, ${skipped} skipped (already exist)`
-  );
+  console.log(`\nImport complete: ${created} created, ${skipped} skipped (already exist)`);
 }
 
 async function main(): Promise<void> {

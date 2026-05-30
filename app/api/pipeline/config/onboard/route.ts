@@ -1,14 +1,14 @@
 /**
  * Tenant Onboarding API
- * 
+ *
  * POST: Onboard a new tenant with default pipeline configuration
- * 
+ *
  * Requirements: 9.6
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from '@/lib/auth';
-import { authOptions } from '@/lib/auth';
+
+import { authOptions, getServerSession } from '@/lib/auth';
 import { onboardTenant } from '@/lib/pipeline/tenantConfig';
 
 /**
@@ -20,18 +20,12 @@ export async function POST(request: NextRequest) {
     const session = await getServerSession();
 
     if (!session?.user?.tenantId) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      );
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     // Check if user has admin role
     if (session.user.role !== 'ADMIN' && session.user.role !== 'OWNER') {
-      return NextResponse.json(
-        { error: 'Forbidden - Admin access required' },
-        { status: 403 }
-      );
+      return NextResponse.json({ error: 'Forbidden - Admin access required' }, { status: 403 });
     }
 
     const result = await onboardTenant(session.user.tenantId);
@@ -43,17 +37,11 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     console.error('Error onboarding tenant:', error);
-    
+
     if (error instanceof Error && error.message.includes('not found')) {
-      return NextResponse.json(
-        { error: error.message },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: error.message }, { status: 404 });
     }
 
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

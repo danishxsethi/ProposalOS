@@ -1,12 +1,12 @@
 /**
  * Scheduled Audit Runner
- * 
+ *
  * Executes scheduled re-audits based on AuditSchedule configuration
  * and generates comparison reports.
  */
 
-import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
+import { prisma } from '@/lib/prisma';
 
 // Import the audit runner when available
 // import { runAudit } from '@/lib/audit/runner';
@@ -29,11 +29,11 @@ export async function processScheduledAudits(): Promise<{
   const dueSchedules = await prisma.auditSchedule.findMany({
     where: {
       isActive: true,
-      nextRunAt: { lte: now }
+      nextRunAt: { lte: now },
     },
     include: {
-      tenant: true
-    }
+      tenant: true,
+    },
   });
 
   for (const schedule of dueSchedules) {
@@ -55,17 +55,24 @@ export async function processScheduledAudits(): Promise<{
           if (comparison) {
             comparisonsGenerated++;
 
-            // Update DeliveryTask with comparison if applicable
-            await prisma.deliveryTask.updateMany({
-              where: {
-                proposal: {
-                  auditId: schedule.lastAuditId
-                }
-              },
-              data: {
-                beforeAfterComparison: comparison as any
-              }
+            // Find proposals matching schedule.lastAuditId
+            const matchingProposals = await prisma.proposal.findMany({
+              where: { auditId: schedule.lastAuditId },
+              select: { id: true },
             });
+            const proposalIds = matchingProposals.map((p) => p.id);
+
+            if (proposalIds.length > 0) {
+              // Update DeliveryTask with comparison if applicable
+              await prisma.deliveryTask.updateMany({
+                where: {
+                  proposalId: { in: proposalIds },
+                },
+                data: {
+                  beforeAfterComparison: comparison as any,
+                },
+              });
+            }
           }
         }
 
@@ -75,11 +82,10 @@ export async function processScheduledAudits(): Promise<{
           data: {
             lastAuditId: newAudit.id,
             lastRunAt: now,
-            nextRunAt: calculateNextRunDate(schedule.frequency, now)
-          }
+            nextRunAt: calculateNextRunDate(schedule.frequency, now),
+          },
         });
       }
-
     } catch (error: any) {
       errors.push(`Failed to process schedule ${schedule.id}: ${error.message}`);
       logger.error({ err: error, scheduleId: schedule.id }, 'Scheduled audit failed');
@@ -89,7 +95,7 @@ export async function processScheduledAudits(): Promise<{
   return {
     auditsRun,
     comparisonsGenerated,
-    errors
+    errors,
   };
 }
 
@@ -99,7 +105,7 @@ export async function processScheduledAudits(): Promise<{
 async function createScheduledAudit(schedule: any) {
   // In a real implementation, this would call the audit runner
   // For now, we'll create the audit record
-  
+
   const audit = await prisma.audit.create({
     data: {
       businessName: schedule.businessName,
@@ -109,7 +115,7 @@ async function createScheduledAudit(schedule: any) {
       status: 'QUEUED',
       tenantId: schedule.tenantId,
       // The actual audit execution would be triggered separately
-    }
+    },
   });
 
   // Log the scheduled audit run
@@ -120,8 +126,8 @@ async function createScheduledAudit(schedule: any) {
       auditId: audit.id,
       previousAuditId: schedule.lastAuditId,
       status: 'queued',
-      startedAt: new Date()
-    }
+      startedAt: new Date(),
+    },
   });
 
   return audit;
@@ -140,16 +146,15 @@ export async function generateComparisonReport(
   newFindings: number;
   improvements: Array<{ category: string; change: string }>;
 } | null> {
-  
   const [beforeAudit, afterAudit] = await Promise.all([
     prisma.audit.findUnique({
       where: { id: beforeAuditId },
-      include: { findings: true }
+      include: { findings: true },
     }),
     prisma.audit.findUnique({
       where: { id: afterAuditId },
-      include: { findings: true }
-    })
+      include: { findings: true },
+    }),
   ]);
 
   if (!beforeAudit || !afterAudit) {
@@ -161,17 +166,13 @@ export async function generateComparisonReport(
   const scoreChange = afterScore - beforeScore;
 
   // Find resolved findings (in before but not in after)
-  const beforeFindingIds = new Set(beforeAudit.findings.map(f => f.id));
-  const afterFindingIds = new Set(afterAudit.findings.map(f => f.id));
-  
-  const resolvedCount = beforeAudit.findings.filter(
-    f => !afterFindingIds.has(f.id)
-  ).length;
+  const beforeFindingIds = new Set(beforeAudit.findings.map((f) => f.id));
+  const afterFindingIds = new Set(afterAudit.findings.map((f) => f.id));
+
+  const resolvedCount = beforeAudit.findings.filter((f) => !afterFindingIds.has(f.id)).length;
 
   // Find new findings (in after but not in before)
-  const newCount = afterAudit.findings.filter(
-    f => !beforeFindingIds.has(f.id)
-  ).length;
+  const newCount = afterAudit.findings.filter((f) => !beforeFindingIds.has(f.id)).length;
 
   // Categorize improvements
   const improvements: Array<{ category: string; change: string }> = [];
@@ -182,7 +183,7 @@ export async function generateComparisonReport(
 
   const allCategories = new Set([
     ...Object.keys(beforeByCategory),
-    ...Object.keys(afterByCategory)
+    ...Object.keys(afterByCategory),
   ]);
 
   for (const category of allCategories) {
@@ -193,7 +194,7 @@ export async function generateComparisonReport(
     if (Math.abs(change) > 0) {
       improvements.push({
         category,
-        change: change > 0 ? `+${change} points` : `${change} points`
+        change: change > 0 ? `+${change} points` : `${change} points`,
       });
     }
   }
@@ -202,7 +203,7 @@ export async function generateComparisonReport(
   await prisma.scheduledAuditRun.updateMany({
     where: {
       auditId: afterAuditId,
-      previousAuditId: beforeAuditId
+      previousAuditId: beforeAuditId,
     },
     data: {
       status: 'completed',
@@ -210,24 +211,26 @@ export async function generateComparisonReport(
         scoreChange,
         findingsResolved: resolvedCount,
         newFindings: newCount,
-        improvements
+        improvements,
       } as any,
-      completedAt: new Date()
-    }
+      completedAt: new Date(),
+    },
   });
 
   return {
     scoreChange,
     findingsResolved: resolvedCount,
     newFindings: newCount,
-    improvements
+    improvements,
   };
 }
 
 /**
  * Group findings by category and calculate average scores
  */
-function groupFindingsByCategory(findings: any[]): Record<string, { avgScore: number; count: number }> {
+function groupFindingsByCategory(
+  findings: any[]
+): Record<string, { avgScore: number; count: number }> {
   const grouped: Record<string, { total: number; count: number }> = {};
 
   for (const finding of findings) {
@@ -243,7 +246,7 @@ function groupFindingsByCategory(findings: any[]): Record<string, { avgScore: nu
   for (const [category, data] of Object.entries(grouped)) {
     result[category] = {
       avgScore: data.count > 0 ? Math.round(data.total / data.count) : 0,
-      count: data.count
+      count: data.count,
     };
   }
 
@@ -302,8 +305,8 @@ export async function createAuditSchedule(
       frequency: config.frequency,
       nextRunAt,
       isActive: true,
-      createdBy: config.createdBy
-    }
+      createdBy: config.createdBy,
+    },
   });
 }
 
@@ -320,9 +323,9 @@ export async function getUpcomingScheduledAudits(tenantId: string, daysAhead: nu
       isActive: true,
       nextRunAt: {
         gte: now,
-        lte: future
-      }
+        lte: future,
+      },
     },
-    orderBy: { nextRunAt: 'asc' }
+    orderBy: { nextRunAt: 'asc' },
   });
 }

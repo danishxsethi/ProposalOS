@@ -1,8 +1,12 @@
-import archiver from 'archiver';
 import { Readable } from 'stream';
-import { ImplementationPackage } from './packager';
+
+import archiver from 'archiver';
+
+import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 import { uploadToGCS } from '@/lib/storage';
+
+import { ImplementationPackage } from './packager';
 
 export interface DeliveryBundle {
   id: string;
@@ -109,7 +113,7 @@ export async function uploadBundle(
     }
     return url;
   } catch (error) {
-    console.error('Failed to upload bundle to GCS:', error);
+    logger.error({ error }, 'Failed to upload bundle to GCS');
     throw error;
   }
 }

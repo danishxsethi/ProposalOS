@@ -1,8 +1,11 @@
-import { cleanupDb } from '@/lib/__tests__/utils/cleanup';
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { randomUUID } from 'crypto';
 import fc from 'fast-check';
-import { onboardPartner, deliverLead, updateLeadStatus, getPartnerMetrics } from '../partnerPortal';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+
+import { cleanupDb } from '@/lib/__tests__/utils/cleanup';
 import { prisma } from '@/lib/db';
+
+import { deliverLead, getPartnerMetrics, onboardPartner, updateLeadStatus } from '../partnerPortal';
 
 describe('Partner Portal - Property Tests', () => {
   let tenantId: string;
@@ -19,7 +22,7 @@ describe('Partner Portal - Property Tests', () => {
 
   afterEach(async () => {
     await cleanupDb(prisma);
-});
+  });
 
   /**
    * Property 38: Partner lead isolation
@@ -30,13 +33,16 @@ describe('Partner Portal - Property Tests', () => {
   it('Property 38: Partner lead isolation', async () => {
     await fc.assert(
       fc.asyncProperty(
-        fc.array(fc.record({
-          name: fc.string({ minLength: 1, maxLength: 50 }),
-          email: fc.emailAddress(),
-          verticals: fc.array(fc.string({ minLength: 1, maxLength: 20 }), { minLength: 1 }),
-          geographies: fc.array(fc.string({ minLength: 1, maxLength: 20 }), { minLength: 1 }),
-          volume: fc.integer({ min: 1, max: 100 }),
-        }), { minLength: 2, maxLength: 5 }),
+        fc.array(
+          fc.record({
+            name: fc.string({ minLength: 1, maxLength: 50 }),
+            email: fc.emailAddress(),
+            verticals: fc.array(fc.string({ minLength: 1, maxLength: 20 }), { minLength: 1 }),
+            geographies: fc.array(fc.string({ minLength: 1, maxLength: 20 }), { minLength: 1 }),
+            volume: fc.integer({ min: 1, max: 100 }),
+          }),
+          { minLength: 2, maxLength: 5 }
+        ),
         async (partnerConfigs) => {
           // Create multiple partners
           const partnerIds = await Promise.all(
@@ -59,6 +65,8 @@ describe('Partner Portal - Property Tests', () => {
               prisma.prospectLead.create({
                 data: {
                   tenantId,
+                  source: 'test_partner_portal',
+                  sourceExternalId: `ext-id-${idx}-${randomUUID()}`,
                   businessName: `Business ${idx}`,
                   website: `https://business${idx}.com`,
                   city: partnerConfigs[idx].geographies[0],
@@ -85,9 +93,7 @@ describe('Partner Portal - Property Tests', () => {
 
           // Deliver leads to each partner
           await Promise.all(
-            partnerIds.map((partnerId, idx) =>
-              deliverLead(partnerId, prospects[idx].id)
-            )
+            partnerIds.map((partnerId, idx) => deliverLead(partnerId, prospects[idx].id))
           );
 
           // Verify isolation: each partner should only see their own leads
@@ -111,9 +117,12 @@ describe('Partner Portal - Property Tests', () => {
   it('Property 39: Partner metrics consistency', async () => {
     await fc.assert(
       fc.asyncProperty(
-        fc.array(fc.record({
-          status: fc.constantFrom('delivered', 'viewed', 'contacted', 'converted', 'rejected'),
-        }), { minLength: 1, maxLength: 20 }),
+        fc.array(
+          fc.record({
+            status: fc.constantFrom('delivered', 'viewed', 'contacted', 'converted', 'rejected'),
+          }),
+          { minLength: 1, maxLength: 20 }
+        ),
         async (statusUpdates) => {
           // Create partner
           const partnerId = await onboardPartner({
@@ -132,6 +141,8 @@ describe('Partner Portal - Property Tests', () => {
               prisma.prospectLead.create({
                 data: {
                   tenantId,
+                  source: 'test_partner_portal',
+                  sourceExternalId: `ext-id-${idx}-${randomUUID()}`,
                   businessName: `Business ${idx}`,
                   website: `https://business${idx}.com`,
                   city: 'New York',
@@ -216,6 +227,8 @@ describe('Partner Portal - Property Tests', () => {
           const prospect = await prisma.prospectLead.create({
             data: {
               tenantId,
+              source: 'test_partner_portal',
+              sourceExternalId: `ext-id-single-${randomUUID()}`,
               businessName: prospectData.businessName,
               website: 'https://test.com',
               city: 'New York',

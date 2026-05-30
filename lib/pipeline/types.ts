@@ -1,6 +1,6 @@
 /**
  * Shared TypeScript types and interfaces for the Autonomous Proposal Engine
- * 
+ *
  * This file contains all core type definitions for the pipeline orchestrator,
  * state machine, discovery engine, outreach agent, deal closer, delivery engine,
  * and supporting components.
@@ -87,12 +87,12 @@ export interface StateTransition {
  * Pain score breakdown by dimension
  */
 export interface PainScoreBreakdown {
-  websiteSpeed: number;      // 0-20
-  mobileBroken: number;      // 0-15
-  gbpNeglected: number;      // 0-15
-  noSsl: number;             // 0-10
+  websiteSpeed: number; // 0-20
+  mobileBroken: number; // 0-15
+  gbpNeglected: number; // 0-15
+  noSsl: number; // 0-10
   zeroReviewResponses: number; // 0-10
-  socialMediaDead: number;   // 0-10
+  socialMediaDead: number; // 0-10
   competitorsOutperforming: number; // 0-10
   accessibilityViolations: number; // 0-10
 }
@@ -101,7 +101,7 @@ export interface PainScoreBreakdown {
  * Qualification signals from multi-source audit
  */
 export interface QualificationSignals {
-  pageSpeedScore?: number;       // 0-100 from Lighthouse
+  pageSpeedScore?: number; // 0-100 from Lighthouse
   mobileResponsive?: boolean;
   hasSsl?: boolean;
   gbpClaimed?: boolean;
@@ -112,7 +112,7 @@ export interface QualificationSignals {
   gbpPostingFrequencyDays?: number;
   socialPresent?: boolean;
   socialLastPostDays?: number;
-  competitorScoreGap?: number;   // How much competitors outperform
+  competitorScoreGap?: number; // How much competitors outperform
   accessibilityViolationCount?: number;
 }
 
@@ -164,11 +164,11 @@ export interface EnrichmentResult {
  * Email QA configuration
  */
 export interface EmailQAConfig {
-  maxReadingGradeLevel: number;  // default: 5
-  maxWordCount: number;          // default: 80
-  minFindingReferences: number;  // default: 2
-  maxSpamRiskScore: number;      // default: 30
-  minQualityScore: number;       // default: 90
+  maxReadingGradeLevel: number; // default: 5
+  maxWordCount: number; // default: 80
+  minFindingReferences: number; // default: 2
+  maxSpamRiskScore: number; // default: 30
+  minQualityScore: number; // default: 90
   jargonWordList: string[];
   dimensionWeights: {
     readability: number;
@@ -183,7 +183,7 @@ export interface EmailQAConfig {
  * Email QA result
  */
 export interface EmailQAResult {
-  compositeScore: number;  // 0-100
+  compositeScore: number; // 0-100
   dimensions: {
     readability: { score: number; gradeLevel: number };
     wordCount: { score: number; count: number };
@@ -248,6 +248,7 @@ export interface OutreachOutcome {
   conversionRate: number;
   vertical: string;
   city: string;
+  tenantId?: string;
 }
 
 // ============================================================================
@@ -300,7 +301,12 @@ export interface Deliverable {
   id: string;
   proposalId: string;
   findingId: string;
-  agentType: 'speed_optimization' | 'seo_fix' | 'accessibility' | 'security_hardening' | 'content_generation';
+  agentType:
+    | 'speed_optimization'
+    | 'seo_fix'
+    | 'accessibility'
+    | 'security_hardening'
+    | 'content_generation';
   status: 'queued' | 'in_progress' | 'completed' | 'verified' | 'failed' | 'escalated';
   estimatedCompletionDate: Date;
   completedAt?: Date;
@@ -382,7 +388,12 @@ export interface PreWarmingConfig {
 /**
  * Signal type
  */
-export type SignalType = 'bad_review' | 'website_change' | 'competitor_upgrade' | 'new_business_license' | 'hiring_spike';
+export type SignalType =
+  | 'bad_review'
+  | 'website_change'
+  | 'competitor_upgrade'
+  | 'new_business_license'
+  | 'hiring_spike';
 
 /**
  * Detected signal
@@ -524,7 +535,11 @@ export interface PipelineOrchestrator {
  */
 export interface ProspectStateMachine {
   canTransition(from: ProspectStatus, to: ProspectStatus): boolean;
-  transition(prospectId: string, to: ProspectStatus, stage: PipelineStage): Promise<StateTransition>;
+  transition(
+    prospectId: string,
+    to: ProspectStatus,
+    stage: PipelineStage
+  ): Promise<StateTransition>;
   getHistory(prospectId: string): Promise<StateTransition[]>;
   serializeHistory(transitions: StateTransition[]): string; // JSON serialization
   deserializeHistory(json: string): StateTransition[]; // JSON deserialization
@@ -544,8 +559,8 @@ export interface ProspectDiscoveryEngine {
  */
 export interface PainScoreCalculator {
   calculate(signals: QualificationSignals): { total: number; breakdown: PainScoreBreakdown };
-  serialize(config: PainScoreConfig): string;   // JSON
-  deserialize(json: string): PainScoreConfig;   // JSON
+  serialize(config: PainScoreConfig): string; // JSON
+  deserialize(json: string): PainScoreConfig; // JSON
 }
 
 /**
@@ -572,8 +587,8 @@ export interface OutreachAgent {
  */
 export interface EmailQAScorer {
   score(email: GeneratedEmail, config: EmailQAConfig): EmailQAResult;
-  serializeConfig(config: EmailQAConfig): string;   // JSON
-  deserializeConfig(json: string): EmailQAConfig;    // JSON
+  serializeConfig(config: EmailQAConfig): string; // JSON
+  deserializeConfig(json: string): EmailQAConfig; // JSON
 }
 
 /**
@@ -606,7 +621,10 @@ export interface LearningLoop {
   // Existing (from dataFlywheel.ts)
   updateBenchmark(industry: string, metrics: Record<string, number>): Promise<void>;
   trackFindingOutcome(findingType: string, accepted: boolean): Promise<void>;
-  trackPromptOutcome(promptId: string, outcome: { qaScore?: number; accepted?: boolean }): Promise<void>;
+  trackPromptOutcome(
+    promptId: string,
+    outcome: { qaScore?: number; accepted?: boolean }
+  ): Promise<void>;
 
   // New extensions
   trackOutreachOutcome(templateId: string, outcome: OutreachOutcome): Promise<void>;
@@ -650,7 +668,11 @@ export interface PipelineObserver {
  * Pre-Warming Engine interface
  */
 export interface PreWarmingEngine {
-  scheduleActions(leadId: string, outreachDate: Date, config: PreWarmingConfig): Promise<PreWarmingAction[]>;
+  scheduleActions(
+    leadId: string,
+    outreachDate: Date,
+    config: PreWarmingConfig
+  ): Promise<PreWarmingAction[]>;
   executeAction(action: PreWarmingAction): Promise<void>;
   checkWindowComplete(leadId: string): Promise<boolean>;
   getDailyActionCount(platform: string, date: Date): Promise<number>;
@@ -670,10 +692,18 @@ export interface SignalDetector {
  * AI Sales Chat interface
  */
 export interface AISalesChat {
-  handleMessage(context: ChatContext, history: ChatMessage[], message: string): Promise<ChatMessage>;
+  handleMessage(
+    context: ChatContext,
+    history: ChatMessage[],
+    message: string
+  ): Promise<ChatMessage>;
   detectIntent(message: string): Promise<{ intent: string; confidence: number }>;
   shouldEscalate(confidence: number, config: { threshold: number }): boolean;
-  recordOutcome(proposalId: string, outcome: 'converted' | 'escalated' | 'abandoned', objections: string[]): Promise<void>;
+  recordOutcome(
+    proposalId: string,
+    outcome: 'converted' | 'escalated' | 'abandoned',
+    objections: string[]
+  ): Promise<void>;
 }
 
 /**
@@ -692,7 +722,12 @@ export interface PartnerPortal {
  */
 export interface CrossTenantIntelligence {
   aggregatePatterns(tenantId: string, outcomes: WinLossData[]): Promise<void>;
-  predictCloseProb(prospect: { vertical: string; painScore: number; geoRegion: string; businessSize?: string }): Promise<PredictiveScore>;
+  predictCloseProb(prospect: {
+    vertical: string;
+    painScore: number;
+    geoRegion: string;
+    businessSize?: string;
+  }): Promise<PredictiveScore>;
   getModelVersion(): string;
   rollbackModel(version: string): Promise<void>;
   ensureAnonymized(data: Record<string, unknown>): boolean; // Verify no PII

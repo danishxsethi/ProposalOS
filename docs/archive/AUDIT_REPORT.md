@@ -10,22 +10,23 @@
 
 ### 1.1 Directory Map
 
-| Directory | Purpose | Status |
-|-----------|---------|--------|
-| `app/` | Next.js App Router (pages + API routes) — 195 children | ✅ Active |
-| `lib/` | Core business logic — 47 subdirectories, 919 files | ✅ Active |
-| `components/` | React UI components — 13 files | ✅ Active |
-| `prisma/` | Schema, migrations, RLS scripts | ✅ Active |
-| `scripts/` | Operational scripts (batch, QA, seed) — 68 files | ✅ Active |
-| `tests/` | Test suites (adversarial, integration, red-team) | ✅ Active |
-| `audit/` | Standalone audit analysis tools — 23 files | ⚠️ Ambiguous overlap with `lib/audit/` |
-| `prompts/` | Prompt templates — 10 files | ✅ Active |
-| `docs/` | Documentation — 7 files | ✅ Active |
-| `backups/` | Backup files — 4 files | ⚠️ P2 — Should not be in repo |
-| `data/` | Data files — 1 file | ✅ Active |
-| `public/` | Static assets — 1 file | ✅ Active |
+| Directory     | Purpose                                                | Status                                 |
+| ------------- | ------------------------------------------------------ | -------------------------------------- |
+| `app/`        | Next.js App Router (pages + API routes) — 195 children | ✅ Active                              |
+| `lib/`        | Core business logic — 47 subdirectories, 919 files     | ✅ Active                              |
+| `components/` | React UI components — 13 files                         | ✅ Active                              |
+| `prisma/`     | Schema, migrations, RLS scripts                        | ✅ Active                              |
+| `scripts/`    | Operational scripts (batch, QA, seed) — 68 files       | ✅ Active                              |
+| `tests/`      | Test suites (adversarial, integration, red-team)       | ✅ Active                              |
+| `audit/`      | Standalone audit analysis tools — 23 files             | ⚠️ Ambiguous overlap with `lib/audit/` |
+| `prompts/`    | Prompt templates — 10 files                            | ✅ Active                              |
+| `docs/`       | Documentation — 7 files                                | ✅ Active                              |
+| `backups/`    | Backup files — 4 files                                 | ⚠️ P2 — Should not be in repo          |
+| `data/`       | Data files — 1 file                                    | ✅ Active                              |
+| `public/`     | Static assets — 1 file                                 | ✅ Active                              |
 
 **Findings:**
+
 - ⚠️ **P2** `backups/` directory exists in repo root — should be `.gitignored` or removed
 - ⚠️ **P2** `cloud-sql-proxy` binary (32MB) checked into repo at root — must be `.gitignored` (`cloud-sql-proxy`, 32,158,706 bytes)
 - ⚠️ **P2** `audit/` directory (23 files) overlaps with `lib/audit/` — unclear which is canonical
@@ -41,15 +42,16 @@
 
 **Missing from validation but used in code:**
 
-| Env Var | Used In | Severity |
-|---------|---------|----------|
-| `STRIPE_SECRET_KEY` | `lib/billing/stripe.ts:3` | ⚠️ P1 — Falls back to `sk_test_placeholder` |
-| `STRIPE_WEBHOOK_SECRET` | `app/api/billing/webhook/route.ts:20` | ❌ P0 — Uses `!` assertion, will crash |
-| `NEXTAUTH_SECRET` | NextAuth internals | ⚠️ P1 — Not validated |
-| `NEXT_PUBLIC_APP_URL` | `middleware.ts:11` | ⚠️ P2 |
-| `RESEND_API_KEY` | `lib/outreach/emailSender.ts` | ✅ Optional, documented |
+| Env Var                 | Used In                               | Severity                                    |
+| ----------------------- | ------------------------------------- | ------------------------------------------- |
+| `STRIPE_SECRET_KEY`     | `lib/billing/stripe.ts:3`             | ⚠️ P1 — Falls back to `sk_test_placeholder` |
+| `STRIPE_WEBHOOK_SECRET` | `app/api/billing/webhook/route.ts:20` | ❌ P0 — Uses `!` assertion, will crash      |
+| `NEXTAUTH_SECRET`       | NextAuth internals                    | ⚠️ P1 — Not validated                       |
+| `NEXT_PUBLIC_APP_URL`   | `middleware.ts:11`                    | ⚠️ P2                                       |
+| `RESEND_API_KEY`        | `lib/outreach/emailSender.ts`         | ✅ Optional, documented                     |
 
 **Hardcoded secret risk:**
+
 - ⚠️ **P1** `lib/billing/stripe.ts:3` — `'sk_test_placeholder'` hardcoded fallback. If `STRIPE_SECRET_KEY` is unset, Stripe client initializes with a fake key that will fail silently on API calls.
 
 ### 1.3 Dependencies
@@ -88,23 +90,23 @@
 
 **Required models present:**
 
-| Model | Lines | tenantId | Status |
-|-------|-------|----------|--------|
-| Audit | 14-46 | ✅ Required | ✅ |
-| Finding | 48-76 | ⚠️ Optional (`String?`) | ⚠️ P1 |
-| Proposal | 78-148 | ⚠️ Optional (`String?`) | ⚠️ P1 |
-| EvidenceSnapshot | 226-241 | ⚠️ Optional (`String?`) | ⚠️ P1 |
-| Tenant | 316-354 | N/A (is the tenant) | ✅ |
-| User | 285-313 | ⚠️ Optional (`String?`) | ⚠️ P1 |
-| ApiKey | 700-721 | ✅ Required | ✅ |
-| AuditSchedule | 398-422 | ✅ Required | ✅ |
-| ProposalTemplate | 243-282 | ⚠️ Optional | ⚠️ P2 |
-| TenantBranding | 723-751 | ✅ Required (unique) | ✅ |
-| Playbook | 372-396 | ⚠️ Optional | ✅ (system defaults) |
-| MonitoringConfig | 🚫 Missing | — | 🚫 P2 |
-| LocationGroup | 🚫 Missing | — | 🚫 P2 |
-| Plugin | 🚫 Missing | — | 🚫 P2 |
-| UsageRecord | 1218-1232 | ✅ Required | ✅ |
+| Model            | Lines      | tenantId                | Status               |
+| ---------------- | ---------- | ----------------------- | -------------------- |
+| Audit            | 14-46      | ✅ Required             | ✅                   |
+| Finding          | 48-76      | ⚠️ Optional (`String?`) | ⚠️ P1                |
+| Proposal         | 78-148     | ⚠️ Optional (`String?`) | ⚠️ P1                |
+| EvidenceSnapshot | 226-241    | ⚠️ Optional (`String?`) | ⚠️ P1                |
+| Tenant           | 316-354    | N/A (is the tenant)     | ✅                   |
+| User             | 285-313    | ⚠️ Optional (`String?`) | ⚠️ P1                |
+| ApiKey           | 700-721    | ✅ Required             | ✅                   |
+| AuditSchedule    | 398-422    | ✅ Required             | ✅                   |
+| ProposalTemplate | 243-282    | ⚠️ Optional             | ⚠️ P2                |
+| TenantBranding   | 723-751    | ✅ Required (unique)    | ✅                   |
+| Playbook         | 372-396    | ⚠️ Optional             | ✅ (system defaults) |
+| MonitoringConfig | 🚫 Missing | —                       | 🚫 P2                |
+| LocationGroup    | 🚫 Missing | —                       | 🚫 P2                |
+| Plugin           | 🚫 Missing | —                       | 🚫 P2                |
+| UsageRecord      | 1218-1232  | ✅ Required             | ✅                   |
 
 ### 2.2 Tenant Isolation
 
@@ -118,6 +120,7 @@
 - ✅ `ProposalOutreach.tenantId` is `String?` — RLS policy uses strict equality, so `NULL` tenantId records become invisible. Correct behavior.
 
 **Previously broken routes — re-verified:**
+
 - ✅ `app/api/audits/route.ts` — Now correctly scopes by `tenantId` (line 24: `const where = { tenantId }`)
 - ✅ `app/api/stats/route.ts` — Now correctly scopes by `tenantId` (lines 28, 39, 49, 61)
 - ✅ `app/api/audit/batch/route.ts` — Now correctly sets `tenantId` on create (line 45)
@@ -200,36 +203,36 @@
 
 **CRITICAL FINDING: Only 5 of 30 module files are wired into the runner.**
 
-| Module File | Wired in runner.ts | Status |
-|-------------|-------------------|--------|
-| `website.ts` | ✅ Line 3 | ✅ WORKING |
-| `gbp.ts` | ✅ Line 4 | ✅ WORKING |
-| `competitor.ts` | ✅ Line 5 | ✅ WORKING |
-| `reputation.ts` | ✅ Line 6 | ✅ WORKING |
-| `social.ts` | ✅ Line 7 | ✅ WORKING |
-| `accessibility.ts` | ❌ Not imported | 🚫 DEAD CODE |
-| `backlinks.ts` | ❌ Not imported | 🚫 DEAD CODE |
-| `citations.ts` | ❌ Not imported | 🚫 DEAD CODE |
-| `contentQuality.ts` | ❌ Not imported | 🚫 DEAD CODE |
-| `conversion.ts` | ❌ Not imported | 🚫 DEAD CODE |
-| `coreWebVitals.ts` | ❌ Not imported | 🚫 DEAD CODE |
-| `emailFinder.ts` | ❌ Not imported | 🚫 DEAD CODE |
-| `gbpDeep.ts` | ❌ Not imported | 🚫 DEAD CODE |
-| `keywordGap.ts` | ❌ Not imported | 🚫 DEAD CODE |
-| `mobileUX.ts` | ❌ Not imported | 🚫 DEAD CODE |
-| `paidSearch.ts` | ❌ Not imported | 🚫 DEAD CODE |
-| `privacyCompliance.ts` | ❌ Not imported | 🚫 DEAD CODE |
-| `schemaAnalysis.ts` | ❌ Not imported | 🚫 DEAD CODE |
-| `schemaMarkup.ts` | ❌ Not imported | 🚫 DEAD CODE |
-| `security.ts` | ❌ Not imported | 🚫 DEAD CODE |
-| `seoDeep.ts` | ❌ Not imported | 🚫 DEAD CODE |
-| `socialDeep.ts` | ❌ Not imported | 🚫 DEAD CODE |
-| `techStack.ts` | ❌ Not imported | 🚫 DEAD CODE |
-| `videoPresence.ts` | ❌ Not imported | 🚫 DEAD CODE |
-| `vision.ts` | ❌ Not imported | 🚫 DEAD CODE |
-| `websiteCrawler.ts` | ❌ Not imported | 🚫 DEAD CODE |
-| `websiteCrawlerModule.ts` | ❌ Not imported | 🚫 DEAD CODE |
-| `competitorStrategy.ts` | ❌ Not imported | 🚫 DEAD CODE |
+| Module File               | Wired in runner.ts | Status       |
+| ------------------------- | ------------------ | ------------ |
+| `website.ts`              | ✅ Line 3          | ✅ WORKING   |
+| `gbp.ts`                  | ✅ Line 4          | ✅ WORKING   |
+| `competitor.ts`           | ✅ Line 5          | ✅ WORKING   |
+| `reputation.ts`           | ✅ Line 6          | ✅ WORKING   |
+| `social.ts`               | ✅ Line 7          | ✅ WORKING   |
+| `accessibility.ts`        | ❌ Not imported    | 🚫 DEAD CODE |
+| `backlinks.ts`            | ❌ Not imported    | 🚫 DEAD CODE |
+| `citations.ts`            | ❌ Not imported    | 🚫 DEAD CODE |
+| `contentQuality.ts`       | ❌ Not imported    | 🚫 DEAD CODE |
+| `conversion.ts`           | ❌ Not imported    | 🚫 DEAD CODE |
+| `coreWebVitals.ts`        | ❌ Not imported    | 🚫 DEAD CODE |
+| `emailFinder.ts`          | ❌ Not imported    | 🚫 DEAD CODE |
+| `gbpDeep.ts`              | ❌ Not imported    | 🚫 DEAD CODE |
+| `keywordGap.ts`           | ❌ Not imported    | 🚫 DEAD CODE |
+| `mobileUX.ts`             | ❌ Not imported    | 🚫 DEAD CODE |
+| `paidSearch.ts`           | ❌ Not imported    | 🚫 DEAD CODE |
+| `privacyCompliance.ts`    | ❌ Not imported    | 🚫 DEAD CODE |
+| `schemaAnalysis.ts`       | ❌ Not imported    | 🚫 DEAD CODE |
+| `schemaMarkup.ts`         | ❌ Not imported    | 🚫 DEAD CODE |
+| `security.ts`             | ❌ Not imported    | 🚫 DEAD CODE |
+| `seoDeep.ts`              | ❌ Not imported    | 🚫 DEAD CODE |
+| `socialDeep.ts`           | ❌ Not imported    | 🚫 DEAD CODE |
+| `techStack.ts`            | ❌ Not imported    | 🚫 DEAD CODE |
+| `videoPresence.ts`        | ❌ Not imported    | 🚫 DEAD CODE |
+| `vision.ts`               | ❌ Not imported    | 🚫 DEAD CODE |
+| `websiteCrawler.ts`       | ❌ Not imported    | 🚫 DEAD CODE |
+| `websiteCrawlerModule.ts` | ❌ Not imported    | 🚫 DEAD CODE |
+| `competitorStrategy.ts`   | ❌ Not imported    | 🚫 DEAD CODE |
 
 - ❌ **P0** 25 module files exist but are **never invoked** by the runner. Features like Accessibility (axe-core), SEO Deep Dive, Mobile UX, Security & Technical Vulnerability, Local Citations, Keyword Gap, etc. are **completely non-functional** despite having implementation code.
 
@@ -408,10 +411,10 @@
 ### 13.1 Tenant Isolation (3-Layer)
 
 1. **Layer 1: AsyncLocalStorage** — `lib/tenant/context.ts` — `runWithTenantAsync()` sets context
-2. **Layer 2: Prisma Extension** — `createScopedPrisma()` auto-filters queries by tenantId
+2. **Layer 2: Prisma Extension** — `legacy tenant-scoped Prisma helper()` auto-filters queries by tenantId
 3. **Layer 3: PostgreSQL RLS** — `prisma/migrations/rls/enable_rls.sql` — database-level enforcement
 
-- ⚠️ **P1** `createScopedPrisma()` only covers `audit`, `finding`, `proposal` models (lines 43-91). All other models (ProspectLead, OutreachEmail, DeliveryTask, etc.) are NOT scoped — relies solely on RLS + manual query filtering.
+- ⚠️ **P1** `legacy tenant-scoped Prisma helper()` only covers `audit`, `finding`, `proposal` models (lines 43-91). All other models (ProspectLead, OutreachEmail, DeliveryTask, etc.) are NOT scoped — relies solely on RLS + manual query filtering.
 
 ### 13.2 Branding
 
@@ -570,68 +573,73 @@
 
 ## MASTER SUMMARY TABLE
 
-| Pass | Domain | P0 | P1 | P2 | ✅ | ⚠️ | ❌ | 🚫 | Status |
-|------|--------|----|----|----|---|---|---|---|--------|
-| 1 | Project Structure | 0 | 2 | 6 | 5 | 7 | 1 | 3 | ⚠️ |
-| 2 | Database Layer | 0 | 5 | 2 | 12 | 5 | 0 | 3 | ⚠️ |
-| 3 | Auth & Authz | 1 | 3 | 1 | 7 | 1 | 1 | 2 | 🔴 |
-| 4 | Audit Engine | 1 | 2 | 0 | 8 | 1 | 1 | 0 | 🔴 |
-| 5 | Diagnosis Pipeline | 0 | 0 | 0 | 5 | 0 | 0 | 0 | ✅ |
-| 6 | Proposal Pipeline | 0 | 0 | 0 | 7 | 0 | 0 | 0 | ✅ |
-| 7 | Proposal Delivery | 0 | 0 | 0 | 5 | 0 | 0 | 0 | ✅ |
-| 8 | Email Outreach | 0 | 0 | 0 | 6 | 0 | 0 | 0 | ✅ |
-| 9 | Closing Agent | 0 | 0 | 0 | 6 | 0 | 0 | 0 | ✅ |
-| 10 | Checkout & Onboarding | 1 | 0 | 0 | 5 | 0 | 1 | 0 | 🔴 |
-| 11 | Delivery Engine | 0 | 0 | 0 | 7 | 0 | 0 | 0 | ✅ |
-| 12 | Client Retention | 0 | 0 | 0 | 6 | 0 | 0 | 0 | ✅ |
-| 13 | Multi-Tenancy | 0 | 1 | 0 | 5 | 1 | 0 | 0 | ⚠️ |
-| 14 | Adversarial QA | 0 | 0 | 0 | 6 | 0 | 0 | 0 | ✅ |
-| 15 | Self-Evolving Prompts | 0 | 0 | 0 | 5 | 0 | 0 | 0 | ✅ |
-| 16 | Localization & Intel | 0 | 0 | 0 | 5 | 0 | 0 | 0 | ✅ |
-| 17 | LLM Layer | 0 | 0 | 1 | 5 | 1 | 0 | 0 | ✅ |
-| 18 | Observability | 0 | 0 | 1 | 6 | 1 | 0 | 0 | ✅ |
-| 19 | Infrastructure | 0 | 1 | 0 | 5 | 0 | 1 | 0 | ⚠️ |
-| 20 | Testing | 0 | 0 | 2 | 5 | 2 | 0 | 0 | ⚠️ |
-| **TOTAL** | | **3** | **14** | **13** | **131** | **19** | **5** | **8** | **🔴** |
+| Pass      | Domain                | P0    | P1     | P2     | ✅      | ⚠️     | ❌    | 🚫    | Status |
+| --------- | --------------------- | ----- | ------ | ------ | ------- | ------ | ----- | ----- | ------ |
+| 1         | Project Structure     | 0     | 2      | 6      | 5       | 7      | 1     | 3     | ⚠️     |
+| 2         | Database Layer        | 0     | 5      | 2      | 12      | 5      | 0     | 3     | ⚠️     |
+| 3         | Auth & Authz          | 1     | 3      | 1      | 7       | 1      | 1     | 2     | 🔴     |
+| 4         | Audit Engine          | 1     | 2      | 0      | 8       | 1      | 1     | 0     | 🔴     |
+| 5         | Diagnosis Pipeline    | 0     | 0      | 0      | 5       | 0      | 0     | 0     | ✅     |
+| 6         | Proposal Pipeline     | 0     | 0      | 0      | 7       | 0      | 0     | 0     | ✅     |
+| 7         | Proposal Delivery     | 0     | 0      | 0      | 5       | 0      | 0     | 0     | ✅     |
+| 8         | Email Outreach        | 0     | 0      | 0      | 6       | 0      | 0     | 0     | ✅     |
+| 9         | Closing Agent         | 0     | 0      | 0      | 6       | 0      | 0     | 0     | ✅     |
+| 10        | Checkout & Onboarding | 1     | 0      | 0      | 5       | 0      | 1     | 0     | 🔴     |
+| 11        | Delivery Engine       | 0     | 0      | 0      | 7       | 0      | 0     | 0     | ✅     |
+| 12        | Client Retention      | 0     | 0      | 0      | 6       | 0      | 0     | 0     | ✅     |
+| 13        | Multi-Tenancy         | 0     | 1      | 0      | 5       | 1      | 0     | 0     | ⚠️     |
+| 14        | Adversarial QA        | 0     | 0      | 0      | 6       | 0      | 0     | 0     | ✅     |
+| 15        | Self-Evolving Prompts | 0     | 0      | 0      | 5       | 0      | 0     | 0     | ✅     |
+| 16        | Localization & Intel  | 0     | 0      | 0      | 5       | 0      | 0     | 0     | ✅     |
+| 17        | LLM Layer             | 0     | 0      | 1      | 5       | 1      | 0     | 0     | ✅     |
+| 18        | Observability         | 0     | 0      | 1      | 6       | 1      | 0     | 0     | ✅     |
+| 19        | Infrastructure        | 0     | 1      | 0      | 5       | 0      | 1     | 0     | ⚠️     |
+| 20        | Testing               | 0     | 0      | 2      | 5       | 2      | 0     | 0     | ⚠️     |
+| **TOTAL** |                       | **3** | **14** | **13** | **131** | **19** | **5** | **8** | **🔴** |
 
 ---
 
 ## P0 BLOCKERS
 
 ### P0-1: Session Auth Path Missing Tenant Context
+
 - **File:** `lib/middleware/auth.ts:74`
 - **Root cause:** When auth falls through to session (no API key), `handler(req, ...args)` is called directly without `runWithTenantAsync()`. The user's `tenantId` from the session is available via `getTenantId()` → `auth()` → `session.user.tenantId`, but this only works if every route explicitly calls `getTenantId()`. If any route uses the scoped Prisma client, it will return unscoped data.
 - **Impact:** Potential cross-tenant data leakage for session-authed dashboard users.
 - **Fix:**
+
 ```typescript
 // lib/middleware/auth.ts:68-75
 const session = await auth();
 if (!session?.user?.email) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 }
 const sessionTenantId = (session.user as any).tenantId;
 if (!sessionTenantId) {
-    return NextResponse.json({ error: 'No tenant associated' }, { status: 403 });
+  return NextResponse.json({ error: 'No tenant associated' }, { status: 403 });
 }
 return runWithTenantAsync(sessionTenantId, () => handler(req, ...args));
 ```
 
 ### P0-2: 25 Audit Modules Are Dead Code
+
 - **File:** `lib/audit/runner.ts` (only imports 5 of 30 modules)
 - **Root cause:** Modules were written but never wired into the orchestrator. The runner only executes: website, gbp, competitor, reputation, social.
 - **Impact:** Accessibility, SEO Deep Dive, Mobile UX, Security, Citations, Keyword Gap, Paid Search, Content Quality, Privacy Compliance, Tech Stack, Backlinks, Video Presence, E-Commerce, Email Domain Health, Schema Markup, and more — all non-functional. Findings from these modules will never appear in audits.
 - **Fix:** Requires substantial refactoring of `runner.ts` to add Phase 2 and Phase 3 module execution. Each module needs to be imported, invoked with appropriate inputs, and have its findings fed into the pipeline.
 
 ### P0-3: Stripe Webhook Secret Non-Null Assertion
+
 - **File:** `app/api/billing/webhook/route.ts:20`
 - **Root cause:** `process.env.STRIPE_WEBHOOK_SECRET!` uses TypeScript non-null assertion. If env var is missing, `constructEvent()` receives `undefined` as secret and throws an unhelpful error.
 - **Impact:** Webhook processing silently broken if env var not set. Payment events (subscription updates, checkout) won't be processed.
 - **Fix:**
+
 ```typescript
 const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
 if (!webhookSecret) {
-    console.error('STRIPE_WEBHOOK_SECRET not configured');
-    return NextResponse.json({ error: 'Webhook not configured' }, { status: 500 });
+  console.error('STRIPE_WEBHOOK_SECRET not configured');
+  return NextResponse.json({ error: 'Webhook not configured' }, { status: 500 });
 }
 event = stripe.webhooks.constructEvent(body, signature, webhookSecret);
 ```
@@ -640,22 +648,22 @@ event = stripe.webhooks.constructEvent(body, signature, webhookSecret);
 
 ## P1 MUST-FIX (Top Items)
 
-| # | File | Line | Description | Fix |
-|---|------|------|-------------|-----|
-| 1 | `prisma/schema.prisma` | 68 | `Finding.tenantId` is optional (`String?`) — weakens tenant isolation | Make required, backfill existing records |
-| 2 | `prisma/schema.prisma` | 102 | `Proposal.tenantId` is optional — same issue | Make required |
-| 3 | `prisma/schema.prisma` | 235 | `EvidenceSnapshot.tenantId` is optional | Make required |
-| 4 | `lib/middleware/auth.ts` | 10 | `handler: Function` — untyped | Type as `(req: Request, ...args: any[]) => Promise<Response>` |
-| 5 | RLS `enable_rls.sql` | 134 | RLS policy on `AuditTarget.tenantId` — field doesn't exist on model | Add tenantId to AuditTarget or remove RLS policy |
-| 6 | RLS `enable_rls.sql` | 70 | RLS policy on `ContactRequest.tenantId` — field doesn't exist | Add tenantId to ContactRequest or remove policy |
-| 7 | `lib/middleware/auth.ts` | — | No RBAC enforcement | Add `withRole()` middleware |
-| 8 | Auth endpoints | — | No rate limiting on `/register`, `/login` | Add rate limiter |
-| 9 | `lib/billing/stripe.ts` | 3 | Hardcoded `sk_test_placeholder` fallback | Throw if missing in prod |
-| 10 | `app/api/audit/batch/route.ts` | 5 | `uuid` not in package.json | Add to dependencies |
-| 11 | `lib/tenant/context.ts` | 38-93 | `createScopedPrisma()` only covers 3 models | Extend to all tenant-scoped models |
-| 12 | `.gitignore` | — | `cloud-sql-proxy` not ignored | Add to .gitignore, remove from git history |
-| 13 | Runner | — | No `$2.00` hard cap on audit cost | Add enforcement in CostTracker |
-| 14 | Cron routes | — | Security unclear — verify CRON_SECRET | Audit each cron route for auth |
+| #   | File                           | Line  | Description                                                           | Fix                                                           |
+| --- | ------------------------------ | ----- | --------------------------------------------------------------------- | ------------------------------------------------------------- |
+| 1   | `prisma/schema.prisma`         | 68    | `Finding.tenantId` is optional (`String?`) — weakens tenant isolation | Make required, backfill existing records                      |
+| 2   | `prisma/schema.prisma`         | 102   | `Proposal.tenantId` is optional — same issue                          | Make required                                                 |
+| 3   | `prisma/schema.prisma`         | 235   | `EvidenceSnapshot.tenantId` is optional                               | Make required                                                 |
+| 4   | `lib/middleware/auth.ts`       | 10    | `handler: Function` — untyped                                         | Type as `(req: Request, ...args: any[]) => Promise<Response>` |
+| 5   | RLS `enable_rls.sql`           | 134   | RLS policy on `AuditTarget.tenantId` — field doesn't exist on model   | Add tenantId to AuditTarget or remove RLS policy              |
+| 6   | RLS `enable_rls.sql`           | 70    | RLS policy on `ContactRequest.tenantId` — field doesn't exist         | Add tenantId to ContactRequest or remove policy               |
+| 7   | `lib/middleware/auth.ts`       | —     | No RBAC enforcement                                                   | Add `withRole()` middleware                                   |
+| 8   | Auth endpoints                 | —     | No rate limiting on `/register`, `/login`                             | Add rate limiter                                              |
+| 9   | `lib/billing/stripe.ts`        | 3     | Hardcoded `sk_test_placeholder` fallback                              | Throw if missing in prod                                      |
+| 10  | `app/api/audit/batch/route.ts` | 5     | `uuid` not in package.json                                            | Add to dependencies                                           |
+| 11  | `lib/tenant/context.ts`        | 38-93 | `legacy tenant-scoped Prisma helper()` only covers 3 models           | Extend to all tenant-scoped models                            |
+| 12  | `.gitignore`                   | —     | `cloud-sql-proxy` not ignored                                         | Add to .gitignore, remove from git history                    |
+| 13  | Runner                         | —     | No `$2.00` hard cap on audit cost                                     | Add enforcement in CostTracker                                |
+| 14  | Cron routes                    | —     | Security unclear — verify CRON_SECRET                                 | Audit each cron route for auth                                |
 
 ---
 
@@ -677,20 +685,20 @@ event = stripe.webhooks.constructEvent(body, signature, webhookSecret);
 
 ## PIPELINE HEALTH MATRIX
 
-| Pipeline | End-to-End Working? | Features Total | ✅ | ⚠️ | ❌ | 🚫 | Blocks Launch? |
-|----------|-------------------:|---------------:|---:|---:|---:|---:|---------------:|
-| Audit Engine | PARTIAL | 30 | 5 | 0 | 25 | 0 | YES |
-| Diagnosis | YES | 8 | 8 | 0 | 0 | 0 | NO |
-| Proposal | YES | 10 | 10 | 0 | 0 | 0 | NO |
-| Email Outreach | YES | 8 | 8 | 0 | 0 | 0 | NO |
-| Closing Agent | YES | 5 | 5 | 0 | 0 | 0 | NO |
-| Delivery | YES | 6 | 6 | 0 | 0 | 0 | NO |
-| Retention | YES | 5 | 5 | 0 | 0 | 0 | NO |
-| Multi-Tenancy | PARTIAL | 5 | 3 | 2 | 0 | 0 | YES |
-| Adversarial QA | YES | 5 | 5 | 0 | 0 | 0 | NO |
-| Predictive Intel | YES | 3 | 3 | 0 | 0 | 0 | NO |
-| Localization | YES | 4 | 4 | 0 | 0 | 0 | NO |
-| Cross-Tenant Intel | YES | 3 | 3 | 0 | 0 | 0 | NO |
+| Pipeline           | End-to-End Working? | Features Total |  ✅ |  ⚠️ |  ❌ |  🚫 | Blocks Launch? |
+| ------------------ | ------------------: | -------------: | --: | --: | --: | --: | -------------: |
+| Audit Engine       |             PARTIAL |             30 |   5 |   0 |  25 |   0 |            YES |
+| Diagnosis          |                 YES |              8 |   8 |   0 |   0 |   0 |             NO |
+| Proposal           |                 YES |             10 |  10 |   0 |   0 |   0 |             NO |
+| Email Outreach     |                 YES |              8 |   8 |   0 |   0 |   0 |             NO |
+| Closing Agent      |                 YES |              5 |   5 |   0 |   0 |   0 |             NO |
+| Delivery           |                 YES |              6 |   6 |   0 |   0 |   0 |             NO |
+| Retention          |                 YES |              5 |   5 |   0 |   0 |   0 |             NO |
+| Multi-Tenancy      |             PARTIAL |              5 |   3 |   2 |   0 |   0 |            YES |
+| Adversarial QA     |                 YES |              5 |   5 |   0 |   0 |   0 |             NO |
+| Predictive Intel   |                 YES |              3 |   3 |   0 |   0 |   0 |             NO |
+| Localization       |                 YES |              4 |   4 |   0 |   0 |   0 |             NO |
+| Cross-Tenant Intel |                 YES |              3 |   3 |   0 |   0 |   0 |             NO |
 
 ---
 
@@ -705,6 +713,7 @@ event = stripe.webhooks.constructEvent(body, signature, webhookSecret);
 3. **Stripe webhook crashes without env var** — payment processing is fragile.
 
 **Conditional path to GO:**
+
 - P0-1 and P0-3 are fixable in < 1 hour each.
 - P0-2 (wiring 25 modules) is a multi-day effort but does not block a "5-module MVP" launch if marketed honestly.
 - With P0-1 and P0-3 fixed, the system is a **CONDITIONAL GO** for a 5-module audit product.
@@ -716,18 +725,18 @@ event = stripe.webhooks.constructEvent(body, signature, webhookSecret);
 ### Fix P0-1: Session Auth Tenant Context
 
 ```
-Fix the session auth path in lib/middleware/auth.ts. On line 74, when falling 
-through to session auth, the handler is called without setting tenant context 
-via runWithTenantAsync(). After validating the session (line 69-72), extract 
-tenantId from session.user.tenantId, require it to be present (return 403 if 
+Fix the session auth path in lib/middleware/auth.ts. On line 74, when falling
+through to session auth, the handler is called without setting tenant context
+via runWithTenantAsync(). After validating the session (line 69-72), extract
+tenantId from session.user.tenantId, require it to be present (return 403 if
 missing), and wrap the handler call in runWithTenantAsync(tenantId, () => handler(req, ...args)).
 ```
 
 ### Fix P0-3: Stripe Webhook Secret
 
 ```
-In app/api/billing/webhook/route.ts, replace the non-null assertion on line 20 
-(process.env.STRIPE_WEBHOOK_SECRET!) with an explicit check: 
+In app/api/billing/webhook/route.ts, replace the non-null assertion on line 20
+(process.env.STRIPE_WEBHOOK_SECRET!) with an explicit check:
 const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
 if (!webhookSecret) return NextResponse.json({ error: 'Webhook not configured' }, { status: 500 });
 Then use webhookSecret in the constructEvent call.
@@ -737,17 +746,17 @@ Also add STRIPE_WEBHOOK_SECRET to lib/config/validateEnv.ts REQUIRED_ENV_VARS.
 ### Fix P1: RLS Schema Mismatch
 
 ```
-In prisma/migrations/rls/enable_rls.sql, remove or comment out the RLS 
-policies for AuditTarget (lines 130-136) and ContactRequest (lines 66-72) 
-since these models do not have a tenantId column. Alternatively, add 
+In prisma/migrations/rls/enable_rls.sql, remove or comment out the RLS
+policies for AuditTarget (lines 130-136) and ContactRequest (lines 66-72)
+since these models do not have a tenantId column. Alternatively, add
 tenantId String fields to these models in schema.prisma and run a migration.
 ```
 
 ### Fix P1: RBAC Middleware
 
 ```
-Create lib/middleware/withRole.ts that wraps withAuth and checks the user's 
-role against required permissions. Export withRole('admin', handler) pattern. 
+Create lib/middleware/withRole.ts that wraps withAuth and checks the user's
+role against required permissions. Export withRole('admin', handler) pattern.
 Apply to destructive routes: POST /api/audit, DELETE routes, settings routes.
 Viewers should only access GET endpoints.
 ```
@@ -756,6 +765,6 @@ Viewers should only access GET endpoints.
 
 ```
 Run: npm install uuid && npm install -D @types/uuid
-This ensures the uuid import in app/api/audit/batch/route.ts works in all 
+This ensures the uuid import in app/api/audit/batch/route.ts works in all
 environments, not just when transitively available.
 ```

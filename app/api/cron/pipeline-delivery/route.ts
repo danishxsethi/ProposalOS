@@ -1,19 +1,31 @@
+/**
+ * app/api/cron/pipeline-delivery/route.ts
+ *
+ * Delivery Cron Job
+ * Processes queued delivery tasks, verifies completed work, and escalates overdue items
+ *
+ * Features:
+ * - Cron auth verification
+ * - Rate limiting
+ * - Standardized error responses
+ */
+
 import { NextResponse } from 'next/server';
+
+import { generateTraceId, InternalError, UnauthorizedError } from '@/lib/api/errors';
 import { prisma } from '@/lib/db';
 import { logger } from '@/lib/logger';
+import { verifyCronAuth } from '@/lib/middleware/cronAuth';
+import { withRateLimit } from '@/lib/middleware/rateLimit';
 import { deliveryEngine } from '@/lib/pipeline/deliveryEngine';
 
 const MAX_TASKS_PER_RUN = 50;
 
-export async function GET(req: Request) {
-  // 1. CRON_SECRET auth
-  const authHeader = req.headers.get('authorization');
-  if (
-    process.env.CRON_SECRET &&
-    authHeader !== `Bearer ${process.env.CRON_SECRET}`
-  ) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+/**
+ * Inner handler for delivery cron
+ */
+async function handleDeliveryCron(req: Request): Promise<NextResponse> {
+  const traceId = generateTraceId();
 
   try {
     logger.info(
@@ -182,8 +194,6 @@ export async function GET(req: Request) {
         const allComplete = await deliveryEngine.checkAllComplete(proposalId);
 
         if (allComplete) {
-          // Update proposal status to delivered (if such a status exists)
-          // For now, we'll just log it
           deliveredProposals.push(proposalId);
 
           logger.info(
@@ -217,7 +227,7 @@ export async function GET(req: Request) {
       'Delivery cron complete'
     );
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       success: true,
       dispatched: dispatchResults.length,
       verified: verificationResults.length,
@@ -230,6 +240,9 @@ export async function GET(req: Request) {
         deliveredProposals,
       },
     });
+
+    response.headers.set('X-Trace-Id', traceId);
+    return response;
   } catch (error) {
     logger.error(
       {
@@ -239,12 +252,26 @@ export async function GET(req: Request) {
       'Delivery Cron Error'
     );
 
-    return NextResponse.json(
-      {
-        error: 'Internal Server Error',
-        message: error instanceof Error ? error.message : 'Unknown error',
-      },
-      { status: 500 }
-    );
+    const internalError = new InternalError('Delivery cron failed', {
+      originalError: error instanceof Error ? error.message : String(error),
+    });
+    return NextResponse.json(internalError.toEnvelope(req.url, traceId), { status: 500 });
   }
 }
+
+// Auth wrapper
+const authHandler = async (req: Request): Promise<NextResponse> => {
+  const authError = await verifyCronAuth(req);
+  if (authError) return authError;
+  return handleDeliveryCron(req);
+};
+
+// Apply rate limiting (5 requests per minute for cron jobs)
+const rateLimitedHandler = (req: Request) =>
+  withRateLimit({
+    windowMs: 60 * 1000,
+    max: 5,
+    message: 'Too many cron requests. Please wait before trying again.',
+  })(req, () => authHandler(req));
+
+export const GET = rateLimitedHandler;

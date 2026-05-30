@@ -1,17 +1,34 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
-import * as fc from 'fast-check';
-import {
-  computeEngagementScore,
-  isHotLead,
-  recordEvent,
-} from '../dealCloser';
-import type { EngagementScore, EngagementEvent, PipelineConfig } from '../types';
-import { createScopedPrisma } from '@/lib/tenant/context';
 import { OutreachEventType } from '@prisma/client';
+import * as fc from 'fast-check';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { prisma } from '@/lib/prisma';
+import { runWithTenantAsync, runWithTenantBypass } from '@/lib/tenant/context';
+
+import { computeEngagementScore, isHotLead, recordEvent } from '../dealCloser';
+
+import type { EngagementEvent, EngagementScore, PipelineConfig } from '../types';
 
 // Mock the tenant context
 vi.mock('@/lib/tenant/context', () => ({
-  createScopedPrisma: vi.fn(),
+  runWithTenantAsync: vi.fn(async (_tenantId: string, fn: () => Promise<unknown>) => await fn()),
+  runWithTenantBypass: vi.fn(async (_reason: string, fn: () => Promise<unknown>) => await fn()),
+}));
+
+vi.mock('@/lib/prisma', () => ({
+  prisma: {
+    prospectLead: {
+      findUnique: vi.fn(),
+      findMany: vi.fn(),
+      update: vi.fn(),
+    },
+    outreachEmailEvent: {
+      create: vi.fn(),
+    },
+    winLossRecord: {
+      create: vi.fn(),
+    },
+  },
 }));
 
 // Mock Stripe
@@ -27,31 +44,38 @@ vi.mock('@/lib/billing/stripe', () => ({
 }));
 
 describe('Deal Closer Property Tests', () => {
-  const mockPrisma = {
+  const mockedRunWithTenantAsync = vi.mocked(runWithTenantAsync);
+  const mockedRunWithTenantBypass = vi.mocked(runWithTenantBypass);
+  const mockPrisma = prisma as unknown as {
     prospectLead: {
-      findUnique: vi.fn(),
-      findMany: vi.fn(),
-      update: vi.fn(),
-    },
+      findUnique: ReturnType<typeof vi.fn>;
+      findMany: ReturnType<typeof vi.fn>;
+      update: ReturnType<typeof vi.fn>;
+    };
     outreachEmailEvent: {
-      create: vi.fn(),
-    },
+      create: ReturnType<typeof vi.fn>;
+    };
     winLossRecord: {
-      create: vi.fn(),
-    },
+      create: ReturnType<typeof vi.fn>;
+    };
   };
 
   beforeEach(() => {
     vi.clearAllMocks();
-    (createScopedPrisma as any).mockReturnValue(mockPrisma);
+    mockedRunWithTenantAsync.mockImplementation(
+      async (_tenantId: string, fn: () => unknown) => await fn()
+    );
+    mockedRunWithTenantBypass.mockImplementation(
+      async (_reason: string, fn: () => unknown) => await fn()
+    );
   });
 
   /**
    * Property 21: Engagement events are recorded with required fields
-   * 
+   *
    * For any engagement event (email open, click, proposal view), the recorded event
    * must contain a non-null timestamp, event type, and the associated prospect/lead ID.
-   * 
+   *
    * **Validates: Requirements 6.1**
    */
   describe('Property 21: Engagement events are recorded with required fields', () => {
@@ -118,11 +142,11 @@ describe('Deal Closer Property Tests', () => {
 
   /**
    * Property 22: Hot lead routing by percentile
-   * 
+   *
    * For any set of active prospects for a tenant, the prospects routed to the
    * Human Review Queue must be exactly those whose engagement score is in the
    * top N percentile (configurable, default: top 5%).
-   * 
+   *
    * **Validates: Requirements 6.6**
    */
   describe('Property 22: Hot lead routing by percentile', () => {
@@ -213,7 +237,7 @@ describe('Deal Closer Property Tests', () => {
 
   /**
    * Additional property: Engagement score is non-negative and bounded
-   * 
+   *
    * For any set of engagement events, the computed engagement score must be
    * non-negative and the total must equal the sum of component scores.
    */
@@ -281,7 +305,7 @@ describe('Deal Closer Property Tests', () => {
 
   /**
    * Additional property: Event type mapping is consistent
-   * 
+   *
    * For any engagement event type, the mapping to OutreachEventType must be
    * consistent and deterministic.
    */
@@ -321,9 +345,10 @@ describe('Deal Closer Property Tests', () => {
 
             // Execute first time
             await recordEvent(leadId, event);
-            const call1 = mockPrisma.outreachEmailEvent.create.mock.calls[
-              mockPrisma.outreachEmailEvent.create.mock.calls.length - 1
-            ];
+            const call1 =
+              mockPrisma.outreachEmailEvent.create.mock.calls[
+                mockPrisma.outreachEmailEvent.create.mock.calls.length - 1
+              ];
 
             // Setup mock for second call
             mockPrisma.prospectLead.findUnique.mockResolvedValueOnce({
@@ -335,13 +360,14 @@ describe('Deal Closer Property Tests', () => {
 
             // Execute second time
             await recordEvent(leadId, event);
-            const call2 = mockPrisma.outreachEmailEvent.create.mock.calls[
-              mockPrisma.outreachEmailEvent.create.mock.calls.length - 1
-            ];
+            const call2 =
+              mockPrisma.outreachEmailEvent.create.mock.calls[
+                mockPrisma.outreachEmailEvent.create.mock.calls.length - 1
+              ];
 
             // Verify same event type mapping
-            expect(call1[0].data.type).toBe(call2[0].data.type);
-            expect(call1[0].data.type).toBe(expectedMapping[eventType]);
+            expect(call1![0].data.type).toBe(call2![0].data.type);
+            expect(call1![0].data.type).toBe(expectedMapping[eventType]);
           }
         ),
         { numRuns: 100 }

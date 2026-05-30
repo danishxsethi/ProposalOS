@@ -1,5 +1,6 @@
 import { Finding } from '@prisma/client';
-import { RawArtifact, ArtifactGenerator } from './schemaGenerator';
+
+import { ArtifactGenerator, RawArtifact } from './schemaGenerator';
 
 /**
  * Content Generator - Generates content briefs and drafts for blog posts, service pages, FAQ sections

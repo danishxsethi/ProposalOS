@@ -1,6 +1,7 @@
 export interface ScanRequest {
-  url: string;
+  url?: string;
   businessName?: string;
+  placeId?: string;
   city?: string;
   industry?: string;
 }

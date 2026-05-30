@@ -1,74 +1,73 @@
+/**
+ * lib/audit/batchProcessor.ts
+ *
+ * Batch Processor — public interface used by the batch API route.
+ *
+ * BEFORE (removed):
+ *   Ran all audits sequentially in-process, blocking the HTTP request.
+ *   Unsafe for Cloud Run timeouts, multi-instance deployments, and partial
+ *   failure recovery.
+ *
+ * AFTER (this file):
+ *   Enqueues one AuditJob per audit ID into the durable job queue and
+ *   returns immediately.  Each job is processed asynchronously by the
+ *   worker endpoint (app/api/worker/audit-job/route.ts).
+ *
+ * The previous processBatch(batchId, auditIds) signature is preserved so
+ * existing callers do not need to change.
+ */
 
-import { runAudit } from '@/lib/audit/runner';
-import { generateProposal } from '@/lib/proposal/runner';
 import { logger } from '@/lib/logger';
-import { prisma } from '@/lib/prisma';
-import { sendBatchComplete } from '@/lib/notifications/email';
-import { sendWebhook } from '@/lib/notifications/webhook';
+import { enqueueBatchJobs } from '@/lib/queue/auditJobQueue';
 
-export async function processBatch(batchId: string, auditIds: string[]) {
-    logger.info({ batchId, auditCount: auditIds.length }, 'Starting batch processing');
+/**
+ * Enqueue all audits in a batch for asynchronous processing.
+ *
+ * Each audit becomes an individual AuditJob row in the database.  Jobs are
+ * idempotent: re-submitting a batch with the same batchId + auditId
+ * combination is a no-op (existing job is returned unchanged).
+ *
+ * Returns a summary of enqueue results so the caller can surface partial
+ * errors in the API response.
+ */
+export async function processBatch(
+  batchId: string,
+  tenantId: string,
+  auditIds: string[]
+): Promise<{
+  enqueued: number;
+  skipped: number;
+  errors: Array<{ auditId: string; error: string }>;
+}> {
+  logger.info(
+    { event: 'batch.enqueue_start', batchId, tenantId, auditCount: auditIds.length },
+    'Batch: enqueueing jobs'
+  );
 
-    // Process sequentially as requested
-    for (const auditId of auditIds) {
-        try {
-            logger.info({ batchId, auditId }, 'Processing audit in batch');
+  const jobs = auditIds.map((auditId) => ({
+    tenantId,
+    batchId,
+    auditId,
+    // Idempotency key is batchId:auditId — stable, deterministic, no duplicates
+    idempotencyKey: `batch:${batchId}:audit:${auditId}`,
+  }));
 
-            // 1. Run Audit
-            await runAudit(auditId);
+  const { enqueued, errors } = await enqueueBatchJobs(batchId, jobs);
 
-            // 2. Generate Proposal (only if audit succeeded)
-            const audit = await prisma.audit.findUnique({
-                where: { id: auditId },
-                select: { status: true }
-            });
+  logger.info(
+    {
+      event: 'batch.enqueue_complete',
+      batchId,
+      tenantId,
+      enqueued: enqueued.length,
+      errors: errors.length,
+    },
+    'Batch: enqueue complete'
+  );
 
-            if (audit?.status === 'COMPLETE' || audit?.status === 'PARTIAL') {
-                await generateProposal(auditId);
-            } else {
-                logger.warn({ batchId, auditId, status: audit?.status }, 'Skipping proposal generation due to audit failure');
-            }
-
-        } catch (error) {
-            // Log and continue to next audit in batch
-            logger.error({ batchId, auditId, error }, 'Error processing audit in batch');
-
-            // Ensure status is failed
-            await prisma.audit.update({
-                where: { id: auditId },
-                data: { status: 'FAILED' }
-            }).catch(() => { });
-        }
-    }
-
-    logger.info({ batchId }, 'Batch processing complete');
-
-    // Calculate stats for notification
-    const total = auditIds.length;
-    let completed = 0;
-    let failed = 0;
-
-    const finalAudits = await prisma.audit.findMany({
-        where: { id: { in: auditIds } },
-        select: { status: true }
-    });
-
-    finalAudits.forEach(a => {
-        if (a.status === 'COMPLETE' || a.status === 'PARTIAL') completed++;
-        else failed++;
-    });
-
-    sendBatchComplete({
-        batchId,
-        total,
-        completed,
-        failed
-    }).catch(console.error);
-
-    sendWebhook('batch.complete', {
-        batchId,
-        total,
-        completed,
-        failed
-    });
+  return {
+    enqueued: enqueued.length,
+    skipped: 0, // Reserved for future use (already-succeeded jobs)
+    errors,
+  };
 }

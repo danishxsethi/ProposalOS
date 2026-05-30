@@ -2,17 +2,14 @@
  * Follow-up email generator — 3-email sequence after in-person meeting.
  * For Saskatoon door-to-door: business owner gave consent, CASL compliant.
  */
-import { generateWithGemini } from '@/lib/llm/provider';
 import { MODEL_CONFIG } from '@/lib/config/models';
-import type {
-  AuditForEmail,
-  ProposalForEmail,
-  PlaybookForEmail,
-  FollowUpSequence,
-} from './types';
 import type { CostTracker } from '@/lib/costs/costTracker';
+import { generateWithGemini } from '@/lib/llm/provider';
 
-const BASE_URL = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL || 'https://proposalengine.com';
+import type { AuditForEmail, FollowUpSequence, PlaybookForEmail, ProposalForEmail } from './types';
+
+const BASE_URL =
+  process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL || 'https://proposalengine.com';
 
 export interface FollowUpInput {
   audit: AuditForEmail;
@@ -59,10 +56,18 @@ MEETING CONTEXT: ${input.meetingContext || 'in-person meeting'}
 ${industryContext}
 
 FINDINGS (discussed in person — do NOT repeat in Email 2):
-${audit.findings.filter((f) => discussedIds.has(f.id)).map((f) => `- ${f.title}`).join('\n') || 'None specified'}
+${
+  audit.findings
+    .filter((f) => discussedIds.has(f.id))
+    .map((f) => `- ${f.title}`)
+    .join('\n') || 'None specified'
+}
 
 FINDINGS NOT YET DISCUSSED (use one in Email 2 for new value):
-${notDiscussed.slice(0, 5).map((f) => `- ${f.title}: ${f.description || ''}`).join('\n')}
+${notDiscussed
+  .slice(0, 5)
+  .map((f) => `- ${f.title}: ${f.description || ''}`)
+  .join('\n')}
 
 PRICING: Starter $${tierPrices.starter}, Growth $${tierPrices.growth}, Premium $${tierPrices.premium}
 INTERESTED TIER: ${input.interestedTier || 'growth'}
@@ -120,17 +125,24 @@ Return ONLY the JSON object.`;
     input: prompt,
     temperature: 0.5,
     maxOutputTokens: 2048,
-    metadata: { node: 'follow_up_generator' }
+    metadata: { node: 'follow_up_generator' },
   });
   const text = result.text || '';
 
   if (tracker && result.usageMetadata) {
     const usage = result.usageMetadata;
-    tracker.addLlmCall('GEMINI_FLASH', usage.promptTokenCount ?? 0, usage.candidatesTokenCount ?? 0, usage.thoughtsTokenCount ?? 0);
+    tracker.addLlmCall(
+      'GEMINI_FLASH',
+      usage.promptTokenCount ?? 0,
+      usage.candidatesTokenCount ?? 0,
+      usage.thoughtsTokenCount ?? 0
+    );
   }
 
   const jsonMatch = text.match(/\{[\s\S]*\}/);
-  const parsed = JSON.parse(jsonMatch ? jsonMatch[0] : text) as { emails: FollowUpSequence['emails'] };
+  const parsed = JSON.parse(jsonMatch ? jsonMatch[0] : text) as {
+    emails: FollowUpSequence['emails'];
+  };
 
   return {
     emails: parsed.emails.map((e) => ({

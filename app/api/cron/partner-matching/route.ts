@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { matchLeadsToPartner, deliverLead } from '@/lib/pipeline/partnerPortal';
+
 import { prisma } from '@/lib/db';
+import { verifyCronAuth } from '@/lib/middleware/cronAuth';
+import { deliverLead, matchLeadsToPartner } from '@/lib/pipeline/partnerPortal';
 
 /**
  * POST /api/cron/partner-matching
@@ -8,16 +10,11 @@ import { prisma } from '@/lib/db';
  * Runs daily to identify leads matching partner preferences
  */
 export async function POST(request: NextRequest) {
+  const authError = await verifyCronAuth(request);
+  if (authError) return authError;
+
+  const startTime = Date.now();
   try {
-    // Verify cron secret
-    const authHeader = request.headers.get('authorization');
-    const cronSecret = process.env.CRON_SECRET;
-
-    if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const startTime = Date.now();
     let totalMatched = 0;
     let totalDelivered = 0;
     let errors = 0;

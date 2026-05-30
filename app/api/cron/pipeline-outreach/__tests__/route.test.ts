@@ -1,19 +1,21 @@
 /**
  * Unit tests for Pipeline Outreach Cron Endpoint
- * 
+ *
  * Tests the cron endpoint that processes "QUALIFIED" prospects and sends
  * outreach emails in batches.
- * 
+ *
  * Requirements: 4.1, 4.6
  */
 
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { GET } from '../route';
-import { prisma } from '@/lib/prisma';
-import { PipelineStage } from '@/lib/pipeline/types';
-import * as outreach from '@/lib/pipeline/outreach';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
 import * as inboxRotation from '@/lib/pipeline/inboxRotation';
+import * as outreach from '@/lib/pipeline/outreach';
 import * as stateMachine from '@/lib/pipeline/stateMachine';
+import { PipelineStage } from '@/lib/pipeline/types';
+import { prisma } from '@/lib/prisma';
+
+import { GET } from '../route';
 
 // ============================================================================
 // Mocks
@@ -32,6 +34,12 @@ vi.mock('@/lib/prisma', () => ({
     },
     pipelineErrorLog: {
       create: vi.fn(),
+    },
+    audit: {
+      findFirst: vi.fn(),
+    },
+    proposal: {
+      findFirst: vi.fn(),
     },
   },
 }));
@@ -151,6 +159,26 @@ describe('Pipeline Outreach Cron Endpoint', () => {
     vi.clearAllMocks();
     // Set CRON_SECRET for auth tests
     process.env.CRON_SECRET = 'test-secret';
+
+    // Set up default prisma mocks
+    vi.mocked(prisma.audit.findFirst).mockResolvedValue({
+      id: 'audit-1',
+      status: 'COMPLETE',
+      findings: [
+        {
+          id: 'f1',
+          title: 'Slow Page Speed',
+          module: 'pagespeed',
+          severity: 'high',
+          impactScore: 85,
+        },
+      ],
+    } as any);
+
+    vi.mocked(prisma.proposal.findFirst).mockResolvedValue({
+      id: 'proposal-1',
+      webLinkToken: 'abc123',
+    } as any);
   });
 
   afterEach(() => {
@@ -182,7 +210,7 @@ describe('Pipeline Outreach Cron Endpoint', () => {
 
     it('should proceed when CRON_SECRET is set and auth header is correct', async () => {
       const req = createMockRequest('Bearer test-secret');
-      
+
       vi.mocked(prisma.pipelineConfig.findMany).mockResolvedValue([]);
 
       const response = await GET(req);
@@ -192,17 +220,17 @@ describe('Pipeline Outreach Cron Endpoint', () => {
       expect(data.success).toBe(true);
     });
 
-    it('should proceed when CRON_SECRET is not set', async () => {
+    it('should return 401 when CRON_SECRET is not set', async () => {
       delete process.env.CRON_SECRET;
       const req = createMockRequest();
-      
+
       vi.mocked(prisma.pipelineConfig.findMany).mockResolvedValue([]);
 
       const response = await GET(req);
       const data = await response.json();
 
-      expect(response.status).toBe(200);
-      expect(data.success).toBe(true);
+      expect(response.status).toBe(401);
+      expect(data.error).toBe('Unauthorized');
     });
   });
 
@@ -213,7 +241,7 @@ describe('Pipeline Outreach Cron Endpoint', () => {
   describe('No Active Tenants', () => {
     it('should return success with 0 processed when no configs exist', async () => {
       const req = createMockRequest('Bearer test-secret');
-      
+
       vi.mocked(prisma.pipelineConfig.findMany).mockResolvedValue([]);
 
       const response = await GET(req);
@@ -227,12 +255,12 @@ describe('Pipeline Outreach Cron Endpoint', () => {
 
     it('should filter out tenants with outreach paused', async () => {
       const req = createMockRequest('Bearer test-secret');
-      
+
       const configs = [
         createMockConfig({ tenantId: 'tenant-1', pausedStages: ['outreach'] }),
         createMockConfig({ tenantId: 'tenant-2', pausedStages: ['discovery'] }),
       ];
-      
+
       vi.mocked(prisma.pipelineConfig.findMany).mockResolvedValue(configs);
       vi.mocked(prisma.prospectLead.findMany).mockResolvedValue([]);
 
@@ -252,9 +280,9 @@ describe('Pipeline Outreach Cron Endpoint', () => {
   describe('No Prospects', () => {
     it('should return success when tenant has no prospects in "QUALIFIED" status', async () => {
       const req = createMockRequest('Bearer test-secret');
-      
+
       const configs = [createMockConfig()];
-      
+
       vi.mocked(prisma.pipelineConfig.findMany).mockResolvedValue(configs);
       vi.mocked(prisma.prospectLead.findMany).mockResolvedValue([]);
 
@@ -275,15 +303,15 @@ describe('Pipeline Outreach Cron Endpoint', () => {
   describe('Successful Email Sending', () => {
     it('should process prospects and send outreach emails', async () => {
       const req = createMockRequest('Bearer test-secret');
-      
+
       const configs = [createMockConfig()];
       const prospects = [createMockProspect()];
       const tenant = createMockTenant();
-      
+
       vi.mocked(prisma.pipelineConfig.findMany).mockResolvedValue(configs);
       vi.mocked(prisma.prospectLead.findMany).mockResolvedValue(prospects);
       vi.mocked(prisma.tenant.findUnique).mockResolvedValue(tenant);
-      
+
       const mockEmail = {
         id: 'email-1',
         subject: 'Test Subject',
@@ -294,7 +322,7 @@ describe('Pipeline Outreach Cron Endpoint', () => {
         scorecardUrl: '/preview/abc123',
         generatedAt: new Date(),
       };
-      
+
       vi.mocked(outreach.generateAndQualifyEmail).mockResolvedValue(mockEmail);
       vi.mocked(inboxRotation.sendWithRotation).mockResolvedValue({
         emailId: 'email-1',
@@ -319,7 +347,7 @@ describe('Pipeline Outreach Cron Endpoint', () => {
       expect(data.success).toBe(true);
       expect(data.results[0].emailsSent).toBe(1);
       expect(data.results[0].failed).toBe(0);
-      
+
       // Verify functions were called correctly
       expect(outreach.generateAndQualifyEmail).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -327,14 +355,8 @@ describe('Pipeline Outreach Cron Endpoint', () => {
           vertical: 'dentist',
         })
       );
-      expect(inboxRotation.sendWithRotation).toHaveBeenCalledWith(
-        mockEmail,
-        'tenant-1'
-      );
-      expect(outreach.scheduleFollowUps).toHaveBeenCalledWith(
-        'prospect-1',
-        'email-1'
-      );
+      expect(inboxRotation.sendWithRotation).toHaveBeenCalledWith(mockEmail, 'tenant-1');
+      expect(outreach.scheduleFollowUps).toHaveBeenCalledWith('prospect-1', 'email-1');
       expect(stateMachine.transition).toHaveBeenCalledWith(
         'prospect-1',
         'outreach_sent',
@@ -344,7 +366,7 @@ describe('Pipeline Outreach Cron Endpoint', () => {
 
     it('should process multiple prospects in batch', async () => {
       const req = createMockRequest('Bearer test-secret');
-      
+
       const configs = [createMockConfig()];
       const prospects = [
         createMockProspect({ id: 'prospect-1' }),
@@ -352,11 +374,11 @@ describe('Pipeline Outreach Cron Endpoint', () => {
         createMockProspect({ id: 'prospect-3' }),
       ];
       const tenant = createMockTenant();
-      
+
       vi.mocked(prisma.pipelineConfig.findMany).mockResolvedValue(configs);
       vi.mocked(prisma.prospectLead.findMany).mockResolvedValue(prospects);
       vi.mocked(prisma.tenant.findUnique).mockResolvedValue(tenant);
-      
+
       const mockEmail = {
         id: 'email-1',
         subject: 'Test Subject',
@@ -367,7 +389,7 @@ describe('Pipeline Outreach Cron Endpoint', () => {
         scorecardUrl: '/preview/abc123',
         generatedAt: new Date(),
       };
-      
+
       vi.mocked(outreach.generateAndQualifyEmail).mockResolvedValue(mockEmail);
       vi.mocked(inboxRotation.sendWithRotation).mockResolvedValue({
         emailId: 'email-1',
@@ -402,15 +424,15 @@ describe('Pipeline Outreach Cron Endpoint', () => {
   describe('Queued Emails', () => {
     it('should handle queued emails when no domain available', async () => {
       const req = createMockRequest('Bearer test-secret');
-      
+
       const configs = [createMockConfig()];
       const prospects = [createMockProspect()];
       const tenant = createMockTenant();
-      
+
       vi.mocked(prisma.pipelineConfig.findMany).mockResolvedValue(configs);
       vi.mocked(prisma.prospectLead.findMany).mockResolvedValue(prospects);
       vi.mocked(prisma.tenant.findUnique).mockResolvedValue(tenant);
-      
+
       const mockEmail = {
         id: 'email-1',
         subject: 'Test Subject',
@@ -421,7 +443,7 @@ describe('Pipeline Outreach Cron Endpoint', () => {
         scorecardUrl: '/preview/abc123',
         generatedAt: new Date(),
       };
-      
+
       vi.mocked(outreach.generateAndQualifyEmail).mockResolvedValue(mockEmail);
       vi.mocked(inboxRotation.sendWithRotation).mockResolvedValue({
         emailId: 'email-1',
@@ -436,7 +458,7 @@ describe('Pipeline Outreach Cron Endpoint', () => {
       expect(response.status).toBe(200);
       expect(data.results[0].emailsQueued).toBe(1);
       expect(data.results[0].emailsSent).toBe(0);
-      
+
       // Should not transition prospect or schedule follow-ups
       expect(stateMachine.transition).not.toHaveBeenCalled();
       expect(outreach.scheduleFollowUps).not.toHaveBeenCalled();
@@ -450,14 +472,15 @@ describe('Pipeline Outreach Cron Endpoint', () => {
   describe('Error Handling', () => {
     it('should handle missing audit data gracefully', async () => {
       const req = createMockRequest('Bearer test-secret');
-      
+
       const configs = [createMockConfig()];
       const prospects = [createMockProspect({ audit: null })];
       const tenant = createMockTenant();
-      
+
       vi.mocked(prisma.pipelineConfig.findMany).mockResolvedValue(configs);
       vi.mocked(prisma.prospectLead.findMany).mockResolvedValue(prospects);
       vi.mocked(prisma.tenant.findUnique).mockResolvedValue(tenant);
+      vi.mocked(prisma.audit.findFirst).mockResolvedValue(null);
 
       const response = await GET(req);
       const data = await response.json();
@@ -469,14 +492,16 @@ describe('Pipeline Outreach Cron Endpoint', () => {
 
     it('should handle missing proposal data gracefully', async () => {
       const req = createMockRequest('Bearer test-secret');
-      
+
       const configs = [createMockConfig()];
       const prospects = [createMockProspect({ proposal: null })];
       const tenant = createMockTenant();
-      
+
       vi.mocked(prisma.pipelineConfig.findMany).mockResolvedValue(configs);
       vi.mocked(prisma.prospectLead.findMany).mockResolvedValue(prospects);
       vi.mocked(prisma.tenant.findUnique).mockResolvedValue(tenant);
+      vi.mocked(prisma.audit.findFirst).mockResolvedValue({ id: 'audit-1', findings: [] } as any);
+      vi.mocked(prisma.proposal.findFirst).mockResolvedValue(null);
 
       const response = await GET(req);
       const data = await response.json();
@@ -488,17 +513,15 @@ describe('Pipeline Outreach Cron Endpoint', () => {
 
     it('should handle email generation failure', async () => {
       const req = createMockRequest('Bearer test-secret');
-      
+
       const configs = [createMockConfig()];
       const prospects = [createMockProspect()];
       const tenant = createMockTenant();
-      
+
       vi.mocked(prisma.pipelineConfig.findMany).mockResolvedValue(configs);
       vi.mocked(prisma.prospectLead.findMany).mockResolvedValue(prospects);
       vi.mocked(prisma.tenant.findUnique).mockResolvedValue(tenant);
-      vi.mocked(outreach.generateAndQualifyEmail).mockRejectedValue(
-        new Error('generation_failed')
-      );
+      vi.mocked(outreach.generateAndQualifyEmail).mockRejectedValue(new Error('generation_failed'));
       vi.mocked(prisma.pipelineErrorLog.create).mockResolvedValue({} as any);
 
       const response = await GET(req);
@@ -518,15 +541,15 @@ describe('Pipeline Outreach Cron Endpoint', () => {
 
     it('should handle send failure', async () => {
       const req = createMockRequest('Bearer test-secret');
-      
+
       const configs = [createMockConfig()];
       const prospects = [createMockProspect()];
       const tenant = createMockTenant();
-      
+
       vi.mocked(prisma.pipelineConfig.findMany).mockResolvedValue(configs);
       vi.mocked(prisma.prospectLead.findMany).mockResolvedValue(prospects);
       vi.mocked(prisma.tenant.findUnique).mockResolvedValue(tenant);
-      
+
       const mockEmail = {
         id: 'email-1',
         subject: 'Test Subject',
@@ -537,7 +560,7 @@ describe('Pipeline Outreach Cron Endpoint', () => {
         scorecardUrl: '/preview/abc123',
         generatedAt: new Date(),
       };
-      
+
       vi.mocked(outreach.generateAndQualifyEmail).mockResolvedValue(mockEmail);
       vi.mocked(inboxRotation.sendWithRotation).mockResolvedValue({
         emailId: 'email-1',
@@ -563,18 +586,18 @@ describe('Pipeline Outreach Cron Endpoint', () => {
 
     it('should continue processing other prospects when one fails', async () => {
       const req = createMockRequest('Bearer test-secret');
-      
+
       const configs = [createMockConfig()];
       const prospects = [
         createMockProspect({ id: 'prospect-1' }),
         createMockProspect({ id: 'prospect-2' }),
       ];
       const tenant = createMockTenant();
-      
+
       vi.mocked(prisma.pipelineConfig.findMany).mockResolvedValue(configs);
       vi.mocked(prisma.prospectLead.findMany).mockResolvedValue(prospects);
       vi.mocked(prisma.tenant.findUnique).mockResolvedValue(tenant);
-      
+
       const mockEmail = {
         id: 'email-1',
         subject: 'Test Subject',
@@ -585,12 +608,12 @@ describe('Pipeline Outreach Cron Endpoint', () => {
         scorecardUrl: '/preview/abc123',
         generatedAt: new Date(),
       };
-      
+
       // First prospect fails, second succeeds
       vi.mocked(outreach.generateAndQualifyEmail)
         .mockRejectedValueOnce(new Error('generation_failed'))
         .mockResolvedValueOnce(mockEmail);
-      
+
       vi.mocked(inboxRotation.sendWithRotation).mockResolvedValue({
         emailId: 'email-1',
         status: 'sent',
@@ -625,12 +648,12 @@ describe('Pipeline Outreach Cron Endpoint', () => {
   describe('Multiple Tenants', () => {
     it('should process multiple tenants up to MAX_TENANTS_PER_RUN', async () => {
       const req = createMockRequest('Bearer test-secret');
-      
+
       const configs = [
         createMockConfig({ tenantId: 'tenant-1' }),
         createMockConfig({ tenantId: 'tenant-2' }),
       ];
-      
+
       vi.mocked(prisma.pipelineConfig.findMany).mockResolvedValue(configs);
       vi.mocked(prisma.prospectLead.findMany).mockResolvedValue([]);
 
@@ -644,14 +667,14 @@ describe('Pipeline Outreach Cron Endpoint', () => {
 
     it('should handle tenant-level errors without affecting other tenants', async () => {
       const req = createMockRequest('Bearer test-secret');
-      
+
       const configs = [
         createMockConfig({ tenantId: 'tenant-1' }),
         createMockConfig({ tenantId: 'tenant-2' }),
       ];
-      
+
       vi.mocked(prisma.pipelineConfig.findMany).mockResolvedValue(configs);
-      
+
       // First tenant throws error, second succeeds
       vi.mocked(prisma.prospectLead.findMany)
         .mockRejectedValueOnce(new Error('Database error'))
@@ -673,9 +696,9 @@ describe('Pipeline Outreach Cron Endpoint', () => {
   describe('Batch Size', () => {
     it('should respect configured batch size', async () => {
       const req = createMockRequest('Bearer test-secret');
-      
+
       const configs = [createMockConfig({ batchSize: 10 })];
-      
+
       vi.mocked(prisma.pipelineConfig.findMany).mockResolvedValue(configs);
       vi.mocked(prisma.prospectLead.findMany).mockResolvedValue([]);
 
@@ -690,9 +713,9 @@ describe('Pipeline Outreach Cron Endpoint', () => {
 
     it('should use default batch size when not configured', async () => {
       const req = createMockRequest('Bearer test-secret');
-      
+
       const configs = [createMockConfig({ batchSize: null })];
-      
+
       vi.mocked(prisma.pipelineConfig.findMany).mockResolvedValue(configs);
       vi.mocked(prisma.prospectLead.findMany).mockResolvedValue([]);
 

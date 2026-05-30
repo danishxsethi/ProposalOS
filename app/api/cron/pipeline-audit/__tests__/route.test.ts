@@ -1,5 +1,6 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextResponse } from 'next/server';
+
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Mock dependencies before imports
 vi.mock('@/lib/prisma', () => ({
@@ -21,9 +22,10 @@ vi.mock('@/lib/pipeline/stages/auditStage', () => ({
   processAuditStage: vi.fn(),
 }));
 
-import { GET } from '../route';
-import { prisma } from '@/lib/prisma';
 import { processAuditStage } from '@/lib/pipeline/stages/auditStage';
+import { prisma } from '@/lib/prisma';
+
+import { GET } from '../route';
 
 function makeRequest(headers: Record<string, string> = {}): Request {
   return {
@@ -36,7 +38,7 @@ function makeRequest(headers: Record<string, string> = {}): Request {
 describe('GET /api/cron/pipeline-audit', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    delete process.env.CRON_SECRET;
+    process.env.CRON_SECRET = 'test-secret';
   });
 
   it('returns 401 when CRON_SECRET is set and auth header is missing', async () => {
@@ -56,21 +58,22 @@ describe('GET /api/cron/pipeline-audit', () => {
   it('allows access when CRON_SECRET matches', async () => {
     process.env.CRON_SECRET = 'test-secret';
     vi.mocked(prisma.pipelineConfig.findMany).mockResolvedValue([]);
-    const res = await GET(
-      makeRequest({ authorization: 'Bearer test-secret' })
-    );
+    const res = await GET(makeRequest({ authorization: 'Bearer test-secret' }));
     expect(res.status).toBe(200);
   });
 
-  it('allows access when CRON_SECRET is not set', async () => {
+  it('returns 401 when CRON_SECRET is not set', async () => {
+    delete process.env.CRON_SECRET;
     vi.mocked(prisma.pipelineConfig.findMany).mockResolvedValue([]);
     const res = await GET(makeRequest());
-    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(res.status).toBe(401);
+    expect(body.error).toBe('Unauthorized');
   });
 
   it('returns early when no active tenants', async () => {
     vi.mocked(prisma.pipelineConfig.findMany).mockResolvedValue([]);
-    const res = await GET(makeRequest());
+    const res = await GET(makeRequest({ authorization: 'Bearer test-secret' }));
     const body = await res.json();
     expect(body.success).toBe(true);
     expect(body.processed).toBe(0);
@@ -87,7 +90,7 @@ describe('GET /api/cron/pipeline-audit', () => {
       },
     ] as any);
 
-    const res = await GET(makeRequest());
+    const res = await GET(makeRequest({ authorization: 'Bearer test-secret' }));
     const body = await res.json();
     expect(body.processed).toBe(0);
     expect(processAuditStage).not.toHaveBeenCalled();
@@ -121,7 +124,7 @@ describe('GET /api/cron/pipeline-audit', () => {
       },
     ]);
 
-    const res = await GET(makeRequest());
+    const res = await GET(makeRequest({ authorization: 'Bearer test-secret' }));
     const body = await res.json();
 
     expect(body.success).toBe(true);
@@ -138,7 +141,7 @@ describe('GET /api/cron/pipeline-audit', () => {
 
   it('limits to MAX_TENANTS_PER_RUN (5)', async () => {
     vi.mocked(prisma.pipelineConfig.findMany).mockResolvedValue([]);
-    await GET(makeRequest());
+    await GET(makeRequest({ authorization: 'Bearer test-secret' }));
     expect(prisma.pipelineConfig.findMany).toHaveBeenCalledWith({
       take: 5,
       orderBy: { updatedAt: 'asc' },
@@ -157,7 +160,7 @@ describe('GET /api/cron/pipeline-audit', () => {
 
     vi.mocked(processAuditStage).mockRejectedValue(new Error('DB down'));
 
-    const res = await GET(makeRequest());
+    const res = await GET(makeRequest({ authorization: 'Bearer test-secret' }));
     const body = await res.json();
 
     expect(body.success).toBe(true);
@@ -169,16 +172,14 @@ describe('GET /api/cron/pipeline-audit', () => {
   });
 
   it('handles top-level errors and returns 500', async () => {
-    vi.mocked(prisma.pipelineConfig.findMany).mockRejectedValue(
-      new Error('Connection refused')
-    );
+    vi.mocked(prisma.pipelineConfig.findMany).mockRejectedValue(new Error('Connection refused'));
 
-    const res = await GET(makeRequest());
+    const res = await GET(makeRequest({ authorization: 'Bearer test-secret' }));
     const body = await res.json();
 
     expect(res.status).toBe(500);
-    expect(body.error).toBe('Internal Server Error');
-    expect(body.message).toBe('Connection refused');
+    expect(body.error.code).toBe('INTERNAL_ERROR');
+    expect(body.error.message).toBe('Pipeline audit cron failed');
   });
 
   it('processes multiple tenants, skipping paused ones', async () => {
@@ -190,7 +191,7 @@ describe('GET /api/cron/pipeline-audit', () => {
 
     vi.mocked(processAuditStage).mockResolvedValue([]);
 
-    const res = await GET(makeRequest());
+    const res = await GET(makeRequest({ authorization: 'Bearer test-secret' }));
     const body = await res.json();
 
     expect(body.processed).toBe(2);

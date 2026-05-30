@@ -7,15 +7,16 @@
  * Requirements: 1.5, 1.8
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 import {
-  enrichProspect,
-  withTimeout,
-  hasVerifiedEmail,
-  PROVIDER_ORDER,
   type EnrichmentProvider,
   type EnrichmentProviders,
+  enrichProspect,
+  hasVerifiedEmail,
+  PROVIDER_ORDER,
   type ProviderResult,
+  withTimeout,
 } from '../waterfallEnrichment';
 
 // Mock Prisma
@@ -143,10 +144,22 @@ describe('enrichProspect', () => {
     const callOrder: string[] = [];
 
     const providers: EnrichmentProviders = {
-      APOLLO: async () => { callOrder.push('APOLLO'); return {}; },
-      HUNTER: async () => { callOrder.push('HUNTER'); return {}; },
-      PROXYCURL: async () => { callOrder.push('PROXYCURL'); return {}; },
-      CLEARBIT: async () => { callOrder.push('CLEARBIT'); return {}; },
+      APOLLO: async () => {
+        callOrder.push('APOLLO');
+        return {};
+      },
+      HUNTER: async () => {
+        callOrder.push('HUNTER');
+        return {};
+      },
+      PROXYCURL: async () => {
+        callOrder.push('PROXYCURL');
+        return {};
+      },
+      CLEARBIT: async () => {
+        callOrder.push('CLEARBIT');
+        return {};
+      },
     };
 
     await enrichProspect('lead-1', providers);
@@ -158,13 +171,22 @@ describe('enrichProspect', () => {
     const callOrder: string[] = [];
 
     const providers: EnrichmentProviders = {
-      APOLLO: async () => { callOrder.push('APOLLO'); return {}; },
+      APOLLO: async () => {
+        callOrder.push('APOLLO');
+        return {};
+      },
       HUNTER: async () => {
         callOrder.push('HUNTER');
         return { email: 'dm@test.com', decisionMaker: { name: 'John', title: 'Owner' } };
       },
-      PROXYCURL: async () => { callOrder.push('PROXYCURL'); return {}; },
-      CLEARBIT: async () => { callOrder.push('CLEARBIT'); return {}; },
+      PROXYCURL: async () => {
+        callOrder.push('PROXYCURL');
+        return {};
+      },
+      CLEARBIT: async () => {
+        callOrder.push('CLEARBIT');
+        return {};
+      },
     };
 
     const result = await enrichProspect('lead-1', providers);
@@ -179,12 +201,18 @@ describe('enrichProspect', () => {
 
     const providers: EnrichmentProviders = {
       APOLLO: makeFailingProvider('Apollo API down'),
-      HUNTER: async () => { callOrder.push('HUNTER'); return {}; },
+      HUNTER: async () => {
+        callOrder.push('HUNTER');
+        return {};
+      },
       PROXYCURL: async () => {
         callOrder.push('PROXYCURL');
         return { email: 'found@proxy.com' };
       },
-      CLEARBIT: async () => { callOrder.push('CLEARBIT'); return {}; },
+      CLEARBIT: async () => {
+        callOrder.push('CLEARBIT');
+        return {};
+      },
     };
 
     const result = await enrichProspect('lead-1', providers);
@@ -203,8 +231,14 @@ describe('enrichProspect', () => {
         callOrder.push('HUNTER');
         return { email: 'hunter@test.com' };
       },
-      PROXYCURL: async () => { callOrder.push('PROXYCURL'); return {}; },
-      CLEARBIT: async () => { callOrder.push('CLEARBIT'); return {}; },
+      PROXYCURL: async () => {
+        callOrder.push('PROXYCURL');
+        return {};
+      },
+      CLEARBIT: async () => {
+        callOrder.push('CLEARBIT');
+        return {};
+      },
     };
 
     const result = await enrichProspect('lead-1', providers, { timeoutMs: 50 });

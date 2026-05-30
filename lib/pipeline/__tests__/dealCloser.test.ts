@@ -1,35 +1,29 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
-import {
-  recordEvent,
-  computeEngagementScore,
-  isHotLead,
-  createCheckoutSession,
-  handlePaymentSuccess,
-  handlePaymentFailure,
-} from '../dealCloser';
-import type { EngagementEvent, EngagementScore, PipelineConfig } from '../types';
-import { createScopedPrisma } from '@/lib/tenant/context';
-import { stripe } from '@/lib/billing/stripe';
 import { OutreachEventType } from '@prisma/client';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { stripe } from '@/lib/billing/stripe';
+import { prisma } from '@/lib/prisma';
+import { runWithTenantAsync, runWithTenantBypass } from '@/lib/tenant/context';
+
+import {
+  computeEngagementScore,
+  createCheckoutSession,
+  handlePaymentFailure,
+  handlePaymentSuccess,
+  isHotLead,
+  recordEvent,
+} from '../dealCloser';
+
+import type { EngagementEvent, EngagementScore, PipelineConfig } from '../types';
 
 // Mock dependencies
 vi.mock('@/lib/tenant/context', () => ({
-  createScopedPrisma: vi.fn(),
+  runWithTenantAsync: vi.fn(async (_tenantId: string, fn: () => Promise<unknown>) => await fn()),
+  runWithTenantBypass: vi.fn(async (_reason: string, fn: () => Promise<unknown>) => await fn()),
 }));
 
-vi.mock('@/lib/billing/stripe', () => ({
-  stripe: {
-    checkout: {
-      sessions: {
-        create: vi.fn(),
-        retrieve: vi.fn(),
-      },
-    },
-  },
-}));
-
-describe('Deal Closer Unit Tests', () => {
-  const mockPrisma = {
+vi.mock('@/lib/prisma', () => ({
+  prisma: {
     prospectLead: {
       findUnique: vi.fn(),
       findMany: vi.fn(),
@@ -44,11 +38,50 @@ describe('Deal Closer Unit Tests', () => {
     winLossRecord: {
       create: vi.fn(),
     },
+  },
+}));
+
+vi.mock('@/lib/billing/stripe', () => ({
+  stripe: {
+    checkout: {
+      sessions: {
+        create: vi.fn(),
+        retrieve: vi.fn(),
+      },
+    },
+  },
+}));
+
+describe('Deal Closer Unit Tests', () => {
+  const mockedRunWithTenantAsync = vi.mocked(runWithTenantAsync);
+  const mockedRunWithTenantBypass = vi.mocked(runWithTenantBypass);
+  const mockedCreateCheckoutSession = vi.mocked(stripe.checkout.sessions.create);
+  const mockedRetrieveCheckoutSession = vi.mocked(stripe.checkout.sessions.retrieve);
+  const mockPrisma = prisma as unknown as {
+    prospectLead: {
+      findUnique: ReturnType<typeof vi.fn>;
+      findMany: ReturnType<typeof vi.fn>;
+      update: ReturnType<typeof vi.fn>;
+    };
+    outreachEmailEvent: {
+      create: ReturnType<typeof vi.fn>;
+    };
+    proposal: {
+      findUnique: ReturnType<typeof vi.fn>;
+    };
+    winLossRecord: {
+      create: ReturnType<typeof vi.fn>;
+    };
   };
 
   beforeEach(() => {
     vi.clearAllMocks();
-    (createScopedPrisma as any).mockReturnValue(mockPrisma);
+    mockedRunWithTenantAsync.mockImplementation(
+      async (_tenantId: string, fn: () => unknown) => await fn()
+    );
+    mockedRunWithTenantBypass.mockImplementation(
+      async (_reason: string, fn: () => unknown) => await fn()
+    );
   });
 
   describe('recordEvent', () => {
@@ -147,9 +180,9 @@ describe('Deal Closer Unit Tests', () => {
       const leadId = 'lead-123';
       const event = {
         leadId,
-        eventType: 'unknown_event' as any,
+        eventType: 'unknown_event',
         timestamp: new Date(),
-      };
+      } as unknown as EngagementEvent;
 
       mockPrisma.prospectLead.findUnique.mockResolvedValue({
         id: leadId,
@@ -171,9 +204,7 @@ describe('Deal Closer Unit Tests', () => {
 
       mockPrisma.prospectLead.findUnique.mockResolvedValue(null);
 
-      await expect(recordEvent(leadId, event)).rejects.toThrow(
-        'Lead not found: nonexistent-lead'
-      );
+      await expect(recordEvent(leadId, event)).rejects.toThrow('Lead not found: nonexistent-lead');
     });
   });
 
@@ -357,9 +388,9 @@ describe('Deal Closer Unit Tests', () => {
         webLinkToken: 'abc123',
       });
 
-      (stripe.checkout.sessions.create as any).mockResolvedValue({
+      mockedCreateCheckoutSession.mockResolvedValue({
         url: 'https://checkout.stripe.com/session-123',
-      });
+      } as Awaited<ReturnType<typeof stripe.checkout.sessions.create>>);
 
       mockPrisma.prospectLead.update.mockResolvedValue({});
 
@@ -458,10 +489,10 @@ describe('Deal Closer Unit Tests', () => {
         tenant: { id: 'tenant-123' },
       });
 
-      (stripe.checkout.sessions.retrieve as any).mockResolvedValue({
+      mockedRetrieveCheckoutSession.mockResolvedValue({
         metadata: { tier: 'growth' },
         amount_total: 500000, // $5000
-      });
+      } as unknown as Awaited<ReturnType<typeof stripe.checkout.sessions.retrieve>>);
 
       mockPrisma.prospectLead.update.mockResolvedValue({});
       mockPrisma.winLossRecord.create.mockResolvedValue({});
@@ -509,9 +540,9 @@ describe('Deal Closer Unit Tests', () => {
         tenantId: 'tenant-123',
       });
 
-      (stripe.checkout.sessions.retrieve as any).mockResolvedValue({
+      mockedRetrieveCheckoutSession.mockResolvedValue({
         metadata: { retryCount: '1' },
-      });
+      } as unknown as Awaited<ReturnType<typeof stripe.checkout.sessions.retrieve>>);
 
       mockPrisma.prospectLead.update.mockResolvedValue({});
 
@@ -535,9 +566,9 @@ describe('Deal Closer Unit Tests', () => {
         city: 'San Francisco',
       });
 
-      (stripe.checkout.sessions.retrieve as any).mockResolvedValue({
+      mockedRetrieveCheckoutSession.mockResolvedValue({
         metadata: { retryCount: '3' },
-      });
+      } as unknown as Awaited<ReturnType<typeof stripe.checkout.sessions.retrieve>>);
 
       mockPrisma.prospectLead.update.mockResolvedValue({});
       mockPrisma.winLossRecord.create.mockResolvedValue({});

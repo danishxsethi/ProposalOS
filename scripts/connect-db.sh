@@ -11,10 +11,11 @@ echo "🔌 Connecting to: $INSTANCE_CONNECTION_NAME"
 echo "👉 Local Port: $LOCAL_PORT"
 echo ""
 echo "To connect via psql:"
-echo "   psql \"postgresql://postgres:cMkRe900EXXSFVa6R7FUXUZi6GmAkFTH@localhost:$LOCAL_PORT/proposal_engine\""
+echo '   export DATABASE_URL="postgresql://<user>:<password>@localhost:'"$LOCAL_PORT"'/proposal_engine"'
+echo '   psql "$DATABASE_URL"'
 echo ""
 echo "To use with Prisma locally (e.g. for Studio):"
-echo "   DATABASE_URL=\"postgresql://postgres:cMkRe900EXXSFVa6R7FUXUZi6GmAkFTH@localhost:$LOCAL_PORT/proposal_engine\" npx prisma studio"
+echo '   npx prisma studio'
 
 # Check if proxy binary exists
 if [ ! -f "./cloud-sql-proxy" ]; then

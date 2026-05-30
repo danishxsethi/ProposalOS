@@ -20,6 +20,7 @@ export interface PromptPerformanceLog {
   outputTokens: number;
   experimentId?: string;
   variantId?: string;
+  tenantId?: string;
   metadata: Record<string, any>;
 }
 
@@ -53,6 +54,7 @@ export interface PromptVersion {
   branchName: string;
   changelog: string;
   isActive: boolean;
+  tenantId?: string;
   performanceDelta?: PerformanceDelta;
 }
 
@@ -78,6 +80,7 @@ export interface ABExperiment {
   id: string;
   name: string;
   nodeId: string;
+  tenantId: string;
   status: 'active' | 'completed' | 'paused';
   variants: ABVariant[];
   startDate: Date;
@@ -92,6 +95,7 @@ export interface ABVariant {
   id: string;
   experimentId: string;
   promptVersionHash: string;
+  tenantId: string;
   trafficPercentage: number;
   sampleSize: number;
   avgQualityScore?: number;
@@ -103,6 +107,7 @@ export interface ABVariant {
 export interface ExperimentConfig {
   name: string;
   nodeId: string;
+  tenantId?: string;
   variants: Array<{
     promptVersionHash: string;
     trafficPercentage: number;
@@ -203,6 +208,7 @@ export interface PromptPerformanceLogRow {
   output_tokens: number;
   experiment_id: string | null;
   variant_id: string | null;
+  tenant_id: string;
   metadata: any;
 }
 
@@ -216,31 +222,34 @@ export interface PromptVersionRow {
   branch_name: string;
   changelog: string;
   is_active: boolean;
+  tenant_id: string | null;
 }
 
 export interface ABExperimentRow {
   id: string;
   name: string;
-  node_id: string;
+  nodeId: string;
+  tenantId: string;
   status: string;
-  start_date: Date;
-  end_date: Date | null;
-  winner_variant_id: string | null;
-  statistical_significance: number | null;
-  created_at: Date;
-  updated_at: Date;
+  startDate: Date;
+  endDate: Date | null;
+  winnerVariantId: string | null;
+  statisticalSignificance: number | null;
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 export interface ABVariantRow {
   id: string;
-  experiment_id: string;
-  prompt_version_hash: string;
-  traffic_percentage: number;
-  sample_size: number;
-  avg_quality_score: number | null;
-  avg_downstream_impact: number | null;
-  created_at: Date;
-  updated_at: Date;
+  experimentId: string;
+  promptVersionHash: string;
+  tenantId: string;
+  trafficPercentage: number;
+  sampleSize: number;
+  avgQualityScore: number | null;
+  avgDownstreamImpact: number | null;
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 export interface PredictionRow {

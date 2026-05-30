@@ -1,29 +1,38 @@
 /**
  * Outreach Agent — Generates personalized, proof-backed outreach emails
- * 
+ *
  * Creates emails that reference ≥2 specific audit findings, include scorecard URLs,
  * translate technical findings into vertical-specific pain language, and schedule
  * behavior-based follow-up sequences.
- * 
+ *
  * Integrates with Email QA Scorer (only send if score >= 90) and regenerates
  * up to 3 times on QA failure.
- * 
+ *
  * Requirements: 4.1, 4.2, 4.3, 4.4, 4.5, 4.8
  */
 
+import { v4 as uuidv4 } from 'uuid';
+
+import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
-import { score as scoreEmail, DEFAULT_EMAIL_QA_CONFIG } from './emailQaScorer';
+
+import { DEFAULT_EMAIL_QA_CONFIG, score as scoreEmail } from './emailQaScorer';
+import {
+  cancelPendingFollowUps,
+  pauseFollowUpSequence,
+  updatePendingFollowUps,
+} from './followUpSequence';
 import { sendWithRotation as sendEmailWithRotation } from './inboxRotation';
+
 import type {
-  OutreachContext,
-  GeneratedEmail,
   EmailQAConfig,
   EmailQAResult,
+  GeneratedEmail,
+  OutreachContext,
   OutreachEventType,
   PainScoreBreakdown,
   SendResult,
 } from './types';
-import { v4 as uuidv4 } from 'uuid';
 
 // ============================================================================
 // Vertical Pain Language Translation
@@ -35,44 +44,44 @@ import { v4 as uuidv4 } from 'uuid';
  */
 const VERTICAL_PAIN_MAP: Record<string, Record<string, string>> = {
   dentist: {
-    'page_speed': 'patients bouncing before they book',
-    'mobile_responsiveness': 'patients can\'t schedule from their phone',
-    'ssl_missing': 'patients see a "Not Secure" warning before your site loads',
-    'gbp_neglected': 'your Google listing is losing patients to nearby practices',
-    'review_response': 'unanswered reviews are turning away new patients',
-    'social_media': 'patients can\'t find you on social media',
-    'competitor_gap': 'nearby practices are showing up above you in search',
-    'accessibility': 'some patients can\'t navigate your website at all',
+    page_speed: 'patients bouncing before they book',
+    mobile_responsiveness: "patients can't schedule from their phone",
+    ssl_missing: 'patients see a "Not Secure" warning before your site loads',
+    gbp_neglected: 'your Google listing is losing patients to nearby practices',
+    review_response: 'unanswered reviews are turning away new patients',
+    social_media: "patients can't find you on social media",
+    competitor_gap: 'nearby practices are showing up above you in search',
+    accessibility: "some patients can't navigate your website at all",
   },
   hvac: {
-    'page_speed': 'homeowners leave before requesting a quote',
-    'mobile_responsiveness': 'homeowners can\'t request a quote from their phone',
-    'ssl_missing': 'homeowners see a security warning on your site',
-    'gbp_neglected': 'your Google listing isn\'t bringing in service calls',
-    'review_response': 'unanswered reviews are costing you repeat customers',
-    'social_media': 'homeowners can\'t find your latest work online',
-    'competitor_gap': 'competing HVAC companies rank higher in your area',
-    'accessibility': 'some customers can\'t use your website to book service',
+    page_speed: 'homeowners leave before requesting a quote',
+    mobile_responsiveness: "homeowners can't request a quote from their phone",
+    ssl_missing: 'homeowners see a security warning on your site',
+    gbp_neglected: "your Google listing isn't bringing in service calls",
+    review_response: 'unanswered reviews are costing you repeat customers',
+    social_media: "homeowners can't find your latest work online",
+    competitor_gap: 'competing HVAC companies rank higher in your area',
+    accessibility: "some customers can't use your website to book service",
   },
   restaurant: {
-    'page_speed': 'diners leave before seeing your menu',
-    'mobile_responsiveness': 'customers can\'t view your menu on their phone',
-    'ssl_missing': 'guests see a security warning when visiting your site',
-    'gbp_neglected': 'your Google listing isn\'t filling tables',
-    'review_response': 'unanswered reviews are keeping diners away',
-    'social_media': 'foodies can\'t find your latest dishes online',
-    'competitor_gap': 'nearby restaurants are getting more visibility than you',
-    'accessibility': 'some guests can\'t navigate your website to make a reservation',
+    page_speed: 'diners leave before seeing your menu',
+    mobile_responsiveness: "customers can't view your menu on their phone",
+    ssl_missing: 'guests see a security warning when visiting your site',
+    gbp_neglected: "your Google listing isn't filling tables",
+    review_response: 'unanswered reviews are keeping diners away',
+    social_media: "foodies can't find your latest dishes online",
+    competitor_gap: 'nearby restaurants are getting more visibility than you',
+    accessibility: "some guests can't navigate your website to make a reservation",
   },
   default: {
-    'page_speed': 'visitors leave before your site loads',
-    'mobile_responsiveness': 'customers can\'t use your site on their phone',
-    'ssl_missing': 'visitors see a "Not Secure" warning on your site',
-    'gbp_neglected': 'your Google listing isn\'t working for you',
-    'review_response': 'unanswered reviews are hurting your reputation',
-    'social_media': 'customers can\'t find you on social media',
-    'competitor_gap': 'your competitors are showing up above you online',
-    'accessibility': 'some customers can\'t use your website',
+    page_speed: 'visitors leave before your site loads',
+    mobile_responsiveness: "customers can't use your site on their phone",
+    ssl_missing: 'visitors see a "Not Secure" warning on your site',
+    gbp_neglected: "your Google listing isn't working for you",
+    review_response: 'unanswered reviews are hurting your reputation',
+    social_media: "customers can't find you on social media",
+    competitor_gap: 'your competitors are showing up above you online',
+    accessibility: "some customers can't use your website",
   },
 };
 
@@ -84,15 +93,22 @@ const VERTICAL_PAIN_MAP: Record<string, Record<string, string>> = {
  * Maps finding module names to pain categories for vertical translation.
  */
 function findingToCategory(finding: any): string {
-  const module = (finding.module || finding.type || '').toLowerCase();
-  if (module.includes('speed') || module.includes('performance') || module.includes('pagespeed')) return 'page_speed';
-  if (module.includes('mobile') || module.includes('responsive')) return 'mobile_responsiveness';
-  if (module.includes('ssl') || module.includes('security') || module.includes('https')) return 'ssl_missing';
-  if (module.includes('gbp') || module.includes('google_business')) return 'gbp_neglected';
-  if (module.includes('review')) return 'review_response';
-  if (module.includes('social')) return 'social_media';
-  if (module.includes('competitor')) return 'competitor_gap';
-  if (module.includes('accessibility') || module.includes('a11y')) return 'accessibility';
+  const moduleName = (finding.module || finding.type || '').toLowerCase();
+  if (
+    moduleName.includes('speed') ||
+    moduleName.includes('performance') ||
+    moduleName.includes('pagespeed')
+  )
+    return 'page_speed';
+  if (moduleName.includes('mobile') || moduleName.includes('responsive'))
+    return 'mobile_responsiveness';
+  if (moduleName.includes('ssl') || moduleName.includes('security') || moduleName.includes('https'))
+    return 'ssl_missing';
+  if (moduleName.includes('gbp') || moduleName.includes('google_business')) return 'gbp_neglected';
+  if (moduleName.includes('review')) return 'review_response';
+  if (moduleName.includes('social')) return 'social_media';
+  if (moduleName.includes('competitor')) return 'competitor_gap';
+  if (moduleName.includes('accessibility') || moduleName.includes('a11y')) return 'accessibility';
   return 'page_speed'; // fallback
 }
 
@@ -106,7 +122,12 @@ function findingToCategory(finding: any): string {
 export function translateFinding(finding: any, vertical: string): string {
   const category = findingToCategory(finding);
   const verticalMap = VERTICAL_PAIN_MAP[vertical.toLowerCase()] || VERTICAL_PAIN_MAP['default'];
-  return verticalMap[category] || VERTICAL_PAIN_MAP['default'][category] || 'an issue that\'s costing you customers';
+  const fallbackMap = VERTICAL_PAIN_MAP['default'];
+  return (
+    (verticalMap && verticalMap[category]) ||
+    (fallbackMap && fallbackMap[category]) ||
+    "an issue that's costing you customers"
+  );
 }
 
 /**
@@ -137,11 +158,11 @@ const DEFAULT_FOLLOWUP_DAYS = [3, 7, 14];
 
 /** Maps behavior events to follow-up email types */
 const BEHAVIOR_BRANCH_MAP: Record<string, { type: string; description: string }> = {
-  'open': { type: 'FOLLOWUP_COMPETITOR', description: 'competitor comparison angle' },
-  'click': { type: 'FOLLOWUP_PROPOSAL', description: 'full proposal delivery' },
-  'reply': { type: 'FOLLOWUP_PROPOSAL', description: 'pause sequence - reply received' },
-  'bounce': { type: 'FOLLOWUP_RETRY', description: 'different subject/time' },
-  'unsubscribe': { type: 'FOLLOWUP_RETRY', description: 'drop from sequence' },
+  open: { type: 'FOLLOWUP_COMPETITOR', description: 'competitor comparison angle' },
+  click: { type: 'FOLLOWUP_PROPOSAL', description: 'full proposal delivery' },
+  reply: { type: 'FOLLOWUP_PROPOSAL', description: 'pause sequence - reply received' },
+  bounce: { type: 'FOLLOWUP_RETRY', description: 'different subject/time' },
+  unsubscribe: { type: 'FOLLOWUP_RETRY', description: 'drop from sequence' },
 };
 
 // ============================================================================
@@ -150,11 +171,11 @@ const BEHAVIOR_BRANCH_MAP: Record<string, { type: string; description: string }>
 
 /**
  * Generates a personalized, proof-backed outreach email.
- * 
+ *
  * - References ≥2 specific findings from the audit
  * - Includes a scorecard URL (/preview/{token})
  * - Translates technical findings into vertical-specific pain language
- * 
+ *
  * Requirements: 4.1, 4.2, 4.3
  */
 export async function generateEmail(context: OutreachContext): Promise<GeneratedEmail> {
@@ -180,7 +201,26 @@ export async function generateEmail(context: OutreachContext): Promise<Generated
   const brandName = tenantBranding?.brandName || 'Our Team';
 
   // Build the email subject
-  const subject = buildSubject(businessName, painPoints[0], vertical);
+  const subject = buildSubject(
+    businessName,
+    painPoints[0] || "an issue that's costing you customers",
+    vertical
+  );
+
+  const emailId = uuidv4();
+
+  // Add tracking to scorecard URL if we have an app URL configured
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+
+  // Create open tracking pixel URL
+  // We assume step 1 and variant A for initial emails for now
+  const trackingPixelUrl = `${appUrl}/api/email/tracking?proposalId=${proposal.id}&step=1&variant=A&eventType=open`;
+
+  // Create click tracking URL for the scorecard
+  const trackingScorecardUrl = `${appUrl}/api/email/tracking?proposalId=${proposal.id}&step=1&variant=A&eventType=click&url=${encodeURIComponent(scorecardUrl)}`;
+
+  // Create unsubscribe URL
+  const unsubscribeUrl = `${appUrl}/api/email/unsubscribe?email=${encodeURIComponent(prospect.decisionMakerEmail || '')}`;
 
   // Build the email body
   const body = buildEmailBody({
@@ -188,12 +228,13 @@ export async function generateEmail(context: OutreachContext): Promise<Generated
     brandName,
     painPoints,
     findingReferences,
-    scorecardUrl,
+    scorecardUrl: trackingScorecardUrl,
     vertical,
     painBreakdown,
+    trackingPixelUrl,
+    unsubscribeUrl,
+    tenantAddress: tenantBranding?.settings?.physicalAddress || '123 Business Rd, City, State ZIP', // Fallback address if not configured
   });
-
-  const emailId = uuidv4();
 
   return {
     id: emailId,
@@ -202,7 +243,7 @@ export async function generateEmail(context: OutreachContext): Promise<Generated
     prospectId: prospect.id,
     proposalId: proposal.id,
     findingReferences,
-    scorecardUrl,
+    scorecardUrl: trackingScorecardUrl,
     generatedAt: new Date(),
   };
 }
@@ -217,7 +258,7 @@ function buildSubject(businessName: string, primaryPain: string, vertical: strin
     `Found something about ${businessName}`,
   ];
   // Use first template for consistency in testing; in production this could be randomized
-  return templates[0];
+  return templates[0] || '';
 }
 
 interface EmailBodyParams {
@@ -228,6 +269,9 @@ interface EmailBodyParams {
   scorecardUrl: string;
   vertical: string;
   painBreakdown: PainScoreBreakdown;
+  trackingPixelUrl?: string;
+  unsubscribeUrl?: string;
+  tenantAddress?: string;
 }
 
 /**
@@ -235,7 +279,16 @@ interface EmailBodyParams {
  * Targets < 80 words and 5th grade reading level per QA requirements.
  */
 function buildEmailBody(params: EmailBodyParams): string {
-  const { businessName, brandName, painPoints, findingReferences, scorecardUrl } = params;
+  const {
+    businessName,
+    brandName,
+    painPoints,
+    findingReferences,
+    scorecardUrl,
+    trackingPixelUrl,
+    unsubscribeUrl,
+    tenantAddress,
+  } = params;
 
   // Build finding bullets — each references a specific finding with pain language
   const findingLines = painPoints
@@ -243,19 +296,33 @@ function buildEmailBody(params: EmailBodyParams): string {
     .map((pain, i) => `• ${findingReferences[i]}: ${pain}`)
     .join('\n');
 
-  const body = `Hi,
+  // Build the email body as HTML to support tracking pixel and hidden footer
+  // Since we're moving to HTML, we replace newlines with <br> and format properly
+  const bodyHtml = `
+<div style="font-family: sans-serif; font-size: 14px; line-height: 1.5; color: #333;">
+  <p>Hi,</p>
+  <p>We looked at ${businessName} online and found a few things:</p>
+  <ul style="padding-left: 20px; margin: 10px 0;">
+    ${painPoints
+      .slice(0, 3)
+      .map((pain, i) => `<li style="margin-bottom: 5px;">${findingReferences[i]}: ${pain}</li>`)
+      .join('')}
+  </ul>
+  <p>We put together a free scorecard showing how you compare to your top local competitor: <a href="${scorecardUrl}">View your scorecard here</a></p>
+  <p>Happy to walk you through it.</p>
+  <p>${brandName}</p>
+  
+  <br><br>
+  
+  <div style="font-size: 10px; color: #999; margin-top: 30px; border-top: 1px solid #eee; padding-top: 10px;">
+    <p>${tenantAddress || ''}</p>
+    <p>Don't want to receive these emails? <a href="${unsubscribeUrl || '#'}" style="color: #999; text-decoration: underline;">Unsubscribe here</a></p>
+  </div>
+  ${trackingPixelUrl ? `<img src="${trackingPixelUrl}" width="1" height="1" style="display:none;" alt="" />` : ''}
+</div>
+`;
 
-We looked at ${businessName} online and found a few things:
-
-${findingLines}
-
-We put together a free scorecard showing how you compare to your top local competitor: ${scorecardUrl}
-
-Happy to walk you through it.
-
-${brandName}`;
-
-  return body;
+  return bodyHtml;
 }
 
 // ============================================================================
@@ -264,11 +331,11 @@ ${brandName}`;
 
 /**
  * Generates an email and qualifies it through the Email QA Scorer.
- * 
+ *
  * - Calls generateEmail(), then scores with Email QA Scorer
  * - If score < 90, regenerates up to 3 times
  * - After 3 failures, throws with "generation_failed"
- * 
+ *
  * Requirements: 4.4, 4.5
  */
 export async function generateAndQualifyEmail(
@@ -286,9 +353,7 @@ export async function generateAndQualifyEmail(
     }
 
     // Log the QA failure for observability
-    console.warn(
-      `Email QA failed (attempt ${attempt}/${maxAttempts}): score=${qaResult.compositeScore}, suggestions=${qaResult.suggestions.join('; ')}`
-    );
+    logger.warn({ attempt, maxAttempts, score: qaResult.compositeScore }, 'Email QA failed');
   }
 
   throw new Error('generation_failed');
@@ -300,10 +365,10 @@ export async function generateAndQualifyEmail(
 
 /**
  * Schedules behavior-based follow-up emails after an initial send.
- * 
+ *
  * Creates follow-up email records at [3, 7, 14] days after initial send.
  * Each follow-up uses branching logic based on prospect behavior.
- * 
+ *
  * Requirements: 4.8
  */
 export async function scheduleFollowUps(
@@ -332,8 +397,10 @@ export async function scheduleFollowUps(
   ];
 
   for (let i = 0; i < followUpDays.length; i++) {
+    const days = followUpDays[i];
+    if (days === undefined) continue;
     const scheduledDate = new Date(baseDate);
-    scheduledDate.setDate(scheduledDate.getDate() + followUpDays[i]);
+    scheduledDate.setDate(scheduledDate.getDate() + days);
 
     await prisma.outreachEmail.create({
       data: {
@@ -356,14 +423,14 @@ export async function scheduleFollowUps(
 
 /**
  * Processes a behavior event and adjusts the follow-up sequence accordingly.
- * 
+ *
  * Branching logic:
  * - opened → competitor comparison angle
  * - clicked → full proposal delivery within 2 hours
  * - viewed 2+ min → hot lead escalation
  * - no reply after 3 → subject variation
  * - never opened → different time/subject, drop after 3
- * 
+ *
  * Requirements: 4.8
  */
 export async function processBehaviorBranch(
@@ -380,15 +447,15 @@ export async function processBehaviorBranch(
       // Clicked audit link → full proposal delivery within 2 hours
       await updatePendingFollowUps(leadId, 'FOLLOWUP_PROPOSAL');
       // Schedule an immediate follow-up for proposal delivery
-      const emails = await prisma.outreachEmail.findMany({
+      const [email] = await prisma.outreachEmail.findMany({
         where: { leadId, type: 'INITIAL', status: 'SENT' },
         orderBy: { createdAt: 'desc' },
         take: 1,
       });
-      if (emails.length > 0) {
+      if (email) {
         await prisma.outreachEmail.create({
           data: {
-            tenantId: emails[0].tenantId,
+            tenantId: email.tenantId,
             leadId,
             type: 'FOLLOWUP_PROPOSAL',
             status: 'PENDING',
@@ -438,7 +505,7 @@ export async function processBehaviorBranch(
 /**
  * Sends an email using inbox rotation.
  * Delegates to the inboxRotation module for domain selection and sending.
- * 
+ *
  * Requirements: 4.6
  */
 export async function sendWithRotation(
@@ -455,36 +522,6 @@ export async function sendWithRotation(
 /**
  * Updates all pending follow-ups for a lead to a specific type.
  */
-async function updatePendingFollowUps(
-  leadId: string,
-  type: 'FOLLOWUP_COMPETITOR' | 'FOLLOWUP_PROPOSAL' | 'FOLLOWUP_RETRY'
-): Promise<void> {
-  await prisma.outreachEmail.updateMany({
-    where: { leadId, status: 'PENDING' },
-    data: { type },
-  });
-}
-
-/**
- * Pauses all pending follow-ups for a lead (sets status to SUPPRESSED).
- */
-export async function pauseFollowUpSequence(leadId: string): Promise<void> {
-  await prisma.outreachEmail.updateMany({
-    where: { leadId, status: 'PENDING' },
-    data: { status: 'SUPPRESSED' },
-  });
-}
-
-/**
- * Cancels all pending follow-ups for a lead.
- */
-async function cancelPendingFollowUps(leadId: string): Promise<void> {
-  await prisma.outreachEmail.updateMany({
-    where: { leadId, status: 'PENDING' },
-    data: { status: 'SUPPRESSED' },
-  });
-}
-
 /**
  * Gets the tenant ID for a lead.
  */

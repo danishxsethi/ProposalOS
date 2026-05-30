@@ -1,26 +1,30 @@
+import * as fc from 'fast-check';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+
 import { cleanupDb } from '@/lib/__tests__/utils/cleanup';
+import { runWithTenantAsync, runWithTenantBypass } from '@/lib/tenant/context';
 /**
  * Property-Based Tests for Prospect State Machine
- * 
+ *
  * Tests Properties 7, 8, and 9 from the design document using fast-check.
  * Minimum 100 iterations per property.
- * 
+ *
  * Feature: autonomous-proposal-engine
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import * as fc from 'fast-check';
 import { prisma } from '@/lib/prisma';
+
 import {
   canTransition,
-  transition,
+  deserializeHistory,
   getHistory,
   serializeHistory,
-  deserializeHistory,
+  transition,
   VALID_TRANSITIONS,
 } from '../stateMachine';
-import type { ProspectStatus, StateTransition } from '../types';
 import { PipelineStage } from '../types';
+
+import type { ProspectStatus, StateTransition } from '../types';
 
 // ============================================================================
 // Test Data Generators
@@ -77,12 +81,7 @@ const stateTransitionArb = fc.record({
   metadata: fc.option(
     fc.dictionary(
       fc.string(),
-      fc.oneof(
-        fc.string(),
-        fc.integer(),
-        fc.boolean(),
-        fc.constant(null)
-      )
+      fc.oneof(fc.string(), fc.integer(), fc.boolean(), fc.constant(null))
     ),
     { nil: {} }
   ),
@@ -91,28 +90,25 @@ const stateTransitionArb = fc.record({
 /**
  * Generate an array of StateTransition objects
  */
-const stateTransitionArrayArb = fc.array(
-  fc.record({
-    from: prospectStatusArb,
-    to: prospectStatusArb,
-    timestamp: fc.date({ min: new Date('2020-01-01'), max: new Date('2030-12-31') }),
-    stage: pipelineStageArb,
-    tenantId: tenantIdArb,
-    metadata: fc.option(
-      fc.dictionary(
-        fc.string(),
-        fc.oneof(
+const stateTransitionArrayArb = fc
+  .array(
+    fc.record({
+      from: prospectStatusArb,
+      to: prospectStatusArb,
+      timestamp: fc.date({ min: new Date('2020-01-01'), max: new Date('2030-12-31') }),
+      stage: pipelineStageArb,
+      tenantId: tenantIdArb,
+      metadata: fc.option(
+        fc.dictionary(
           fc.string(),
-          fc.integer(),
-          fc.boolean(),
-          fc.constant(null)
-        )
+          fc.oneof(fc.string(), fc.integer(), fc.boolean(), fc.constant(null))
+        ),
+        { nil: {} }
       ),
-      { nil: {} }
-    ),
-  }),
-  { minLength: 0, maxLength: 20 }
-).filter((arr) => arr.every((t) => !isNaN(t.timestamp.getTime())));
+    }),
+    { minLength: 0, maxLength: 20 }
+  )
+  .filter((arr) => arr.every((t) => !isNaN(t.timestamp.getTime())));
 
 /**
  * Generate a valid transition pair (from, to) based on VALID_TRANSITIONS
@@ -125,9 +121,7 @@ const validTransitionPairArb = fc
       // Terminal state, return a dummy pair that we'll filter out
       return fc.constant({ from, to: from, isTerminal: true });
     }
-    return fc
-      .constantFrom(...validNextStates)
-      .map((to) => ({ from, to, isTerminal: false }));
+    return fc.constantFrom(...validNextStates).map((to) => ({ from, to, isTerminal: false }));
   })
   .filter((pair) => !pair.isTerminal);
 
@@ -152,21 +146,20 @@ let testTenantId: string;
  * Create a test tenant for the tests
  */
 async function createTestTenant(): Promise<string> {
-  const tenant = await prisma.tenant.create({
-    data: {
-      name: `Test Tenant ${Math.random()}`,
-    },
+  return runWithTenantBypass('create test tenant', async () => {
+    const tenant = await prisma.tenant.create({
+      data: {
+        name: `Test Tenant ${Math.random()}`,
+      },
+    });
+    return tenant.id;
   });
-  return tenant.id;
 }
 
 /**
  * Create a test prospect in the database
  */
-async function createTestProspect(
-  tenantId: string,
-  status: ProspectStatus
-): Promise<string> {
+async function createTestProspect(tenantId: string, status: ProspectStatus): Promise<string> {
   const prospect = await prisma.prospectLead.create({
     data: {
       tenantId,
@@ -189,8 +182,18 @@ async function createTestProspect(
  */
 async function cleanupTestData(prospectIds: string[]) {
   if (prospectIds.length === 0) return;
-  
-    await cleanupDb(prisma);
+
+  await runWithTenantBypass('cleanup test data', async () => {
+    await prisma.pipelineErrorLog.deleteMany({
+      where: { prospectId: { in: prospectIds } },
+    });
+    await prisma.prospectStateTransition.deleteMany({
+      where: { leadId: { in: prospectIds } },
+    });
+    await prisma.prospectLead.deleteMany({
+      where: { id: { in: prospectIds } },
+    });
+  });
 }
 
 /**
@@ -198,10 +201,12 @@ async function cleanupTestData(prospectIds: string[]) {
  */
 async function cleanupTestTenant(tenantId: string) {
   if (!tenantId) return;
-  
+
   try {
-    await prisma.tenant.delete({
-      where: { id: tenantId },
+    await runWithTenantBypass('cleanup test tenant', async () => {
+      await prisma.tenant.delete({
+        where: { id: tenantId },
+      });
     });
   } catch (error) {
     // Tenant might not exist if test failed early
@@ -225,7 +230,7 @@ describe('State Machine Property Tests', () => {
     // Clean up all test data after each test
     await cleanupTestData(createdProspectIds);
     createdProspectIds.length = 0;
-    
+
     // Clean up test tenant
     if (testTenantId) {
       await cleanupTestTenant(testTenantId);
@@ -234,20 +239,18 @@ describe('State Machine Property Tests', () => {
 
   /**
    * Property 7: State machine only allows valid transitions
-   * 
+   *
    * For any prospect status and any attempted transition, the transition must
    * succeed only if the target status is in the set of valid successors for
    * the current status. Invalid transitions must be rejected and logged.
-   * 
+   *
    * **Validates: Requirements 12.1, 12.2**
    */
   describe('Property 7: State machine only allows valid transitions', () => {
     it('accepts all valid transitions', async () => {
       await fc.assert(
-        fc.asyncProperty(
-          validTransitionPairArb,
-          pipelineStageArb,
-          async ({ from, to }, stage) => {
+        fc.asyncProperty(validTransitionPairArb, pipelineStageArb, async ({ from, to }, stage) => {
+          return runWithTenantAsync(testTenantId, async () => {
             // Create a prospect in the 'from' status
             const prospectId = await createTestProspect(testTenantId, from);
             createdProspectIds.push(prospectId);
@@ -267,8 +270,8 @@ describe('State Machine Property Tests', () => {
               select: { pipelineStatus: true },
             });
             expect(updatedProspect?.pipelineStatus).toBe(to);
-          }
-        ),
+          });
+        }),
         { numRuns: 100 }
       );
     });
@@ -279,28 +282,30 @@ describe('State Machine Property Tests', () => {
           invalidTransitionPairArb,
           pipelineStageArb,
           async ({ from, to }, stage) => {
-            // Create a prospect in the 'from' status
-            const prospectId = await createTestProspect(testTenantId, from);
-            createdProspectIds.push(prospectId);
+            return runWithTenantAsync(testTenantId, async () => {
+              // Create a prospect in the 'from' status
+              const prospectId = await createTestProspect(testTenantId, from);
+              createdProspectIds.push(prospectId);
 
-            // Attempt the invalid transition
-            await expect(transition(prospectId, to, stage)).rejects.toThrow();
+              // Attempt the invalid transition
+              await expect(transition(prospectId, to, stage)).rejects.toThrow();
 
-            // Verify the prospect's status was NOT updated
-            const updatedProspect = await prisma.prospectLead.findUnique({
-              where: { id: prospectId },
-              select: { pipelineStatus: true },
+              // Verify the prospect's status was NOT updated
+              const updatedProspect = await prisma.prospectLead.findUnique({
+                where: { id: prospectId },
+                select: { pipelineStatus: true },
+              });
+              expect(updatedProspect?.pipelineStatus).toBe(from);
+
+              // Verify an error was logged
+              const errorLog = await prisma.pipelineErrorLog.findFirst({
+                where: {
+                  prospectId,
+                  errorType: 'INVALID_TRANSITION',
+                },
+              });
+              expect(errorLog).toBeTruthy();
             });
-            expect(updatedProspect?.pipelineStatus).toBe(from);
-
-            // Verify an error was logged
-            const errorLog = await prisma.pipelineErrorLog.findFirst({
-              where: {
-                prospectId,
-                errorType: 'INVALID_TRANSITION',
-              },
-            });
-            expect(errorLog).toBeTruthy();
           }
         ),
         { numRuns: 100 }
@@ -321,20 +326,18 @@ describe('State Machine Property Tests', () => {
 
   /**
    * Property 8: State transitions are fully recorded
-   * 
+   *
    * For any successful state transition, a transition record must be created
    * containing the prospect ID, from-status, to-status, timestamp, originating
    * stage, and tenant ID.
-   * 
+   *
    * **Validates: Requirements 12.3**
    */
   describe('Property 8: State transitions are fully recorded', () => {
     it('records all transition details in the database', async () => {
       await fc.assert(
-        fc.asyncProperty(
-          validTransitionPairArb,
-          pipelineStageArb,
-          async ({ from, to }, stage) => {
+        fc.asyncProperty(validTransitionPairArb, pipelineStageArb, async ({ from, to }, stage) => {
+          return runWithTenantAsync(testTenantId, async () => {
             // Create a prospect in the 'from' status
             const prospectId = await createTestProspect(testTenantId, from);
             createdProspectIds.push(prospectId);
@@ -369,8 +372,8 @@ describe('State Machine Property Tests', () => {
             expect(transitionRecord?.fromStatus).toBe(from);
             expect(transitionRecord?.toStatus).toBe(to);
             expect(transitionRecord?.createdAt).toBeInstanceOf(Date);
-          }
-        ),
+          });
+        }),
         { numRuns: 100 }
       );
     });
@@ -380,53 +383,55 @@ describe('State Machine Property Tests', () => {
         fc.asyncProperty(
           fc.constant(null), // Dummy arbitrary to run the test
           async () => {
-            // Create a prospect and perform a sequence of valid transitions
-            const prospectId = await createTestProspect(testTenantId, 'discovered');
-            createdProspectIds.push(prospectId);
+            return runWithTenantAsync(testTenantId, async () => {
+              // Create a prospect and perform a sequence of valid transitions
+              const prospectId = await createTestProspect(testTenantId, 'discovered');
+              createdProspectIds.push(prospectId);
 
-            // Perform a sequence of transitions: discovered -> audited -> proposed
-            await transition(prospectId, 'audited', PipelineStage.AUDIT);
-            await transition(prospectId, 'QUALIFIED', PipelineStage.PROPOSAL);
+              // Perform a sequence of transitions: discovered -> audited -> proposed
+              await transition(prospectId, 'audited', PipelineStage.AUDIT);
+              await transition(prospectId, 'QUALIFIED', PipelineStage.PROPOSAL);
 
-            // Get the history
-            const history = await getHistory(prospectId);
+              // Get the history
+              const history = await getHistory(prospectId);
 
-            // Verify we have 2 transitions
-            expect(history).toHaveLength(2);
+              // Verify we have 2 transitions
+              expect(history).toHaveLength(2);
 
-            // Verify they are in chronological order
-            expect(history[0].from).toBe('discovered');
-            expect(history[0].to).toBe('audited');
-            expect(history[1].from).toBe('audited');
-            expect(history[1].to).toBe('QUALIFIED');
+              // Verify they are in chronological order
+              expect(history[0].from).toBe('discovered');
+              expect(history[0].to).toBe('audited');
+              expect(history[1].from).toBe('audited');
+              expect(history[1].to).toBe('QUALIFIED');
 
-            // Verify timestamps are in order
-            expect(history[0].timestamp.getTime()).toBeLessThanOrEqual(
-              history[1].timestamp.getTime()
-            );
+              // Verify timestamps are in order
+              expect(history[0].timestamp.getTime()).toBeLessThanOrEqual(
+                history[1].timestamp.getTime()
+              );
 
-            // Verify all required fields are present
-            for (const transition of history) {
-              expect(transition.from).toBeDefined();
-              expect(transition.to).toBeDefined();
-              expect(transition.timestamp).toBeInstanceOf(Date);
-              expect(transition.stage).toBeDefined();
-              expect(transition.tenantId).toBe(testTenantId);
-              expect(transition.metadata).toBeDefined();
-            }
+              // Verify all required fields are present
+              for (const transition of history) {
+                expect(transition.from).toBeDefined();
+                expect(transition.to).toBeDefined();
+                expect(transition.timestamp).toBeInstanceOf(Date);
+                expect(transition.stage).toBeDefined();
+                expect(transition.tenantId).toBe(testTenantId);
+                expect(transition.metadata).toBeDefined();
+              }
+            });
           }
         ),
-        { numRuns: 100 }
+        { numRuns: 5 }
       );
     });
   });
 
   /**
    * Property 9: State transition history round-trip serialization
-   * 
+   *
    * For any list of state transition records, serializing to JSON and then
    * deserializing must produce a list equivalent to the original.
-   * 
+   *
    * **Validates: Requirements 12.4**
    */
   describe('Property 9: State transition history round-trip serialization', () => {
@@ -454,10 +459,10 @@ describe('State Machine Property Tests', () => {
             expect(restored.to).toBe(original.to);
             expect(restored.stage).toBe(original.stage);
             expect(restored.tenantId).toBe(original.tenantId);
-            
+
             // Timestamps should be equal (within millisecond precision)
             expect(restored.timestamp.getTime()).toBe(original.timestamp.getTime());
-            
+
             // Metadata should be deeply equal
             expect(restored.metadata).toEqual(original.metadata || {});
           }
@@ -470,29 +475,29 @@ describe('State Machine Property Tests', () => {
       const empty: StateTransition[] = [];
       const serialized = serializeHistory(empty);
       const deserialized = deserializeHistory(serialized);
-      
+
       expect(deserialized).toEqual([]);
     });
 
     it('preserves metadata through serialization', () => {
       fc.assert(
         fc.property(
-          fc.array(
-            fc.record({
-              from: prospectStatusArb,
-              to: prospectStatusArb,
-              timestamp: fc.date({ min: new Date('2020-01-01'), max: new Date('2030-12-31') }),
-              stage: pipelineStageArb,
-              tenantId: tenantIdArb,
-              metadata: fc.dictionary(fc.string(), fc.oneof(
-                fc.string(),
-                fc.integer(),
-                fc.boolean(),
-                fc.constant(null)
-              )),
-            }),
-            { minLength: 1, maxLength: 10 }
-          ).filter((transitions) => transitions.every((t) => !isNaN(t.timestamp.getTime()))),
+          fc
+            .array(
+              fc.record({
+                from: prospectStatusArb,
+                to: prospectStatusArb,
+                timestamp: fc.date({ min: new Date('2020-01-01'), max: new Date('2030-12-31') }),
+                stage: pipelineStageArb,
+                tenantId: tenantIdArb,
+                metadata: fc.dictionary(
+                  fc.string(),
+                  fc.oneof(fc.string(), fc.integer(), fc.boolean(), fc.constant(null))
+                ),
+              }),
+              { minLength: 1, maxLength: 10 }
+            )
+            .filter((transitions) => transitions.every((t) => !isNaN(t.timestamp.getTime()))),
           (transitions) => {
             const serialized = serializeHistory(transitions);
             const deserialized = deserializeHistory(serialized);

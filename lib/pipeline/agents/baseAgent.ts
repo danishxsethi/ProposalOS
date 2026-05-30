@@ -1,9 +1,10 @@
 /**
  * Base interface for AI service agents
- * 
+ *
  * Each agent type implements this interface to provide service delivery
  * for specific finding categories.
  */
+import { logger } from '@/lib/logger';
 
 export interface AgentResult {
   success: boolean;
@@ -51,7 +52,7 @@ export abstract class BaseAgent implements ServiceAgent {
    * Log agent activity
    */
   protected log(message: string, data?: any): void {
-    console.log(`[${this.getType()}] ${message}`, data || '');
+    logger.info({ agentType: this.getType(), data }, message);
   }
 
   /**

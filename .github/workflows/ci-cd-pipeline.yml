@@ -1,0 +1,605 @@
+# CI/CD Pipeline for ProposalOS
+# Full pipeline: Lint → Type-check → Unit Test → Integration Test → Build → Deploy Staging → Smoke Test → Deploy Prod
+
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Concurrency to prevent duplicate runs
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+env:
+  NODE_VERSION: '20.x'
+  GCP_REGION: us-central1
+  GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+  STAGING_SERVICE: proposal-engine-staging
+  PROD_SERVICE: proposal-engine
+
+jobs:
+  # ===========================================
+  # STAGE 1: LINT
+  # ===========================================
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run ESLint
+        run: npm run lint
+
+  # ===========================================
+  # STAGE 2: TYPE CHECK
+  # ===========================================
+  typecheck:
+    name: Type Check
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma Client
+        run: npx prisma generate
+
+      - name: Run TypeScript Type Check
+        run: npx tsc --noEmit
+
+  # ===========================================
+  # STAGE 3: UNIT TEST (with coverage ≥80%)
+  # ===========================================
+  unit-test:
+    name: Unit Test
+    runs-on: ubuntu-latest
+    needs: typecheck
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma Client
+        run: npx prisma generate
+
+      - name: Run Unit Tests with Coverage
+        run: npm run test:coverage -- --coverage.thresholds.lines=80 --coverage.thresholds.functions=80 --coverage.thresholds.branches=80 --coverage.thresholds.statements=80
+
+      - name: Upload Coverage Report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-report
+          path: coverage/
+          retention-days: 7
+
+  # ===========================================
+  # STAGE 4: INTEGRATION TEST
+  # ===========================================
+  integration-test:
+    name: Integration Test
+    runs-on: ubuntu-latest
+    needs: unit-test
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: test_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma Client
+        run: npx prisma generate
+
+      - name: Run Database Migrations
+        env:
+          DATABASE_URL: postgresql://test:test@localhost:5432/test_db
+        run: npx prisma migrate deploy
+
+      - name: Run Integration Tests
+        env:
+          DATABASE_URL: postgresql://test:test@localhost:5432/test_db
+          NODE_ENV: test
+        run: npm test -- --run integration
+
+      - name: Run API Route Tests
+        env:
+          DATABASE_URL: postgresql://test:test@localhost:5432/test_db
+          NODE_ENV: test
+        run: npm test -- --run __tests__
+
+  # ===========================================
+  # STAGE 5: BUILD
+  # ===========================================
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    needs: integration-test
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma Client
+        run: npx prisma generate
+
+      - name: Build Application
+        # SKIP_ENV_VALIDATION is intentionally set here for the `next build` step only.
+        # Real secrets are not available at CI build time — they are injected at Cloud Run
+        # startup via Secret Manager. The running server validates env via instrumentation.ts.
+        # This flag must NOT appear in next.config.mjs or any runtime config.
+        env:
+          SKIP_ENV_VALIDATION: true
+        run: npm run build
+
+      - name: Upload Build Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-output
+          path: .next/
+          retention-days: 7
+
+  # ===========================================
+  # STAGE 6: BUILD DOCKER IMAGE (main only)
+  # ===========================================
+  build-docker:
+    name: Build Docker Image
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      id-token: write
+    outputs:
+      image-tag: ${{ steps.vars.outputs.image-tag }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set image tag
+        id: vars
+        run: echo "image-tag=${{ env.GCP_REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/proposal-engine/proposal-engine:${{ github.sha }}" >> $GITHUB_OUTPUT
+
+      - name: Authenticate to GCP
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - name: Setup gcloud
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ env.GCP_PROJECT_ID }}
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker ${{ env.GCP_REGION }}-docker.pkg.dev
+
+      - name: Build Docker Image
+        # --build-arg SKIP_ENV_VALIDATION=true is intentional: secrets are not available
+        # at Docker image build time. They are injected at Cloud Run startup via Secret Manager.
+        # The running container validates env via instrumentation.ts on first request.
+        run: |
+          docker build \
+            -t ${{ steps.vars.outputs.image-tag }} \
+            -t ${{ env.GCP_REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/proposal-engine/proposal-engine:latest \
+            --cache-from ${{ env.GCP_REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/proposal-engine/proposal-engine:latest \
+            --build-arg SKIP_ENV_VALIDATION=true \
+            .
+
+      - name: Push Docker Image
+        run: |
+          docker push ${{ steps.vars.outputs.image-tag }}
+          docker push ${{ env.GCP_REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/proposal-engine/proposal-engine:latest
+
+  # ===========================================
+  # STAGE 7: DEPLOY TO STAGING (main only)
+  # ===========================================
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: build-docker
+    if: github.ref == 'refs/heads/main'
+    environment:
+      name: staging
+      url: https://${{ env.STAGING_SERVICE }}-${{ env.GCP_REGION }}.run.app
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Authenticate to GCP
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - name: Setup gcloud
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ env.GCP_PROJECT_ID }}
+
+      - name: Deploy to Cloud Run Staging
+        run: |
+          gcloud run deploy ${{ env.STAGING_SERVICE }} \
+            --image ${{ needs.build-docker.outputs.image-tag }} \
+            --region ${{ env.GCP_REGION }} \
+            --platform managed \
+            --allow-unauthenticated \
+            --memory 1Gi \
+            --cpu 1 \
+            --min-instances 0 \
+            --max-instances 3 \
+            --port 8080 \
+            --set-env-vars="NODE_ENV=staging,DEPLOY_COMMIT=${{ github.sha }}"
+
+      - name: Wait for deployment to be ready
+        run: sleep 30
+
+  # ===========================================
+  # STAGE 8: SMOKE TEST (main only)
+  # ===========================================
+  smoke-test:
+    name: Smoke Test
+    runs-on: ubuntu-latest
+    needs: deploy-staging
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run Smoke Tests against Staging
+        env:
+          SMOKE_TEST_BASE_URL: https://${{ env.STAGING_SERVICE }}-${{ env.GCP_REGION }}.run.app
+        run: |
+          npm run final-audit || exit 1
+
+      - name: Run Health Check
+        env:
+          SMOKE_TEST_BASE_URL: https://${{ env.STAGING_SERVICE }}-${{ env.GCP_REGION }}.run.app
+        run: |
+          response=$(curl -s -o /dev/null -w "%{http_code}" "${SMOKE_TEST_BASE_URL}/api/health")
+          if [ "$response" -ne 200 ]; then
+            echo "Health check failed with status: $response"
+            exit 1
+          fi
+          echo "Health check passed with status: $response"
+
+  # ===========================================
+  # STAGE 9: AUDIT REGRESSION GATE (main only)
+  # ===========================================
+  audit-regression-gate:
+    name: Audit Regression Gate
+    runs-on: ubuntu-latest
+    needs: smoke-test
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run Audit Regression Tests (5 sample audits)
+        env:
+          AUDIT_REGRESSION_BASE_URL: https://${{ env.STAGING_SERVICE }}-${{ env.GCP_REGION }}.run.app
+          MIN_QUALITY_SCORE: 8
+        run: |
+          node scripts/run-audit-regression.js
+
+      - name: Verify Output Quality
+        env:
+          AUDIT_REGRESSION_BASE_URL: https://${{ env.STAGING_SERVICE }}-${{ env.GCP_REGION }}.run.app
+        run: |
+          # Run 5 audits across different industries and verify quality
+          npm run qa-review -- --min-score=8 --count=5
+
+  # ===========================================
+  # STAGE 10: CANARY DEPLOY TO PRODUCTION (main only, manual approval)
+  # ===========================================
+  deploy-prod:
+    name: Canary Deploy to Production
+    runs-on: ubuntu-latest
+    needs: [build-docker, audit-regression-gate]
+    if: github.ref == 'refs/heads/main'
+    environment:
+      name: production
+      url: https://${{ env.PROD_SERVICE }}-${{ env.GCP_REGION }}.run.app
+    permissions:
+      contents: read
+      id-token: write
+    outputs:
+      canary-success: ${{ steps.canary-deploy.outputs.success }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Authenticate to GCP
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - name: Setup gcloud
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ env.GCP_PROJECT_ID }}
+
+      - name: Get current revision
+        id: current-revision
+        run: |
+          REVISION=$(gcloud run services describe ${{ env.PROD_SERVICE }} \
+            --region ${{ env.GCP_REGION }} \
+            --format 'value(status.latestCreatedRevisionName)')
+          echo "current_revision=$REVISION" >> $GITHUB_OUTPUT
+
+      - name: Deploy new revision with 0% traffic
+        id: deploy
+        run: |
+          gcloud run deploy ${{ env.PROD_SERVICE }} \
+            --image ${{ needs.build-docker.outputs.image-tag }} \
+            --region ${{ env.GCP_REGION }} \
+            --platform managed \
+            --no-traffic \
+            --memory 1Gi \
+            --cpu 1 \
+            --min-instances 1 \
+            --max-instances 5 \
+            --port 8080 \
+            --set-env-vars="NODE_ENV=production,DEPLOY_COMMIT=${{ github.sha }}"
+
+          # Get the new revision name
+          NEW_REVISION=$(gcloud run services describe ${{ env.PROD_SERVICE }} \
+            --region ${{ env.GCP_REGION }} \
+            --format 'value(status.latestCreatedRevisionName)')
+          echo "new_revision=$NEW_REVISION" >> $GITHUB_OUTPUT
+
+      - name: Canary Stage 1 - Set 10% traffic
+        id: canary-10
+        run: |
+          gcloud run services update-traffic ${{ env.PROD_SERVICE }} \
+            --region ${{ env.GCP_REGION }} \
+            --to-revisions=${{ steps.deploy.outputs.new_revision }}=10 \
+            --to-revisions=${{ steps.current-revision.outputs.current_revision }}=90 \
+            --quiet
+        continue-on-error: true
+
+      - name: Monitor health at 10% traffic
+        id: health-10
+        if: steps.canary-10.outcome == 'success'
+        run: |
+          sleep 30
+          SERVICE_URL=$(gcloud run services describe ${{ env.PROD_SERVICE }} \
+            --region ${{ env.GCP_REGION }} \
+            --format 'value(status.url)')
+
+          for i in {1..5}; do
+            RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" "$SERVICE_URL/api/health")
+            if [ "$RESPONSE" == "200" ]; then
+              echo "Health check $i passed"
+              sleep 10
+            else
+              echo "Health check $i failed with status: $RESPONSE"
+              exit 1
+            fi
+          done
+
+      - name: Canary Stage 2 - Set 50% traffic
+        id: canary-50
+        if: steps.health-10.outcome == 'success'
+        run: |
+          gcloud run services update-traffic ${{ env.PROD_SERVICE }} \
+            --region ${{ env.GCP_REGION }} \
+            --to-revisions=${{ steps.deploy.outputs.new_revision }}=50 \
+            --to-revisions=${{ steps.current-revision.outputs.current_revision }}=50 \
+            --quiet
+        continue-on-error: true
+
+      - name: Monitor health at 50% traffic
+        id: health-50
+        if: steps.canary-50.outcome == 'success'
+        run: |
+          SERVICE_URL=$(gcloud run services describe ${{ env.PROD_SERVICE }} \
+            --region ${{ env.GCP_REGION }} \
+            --format 'value(status.url)')
+
+          for i in {1..3}; do
+            RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" "$SERVICE_URL/api/health")
+            if [ "$RESPONSE" == "200" ]; then
+              echo "Health check $i passed"
+              sleep 20
+            else
+              echo "Health check $i failed with status: $RESPONSE"
+              exit 1
+            fi
+          done
+
+      - name: Canary Stage 3 - Set 100% traffic
+        id: canary-100
+        if: steps.health-50.outcome == 'success'
+        run: |
+          gcloud run services update-traffic ${{ env.PROD_SERVICE }} \
+            --region ${{ env.GCP_REGION }} \
+            --to-latest=100 \
+            --quiet
+        continue-on-error: true
+
+      - name: Final health check
+        id: health-final
+        if: steps.canary-100.outcome == 'success'
+        run: |
+          SERVICE_URL=$(gcloud run services describe ${{ env.PROD_SERVICE }} \
+            --region ${{ env.GCP_REGION }} \
+            --format 'value(status.url)')
+
+          RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" "$SERVICE_URL/api/health")
+          if [ "$RESPONSE" == "200" ]; then
+            echo "Final health check passed"
+            echo "success=true" >> $GITHUB_OUTPUT
+          else
+            echo "Final health check failed with status: $RESPONSE"
+            echo "success=false" >> $GITHUB_OUTPUT
+            exit 1
+          fi
+
+      - name: Rollback on failure
+        if: failure()
+        run: |
+          echo "Canary deployment failed, rolling back..."
+          gcloud run services update-traffic ${{ env.PROD_SERVICE }} \
+            --region ${{ env.GCP_REGION }} \
+            --to-revisions=${{ steps.current-revision.outputs.current_revision }}=100 \
+            --quiet
+
+          # Send rollback notification
+          curl -s -X POST "$SLACK_WEBHOOK_URL" \
+            -H 'Content-Type: application/json' \
+            -d "{
+              \"text\": \"❌ Rollback: ${{ env.PROD_SERVICE }}\",
+              \"attachments\": [{
+                \"color\": \"danger\",
+                \"fields\": [
+                  {\"title\": \"Service\", \"value\": \"${{ env.PROD_SERVICE }}\", \"short\": true},
+                  {\"title\": \"Reason\", \"value\": \"Canary deployment failed\", \"short\": true}
+                ]
+              }]
+            }" || true
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+      - name: Send success notification
+        if: success()
+        uses: slackapi/slack-github-action@v1.25.0
+        with:
+          payload: |
+            {
+              "text": "✅ Canary Deploy Success: ${{ env.PROD_SERVICE }}",
+              "attachments": [
+                {
+                  "color": "good",
+                  "fields": [
+                    {
+                      "title": "Service",
+                      "short": true,
+                      "value": "${{ env.PROD_SERVICE }}"
+                    },
+                    {
+                      "title": "Commit",
+                      "short": true,
+                      "value": "${{ github.sha }}"
+                    },
+                    {
+                      "title": "Traffic",
+                      "short": true,
+                      "value": "100%"
+                    }
+                  ]
+                }
+              ]
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+  # ===========================================
+  # STAGE 11: POST-DEPLOY NOTIFICATIONS
+  # ===========================================
+  notify:
+    name: Send Notifications
+    runs-on: ubuntu-latest
+    needs: [deploy-prod, audit-regression-gate]
+    if: always() && github.ref == 'refs/heads/main'
+    steps:
+      - name: Send Slack Notification
+        uses: slackapi/slack-github-action@v1.25.0
+        with:
+          payload: |
+            {
+              "text": "${{ needs.deploy-prod.result == 'success' && '✅' || '❌' }} Deploy ${{ needs.deploy-prod.result }}",
+              "attachments": [
+                {
+                  "color": "${{ needs.deploy-prod.result == 'success' && 'good' || 'danger' }}",
+                  "fields": [
+                    {
+                      "title": "Commit",
+                      "short": true,
+                      "value": "<${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}|${{ github.sha }}>"
+                    },
+                    {
+                      "title": "Result",
+                      "short": true,
+                      "value": "${{ needs.deploy-prod.result }}"
+                    },
+                    {
+                      "title": "Triggered By",
+                      "short": true,
+                      "value": "${{ github.actor }}"
+                    }
+                  ]
+                }
+              ]
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}

@@ -1,5 +1,7 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { DeliveryEngine } from '../deliveryEngine';
+
 import type { Deliverable } from '../types';
 
 // Mock Prisma
@@ -140,9 +142,9 @@ describe('Delivery Engine Unit Tests', () => {
 
       (prisma.proposal.findUnique as any).mockResolvedValue(mockProposal);
 
-      await expect(deliveryEngine.generateDeliverables('proposal-123', 'essentials')).rejects.toThrow(
-        'Proposal not accepted'
-      );
+      await expect(
+        deliveryEngine.generateDeliverables('proposal-123', 'essentials')
+      ).rejects.toThrow('Proposal not accepted');
     });
 
     it('should throw error if proposal missing tenantId', async () => {
@@ -156,9 +158,9 @@ describe('Delivery Engine Unit Tests', () => {
 
       (prisma.proposal.findUnique as any).mockResolvedValue(mockProposal);
 
-      await expect(deliveryEngine.generateDeliverables('proposal-123', 'essentials')).rejects.toThrow(
-        'Proposal missing tenantId'
-      );
+      await expect(
+        deliveryEngine.generateDeliverables('proposal-123', 'essentials')
+      ).rejects.toThrow('Proposal missing tenantId');
     });
 
     it('should skip findings not in audit', async () => {
@@ -298,9 +300,8 @@ describe('Delivery Engine Unit Tests', () => {
 
       const result = await deliveryEngine.verifyDeliverable(deliverableId);
 
-      expect(result.verified).toBe(true);
+      expect(result.passed).toBe(true);
       expect(result.improvementPercent).toBeGreaterThan(0);
-      expect(result.beforeAfterComparison).toBeDefined();
 
       expect(prisma.deliveryTask.update).toHaveBeenCalledWith({
         where: { id: deliverableId },

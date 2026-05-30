@@ -1,26 +1,29 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { cleanupDb } from '@/lib/__tests__/utils/cleanup';
 /**
  * Unit Tests for Tenant Configuration
- * 
+ *
  * Tests default configuration generation, configuration validation,
  * and branding application.
- * 
+ *
  * Requirements: 9.2, 9.6
  */
 
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { prisma } from '@/lib/db';
+
 import {
-  getPipelineConfig,
-  upsertPipelineConfig,
-  onboardTenant,
   applyBrandingToEmail,
   applyBrandingToProposal,
   checkSpendingLimit,
+  getPipelineConfig,
+  isStagePaused,
+  onboardTenant,
   pauseStage,
   resumeStage,
-  isStagePaused,
+  upsertPipelineConfig,
 } from '../tenantConfig';
+
 import type { Tenant, TenantBranding } from '@prisma/client';
 
 describe('Tenant Configuration', () => {
@@ -29,12 +32,12 @@ describe('Tenant Configuration', () => {
   beforeEach(async () => {
     // Clean up test data
     await cleanupDb(prisma);
-});
+  });
 
   afterEach(async () => {
     // Clean up test data
     await cleanupDb(prisma);
-});
+  });
 
   describe('Default Configuration Generation', () => {
     it('should create default configuration for new tenant', async () => {
@@ -95,45 +98,45 @@ describe('Tenant Configuration', () => {
 
   describe('Configuration Validation', () => {
     it('should reject invalid concurrency limit', async () => {
-      await expect(
-        upsertPipelineConfig(testTenantId, { concurrencyLimit: 0 })
-      ).rejects.toThrow('Concurrency limit must be between 1 and 100');
+      await expect(upsertPipelineConfig(testTenantId, { concurrencyLimit: 0 })).rejects.toThrow(
+        'Concurrency limit must be between 1 and 100'
+      );
 
-      await expect(
-        upsertPipelineConfig(testTenantId, { concurrencyLimit: 101 })
-      ).rejects.toThrow('Concurrency limit must be between 1 and 100');
+      await expect(upsertPipelineConfig(testTenantId, { concurrencyLimit: 101 })).rejects.toThrow(
+        'Concurrency limit must be between 1 and 100'
+      );
     });
 
     it('should reject invalid pain score threshold', async () => {
-      await expect(
-        upsertPipelineConfig(testTenantId, { painScoreThreshold: -1 })
-      ).rejects.toThrow('Pain score threshold must be between 0 and 100');
+      await expect(upsertPipelineConfig(testTenantId, { painScoreThreshold: -1 })).rejects.toThrow(
+        'Pain score threshold must be between 0 and 100'
+      );
 
-      await expect(
-        upsertPipelineConfig(testTenantId, { painScoreThreshold: 101 })
-      ).rejects.toThrow('Pain score threshold must be between 0 and 100');
+      await expect(upsertPipelineConfig(testTenantId, { painScoreThreshold: 101 })).rejects.toThrow(
+        'Pain score threshold must be between 0 and 100'
+      );
     });
 
     it('should reject invalid pricing multiplier', async () => {
-      await expect(
-        upsertPipelineConfig(testTenantId, { pricingMultiplier: 0.05 })
-      ).rejects.toThrow('Pricing multiplier must be between 0.1 and 10');
+      await expect(upsertPipelineConfig(testTenantId, { pricingMultiplier: 0.05 })).rejects.toThrow(
+        'Pricing multiplier must be between 0.1 and 10'
+      );
 
-      await expect(
-        upsertPipelineConfig(testTenantId, { pricingMultiplier: 15 })
-      ).rejects.toThrow('Pricing multiplier must be between 0.1 and 10');
+      await expect(upsertPipelineConfig(testTenantId, { pricingMultiplier: 15 })).rejects.toThrow(
+        'Pricing multiplier must be between 0.1 and 10'
+      );
     });
 
     it('should reject invalid country', async () => {
-      await expect(
-        upsertPipelineConfig(testTenantId, { country: 'XX' })
-      ).rejects.toThrow('Country must be one of: US, UK, CA');
+      await expect(upsertPipelineConfig(testTenantId, { country: 'XX' })).rejects.toThrow(
+        'Country must be one of: US, UK, CA'
+      );
     });
 
     it('should reject invalid currency', async () => {
-      await expect(
-        upsertPipelineConfig(testTenantId, { currency: 'EUR' })
-      ).rejects.toThrow('Currency must be one of: USD, GBP, CAD');
+      await expect(upsertPipelineConfig(testTenantId, { currency: 'EUR' })).rejects.toThrow(
+        'Currency must be one of: USD, GBP, CAD'
+      );
     });
 
     it('should reject negative spending limit', async () => {
@@ -324,9 +327,9 @@ describe('Tenant Configuration', () => {
 
       const config = await getPipelineConfig(testTenantId);
       const pausedStages = config?.pausedStages as string[];
-      
+
       // Should only appear once
-      expect(pausedStages.filter(s => s === 'discovery').length).toBe(1);
+      expect(pausedStages.filter((s) => s === 'discovery').length).toBe(1);
     });
 
     it('should handle multiple paused stages', async () => {

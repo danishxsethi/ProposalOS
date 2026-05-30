@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Mock prisma
 const mockFindMany = vi.fn();
@@ -41,7 +41,7 @@ function makeRequest(authHeader?: string): Request {
 describe('GET /api/cron/discovery', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    delete process.env.CRON_SECRET;
+    process.env.CRON_SECRET = 'test-secret';
   });
 
   it('returns 401 when CRON_SECRET is set and auth header is wrong', async () => {
@@ -59,15 +59,18 @@ describe('GET /api/cron/discovery', () => {
     expect(res.status).toBe(200);
   });
 
-  it('allows access when CRON_SECRET is not set', async () => {
+  it('returns 401 when CRON_SECRET is not set', async () => {
+    delete process.env.CRON_SECRET;
     mockFindMany.mockResolvedValue([]);
     const res = await GET(makeRequest());
-    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(res.status).toBe(401);
+    expect(body.error).toBe('Unauthorized');
   });
 
   it('returns early when no active configs exist', async () => {
     mockFindMany.mockResolvedValue([]);
-    const res = await GET(makeRequest());
+    const res = await GET(makeRequest('Bearer test-secret'));
     const body = await res.json();
     expect(body.success).toBe(true);
     expect(body.processed).toBe(0);
@@ -76,16 +79,27 @@ describe('GET /api/cron/discovery', () => {
 
   it('filters out tenants with discovery in pausedStages', async () => {
     mockFindMany.mockResolvedValue([
-      { tenantId: 't1', pausedStages: ['discovery'], painScoreThreshold: 60, dailyVolumeLimit: 200 },
+      {
+        tenantId: 't1',
+        pausedStages: ['discovery'],
+        painScoreThreshold: 60,
+        dailyVolumeLimit: 200,
+      },
     ]);
-    const res = await GET(makeRequest());
+    const res = await GET(makeRequest('Bearer test-secret'));
     const body = await res.json();
     expect(body.processed).toBe(0);
   });
 
   it('processes active tenants and triggers discovery', async () => {
     mockFindMany.mockResolvedValue([
-      { tenantId: 't1', pausedStages: [], painScoreThreshold: 60, dailyVolumeLimit: 200, updatedAt: new Date() },
+      {
+        tenantId: 't1',
+        pausedStages: [],
+        painScoreThreshold: 60,
+        dailyVolumeLimit: 200,
+        updatedAt: new Date(),
+      },
     ]);
     mockFindFirst.mockResolvedValue(null); // No queued job
     mockDiscover.mockResolvedValue({
@@ -97,7 +111,7 @@ describe('GET /api/cron/discovery', () => {
       completedAt: new Date(),
     });
 
-    const res = await GET(makeRequest());
+    const res = await GET(makeRequest('Bearer test-secret'));
     const body = await res.json();
     expect(body.success).toBe(true);
     expect(body.processed).toBe(1);
@@ -107,7 +121,13 @@ describe('GET /api/cron/discovery', () => {
 
   it('uses discovery job config when a queued job exists', async () => {
     mockFindMany.mockResolvedValue([
-      { tenantId: 't1', pausedStages: [], painScoreThreshold: 60, dailyVolumeLimit: 200, updatedAt: new Date() },
+      {
+        tenantId: 't1',
+        pausedStages: [],
+        painScoreThreshold: 60,
+        dailyVolumeLimit: 200,
+        updatedAt: new Date(),
+      },
     ]);
     mockFindFirst.mockResolvedValue({
       id: 'job1',
@@ -129,7 +149,7 @@ describe('GET /api/cron/discovery', () => {
       completedAt: new Date(),
     });
 
-    const res = await GET(makeRequest());
+    const res = await GET(makeRequest('Bearer test-secret'));
     const body = await res.json();
     expect(body.success).toBe(true);
     expect(body.processed).toBe(1);
@@ -157,13 +177,23 @@ describe('GET /api/cron/discovery', () => {
 
   it('handles individual tenant errors gracefully', async () => {
     mockFindMany.mockResolvedValue([
-      { tenantId: 't1', pausedStages: [], painScoreThreshold: 60, dailyVolumeLimit: 200, updatedAt: new Date() },
-      { tenantId: 't2', pausedStages: [], painScoreThreshold: 60, dailyVolumeLimit: 200, updatedAt: new Date() },
+      {
+        tenantId: 't1',
+        pausedStages: [],
+        painScoreThreshold: 60,
+        dailyVolumeLimit: 200,
+        updatedAt: new Date(),
+      },
+      {
+        tenantId: 't2',
+        pausedStages: [],
+        painScoreThreshold: 60,
+        dailyVolumeLimit: 200,
+        updatedAt: new Date(),
+      },
     ]);
     // First tenant throws, second succeeds
-    mockFindFirst
-      .mockRejectedValueOnce(new Error('DB error'))
-      .mockResolvedValueOnce(null);
+    mockFindFirst.mockRejectedValueOnce(new Error('DB error')).mockResolvedValueOnce(null);
     mockDiscover.mockResolvedValue({
       jobId: 'j2',
       tenantId: 't2',
@@ -173,7 +203,7 @@ describe('GET /api/cron/discovery', () => {
       completedAt: new Date(),
     });
 
-    const res = await GET(makeRequest());
+    const res = await GET(makeRequest('Bearer test-secret'));
     const body = await res.json();
     expect(body.success).toBe(true);
     expect(body.processed).toBe(2);
@@ -184,9 +214,10 @@ describe('GET /api/cron/discovery', () => {
 
   it('returns 500 on top-level error', async () => {
     mockFindMany.mockRejectedValue(new Error('Connection lost'));
-    const res = await GET(makeRequest());
+    const res = await GET(makeRequest('Bearer test-secret'));
     expect(res.status).toBe(500);
     const body = await res.json();
-    expect(body.error).toBe('Internal Server Error');
+    expect(body.error.code).toBe('INTERNAL_ERROR');
+    expect(body.error.message).toBe('Discovery cron failed');
   });
 });

@@ -1,15 +1,16 @@
 /**
  * Competitor Monitor
- * 
+ *
  * Detects competitor changes and triggers upsell proposals
  * when significant changes are detected.
  */
 
-import { prisma } from '@/lib/prisma';
 import { generateWithGemini } from '@/lib/llm/provider';
+import { logger } from '@/lib/logger';
 import { sendProposalEmail } from '@/lib/outreach/emailSender';
+import { prisma } from '@/lib/prisma';
 
-export type CompetitorSignalType = 
+export type CompetitorSignalType =
   | 'competitor_new_review'
   | 'competitor_rating_change'
   | 'competitor_website_update'
@@ -70,8 +71,7 @@ export async function processCompetitorSignals(): Promise<{
     where: { status: 'ACCEPTED' },
     include: {
       audit: true,
-      tenant: true
-    }
+    },
   });
 
   for (const proposal of acceptedProposals) {
@@ -82,11 +82,7 @@ export async function processCompetitorSignals(): Promise<{
       if (!industry || !proposal.tenantId) continue;
 
       // Check for competitor changes
-      const signals = await checkCompetitorChanges(
-        proposal.tenantId,
-        industry,
-        city || undefined
-      );
+      const signals = await checkCompetitorChanges(proposal.tenantId, industry, city || undefined);
 
       if (signals.length > 0) {
         signalsDetected += signals.length;
@@ -101,8 +97,8 @@ export async function processCompetitorSignals(): Promise<{
               priority: signal.severity,
               competitorName: signal.competitorName,
               competitorUrl: signal.competitorUrl,
-              signalData: signal as any
-            }
+              signalData: signal as any,
+            },
           });
 
           // If high severity, trigger upsell proposal
@@ -114,7 +110,6 @@ export async function processCompetitorSignals(): Promise<{
           }
         }
       }
-
     } catch (error: any) {
       errors.push(`Error processing proposal ${proposal.id}: ${error.message}`);
     }
@@ -123,7 +118,7 @@ export async function processCompetitorSignals(): Promise<{
   return {
     signalsDetected,
     upsellsTriggered,
-    errors
+    errors,
   };
 }
 
@@ -148,7 +143,7 @@ async function triggerUpsellProposal(
       recipientEmail: proposal.prospectEmail,
       subject: upsellContent.subject,
       messageHtml: upsellContent.body,
-      tenantId: proposal.tenantId
+      tenantId: proposal.tenantId,
     });
 
     // Update signal record
@@ -157,17 +152,17 @@ async function triggerUpsellProposal(
         tenantId: proposal.tenantId,
         competitorName: signal.competitorName,
         signalData: { path: ['changeType'], equals: signal.changeType },
-        outreachTriggered: false
+        outreachTriggered: false,
       },
       data: {
         outreachTriggered: true,
-        upsellProposalId: proposal.id
-      }
+        upsellProposalId: proposal.id,
+      },
     });
 
     return true;
   } catch (error) {
-    console.error('Failed to send upsell proposal:', error);
+    logger.error({ error }, 'Failed to send upsell proposal');
     return false;
   }
 }
@@ -180,7 +175,7 @@ async function generateUpsellContent(
   signal: CompetitorSignalData
 ): Promise<{ subject: string; body: string }> {
   const businessName = proposal.audit?.businessName || 'your business';
-  
+
   const prompt = `You are writing a brief, professional upsell email to an existing client.
 
 Context:
@@ -213,13 +208,14 @@ Do NOT use JSON.`;
   });
 
   const text = result.text || '';
-  
+
   const subjectMatch = text.match(/SUBJECT:\s*(.+)/i);
   const bodyMatch = text.match(/BODY:\s*([\s\S]+)/i);
 
-  const subject = subjectMatch?.[1]?.trim() || 
-    `Opportunity: ${signal.competitorName} just improved`;
-  const body = bodyMatch?.[1]?.trim() || 
+  const subject =
+    subjectMatch?.[1]?.trim() || `Opportunity: ${signal.competitorName} just improved`;
+  const body =
+    bodyMatch?.[1]?.trim() ||
     `Hi,\n\nI noticed that ${signal.competitorName} just ${signal.description.toLowerCase()}.\n\nThis is actually great news for you — it means the market is validating the importance of this area.\n\nGiven your current implementation, I'd love to discuss how we can ensure you're staying ahead. Would you be open to a quick call to explore some enhancements?\n\nBest regards`;
 
   return { subject, body };
@@ -233,9 +229,9 @@ export async function getPendingUpsellSignals(tenantId: string) {
     where: {
       tenantId,
       outreachTriggered: false,
-      priority: { in: ['high', 'medium'] }
+      priority: { in: ['high', 'medium'] },
     },
     orderBy: { detectedAt: 'desc' },
-    take: 50
+    take: 50,
   });
 }

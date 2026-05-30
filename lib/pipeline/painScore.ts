@@ -1,9 +1,9 @@
 /**
  * Pain Score Calculator
- * 
+ *
  * Computes a composite qualification score (0-100) from multi-signal audit data.
  * Each dimension is weighted and capped at its maximum value.
- * 
+ *
  * Weights:
  * - Website speed: 20
  * - Mobile broken: 15
@@ -13,11 +13,11 @@
  * - Social media dead: 10
  * - Competitors outperforming: 10
  * - Accessibility violations: 10
- * 
+ *
  * Requirements: 1.3, 1.4
  */
 
-import type { QualificationSignals, PainScoreBreakdown, PainScoreConfig } from './types';
+import type { PainScoreBreakdown, PainScoreConfig, QualificationSignals } from './types';
 
 /**
  * Default weight configuration for pain score dimensions
@@ -35,10 +35,10 @@ export const DEFAULT_WEIGHTS: PainScoreBreakdown = {
 
 /**
  * Calculate pain score from qualification signals
- * 
+ *
  * Each dimension is scored independently and capped at its weight maximum.
  * The total score equals the sum of all dimension scores.
- * 
+ *
  * @param signals - Multi-signal audit data
  * @param weights - Optional custom weights (defaults to DEFAULT_WEIGHTS)
  * @returns Object containing total score (0-100) and breakdown by dimension
@@ -74,7 +74,7 @@ export function calculate(
   // GBP Neglected (0-15): Composite of claim status, photos, reviews, responses, posting
   if (signals.gbpClaimed !== undefined) {
     let gbpPain = 0;
-    
+
     // Not claimed = 60% of max pain
     if (!signals.gbpClaimed) {
       gbpPain = 0.6;
@@ -133,7 +133,10 @@ export function calculate(
   if (signals.gbpReviewResponseRate !== undefined && !isNaN(signals.gbpReviewResponseRate)) {
     // 0 response rate = full pain, 1.0 response rate = 0 pain
     const responsePain = 1 - signals.gbpReviewResponseRate;
-    breakdown.zeroReviewResponses = Math.min(responsePain * weights.zeroReviewResponses, weights.zeroReviewResponses);
+    breakdown.zeroReviewResponses = Math.min(
+      responsePain * weights.zeroReviewResponses,
+      weights.zeroReviewResponses
+    );
   }
 
   // Social Media Dead (0-10): No presence or stale posts
@@ -154,7 +157,10 @@ export function calculate(
       }
     }
 
-    breakdown.socialMediaDead = Math.min(socialPain * weights.socialMediaDead, weights.socialMediaDead);
+    breakdown.socialMediaDead = Math.min(
+      socialPain * weights.socialMediaDead,
+      weights.socialMediaDead
+    );
   }
 
   // Competitors Outperforming (0-10): Gap between prospect and competitors
@@ -162,18 +168,24 @@ export function calculate(
     // Gap is a positive number indicating how much better competitors are
     // Normalize to 0-1 range (assume max gap of 50 points)
     const gapPain = Math.min(signals.competitorScoreGap / 50, 1.0);
-    breakdown.competitorsOutperforming = Math.min(gapPain * weights.competitorsOutperforming, weights.competitorsOutperforming);
+    breakdown.competitorsOutperforming = Math.min(
+      gapPain * weights.competitorsOutperforming,
+      weights.competitorsOutperforming
+    );
   }
 
   // Accessibility Violations (0-10): More violations = more pain
   if (signals.accessibilityViolationCount !== undefined) {
     // Normalize: 0 violations = 0 pain, 20+ violations = full pain
     const a11yPain = Math.min(signals.accessibilityViolationCount / 20, 1.0);
-    breakdown.accessibilityViolations = Math.min(a11yPain * weights.accessibilityViolations, weights.accessibilityViolations);
+    breakdown.accessibilityViolations = Math.min(
+      a11yPain * weights.accessibilityViolations,
+      weights.accessibilityViolations
+    );
   }
 
   // Calculate total as sum of all dimensions
-  const total = 
+  const total =
     breakdown.websiteSpeed +
     breakdown.mobileBroken +
     breakdown.gbpNeglected +
@@ -191,7 +203,7 @@ export function calculate(
 
 /**
  * Serialize PainScoreConfig to JSON string
- * 
+ *
  * @param config - Pain score configuration
  * @returns JSON string representation
  */
@@ -201,13 +213,13 @@ export function serialize(config: PainScoreConfig): string {
 
 /**
  * Deserialize PainScoreConfig from JSON string
- * 
+ *
  * @param json - JSON string representation
  * @returns Pain score configuration object
  */
 export function deserialize(json: string): PainScoreConfig {
   const parsed = JSON.parse(json);
-  
+
   // Validate structure
   if (!parsed.weights || typeof parsed.threshold !== 'number') {
     throw new Error('Invalid PainScoreConfig JSON: missing weights or threshold');
@@ -236,7 +248,7 @@ export function deserialize(json: string): PainScoreConfig {
 
 /**
  * Create a default PainScoreConfig
- * 
+ *
  * @param threshold - Qualification threshold (default: 60)
  * @returns Default pain score configuration
  */

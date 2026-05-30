@@ -1,37 +1,33 @@
 import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
+
 import { logger } from '@/lib/logger';
+import { verifyCronAuth } from '@/lib/middleware/cronAuth';
 import {
-  runDetection,
   deduplicateSignals,
-  triggerSignalOutreach,
+  runDetection,
   signalExists,
+  triggerSignalOutreach,
 } from '@/lib/pipeline/signalDetector';
 import type { SignalType } from '@/lib/pipeline/types';
+import { prisma } from '@/lib/prisma';
 
 const MAX_TENANTS_PER_RUN = 5;
 
 /**
  * Signal detection cron endpoint
- * 
+ *
  * Runs signal checks on configurable schedule:
  * - bad_review: Every 6 hours
  * - website_change: Daily
  * - competitor_upgrade: Daily
  * - new_business_license: Weekly
  * - hiring_spike: Weekly
- * 
+ *
  * Requirements: 14.6
  */
 export async function GET(req: Request) {
-  // 1. CRON_SECRET auth
-  const authHeader = req.headers.get('authorization');
-  if (
-    process.env.CRON_SECRET &&
-    authHeader !== `Bearer ${process.env.CRON_SECRET}`
-  ) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const authError = await verifyCronAuth(req);
+  if (authError) return authError;
 
   try {
     // 2. Find tenants with active PipelineConfig where signal_detection is not paused
@@ -41,9 +37,7 @@ export async function GET(req: Request) {
     });
 
     const activeConfigs = configs.filter((cfg) => {
-      const paused = Array.isArray(cfg.pausedStages)
-        ? (cfg.pausedStages as string[])
-        : [];
+      const paused = Array.isArray(cfg.pausedStages) ? (cfg.pausedStages as string[]) : [];
       return !paused.includes('signal_detection');
     });
 
@@ -137,11 +131,7 @@ export async function GET(req: Request) {
                 for (const signal of dedupedSignals) {
                   try {
                     // Check if signal already exists in DB
-                    const exists = await signalExists(
-                      config.tenantId,
-                      signal.leadId,
-                      signalType
-                    );
+                    const exists = await signalExists(config.tenantId, signal.leadId, signalType);
 
                     if (!exists) {
                       await triggerSignalOutreach(signal);

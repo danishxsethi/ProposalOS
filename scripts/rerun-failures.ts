@@ -13,8 +13,9 @@
  */
 
 import 'dotenv/config';
-import * as fs from 'fs-extra';
 import * as path from 'path';
+
+import * as fs from 'fs-extra';
 
 const BASE_URL = process.env.BASE_URL || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
 const API_KEY = process.env.API_KEY;
@@ -71,7 +72,10 @@ function sleep(ms: number): Promise<void> {
 }
 
 function safeFilename(name: string): string {
-  return name.replace(/[^a-z0-9-_]/gi, '_').replace(/_+/g, '_').slice(0, 80);
+  return name
+    .replace(/[^a-z0-9-_]/gi, '_')
+    .replace(/_+/g, '_')
+    .slice(0, 80);
 }
 
 async function fetchWithAuth(url: string, options: RequestInit = {}): Promise<Response> {
@@ -127,7 +131,9 @@ function runQualityGate(
 ): { pass: boolean; issues: string[] } {
   const issues: string[] = [];
   if (!audit.modulesCompleted || audit.modulesCompleted.length < EXPECTED_MODULES.length) {
-    issues.push(`Module(s) failed: ${audit.modulesFailed?.map((m) => m.module).join(', ') || 'unknown'}`);
+    issues.push(
+      `Module(s) failed: ${audit.modulesFailed?.map((m) => m.module).join(', ') || 'unknown'}`
+    );
   }
   if ((audit.findingsCount ?? 0) < 5) issues.push(`Findings ${audit.findingsCount ?? 0} < 5`);
   const qaScore = propose.qaScore ?? 0;
@@ -136,7 +142,8 @@ function runQualityGate(
   if (!summary.toLowerCase().includes(businessName.toLowerCase())) {
     issues.push('Executive summary does not mention business name');
   }
-  if (pdfSize === null || pdfSize <= 50 * 1024) issues.push(`PDF size ${pdfSize ?? 0} bytes <= 50KB`);
+  if (pdfSize === null || pdfSize <= 50 * 1024)
+    issues.push(`PDF size ${pdfSize ?? 0} bytes <= 50KB`);
   const pricing = propose.proposal?.pricing;
   const hasPricing =
     pricing &&
@@ -237,7 +244,9 @@ async function main(): Promise<void> {
     console.log(`[${i + 1}/${failed.length}] Re-auditing ${f.businessName}...`);
     const newResult = await processOne(f);
     const icon = newResult.pass ? '✅' : '❌';
-    console.log(`  ${icon} ${newResult.pass ? 'PASS' : 'FAIL'} (QA: ${newResult.qaScore ?? 'N/A'})`);
+    console.log(
+      `  ${icon} ${newResult.pass ? 'PASS' : 'FAIL'} (QA: ${newResult.qaScore ?? 'N/A'})`
+    );
 
     const idx = results.findIndex(
       (r) => r.businessName === f.businessName && r.website === f.website

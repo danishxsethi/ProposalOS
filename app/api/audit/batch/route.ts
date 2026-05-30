@@ -1,88 +1,202 @@
+/**
+ * POST /api/audit/batch
+ * Create and enqueue batch audits for multiple businesses.
+ *
+ * BEFORE: Ran all audits sequentially in the request path (blocking, unsafe).
+ * AFTER:  Creates Audit records, enqueues AuditJob rows, returns immediately.
+ *         Jobs are processed asynchronously by the worker endpoint.
+ *
+ * Features:
+ * - Zod validation with batchAuditSchema (max 100 items)
+ * - Rate limiting (2 requests/minute for batch operations)
+ * - Idempotency support via Idempotency-Key header
+ * - Standardized error responses
+ * - Per-item error isolation (partial success is OK)
+ * - No request-bound sequential processing
+ */
+
 import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
+
+import { v4 as uuidv4 } from 'uuid';
+
+import { generateTraceId, InternalError, ValidationError } from '@/lib/api/errors';
+import { batchAuditSchema } from '@/lib/api/schemas/audit';
 import { processBatch } from '@/lib/audit/batchProcessor';
 import { logger } from '@/lib/logger';
-import { v4 as uuidv4 } from 'uuid';
 import { withAuth } from '@/lib/middleware/auth';
+import { withIdempotency } from '@/lib/middleware/idempotency';
+import { RateLimitPresets, withRateLimit } from '@/lib/middleware/rateLimit';
+import { withRole } from '@/lib/middleware/withRole';
+import { prisma } from '@/lib/prisma';
 import { getTenantId } from '@/lib/tenant/context';
 
-export const POST = withAuth(async (req: Request) => {
-    try {
-        const tenantId = await getTenantId();
-        if (!tenantId) {
-            return NextResponse.json({ error: 'Unauthorized: No Tenant' }, { status: 401 });
-        }
+/**
+ * Inner handler for batch audit creation
+ */
+async function handleBatchAuditCreation(req: Request): Promise<NextResponse> {
+  const traceId = generateTraceId();
 
-        const body = await req.json();
-        const { businesses } = body;
-
-        if (!Array.isArray(businesses) || businesses.length === 0) {
-            return NextResponse.json(
-                { error: 'Input must be an array of businesses' },
-                { status: 400 }
-            );
-        }
-
-        if (businesses.length > 10) {
-            return NextResponse.json(
-                { error: 'Batch size limited to 10 businesses' },
-                { status: 400 }
-            );
-        }
-
-        const batchId = uuidv4();
-        const auditIds: string[] = [];
-
-        // Create all Audit records immediately (tenant-scoped)
-        for (const business of businesses) {
-            // Basic validation
-            if (!business.name || !business.city) {
-                if (!business.url) continue; // Skip invalid
-            }
-
-            const audit = await prisma.audit.create({
-                data: {
-                    tenantId,
-                    businessName: business.name || 'Unknown',
-                    businessCity: business.city,
-                    businessUrl: business.url,
-                    businessIndustry: business.industry, // If provided
-                    status: 'QUEUED',
-                    batchId: batchId
-                }
-            });
-            auditIds.push(audit.id);
-        }
-
-        logger.info({
-            event: 'batch.created',
-            batchId,
-            count: auditIds.length
-        }, 'Batch audit created');
-
-        // Trigger background processing
-        // We do NOT await this.
-        const processingPromise = processBatch(batchId, auditIds).catch(err => {
-            logger.error({ batchId, error: err }, 'Batch processing crashed');
-        });
-
-        // If we are on Vercel or have access to waitUntil, we should use it.
-        // req is standard Request, not NextRequest in some contexts but let's try casting or checking context.
-        // Next.js 13/14 doesn't expose waitUntil on Request uniformly yet without @vercel/functions or edge.
-        // We will just let the promise float. 
-
-        return NextResponse.json({
-            success: true,
-            batchId,
-            auditIds,
-            message: 'Batch started. Poll status at /api/audit/batch/[batchId]'
-        });
-
-    } catch (error) {
-        logger.error({ error }, 'Error creating batch');
-        return NextResponse.json(
-            { error: 'Internal Server Error', details: String(error) },
-            { status: 500 }
-        );
+  try {
+    const tenantId = await getTenantId();
+    if (!tenantId) {
+      return NextResponse.json(
+        new ValidationError('Unauthorized: No Tenant').toEnvelope(req.url, traceId),
+        { status: 401 }
+      );
     }
-});
+
+    // Parse and validate body
+    const body = await req.json();
+    const result = batchAuditSchema.safeParse(body);
+
+    if (!result.success) {
+      const errorDetails = result.error.errors.map((e) => ({
+        field: e.path.join('.'),
+        message: e.message,
+      }));
+      return NextResponse.json(
+        new ValidationError('Invalid batch input', errorDetails).toEnvelope(req.url, traceId),
+        { status: 400 }
+      );
+    }
+
+    const { name: batchName, items } = result.data;
+
+    // Restrict max batch size strictly to 50
+    if (items.length > 50) {
+      return NextResponse.json(
+        new ValidationError('Batch size exceeds maximum limit of 50 audits').toEnvelope(
+          req.url,
+          traceId
+        ),
+        { status: 400 }
+      );
+    }
+
+    // Check Daily Quota / Cost Budget
+    const { checkDailyAuditLimit, incrementAuditCount } = await import('@/lib/costs/costTracker');
+    const dailyLimit = checkDailyAuditLimit(tenantId);
+    if (!dailyLimit.allowed || items.length > dailyLimit.remaining) {
+      const recordAuditTrailEvent = (await import('@/lib/observability/auditTrail'))
+        .recordAuditTrailEvent;
+      await recordAuditTrailEvent({
+        eventType: 'abuse.quota_exceeded',
+        tenantId,
+        payload: {
+          routeClass: 'batch_audit',
+          limit: dailyLimit.limit,
+          todayCount: dailyLimit.todayCount,
+          remaining: dailyLimit.remaining,
+          requestedCount: items.length,
+        },
+      }).catch(() => {});
+
+      return NextResponse.json(
+        {
+          error: {
+            code: 'QUOTA_EXCEEDED',
+            message: `Daily Audit Limit Exceeded. You have ${dailyLimit.remaining} remaining audits today, but requested ${items.length}.`,
+            details: { reason: 'DAILY_CAP_REACHED', upgrade: true },
+            timestamp: new Date().toISOString(),
+            traceId,
+          },
+        },
+        { status: 429 }
+      );
+    }
+
+    const batchId = uuidv4();
+    const auditIds: string[] = [];
+    const creationErrors: Array<{ item: unknown; error: string }> = [];
+
+    // Create all Audit records immediately (tenant-scoped)
+    for (const item of items) {
+      try {
+        const audit = await prisma.audit.create({
+          data: {
+            tenantId,
+            businessName: item.businessName || 'Unknown',
+            businessUrl: item.url,
+            placeId: item.placeId ?? null,
+            status: 'QUEUED',
+            batchId,
+          },
+        });
+        auditIds.push(audit.id);
+        incrementAuditCount(tenantId);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        logger.error({ batchId, item, error: msg }, 'Batch: failed to create audit record');
+        creationErrors.push({ item, error: msg });
+      }
+    }
+
+    if (auditIds.length === 0) {
+      return NextResponse.json(
+        {
+          error: {
+            code: 'BATCH_CREATION_FAILED',
+            message: 'No valid audit records could be created',
+            details: creationErrors,
+            timestamp: new Date().toISOString(),
+            traceId,
+          },
+        },
+        { status: 422 }
+      );
+    }
+
+    // Enqueue all audit jobs — returns immediately, no in-process execution
+    const enqueueResult = await processBatch(batchId, tenantId, auditIds);
+
+    logger.info(
+      {
+        event: 'batch.accepted',
+        batchId,
+        batchName,
+        auditCount: auditIds.length,
+        enqueued: enqueueResult.enqueued,
+        enqueueFailed: enqueueResult.errors.length,
+        auditCreationErrors: creationErrors.length,
+      },
+      'Batch accepted — jobs enqueued'
+    );
+
+    const response = NextResponse.json({
+      success: true,
+      batchId,
+      batchName,
+      accepted: enqueueResult.enqueued,
+      rejected: creationErrors.length + enqueueResult.errors.length,
+      auditIds,
+      partialErrors:
+        creationErrors.length > 0 || enqueueResult.errors.length > 0
+          ? [
+              ...creationErrors,
+              ...enqueueResult.errors.map((e) => ({
+                item: { auditId: e.auditId },
+                error: e.error,
+              })),
+            ]
+          : undefined,
+      message: `${enqueueResult.enqueued} jobs queued. Poll status at /api/audit/batch/${batchId}`,
+      statusUrl: `/api/audit/batch/${batchId}`,
+    });
+
+    response.headers.set('X-Trace-Id', traceId);
+    return response;
+  } catch (error) {
+    logger.error({ error }, 'Batch: unhandled error');
+    const internalError = new InternalError('Failed to create batch', {
+      originalError: error instanceof Error ? error.message : String(error),
+    });
+    return NextResponse.json(internalError.toEnvelope(req.url, traceId), { status: 500 });
+  }
+}
+
+// Apply middleware stack: withRole -> withAuth -> withRateLimit -> withIdempotency
+const rateLimitedHandler = (req: Request) =>
+  withRateLimit(RateLimitPresets.batchOperations)(req, () => handleBatchAuditCreation(req));
+const idempotentHandler = (req: Request) => withIdempotency(rateLimitedHandler)(req);
+const authHandler = (req: Request) => withAuth(idempotentHandler)(req, [] as any);
+export const POST = (req: Request) => withRole('agency_member', authHandler)(req, [] as any);

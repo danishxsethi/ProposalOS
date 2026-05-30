@@ -1,0 +1,4 @@
+# Prisma migration lock file
+# This file ensures migration consistency across environments
+
+version = "6"

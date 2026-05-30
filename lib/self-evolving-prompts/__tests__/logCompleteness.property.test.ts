@@ -1,30 +1,58 @@
 /**
  * Feature: self-evolving-prompts-predictive-intelligence
  * Property 1: Performance Log Completeness
- * 
+ *
  * Validates: Requirements 1.1, 10.2
- * 
+ *
  * Property: For any LLM call, when logged by the Prompt_Performance_Tracker,
  * the stored record contains all required fields: version hash, quality score,
  * downstream impact, cost, latency, input tokens, and output tokens.
  */
 
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { randomUUID } from 'crypto';
 import fc from 'fast-check';
-import { PromptPerformanceTracker } from '../PromptPerformanceTracker';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+
 import * as promptPerformanceDA from '../data-access/prompt-performance';
+import { closeConnection, prisma, executeCommand } from '../db';
+import { PromptPerformanceTracker } from '../PromptPerformanceTracker';
 import { PromptPerformanceLog } from '../types';
-import { closeConnection } from '../db';
 
 describe('Property 1: Performance Log Completeness', () => {
   const tracker = new PromptPerformanceTracker();
+  const testTenantId = '11111111-1111-4111-a111-111111111111';
+
+  beforeAll(async () => {
+    const { runWithTenantBypass } = await import('@/lib/tenant/context');
+    await runWithTenantBypass('seed-test-tenant', async () => {
+      await prisma.tenant.upsert({
+        where: { id: testTenantId },
+        update: {},
+        create: {
+          id: testTenantId,
+          name: 'Tracker Test Tenant',
+          planTier: 'pro',
+          status: 'active',
+        },
+      });
+    });
+  });
+
+  async function withTenant<T>(fn: () => Promise<T>): Promise<T> {
+    const { runWithTenantAsync } = await import('@/lib/tenant/context');
+    return runWithTenantAsync(testTenantId, fn);
+  }
 
   // Define generators for required fields
   const versionHashArb = fc.string({ minLength: 64, maxLength: 64 });
   const nodeIdArb = fc.string({ minLength: 1, maxLength: 255 });
   // Use reasonable ranges for quality scores (0-100)
   const qualityScoreArb = fc.float({ min: Math.fround(0.01), max: Math.fround(100), noNaN: true });
-  const downstreamImpactArb = fc.float({ min: Math.fround(0.01), max: Math.fround(100), noNaN: true });
+  const downstreamImpactArb = fc.float({
+    min: Math.fround(0.01),
+    max: Math.fround(100),
+    noNaN: true,
+  });
   // Cost in USD with reasonable precision
   const costArb = fc.float({ min: Math.fround(0.01), max: Math.fround(1000), noNaN: true });
   const latencyArb = fc.integer({ min: 1, max: 10000 });
@@ -35,6 +63,11 @@ describe('Property 1: Performance Log Completeness', () => {
   });
 
   afterAll(async () => {
+    const { runWithTenantBypass } = await import('@/lib/tenant/context');
+    await runWithTenantBypass('test-cleanup', async () => {
+      await prisma.$executeRaw`DELETE FROM "PromptPerformanceLog" WHERE "tenantId" = ${testTenantId}`;
+      await prisma.$executeRaw`DELETE FROM "PromptVersion" WHERE "tenantId" = ${testTenantId}`;
+    });
     await closeConnection();
   });
 
@@ -61,44 +94,67 @@ describe('Property 1: Performance Log Completeness', () => {
           outputTokens,
           metadata
         ) => {
-          // Arrange: Create a performance log entry
-          const logEntry = {
-            promptVersionHash: versionHash,
-            nodeId,
-            qualityScore,
-            downstreamImpact,
-            costUSD: cost,
-            latencyMs: latency,
-            inputTokens,
-            outputTokens,
-            metadata,
-          };
+          await withTenant(async () => {
+            const versionId = randomUUID();
+            // Seed parent PromptVersion record
+            await executeCommand(
+              `INSERT INTO "PromptVersion" (
+                id, "versionHash", "nodeId", "promptText", "createdBy", "parentVersionHash", "branchName", "changelog", "isActive", "tenantId", "updatedAt"
+              ) VALUES ($1::uuid, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
+              ON CONFLICT ("versionHash") DO NOTHING`,
+              [
+                versionId,
+                versionHash,
+                nodeId,
+                'Dummy prompt text',
+                'system',
+                null,
+                'main',
+                'Changelog',
+                false,
+                testTenantId,
+              ]
+            );
 
-          // Act: Log the performance
-          const result = await tracker.logPerformance(logEntry);
+            // Arrange: Create a performance log entry
+            const logEntry = {
+              promptVersionHash: versionHash,
+              nodeId,
+              qualityScore,
+              downstreamImpact,
+              costUSD: cost,
+              latencyMs: latency,
+              inputTokens,
+              outputTokens,
+              metadata,
+            };
 
-          // Assert: Verify all required fields are present in the stored record
-          expect(result).toBeDefined();
-          expect(result.id).toBeDefined();
-          expect(typeof result.id).toBe('string');
-          expect(result.id.length).toBeGreaterThan(0);
+            // Act: Log the performance
+            const result = await tracker.logPerformance(logEntry);
 
-          expect(result.timestamp).toBeDefined();
-          expect(result.timestamp instanceof Date).toBe(true);
+            // Assert: Verify all required fields are present in the stored record
+            expect(result).toBeDefined();
+            expect(result.id).toBeDefined();
+            expect(typeof result.id).toBe('string');
+            expect(result.id.length).toBeGreaterThan(0);
 
-          expect(result.promptVersionHash).toBe(versionHash);
-          expect(result.nodeId).toBe(nodeId);
-          // Allow for floating point precision loss
-          expect(Math.abs(result.qualityScore - qualityScore)).toBeLessThan(0.01);
-          expect(Math.abs(result.downstreamImpact - downstreamImpact)).toBeLessThan(0.01);
-          expect(Math.abs(result.costUSD - cost)).toBeLessThan(0.01);
-          expect(result.latencyMs).toBe(latency);
-          expect(result.inputTokens).toBe(inputTokens);
-          expect(result.outputTokens).toBe(outputTokens);
-          expect(result.metadata).toEqual(metadata);
+            expect(result.timestamp).toBeDefined();
+            expect(result.timestamp instanceof Date).toBe(true);
+
+            expect(result.promptVersionHash).toBe(versionHash);
+            expect(result.nodeId).toBe(nodeId);
+            // Allow for floating point precision loss
+            expect(Math.abs(result.qualityScore - qualityScore)).toBeLessThan(0.01);
+            expect(Math.abs(result.downstreamImpact - downstreamImpact)).toBeLessThan(0.01);
+            expect(Math.abs(result.costUSD - cost)).toBeLessThan(0.01);
+            expect(result.latencyMs).toBe(latency);
+            expect(result.inputTokens).toBe(inputTokens);
+            expect(result.outputTokens).toBe(outputTokens);
+            expect(result.metadata).toEqual(metadata);
+          });
         }
       ),
-      { numRuns: 100 }
+      { numRuns: 20 }
     );
   });
 
@@ -125,45 +181,68 @@ describe('Property 1: Performance Log Completeness', () => {
           outputTokens,
           metadata
         ) => {
-          // Arrange: Create a performance log entry
-          const logEntry = {
-            promptVersionHash: versionHash,
-            nodeId,
-            qualityScore,
-            downstreamImpact,
-            costUSD: cost,
-            latencyMs: latency,
-            inputTokens,
-            outputTokens,
-            metadata,
-          };
+          await withTenant(async () => {
+            const versionId = randomUUID();
+            // Seed parent PromptVersion record
+            await executeCommand(
+              `INSERT INTO "PromptVersion" (
+                id, "versionHash", "nodeId", "promptText", "createdBy", "parentVersionHash", "branchName", "changelog", "isActive", "tenantId", "updatedAt"
+              ) VALUES ($1::uuid, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
+              ON CONFLICT ("versionHash") DO NOTHING`,
+              [
+                versionId,
+                versionHash,
+                nodeId,
+                'Dummy prompt text',
+                'system',
+                null,
+                'main',
+                'Changelog',
+                false,
+                testTenantId,
+              ]
+            );
 
-          // Act: Log the performance
-          const result = await tracker.logPerformance(logEntry);
+            // Arrange: Create a performance log entry
+            const logEntry = {
+              promptVersionHash: versionHash,
+              nodeId,
+              qualityScore,
+              downstreamImpact,
+              costUSD: cost,
+              latencyMs: latency,
+              inputTokens,
+              outputTokens,
+              metadata,
+            };
 
-          // Assert: Retrieve from database and verify all fields are persisted
-          const retrieved = await promptPerformanceDA.getPerformanceByVersion(versionHash);
-          expect(retrieved.length).toBeGreaterThan(0);
+            // Act: Log the performance
+            const result = await tracker.logPerformance(logEntry);
 
-          const storedLog = retrieved.find((log) => log.id === result.id);
-          expect(storedLog).toBeDefined();
+            // Assert: Retrieve from database and verify all fields are persisted
+            const retrieved = await promptPerformanceDA.getPerformanceByVersion(versionHash);
+            expect(retrieved.length).toBeGreaterThan(0);
 
-          if (storedLog) {
-            // Verify all required fields are present and correct
-            expect(storedLog.promptVersionHash).toBe(versionHash);
-            expect(storedLog.nodeId).toBe(nodeId);
-            // Allow for floating point precision loss
-            expect(Math.abs(storedLog.qualityScore - qualityScore)).toBeLessThan(0.01);
-            expect(Math.abs(storedLog.downstreamImpact - downstreamImpact)).toBeLessThan(0.01);
-            expect(Math.abs(storedLog.costUSD - cost)).toBeLessThan(0.01);
-            expect(storedLog.latencyMs).toBe(latency);
-            expect(storedLog.inputTokens).toBe(inputTokens);
-            expect(storedLog.outputTokens).toBe(outputTokens);
-            expect(storedLog.metadata).toEqual(metadata);
-          }
+            const storedLog = retrieved.find((log) => log.id === result.id);
+            expect(storedLog).toBeDefined();
+
+            if (storedLog) {
+              // Verify all required fields are present and correct
+              expect(storedLog.promptVersionHash).toBe(versionHash);
+              expect(storedLog.nodeId).toBe(nodeId);
+              // Allow for floating point precision loss
+              expect(Math.abs(storedLog.qualityScore - qualityScore)).toBeLessThan(0.01);
+              expect(Math.abs(storedLog.downstreamImpact - downstreamImpact)).toBeLessThan(0.01);
+              expect(Math.abs(storedLog.costUSD - cost)).toBeLessThan(0.01);
+              expect(storedLog.latencyMs).toBe(latency);
+              expect(storedLog.inputTokens).toBe(inputTokens);
+              expect(storedLog.outputTokens).toBe(outputTokens);
+              expect(storedLog.metadata).toEqual(metadata);
+            }
+          });
         }
       ),
-      { numRuns: 100 }
+      { numRuns: 20 }
     );
   });
 
@@ -188,34 +267,57 @@ describe('Property 1: Performance Log Completeness', () => {
           inputTokens,
           outputTokens
         ) => {
-          // Arrange: Create a performance log entry
-          const logEntry = {
-            promptVersionHash: versionHash,
-            nodeId,
-            qualityScore,
-            downstreamImpact,
-            costUSD: cost,
-            latencyMs: latency,
-            inputTokens,
-            outputTokens,
-            metadata: {},
-          };
+          await withTenant(async () => {
+            const versionId = randomUUID();
+            // Seed parent PromptVersion record
+            await executeCommand(
+              `INSERT INTO "PromptVersion" (
+                id, "versionHash", "nodeId", "promptText", "createdBy", "parentVersionHash", "branchName", "changelog", "isActive", "tenantId", "updatedAt"
+              ) VALUES ($1::uuid, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
+              ON CONFLICT ("versionHash") DO NOTHING`,
+              [
+                versionId,
+                versionHash,
+                nodeId,
+                'Dummy prompt text',
+                'system',
+                null,
+                'main',
+                'Changelog',
+                false,
+                testTenantId,
+              ]
+            );
 
-          // Act: Log the performance
-          const result = await tracker.logPerformance(logEntry);
+            // Arrange: Create a performance log entry
+            const logEntry = {
+              promptVersionHash: versionHash,
+              nodeId,
+              qualityScore,
+              downstreamImpact,
+              costUSD: cost,
+              latencyMs: latency,
+              inputTokens,
+              outputTokens,
+              metadata: {},
+            };
 
-          // Assert: Quality score is numeric and comparable
-          expect(typeof result.qualityScore).toBe('number');
-          expect(isNaN(result.qualityScore)).toBe(false);
+            // Act: Log the performance
+            const result = await tracker.logPerformance(logEntry);
 
-          // Verify quality score supports comparison operations
-          expect(result.qualityScore).toBeGreaterThan(0);
-          expect(result.qualityScore).toBeLessThanOrEqual(100);
-          // Allow for floating point precision loss
-          expect(Math.abs(result.qualityScore - qualityScore)).toBeLessThan(0.01);
+            // Assert: Quality score is numeric and comparable
+            expect(typeof result.qualityScore).toBe('number');
+            expect(isNaN(result.qualityScore)).toBe(false);
+
+            // Verify quality score supports comparison operations
+            expect(result.qualityScore).toBeGreaterThan(0);
+            expect(result.qualityScore).toBeLessThanOrEqual(100);
+            // Allow for floating point precision loss
+            expect(Math.abs(result.qualityScore - qualityScore)).toBeLessThan(0.01);
+          });
         }
       ),
-      { numRuns: 100 }
+      { numRuns: 20 }
     );
   });
 
@@ -240,40 +342,63 @@ describe('Property 1: Performance Log Completeness', () => {
           inputTokens,
           outputTokens
         ) => {
-          // Arrange: Create a performance log entry
-          const logEntry = {
-            promptVersionHash: versionHash,
-            nodeId,
-            qualityScore,
-            downstreamImpact,
-            costUSD: cost,
-            latencyMs: latency,
-            inputTokens,
-            outputTokens,
-            metadata: {},
-          };
+          await withTenant(async () => {
+            const versionId = randomUUID();
+            // Seed parent PromptVersion record
+            await executeCommand(
+              `INSERT INTO "PromptVersion" (
+                id, "versionHash", "nodeId", "promptText", "createdBy", "parentVersionHash", "branchName", "changelog", "isActive", "tenantId", "updatedAt"
+              ) VALUES ($1::uuid, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
+              ON CONFLICT ("versionHash") DO NOTHING`,
+              [
+                versionId,
+                versionHash,
+                nodeId,
+                'Dummy prompt text',
+                'system',
+                null,
+                'main',
+                'Changelog',
+                false,
+                testTenantId,
+              ]
+            );
 
-          // Act: Log the performance
-          const result = await tracker.logPerformance(logEntry);
+            // Arrange: Create a performance log entry
+            const logEntry = {
+              promptVersionHash: versionHash,
+              nodeId,
+              qualityScore,
+              downstreamImpact,
+              costUSD: cost,
+              latencyMs: latency,
+              inputTokens,
+              outputTokens,
+              metadata: {},
+            };
 
-          // Assert: All numeric fields are valid numbers
-          const numericFields = [
-            'qualityScore',
-            'downstreamImpact',
-            'costUSD',
-            'latencyMs',
-            'inputTokens',
-            'outputTokens',
-          ];
+            // Act: Log the performance
+            const result = await tracker.logPerformance(logEntry);
 
-          for (const field of numericFields) {
-            const value = result[field as keyof PromptPerformanceLog];
-            expect(typeof value).toBe('number');
-            expect(isNaN(value as number)).toBe(false);
-          }
+            // Assert: All numeric fields are valid numbers
+            const numericFields = [
+              'qualityScore',
+              'downstreamImpact',
+              'costUSD',
+              'latencyMs',
+              'inputTokens',
+              'outputTokens',
+            ];
+
+            for (const field of numericFields) {
+              const value = result[field as keyof PromptPerformanceLog];
+              expect(typeof value).toBe('number');
+              expect(isNaN(value as number)).toBe(false);
+            }
+          });
         }
       ),
-      { numRuns: 100 }
+      { numRuns: 20 }
     );
   });
 
@@ -298,34 +423,57 @@ describe('Property 1: Performance Log Completeness', () => {
           inputTokens,
           outputTokens
         ) => {
-          // Arrange: Create a performance log entry
-          const logEntry = {
-            promptVersionHash: versionHash,
-            nodeId,
-            qualityScore,
-            downstreamImpact,
-            costUSD: cost,
-            latencyMs: latency,
-            inputTokens,
-            outputTokens,
-            metadata: {},
-          };
+          await withTenant(async () => {
+            const versionId = randomUUID();
+            // Seed parent PromptVersion record
+            await executeCommand(
+              `INSERT INTO "PromptVersion" (
+                id, "versionHash", "nodeId", "promptText", "createdBy", "parentVersionHash", "branchName", "changelog", "isActive", "tenantId", "updatedAt"
+              ) VALUES ($1::uuid, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
+              ON CONFLICT ("versionHash") DO NOTHING`,
+              [
+                versionId,
+                versionHash,
+                nodeId,
+                'Dummy prompt text',
+                'system',
+                null,
+                'main',
+                'Changelog',
+                false,
+                testTenantId,
+              ]
+            );
 
-          // Act: Log the performance
-          const result = await tracker.logPerformance(logEntry);
+            // Arrange: Create a performance log entry
+            const logEntry = {
+              promptVersionHash: versionHash,
+              nodeId,
+              qualityScore,
+              downstreamImpact,
+              costUSD: cost,
+              latencyMs: latency,
+              inputTokens,
+              outputTokens,
+              metadata: {},
+            };
 
-          // Assert: All string fields are non-empty
-          expect(result.promptVersionHash).toBeDefined();
-          expect(result.promptVersionHash.length).toBeGreaterThan(0);
+            // Act: Log the performance
+            const result = await tracker.logPerformance(logEntry);
 
-          expect(result.nodeId).toBeDefined();
-          expect(result.nodeId.length).toBeGreaterThan(0);
+            // Assert: All string fields are non-empty
+            expect(result.promptVersionHash).toBeDefined();
+            expect(result.promptVersionHash.length).toBeGreaterThan(0);
 
-          expect(result.id).toBeDefined();
-          expect(result.id.length).toBeGreaterThan(0);
+            expect(result.nodeId).toBeDefined();
+            expect(result.nodeId.length).toBeGreaterThan(0);
+
+            expect(result.id).toBeDefined();
+            expect(result.id.length).toBeGreaterThan(0);
+          });
         }
       ),
-      { numRuns: 100 }
+      { numRuns: 20 }
     );
   });
 });

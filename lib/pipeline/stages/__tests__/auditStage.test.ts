@@ -7,7 +7,8 @@
  * Requirements: 2.1, 2.2, 2.3, 2.4, 2.6
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 import type { StageResult } from '../../types';
 
 // --- Mocks ---
@@ -16,6 +17,7 @@ const mockFindMany = vi.fn();
 const mockFindUnique = vi.fn();
 const mockAuditCreate = vi.fn();
 const mockAuditUpdate = vi.fn();
+const mockAuditFindUnique = vi.fn();
 const mockProspectUpdate = vi.fn();
 const mockErrorLogCreate = vi.fn();
 
@@ -29,6 +31,7 @@ vi.mock('@/lib/prisma', () => ({
     audit: {
       create: (...args: any[]) => mockAuditCreate(...args),
       update: (...args: any[]) => mockAuditUpdate(...args),
+      findUnique: (...args: any[]) => mockAuditFindUnique(...args),
     },
     pipelineErrorLog: {
       create: (...args: any[]) => mockErrorLogCreate(...args),
@@ -46,27 +49,10 @@ vi.mock('../../metrics', () => ({
   logStageFailure: (...args: any[]) => mockLogStageFailure(...args),
 }));
 
-const mockOrchestratorRun = vi.fn();
-vi.mock('@/lib/orchestrator/auditOrchestrator', () => {
-  return {
-    AuditOrchestrator: class MockAuditOrchestrator {
-      constructor() {}
-      run() {
-        return mockOrchestratorRun();
-      }
-    },
-  };
-});
-
-vi.mock('@/lib/costs/costTracker', () => {
-  return {
-    CostTracker: class MockCostTracker {
-      getTotalCents() {
-        return 42;
-      }
-    },
-  };
-});
+const mockRunAudit = vi.fn();
+vi.mock('@/lib/audit/runner', () => ({
+  runAudit: (...args: any[]) => mockRunAudit(...args),
+}));
 
 import { processAuditStage, processOneAudit } from '../auditStage';
 
@@ -97,6 +83,12 @@ describe('Audit Stage', () => {
     vi.clearAllMocks();
     mockAuditCreate.mockResolvedValue(makeAudit());
     mockAuditUpdate.mockResolvedValue({});
+    mockAuditFindUnique.mockResolvedValue({
+      id: 'audit-1',
+      status: 'COMPLETE',
+      apiCostCents: 42,
+      modulesCompleted: ['website', 'gbp'],
+    });
     mockProspectUpdate.mockResolvedValue({});
     mockTransition.mockResolvedValue({
       from: 'discovered',
@@ -107,17 +99,16 @@ describe('Audit Stage', () => {
     });
     mockErrorLogCreate.mockResolvedValue({});
     mockLogStageFailure.mockResolvedValue(undefined);
+    mockRunAudit.mockResolvedValue(undefined);
   });
 
   describe('processOneAudit', () => {
     it('transitions to "audited" when orchestrator returns COMPLETE', async () => {
       mockFindUnique.mockResolvedValue(makeProspect());
-      mockOrchestratorRun.mockResolvedValue({
+      mockAuditFindUnique.mockResolvedValue({
+        id: 'audit-1',
         status: 'COMPLETE',
-        findings: [{ id: 'f1' }],
-        evidenceSnapshots: [],
-        moduleTimings: {},
-        progress: 100,
+        apiCostCents: 42,
         modulesCompleted: ['website', 'gbp'],
       });
 
@@ -131,12 +122,10 @@ describe('Audit Stage', () => {
 
     it('transitions to "audited" when orchestrator returns PARTIAL', async () => {
       mockFindUnique.mockResolvedValue(makeProspect());
-      mockOrchestratorRun.mockResolvedValue({
+      mockAuditFindUnique.mockResolvedValue({
+        id: 'audit-1',
         status: 'PARTIAL',
-        findings: [],
-        evidenceSnapshots: [],
-        moduleTimings: {},
-        progress: 60,
+        apiCostCents: 42,
         modulesCompleted: ['website'],
       });
 
@@ -148,13 +137,10 @@ describe('Audit Stage', () => {
 
     it('transitions to "audit_failed" when orchestrator returns FAILED', async () => {
       mockFindUnique.mockResolvedValue(makeProspect());
-      mockOrchestratorRun.mockResolvedValue({
+      mockAuditFindUnique.mockResolvedValue({
+        id: 'audit-1',
         status: 'FAILED',
-        findings: [],
-        evidenceSnapshots: [],
-        moduleTimings: {},
-        progress: 0,
-        modulesCompleted: [],
+        apiCostCents: 42,
       });
 
       const result = await processOneAudit('prospect-1');
@@ -166,7 +152,12 @@ describe('Audit Stage', () => {
 
     it('transitions to "audit_failed" when orchestrator throws', async () => {
       mockFindUnique.mockResolvedValue(makeProspect());
-      mockOrchestratorRun.mockRejectedValue(new Error('Network timeout'));
+      mockRunAudit.mockRejectedValue(new Error('Network timeout'));
+      mockAuditFindUnique.mockResolvedValue({
+        id: 'audit-1',
+        status: 'FAILED',
+        apiCostCents: 0,
+      });
 
       const result = await processOneAudit('prospect-1');
 
@@ -177,14 +168,6 @@ describe('Audit Stage', () => {
 
     it('creates an Audit record before running the orchestrator', async () => {
       mockFindUnique.mockResolvedValue(makeProspect());
-      mockOrchestratorRun.mockResolvedValue({
-        status: 'COMPLETE',
-        findings: [],
-        evidenceSnapshots: [],
-        moduleTimings: {},
-        progress: 100,
-        modulesCompleted: [],
-      });
 
       await processOneAudit('prospect-1');
 
@@ -202,14 +185,6 @@ describe('Audit Stage', () => {
 
     it('links auditId to ProspectLead on success', async () => {
       mockFindUnique.mockResolvedValue(makeProspect());
-      mockOrchestratorRun.mockResolvedValue({
-        status: 'COMPLETE',
-        findings: [],
-        evidenceSnapshots: [],
-        moduleTimings: {},
-        progress: 100,
-        modulesCompleted: [],
-      });
 
       await processOneAudit('prospect-1');
 
@@ -223,14 +198,6 @@ describe('Audit Stage', () => {
 
     it('records audit cost against tenant on success', async () => {
       mockFindUnique.mockResolvedValue(makeProspect());
-      mockOrchestratorRun.mockResolvedValue({
-        status: 'COMPLETE',
-        findings: [],
-        evidenceSnapshots: [],
-        moduleTimings: {},
-        progress: 100,
-        modulesCompleted: [],
-      });
 
       await processOneAudit('prospect-1');
 
@@ -246,13 +213,10 @@ describe('Audit Stage', () => {
 
     it('records audit cost against tenant on failure', async () => {
       mockFindUnique.mockResolvedValue(makeProspect());
-      mockOrchestratorRun.mockResolvedValue({
+      mockAuditFindUnique.mockResolvedValue({
+        id: 'audit-1',
         status: 'FAILED',
-        findings: [],
-        evidenceSnapshots: [],
-        moduleTimings: {},
-        progress: 0,
-        modulesCompleted: [],
+        apiCostCents: 42,
       });
 
       await processOneAudit('prospect-1');
@@ -276,19 +240,15 @@ describe('Audit Stage', () => {
     it('throws when prospect is not in "discovered" status', async () => {
       mockFindUnique.mockResolvedValue(makeProspect({ pipelineStatus: 'audited' }));
 
-      await expect(processOneAudit('prospect-1')).rejects.toThrow(
-        'expected "discovered"'
-      );
+      await expect(processOneAudit('prospect-1')).rejects.toThrow('expected "discovered"');
     });
 
-    it('includes metadata with auditId and findings count on success', async () => {
+    it('includes metadata with auditId on success', async () => {
       mockFindUnique.mockResolvedValue(makeProspect());
-      mockOrchestratorRun.mockResolvedValue({
+      mockAuditFindUnique.mockResolvedValue({
+        id: 'audit-1',
         status: 'COMPLETE',
-        findings: [{ id: 'f1' }, { id: 'f2' }, { id: 'f3' }],
-        evidenceSnapshots: [],
-        moduleTimings: {},
-        progress: 100,
+        apiCostCents: 42,
         modulesCompleted: ['website', 'gbp'],
       });
 
@@ -298,7 +258,6 @@ describe('Audit Stage', () => {
         expect.objectContaining({
           auditId: 'audit-1',
           auditStatus: 'COMPLETE',
-          findingsCount: 3,
           modulesCompleted: ['website', 'gbp'],
         })
       );
@@ -312,14 +271,6 @@ describe('Audit Stage', () => {
       mockFindUnique
         .mockResolvedValueOnce(makeProspect({ id: 'p1' }))
         .mockResolvedValueOnce(makeProspect({ id: 'p2' }));
-      mockOrchestratorRun.mockResolvedValue({
-        status: 'COMPLETE',
-        findings: [],
-        evidenceSnapshots: [],
-        moduleTimings: {},
-        progress: 100,
-        modulesCompleted: [],
-      });
 
       const results = await processAuditStage('tenant-1', 10);
 
@@ -331,17 +282,7 @@ describe('Audit Stage', () => {
       const prospects = [makeProspect({ id: 'p1' }), makeProspect({ id: 'p2' })];
       mockFindMany.mockResolvedValue(prospects);
       // First prospect: not found (will throw)
-      mockFindUnique
-        .mockResolvedValueOnce(null)
-        .mockResolvedValueOnce(makeProspect({ id: 'p2' }));
-      mockOrchestratorRun.mockResolvedValue({
-        status: 'COMPLETE',
-        findings: [],
-        evidenceSnapshots: [],
-        moduleTimings: {},
-        progress: 100,
-        modulesCompleted: [],
-      });
+      mockFindUnique.mockResolvedValueOnce(null).mockResolvedValueOnce(makeProspect({ id: 'p2' }));
 
       const results = await processAuditStage('tenant-1', 10);
 

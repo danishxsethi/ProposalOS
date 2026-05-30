@@ -8,144 +8,145 @@
  * Also generates an HTML summary suitable for PDF rendering or email.
  */
 
-import { prisma } from '@/lib/prisma';
 import { Finding } from '@prisma/client';
 
+import { logger } from '@/lib/logger';
+import { prisma } from '@/lib/prisma';
+
 export interface ModuleComparison {
-    module: string;
-    before: Finding[];
-    after: Finding[];
-    resolved: Finding[];
-    newIssues: Finding[];
-    improvementPercent: number;
+  module: string;
+  before: Finding[];
+  after: Finding[];
+  resolved: Finding[];
+  newIssues: Finding[];
+  improvementPercent: number;
 }
 
 export interface ComparisonReportResult {
-    originalAuditId: string;
-    reAuditId: string;
-    overallImprovementPercent: number;
-    /** Number of original findings now gone */
-    totalResolved: number;
-    /** Number of brand-new findings in the re-audit */
-    totalNewIssues: number;
-    /** Score delta (reAudit.overallScore - original.overallScore) */
-    scoreDelta: number;
-    modules: ModuleComparison[];
-    /** Ready-to-render HTML summary string */
-    htmlSummary: string;
-    generatedAt: string;
+  originalAuditId: string;
+  reAuditId: string;
+  overallImprovementPercent: number;
+  /** Number of original findings now gone */
+  totalResolved: number;
+  /** Number of brand-new findings in the re-audit */
+  totalNewIssues: number;
+  /** Score delta (reAudit.overallScore - original.overallScore) */
+  scoreDelta: number;
+  modules: ModuleComparison[];
+  /** Ready-to-render HTML summary string */
+  htmlSummary: string;
+  generatedAt: string;
 }
 
 // ─── Core engine ──────────────────────────────────────────────────────────────
 
 export async function generateComparisonReport(
-    originalAuditId: string,
-    reAuditId: string,
-    tenantId: string
+  originalAuditId: string,
+  reAuditId: string,
+  tenantId: string
 ): Promise<ComparisonReportResult | null> {
-    const [original, reAudit] = await Promise.all([
-        prisma.audit.findUnique({
-            where: { id: originalAuditId },
-            include: { findings: true },
-        }),
-        prisma.audit.findUnique({
-            where: { id: reAuditId },
-            include: { findings: true },
-        }),
-    ]);
+  const [original, reAudit] = await Promise.all([
+    prisma.audit.findUnique({
+      where: { id: originalAuditId },
+      include: { findings: true },
+    }),
+    prisma.audit.findUnique({
+      where: { id: reAuditId },
+      include: { findings: true },
+    }),
+  ]);
 
-    if (!original || !reAudit) {
-        console.warn(`[ComparisonReport] Could not find one or both audits: ${originalAuditId}, ${reAuditId}`);
-        return null;
-    }
-
-    const beforeFindings = original.findings;
-    const afterFindings = reAudit.findings;
-
-    // Identify resolved / new by title + category fingerprint
-    const beforeKeys = new Set(beforeFindings.map(fingerprint));
-    const afterKeys = new Set(afterFindings.map(fingerprint));
-
-    const resolved = beforeFindings.filter(f => !afterKeys.has(fingerprint(f)));
-    const newIssues = afterFindings.filter(f => !beforeKeys.has(fingerprint(f)));
-
-    const overallImprovementPercent =
-        beforeFindings.length > 0
-            ? Math.round((resolved.length / beforeFindings.length) * 100)
-            : 100;
-
-    const scoreDelta = (reAudit.overallScore ?? 0) - (original.overallScore ?? 0);
-
-    // Module-level breakdown
-    const allModules = new Set([
-        ...beforeFindings.map(f => f.module ?? 'unknown'),
-        ...afterFindings.map(f => f.module ?? 'unknown'),
-    ]);
-
-    const modules: ModuleComparison[] = [];
-    for (const mod of allModules) {
-        const modBefore = beforeFindings.filter(f => (f.module ?? 'unknown') === mod);
-        const modAfter = afterFindings.filter(f => (f.module ?? 'unknown') === mod);
-        const modBeforeKeys = new Set(modBefore.map(fingerprint));
-        const modAfterKeys = new Set(modAfter.map(fingerprint));
-
-        const modResolved = modBefore.filter(f => !modAfterKeys.has(fingerprint(f)));
-        const modNew = modAfter.filter(f => !modBeforeKeys.has(fingerprint(f)));
-        const modImprovement =
-            modBefore.length > 0
-                ? Math.round((modResolved.length / modBefore.length) * 100)
-                : 100;
-
-        modules.push({
-            module: mod,
-            before: modBefore,
-            after: modAfter,
-            resolved: modResolved,
-            newIssues: modNew,
-            improvementPercent: modImprovement,
-        });
-    }
-
-    const htmlSummary = renderHtmlSummary(
-        original.businessName,
-        overallImprovementPercent,
-        scoreDelta,
-        resolved.length,
-        newIssues.length,
-        modules
+  if (!original || !reAudit) {
+    logger.warn(
+      { originalAuditId, reAuditId },
+      '[ComparisonReport] Could not find one or both audits'
     );
+    return null;
+  }
 
-    return {
-        originalAuditId,
-        reAuditId,
-        overallImprovementPercent,
-        totalResolved: resolved.length,
-        totalNewIssues: newIssues.length,
-        scoreDelta,
-        modules,
-        htmlSummary,
-        generatedAt: new Date().toISOString(),
-    };
+  const beforeFindings = original.findings;
+  const afterFindings = reAudit.findings;
+
+  // Identify resolved / new by title + category fingerprint
+  const beforeKeys = new Set(beforeFindings.map(fingerprint));
+  const afterKeys = new Set(afterFindings.map(fingerprint));
+
+  const resolved = beforeFindings.filter((f) => !afterKeys.has(fingerprint(f)));
+  const newIssues = afterFindings.filter((f) => !beforeKeys.has(fingerprint(f)));
+
+  const overallImprovementPercent =
+    beforeFindings.length > 0 ? Math.round((resolved.length / beforeFindings.length) * 100) : 100;
+
+  const scoreDelta = (reAudit.overallScore ?? 0) - (original.overallScore ?? 0);
+
+  // Module-level breakdown
+  const allModules = new Set([
+    ...beforeFindings.map((f) => f.module ?? 'unknown'),
+    ...afterFindings.map((f) => f.module ?? 'unknown'),
+  ]);
+
+  const modules: ModuleComparison[] = [];
+  for (const mod of allModules) {
+    const modBefore = beforeFindings.filter((f) => (f.module ?? 'unknown') === mod);
+    const modAfter = afterFindings.filter((f) => (f.module ?? 'unknown') === mod);
+    const modBeforeKeys = new Set(modBefore.map(fingerprint));
+    const modAfterKeys = new Set(modAfter.map(fingerprint));
+
+    const modResolved = modBefore.filter((f) => !modAfterKeys.has(fingerprint(f)));
+    const modNew = modAfter.filter((f) => !modBeforeKeys.has(fingerprint(f)));
+    const modImprovement =
+      modBefore.length > 0 ? Math.round((modResolved.length / modBefore.length) * 100) : 100;
+
+    modules.push({
+      module: mod,
+      before: modBefore,
+      after: modAfter,
+      resolved: modResolved,
+      newIssues: modNew,
+      improvementPercent: modImprovement,
+    });
+  }
+
+  const htmlSummary = renderHtmlSummary(
+    original.businessName,
+    overallImprovementPercent,
+    scoreDelta,
+    resolved.length,
+    newIssues.length,
+    modules
+  );
+
+  return {
+    originalAuditId,
+    reAuditId,
+    overallImprovementPercent,
+    totalResolved: resolved.length,
+    totalNewIssues: newIssues.length,
+    scoreDelta,
+    modules,
+    htmlSummary,
+    generatedAt: new Date().toISOString(),
+  };
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 /** Stable key for matching findings across audits by title + category */
 function fingerprint(f: Finding): string {
-    return `${(f.category ?? '').toLowerCase()}::${(f.title ?? '').toLowerCase().trim()}`;
+  return `${(f.category ?? '').toLowerCase()}::${(f.title ?? '').toLowerCase().trim()}`;
 }
 
 function renderHtmlSummary(
-    businessName: string,
-    improvement: number,
-    scoreDelta: number,
-    resolved: number,
-    newIssues: number,
-    modules: ModuleComparison[]
+  businessName: string,
+  improvement: number,
+  scoreDelta: number,
+  resolved: number,
+  newIssues: number,
+  modules: ModuleComparison[]
 ): string {
-    const moduleRows = modules
-        .map(
-            m => `
+  const moduleRows = modules
+    .map(
+      (m) => `
       <tr>
         <td style="padding:8px 12px;font-weight:600;text-transform:capitalize">${m.module}</td>
         <td style="padding:8px 12px;text-align:center">${m.before.length}</td>
@@ -154,12 +155,12 @@ function renderHtmlSummary(
         <td style="padding:8px 12px;text-align:center;color:${m.newIssues.length > 0 ? '#ef4444' : '#6b7280'}">${m.newIssues.length}</td>
         <td style="padding:8px 12px;text-align:center;font-weight:700;color:${m.improvementPercent >= 50 ? '#22c55e' : '#f59e0b'}">${m.improvementPercent}%</td>
       </tr>`
-        )
-        .join('');
+    )
+    .join('');
 
-    const overallColor = improvement >= 50 ? '#22c55e' : improvement >= 25 ? '#f59e0b' : '#ef4444';
+  const overallColor = improvement >= 50 ? '#22c55e' : improvement >= 25 ? '#f59e0b' : '#ef4444';
 
-    return `<!DOCTYPE html>
+  return `<!DOCTYPE html>
 <html>
 <head><meta charset="utf-8"><title>Delivery Report — ${businessName}</title></head>
 <body style="font-family:Inter,Arial,sans-serif;max-width:700px;margin:0 auto;padding:40px 20px;color:#1e293b">

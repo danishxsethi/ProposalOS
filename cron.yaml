@@ -1,5 +1,5 @@
 # GCP Cloud Scheduler Configuration for Autonomous Pipeline Cron Jobs
-# 
+#
 # Deploy with: gcloud scheduler jobs create http [JOB_NAME] --location=[REGION] --schedule="[SCHEDULE]" --uri="[URL]" --http-method=POST --headers="Authorization=Bearer [CRON_SECRET]"
 #
 # Or use the setup script: ./scripts/setup-cron-jobs.sh
@@ -9,81 +9,88 @@
 # 1. Discovery - Every 6 hours
 # Discovers new prospects from Google Maps, Yelp, and directories
 discovery:
-  schedule: "0 */6 * * *"
-  endpoint: "/api/cron/discovery"
-  description: "Discover new prospects from external sources"
-  timezone: "America/New_York"
+  schedule: '0 */6 * * *'
+  endpoint: '/api/cron/discovery'
+  description: 'Discover new prospects from external sources'
+  timezone: 'America/New_York'
 
 # 2. Pipeline Audit - Every 2 hours
 # Processes discovered prospects through the audit pipeline
 pipeline-audit:
-  schedule: "0 */2 * * *"
-  endpoint: "/api/cron/pipeline-audit"
-  description: "Process discovered prospects through audit pipeline"
-  timezone: "America/New_York"
+  schedule: '0 */2 * * *'
+  endpoint: '/api/cron/pipeline-audit'
+  description: 'Process discovered prospects through audit pipeline'
+  timezone: 'America/New_York'
 
 # 3. Pipeline Outreach - Every hour
 # Sends outreach emails to prospects with proposals
 pipeline-outreach:
-  schedule: "0 * * * *"
-  endpoint: "/api/cron/pipeline-outreach"
-  description: "Send outreach emails to proposed prospects"
-  timezone: "America/New_York"
+  schedule: '0 * * * *'
+  endpoint: '/api/cron/pipeline-outreach'
+  description: 'Send outreach emails to proposed prospects'
+  timezone: 'America/New_York'
 
 # 4. Signal Detection - Daily at 2 AM
 # Detects business signals (bad reviews, website changes, etc.)
 signal-detection:
-  schedule: "0 2 * * *"
-  endpoint: "/api/cron/signal-detection"
-  description: "Detect business signals for optimal outreach timing"
-  timezone: "America/New_York"
+  schedule: '0 2 * * *'
+  endpoint: '/api/cron/signal-detection'
+  description: 'Detect business signals for optimal outreach timing'
+  timezone: 'America/New_York'
 
 # 5. Pipeline Closing - Every 4 hours
 # Processes hot leads and manages checkout sessions
 pipeline-closing:
-  schedule: "0 */4 * * *"
-  endpoint: "/api/cron/pipeline-closing"
-  description: "Process hot leads and manage checkout sessions"
-  timezone: "America/New_York"
+  schedule: '0 */4 * * *'
+  endpoint: '/api/cron/pipeline-closing'
+  description: 'Process hot leads and manage checkout sessions'
+  timezone: 'America/New_York'
 
 # 6. Pipeline Delivery - Daily at 8 AM
 # Processes delivery tasks and checks for overdue escalation
 pipeline-delivery:
-  schedule: "0 8 * * *"
-  endpoint: "/api/cron/pipeline-delivery"
-  description: "Process delivery tasks and check for overdue items"
-  timezone: "America/New_York"
+  schedule: '0 8 * * *'
+  endpoint: '/api/cron/pipeline-delivery'
+  description: 'Process delivery tasks and check for overdue items'
+  timezone: 'America/New_York'
 
 # 7. Retention - Daily at 6 AM
 # Processes NPS surveys (Day 30, Day 90), scheduled re-audits, and competitor monitoring
 retention:
-  schedule: "0 6 * * *"
-  endpoint: "/api/cron/retention"
-  description: "Process client retention: NPS surveys, scheduled re-audits, competitor monitoring"
-  timezone: "America/New_York"
+  schedule: '0 6 * * *'
+  endpoint: '/api/cron/retention'
+  description: 'Process client retention: NPS surveys, scheduled re-audits, competitor monitoring'
+  timezone: 'America/New_York'
 
 # 8. Scheduled Audits - Daily at 7 AM
 # Runs scheduled monthly/quarterly re-audits for existing clients
 scheduled-audits:
-  schedule: "0 7 * * *"
-  endpoint: "/api/cron/scheduled-audits"
-  description: "Run scheduled re-audits for existing clients"
-  timezone: "America/New_York"
+  schedule: '0 7 * * *'
+  endpoint: '/api/cron/scheduled-audits'
+  description: 'Run scheduled re-audits for existing clients'
+  timezone: 'America/New_York'
 
 # 9. Partner Matching - Daily at 10 AM (when Task 26 is implemented)
 # Matches qualified leads to agency partners
 partner-matching:
-  schedule: "0 10 * * *"
-  endpoint: "/api/cron/partner-matching"
-  description: "Match qualified leads to agency partners"
-  timezone: "America/New_York"
-  enabled: false  # Enable when Task 26 is implemented
+  schedule: '0 10 * * *'
+  endpoint: '/api/cron/partner-matching'
+  description: 'Match qualified leads to agency partners'
+  timezone: 'America/New_York'
+  enabled: false # Enable when Task 26 is implemented
 
 # 10. Intelligence Aggregation - Weekly on Sunday at 3 AM (when Task 27 is implemented)
 # Aggregates anonymized patterns across tenants
 intelligence-aggregation:
-  schedule: "0 3 * * 0"
-  endpoint: "/api/cron/intelligence-aggregation"
-  description: "Aggregate anonymized patterns for cross-tenant intelligence"
-  timezone: "America/New_York"
-  enabled: false  # Enable when Task 27 is implemented
+  schedule: '0 3 * * 0'
+  endpoint: '/api/cron/intelligence-aggregation'
+  description: 'Aggregate anonymized patterns for cross-tenant intelligence'
+  timezone: 'America/New_York'
+  enabled: false # Enable when Task 27 is implemented
+
+# 11. Billing Reconciliation - Every 6 hours
+reconcile-billing:
+  schedule: '0 */6 * * *'
+  endpoint: '/api/cron/reconcile-billing'
+  description: 'Reconcile Stripe subscriptions, payments, and abandoned checkouts'
+  timezone: 'America/New_York'

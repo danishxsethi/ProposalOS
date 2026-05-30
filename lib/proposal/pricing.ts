@@ -1,16 +1,18 @@
+import { OrganizationSegment } from './types';
+
 // Fixed pricing tiers — distinct positioning, Growth as recommended
 
 export interface ProposalPricingTiers {
-    starter: number;
-    growth: number;
-    premium: number;
+  starter: number;
+  growth: number;
+  premium: number;
 }
 
 /** Base pricing — Starter $497, Growth $1,497, Premium $2,997 */
 export const PROPOSAL_PRICING: ProposalPricingTiers = {
-    starter: 497,
-    growth: 1497,
-    premium: 2997,
+  starter: 497,
+  growth: 1497,
+  premium: 2997,
 };
 
 /**
@@ -18,66 +20,66 @@ export const PROPOSAL_PRICING: ProposalPricingTiers = {
  * due to complexity, compliance requirements, or higher customer lifetime value
  */
 const INDUSTRY_MULTIPLIERS: Record<string, number> = {
-    // High-value industries
-    legal: 1.30,           // +30% - High client values, compliance heavy
-    medical: 1.20,          // +20% - Compliance, HIPAA, complex SEO
-    dental: 1.15,            // +15% - Competitive, high patient volume
-    real_estate: 1.20,      // +20% - High competition, luxury markets
-    financial: 1.25,         // +25% - Compliance, trust-heavy
+  // High-value industries
+  legal: 1.3, // +30% - High client values, compliance heavy
+  medical: 1.2, // +20% - Compliance, HIPAA, complex SEO
+  dental: 1.15, // +15% - Competitive, high patient volume
+  real_estate: 1.2, // +20% - High competition, luxury markets
+  financial: 1.25, // +25% - Compliance, trust-heavy
 
-    // Specialized services  
-    construction: 1.15,      // +15% - Complex sales cycle
-    contractor: 1.10,        // +10% - Trade skills
-    hvac: 1.10,             // +10% - Seasonal, technical
-    plumbing: 1.10,          // +10% - Emergency services
+  // Specialized services
+  construction: 1.15, // +15% - Complex sales cycle
+  contractor: 1.1, // +10% - Trade skills
+  hvac: 1.1, // +10% - Seasonal, technical
+  plumbing: 1.1, // +10% - Emergency services
 
-    // Standard industries
-    automotive: 1.0,
-    restaurant: 1.0,
-    retail: 1.0,
-    fitness: 1.0,
-    salon: 1.0,
-    cleaning: 1.0,
+  // Standard industries
+  automotive: 1.0,
+  restaurant: 1.0,
+  retail: 1.0,
+  fitness: 1.0,
+  salon: 1.0,
+  cleaning: 1.0,
 
-    // Lower complexity
-    cafe: 0.95,             // -5%
-    boutique: 0.95,          // -5%
-    photography: 0.90,       // -10%
+  // Lower complexity
+  cafe: 0.95, // -5%
+  boutique: 0.95, // -5%
+  photography: 0.9, // -10%
 
-    // Default
-    general: 1.0,
+  // Default
+  general: 1.0,
 };
 
 /**
  * Business size multipliers based on employee count or revenue scope
  */
 const BUSINESS_SIZE_MULTIPLIERS: Record<string, number> = {
-    // Small business (1-10 employees)
-    small: 1.0,
+  // Small business (1-10 employees)
+  small: 1.0,
 
-    // Medium (11-50 employees)  
-    medium: 1.20,
+  // Medium (11-50 employees)
+  medium: 1.2,
 
-    // Large (51-200 employees)
-    large: 1.40,
+  // Large (51-200 employees)
+  large: 1.4,
 
-    // Enterprise (200+)
-    enterprise: 1.60,
+  // Enterprise (200+)
+  enterprise: 1.6,
 
-    // Default to small if unknown
-    unknown: 1.0,
+  // Default to small if unknown
+  unknown: 1.0,
 };
 
 /**
  * Revenue tier multipliers (alternative to employee count)
  */
 const REVENUE_MULTIPLIERS: Record<string, number> = {
-    '0-100k': 1.0,      // <$100K
-    '100k-500k': 1.10,  // $100K-$500K  
-    '500k-1m': 1.25,    // $500K-$1M
-    '1m-5m': 1.40,      // $1M-$5M
-    '5m+': 1.60,        // $5M+
-    unknown: 1.0,
+  '0-100k': 1.0, // <$100K
+  '100k-500k': 1.1, // $100K-$500K
+  '500k-1m': 1.25, // $500K-$1M
+  '1m-5m': 1.4, // $1M-$5M
+  '5m+': 1.6, // $5M+
+  unknown: 1.0,
 };
 
 /**
@@ -89,120 +91,146 @@ export type BusinessSize = 'small' | 'medium' | 'large' | 'enterprise' | 'unknow
  * Dynamic pricing input parameters
  */
 export interface DynamicPricingInput {
-    industry: string | null;
-    businessSize?: BusinessSize;
-    employeeCount?: number;
-    revenue?: string;
-    location?: string; // Premium markets (NYC, SF, etc.)
+  industry: string | null;
+  businessSize?: BusinessSize;
+  employeeCount?: number;
+  revenue?: string;
+  location?: string; // Premium markets (NYC, SF, etc.)
+  segment?: OrganizationSegment;
 }
 
 /**
  * Calculate dynamic pricing based on industry, business size, and market factors
- * Floors/Ceilings enforced: 
+ * Floors/Ceilings enforced:
  * Starter: $397-$797
  * Growth: $997-$2497
  * Premium: $1997-$4997
  */
 export function getDynamicPricing(input: DynamicPricingInput): ProposalPricingTiers {
-    const { industry, businessSize, employeeCount, revenue, location } = input;
+  const { industry, businessSize, employeeCount, revenue, location, segment } = input;
 
-    // Custom Industry Multipliers from Requirements
-    const customIndustryMultipliers: Record<string, number> = {
-        restaurant: 0.8,
-        legal: 1.3,
-        healthcare: 1.4,
-        medical: 1.4,
-        dental: 1.4,
-        ecommerce: 1.2,
-        general: 1.0
+  // Custom Industry Multipliers from Requirements
+  const customIndustryMultipliers: Record<string, number> = {
+    restaurant: 0.8,
+    legal: 1.3,
+    healthcare: 1.4,
+    medical: 1.4,
+    dental: 1.4,
+    ecommerce: 1.2,
+    general: 1.0,
+  };
+
+  // Custom Size Multipliers from Requirements
+  const customSizeMultipliers: Record<BusinessSize, number> = {
+    small: 0.8,
+    medium: 1.0,
+    large: 1.3,
+    enterprise: 1.5,
+    unknown: 1.0,
+  };
+
+  let multiplier = 1.0;
+
+  // Apply segment multiplier if provided
+  if (segment) {
+    const segmentMultipliers: Record<OrganizationSegment, number> = {
+      nonprofit: 0.7, // Lower/tailored pricing for nonprofits
+      baseline_unknown: 0.8, // Basic minimal packages pricing
+      smb_local: 1.0, // Standard local business
+      technical_community: 1.2, // Premium tech positioning
+      healthcare: 1.4, // Highly regulated high-premium vertical
+      enterprise: 1.6, // High-end premium enterprise vertical
     };
+    multiplier *= segmentMultipliers[segment] || 1.0;
+  }
 
-    // Custom Size Multipliers from Requirements 
-    const customSizeMultipliers: Record<string, number> = {
-        small: 0.8,
-        medium: 1.0,
-        large: 1.3,
-        enterprise: 1.5,
-        unknown: 1.0
-    };
+  // Apply industry multiplier
+  const industryKey = (industry || 'general').toLowerCase();
+  const industryMultiplier =
+    customIndustryMultipliers[industryKey] || INDUSTRY_MULTIPLIERS[industryKey] || 1.0;
+  multiplier *= industryMultiplier;
 
-    let multiplier = 1.0;
+  // Apply business size multiplier
+  let sizeMultiplier = 1.0;
+  if (businessSize && businessSize !== 'unknown') {
+    sizeMultiplier = customSizeMultipliers[businessSize] || 1.0;
+  } else if (employeeCount !== undefined) {
+    if (employeeCount <= 10) sizeMultiplier = customSizeMultipliers.small;
+    else if (employeeCount <= 50) sizeMultiplier = customSizeMultipliers.medium;
+    else if (employeeCount <= 200) sizeMultiplier = customSizeMultipliers.large;
+    else sizeMultiplier = customSizeMultipliers.enterprise;
+  }
+  multiplier *= sizeMultiplier;
 
-    // Apply industry multiplier
-    const industryKey = (industry || 'general').toLowerCase();
-    const industryMultiplier = customIndustryMultipliers[industryKey] || INDUSTRY_MULTIPLIERS[industryKey] || 1.0;
-    multiplier *= industryMultiplier;
+  // Apply revenue multiplier if provided
+  if (revenue) {
+    const revenueKey = revenue.toLowerCase();
+    const revenueMultiplier = REVENUE_MULTIPLIERS[revenueKey] || 1.0;
+    multiplier *= revenueMultiplier;
+  }
 
-    // Apply business size multiplier
-    let sizeMultiplier = 1.0;
-    if (businessSize && businessSize !== 'unknown') {
-        sizeMultiplier = customSizeMultipliers[businessSize] || 1.0;
-    } else if (employeeCount !== undefined) {
-        if (employeeCount <= 10) sizeMultiplier = customSizeMultipliers.small;
-        else if (employeeCount <= 50) sizeMultiplier = customSizeMultipliers.medium;
-        else if (employeeCount <= 200) sizeMultiplier = customSizeMultipliers.large;
-        else sizeMultiplier = customSizeMultipliers.enterprise;
-    }
-    multiplier *= sizeMultiplier;
+  // Apply location premium for major markets
+  const premiumMarkets = [
+    'nyc',
+    'new york',
+    'san francisco',
+    'sf',
+    'los angeles',
+    'la',
+    'chicago',
+    'boston',
+    'seattle',
+    'miami',
+  ];
+  if (location && premiumMarkets.some((m) => location.toLowerCase().includes(m))) {
+    multiplier *= 1.15; // +15% for premium markets
+  }
 
-    // Apply revenue multiplier if provided
-    if (revenue) {
-        const revenueKey = revenue.toLowerCase();
-        const revenueMultiplier = REVENUE_MULTIPLIERS[revenueKey] || 1.0;
-        multiplier *= revenueMultiplier;
-    }
+  // Floor/Ceiling constants
+  const bounds: Record<'starter' | 'growth' | 'premium', [number, number]> = {
+    starter: [397, 797],
+    growth: [997, 2497],
+    premium: [1997, 4997],
+  };
 
-    // Apply location premium for major markets
-    const premiumMarkets = ['nyc', 'new york', 'san francisco', 'sf', 'los angeles', 'la', 'chicago', 'boston', 'seattle', 'miami'];
-    if (location && premiumMarkets.some(m => location.toLowerCase().includes(m))) {
-        multiplier *= 1.15; // +15% for premium markets
-    }
+  // Calculate final prices and clamp to boundaries, rounding to nearest $10
+  const roundToNearest10 = (val: number) => Math.round(val / 10) * 10 - 3; // e.g. 500 -> 497
 
-    // Floor/Ceiling constants
-    const bounds = {
-        starter: [397, 797],
-        growth: [997, 2497],
-        premium: [1997, 4997]
-    };
+  const calcBoundedPrice = (base: number, [min, max]: [number, number]) => {
+    let raw = base * multiplier;
+    raw = Math.max(min, Math.min(raw, max));
+    // We round to nearest 10, then subtract 3 to get ending in 7 ($497, $997, etc)
+    const rounded = Math.round(raw / 10) * 10;
+    // Keep it ending in 7 for standard psychology, so subtract 3
+    const result = rounded - 3;
+    // Re-clamp just in case the -3 pushed it out
+    return Math.max(min, Math.min(result, max));
+  };
 
-    // Calculate final prices and clamp to boundaries, rounding to nearest $10
-    const roundToNearest10 = (val: number) => Math.round(val / 10) * 10 - 3; // e.g. 500 -> 497
-
-    const calcBoundedPrice = (base: number, [min, max]: number[]) => {
-        let raw = base * multiplier;
-        raw = Math.max(min, Math.min(raw, max));
-        // We round to nearest 10, then subtract 3 to get ending in 7 ($497, $997, etc)
-        const rounded = Math.round(raw / 10) * 10;
-        // Keep it ending in 7 for standard psychology, so subtract 3
-        const result = rounded - 3;
-        // Re-clamp just in case the -3 pushed it out
-        return Math.max(min, Math.min(result, max));
-    };
-
-    return {
-        starter: calcBoundedPrice(PROPOSAL_PRICING.starter, bounds.starter),
-        growth: calcBoundedPrice(PROPOSAL_PRICING.growth, bounds.growth),
-        premium: calcBoundedPrice(PROPOSAL_PRICING.premium, bounds.premium),
-    };
+  return {
+    starter: calcBoundedPrice(PROPOSAL_PRICING.starter, bounds.starter),
+    growth: calcBoundedPrice(PROPOSAL_PRICING.growth, bounds.growth),
+    premium: calcBoundedPrice(PROPOSAL_PRICING.premium, bounds.premium),
+  };
 }
 
 /**
  * Classify business size from employee count
  */
 export function classifyBusinessSize(employeeCount?: number): BusinessSize {
-    if (!employeeCount) return 'unknown';
+  if (!employeeCount) return 'unknown';
 
-    if (employeeCount <= 10) return 'small';
-    if (employeeCount <= 50) return 'medium';
-    if (employeeCount <= 200) return 'large';
-    return 'enterprise';
+  if (employeeCount <= 10) return 'small';
+  if (employeeCount <= 50) return 'medium';
+  if (employeeCount <= 200) return 'large';
+  return 'enterprise';
 }
 
 // Legacy interface for backward compatibility
 export interface IndustryPricing {
-    essentials: number;
-    growth: number;
-    premium: number;
+  essentials: number;
+  growth: number;
+  premium: number;
 }
 
 /**
@@ -210,7 +238,7 @@ export interface IndustryPricing {
  * Maps essentials -> starter for backward compatibility.
  */
 export function getProposalPricing(): ProposalPricingTiers {
-    return { ...PROPOSAL_PRICING };
+  return { ...PROPOSAL_PRICING };
 }
 
 /**
@@ -218,18 +246,19 @@ export function getProposalPricing(): ProposalPricingTiers {
  * for components that expect the old keys.
  */
 export function getIndustryPricing(input?: string | null | DynamicPricingInput): IndustryPricing {
-    // If we're passed a DynamicPricingInput object, use it directly
-    const pricingInput = typeof input === 'object' && input !== null
-        ? input as DynamicPricingInput
-        : { industry: typeof input === 'string' ? input : null };
+  // If we're passed a DynamicPricingInput object, use it directly
+  const pricingInput =
+    typeof input === 'object' && input !== null
+      ? (input as DynamicPricingInput)
+      : { industry: typeof input === 'string' ? input : null };
 
-    const dynamicPricing = getDynamicPricing(pricingInput);
+  const dynamicPricing = getDynamicPricing(pricingInput);
 
-    return {
-        essentials: dynamicPricing.starter,
-        growth: dynamicPricing.growth,
-        premium: dynamicPricing.premium,
-    };
+  return {
+    essentials: dynamicPricing.starter,
+    growth: dynamicPricing.growth,
+    premium: dynamicPricing.premium,
+  };
 }
 
 export const getPricing = getIndustryPricing;

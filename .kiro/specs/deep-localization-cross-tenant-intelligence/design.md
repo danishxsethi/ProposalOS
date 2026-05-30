@@ -21,7 +21,7 @@ graph TB
         B --> C[Localization Engine]
         C --> D[LangGraph Audit Nodes]
     end
-    
+
     subgraph "Localization Layer"
         C --> E[Localized Prompt Library]
         C --> F[Locale-Specific Benchmarks]
@@ -29,14 +29,14 @@ graph TB
         D --> H[Audit Results]
         H --> I[Locale-Aware Formatting]
     end
-    
+
     subgraph "Intelligence Collection"
         H --> J[Anonymization Pipeline]
         J --> K[Differential Privacy Engine]
         K --> L[K-Anonymity Enforcer]
         L --> M[PostgreSQL: Anonymized Metrics]
     end
-    
+
     subgraph "Intelligence Analysis"
         M --> N[Benchmark Engine]
         M --> O[Pattern Discovery]
@@ -45,14 +45,14 @@ graph TB
         O --> Q
         P --> Q
     end
-    
+
     subgraph "Audit Enrichment"
         D --> R[Intelligence Query]
         R --> Q
         Q --> S[Enriched Findings]
         S --> H
     end
-    
+
     subgraph "Re-audit Tracking"
         T[Re-audit] --> U[Impact Measurement]
         U --> P
@@ -77,6 +77,7 @@ graph TB
 **Purpose**: Auto-detects user locale from multiple signals with manual override capability.
 
 **Data Model**:
+
 ```typescript
 interface LocaleDetectionResult {
   detectedLocale: string;
@@ -97,6 +98,7 @@ interface LocaleConfig {
 ```
 
 **Interface**:
+
 ```typescript
 class LocaleDetector {
   async detectLocale(context: DetectionContext): Promise<LocaleDetectionResult>;
@@ -115,6 +117,7 @@ interface DetectionContext {
 ```
 
 **Detection Priority**:
+
 1. Manual override parameter (?locale=de-DE)
 2. Domain TLD (.de → de-DE)
 3. hreflang tags in HTML
@@ -127,6 +130,7 @@ interface DetectionContext {
 **Purpose**: Adapts all audit content to locale with cultural context.
 
 **Data Model**:
+
 ```typescript
 interface LocalizationContext {
   locale: string;
@@ -158,6 +162,7 @@ interface LocalizationDimensions {
 ```
 
 **Interface**:
+
 ```typescript
 class LocalizationEngine {
   async localizePrompt(nodeId: string, locale: string): Promise<LocalizedPrompt>;
@@ -183,6 +188,7 @@ interface LocalizedFinding {
 ```
 
 **Gemini Prompt Template for Localization**:
+
 ```typescript
 const LOCALIZATION_PROMPT_TEMPLATE = `
 You are an expert in SEO and cultural adaptation for the ${locale} market.
@@ -217,6 +223,7 @@ and create a culturally appropriate prompt.
 **Purpose**: Stores and manages locale variants of all LangGraph node prompts.
 
 **Data Model**:
+
 ```typescript
 interface PromptLibraryEntry {
   nodeId: string;
@@ -236,6 +243,7 @@ interface PromptLibraryStats {
 ```
 
 **Interface**:
+
 ```typescript
 class LocalizedPromptLibrary {
   async getPrompt(nodeId: string, locale: string): Promise<LocalizedPrompt>;
@@ -249,6 +257,7 @@ class LocalizedPromptLibrary {
 ```
 
 **Approval Workflow**:
+
 1. Variant created by Localization Engine
 2. Submitted for native speaker review
 3. Native speaker provides feedback
@@ -260,6 +269,7 @@ class LocalizedPromptLibrary {
 **Purpose**: Aggregates anonymized metrics by industry, size, and locale.
 
 **Data Model**:
+
 ```typescript
 interface AnonymizedMetric {
   id: string;
@@ -302,6 +312,7 @@ interface BenchmarkQuery {
 ```
 
 **Interface**:
+
 ```typescript
 class BenchmarkEngine {
   async addMetrics(metrics: AnonymizedMetric[]): Promise<void>;
@@ -321,6 +332,7 @@ interface CohortStats {
 ```
 
 **K-Anonymity Enforcement**:
+
 - Minimum k = 10 for all cohorts
 - If cohort < 10 records, merge with broader cohort
 - Merge strategy: industry → all industries, then size → all sizes, then locale → all locales
@@ -330,6 +342,7 @@ interface CohortStats {
 **Purpose**: Removes client-identifying information and applies privacy techniques.
 
 **Data Model**:
+
 ```typescript
 interface RawAuditMetrics {
   clientId: string;
@@ -365,6 +378,7 @@ interface GeneralizationRule {
 ```
 
 **Interface**:
+
 ```typescript
 class AnonymizationPipeline {
   async anonymizeMetrics(rawMetrics: RawAuditMetrics): Promise<AnonymizedAuditMetrics>;
@@ -376,6 +390,7 @@ class AnonymizationPipeline {
 ```
 
 **Anonymization Steps**:
+
 1. Remove: client name, domain, contact info, email, phone
 2. Generalize: location (to region), business size (to category)
 3. Hash: client ID (one-way hash for re-audit matching)
@@ -387,6 +402,7 @@ class AnonymizationPipeline {
 **Purpose**: Auto-discovers recurring patterns across audits.
 
 **Data Model**:
+
 ```typescript
 interface Pattern {
   id: string;
@@ -413,6 +429,7 @@ interface PatternQuery {
 ```
 
 **Interface**:
+
 ```typescript
 class PatternDiscoveryEngine {
   async analyzeAudit(auditResults: AuditResults): Promise<Pattern[]>;
@@ -432,6 +449,7 @@ interface PatternStats {
 ```
 
 **Pattern Promotion Criteria**:
+
 - Observed in 10+ audits
 - Confidence score ≥ 0.7
 - Affects multiple industries or locales
@@ -442,6 +460,7 @@ interface PatternStats {
 **Purpose**: Measures actual impact of recommendations vs predicted impact.
 
 **Data Model**:
+
 ```typescript
 interface RecommendationImplementation {
   id: string;
@@ -482,11 +501,16 @@ interface EffectivenessStats {
 ```
 
 **Interface**:
+
 ```typescript
 class RecommendationEffectivenessTracker {
   async recordImplementation(implementation: RecommendationImplementation): Promise<void>;
   async recordOutcome(record: EffectivenessRecord): Promise<void>;
-  async getEffectivenessStats(recommendationType: string, industry: string, locale: string): Promise<EffectivenessStats>;
+  async getEffectivenessStats(
+    recommendationType: string,
+    industry: string,
+    locale: string
+  ): Promise<EffectivenessStats>;
   async getAccuracyTrends(recommendationType: string, timeRange: TimeRange): Promise<TrendData>;
   async getPredictiveAccuracy(): Promise<AccuracyMetrics>;
 }
@@ -505,6 +529,7 @@ interface AccuracyMetrics {
 **Purpose**: Provides internal API for querying cross-tenant intelligence.
 
 **Data Model**:
+
 ```typescript
 interface IntelligenceQuery {
   queryType: 'benchmarks' | 'patterns' | 'effectiveness';
@@ -535,11 +560,24 @@ interface APIAuditLog {
 ```
 
 **Interface**:
+
 ```typescript
 class IntelligenceAPI {
-  async queryBenchmarks(industry: string, locale: string, size?: string): Promise<IntelligenceResponse>;
-  async queryPatterns(platform?: string, plugin?: string, industry?: string): Promise<IntelligenceResponse>;
-  async queryEffectiveness(recommendationType: string, industry?: string, locale?: string): Promise<IntelligenceResponse>;
+  async queryBenchmarks(
+    industry: string,
+    locale: string,
+    size?: string
+  ): Promise<IntelligenceResponse>;
+  async queryPatterns(
+    platform?: string,
+    plugin?: string,
+    industry?: string
+  ): Promise<IntelligenceResponse>;
+  async queryEffectiveness(
+    recommendationType: string,
+    industry?: string,
+    locale?: string
+  ): Promise<IntelligenceResponse>;
   async auditQuery(query: IntelligenceQuery): Promise<void>;
   async getAuditLog(timeRange: TimeRange): Promise<APIAuditLog[]>;
   async validatePrivacy(response: IntelligenceResponse): Promise<ValidationResult>;
@@ -547,6 +585,7 @@ class IntelligenceAPI {
 ```
 
 **API Endpoints**:
+
 - `GET /intelligence/benchmarks?industry=dental&locale=en-US&size=small`
 - `GET /intelligence/patterns?platform=wordpress&plugin=yoast`
 - `GET /intelligence/effectiveness?recommendation_type=schema_markup&industry=medical`
@@ -558,6 +597,7 @@ class IntelligenceAPI {
 **Purpose**: Flags recommendations that may violate local regulations.
 
 **Data Model**:
+
 ```typescript
 interface RegulatoryRule {
   id: string;
@@ -584,11 +624,18 @@ interface RegulatoryConfig {
 ```
 
 **Interface**:
+
 ```typescript
 class RegulatoryComplianceChecker {
-  async checkRecommendation(recommendation: Recommendation, locale: string): Promise<RegulatoryFlag[]>;
+  async checkRecommendation(
+    recommendation: Recommendation,
+    locale: string
+  ): Promise<RegulatoryFlag[]>;
   async getApplicableRegulations(locale: string): Promise<RegulatoryRule[]>;
-  async validateCompliance(recommendations: Recommendation[], locale: string): Promise<ComplianceReport>;
+  async validateCompliance(
+    recommendations: Recommendation[],
+    locale: string
+  ): Promise<ComplianceReport>;
   async getSuggestedAlternatives(flag: RegulatoryFlag): Promise<string[]>;
 }
 
@@ -602,6 +649,7 @@ interface ComplianceReport {
 ```
 
 **Regulatory Rules**:
+
 - **GDPR (EU)**: Data collection, consent, privacy policy, cookie consent
 - **PIPEDA (Canada)**: Personal information collection, consent, privacy policy
 - **Privacy Act (Australia)**: Personal information handling, privacy policy, consent
@@ -793,6 +841,7 @@ The testing strategy employs both unit tests and property-based tests to ensure 
 ### Unit Testing Approach
 
 Unit tests focus on:
+
 - Specific examples demonstrating correct behavior
 - Edge cases (empty inputs, boundary values, null handling)
 - Error conditions and failure modes
@@ -802,6 +851,7 @@ Unit tests focus on:
 ### Property-Based Testing Approach
 
 Property tests verify universal correctness properties across randomized inputs:
+
 - Each property test runs minimum 100 iterations
 - Tests reference design document properties using tags
 - Tag format: `Feature: deep-localization-cross-tenant-intelligence, Property {N}: {property_text}`
@@ -831,452 +881,450 @@ const propertyTestConfig = {
 - All correctness properties must have corresponding property tests
 - All error conditions must have unit tests
 
-
-
 ## Correctness Properties
 
 A property is a characteristic or behavior that should hold true across all valid executions of a system—essentially, a formal statement about what the system should do. Properties serve as the bridge between human-readable specifications and machine-verifiable correctness guarantees.
 
 ### Property 1: Locale Detection Priority Chain
 
-*For any* detection context, the Locale_Detector SHALL respect the priority chain: manual override > TLD > hreflang > GBP > IP geolocation > default (en-US).
+_For any_ detection context, the Locale_Detector SHALL respect the priority chain: manual override > TLD > hreflang > GBP > IP geolocation > default (en-US).
 
 **Validates: Requirements 1.1, 1.2, 1.3, 1.4, 1.5, 1.7**
 
 ### Property 2: Manual Override Precedence
 
-*For any* detection context with a manual locale parameter, the Locale_Detector SHALL return the manual locale regardless of other detection signals.
+_For any_ detection context with a manual locale parameter, the Locale_Detector SHALL return the manual locale regardless of other detection signals.
 
 **Validates: Requirements 1.5**
 
 ### Property 3: Locale Storage Completeness
 
-*For any* detected locale, the audit context SHALL contain the detected locale value for use by downstream components.
+_For any_ detected locale, the audit context SHALL contain the detected locale value for use by downstream components.
 
 **Validates: Requirements 1.6**
 
 ### Property 4: Default Locale Fallback
 
-*For any* detection context where all detection methods fail, the Locale_Detector SHALL return en-US as the default locale.
+_For any_ detection context where all detection methods fail, the Locale_Detector SHALL return en-US as the default locale.
 
 **Validates: Requirements 1.7**
 
 ### Property 5: Prompt Adaptation for Non-English Locales
 
-*For any* non-English locale, the Localization_Engine SHALL adapt LangGraph node prompts to include cultural context beyond translation.
+_For any_ non-English locale, the Localization_Engine SHALL adapt LangGraph node prompts to include cultural context beyond translation.
 
 **Validates: Requirements 2.1, 2.2**
 
 ### Property 6: Gemini Thinking Budget Compliance
 
-*For any* prompt localization request, the Localization_Engine SHALL use Gemini with exactly 4,096 tokens for thinking budget.
+_For any_ prompt localization request, the Localization_Engine SHALL use Gemini with exactly 4,096 tokens for thinking budget.
 
 **Validates: Requirements 2.3**
 
 ### Property 7: Localization Dimension Coverage
 
-*For any* localized prompt, the adapted prompt SHALL address all seven dimensions: language, search engine, benchmarks, competitors, regulations, currency, and tone.
+_For any_ localized prompt, the adapted prompt SHALL address all seven dimensions: language, search engine, benchmarks, competitors, regulations, currency, and tone.
 
 **Validates: Requirements 2.4**
 
 ### Property 8: Audit Results Localization
 
-*For any* audit completed in a non-English locale, all findings, recommendations, and explanations SHALL be presented in the target locale.
+_For any_ audit completed in a non-English locale, all findings, recommendations, and explanations SHALL be presented in the target locale.
 
 **Validates: Requirements 2.5**
 
 ### Property 9: Currency Formatting Correctness
 
-*For any* metric displayed in a specific locale, the currency formatting SHALL use the locale-appropriate currency symbol and formatting rules.
+_For any_ metric displayed in a specific locale, the currency formatting SHALL use the locale-appropriate currency symbol and formatting rules.
 
 **Validates: Requirements 2.6**
 
 ### Property 10: Search Engine Prioritization
 
-*For any* audit in a locale with a dominant non-Google search engine (e.g., ru-RU → Yandex), the Localization_Engine SHALL prioritize that search engine in recommendations and analysis.
+_For any_ audit in a locale with a dominant non-Google search engine (e.g., ru-RU → Yandex), the Localization_Engine SHALL prioritize that search engine in recommendations and analysis.
 
 **Validates: Requirements 3.1, 3.3**
 
 ### Property 11: Search Engine-Specific Guidance
 
-*For any* recommendation generated for a locale with a non-Google search engine, the recommendation SHALL include search-engine-specific guidance.
+_For any_ recommendation generated for a locale with a non-Google search engine, the recommendation SHALL include search-engine-specific guidance.
 
 **Validates: Requirements 3.2**
 
 ### Property 12: Search Visibility Metrics Display
 
-*For any* search visibility metrics displayed in a specific locale, the locale-appropriate search engine SHALL be shown as the primary engine.
+_For any_ search visibility metrics displayed in a specific locale, the locale-appropriate search engine SHALL be shown as the primary engine.
 
 **Validates: Requirements 3.4**
 
 ### Property 13: Benchmark Metric Extraction
 
-*For any* completed audit, the Benchmark_Engine SHALL extract anonymized metrics and categorize them by industry, business size, and locale.
+_For any_ completed audit, the Benchmark_Engine SHALL extract anonymized metrics and categorize them by industry, business size, and locale.
 
 **Validates: Requirements 4.1**
 
 ### Property 14: Benchmark Cohort Matching
 
-*For any* benchmark query, the System SHALL return benchmarks for the requested industry, business size, and locale cohort.
+_For any_ benchmark query, the System SHALL return benchmarks for the requested industry, business size, and locale cohort.
 
 **Validates: Requirements 4.2**
 
 ### Property 15: Benchmark Cohort Fallback
 
-*For any* benchmark query where the specific cohort has insufficient data, the System SHALL fall back to broader cohorts (industry → all industries, size → all sizes, locale → all locales).
+_For any_ benchmark query where the specific cohort has insufficient data, the System SHALL fall back to broader cohorts (industry → all industries, size → all sizes, locale → all locales).
 
 **Validates: Requirements 4.3**
 
 ### Property 16: Benchmark Metadata Completeness
 
-*For any* benchmark displayed, the display SHALL include sample size and confidence level.
+_For any_ benchmark displayed, the display SHALL include sample size and confidence level.
 
 **Validates: Requirements 4.4**
 
 ### Property 17: Competitor Locale Identification
 
-*For any* competitor analysis, the System SHALL identify competitors in the same locale and industry as the audited business.
+_For any_ competitor analysis, the System SHALL identify competitors in the same locale and industry as the audited business.
 
 **Validates: Requirements 5.1**
 
 ### Property 18: Multi-Locale Competitor Analysis
 
-*For any* business operating in multiple locales, the System SHALL analyze competitors separately for each locale.
+_For any_ business operating in multiple locales, the System SHALL analyze competitors separately for each locale.
 
 **Validates: Requirements 5.2**
 
 ### Property 19: Competitor Metrics Localization
 
-*For any* competitor data displayed, the metrics SHALL be locale-specific (e.g., rankings in the appropriate search results).
+_For any_ competitor data displayed, the metrics SHALL be locale-specific (e.g., rankings in the appropriate search results).
 
 **Validates: Requirements 5.3**
 
 ### Property 20: GDPR Regulatory Flagging
 
-*For any* audit running in an EU locale (de-DE, fr-FR, es-ES), the System SHALL flag recommendations with GDPR implications.
+_For any_ audit running in an EU locale (de-DE, fr-FR, es-ES), the System SHALL flag recommendations with GDPR implications.
 
 **Validates: Requirements 6.1**
 
 ### Property 21: PIPEDA Regulatory Flagging
 
-*For any* audit running in Canada (en-CA), the System SHALL flag recommendations with PIPEDA implications.
+_For any_ audit running in Canada (en-CA), the System SHALL flag recommendations with PIPEDA implications.
 
 **Validates: Requirements 6.2**
 
 ### Property 22: Privacy Act Regulatory Flagging
 
-*For any* audit running in Australia (en-AU), the System SHALL flag recommendations with Privacy Act implications.
+_For any_ audit running in Australia (en-AU), the System SHALL flag recommendations with Privacy Act implications.
 
 **Validates: Requirements 6.3**
 
 ### Property 23: Regulatory Guidance Completeness
 
-*For any* flagged recommendation, the flag SHALL include specific guidance on compliance requirements.
+_For any_ flagged recommendation, the flag SHALL include specific guidance on compliance requirements.
 
 **Validates: Requirements 6.4**
 
 ### Property 24: Regulatory Review Marking
 
-*For any* recommendation with regulatory implications, the System SHALL mark it as requiring legal review before implementation.
+_For any_ recommendation with regulatory implications, the System SHALL mark it as requiring legal review before implementation.
 
 **Validates: Requirements 6.5**
 
 ### Property 25: Locale Variant Requirement
 
-*For any* new LangGraph node, the System SHALL require locale variants for all supported launch locales (en-US, en-GB, en-CA, en-AU, de-DE, fr-FR, es-ES).
+_For any_ new LangGraph node, the System SHALL require locale variants for all supported launch locales (en-US, en-GB, en-CA, en-AU, de-DE, fr-FR, es-ES).
 
 **Validates: Requirements 7.1**
 
 ### Property 26: Variant Gemini Budget
 
-*For any* locale variant creation, the Localization_Engine SHALL use Gemini with 4,096 tokens for thinking budget.
+_For any_ locale variant creation, the Localization_Engine SHALL use Gemini with 4,096 tokens for thinking budget.
 
 **Validates: Requirements 7.2**
 
 ### Property 27: Variant Cultural Rewriting
 
-*For any* created locale variant, the variant SHALL include cultural context appropriate to the target locale.
+_For any_ created locale variant, the variant SHALL include cultural context appropriate to the target locale.
 
 **Validates: Requirements 7.3**
 
 ### Property 28: Native Speaker Review Requirement
 
-*For any* locale variant for a launch locale, the System SHALL require native speaker review before approval.
+_For any_ locale variant for a launch locale, the System SHALL require native speaker review before approval.
 
 **Validates: Requirements 7.4**
 
 ### Property 29: Variant Storage and Versioning
 
-*For any* approved locale variant, the System SHALL store it in the Localized_Prompt_Library with complete version tracking information.
+_For any_ approved locale variant, the System SHALL store it in the Localized_Prompt_Library with complete version tracking information.
 
 **Validates: Requirements 7.5**
 
 ### Property 30: Variant Selection Correctness
 
-*For any* audit execution, the System SHALL select the appropriate prompt variant based on the detected locale.
+_For any_ audit execution, the System SHALL select the appropriate prompt variant based on the detected locale.
 
 **Validates: Requirements 7.6**
 
 ### Property 31: Anonymization Completeness
 
-*For any* audit completion, the Benchmark_Engine SHALL extract metrics with all client-identifying information removed.
+_For any_ audit completion, the Benchmark_Engine SHALL extract metrics with all client-identifying information removed.
 
 **Validates: Requirements 8.1, 8.2**
 
 ### Property 32: Differential Privacy Application
 
-*For any* anonymized metric stored, the Benchmark_Engine SHALL apply differential privacy with noise injection.
+_For any_ anonymized metric stored, the Benchmark_Engine SHALL apply differential privacy with noise injection.
 
 **Validates: Requirements 8.3**
 
 ### Property 33: K-Anonymity Enforcement
 
-*For any* stored anonymized metric, the Benchmark_Engine SHALL ensure the cohort has k ≥ 10 records.
+_For any_ stored anonymized metric, the Benchmark_Engine SHALL ensure the cohort has k ≥ 10 records.
 
 **Validates: Requirements 8.4**
 
 ### Property 34: Cohort Merging on K-Anonymity Violation
 
-*For any* cohort that would have fewer than 10 records, the Benchmark_Engine SHALL merge it with a broader cohort.
+_For any_ cohort that would have fewer than 10 records, the Benchmark_Engine SHALL merge it with a broader cohort.
 
 **Validates: Requirements 8.5**
 
 ### Property 35: Anonymized Metric Field Completeness
 
-*For any* stored anonymized metric, the record SHALL include industry, business size, locale, and performance metrics.
+_For any_ stored anonymized metric, the record SHALL include industry, business size, locale, and performance metrics.
 
 **Validates: Requirements 8.6**
 
 ### Property 36: Benchmark Query Privacy
 
-*For any* benchmark query result, the result SHALL not contain data that could identify individual clients.
+_For any_ benchmark query result, the result SHALL not contain data that could identify individual clients.
 
 **Validates: Requirements 8.7**
 
 ### Property 37: Pattern Analysis Execution
 
-*For any* completed audit, the Pattern_Library SHALL analyze findings to identify recurring patterns.
+_For any_ completed audit, the Pattern_Library SHALL analyze findings to identify recurring patterns.
 
 **Validates: Requirements 9.1**
 
 ### Property 38: Pattern Promotion Threshold
 
-*For any* pattern observed in 10+ audits, the Pattern_Library SHALL promote it to the active library.
+_For any_ pattern observed in 10+ audits, the Pattern_Library SHALL promote it to the active library.
 
 **Validates: Requirements 9.2**
 
 ### Property 39: Active Pattern Usage
 
-*For any* active pattern in the library, the System SHALL use it to accelerate diagnosis in future audits.
+_For any_ active pattern in the library, the System SHALL use it to accelerate diagnosis in future audits.
 
 **Validates: Requirements 9.3**
 
 ### Property 40: Pattern Display Completeness
 
-*For any* displayed pattern, the display SHALL include description, frequency, affected platforms, and recommended fixes.
+_For any_ displayed pattern, the display SHALL include description, frequency, affected platforms, and recommended fixes.
 
 **Validates: Requirements 9.4**
 
 ### Property 41: Pattern Tracking Completeness
 
-*For any* discovered pattern, the System SHALL track which industries and locales are affected.
+_For any_ discovered pattern, the System SHALL track which industries and locales are affected.
 
 **Validates: Requirements 9.5**
 
 ### Property 42: Re-audit Impact Measurement
 
-*For any* re-audit of a business that implemented recommendations, the System SHALL measure actual impact vs predicted impact.
+_For any_ re-audit of a business that implemented recommendations, the System SHALL measure actual impact vs predicted impact.
 
 **Validates: Requirements 10.1**
 
 ### Property 43: Impact Metric Completeness
 
-*For any* impact measurement, the System SHALL compare traffic changes, ranking changes, and conversion changes.
+_For any_ impact measurement, the System SHALL compare traffic changes, ranking changes, and conversion changes.
 
 **Validates: Requirements 10.2**
 
 ### Property 44: Effectiveness Feedback Loop
 
-*For any* measured impact, the System SHALL feed accuracy data back into the predictive engine.
+_For any_ measured impact, the System SHALL feed accuracy data back into the predictive engine.
 
 **Validates: Requirements 10.3**
 
 ### Property 45: Effectiveness Data Display
 
-*For any* displayed effectiveness data, the display SHALL include recommendation type, industry, locale, and average impact.
+_For any_ displayed effectiveness data, the display SHALL include recommendation type, industry, locale, and average impact.
 
 **Validates: Requirements 10.4**
 
 ### Property 46: Effectiveness Data in Proposals
 
-*For any* proposal generated when sufficient effectiveness data exists, the proposal SHALL surface effectiveness data from similar implementations.
+_For any_ proposal generated when sufficient effectiveness data exists, the proposal SHALL surface effectiveness data from similar implementations.
 
 **Validates: Requirements 10.5**
 
 ### Property 47: Benchmarks API Endpoint
 
-*For any* request to GET /intelligence/benchmarks with valid parameters (industry, locale, size), the Intelligence_API SHALL return benchmark data for the requested cohort.
+_For any_ request to GET /intelligence/benchmarks with valid parameters (industry, locale, size), the Intelligence_API SHALL return benchmark data for the requested cohort.
 
 **Validates: Requirements 11.1**
 
 ### Property 48: Patterns API Endpoint
 
-*For any* request to GET /intelligence/patterns with valid parameters (platform, plugin, industry), the Intelligence_API SHALL return pattern data matching the filters.
+_For any_ request to GET /intelligence/patterns with valid parameters (platform, plugin, industry), the Intelligence_API SHALL return pattern data matching the filters.
 
 **Validates: Requirements 11.2**
 
 ### Property 49: Effectiveness API Endpoint
 
-*For any* request to GET /intelligence/effectiveness with valid parameters (recommendation_type, industry, locale), the Intelligence_API SHALL return effectiveness data.
+_For any_ request to GET /intelligence/effectiveness with valid parameters (recommendation_type, industry, locale), the Intelligence_API SHALL return effectiveness data.
 
 **Validates: Requirements 11.3**
 
 ### Property 50: API Rate Limiting
 
-*For any* API client, the Intelligence_API SHALL enforce rate limiting (1000 requests per hour per service account).
+_For any_ API client, the Intelligence_API SHALL enforce rate limiting (1000 requests per hour per service account).
 
 **Validates: Requirements 11.4**
 
 ### Property 51: API Request Audit Logging
 
-*For any* Intelligence_API request, the System SHALL audit and log the request for compliance review.
+_For any_ Intelligence_API request, the System SHALL audit and log the request for compliance review.
 
 **Validates: Requirements 11.5**
 
 ### Property 52: API Response Privacy
 
-*For any* Intelligence_API response, the response SHALL not contain data that could identify individual clients.
+_For any_ Intelligence_API response, the response SHALL not contain data that could identify individual clients.
 
 **Validates: Requirements 11.6**
 
 ### Property 53: Empty API Result Handling
 
-*For any* Intelligence_API query that returns no data, the API SHALL return an empty result set with appropriate HTTP status.
+_For any_ Intelligence_API query that returns no data, the API SHALL return an empty result set with appropriate HTTP status.
 
 **Validates: Requirements 11.7**
 
 ### Property 54: Privacy-First Anonymization
 
-*For any* anonymized metric collection, the System SHALL remove all client-identifying information before storage.
+_For any_ anonymized metric collection, the System SHALL remove all client-identifying information before storage.
 
 **Validates: Requirements 12.1**
 
 ### Property 55: Differential Privacy Noise Injection
 
-*For any* privacy technique applied, the System SHALL use differential privacy with noise injection.
+_For any_ privacy technique applied, the System SHALL use differential privacy with noise injection.
 
 **Validates: Requirements 12.2**
 
 ### Property 56: K-Anonymity Guarantee
 
-*For any* stored anonymized data, the System SHALL ensure no cohort has fewer than 10 records (k ≥ 10).
+_For any_ stored anonymized data, the System SHALL ensure no cohort has fewer than 10 records (k ≥ 10).
 
 **Validates: Requirements 12.3**
 
 ### Property 57: Intelligence Query Audit Logging
 
-*For any* intelligence data query, the System SHALL audit and log the query for compliance review.
+_For any_ intelligence data query, the System SHALL audit and log the query for compliance review.
 
 **Validates: Requirements 12.4**
 
 ### Property 58: Privacy Concern Alerting
 
-*For any* identified privacy concern, the System SHALL alert operators immediately.
+_For any_ identified privacy concern, the System SHALL alert operators immediately.
 
 **Validates: Requirements 12.5**
 
 ### Property 59: Secure Data Deletion
 
-*For any* raw audit data after anonymization, the System SHALL securely delete it according to data retention policies.
+_For any_ raw audit data after anonymization, the System SHALL securely delete it according to data retention policies.
 
 **Validates: Requirements 12.6**
 
 ### Property 60: Locale Configuration Extensibility
 
-*For any* new locale addition, the System SHALL require only a configuration file with locale-specific settings.
+_For any_ new locale addition, the System SHALL require only a configuration file with locale-specific settings.
 
 **Validates: Requirements 13.1**
 
 ### Property 61: Locale Configuration Completeness
 
-*For any* locale configuration file, the file SHALL specify language, primary search engine, currency, regulations, and tone.
+_For any_ locale configuration file, the file SHALL specify language, primary search engine, currency, regulations, and tone.
 
 **Validates: Requirements 13.2**
 
 ### Property 62: New Locale Variant Requirement
 
-*For any* newly added locale, the System SHALL require locale variants for all LangGraph node prompts.
+_For any_ newly added locale, the System SHALL require locale variants for all LangGraph node prompts.
 
 **Validates: Requirements 13.3**
 
 ### Property 63: New Locale Variant Approval
 
-*For any* locale variant for a newly added locale, the System SHALL require native speaker review before deployment.
+_For any_ locale variant for a newly added locale, the System SHALL require native speaker review before deployment.
 
 **Validates: Requirements 13.4**
 
 ### Property 64: New Locale Benchmark Collection
 
-*For any* newly deployed locale, the System SHALL begin collecting anonymized benchmarks for that locale.
+_For any_ newly deployed locale, the System SHALL begin collecting anonymized benchmarks for that locale.
 
 **Validates: Requirements 13.5**
 
 ### Property 65: Audit Enrichment with Benchmarks
 
-*For any* completed audit, the System SHALL query the Intelligence_API for relevant benchmarks.
+_For any_ completed audit, the System SHALL query the Intelligence_API for relevant benchmarks.
 
 **Validates: Requirements 14.1**
 
 ### Property 66: Benchmark Display with Findings
 
-*For any* available benchmarks, the System SHALL display them alongside audit findings.
+_For any_ available benchmarks, the System SHALL display them alongside audit findings.
 
 **Validates: Requirements 14.2**
 
 ### Property 67: Pattern Highlighting in Findings
 
-*For any* available patterns, the System SHALL highlight findings that match known patterns.
+_For any_ available patterns, the System SHALL highlight findings that match known patterns.
 
 **Validates: Requirements 14.3**
 
 ### Property 68: Enriched Finding Display Completeness
 
-*For any* enriched finding display, the display SHALL show benchmark percentile, pattern frequency, and effectiveness data.
+_For any_ enriched finding display, the display SHALL show benchmark percentile, pattern frequency, and effectiveness data.
 
 **Validates: Requirements 14.4**
 
 ### Property 69: Insufficient Data Messaging
 
-*For any* audit where insufficient data exists for enrichment, the System SHALL indicate that enrichment will improve as more data is collected.
+_For any_ audit where insufficient data exists for enrichment, the System SHALL indicate that enrichment will improve as more data is collected.
 
 **Validates: Requirements 14.5**
 
 ### Property 70: EU Regulatory Compliance Checking
 
-*For any* audit running in an EU locale, the System SHALL check all recommendations against GDPR requirements.
+_For any_ audit running in an EU locale, the System SHALL check all recommendations against GDPR requirements.
 
 **Validates: Requirements 15.1**
 
 ### Property 71: Canada Regulatory Compliance Checking
 
-*For any* audit running in Canada (en-CA), the System SHALL check all recommendations against PIPEDA requirements.
+_For any_ audit running in Canada (en-CA), the System SHALL check all recommendations against PIPEDA requirements.
 
 **Validates: Requirements 15.2**
 
 ### Property 72: Australia Regulatory Compliance Checking
 
-*For any* audit running in Australia (en-AU), the System SHALL check all recommendations against Privacy Act requirements.
+_For any_ audit running in Australia (en-AU), the System SHALL check all recommendations against Privacy Act requirements.
 
 **Validates: Requirements 15.3**
 
 ### Property 73: Regulatory Concern Flagging and Guidance
 
-*For any* identified regulatory concern, the System SHALL flag the recommendation and provide specific guidance on compliance requirements.
+_For any_ identified regulatory concern, the System SHALL flag the recommendation and provide specific guidance on compliance requirements.
 
 **Validates: Requirements 15.4**
 
 ### Property 74: Regulatory Requirement Indication
 
-*For any* flagged recommendation, the System SHALL indicate the specific regulatory requirement that triggered the flag.
+_For any_ flagged recommendation, the System SHALL indicate the specific regulatory requirement that triggered the flag.
 
 **Validates: Requirements 15.5**

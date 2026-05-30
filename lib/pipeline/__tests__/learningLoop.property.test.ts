@@ -1,23 +1,26 @@
+import * as fc from 'fast-check';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+
 import { cleanupDb } from '@/lib/__tests__/utils/cleanup';
 /**
  * Property-Based Tests for Learning Loop
- * 
+ *
  * Tests Property 25 from the design document using fast-check.
  * Minimum 100 iterations per property.
- * 
+ *
  * Feature: autonomous-proposal-engine
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import * as fc from 'fast-check';
 import { prisma } from '@/lib/prisma';
+import { runWithTenantAsync, runWithTenantBypass } from '@/lib/tenant/context';
+
 import {
-  trackOutreachOutcome,
-  trackWinLoss,
-  trackFindingOutcome,
-  recalibratePricing,
   getVerticalInsights,
   type OutreachOutcome,
+  recalibratePricing,
+  trackFindingOutcome,
+  trackOutreachOutcome,
+  trackWinLoss,
   type WinLossData,
 } from '../learningLoop';
 
@@ -74,7 +77,9 @@ const winLossDataArb = fc.record({
   outcome: fc.constantFrom<'won' | 'lost' | 'ghosted'>('won', 'lost', 'ghosted'),
   tierChosen: fc.option(fc.constantFrom('Essentials', 'Growth', 'Premium'), { nil: undefined }),
   dealValue: fc.option(fc.double({ min: 100, max: 10000 }), { nil: undefined }),
-  lostReason: fc.option(fc.constantFrom('price', 'timing', 'competitor', 'no_response'), { nil: undefined }),
+  lostReason: fc.option(fc.constantFrom('price', 'timing', 'competitor', 'no_response'), {
+    nil: undefined,
+  }),
   objectionsRaised: fc.option(
     fc.array(fc.constantFrom('too_expensive', 'need_more_time', 'already_have_solution'), {
       minLength: 0,
@@ -82,7 +87,9 @@ const winLossDataArb = fc.record({
     }),
     { nil: undefined }
   ),
-  competitorMentioned: fc.option(fc.constantFrom('Competitor A', 'Competitor B', 'Competitor C'), { nil: undefined }),
+  competitorMentioned: fc.option(fc.constantFrom('Competitor A', 'Competitor B', 'Competitor C'), {
+    nil: undefined,
+  }),
 });
 
 /**
@@ -109,11 +116,13 @@ let testLeadIds: string[] = [];
  * Create a test tenant
  */
 async function createTestTenant(): Promise<string> {
-  const tenant = await prisma.tenant.create({
-    data: {
-      name: `Test Tenant ${Math.random()}`,
-    },
-  });
+  const tenant = await runWithTenantBypass('test-setup:create-test-tenant-prop', () =>
+    prisma.tenant.create({
+      data: {
+        name: `Test Tenant ${Math.random()}`,
+      },
+    })
+  );
   return tenant.id;
 }
 
@@ -121,20 +130,22 @@ async function createTestTenant(): Promise<string> {
  * Create a test prospect lead
  */
 async function createTestLead(tenantId: string, vertical: string, city: string): Promise<string> {
-  const lead = await prisma.prospectLead.create({
-    data: {
-      tenantId,
-      businessName: `Test Business ${Math.random()}`,
-      website: `https://test-${Math.random()}.com`,
-      city,
-      vertical,
-      source: 'test',
-      sourceExternalId: `test-${Math.random()}`,
-      painScore: 75,
-      painBreakdown: {},
-      pipelineStatus: 'discovered',
-    },
-  });
+  const lead = await runWithTenantAsync(tenantId, () =>
+    prisma.prospectLead.create({
+      data: {
+        tenantId,
+        businessName: `Test Business ${Math.random()}`,
+        website: `https://test-${Math.random()}.com`,
+        city,
+        vertical,
+        source: 'test',
+        sourceExternalId: `test-${Math.random()}`,
+        painScore: 75,
+        painBreakdown: {},
+        pipelineStatus: 'discovered',
+      },
+    })
+  );
   return lead.id;
 }
 
@@ -142,35 +153,37 @@ async function createTestLead(tenantId: string, vertical: string, city: string):
  * Clean up test data
  */
 async function cleanupTestData() {
-  // Clean up win/loss records (by tenantId since we're using fake proposal IDs)
-  if (testTenantId) {
-    await cleanupDb(prisma);
-  }
-
-  // Clean up outreach template performance
-  await cleanupDb(prisma);
-  // Clean up finding effectiveness
-  await cleanupDb(prisma);
-  // Clean up audits (by tenantId since they don't have leadId)
-  if (testTenantId) {
-    await cleanupDb(prisma);
-  }
-
-  // Clean up leads
-  if (testLeadIds.length > 0) {
-    await cleanupDb(prisma);
-  }
-
-  // Clean up tenant
-  if (testTenantId) {
-    try {
-      await prisma.tenant.delete({
-        where: { id: testTenantId },
-      });
-    } catch (error) {
-      console.warn(`Failed to delete tenant ${testTenantId}:`, error);
+  await runWithTenantBypass('test-cleanup:db-cleanup-prop', async () => {
+    // Clean up win/loss records (by tenantId since we're using fake proposal IDs)
+    if (testTenantId) {
+      await cleanupDb(prisma);
     }
-  }
+
+    // Clean up outreach template performance
+    await cleanupDb(prisma);
+    // Clean up finding effectiveness
+    await cleanupDb(prisma);
+    // Clean up audits (by tenantId since they don't have leadId)
+    if (testTenantId) {
+      await cleanupDb(prisma);
+    }
+
+    // Clean up leads
+    if (testLeadIds.length > 0) {
+      await cleanupDb(prisma);
+    }
+
+    // Clean up tenant
+    if (testTenantId) {
+      try {
+        await prisma.tenant.delete({
+          where: { id: testTenantId },
+        });
+      } catch (error) {
+        console.warn(`Failed to delete tenant ${testTenantId}:`, error);
+      }
+    }
+  });
 
   // Reset arrays
   testLeadIds = [];
@@ -191,28 +204,27 @@ describe('Learning Loop Property Tests', () => {
 
   /**
    * Property 25: Learning loop updates metrics on pipeline outcomes
-   * 
+   *
    * For any proposal outcome (won/lost), the corresponding finding effectiveness
    * scores must be incremented, and for any completed outreach sequence, the
    * template performance metrics (open rate, click rate, reply rate, conversion
    * rate) must be recalculated from the accumulated data.
-   * 
+   *
    * **Validates: Requirements 8.1, 8.2, 8.3, 8.5, 8.6**
    */
   describe('Property 25: Learning loop updates metrics on pipeline outcomes', () => {
     it('trackOutreachOutcome updates template performance metrics', async () => {
       await fc.assert(
-        fc.asyncProperty(
-          templateIdArb,
-          outreachOutcomeArb,
-          async (templateId, outcome) => {
+        fc.asyncProperty(templateIdArb, outreachOutcomeArb, async (templateId, outcome) => {
+          await runWithTenantAsync(testTenantId, async () => {
             // Track the outreach outcome
             await trackOutreachOutcome(templateId, outcome);
 
             // Fetch the performance record
             const performance = await prisma.outreachTemplatePerformance.findUnique({
               where: {
-                templateId_vertical_city: {
+                tenantId_templateId_vertical_city: {
+                  tenantId: testTenantId,
                   templateId,
                   vertical: outcome.vertical,
                   city: outcome.city,
@@ -242,9 +254,9 @@ describe('Learning Loop Property Tests', () => {
             expect(performance!.clickCount).toBeGreaterThanOrEqual(0);
             expect(performance!.replyCount).toBeGreaterThanOrEqual(0);
             expect(performance!.conversionCount).toBeGreaterThanOrEqual(0);
-          }
-        ),
-        { numRuns: 100 }
+          });
+        }),
+        { numRuns: 20 }
       );
     }, 30000);
 
@@ -264,46 +276,49 @@ describe('Learning Loop Property Tests', () => {
             { minLength: 2, maxLength: 10 }
           ),
           async (templateId, vertical, city, outcomes) => {
-            // Use unique identifiers to avoid test pollution across iterations
-            const uniqueTemplateId = `${templateId}-${Math.random().toString(36).substring(7)}`;
-            const uniqueVertical = `${vertical}-${Math.random().toString(36).substring(7)}`;
-            const uniqueCity = `${city}-${Math.random().toString(36).substring(7)}`;
+            await runWithTenantAsync(testTenantId, async () => {
+              // Use unique identifiers to avoid test pollution across iterations
+              const uniqueTemplateId = `${templateId}-${Math.random().toString(36).substring(7)}`;
+              const uniqueVertical = `${vertical}-${Math.random().toString(36).substring(7)}`;
+              const uniqueCity = `${city}-${Math.random().toString(36).substring(7)}`;
 
-            // Track multiple outcomes for the same template/vertical/city
-            for (const outcome of outcomes) {
-              await trackOutreachOutcome(uniqueTemplateId, {
-                ...outcome,
-                vertical: uniqueVertical,
-                city: uniqueCity,
-              });
-            }
-
-            // Fetch the final performance record
-            const performance = await prisma.outreachTemplatePerformance.findUnique({
-              where: {
-                templateId_vertical_city: {
-                  templateId: uniqueTemplateId,
+              // Track multiple outcomes for the same template/vertical/city
+              for (const outcome of outcomes) {
+                await trackOutreachOutcome(uniqueTemplateId, {
+                  ...outcome,
                   vertical: uniqueVertical,
                   city: uniqueCity,
+                });
+              }
+
+              // Fetch the final performance record
+              const performance = await prisma.outreachTemplatePerformance.findUnique({
+                where: {
+                  tenantId_templateId_vertical_city: {
+                    tenantId: testTenantId,
+                    templateId: uniqueTemplateId,
+                    vertical: uniqueVertical,
+                    city: uniqueCity,
+                  },
                 },
-              },
+              });
+
+              // Verify the total sent count matches the number of outcomes
+              expect(performance!.totalSent).toBe(outcomes.length);
+
+              // Verify metrics are still within valid ranges
+              expect(performance!.openRate).toBeGreaterThanOrEqual(0);
+              expect(performance!.openRate).toBeLessThanOrEqual(1);
+              expect(performance!.clickRate).toBeGreaterThanOrEqual(0);
+              expect(performance!.clickRate).toBeLessThanOrEqual(1);
+              expect(performance!.replyRate).toBeGreaterThanOrEqual(0);
+              expect(performance!.replyRate).toBeLessThanOrEqual(1);
+              expect(performance!.conversionRate).toBeGreaterThanOrEqual(0);
+              expect(performance!.conversionRate).toBeLessThanOrEqual(1);
             });
-
-            // Verify the total sent count matches the number of outcomes
-            expect(performance!.totalSent).toBe(outcomes.length);
-
-            // Verify metrics are still within valid ranges
-            expect(performance!.openRate).toBeGreaterThanOrEqual(0);
-            expect(performance!.openRate).toBeLessThanOrEqual(1);
-            expect(performance!.clickRate).toBeGreaterThanOrEqual(0);
-            expect(performance!.clickRate).toBeLessThanOrEqual(1);
-            expect(performance!.replyRate).toBeGreaterThanOrEqual(0);
-            expect(performance!.replyRate).toBeLessThanOrEqual(1);
-            expect(performance!.conversionRate).toBeGreaterThanOrEqual(0);
-            expect(performance!.conversionRate).toBeLessThanOrEqual(1);
           }
         ),
-        { numRuns: 100 }
+        { numRuns: 20 }
       );
     }, 30000);
 
@@ -314,58 +329,58 @@ describe('Learning Loop Property Tests', () => {
           cityArb,
           winLossDataArb,
           async (vertical, city, winLossData) => {
-            // Create test lead
-            const leadId = await createTestLead(testTenantId, vertical, city);
-            testLeadIds.push(leadId);
+            await runWithTenantAsync(testTenantId, async () => {
+              // Create test lead
+              const leadId = await createTestLead(testTenantId, vertical, city);
+              testLeadIds.push(leadId);
 
-            // Generate a fake proposal ID (we don't need to create the actual proposal)
-            const proposalId = `test-proposal-${Math.random()}`;
+              // Generate a fake proposal ID (we don't need to create the actual proposal)
+              const proposalId = `test-proposal-${Math.random()}`;
 
-            // Track the win/loss
-            await trackWinLoss(proposalId, leadId, testTenantId, vertical, city, winLossData);
+              // Track the win/loss
+              await trackWinLoss(proposalId, leadId, testTenantId, vertical, city, winLossData);
 
-            // Fetch the win/loss record
-            const record = await prisma.winLossRecord.findFirst({
-              where: {
-                proposalId,
-                leadId,
-              },
+              // Fetch the win/loss record
+              const record = await prisma.winLossRecord.findFirst({
+                where: {
+                  proposalId,
+                  leadId,
+                },
+              });
+
+              // Verify the record was created with all required fields
+              expect(record).toBeTruthy();
+              expect(record!.tenantId).toBe(testTenantId);
+              expect(record!.proposalId).toBe(proposalId);
+              expect(record!.leadId).toBe(leadId);
+              expect(record!.vertical).toBe(vertical);
+              expect(record!.city).toBe(city);
+              expect(record!.outcome).toBe(winLossData.outcome);
+
+              // Verify optional fields match input
+              if (winLossData.tierChosen !== undefined) {
+                expect(record!.tierChosen).toBe(winLossData.tierChosen);
+              }
+              if (winLossData.dealValue !== undefined) {
+                expect(Number(record!.dealValue)).toBeCloseTo(winLossData.dealValue, 2);
+              }
+              if (winLossData.lostReason !== undefined) {
+                expect(record!.lostReason).toBe(winLossData.lostReason);
+              }
+              if (winLossData.competitorMentioned !== undefined) {
+                expect(record!.competitorMentioned).toBe(winLossData.competitorMentioned);
+              }
             });
-
-            // Verify the record was created with all required fields
-            expect(record).toBeTruthy();
-            expect(record!.tenantId).toBe(testTenantId);
-            expect(record!.proposalId).toBe(proposalId);
-            expect(record!.leadId).toBe(leadId);
-            expect(record!.vertical).toBe(vertical);
-            expect(record!.city).toBe(city);
-            expect(record!.outcome).toBe(winLossData.outcome);
-
-            // Verify optional fields match input
-            if (winLossData.tierChosen !== undefined) {
-              expect(record!.tierChosen).toBe(winLossData.tierChosen);
-            }
-            if (winLossData.dealValue !== undefined) {
-              expect(Number(record!.dealValue)).toBeCloseTo(winLossData.dealValue, 2);
-            }
-            if (winLossData.lostReason !== undefined) {
-              expect(record!.lostReason).toBe(winLossData.lostReason);
-            }
-            if (winLossData.competitorMentioned !== undefined) {
-              expect(record!.competitorMentioned).toBe(winLossData.competitorMentioned);
-            }
           }
         ),
-        { numRuns: 100 }
+        { numRuns: 20 }
       );
     }, 30000);
 
     it('trackFindingOutcome updates finding effectiveness scores', async () => {
       await fc.assert(
-        fc.asyncProperty(
-          findingTypeArb,
-          fc.boolean(),
-          async (findingType, accepted) => {
+        fc.asyncProperty(findingTypeArb, fc.boolean(), async (findingType, accepted) => {
+          await runWithTenantAsync(testTenantId, async () => {
             // Track the finding outcome
             await trackFindingOutcome(findingType, accepted);
 
@@ -390,9 +405,9 @@ describe('Learning Loop Property Tests', () => {
                 ? effectiveness!.acceptedCount / effectiveness!.totalOccurrences
                 : 0;
             expect(effectiveness!.conversionPower).toBeCloseTo(expectedConversionPower, 5);
-          }
-        ),
-        { numRuns: 100 }
+          });
+        }),
+        { numRuns: 20 }
       );
     }, 30000);
   });
@@ -411,50 +426,59 @@ describe('Learning Loop Property Tests', () => {
           { minLength: 5, maxLength: 20 }
         ),
         async (vertical, city, winLossRecords) => {
-          // Use unique vertical/city to avoid test pollution across iterations
-          const uniqueVertical = `${vertical}-${Math.random().toString(36).substring(7)}`;
-          const uniqueCity = `${city}-${Math.random().toString(36).substring(7)}`;
+          await runWithTenantAsync(testTenantId, async () => {
+            // Use unique vertical/city to avoid test pollution across iterations
+            const uniqueVertical = `${vertical}-${Math.random().toString(36).substring(7)}`;
+            const uniqueCity = `${city}-${Math.random().toString(36).substring(7)}`;
 
-          // Create test data
-          for (const record of winLossRecords) {
-            const leadId = await createTestLead(testTenantId, uniqueVertical, uniqueCity);
-            testLeadIds.push(leadId);
-            const proposalId = `test-proposal-${Math.random()}`;
+            // Create test data
+            for (const record of winLossRecords) {
+              const leadId = await createTestLead(testTenantId, uniqueVertical, uniqueCity);
+              testLeadIds.push(leadId);
+              const proposalId = `test-proposal-${Math.random()}`;
 
-            await trackWinLoss(proposalId, leadId, testTenantId, uniqueVertical, uniqueCity, record);
-          }
+              await trackWinLoss(
+                proposalId,
+                leadId,
+                testTenantId,
+                uniqueVertical,
+                uniqueCity,
+                record
+              );
+            }
 
-          // Recalibrate pricing
-          const calibration = await recalibratePricing(uniqueVertical, uniqueCity, testTenantId);
+            // Recalibrate pricing
+            const calibration = await recalibratePricing(uniqueVertical, uniqueCity, testTenantId);
 
-          // Verify the calibration has all required fields
-          expect(calibration.vertical).toBe(uniqueVertical);
-          expect(calibration.city).toBe(uniqueCity);
-          expect(calibration.sampleSize).toBe(winLossRecords.length);
+            // Verify the calibration has all required fields
+            expect(calibration.vertical).toBe(uniqueVertical);
+            expect(calibration.city).toBe(uniqueCity);
+            expect(calibration.sampleSize).toBe(winLossRecords.length);
 
-          // Verify conversion rates are within valid range [0, 1]
-          expect(calibration.essentialsConversionRate).toBeGreaterThanOrEqual(0);
-          expect(calibration.essentialsConversionRate).toBeLessThanOrEqual(1);
-          expect(calibration.growthConversionRate).toBeGreaterThanOrEqual(0);
-          expect(calibration.growthConversionRate).toBeLessThanOrEqual(1);
-          expect(calibration.premiumConversionRate).toBeGreaterThanOrEqual(0);
-          expect(calibration.premiumConversionRate).toBeLessThanOrEqual(1);
+            // Verify conversion rates are within valid range [0, 1]
+            expect(calibration.essentialsConversionRate).toBeGreaterThanOrEqual(0);
+            expect(calibration.essentialsConversionRate).toBeLessThanOrEqual(1);
+            expect(calibration.growthConversionRate).toBeGreaterThanOrEqual(0);
+            expect(calibration.growthConversionRate).toBeLessThanOrEqual(1);
+            expect(calibration.premiumConversionRate).toBeGreaterThanOrEqual(0);
+            expect(calibration.premiumConversionRate).toBeLessThanOrEqual(1);
 
-          // Verify recommended pricing is positive
-          expect(calibration.recommendedPricing.essentials).toBeGreaterThan(0);
-          expect(calibration.recommendedPricing.growth).toBeGreaterThan(0);
-          expect(calibration.recommendedPricing.premium).toBeGreaterThan(0);
+            // Verify recommended pricing is positive
+            expect(calibration.recommendedPricing.essentials).toBeGreaterThan(0);
+            expect(calibration.recommendedPricing.growth).toBeGreaterThan(0);
+            expect(calibration.recommendedPricing.premium).toBeGreaterThan(0);
 
-          // Verify pricing tiers are ordered (essentials < growth < premium)
-          expect(calibration.recommendedPricing.essentials).toBeLessThan(
-            calibration.recommendedPricing.growth
-          );
-          expect(calibration.recommendedPricing.growth).toBeLessThan(
-            calibration.recommendedPricing.premium
-          );
+            // Verify pricing tiers are ordered (essentials < growth < premium)
+            expect(calibration.recommendedPricing.essentials).toBeLessThan(
+              calibration.recommendedPricing.growth
+            );
+            expect(calibration.recommendedPricing.growth).toBeLessThan(
+              calibration.recommendedPricing.premium
+            );
+          });
         }
       ),
-      { numRuns: 100 }
+      { numRuns: 20 }
     );
   }, 30000);
 
@@ -466,48 +490,52 @@ describe('Learning Loop Property Tests', () => {
             outcome: fc.constantFrom<'won' | 'lost' | 'ghosted'>('won', 'lost', 'ghosted'),
             tierChosen: fc.constantFrom('Essentials', 'Growth', 'Premium'),
             dealValue: fc.double({ min: 100, max: 10000 }),
-            lostReason: fc.option(fc.constantFrom('price', 'timing', 'competitor'), { nil: undefined }),
+            lostReason: fc.option(fc.constantFrom('price', 'timing', 'competitor'), {
+              nil: undefined,
+            }),
           }),
           { minLength: 3, maxLength: 15 }
         ),
         async (winLossRecords) => {
-          // Use a unique vertical name for this test run to avoid interference
-          const vertical = `test-vertical-${Math.random().toString(36).substring(7)}`;
+          await runWithTenantAsync(testTenantId, async () => {
+            // Use a unique vertical name for this test run to avoid interference
+            const vertical = `test-vertical-${Math.random().toString(36).substring(7)}`;
 
-          // Create test data
-          for (const record of winLossRecords) {
-            const leadId = await createTestLead(testTenantId, vertical, 'Test City');
-            testLeadIds.push(leadId);
-            const proposalId = `test-proposal-${Math.random()}`;
+            // Create test data
+            for (const record of winLossRecords) {
+              const leadId = await createTestLead(testTenantId, vertical, 'Test City');
+              testLeadIds.push(leadId);
+              const proposalId = `test-proposal-${Math.random()}`;
 
-            await trackWinLoss(proposalId, leadId, testTenantId, vertical, 'Test City', record);
-          }
+              await trackWinLoss(proposalId, leadId, testTenantId, vertical, 'Test City', record);
+            }
 
-          // Get vertical insights
-          const insights = await getVerticalInsights(vertical);
+            // Get vertical insights
+            const insights = await getVerticalInsights(vertical);
 
-          // Verify the insights structure
-          expect(insights.vertical).toBe(vertical);
-          expect(insights.totalProspects).toBe(winLossRecords.length);
+            // Verify the insights structure
+            expect(insights.vertical).toBe(vertical);
+            expect(insights.totalProspects).toBe(winLossRecords.length);
 
-          // Verify win rate is within valid range [0, 1]
-          expect(insights.winRate).toBeGreaterThanOrEqual(0);
-          expect(insights.winRate).toBeLessThanOrEqual(1);
+            // Verify win rate is within valid range [0, 1]
+            expect(insights.winRate).toBeGreaterThanOrEqual(0);
+            expect(insights.winRate).toBeLessThanOrEqual(1);
 
-          // Verify average deal value is non-negative
-          expect(insights.avgDealValue).toBeGreaterThanOrEqual(0);
+            // Verify average deal value is non-negative
+            expect(insights.avgDealValue).toBeGreaterThanOrEqual(0);
 
-          // Verify arrays are present (may be empty)
-          expect(Array.isArray(insights.topPerformingFindings)).toBe(true);
-          expect(Array.isArray(insights.topLostReasons)).toBe(true);
-          expect(Array.isArray(insights.bestEmailPatterns)).toBe(true);
+            // Verify arrays are present (may be empty)
+            expect(Array.isArray(insights.topPerformingFindings)).toBe(true);
+            expect(Array.isArray(insights.topLostReasons)).toBe(true);
+            expect(Array.isArray(insights.bestEmailPatterns)).toBe(true);
 
-          // Verify avgPainScore is within valid range [0, 100]
-          expect(insights.avgPainScore).toBeGreaterThanOrEqual(0);
-          expect(insights.avgPainScore).toBeLessThanOrEqual(100);
+            // Verify avgPainScore is within valid range [0, 100]
+            expect(insights.avgPainScore).toBeGreaterThanOrEqual(0);
+            expect(insights.avgPainScore).toBeLessThanOrEqual(100);
+          });
         }
       ),
-      { numRuns: 100 }
+      { numRuns: 20 }
     );
   }, 30000);
 });

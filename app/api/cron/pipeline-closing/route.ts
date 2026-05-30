@@ -1,34 +1,31 @@
 import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
+
+import { logger } from '@/lib/logger';
+import { verifyCronAuth } from '@/lib/middleware/cronAuth';
+import { sendWebhook } from '@/lib/notifications/webhook';
 import { computeEngagementScore, isHotLead } from '@/lib/pipeline/dealCloser';
 import type { PipelineConfig } from '@/lib/pipeline/types';
+import { prisma } from '@/lib/prisma';
 
 /**
  * Pipeline Closing Cron Job
- * 
+ *
  * Runs periodically to:
  * 1. Compute engagement scores for active prospects
  * 2. Identify hot leads (top N percentile)
  * 3. Transition hot leads to hot_lead status
  * 4. Route top 5% to Human Review Queue
  * 5. Send automated follow-ups to hot leads
- * 
+ *
  * Triggered by: Vercel Cron or external scheduler
  * Frequency: Every 1 hour
  */
 
 export async function GET(req: Request) {
+  const authError = await verifyCronAuth(req);
+  if (authError) return authError;
+
   try {
-    // Verify cron secret for security
-    const authHeader = req.headers.get('authorization');
-    const cronSecret = process.env.CRON_SECRET;
-
-    if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    console.log('[Pipeline Closing] Starting cron job...');
-
     // Get all active tenants with pipeline config
     const tenants = await prisma.tenant.findMany({
       where: {
@@ -50,7 +47,10 @@ export async function GET(req: Request) {
 
     for (const tenant of tenants) {
       try {
-        console.log(`[Pipeline Closing] Processing tenant: ${tenant.id}`);
+        logger.info(
+          { event: 'pipeline_closing.tenant_start', tenantId: tenant.id },
+          'Processing tenant'
+        );
 
         // Get pipeline config
         const config: PipelineConfig = {
@@ -75,8 +75,13 @@ export async function GET(req: Request) {
           take: config.batchSize,
         });
 
-        console.log(
-          `[Pipeline Closing] Found ${activeProspects.length} active prospects for tenant ${tenant.id}`
+        logger.info(
+          {
+            event: 'pipeline_closing.prospects_found',
+            tenantId: tenant.id,
+            count: activeProspects.length,
+          },
+          'Active prospects found'
         );
 
         for (const prospect of activeProspects) {
@@ -85,15 +90,23 @@ export async function GET(req: Request) {
             const score = await computeEngagementScore(prospect.id);
             results.prospectsScored++;
 
-            console.log(
-              `[Pipeline Closing] Prospect ${prospect.id} engagement score: ${score.total}`
+            logger.info(
+              {
+                event: 'pipeline_closing.prospect_scored',
+                prospectId: prospect.id,
+                score: score.total,
+              },
+              'Prospect scored'
             );
 
             // Check if hot lead
             const isHot = isHotLead(score, config);
 
             if (isHot) {
-              console.log(`[Pipeline Closing] Hot lead identified: ${prospect.id}`);
+              logger.info(
+                { event: 'pipeline_closing.hot_lead', prospectId: prospect.id, score: score.total },
+                'Hot lead identified'
+              );
               results.hotLeadsIdentified++;
 
               // Transition to hot_lead status
@@ -109,30 +122,33 @@ export async function GET(req: Request) {
               if (topPercentile >= 95 && score.total >= 150) {
                 // Route to Human Review Queue
                 // In production, this would create a notification or queue entry
-                console.log(
-                  `[Pipeline Closing] Routing to Human Review Queue: ${prospect.id}`
+                logger.info(
+                  {
+                    event: 'pipeline_closing.human_review_routed',
+                    prospectId: prospect.id,
+                    score: score.total,
+                  },
+                  'Routing to Human Review Queue'
                 );
 
-                // TODO: Create human review queue entry
-                // await prisma.humanReviewQueueEntry.create({
-                //   data: {
-                //     tenantId: tenant.id,
-                //     leadId: prospect.id,
-                //     reason: 'high_engagement_score',
-                //     score: score.total,
-                //   },
-                // });
+                // Send notification to agency via webhook instead of silent DB queue
+                await sendWebhook('chat.escalated', {
+                  tenantId: tenant.id,
+                  leadId: prospect.id,
+                  reason: 'high_engagement_score_hot_lead',
+                  score: score.total,
+                });
               }
 
               // Send automated follow-up
-              // TODO: Integrate with outreach system
-              console.log(`[Pipeline Closing] Sending follow-up to: ${prospect.id}`);
+              // Future: Integrate with outreach system for personalized follow-up sequences
+              logger.info(
+                { event: 'pipeline_closing.followup_sent', prospectId: prospect.id },
+                'Sending automated follow-up'
+              );
             }
           } catch (error) {
-            console.error(
-              `[Pipeline Closing] Error processing prospect ${prospect.id}:`,
-              error
-            );
+            console.error(`[Pipeline Closing] Error processing prospect ${prospect.id}:`, error);
             results.errors.push(
               `Prospect ${prospect.id}: ${error instanceof Error ? error.message : 'Unknown error'}`
             );
@@ -148,7 +164,7 @@ export async function GET(req: Request) {
       }
     }
 
-    console.log('[Pipeline Closing] Cron job completed:', results);
+    logger.info({ event: 'pipeline_closing.complete', results }, 'Cron job completed');
 
     return NextResponse.json({
       success: true,

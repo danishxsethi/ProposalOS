@@ -1,5 +1,6 @@
 import { Finding } from '@prisma/client';
-import { RawArtifact, ArtifactGenerator } from './schemaGenerator';
+
+import { ArtifactGenerator, RawArtifact } from './schemaGenerator';
 
 /**
  * Accessibility Generator - Generates ARIA label additions, alt text strings, and color contrast CSS fixes
@@ -49,7 +50,10 @@ add_filter('wp_kses_allowed_html', function(\$allowed, \$context) {
 add_action('wp_footer', function() {
     ?>
     <style>
-    ${artifact.content.split('\\n').filter(line => line.includes('{')).join('\\n')}
+    ${artifact.content
+      .split('\\n')
+      .filter((line) => line.includes('{'))
+      .join('\\n')}
     </style>
     <?php
 });
@@ -74,7 +78,11 @@ add_action('wp_footer', function() {
     return 'aria_labels';
   }
 
-  private generateAccessibilityFix(type: string, finding: Finding, context: Record<string, any>): string {
+  private generateAccessibilityFix(
+    type: string,
+    finding: Finding,
+    context: Record<string, any>
+  ): string {
     switch (type) {
       case 'aria_labels':
         return this.generateAriaLabels(finding, context);

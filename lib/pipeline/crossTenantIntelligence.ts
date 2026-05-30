@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/db';
+
 import { PainScoreBreakdown } from './types';
 
 export interface AnonymizedPattern {
@@ -59,10 +60,7 @@ const PII_PATTERNS = {
 /**
  * Aggregate anonymized patterns from win/loss outcomes
  */
-export async function aggregatePatterns(
-  tenantId: string,
-  outcomes: WinLossData[]
-): Promise<void> {
+export async function aggregatePatterns(tenantId: string, outcomes: WinLossData[]): Promise<void> {
   if (outcomes.length === 0) {
     return;
   }
@@ -233,6 +231,12 @@ export async function rollbackModel(version: string): Promise<void> {
  * Check if data contains PII
  */
 export function ensureAnonymized(data: Record<string, unknown>): boolean {
+  // Reset stateful global regexes
+  PII_PATTERNS.email.lastIndex = 0;
+  PII_PATTERNS.phone.lastIndex = 0;
+  PII_PATTERNS.ssn.lastIndex = 0;
+  PII_PATTERNS.creditCard.lastIndex = 0;
+
   const dataStr = JSON.stringify(data);
 
   // Check for email addresses
@@ -259,16 +263,39 @@ export function ensureAnonymized(data: Record<string, unknown>): boolean {
 }
 
 /**
+ * Helper to recursively anonymize string values within any nested structure
+ */
+function anonymizeValue(val: unknown): unknown {
+  if (typeof val === 'string') {
+    // Reset stateful global regexes
+    PII_PATTERNS.email.lastIndex = 0;
+    PII_PATTERNS.phone.lastIndex = 0;
+    PII_PATTERNS.ssn.lastIndex = 0;
+    PII_PATTERNS.creditCard.lastIndex = 0;
+
+    return val
+      .replace(PII_PATTERNS.email, '[EMAIL]')
+      .replace(PII_PATTERNS.phone, '[PHONE]')
+      .replace(PII_PATTERNS.ssn, '[SSN]')
+      .replace(PII_PATTERNS.creditCard, '[CARD]');
+  }
+  if (Array.isArray(val)) {
+    return val.map(anonymizeValue);
+  }
+  if (val !== null && typeof val === 'object') {
+    const obj = val as Record<string, unknown>;
+    const res: Record<string, unknown> = {};
+    for (const key of Object.keys(obj)) {
+      res[key] = anonymizeValue(obj[key]);
+    }
+    return res;
+  }
+  return val;
+}
+
+/**
  * Remove PII from data
  */
 export function anonymizeData(data: Record<string, unknown>): Record<string, unknown> {
-  const dataStr = JSON.stringify(data);
-
-  let anonymized = dataStr
-    .replace(PII_PATTERNS.email, '[EMAIL]')
-    .replace(PII_PATTERNS.phone, '[PHONE]')
-    .replace(PII_PATTERNS.ssn, '[SSN]')
-    .replace(PII_PATTERNS.creditCard, '[CARD]');
-
-  return JSON.parse(anonymized);
+  return anonymizeValue(data) as Record<string, unknown>;
 }

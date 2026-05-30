@@ -1,19 +1,31 @@
+/**
+ * app/api/cron/pipeline-audit/route.ts
+ *
+ * Pipeline Audit Cron Job
+ * Processes prospects through the audit stage
+ *
+ * Features:
+ * - Cron auth verification
+ * - Rate limiting
+ * - Standardized error responses
+ */
+
 import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
+
+import { generateTraceId, InternalError } from '@/lib/api/errors';
 import { logger } from '@/lib/logger';
+import { verifyCronAuth } from '@/lib/middleware/cronAuth';
+import { withRateLimit } from '@/lib/middleware/rateLimit';
 import { processAuditStage } from '@/lib/pipeline/stages/auditStage';
+import { prisma } from '@/lib/prisma';
 
 const MAX_TENANTS_PER_RUN = 5;
 
-export async function GET(req: Request) {
-  // 1. CRON_SECRET auth
-  const authHeader = req.headers.get('authorization');
-  if (
-    process.env.CRON_SECRET &&
-    authHeader !== `Bearer ${process.env.CRON_SECRET}`
-  ) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+/**
+ * Inner handler for pipeline audit cron
+ */
+async function handlePipelineAuditCron(req: Request): Promise<NextResponse> {
+  const traceId = generateTraceId();
 
   try {
     // 2. Find tenants with active PipelineConfig where audit is not paused
@@ -23,18 +35,18 @@ export async function GET(req: Request) {
     });
 
     const activeConfigs = configs.filter((cfg) => {
-      const paused = Array.isArray(cfg.pausedStages)
-        ? (cfg.pausedStages as string[])
-        : [];
+      const paused = Array.isArray(cfg.pausedStages) ? (cfg.pausedStages as string[]) : [];
       return !paused.includes('audit');
     });
 
     if (activeConfigs.length === 0) {
-      return NextResponse.json({
+      const response = NextResponse.json({
         success: true,
         processed: 0,
         message: 'No active tenants for audit',
       });
+      response.headers.set('X-Trace-Id', traceId);
+      return response;
     }
 
     logger.info(
@@ -57,10 +69,7 @@ export async function GET(req: Request) {
     // 3. Process each tenant
     for (const config of activeConfigs) {
       try {
-        const stageResults = await processAuditStage(
-          config.tenantId,
-          config.batchSize
-        );
+        const stageResults = await processAuditStage(config.tenantId, config.batchSize);
 
         const succeeded = stageResults.filter((r) => r.success).length;
         const failed = stageResults.filter((r) => !r.success).length;
@@ -111,11 +120,14 @@ export async function GET(req: Request) {
       'Pipeline audit cron complete'
     );
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       success: true,
       processed: results.length,
       results,
     });
+
+    response.headers.set('X-Trace-Id', traceId);
+    return response;
   } catch (error) {
     logger.error(
       {
@@ -125,12 +137,26 @@ export async function GET(req: Request) {
       'Pipeline Audit Cron Error'
     );
 
-    return NextResponse.json(
-      {
-        error: 'Internal Server Error',
-        message: error instanceof Error ? error.message : 'Unknown error',
-      },
-      { status: 500 }
-    );
+    const internalError = new InternalError('Pipeline audit cron failed', {
+      originalError: error instanceof Error ? error.message : String(error),
+    });
+    return NextResponse.json(internalError.toEnvelope(req.url, traceId), { status: 500 });
   }
 }
+
+// Auth wrapper
+const authHandler = async (req: Request): Promise<NextResponse> => {
+  const authError = await verifyCronAuth(req);
+  if (authError) return authError;
+  return handlePipelineAuditCron(req);
+};
+
+// Apply rate limiting (5 requests per minute for cron jobs)
+const rateLimitedHandler = (req: Request) =>
+  withRateLimit({
+    windowMs: 60 * 1000,
+    max: 5,
+    message: 'Too many cron requests. Please wait before trying again.',
+  })(req, () => authHandler(req));
+
+export const GET = rateLimitedHandler;

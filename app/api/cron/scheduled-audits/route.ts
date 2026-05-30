@@ -1,299 +1,373 @@
+/**
+ * app/api/cron/scheduled-audits/route.ts
+ *
+ * Scheduled Audits Cron Job
+ * Processes due audit schedules and triggers audit creation
+ *
+ * Features:
+ * - Cron auth verification
+ * - Rate limiting
+ * - Standardized error responses
+ */
 
 import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
-import { logger } from '@/lib/logger';
-import { AuditOrchestrator } from '@/lib/orchestrator/auditOrchestrator';
+
+import { generateTraceId, InternalError } from '@/lib/api/errors';
 import { CostTracker } from '@/lib/costs/costTracker';
+import { logger } from '@/lib/logger';
+import { verifyCronAuth } from '@/lib/middleware/cronAuth';
+import { withRateLimit } from '@/lib/middleware/rateLimit';
 import { sendWebhook } from '@/lib/notifications/webhook';
+import { AuditOrchestrator } from '@/lib/orchestrator/auditOrchestrator';
+import { prisma } from '@/lib/prisma';
 import { detectCompetitorImprovement, triggerUpsellProposal } from '@/lib/retention/upsellTrigger';
 
-export async function GET(req: Request) {
-    // 1. Security Check (CRON_SECRET)
-    const authHeader = req.headers.get('authorization');
-    if (process.env.CRON_SECRET && authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+/**
+ * Inner handler for scheduled audits cron
+ */
+async function handleScheduledAudits(req: Request): Promise<NextResponse> {
+  const traceId = generateTraceId();
+
+  try {
+    const now = new Date();
+
+    // 2. Find Due Schedules (limit to 5 to prevent timeout)
+    const dueSchedules = await prisma.auditSchedule.findMany({
+      where: {
+        isActive: true,
+        nextRunAt: { lte: now },
+      },
+      include: {
+        tenant: true,
+      },
+      take: 5, // Process max 5 per run to prevent timeout
+      orderBy: { nextRunAt: 'asc' }, // Oldest first
+    });
+
+    if (dueSchedules.length === 0) {
+      const response = NextResponse.json({
+        success: true,
+        processed: 0,
+        message: 'No schedules due',
+      });
+      response.headers.set('X-Trace-Id', traceId);
+      return response;
     }
 
-    try {
-        const now = new Date();
+    logger.info(
+      {
+        event: 'cron.scheduled_audits.start',
+        count: dueSchedules.length,
+      },
+      `Processing ${dueSchedules.length} scheduled audits`
+    );
 
-        // 2. Find Due Schedules (limit to 5 to prevent timeout)
-        const dueSchedules = await prisma.auditSchedule.findMany({
-            where: {
-                isActive: true,
-                nextRunAt: { lte: now }
-            },
-            include: {
-                tenant: true
-            },
-            take: 5, // Process max 5 per run to prevent timeout
-            orderBy: { nextRunAt: 'asc' } // Oldest first
-        });
+    const results = [];
 
-        if (dueSchedules.length === 0) {
-            return NextResponse.json({
-                success: true,
-                processed: 0,
-                message: 'No schedules due'
-            });
+    for (const schedule of dueSchedules) {
+      try {
+        // Validate required fields
+        if (!schedule.businessUrl || !schedule.businessName || !schedule.businessCity) {
+          logger.warn(
+            {
+              event: 'cron.scheduled_audits.skip',
+              scheduleId: schedule.id,
+              reason: 'Missing required fields',
+            },
+            'Skipping schedule with incomplete data'
+          );
+
+          results.push({
+            id: schedule.id,
+            status: 'Skipped',
+            reason: 'Missing required fields',
+          });
+          continue;
         }
 
-        logger.info({
-            event: 'cron.scheduled_audits.start',
-            count: dueSchedules.length
-        }, `Processing ${dueSchedules.length} scheduled audits`);
+        // 3. Create Audit Record
+        const audit = await prisma.audit.create({
+          data: {
+            tenantId: schedule.tenantId,
+            businessName: schedule.businessName,
+            businessCity: schedule.businessCity,
+            businessUrl: schedule.businessUrl,
+            businessIndustry: schedule.industry || 'Generic',
+            status: 'RUNNING',
+            startedAt: now,
+            apiCostCents: 0,
+            batchId: `scheduled-${now.toISOString().split('T')[0]}`,
+          },
+        });
 
-        const results = [];
+        logger.info(
+          {
+            event: 'cron.scheduled_audits.audit_created',
+            auditId: audit.id,
+            scheduleId: schedule.id,
+            businessName: schedule.businessName,
+          },
+          'Created audit from schedule'
+        );
 
-        for (const schedule of dueSchedules) {
-            try {
-                // Validate required fields
-                if (!schedule.businessUrl || !schedule.businessName || !schedule.businessCity) {
-                    logger.warn({
-                        event: 'cron.scheduled_audits.skip',
-                        scheduleId: schedule.id,
-                        reason: 'Missing required fields'
-                    }, 'Skipping schedule with incomplete data');
+        // 4. Initialize Orchestrator
+        const tracker = new CostTracker();
 
-                    results.push({
-                        id: schedule.id,
-                        status: 'Skipped',
-                        reason: 'Missing required fields'
-                    });
-                    continue;
-                }
+        // Module completion callback
+        const onModuleComplete = async (moduleId: string, status: 'success' | 'failed') => {
+          try {
+            if (status === 'success') {
+              await prisma.audit.update({
+                where: { id: audit.id },
+                data: {
+                  modulesCompleted: { push: moduleId },
+                },
+              });
+            } else {
+              const current = await prisma.audit.findUnique({
+                where: { id: audit.id },
+                select: { modulesFailed: true },
+              });
 
-                // 3. Create Audit Record
-                const audit = await prisma.audit.create({
-                    data: {
-                        tenantId: schedule.tenantId,
-                        businessName: schedule.businessName,
-                        businessCity: schedule.businessCity,
-                        businessUrl: schedule.businessUrl,
-                        businessIndustry: schedule.industry || 'Generic',
-                        status: 'RUNNING',
-                        startedAt: now,
-                        apiCostCents: 0,
-                        batchId: `scheduled-${now.toISOString().split('T')[0]}`,
-                    }
-                });
-
-                logger.info({
-                    event: 'cron.scheduled_audits.audit_created',
-                    auditId: audit.id,
-                    scheduleId: schedule.id,
-                    businessName: schedule.businessName
-                }, 'Created audit from schedule');
-
-                // 4. Initialize Orchestrator
-                const tracker = new CostTracker();
-
-                // Module completion callback
-                const onModuleComplete = async (moduleId: string, status: 'success' | 'failed') => {
-                    try {
-                        if (status === 'success') {
-                            await prisma.audit.update({
-                                where: { id: audit.id },
-                                data: {
-                                    modulesCompleted: { push: moduleId }
-                                }
-                            });
-                        } else {
-                            const current = await prisma.audit.findUnique({
-                                where: { id: audit.id },
-                                select: { modulesFailed: true }
-                            });
-
-                            await prisma.audit.update({
-                                where: { id: audit.id },
-                                data: {
-                                    modulesFailed: [
-                                        ...(Array.isArray(current?.modulesFailed) ? current.modulesFailed : []),
-                                        { module: moduleId, error: 'Module execution failed' }
-                                    ]
-                                }
-                            });
-                        }
-                    } catch (error) {
-                        logger.error({
-                            event: 'cron.scheduled_audits.module_callback_error',
-                            auditId: audit.id,
-                            moduleId,
-                            error
-                        }, 'Failed to update module status');
-                    }
-                };
-
-                const orchestrator = new AuditOrchestrator({
-                    auditId: audit.id,
-                    businessName: schedule.businessName,
-                    websiteUrl: schedule.businessUrl,
-                    city: schedule.businessCity,
-                    industry: schedule.industry || 'Generic'
-                }, tracker, onModuleComplete);
-
-                // 5. Run audit asynchronously (fire-and-forget to prevent timeout)
-                orchestrator.run()
-                    .then(async (result) => {
-                        logger.info({
-                            event: 'cron.scheduled_audits.audit_completed',
-                            auditId: audit.id,
-                            status: result.status,
-                            modulesCompleted: result.modulesCompleted?.length || 0
-                        }, 'Scheduled audit completed');
-
-                        // Update audit status
-                        await prisma.audit.update({
-                            where: { id: audit.id },
-                            data: {
-                                status: result.status === 'COMPLETE' ? 'COMPLETE' : 'FAILED',
-                                completedAt: new Date(),
-                                apiCostCents: tracker.getTotalCents(),
-                                overallScore: result.status === 'COMPLETE' ?
-                                    Math.round((result.modulesCompleted?.length || 0) / 15 * 100) : undefined
-                            }
-                        });
-
-                        // Task 3: Upsell trigger — compare competitor signals against previous audit
-                        if (result.status === 'COMPLETE' && schedule.lastAuditId) {
-                            try {
-                                const { triggered, reason } = await detectCompetitorImprovement(
-                                    schedule.lastAuditId,
-                                    audit.id
-                                );
-                                if (triggered) {
-                                    await triggerUpsellProposal(schedule.tenantId, audit.id, reason);
-                                    logger.info({
-                                        event: 'cron.scheduled_audits.upsell_triggered',
-                                        auditId: audit.id,
-                                        scheduleId: schedule.id,
-                                        reason
-                                    }, 'Upsell proposal auto-generated from competitor improvement');
-                                }
-                            } catch (upsellErr) {
-                                logger.error({ err: upsellErr, auditId: audit.id }, 'Upsell trigger check failed');
-                            }
-                        }
-
-                        // Send webhook notification
-                        await sendWebhook('audit.completed', {
-                            auditId: audit.id,
-                            scheduleId: schedule.id,
-                            status: result.status,
-                            businessName: schedule.businessName,
-                            source: 'scheduled'
-                        });
-                    })
-                    .catch(async (error) => {
-                        logger.error({
-                            event: 'cron.scheduled_audits.audit_failed',
-                            auditId: audit.id,
-                            error: error.message
-                        }, 'Scheduled audit failed');
-
-                        // Update audit to failed status
-                        await prisma.audit.update({
-                            where: { id: audit.id },
-                            data: {
-                                status: 'FAILED',
-                                completedAt: new Date(),
-                                apiCostCents: tracker.getTotalCents()
-                            }
-                        });
-
-                        // Send failure webhook
-                        await sendWebhook('audit.failed', {
-                            auditId: audit.id,
-                            scheduleId: schedule.id,
-                            error: error.message,
-                            businessName: schedule.businessName,
-                            source: 'scheduled'
-                        });
-                    });
-
-                // 6. Update Schedule for next run
-                const nextRun = calculateNextRun(schedule.frequency, now);
-                await prisma.auditSchedule.update({
-                    where: { id: schedule.id },
-                    data: {
-                        lastRunAt: now,
-                        nextRunAt: nextRun,
-                        lastAuditId: audit.id
-                    }
-                });
-
-                logger.info({
-                    event: 'cron.scheduled_audits.schedule_updated',
-                    scheduleId: schedule.id,
-                    nextRunAt: nextRun
-                }, 'Updated schedule for next run');
-
-                results.push({
-                    id: schedule.id,
-                    auditId: audit.id,
-                    status: 'Started',
-                    nextRunAt: nextRun
-                });
-
-            } catch (err) {
-                logger.error({
-                    event: 'cron.scheduled_audits.schedule_error',
-                    scheduleId: schedule.id,
-                    error: err
-                }, `Failed to process schedule ${schedule.id}`);
-
-                results.push({
-                    id: schedule.id,
-                    status: 'Failed',
-                    error: err instanceof Error ? err.message : 'Unknown error'
-                });
+              await prisma.audit.update({
+                where: { id: audit.id },
+                data: {
+                  modulesFailed: [
+                    ...(Array.isArray(current?.modulesFailed) ? current.modulesFailed : []),
+                    { module: moduleId, error: 'Module execution failed' },
+                  ],
+                },
+              });
             }
-        }
+          } catch (error) {
+            logger.error(
+              {
+                event: 'cron.scheduled_audits.module_callback_error',
+                auditId: audit.id,
+                moduleId,
+                error,
+              },
+              'Failed to update module status'
+            );
+          }
+        };
 
-        logger.info({
-            event: 'cron.scheduled_audits.complete',
-            processed: results.length,
-            started: results.filter(r => r.status === 'Started').length,
-            failed: results.filter(r => r.status === 'Failed').length
-        }, 'Scheduled audits cron complete');
+        const orchestrator = new AuditOrchestrator(
+          {
+            auditId: audit.id,
+            businessName: schedule.businessName,
+            websiteUrl: schedule.businessUrl,
+            city: schedule.businessCity,
+            industry: schedule.industry || 'Generic',
+          },
+          tracker,
+          onModuleComplete
+        );
 
-        return NextResponse.json({
-            success: true,
-            processed: results.length,
-            results
+        // 5. Run audit asynchronously (fire-and-forget to prevent timeout)
+        orchestrator
+          .run()
+          .then(async (result) => {
+            logger.info(
+              {
+                event: 'cron.scheduled_audits.audit_completed',
+                auditId: audit.id,
+                status: result.status,
+                modulesCompleted: result.modulesCompleted?.length || 0,
+              },
+              'Scheduled audit completed'
+            );
+
+            // Update audit status
+            await prisma.audit.update({
+              where: { id: audit.id },
+              data: {
+                status: result.status === 'COMPLETE' ? 'COMPLETE' : 'FAILED',
+                completedAt: new Date(),
+                apiCostCents: tracker.getTotalCents(),
+                overallScore:
+                  result.status === 'COMPLETE'
+                    ? Math.round(((result.modulesCompleted?.length || 0) / 15) * 100)
+                    : undefined,
+              },
+            });
+
+            // Task 3: Upsell trigger — compare competitor signals against previous audit
+            if (result.status === 'COMPLETE' && schedule.lastAuditId) {
+              try {
+                const { triggered, reason } = await detectCompetitorImprovement(
+                  schedule.lastAuditId,
+                  audit.id
+                );
+                if (triggered) {
+                  await triggerUpsellProposal(schedule.tenantId, audit.id, reason);
+                  logger.info(
+                    {
+                      event: 'cron.scheduled_audits.upsell_triggered',
+                      auditId: audit.id,
+                      scheduleId: schedule.id,
+                      reason,
+                    },
+                    'Upsell proposal auto-generated from competitor improvement'
+                  );
+                }
+              } catch (upsellErr) {
+                logger.error({ err: upsellErr, auditId: audit.id }, 'Upsell trigger check failed');
+              }
+            }
+
+            // Send webhook notification
+            await sendWebhook('audit.completed', {
+              auditId: audit.id,
+              scheduleId: schedule.id,
+              status: result.status,
+              businessName: schedule.businessName,
+              source: 'scheduled',
+            });
+          })
+          .catch(async (error) => {
+            logger.error(
+              {
+                event: 'cron.scheduled_audits.audit_failed',
+                auditId: audit.id,
+                error: error.message,
+              },
+              'Scheduled audit failed'
+            );
+
+            // Update audit to failed status
+            await prisma.audit.update({
+              where: { id: audit.id },
+              data: {
+                status: 'FAILED',
+                completedAt: new Date(),
+                apiCostCents: tracker.getTotalCents(),
+              },
+            });
+
+            // Send failure webhook
+            await sendWebhook('audit.failed', {
+              auditId: audit.id,
+              scheduleId: schedule.id,
+              error: error.message,
+              businessName: schedule.businessName,
+              source: 'scheduled',
+            });
+          });
+
+        // 6. Update Schedule for next run
+        const nextRun = calculateNextRun(schedule.frequency, now);
+        await prisma.auditSchedule.update({
+          where: { id: schedule.id },
+          data: {
+            lastRunAt: now,
+            nextRunAt: nextRun,
+            lastAuditId: audit.id,
+          },
         });
 
-    } catch (error) {
-        logger.error({
-            event: 'cron.scheduled_audits.error',
-            error
-        }, 'Scheduled Audits Cron Error');
+        logger.info(
+          {
+            event: 'cron.scheduled_audits.schedule_updated',
+            scheduleId: schedule.id,
+            nextRunAt: nextRun,
+          },
+          'Updated schedule for next run'
+        );
 
-        return NextResponse.json({
-            error: 'Internal Server Error',
-            message: error instanceof Error ? error.message : 'Unknown error'
-        }, { status: 500 });
+        results.push({
+          id: schedule.id,
+          auditId: audit.id,
+          status: 'Started',
+          nextRunAt: nextRun,
+        });
+      } catch (err) {
+        logger.error(
+          {
+            event: 'cron.scheduled_audits.schedule_error',
+            scheduleId: schedule.id,
+            error: err,
+          },
+          `Failed to process schedule ${schedule.id}`
+        );
+
+        results.push({
+          id: schedule.id,
+          status: 'Failed',
+          error: err instanceof Error ? err.message : 'Unknown error',
+        });
+      }
     }
+
+    logger.info(
+      {
+        event: 'cron.scheduled_audits.complete',
+        processed: results.length,
+        started: results.filter((r) => r.status === 'Started').length,
+        failed: results.filter((r) => r.status === 'Failed').length,
+      },
+      'Scheduled audits cron complete'
+    );
+
+    const response = NextResponse.json({
+      success: true,
+      processed: results.length,
+      results,
+    });
+
+    response.headers.set('X-Trace-Id', traceId);
+    return response;
+  } catch (error) {
+    logger.error(
+      {
+        event: 'cron.scheduled_audits.error',
+        error,
+      },
+      'Scheduled Audits Cron Error'
+    );
+
+    const internalError = new InternalError('Scheduled audits cron failed', {
+      originalError: error instanceof Error ? error.message : String(error),
+    });
+    return NextResponse.json(internalError.toEnvelope(req.url, traceId), { status: 500 });
+  }
 }
 
 function calculateNextRun(frequency: string, current: Date): Date {
-    const base = new Date(); // Use NOW to prevent catch-up loops
+  const base = new Date(); // Use NOW to prevent catch-up loops
 
-    switch (frequency) {
-        case 'weekly':
-            base.setDate(base.getDate() + 7);
-            break;
-        case 'biweekly':
-            base.setDate(base.getDate() + 14);
-            break;
-        case 'monthly':
-            base.setMonth(base.getMonth() + 1);
-            break;
-        case 'quarterly':
-            base.setMonth(base.getMonth() + 3);
-            break;
-        default:
-            base.setDate(base.getDate() + 7); // Default weekly
-    }
-    return base;
+  switch (frequency) {
+    case 'weekly':
+      base.setDate(base.getDate() + 7);
+      break;
+    case 'biweekly':
+      base.setDate(base.getDate() + 14);
+      break;
+    case 'monthly':
+      base.setMonth(base.getMonth() + 1);
+      break;
+    case 'quarterly':
+      base.setMonth(base.getMonth() + 3);
+      break;
+    default:
+      base.setDate(base.getDate() + 7); // Default weekly
+  }
+  return base;
 }
+
+// Auth wrapper
+const authHandler = async (req: Request): Promise<NextResponse> => {
+  const authError = await verifyCronAuth(req);
+  if (authError) return authError;
+  return handleScheduledAudits(req);
+};
+
+// Apply rate limiting (5 requests per minute for cron jobs)
+const rateLimitedHandler = (req: Request) =>
+  withRateLimit({
+    windowMs: 60 * 1000,
+    max: 5,
+    message: 'Too many cron requests. Please wait before trying again.',
+  })(req, () => authHandler(req));
+
+export const GET = rateLimitedHandler;

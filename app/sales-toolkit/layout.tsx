@@ -4,10 +4,6 @@ export const metadata = {
   robots: 'noindex, nofollow',
 };
 
-export default function SalesToolkitLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function SalesToolkitLayout({ children }: { children: React.ReactNode }) {
   return children;
 }

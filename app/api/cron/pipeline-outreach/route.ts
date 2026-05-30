@@ -1,25 +1,36 @@
+/**
+ * app/api/cron/pipeline-outreach/route.ts
+ *
+ * Outreach Cron Job
+ * Processes qualified prospects and sends outreach emails
+ *
+ * Features:
+ * - Cron auth verification
+ * - Rate limiting
+ * - Standardized error responses
+ */
+
 import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
+
+import { generateTraceId, InternalError } from '@/lib/api/errors';
 import { logger } from '@/lib/logger';
-import { generateAndQualifyEmail } from '@/lib/pipeline/outreach';
+import { verifyCronAuth } from '@/lib/middleware/cronAuth';
+import { withRateLimit } from '@/lib/middleware/rateLimit';
 import { sendWithRotation } from '@/lib/pipeline/inboxRotation';
-import { scheduleFollowUps } from '@/lib/pipeline/outreach';
+import { generateAndQualifyEmail, scheduleFollowUps } from '@/lib/pipeline/outreach';
 import { transition } from '@/lib/pipeline/stateMachine';
 import type { OutreachContext } from '@/lib/pipeline/types';
 import { PipelineStage } from '@/lib/pipeline/types';
+import { prisma } from '@/lib/prisma';
 
 const MAX_TENANTS_PER_RUN = 5;
 const DEFAULT_BATCH_SIZE = 50;
 
-export async function GET(req: Request) {
-  // 1. CRON_SECRET auth
-  const authHeader = req.headers.get('authorization');
-  if (
-    process.env.CRON_SECRET &&
-    authHeader !== `Bearer ${process.env.CRON_SECRET}`
-  ) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+/**
+ * Inner handler for outreach cron
+ */
+async function handleOutreachCron(req: Request): Promise<NextResponse> {
+  const traceId = generateTraceId();
 
   try {
     // 2. Find tenants with active PipelineConfig where outreach is not paused
@@ -29,18 +40,18 @@ export async function GET(req: Request) {
     });
 
     const activeConfigs = configs.filter((cfg) => {
-      const paused = Array.isArray(cfg.pausedStages)
-        ? (cfg.pausedStages as string[])
-        : [];
+      const paused = Array.isArray(cfg.pausedStages) ? (cfg.pausedStages as string[]) : [];
       return !paused.includes('outreach');
     });
 
     if (activeConfigs.length === 0) {
-      return NextResponse.json({
+      const response = NextResponse.json({
         success: true,
         processed: 0,
         message: 'No active tenants for outreach',
       });
+      response.headers.set('X-Trace-Id', traceId);
+      return response;
     }
 
     logger.info(
@@ -231,8 +242,7 @@ export async function GET(req: Request) {
           } catch (err) {
             failed++;
 
-            const errorMessage =
-              err instanceof Error ? err.message : String(err);
+            const errorMessage = err instanceof Error ? err.message : String(err);
 
             logger.error(
               {
@@ -302,19 +312,19 @@ export async function GET(req: Request) {
         completed: results.filter((r) => r.status === 'Complete').length,
         failed: results.filter((r) => r.status === 'Failed').length,
         totalEmailsSent: results.reduce((sum, r) => sum + (r.emailsSent || 0), 0),
-        totalEmailsQueued: results.reduce(
-          (sum, r) => sum + (r.emailsQueued || 0),
-          0
-        ),
+        totalEmailsQueued: results.reduce((sum, r) => sum + (r.emailsQueued || 0), 0),
       },
       'Pipeline outreach cron complete'
     );
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       success: true,
       processed: results.length,
       results,
     });
+
+    response.headers.set('X-Trace-Id', traceId);
+    return response;
   } catch (error) {
     logger.error(
       {
@@ -324,12 +334,26 @@ export async function GET(req: Request) {
       'Pipeline Outreach Cron Error'
     );
 
-    return NextResponse.json(
-      {
-        error: 'Internal Server Error',
-        message: error instanceof Error ? error.message : 'Unknown error',
-      },
-      { status: 500 }
-    );
+    const internalError = new InternalError('Pipeline outreach cron failed', {
+      originalError: error instanceof Error ? error.message : String(error),
+    });
+    return NextResponse.json(internalError.toEnvelope(req.url, traceId), { status: 500 });
   }
 }
+
+// Auth wrapper
+const authHandler = async (req: Request): Promise<NextResponse> => {
+  const authError = await verifyCronAuth(req);
+  if (authError) return authError;
+  return handleOutreachCron(req);
+};
+
+// Apply rate limiting (5 requests per minute for cron jobs)
+const rateLimitedHandler = (req: Request) =>
+  withRateLimit({
+    windowMs: 60 * 1000,
+    max: 5,
+    message: 'Too many cron requests. Please wait before trying again.',
+  })(req, () => authHandler(req));
+
+export const GET = rateLimitedHandler;

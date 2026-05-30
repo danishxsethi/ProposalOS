@@ -1,19 +1,21 @@
-import { prisma } from '@/lib/prisma';
 import {
-  updateBenchmark as flywheelUpdateBenchmark,
   trackFindingOutcome as flywheelTrackFindingOutcome,
   trackPromptOutcome as flywheelTrackPromptOutcome,
+  updateBenchmark as flywheelUpdateBenchmark,
 } from '@/lib/flywheel/dataFlywheel';
+import { logger } from '@/lib/logger';
+import { prisma } from '@/lib/prisma';
+import { getTenantId, getTenantIdFromStore } from '@/lib/tenant/context';
 
 /**
  * Learning Loop Extensions
- * 
+ *
  * Extends the existing data flywheel with additional tracking for:
  * - Outreach template performance
  * - Win/loss analysis with reason codes
  * - Pricing recalibration based on conversion rates
  * - Vertical-specific insights
- * 
+ *
  * Requirements: 8.1, 8.2, 8.3, 8.4, 8.5, 8.6
  */
 
@@ -25,7 +27,10 @@ import {
  * Update industry benchmark statistics
  * Requirements: 8.3
  */
-export async function updateBenchmark(industry: string, metrics: Record<string, number>): Promise<void> {
+export async function updateBenchmark(
+  industry: string,
+  metrics: Record<string, number>
+): Promise<void> {
   return flywheelUpdateBenchmark(industry, metrics);
 }
 
@@ -59,6 +64,7 @@ export interface OutreachOutcome {
   conversionRate: number;
   vertical: string;
   city: string;
+  tenantId?: string;
 }
 
 export interface WinLossData {
@@ -98,7 +104,7 @@ export interface VerticalInsights {
 /**
  * Track outreach template performance
  * Requirements: 8.2
- * 
+ *
  * Updates OutreachTemplatePerformance table with aggregated metrics
  * for a specific template, vertical, and city combination.
  */
@@ -107,7 +113,20 @@ export async function trackOutreachOutcome(
   outcome: OutreachOutcome
 ): Promise<void> {
   try {
-    const { vertical, city, openRate, clickRate, replyRate, conversionRate } = outcome;
+    const {
+      vertical,
+      city,
+      openRate,
+      clickRate,
+      replyRate,
+      conversionRate,
+      tenantId: providedTenantId,
+    } = outcome;
+
+    let tenantId = providedTenantId || getTenantIdFromStore();
+    if (!tenantId) {
+      tenantId = (await getTenantId()) || (await prisma.tenant.findFirst())?.id || 'default-tenant';
+    }
 
     // Sanitize rates to handle NaN and Infinity
     const sanitizeRate = (rate: number): number => {
@@ -123,7 +142,8 @@ export async function trackOutreachOutcome(
     // Upsert the performance record
     const existing = await prisma.outreachTemplatePerformance.findUnique({
       where: {
-        templateId_vertical_city: {
+        tenantId_templateId_vertical_city: {
+          tenantId,
           templateId,
           vertical,
           city: city || '',
@@ -157,6 +177,7 @@ export async function trackOutreachOutcome(
       // Create new record
       await prisma.outreachTemplatePerformance.create({
         data: {
+          tenantId,
           templateId,
           vertical,
           city: city || '',
@@ -173,9 +194,9 @@ export async function trackOutreachOutcome(
       });
     }
 
-    console.log(`[LearningLoop] Tracked outreach outcome for template ${templateId} in ${vertical}/${city}`);
+    logger.info({ templateId, vertical, city }, '[LearningLoop] Tracked outreach outcome');
   } catch (error) {
-    console.error('[LearningLoop] Failed to track outreach outcome:', error);
+    logger.error({ error }, '[LearningLoop] Failed to track outreach outcome');
     throw error;
   }
 }
@@ -183,7 +204,7 @@ export async function trackOutreachOutcome(
 /**
  * Track win/loss outcomes with reason codes
  * Requirements: 8.6
- * 
+ *
  * Records detailed win/loss data including reason codes, objections,
  * and competitor mentions for future playbook refinement.
  */
@@ -212,9 +233,9 @@ export async function trackWinLoss(
       },
     });
 
-    console.log(`[LearningLoop] Tracked ${data.outcome} outcome for proposal ${proposalId}`);
+    logger.info({ proposalId, outcome: data.outcome }, '[LearningLoop] Tracked win/loss');
   } catch (error) {
-    console.error('[LearningLoop] Failed to track win/loss:', error);
+    logger.error({ error }, '[LearningLoop] Failed to track win/loss');
     throw error;
   }
 }
@@ -222,7 +243,7 @@ export async function trackWinLoss(
 /**
  * Recalibrate pricing based on historical conversion rates
  * Requirements: 8.4
- * 
+ *
  * Analyzes win/loss data for a specific vertical and city to compute
  * conversion rates by tier and recommend optimal pricing.
  */
@@ -237,11 +258,11 @@ export async function recalibratePricing(
       vertical,
       city: city || null,
     };
-    
+
     if (tenantId) {
       where.tenantId = tenantId;
     }
-    
+
     const records = await prisma.winLossRecord.findMany({ where });
 
     if (records.length === 0) {
@@ -281,9 +302,7 @@ export async function recalibratePricing(
     }
 
     const essentialsConversionRate =
-      tierCounts.essentials.total > 0
-        ? tierCounts.essentials.won / tierCounts.essentials.total
-        : 0;
+      tierCounts.essentials.total > 0 ? tierCounts.essentials.won / tierCounts.essentials.total : 0;
     const growthConversionRate =
       tierCounts.growth.total > 0 ? tierCounts.growth.won / tierCounts.growth.total : 0;
     const premiumConversionRate =
@@ -313,7 +332,7 @@ export async function recalibratePricing(
       sampleSize: records.length,
     };
   } catch (error) {
-    console.error('[LearningLoop] Failed to recalibrate pricing:', error);
+    logger.error({ error }, '[LearningLoop] Failed to recalibrate pricing');
     throw error;
   }
 }
@@ -351,7 +370,7 @@ function ensureTierOrdering(pricing: { essentials: number; growth: number; premi
   // Otherwise, enforce minimum gaps between tiers
   // Start from the base prices and adjust based on conversion rates
   const basePricing = { essentials: 500, growth: 1500, premium: 3000 };
-  
+
   // If essentials is too high, cap it at growth - 100
   let adjustedEssentials = essentials;
   let adjustedGrowth = growth;
@@ -382,7 +401,7 @@ function ensureTierOrdering(pricing: { essentials: number; growth: number; premi
 /**
  * Get vertical-specific insights
  * Requirements: 8.4
- * 
+ *
  * Aggregates learning data for a specific vertical to provide
  * actionable insights for improving pipeline performance.
  */
@@ -451,7 +470,7 @@ export async function getVerticalInsights(vertical: string): Promise<VerticalIns
       avgPainScore,
     };
   } catch (error) {
-    console.error('[LearningLoop] Failed to get vertical insights:', error);
+    logger.error({ error }, '[LearningLoop] Failed to get vertical insights');
     throw error;
   }
 }

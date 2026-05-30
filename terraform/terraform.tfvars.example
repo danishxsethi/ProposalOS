@@ -1,0 +1,133 @@
+# =============================================================================
+# Terraform Variables Configuration (Example)
+# =============================================================================
+# Copy this file to terraform.tfvars and fill in your values.
+# DO NOT commit terraform.tfvars with sensitive values to version control.
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# GCP Configuration
+# -----------------------------------------------------------------------------
+
+project_id  = "your-gcp-project-id"
+region      = "us-central1"
+zone        = "us-central1-a"
+app_name    = "proposalos"
+environment = "prod"
+
+# -----------------------------------------------------------------------------
+# Cloud Run Configuration
+# -----------------------------------------------------------------------------
+
+cloud_run_api = {
+  min_instances   = 1       # Always-on for API (no cold starts)
+  max_instances   = 50      # Handle traffic spikes
+  memory          = "1Gi"
+  cpu             = "1"
+  concurrency     = 40
+  timeout_seconds = 300
+  container_port  = 8080
+  always_on_cpu   = true
+}
+
+cloud_run_frontend = {
+  min_instances   = 1
+  max_instances   = 20
+  memory          = "1Gi"
+  cpu             = "1"
+  concurrency     = 80
+  timeout_seconds = 60
+  container_port  = 3000
+}
+
+# -----------------------------------------------------------------------------
+# Cloud SQL Configuration
+# -----------------------------------------------------------------------------
+
+cloud_sql = {
+  database_name       = "proposalos"
+  tier                = "db-custom-2-4096"  # 2 vCPU, 4GB RAM
+  disk_size           = 50                   # GB
+  disk_type           = "PD_SSD"
+  availability_type   = "REGIONAL"           # HA enabled
+  backup_start_time   = "02:00"
+  backup_retention    = 7                    # days
+  maintenance_day     = "MON"
+  maintenance_hour    = 2
+  require_ssl         = true
+  private_ip          = true
+  deletion_protection = true
+}
+
+# -----------------------------------------------------------------------------
+# GCS Buckets Configuration
+# -----------------------------------------------------------------------------
+
+gcs_buckets = {
+  proposals       = "proposals"
+  audit_snapshots = "audit-snapshots"
+  outreach_assets = "outreach-assets"
+  terraform_state = "terraform-state"
+}
+
+# -----------------------------------------------------------------------------
+# VPC Configuration
+# -----------------------------------------------------------------------------
+
+vpc = {
+  name                     = null                          # null = auto-generated
+  auto_create_subnetworks  = false
+  subnet_cidr              = "10.0.0.0/20"
+  cloud_run_connector_cidr = "10.8.0.0/28"
+}
+
+# -----------------------------------------------------------------------------
+# Cloud Armor WAF Configuration
+# -----------------------------------------------------------------------------
+
+cloud_armor = {
+  enabled                     = true
+  ddos_protection             = true
+  allowed_ips                 = []  # Add specific IPs to allow (optional)
+  blocked_ips                 = []  # Add specific IPs to block (optional)
+  rate_limit_requests_per_sec = 1000
+}
+
+# -----------------------------------------------------------------------------
+# DNS Configuration
+# -----------------------------------------------------------------------------
+
+dns = {
+  domain            = "claraud.com"
+  sending_subdomain = "mail"
+  managed_zone      = "claraud-com"
+  spf_include       = ["_spf.google.com", "sendgrid.net", "resend.com"]
+  dmarc_policy      = "quarantine"
+  dmarc_rua_email   = "dmarc-reports@claraud.com"
+}
+
+# -----------------------------------------------------------------------------
+# Monitoring Configuration
+# -----------------------------------------------------------------------------
+
+monitoring = {
+  enabled            = true
+  notification_email = "oncall@claraud.com"
+  uptime_check_enabled = true
+}
+
+# -----------------------------------------------------------------------------
+# Labels
+# -----------------------------------------------------------------------------
+
+default_labels = {
+  environment = "prod"
+  managed_by  = "terraform"
+  application = "proposalos"
+}
+
+cost_allocation_labels = {
+  cost_center  = "engineering"
+  team         = "platform"
+  billing_code = "prod-001"
+}

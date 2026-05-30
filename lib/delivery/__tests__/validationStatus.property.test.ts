@@ -1,14 +1,22 @@
 // Feature: agentic-delivery-qa-hardening, Property 2: Validation status completeness
-import { describe, it, expect } from 'vitest';
 import fc from 'fast-check';
-import { runValidationPipeline } from '../validationPipeline';
+import { describe, expect, it } from 'vitest';
+
 import { RawArtifact } from '../generators';
+import { runValidationPipeline } from '../validationPipeline';
 
 describe('Property 2: Validation status completeness', () => {
   it('should always assign VALIDATED or FAILED_VALIDATION status', async () => {
     const artifactArbitrary = fc.record({
       content: fc.string({ minLength: 1 }),
-      artifactType: fc.constantFrom('json_ld', 'html_meta', 'speed_script', 'gbp_draft', 'content_brief', 'aria_fix'),
+      artifactType: fc.constantFrom(
+        'json_ld',
+        'html_meta',
+        'speed_script',
+        'gbp_draft',
+        'content_brief',
+        'aria_fix'
+      ),
       metadata: fc.record({
         findingId: fc.uuid(),
         generatedAt: fc.date(),
@@ -109,7 +117,7 @@ describe('Property 2: Validation status completeness', () => {
     };
 
     const result = await runValidationPipeline(artifact);
-    
+
     result.validationResults.forEach((checkResult) => {
       expect(checkResult.checkName).toBeDefined();
       expect(['syntax', 'schema', 'lighthouse', 'human_review']).toContain(checkResult.checkName);

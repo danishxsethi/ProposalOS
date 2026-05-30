@@ -1,0 +1,709 @@
+{
+  "workspaceId": null,
+  "collectionId": null,
+  "environmentId": null,
+  "collection": {
+    "info": {
+      "name": "ProposalOS API",
+      "description": "Complete API collection for ProposalOS. Auto-generated from source routes.\n\nGroups:\n- Public (no auth)\n- Auth\n- Audits\n- Proposals\n- Pipeline\n- Pricing\n- Admin\n- Health\n- Widget\n- Cache",
+      "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+    },
+    "variable": [
+      { "key": "base_url", "value": "http://localhost:3000", "type": "string" },
+      { "key": "api_key", "value": "", "type": "string" },
+      { "key": "audit_id", "value": "", "type": "string" },
+      { "key": "proposal_id", "value": "", "type": "string" },
+      { "key": "plan_id", "value": "", "type": "string" },
+      { "key": "admin_secret", "value": "", "type": "string" }
+    ],
+    "item": [
+      {
+        "name": "Health",
+        "item": [
+          {
+            "name": "GET /api/health",
+            "request": {
+              "method": "GET",
+              "header": [],
+              "url": {
+                "raw": "{{base_url}}/api/health",
+                "host": ["{{base_url}}"],
+                "path": ["api", "health"]
+              }
+            },
+            "event": [
+              {
+                "listen": "test",
+                "script": {
+                  "exec": [
+                    "pm.test('Status is 200 or 503', () => { pm.expect([200, 503]).to.include(pm.response.code); });",
+                    "pm.test('Response has status field', () => { const json = pm.response.json(); pm.expect(json).to.have.property('status'); pm.expect(['healthy','degraded','unhealthy']).to.include(json.status); });",
+                    "pm.test('Response has checks object', () => { pm.expect(pm.response.json()).to.have.property('checks'); });",
+                    "pm.test('Response has timestamp', () => { pm.expect(pm.response.json()).to.have.property('timestamp'); });"
+                  ],
+                  "type": "text/javascript"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "Public",
+        "item": [
+          {
+            "name": "POST /api/public/audit — valid",
+            "request": {
+              "method": "POST",
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": {
+                "mode": "raw",
+                "raw": "{\n  \"url\": \"https://example.com\",\n  \"industry\": \"ecommerce\",\n  \"businessName\": \"Example Co\",\n  \"businessCity\": \"New York\"\n}"
+              },
+              "url": {
+                "raw": "{{base_url}}/api/public/audit",
+                "host": ["{{base_url}}"],
+                "path": ["api", "public", "audit"]
+              }
+            },
+            "event": [
+              {
+                "listen": "test",
+                "script": {
+                  "exec": [
+                    "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                    "pm.test('Response has audit id', () => { const json = pm.response.json(); pm.expect(json).to.have.property('id'); pm.collectionVariables.set('audit_id', json.id); });",
+                    "pm.test('id is a non-empty string', () => { pm.expect(pm.response.json().id).to.be.a('string').and.not.empty; });"
+                  ],
+                  "type": "text/javascript"
+                }
+              }
+            ]
+          },
+          {
+            "name": "POST /api/public/audit — missing url (400)",
+            "request": {
+              "method": "POST",
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": { "mode": "raw", "raw": "{\n  \"industry\": \"ecommerce\"\n}" },
+              "url": {
+                "raw": "{{base_url}}/api/public/audit",
+                "host": ["{{base_url}}"],
+                "path": ["api", "public", "audit"]
+              }
+            },
+            "event": [
+              {
+                "listen": "test",
+                "script": {
+                  "exec": [
+                    "pm.test('Status is 400', () => pm.response.to.have.status(400));",
+                    "pm.test('Error envelope present', () => { pm.expect(pm.response.json()).to.have.property('error'); });"
+                  ],
+                  "type": "text/javascript"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "Auth",
+        "item": [
+          {
+            "name": "POST /api/auth/register — valid",
+            "request": {
+              "method": "POST",
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": {
+                "mode": "raw",
+                "raw": "{\n  \"name\": \"Test User\",\n  \"email\": \"test+{{$randomInt}}@example.com\",\n  \"password\": \"password123\",\n  \"companyName\": \"Test Agency\"\n}"
+              },
+              "url": {
+                "raw": "{{base_url}}/api/auth/register",
+                "host": ["{{base_url}}"],
+                "path": ["api", "auth", "register"]
+              }
+            },
+            "event": [
+              {
+                "listen": "test",
+                "script": {
+                  "exec": [
+                    "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                    "pm.test('User object returned', () => { const json = pm.response.json(); pm.expect(json).to.have.property('user'); pm.expect(json.user).to.have.property('id'); pm.expect(json.user).to.have.property('email'); });"
+                  ],
+                  "type": "text/javascript"
+                }
+              }
+            ]
+          },
+          {
+            "name": "POST /api/auth/register — invalid email (400)",
+            "request": {
+              "method": "POST",
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": {
+                "mode": "raw",
+                "raw": "{\n  \"name\": \"T\",\n  \"email\": \"not-an-email\",\n  \"password\": \"pw\",\n  \"companyName\": \"X\"\n}"
+              },
+              "url": {
+                "raw": "{{base_url}}/api/auth/register",
+                "host": ["{{base_url}}"],
+                "path": ["api", "auth", "register"]
+              }
+            },
+            "event": [
+              {
+                "listen": "test",
+                "script": {
+                  "exec": [
+                    "pm.test('Status is 400', () => pm.response.to.have.status(400));",
+                    "pm.test('Error present', () => { pm.expect(pm.response.json()).to.have.property('error'); });"
+                  ],
+                  "type": "text/javascript"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "Audits (authenticated)",
+        "item": [
+          {
+            "name": "POST /api/audit — create audit",
+            "request": {
+              "method": "POST",
+              "header": [
+                { "key": "Content-Type", "value": "application/json" },
+                { "key": "Authorization", "value": "Bearer {{api_key}}" },
+                { "key": "Idempotency-Key", "value": "{{$randomUUID}}" }
+              ],
+              "body": {
+                "mode": "raw",
+                "raw": "{\n  \"url\": \"https://example.com\",\n  \"industry\": \"saas\",\n  \"businessName\": \"Example SaaS\",\n  \"businessCity\": \"Austin\"\n}"
+              },
+              "url": {
+                "raw": "{{base_url}}/api/audit",
+                "host": ["{{base_url}}"],
+                "path": ["api", "audit"]
+              }
+            },
+            "event": [
+              {
+                "listen": "test",
+                "script": {
+                  "exec": [
+                    "pm.test('Status is 200 or 401', () => { pm.expect([200, 401, 429]).to.include(pm.response.code); });",
+                    "if (pm.response.code === 200) {",
+                    "  pm.test('Has auditId', () => { const j = pm.response.json(); pm.expect(j).to.have.property('auditId'); pm.collectionVariables.set('audit_id', j.auditId); });",
+                    "  pm.test('success is true', () => pm.expect(pm.response.json().success).to.be.true);",
+                    "}"
+                  ],
+                  "type": "text/javascript"
+                }
+              }
+            ]
+          },
+          {
+            "name": "GET /api/audit/:id",
+            "request": {
+              "method": "GET",
+              "header": [{ "key": "Authorization", "value": "Bearer {{api_key}}" }],
+              "url": {
+                "raw": "{{base_url}}/api/audit/{{audit_id}}",
+                "host": ["{{base_url}}"],
+                "path": ["api", "audit", "{{audit_id}}"]
+              }
+            },
+            "event": [
+              {
+                "listen": "test",
+                "script": {
+                  "exec": [
+                    "pm.test('Status is 200, 401, or 404', () => { pm.expect([200, 401, 404]).to.include(pm.response.code); });",
+                    "if (pm.response.code === 200) {",
+                    "  pm.test('Has id field', () => pm.expect(pm.response.json()).to.have.property('id'));",
+                    "  pm.test('Has status field', () => pm.expect(pm.response.json()).to.have.property('status'));",
+                    "}"
+                  ],
+                  "type": "text/javascript"
+                }
+              }
+            ]
+          },
+          {
+            "name": "GET /api/audits — list",
+            "request": {
+              "method": "GET",
+              "header": [{ "key": "Authorization", "value": "Bearer {{api_key}}" }],
+              "url": {
+                "raw": "{{base_url}}/api/audits",
+                "host": ["{{base_url}}"],
+                "path": ["api", "audits"]
+              }
+            },
+            "event": [
+              {
+                "listen": "test",
+                "script": {
+                  "exec": [
+                    "pm.test('Status is 200 or 401', () => { pm.expect([200, 401]).to.include(pm.response.code); });"
+                  ],
+                  "type": "text/javascript"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "Proposals (authenticated)",
+        "item": [
+          {
+            "name": "GET /api/proposals — list",
+            "request": {
+              "method": "GET",
+              "header": [{ "key": "Authorization", "value": "Bearer {{api_key}}" }],
+              "url": {
+                "raw": "{{base_url}}/api/proposals?page=1&limit=20",
+                "host": ["{{base_url}}"],
+                "path": ["api", "proposals"],
+                "query": [
+                  { "key": "page", "value": "1" },
+                  { "key": "limit", "value": "20" }
+                ]
+              }
+            },
+            "event": [
+              {
+                "listen": "test",
+                "script": {
+                  "exec": [
+                    "pm.test('Status is 200 or 401', () => { pm.expect([200, 401]).to.include(pm.response.code); });",
+                    "if (pm.response.code === 200) {",
+                    "  pm.test('Has proposals array', () => pm.expect(pm.response.json()).to.have.property('proposals'));",
+                    "  pm.test('Has pagination object', () => pm.expect(pm.response.json()).to.have.property('pagination'));",
+                    "}"
+                  ],
+                  "type": "text/javascript"
+                }
+              }
+            ]
+          },
+          {
+            "name": "GET /api/proposals — filter by status",
+            "request": {
+              "method": "GET",
+              "header": [{ "key": "Authorization", "value": "Bearer {{api_key}}" }],
+              "url": {
+                "raw": "{{base_url}}/api/proposals?status=READY&limit=10",
+                "host": ["{{base_url}}"],
+                "path": ["api", "proposals"],
+                "query": [
+                  { "key": "status", "value": "READY" },
+                  { "key": "limit", "value": "10" }
+                ]
+              }
+            },
+            "event": [
+              {
+                "listen": "test",
+                "script": {
+                  "exec": [
+                    "pm.test('Status is 200 or 401', () => { pm.expect([200, 401]).to.include(pm.response.code); });"
+                  ],
+                  "type": "text/javascript"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "Pipeline (authenticated)",
+        "item": [
+          {
+            "name": "GET /api/pipeline/metrics",
+            "request": {
+              "method": "GET",
+              "header": [{ "key": "Authorization", "value": "Bearer {{api_key}}" }],
+              "url": {
+                "raw": "{{base_url}}/api/pipeline/metrics?days=7",
+                "host": ["{{base_url}}"],
+                "path": ["api", "pipeline", "metrics"],
+                "query": [{ "key": "days", "value": "7" }]
+              }
+            },
+            "event": [
+              {
+                "listen": "test",
+                "script": {
+                  "exec": [
+                    "pm.test('Status is 200 or 401', () => { pm.expect([200, 401]).to.include(pm.response.code); });"
+                  ],
+                  "type": "text/javascript"
+                }
+              }
+            ]
+          },
+          {
+            "name": "GET /api/pipeline/review — queue",
+            "request": {
+              "method": "GET",
+              "header": [{ "key": "Authorization", "value": "Bearer {{api_key}}" }],
+              "url": {
+                "raw": "{{base_url}}/api/pipeline/review?sortBy=engagementScore&sortOrder=desc&page=1&pageSize=20",
+                "host": ["{{base_url}}"],
+                "path": ["api", "pipeline", "review"],
+                "query": [
+                  { "key": "sortBy", "value": "engagementScore" },
+                  { "key": "sortOrder", "value": "desc" },
+                  { "key": "page", "value": "1" },
+                  { "key": "pageSize", "value": "20" }
+                ]
+              }
+            },
+            "event": [
+              {
+                "listen": "test",
+                "script": {
+                  "exec": [
+                    "pm.test('Status is 200 or 401', () => { pm.expect([200, 401]).to.include(pm.response.code); });",
+                    "if (pm.response.code === 200) {",
+                    "  pm.test('Has items array', () => pm.expect(pm.response.json()).to.have.property('items'));",
+                    "  pm.test('Has total', () => pm.expect(pm.response.json()).to.have.property('total'));",
+                    "}"
+                  ],
+                  "type": "text/javascript"
+                }
+              }
+            ]
+          },
+          {
+            "name": "POST /api/pipeline/review — approve",
+            "request": {
+              "method": "POST",
+              "header": [
+                { "key": "Content-Type", "value": "application/json" },
+                { "key": "Authorization", "value": "Bearer {{api_key}}" }
+              ],
+              "body": {
+                "mode": "raw",
+                "raw": "{\n  \"prospectId\": \"{{prospect_id}}\",\n  \"action\": \"approve\",\n  \"notes\": \"High-value lead, proceed to closing\"\n}"
+              },
+              "url": {
+                "raw": "{{base_url}}/api/pipeline/review",
+                "host": ["{{base_url}}"],
+                "path": ["api", "pipeline", "review"]
+              }
+            },
+            "event": [
+              {
+                "listen": "test",
+                "script": {
+                  "exec": [
+                    "pm.test('Status is 200, 400, 401, 403, or 404', () => { pm.expect([200, 400, 401, 403, 404]).to.include(pm.response.code); });",
+                    "if (pm.response.code === 200) {",
+                    "  pm.test('success is true', () => pm.expect(pm.response.json().success).to.be.true);",
+                    "}"
+                  ],
+                  "type": "text/javascript"
+                }
+              }
+            ]
+          },
+          {
+            "name": "POST /api/pipeline/review — reject",
+            "request": {
+              "method": "POST",
+              "header": [
+                { "key": "Content-Type", "value": "application/json" },
+                { "key": "Authorization", "value": "Bearer {{api_key}}" }
+              ],
+              "body": {
+                "mode": "raw",
+                "raw": "{\n  \"prospectId\": \"{{prospect_id}}\",\n  \"action\": \"reject\",\n  \"reason\": \"Not a good fit\",\n  \"notes\": \"Budget too small\"\n}"
+              },
+              "url": {
+                "raw": "{{base_url}}/api/pipeline/review",
+                "host": ["{{base_url}}"],
+                "path": ["api", "pipeline", "review"]
+              }
+            },
+            "event": [
+              {
+                "listen": "test",
+                "script": {
+                  "exec": [
+                    "pm.test('Status is 200, 400, 401, 403, or 404', () => { pm.expect([200, 400, 401, 403, 404]).to.include(pm.response.code); });"
+                  ],
+                  "type": "text/javascript"
+                }
+              }
+            ]
+          },
+          {
+            "name": "POST /api/pipeline/review — invalid action (400)",
+            "request": {
+              "method": "POST",
+              "header": [
+                { "key": "Content-Type", "value": "application/json" },
+                { "key": "Authorization", "value": "Bearer {{api_key}}" }
+              ],
+              "body": {
+                "mode": "raw",
+                "raw": "{\n  \"prospectId\": \"some-id\",\n  \"action\": \"snooze\"\n}"
+              },
+              "url": {
+                "raw": "{{base_url}}/api/pipeline/review",
+                "host": ["{{base_url}}"],
+                "path": ["api", "pipeline", "review"]
+              }
+            },
+            "event": [
+              {
+                "listen": "test",
+                "script": {
+                  "exec": [
+                    "pm.test('Status is 400 or 401', () => { pm.expect([400, 401]).to.include(pm.response.code); });"
+                  ],
+                  "type": "text/javascript"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "Pricing",
+        "item": [
+          {
+            "name": "GET /api/pricing/plans — all",
+            "request": {
+              "method": "GET",
+              "header": [],
+              "url": {
+                "raw": "{{base_url}}/api/pricing/plans",
+                "host": ["{{base_url}}"],
+                "path": ["api", "pricing", "plans"]
+              }
+            },
+            "event": [
+              {
+                "listen": "test",
+                "script": {
+                  "exec": [
+                    "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                    "pm.test('Has saas and proposal keys', () => { const j = pm.response.json(); pm.expect(j).to.have.property('saas'); pm.expect(j).to.have.property('proposal'); });"
+                  ],
+                  "type": "text/javascript"
+                }
+              }
+            ]
+          },
+          {
+            "name": "GET /api/pricing/plans?type=saas",
+            "request": {
+              "method": "GET",
+              "header": [],
+              "url": {
+                "raw": "{{base_url}}/api/pricing/plans?type=saas",
+                "host": ["{{base_url}}"],
+                "path": ["api", "pricing", "plans"],
+                "query": [{ "key": "type", "value": "saas" }]
+              }
+            },
+            "event": [
+              {
+                "listen": "test",
+                "script": {
+                  "exec": [
+                    "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                    "pm.test('Response is an array', () => pm.expect(pm.response.json()).to.be.an('array'));"
+                  ],
+                  "type": "text/javascript"
+                }
+              }
+            ]
+          },
+          {
+            "name": "GET /api/pricing/plans?id=:plan_id",
+            "request": {
+              "method": "GET",
+              "header": [],
+              "url": {
+                "raw": "{{base_url}}/api/pricing/plans?id={{plan_id}}",
+                "host": ["{{base_url}}"],
+                "path": ["api", "pricing", "plans"],
+                "query": [{ "key": "id", "value": "{{plan_id}}" }]
+              }
+            },
+            "event": [
+              {
+                "listen": "test",
+                "script": {
+                  "exec": [
+                    "pm.test('Status is 200 or 404', () => { pm.expect([200, 404]).to.include(pm.response.code); });"
+                  ],
+                  "type": "text/javascript"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "Widget",
+        "item": [
+          {
+            "name": "OPTIONS /api/widget/quick-audit — CORS preflight",
+            "request": {
+              "method": "OPTIONS",
+              "header": [
+                { "key": "Origin", "value": "https://example.com" },
+                { "key": "Access-Control-Request-Method", "value": "POST" }
+              ],
+              "url": {
+                "raw": "{{base_url}}/api/widget/quick-audit",
+                "host": ["{{base_url}}"],
+                "path": ["api", "widget", "quick-audit"]
+              }
+            },
+            "event": [
+              {
+                "listen": "test",
+                "script": {
+                  "exec": [
+                    "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                    "pm.test('CORS header present', () => { pm.expect(pm.response.headers.get('Access-Control-Allow-Origin')).to.exist; });"
+                  ],
+                  "type": "text/javascript"
+                }
+              }
+            ]
+          },
+          {
+            "name": "POST /api/widget/quick-audit — valid",
+            "request": {
+              "method": "POST",
+              "header": [
+                { "key": "Content-Type", "value": "application/json" },
+                { "key": "Origin", "value": "https://example.com" }
+              ],
+              "body": {
+                "mode": "raw",
+                "raw": "{\n  \"url\": \"https://example.com\",\n  \"email\": \"lead@example.com\",\n  \"tenantDomain\": \"proposalengine.com\"\n}"
+              },
+              "url": {
+                "raw": "{{base_url}}/api/widget/quick-audit",
+                "host": ["{{base_url}}"],
+                "path": ["api", "widget", "quick-audit"]
+              }
+            },
+            "event": [
+              {
+                "listen": "test",
+                "script": {
+                  "exec": [
+                    "pm.test('Status is 200 or 400', () => { pm.expect([200, 400]).to.include(pm.response.code); });",
+                    "if (pm.response.code === 200) {",
+                    "  pm.test('Has auditId', () => pm.expect(pm.response.json()).to.have.property('auditId'));",
+                    "  pm.test('Has score', () => pm.expect(pm.response.json()).to.have.property('score'));",
+                    "  pm.test('Has grade', () => pm.expect(pm.response.json()).to.have.property('grade'));",
+                    "  pm.test('Score is 0-100', () => { const s = pm.response.json().score; pm.expect(s).to.be.at.least(0).and.at.most(100); });",
+                    "}"
+                  ],
+                  "type": "text/javascript"
+                }
+              }
+            ]
+          },
+          {
+            "name": "POST /api/widget/quick-audit — unknown tenant (400)",
+            "request": {
+              "method": "POST",
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": {
+                "mode": "raw",
+                "raw": "{\n  \"url\": \"https://example.com\",\n  \"email\": \"lead@example.com\",\n  \"tenantDomain\": \"nonexistent-tenant-xyz.com\"\n}"
+              },
+              "url": {
+                "raw": "{{base_url}}/api/widget/quick-audit",
+                "host": ["{{base_url}}"],
+                "path": ["api", "widget", "quick-audit"]
+              }
+            },
+            "event": [
+              {
+                "listen": "test",
+                "script": {
+                  "exec": [
+                    "pm.test('Status is 400', () => pm.response.to.have.status(400));",
+                    "pm.test('Error envelope present', () => pm.expect(pm.response.json()).to.have.property('error'));"
+                  ],
+                  "type": "text/javascript"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "Cache (admin)",
+        "item": [
+          {
+            "name": "POST /api/cache/clear — valid admin key",
+            "request": {
+              "method": "POST",
+              "header": [{ "key": "x-admin-key", "value": "{{admin_secret}}" }],
+              "url": {
+                "raw": "{{base_url}}/api/cache/clear",
+                "host": ["{{base_url}}"],
+                "path": ["api", "cache", "clear"]
+              }
+            },
+            "event": [
+              {
+                "listen": "test",
+                "script": {
+                  "exec": [
+                    "pm.test('Status is 200 or 503', () => { pm.expect([200, 503]).to.include(pm.response.code); });",
+                    "if (pm.response.code === 200) {",
+                    "  pm.test('success is true', () => pm.expect(pm.response.json().success).to.be.true);",
+                    "}"
+                  ],
+                  "type": "text/javascript"
+                }
+              }
+            ]
+          },
+          {
+            "name": "POST /api/cache/clear — no key (401)",
+            "request": {
+              "method": "POST",
+              "header": [],
+              "url": {
+                "raw": "{{base_url}}/api/cache/clear",
+                "host": ["{{base_url}}"],
+                "path": ["api", "cache", "clear"]
+              }
+            },
+            "event": [
+              {
+                "listen": "test",
+                "script": {
+                  "exec": [
+                    "pm.test('Status is 401 or 503', () => { pm.expect([401, 503]).to.include(pm.response.code); });"
+                  ],
+                  "type": "text/javascript"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

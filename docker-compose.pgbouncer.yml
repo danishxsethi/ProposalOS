@@ -1,0 +1,50 @@
+version: '3.8'
+
+services:
+  pgbouncer:
+    image: edoburu/pgbouncer:latest
+    container_name: proposalos-pgbouncer
+    ports:
+      - '6432:5432'
+    environment:
+      # PostgreSQL connection settings (aligned with edoburu/pgbouncer)
+      - DB_HOST=proposal_engine_db
+      - DB_PORT=5432
+      - DB_USER=${DB_USER:-postgres}
+      - DB_PASSWORD=${DB_PASSWORD:-password}
+      - DB_NAME=${DB_NAME:-proposal_rls_smoke}
+
+      # PgBouncer pool settings (optimized for local dev)
+      - POOL_MODE=transaction
+      - MAX_CLIENT_CONN=100
+      - DEFAULT_POOL_SIZE=10
+      - MIN_POOL_SIZE=2
+      - RESERVE_POOL_SIZE=2
+      - RESERVE_POOL_TIMEOUT=3
+
+      # Authentication
+      - AUTH_TYPE=scram-sha-256
+      - AUTH_FILE=/etc/pgbouncer/userlist.txt
+
+      # Logging
+      - LOG_CONNECTIONS=1
+      - LOG_DISCONNECTIONS=1
+      - LOG_POOLER_ERRORS=1
+      - LOG_STATS=1
+
+    volumes:
+      # Custom userlist.txt for authentication
+      - ./docker/pgbouncer/userlist.txt:/etc/pgbouncer/userlist.txt:ro
+
+    restart: unless-stopped
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${DB_USER:-postgres} -p 5432 -h localhost']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+networks:
+  default:
+    name: proposal_engine_network
+    external: true
+

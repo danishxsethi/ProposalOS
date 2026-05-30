@@ -7,31 +7,29 @@
  * Feature: autonomous-proposal-engine
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
 import * as fc from 'fast-check';
-import {
-  enrichProspect,
-  withTimeout,
-  hasVerifiedEmail,
-  PROVIDER_ORDER,
-  type EnrichmentProvider,
-  type EnrichmentProviders,
-  type ProviderResult,
-} from '../waterfallEnrichment';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 import {
   deduplicateRecords,
-  persistQualifiedProspect,
   discover,
   getRemainingDailyCapacity,
+  persistQualifiedProspect,
+  type QualificationProvider,
   type RawBusinessRecord,
   type SourceProvider,
-  type QualificationProvider,
 } from '../discovery';
-import type {
-  DiscoveryConfig,
-  QualificationSignals,
-  PainScoreBreakdown,
-} from '../types';
+import {
+  type EnrichmentProvider,
+  type EnrichmentProviders,
+  enrichProspect,
+  hasVerifiedEmail,
+  PROVIDER_ORDER,
+  type ProviderResult,
+  withTimeout,
+} from '../waterfallEnrichment';
+
+import type { DiscoveryConfig, PainScoreBreakdown, QualificationSignals } from '../types';
 
 // ============================================================================
 // Mocks
@@ -179,19 +177,19 @@ function setupEnrichmentMocks(lead = makeLead()) {
   mockPrisma.prospectEnrichmentRun.update.mockResolvedValue({} as never);
 }
 
-function setupDiscoveryMocks(opts: {
-  dailyVolumeLimit?: number;
-  existingCount?: number;
-  existingKeys?: Array<{ source: string; sourceExternalId: string }>;
-} = {}) {
+function setupDiscoveryMocks(
+  opts: {
+    dailyVolumeLimit?: number;
+    existingCount?: number;
+    existingKeys?: Array<{ source: string; sourceExternalId: string }>;
+  } = {}
+) {
   mockPrisma.pipelineConfig.findUnique.mockResolvedValue({
     dailyVolumeLimit: opts.dailyVolumeLimit ?? 200,
   } as never);
 
   mockPrisma.prospectLead.count.mockResolvedValue(opts.existingCount ?? 0);
-  mockPrisma.prospectLead.findMany.mockResolvedValue(
-    (opts.existingKeys ?? []) as never
-  );
+  mockPrisma.prospectLead.findMany.mockResolvedValue((opts.existingKeys ?? []) as never);
 
   let createCount = 0;
   mockPrisma.prospectLead.create.mockImplementation(async (args: any) => {
@@ -224,77 +222,74 @@ describe('Discovery Property Tests', () => {
   describe('Property 3: Waterfall enrichment respects provider sequence and fault tolerance', () => {
     it('providers are always queried in strict PROVIDER_ORDER and stop on first verified email', async () => {
       await fc.assert(
-        fc.asyncProperty(
-          waterfallScenarioArb,
-          async ({ winnerIndex, failures }) => {
-            vi.clearAllMocks();
-            setupEnrichmentMocks();
+        fc.asyncProperty(waterfallScenarioArb, async ({ winnerIndex, failures }) => {
+          vi.clearAllMocks();
+          setupEnrichmentMocks();
 
-            const callOrder: string[] = [];
+          const callOrder: string[] = [];
 
-            // Build providers based on the scenario
-            const providers: EnrichmentProviders = {};
-            for (let i = 0; i < PROVIDER_ORDER.length; i++) {
-              const name = PROVIDER_ORDER[i];
-              const isFailing = failures[i];
-              const isWinner = i === winnerIndex;
+          // Build providers based on the scenario
+          const providers: EnrichmentProviders = {};
+          for (let i = 0; i < PROVIDER_ORDER.length; i++) {
+            const name = PROVIDER_ORDER[i];
+            const isFailing = failures[i];
+            const isWinner = i === winnerIndex;
 
-              if (isFailing && !isWinner) {
-                // This provider fails
-                providers[name] = async () => {
-                  callOrder.push(name);
-                  throw new Error(`${name} failed`);
+            if (isFailing && !isWinner) {
+              // This provider fails
+              providers[name] = async () => {
+                callOrder.push(name);
+                throw new Error(`${name} failed`);
+              };
+            } else if (isWinner) {
+              // This provider returns a verified email
+              providers[name] = async () => {
+                callOrder.push(name);
+                return {
+                  email: `dm@${name.toLowerCase()}.com`,
+                  decisionMaker: { name: 'John', title: 'Owner' },
                 };
-              } else if (isWinner) {
-                // This provider returns a verified email
-                providers[name] = async () => {
-                  callOrder.push(name);
-                  return {
-                    email: `dm@${name.toLowerCase()}.com`,
-                    decisionMaker: { name: 'John', title: 'Owner' },
-                  };
-                };
-              } else {
-                // This provider returns no email
-                providers[name] = async () => {
-                  callOrder.push(name);
-                  return {};
-                };
-              }
-            }
-
-            const result = await enrichProspect('lead-1', providers, {
-              timeoutMs: 5000,
-            });
-
-            // 1. Verify call order matches PROVIDER_ORDER (subset)
-            const expectedOrder = PROVIDER_ORDER.filter((_, idx) =>
-              callOrder.includes(PROVIDER_ORDER[idx])
-            );
-            expect(callOrder).toEqual(expectedOrder);
-
-            // 2. Verify sequence stops at winner
-            if (winnerIndex < PROVIDER_ORDER.length) {
-              // Should have stopped at or before the winner
-              const lastCalled = callOrder[callOrder.length - 1];
-              const lastCalledIdx = PROVIDER_ORDER.indexOf(lastCalled as any);
-              expect(lastCalledIdx).toBeLessThanOrEqual(winnerIndex);
-
-              // If the winner wasn't skipped by a failure, it should be the last called
-              if (!failures[winnerIndex]) {
-                expect(result.email).toBeDefined();
-                expect(result.provider).toBe(PROVIDER_ORDER[winnerIndex]);
-              }
-            }
-
-            // 3. No provider after the winner should have been called
-            if (winnerIndex < PROVIDER_ORDER.length && !failures[winnerIndex]) {
-              for (let i = winnerIndex + 1; i < PROVIDER_ORDER.length; i++) {
-                expect(callOrder).not.toContain(PROVIDER_ORDER[i]);
-              }
+              };
+            } else {
+              // This provider returns no email
+              providers[name] = async () => {
+                callOrder.push(name);
+                return {};
+              };
             }
           }
-        ),
+
+          const result = await enrichProspect('lead-1', providers, {
+            timeoutMs: 5000,
+          });
+
+          // 1. Verify call order matches PROVIDER_ORDER (subset)
+          const expectedOrder = PROVIDER_ORDER.filter((_, idx) =>
+            callOrder.includes(PROVIDER_ORDER[idx])
+          );
+          expect(callOrder).toEqual(expectedOrder);
+
+          // 2. Verify sequence stops at winner
+          if (winnerIndex < PROVIDER_ORDER.length) {
+            // Should have stopped at or before the winner
+            const lastCalled = callOrder[callOrder.length - 1];
+            const lastCalledIdx = PROVIDER_ORDER.indexOf(lastCalled as any);
+            expect(lastCalledIdx).toBeLessThanOrEqual(winnerIndex);
+
+            // If the winner wasn't skipped by a failure, it should be the last called
+            if (!failures[winnerIndex]) {
+              expect(result.email).toBeDefined();
+              expect(result.provider).toBe(PROVIDER_ORDER[winnerIndex]);
+            }
+          }
+
+          // 3. No provider after the winner should have been called
+          if (winnerIndex < PROVIDER_ORDER.length && !failures[winnerIndex]) {
+            for (let i = winnerIndex + 1; i < PROVIDER_ORDER.length; i++) {
+              expect(callOrder).not.toContain(PROVIDER_ORDER[i]);
+            }
+          }
+        }),
         { numRuns: 100 }
       );
     });
@@ -306,7 +301,7 @@ describe('Discovery Property Tests', () => {
             fc.boolean(), // APOLLO fails?
             fc.boolean(), // HUNTER fails?
             fc.boolean(), // PROXYCURL fails?
-            fc.boolean(), // CLEARBIT fails?
+            fc.boolean() // CLEARBIT fails?
           ),
           async (failures) => {
             vi.clearAllMocks();
@@ -370,9 +365,7 @@ describe('Discovery Property Tests', () => {
 
             // Enrichment runs should be created for providers up to and including the winner
             const expectedRunCount = winnerIndex + 1;
-            expect(mockPrisma.prospectEnrichmentRun.create).toHaveBeenCalledTimes(
-              expectedRunCount
-            );
+            expect(mockPrisma.prospectEnrichmentRun.create).toHaveBeenCalledTimes(expectedRunCount);
           }
         ),
         { numRuns: 100 }
@@ -399,18 +392,14 @@ describe('Discovery Property Tests', () => {
             vi.clearAllMocks();
 
             // Pick a random subset of records to be "existing" in the DB
-            const existingIndices = records
-              .map((_, i) => i)
-              .filter(() => Math.random() > 0.5);
+            const existingIndices = records.map((_, i) => i).filter(() => Math.random() > 0.5);
 
             const existingKeys = existingIndices.map((i) => ({
               source: records[i].source,
               sourceExternalId: records[i].sourceExternalId,
             }));
 
-            mockPrisma.prospectLead.findMany.mockResolvedValue(
-              existingKeys as never
-            );
+            mockPrisma.prospectLead.findMany.mockResolvedValue(existingKeys as never);
 
             const result = await deduplicateRecords(records, tenantId);
 
@@ -426,9 +415,7 @@ describe('Discovery Property Tests', () => {
             }
 
             // Every record NOT in the existing set must be in the result
-            const resultKeySet = new Set(
-              result.map((r) => `${r.source}::${r.sourceExternalId}`)
-            );
+            const resultKeySet = new Set(result.map((r) => `${r.source}::${r.sourceExternalId}`));
             for (const r of records) {
               const key = `${r.source}::${r.sourceExternalId}`;
               if (!existingKeySet.has(key)) {
@@ -446,25 +433,21 @@ describe('Discovery Property Tests', () => {
 
     it('deduplication queries the correct tenant', async () => {
       await fc.assert(
-        fc.asyncProperty(
-          recordBatchArb,
-          fc.uuid(),
-          async (records, tenantId) => {
-            vi.clearAllMocks();
-            mockPrisma.prospectLead.findMany.mockResolvedValue([] as never);
+        fc.asyncProperty(recordBatchArb, fc.uuid(), async (records, tenantId) => {
+          vi.clearAllMocks();
+          mockPrisma.prospectLead.findMany.mockResolvedValue([] as never);
 
-            await deduplicateRecords(records, tenantId);
+          await deduplicateRecords(records, tenantId);
 
-            // Verify the query was scoped to the correct tenant
-            expect(mockPrisma.prospectLead.findMany).toHaveBeenCalledWith(
-              expect.objectContaining({
-                where: expect.objectContaining({
-                  tenantId,
-                }),
-              })
-            );
-          }
-        ),
+          // Verify the query was scoped to the correct tenant
+          expect(mockPrisma.prospectLead.findMany).toHaveBeenCalledWith(
+            expect.objectContaining({
+              where: expect.objectContaining({
+                tenantId,
+              }),
+            })
+          );
+        }),
         { numRuns: 100 }
       );
     });
@@ -507,14 +490,7 @@ describe('Discovery Property Tests', () => {
             const { calculate } = await import('../painScore');
             const { total, breakdown } = calculate(signals);
 
-            await persistQualifiedProspect(
-              record,
-              tenantId,
-              jobId,
-              total,
-              breakdown,
-              signals
-            );
+            await persistQualifiedProspect(record, tenantId, jobId, total, breakdown, signals);
 
             // Verify all required fields are non-null
             expect(capturedData).not.toBeNull();
@@ -555,14 +531,7 @@ describe('Discovery Property Tests', () => {
             const { calculate } = await import('../painScore');
             const { total, breakdown } = calculate(signals);
 
-            await persistQualifiedProspect(
-              record,
-              tenantId,
-              jobId,
-              total,
-              breakdown,
-              signals
-            );
+            await persistQualifiedProspect(record, tenantId, jobId, total, breakdown, signals);
 
             expect(capturedBreakdown).not.toBeNull();
 
@@ -606,14 +575,7 @@ describe('Discovery Property Tests', () => {
             const { calculate } = await import('../painScore');
             const { total, breakdown } = calculate(signals);
 
-            await persistQualifiedProspect(
-              record,
-              tenantId,
-              jobId,
-              total,
-              breakdown,
-              signals
-            );
+            await persistQualifiedProspect(record, tenantId, jobId, total, breakdown, signals);
 
             expect(capturedPainScore).not.toBeNull();
             expect(Number.isInteger(capturedPainScore)).toBe(true);
@@ -669,17 +631,14 @@ describe('Discovery Property Tests', () => {
             mockPrisma.prospectLead.update.mockResolvedValue({} as never);
 
             // Generate records
-            const records: RawBusinessRecord[] = Array.from(
-              { length: recordCount },
-              (_, i) => ({
-                businessName: `Biz ${i}`,
-                website: `https://biz${i}.com`,
-                city: 'Austin',
-                vertical: 'dentist',
-                source: 'google_places',
-                sourceExternalId: `gp-${i}`,
-              })
-            );
+            const records: RawBusinessRecord[] = Array.from({ length: recordCount }, (_, i) => ({
+              businessName: `Biz ${i}`,
+              website: `https://biz${i}.com`,
+              city: 'Austin',
+              vertical: 'dentist',
+              source: 'google_places',
+              sourceExternalId: `gp-${i}`,
+            }));
 
             // High-pain qualification provider so all pass threshold
             const highPainSignals: QualificationSignals = {
@@ -711,9 +670,7 @@ describe('Discovery Property Tests', () => {
             const result = await discover(config, 'tenant-1', providers);
 
             // The number of qualified prospects must not exceed remaining capacity
-            expect(result.prospectsQualified).toBeLessThanOrEqual(
-              remainingCapacity
-            );
+            expect(result.prospectsQualified).toBeLessThanOrEqual(remainingCapacity);
 
             // The number of creates must not exceed remaining capacity
             expect(createCount).toBeLessThanOrEqual(remainingCapacity);
@@ -725,57 +682,54 @@ describe('Discovery Property Tests', () => {
 
     it('returns zero prospects when daily limit is already reached', async () => {
       await fc.assert(
-        fc.asyncProperty(
-          dailyVolumeLimitArb,
-          async (dailyLimit) => {
-            vi.clearAllMocks();
+        fc.asyncProperty(dailyVolumeLimitArb, async (dailyLimit) => {
+          vi.clearAllMocks();
 
-            // Existing count >= limit
-            mockPrisma.pipelineConfig.findUnique.mockResolvedValue({
-              dailyVolumeLimit: dailyLimit,
-            } as never);
-            mockPrisma.prospectLead.count.mockResolvedValue(dailyLimit as never);
-            mockPrisma.prospectLead.findMany.mockResolvedValue([] as never);
-            mockPrisma.prospectLead.create.mockResolvedValue({ id: 'x' } as never);
-            mockPrisma.prospectLead.update.mockResolvedValue({} as never);
+          // Existing count >= limit
+          mockPrisma.pipelineConfig.findUnique.mockResolvedValue({
+            dailyVolumeLimit: dailyLimit,
+          } as never);
+          mockPrisma.prospectLead.count.mockResolvedValue(dailyLimit as never);
+          mockPrisma.prospectLead.findMany.mockResolvedValue([] as never);
+          mockPrisma.prospectLead.create.mockResolvedValue({ id: 'x' } as never);
+          mockPrisma.prospectLead.update.mockResolvedValue({} as never);
 
-            const records: RawBusinessRecord[] = [
-              {
-                businessName: 'Test',
-                website: 'https://test.com',
-                city: 'Austin',
-                vertical: 'dentist',
-                source: 'google_places',
-                sourceExternalId: 'gp-1',
-              },
-            ];
-
-            const providers = {
-              googlePlaces: (async () => records) as SourceProvider,
-              yelp: (async () => []) as SourceProvider,
-              directories: (async () => []) as SourceProvider,
-              qualification: (async () => ({
-                pageSpeedScore: 20,
-                mobileResponsive: false,
-                hasSsl: false,
-              })) as QualificationProvider,
-            };
-
-            const config: DiscoveryConfig = {
+          const records: RawBusinessRecord[] = [
+            {
+              businessName: 'Test',
+              website: 'https://test.com',
               city: 'Austin',
               vertical: 'dentist',
-              targetLeads: 50,
-              painThreshold: 60,
-              sources: { googlePlaces: true, yelp: false, directories: false },
-            };
+              source: 'google_places',
+              sourceExternalId: 'gp-1',
+            },
+          ];
 
-            const result = await discover(config, 'tenant-1', providers);
+          const providers = {
+            googlePlaces: (async () => records) as SourceProvider,
+            yelp: (async () => []) as SourceProvider,
+            directories: (async () => []) as SourceProvider,
+            qualification: (async () => ({
+              pageSpeedScore: 20,
+              mobileResponsive: false,
+              hasSsl: false,
+            })) as QualificationProvider,
+          };
 
-            expect(result.prospectsQualified).toBe(0);
-            expect(result.prospectsFound).toBe(0);
-            expect(mockPrisma.prospectLead.create).not.toHaveBeenCalled();
-          }
-        ),
+          const config: DiscoveryConfig = {
+            city: 'Austin',
+            vertical: 'dentist',
+            targetLeads: 50,
+            painThreshold: 60,
+            sources: { googlePlaces: true, yelp: false, directories: false },
+          };
+
+          const result = await discover(config, 'tenant-1', providers);
+
+          expect(result.prospectsQualified).toBe(0);
+          expect(result.prospectsFound).toBe(0);
+          expect(mockPrisma.prospectLead.create).not.toHaveBeenCalled();
+        }),
         { numRuns: 100 }
       );
     });
@@ -789,10 +743,7 @@ describe('Discovery Property Tests', () => {
             vi.clearAllMocks();
             mockPrisma.prospectLead.count.mockResolvedValue(existingCount as never);
 
-            const remaining = await getRemainingDailyCapacity(
-              'tenant-1',
-              dailyLimit
-            );
+            const remaining = await getRemainingDailyCapacity('tenant-1', dailyLimit);
 
             expect(remaining).toBeGreaterThanOrEqual(0);
             expect(remaining).toBeLessThanOrEqual(dailyLimit);

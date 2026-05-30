@@ -1,4 +1,4 @@
-import { BaseAgent, type AgentContext, type AgentResult } from './baseAgent';
+import { type AgentContext, type AgentResult, BaseAgent } from './baseAgent';
 
 export class PredictiveAgent extends BaseAgent {
   getType(): string {
@@ -6,7 +6,11 @@ export class PredictiveAgent extends BaseAgent {
   }
 
   canHandle(findingCategory: string): boolean {
-    return findingCategory === 'PREDICTIVE' || findingCategory === 'FORECASTING' || findingCategory === 'INTELLIGENCE';
+    return (
+      findingCategory === 'PREDICTIVE' ||
+      findingCategory === 'FORECASTING' ||
+      findingCategory === 'INTELLIGENCE'
+    );
   }
 
   async execute(context: AgentContext): Promise<AgentResult> {

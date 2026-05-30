@@ -21,13 +21,13 @@ Implement the `delivery_agent` LangGraph subgraph and `adversarial_qa` node, alo
 
   - [x] 2.2 Write property test for confidence score assignment completeness
     - **Property 7: Confidence score assignment completeness**
-    - *For any* Finding, `scoreConfidence` returns exactly one of {HIGH, MEDIUM, LOW} — never null
+    - _For any_ Finding, `scoreConfidence` returns exactly one of {HIGH, MEDIUM, LOW} — never null
     - **Validates: Requirements 7.1, 7.2, 7.3**
     - Use `fast-check` with `fc.record` to generate random Finding shapes
 
   - [x] 2.3 Write property test for LOW confidence language softening
     - **Property 8: LOW confidence language softening**
-    - *For any* LOW-confidence claim text, `softenLanguage` output must not contain the original assertive phrasing and must contain a qualifier word
+    - _For any_ LOW-confidence claim text, `softenLanguage` output must not contain the original assertive phrasing and must contain a qualifier word
     - **Validates: Requirements 7.4**
 
 - [ ] 3. Artifact generators
@@ -64,7 +64,7 @@ Implement the `delivery_agent` LangGraph subgraph and `adversarial_qa` node, alo
 
   - [x] 3.8 Write property test for artifact type coverage
     - **Property 1: Artifact type coverage**
-    - *For any* Finding with category in {SCHEMA, SEO, SPEED, GBP, CONTENT, ACCESSIBILITY}, `getGenerator(category)` returns a non-null generator and `generate()` returns an artifact with the correct `artifactType`
+    - _For any_ Finding with category in {SCHEMA, SEO, SPEED, GBP, CONTENT, ACCESSIBILITY}, `getGenerator(category)` returns a non-null generator and `generate()` returns an artifact with the correct `artifactType`
     - **Validates: Requirements 1.1, 1.2, 1.3, 1.4, 1.5, 1.6**
 
 - [ ] 4. Validation pipeline
@@ -79,12 +79,12 @@ Implement the `delivery_agent` LangGraph subgraph and `adversarial_qa` node, alo
 
   - [x] 4.2 Write property test for validation status completeness
     - **Property 2: Validation status completeness**
-    - *For any* artifact after `runValidationPipeline` completes, status is exactly `VALIDATED` or `FAILED_VALIDATION`
+    - _For any_ artifact after `runValidationPipeline` completes, status is exactly `VALIDATED` or `FAILED_VALIDATION`
     - **Validates: Requirements 2.4, 2.5**
 
   - [x] 4.3 Write property test for rejection rate monotonicity
     - **Property 3: Rejection rate monotonicity**
-    - *For any* set of N artifacts, `computeRejectionRate` equals `failedCount / N`
+    - _For any_ set of N artifacts, `computeRejectionRate` equals `failedCount / N`
     - **Validates: Requirements 2.6**
 
 - [x] 5. Checkpoint — Ensure generators and validation pipeline tests pass
@@ -109,12 +109,12 @@ Implement the `delivery_agent` LangGraph subgraph and `adversarial_qa` node, alo
 
   - [x] 6.3 Write property test for implementation package completeness
     - **Property 4: Implementation package completeness**
-    - *For any* validated artifact, `packageArtifact` returns a package where all four required fields are non-null and non-empty
+    - _For any_ validated artifact, `packageArtifact` returns a package where all four required fields are non-null and non-empty
     - **Validates: Requirements 3.1**
 
   - [x] 6.4 Write property test for delivery bundle integrity
     - **Property 5: Delivery bundle integrity**
-    - *For any* set of packages, the assembled bundle's `artifactCount` equals the number of packages, and the ZIP contains a README entry
+    - _For any_ set of packages, the assembled bundle's `artifactCount` equals the number of packages, and the ZIP contains a README entry
     - **Validates: Requirements 3.2, 3.3**
 
 - [ ] 7. Delivery LangGraph subgraph
@@ -158,12 +158,12 @@ Implement the `delivery_agent` LangGraph subgraph and `adversarial_qa` node, alo
 
   - [x] 8.4 Write property test for hallucination sweep coverage
     - **Property 6: Hallucination sweep coverage**
-    - *For any* content string containing a planted claim with no matching evidence pointer, `hallucination_sweep` must include that claim in `hallucinationFlags`
+    - _For any_ content string containing a planted claim with no matching evidence pointer, `hallucination_sweep` must include that claim in `hallucinationFlags`
     - **Validates: Requirements 4.1, 4.2**
 
   - [x] 8.5 Write property test for no unattributed claims in READY proposals
     - **Property 11: No unattributed claims in READY proposals**
-    - *For any* proposal that passes the adversarial QA node, every factual claim in the executive summary has a traceable finding ID
+    - _For any_ proposal that passes the adversarial QA node, every factual claim in the executive summary has a traceable finding ID
     - **Validates: Requirements 10.6**
 
 - [x] 9. Checkpoint — Ensure delivery graph and adversarial QA tests pass
@@ -179,12 +179,12 @@ Implement the `delivery_agent` LangGraph subgraph and `adversarial_qa` node, alo
 
   - [x] 10.2 Write property test for hallucination log consistency
     - **Property 10: Hallucination log consistency**
-    - *For any* `AdversarialQARun`, `totalFlagged` equals `hallucinationFlags.length + consistencyFlags.length + competitorFlags.length`
+    - _For any_ `AdversarialQARun`, `totalFlagged` equals `hallucinationFlags.length + consistencyFlags.length + competitorFlags.length`
     - **Validates: Requirements 9.1**
 
   - [x] 10.3 Write property test for weekly rate computation
     - **Property (rate): Weekly hallucination rate**
-    - *For any* set of N total claims and M caught hallucinations, `computeWeeklyRate` returns `rate = M / N`
+    - _For any_ set of N total claims and M caught hallucinations, `computeWeeklyRate` returns `rate = M / N`
     - **Validates: Requirements 9.2**
 
 - [ ] 11. Confidence score display in proposals
@@ -215,7 +215,7 @@ Implement the `delivery_agent` LangGraph subgraph and `adversarial_qa` node, alo
 
   - [x] 12.3 Write property test for red team pass rate gate
     - **Property 9: Red team pass rate gate**
-    - *For any* run of the 50 red team fixtures, the pass rate must be ≥ 0.90
+    - _For any_ run of the 50 red team fixtures, the pass rate must be ≥ 0.90
     - **Validates: Requirements 8.3, 10.4**
 
 - [ ] 13. API endpoints

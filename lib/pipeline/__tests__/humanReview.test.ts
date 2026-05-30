@@ -1,55 +1,73 @@
+import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { v4 as uuidv4 } from 'uuid';
+
 import { cleanupDb } from '@/lib/__tests__/utils/cleanup';
 /**
  * Unit Tests for Human Review Queue
- * 
+ *
  * Tests routing logic, approve/reject workflows, and queue filtering/sorting.
- * 
+ *
  * Requirements: 10.3, 10.4, 10.5
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { prisma } from '@/lib/db';
+
 import {
-  routeToReview,
-  getReviewQueue,
   approveProspect,
-  rejectProspect,
   getProspectContext,
+  getReviewQueue,
   getReviewQueueStats,
   overrideProspectStatus,
+  rejectProspect,
+  routeToReview,
 } from '../humanReview';
 
 describe('Human Review Queue', () => {
-  const testTenantId = 'test-tenant-review';
+  const testTenantId = uuidv4();
   const testProspectIds: string[] = [];
 
   beforeEach(async () => {
-    // Clean up test data
-    await cleanupDb(prisma);
-});
+    // Clean up test data and recreate test tenant with bypass
+    const { runWithTenantBypass } = await import('@/lib/tenant/context');
+    await runWithTenantBypass('test-cleanup', async () => {
+      await cleanupDb(prisma);
+      await prisma.tenant.create({
+        data: {
+          id: testTenantId,
+          name: 'Review Test Tenant',
+          planTier: 'pro',
+          status: 'active',
+        },
+      });
+    });
+  });
 
   afterEach(async () => {
-    // Clean up test data
-    await cleanupDb(prisma);
-});
+    // Clean up test data with bypass
+    const { runWithTenantBypass } = await import('@/lib/tenant/context');
+    await runWithTenantBypass('test-cleanup', () => cleanupDb(prisma));
+  });
 
   describe('Routing Logic', () => {
     it('should route prospect to review queue', async () => {
-      // Create test prospect
-      const prospect = await prisma.prospectLead.create({
-        data: {
-          tenantId: testTenantId,
-          businessName: 'Test Business',
-          website: 'https://test.com',
-          city: 'Test City',
-          vertical: 'dental',
-          source: 'google_maps',
-          sourceExternalId: 'test-123',
-          pipelineStatus: 'QUALIFIED',
-          painScoreBreakdown: { websiteSpeed: 20, mobileBroken: 15 },
-          engagementScore: 85,
-        },
-      });
+      // Create test prospect with bypass or proper context
+      const { runWithTenantAsync } = await import('@/lib/tenant/context');
+      const prospect = await runWithTenantAsync(testTenantId, () =>
+        prisma.prospectLead.create({
+          data: {
+            tenantId: testTenantId,
+            businessName: 'Test Business',
+            website: 'https://test.com',
+            city: 'Test City',
+            vertical: 'dental',
+            source: 'google_maps',
+            sourceExternalId: 'test-123',
+            pipelineStatus: 'outreach_sent',
+            painBreakdown: { websiteSpeed: 20, mobileBroken: 15 },
+            engagementScore: 85,
+          },
+        })
+      );
 
       testProspectIds.push(prospect.id);
 
@@ -88,7 +106,7 @@ describe('Human Review Queue', () => {
             source: 'google_maps',
             sourceExternalId: 'test-1',
             pipelineStatus: 'hot_lead',
-            painScoreBreakdown: { websiteSpeed: 20 },
+            painBreakdown: { websiteSpeed: 20 },
             engagementScore: 90,
           },
         }),
@@ -102,13 +120,13 @@ describe('Human Review Queue', () => {
             source: 'google_maps',
             sourceExternalId: 'test-2',
             pipelineStatus: 'hot_lead',
-            painScoreBreakdown: { websiteSpeed: 15, mobileBroken: 10 },
+            painBreakdown: { websiteSpeed: 15, mobileBroken: 10 },
             engagementScore: 75,
           },
         }),
       ]);
 
-      testProspectIds.push(...prospects.map(p => p.id));
+      testProspectIds.push(...prospects.map((p) => p.id));
 
       const queue = await getReviewQueue(testTenantId);
 
@@ -129,7 +147,7 @@ describe('Human Review Queue', () => {
             source: 'google_maps',
             sourceExternalId: 'dental-1',
             pipelineStatus: 'hot_lead',
-            painScoreBreakdown: { websiteSpeed: 20 },
+            painBreakdown: { websiteSpeed: 20 },
             engagementScore: 80,
           },
         }),
@@ -143,13 +161,13 @@ describe('Human Review Queue', () => {
             source: 'google_maps',
             sourceExternalId: 'hvac-1',
             pipelineStatus: 'hot_lead',
-            painScoreBreakdown: { websiteSpeed: 15 },
+            painBreakdown: { websiteSpeed: 15 },
             engagementScore: 70,
           },
         }),
       ]);
 
-      testProspectIds.push(...prospects.map(p => p.id));
+      testProspectIds.push(...prospects.map((p) => p.id));
 
       const queue = await getReviewQueue(testTenantId, {
         vertical: ['dental'],
@@ -171,7 +189,7 @@ describe('Human Review Queue', () => {
             source: 'google_maps',
             sourceExternalId: 'high-1',
             pipelineStatus: 'hot_lead',
-            painScoreBreakdown: { websiteSpeed: 20 },
+            painBreakdown: { websiteSpeed: 20 },
             engagementScore: 95,
           },
         }),
@@ -185,13 +203,13 @@ describe('Human Review Queue', () => {
             source: 'google_maps',
             sourceExternalId: 'low-1',
             pipelineStatus: 'hot_lead',
-            painScoreBreakdown: { websiteSpeed: 15 },
+            painBreakdown: { websiteSpeed: 15 },
             engagementScore: 60,
           },
         }),
       ]);
 
-      testProspectIds.push(...prospects.map(p => p.id));
+      testProspectIds.push(...prospects.map((p) => p.id));
 
       const queue = await getReviewQueue(testTenantId, {
         minEngagementScore: 80,
@@ -215,14 +233,14 @@ describe('Human Review Queue', () => {
               source: 'google_maps',
               sourceExternalId: `test-${i}`,
               pipelineStatus: 'hot_lead',
-              painScoreBreakdown: { websiteSpeed: 20 },
+              painBreakdown: { websiteSpeed: 20 },
               engagementScore: 80 + i,
             },
           })
         )
       );
 
-      testProspectIds.push(...prospects.map(p => p.id));
+      testProspectIds.push(...prospects.map((p) => p.id));
 
       // Get page 1
       const page1 = await getReviewQueue(testTenantId, {
@@ -257,7 +275,7 @@ describe('Human Review Queue', () => {
           source: 'google_maps',
           sourceExternalId: 'approve-1',
           pipelineStatus: 'hot_lead',
-          painScoreBreakdown: { websiteSpeed: 20 },
+          painBreakdown: { websiteSpeed: 20 },
           engagementScore: 90,
         },
       });
@@ -302,7 +320,7 @@ describe('Human Review Queue', () => {
           source: 'google_maps',
           sourceExternalId: 'reject-1',
           pipelineStatus: 'hot_lead',
-          painScoreBreakdown: { websiteSpeed: 20 },
+          painBreakdown: { websiteSpeed: 20 },
           engagementScore: 90,
         },
       });
@@ -350,7 +368,7 @@ describe('Human Review Queue', () => {
           source: 'google_maps',
           sourceExternalId: 'context-1',
           pipelineStatus: 'hot_lead',
-          painScoreBreakdown: { websiteSpeed: 20, mobileBroken: 15 },
+          painBreakdown: { websiteSpeed: 20, mobileBroken: 15 },
           engagementScore: 85,
         },
       });
@@ -383,8 +401,8 @@ describe('Human Review Queue', () => {
           vertical: 'dental',
           source: 'google_maps',
           sourceExternalId: 'override-1',
-          pipelineStatus: 'hot_lead',
-          painScoreBreakdown: { websiteSpeed: 20 },
+          pipelineStatus: 'closing',
+          painBreakdown: { websiteSpeed: 20 },
           engagementScore: 90,
         },
       });
@@ -433,7 +451,7 @@ describe('Human Review Queue', () => {
             source: 'google_maps',
             sourceExternalId: 'stats-1',
             pipelineStatus: 'hot_lead',
-            painScoreBreakdown: { websiteSpeed: 20, mobileBroken: 10 },
+            painBreakdown: { websiteSpeed: 20, mobileBroken: 10 },
             engagementScore: 80,
           },
         }),
@@ -447,7 +465,7 @@ describe('Human Review Queue', () => {
             source: 'google_maps',
             sourceExternalId: 'stats-2',
             pipelineStatus: 'hot_lead',
-            painScoreBreakdown: { websiteSpeed: 15, mobileBroken: 15 },
+            painBreakdown: { websiteSpeed: 15, mobileBroken: 15 },
             engagementScore: 90,
           },
         }),

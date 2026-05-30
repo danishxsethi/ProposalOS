@@ -1,6 +1,6 @@
 /**
  * Security Hardening Agent
- * 
+ *
  * Handles security-related findings by implementing:
  * - SSL/TLS configuration
  * - Security headers (CSP, HSTS, X-Frame-Options)
@@ -10,7 +10,7 @@
  * - Vulnerability patching
  */
 
-import { BaseAgent, type AgentContext, type AgentResult } from './baseAgent';
+import { type AgentContext, type AgentResult, BaseAgent } from './baseAgent';
 
 export class SecurityHardeningAgent extends BaseAgent {
   getType(): string {

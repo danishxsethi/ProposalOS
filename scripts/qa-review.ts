@@ -8,9 +8,10 @@
  */
 
 import 'dotenv/config';
-import * as fs from 'fs-extra';
-import * as path from 'path';
 import { execSync } from 'child_process';
+import * as path from 'path';
+
+import * as fs from 'fs-extra';
 
 const RESULTS_PATH = path.join(process.cwd(), 'scripts', 'output', 'blitz-results.json');
 
@@ -30,7 +31,8 @@ interface BlitzResult {
 
 function openUrl(url: string): void {
   try {
-    const cmd = process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'start' : 'xdg-open';
+    const cmd =
+      process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'start' : 'xdg-open';
     execSync(`${cmd} "${url}"`, { stdio: 'ignore' });
   } catch {
     console.log(`  URL: ${url}`);
@@ -52,8 +54,12 @@ async function main(): Promise<void> {
   }
 
   console.log(`\n📋 QA Review: ${failed.length} failed audit(s)\n`);
-  console.log('| # | Business              | Vertical    | QA  | Issues                    | Proposal URL              |');
-  console.log('|---|-----------------------|-------------|-----|---------------------------|---------------------------|');
+  console.log(
+    '| # | Business              | Vertical    | QA  | Issues                    | Proposal URL              |'
+  );
+  console.log(
+    '|---|-----------------------|-------------|-----|---------------------------|---------------------------|'
+  );
 
   for (let i = 0; i < failed.length; i++) {
     const r = failed[i];
@@ -62,7 +68,9 @@ async function main(): Promise<void> {
     const qa = r.qaScore !== undefined ? String(r.qaScore).padStart(3) : 'N/A';
     const issues = r.issues.join('; ').slice(0, 25).padEnd(25);
     const url = r.proposalUrl ? 'Yes' : 'No';
-    console.log(`| ${String(i + 1).padStart(2)} | ${name} | ${vert} | ${qa} | ${issues} | ${url.padEnd(25)} |`);
+    console.log(
+      `| ${String(i + 1).padStart(2)} | ${name} | ${vert} | ${qa} | ${issues} | ${url.padEnd(25)} |`
+    );
   }
 
   console.log('\n--- Failure details ---\n');

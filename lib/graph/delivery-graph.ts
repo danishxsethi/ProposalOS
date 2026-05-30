@@ -1,13 +1,15 @@
-import { StateGraph, Annotation } from "@langchain/langgraph";
-import { Finding, ProjectStatus } from '@prisma/client';
-import { RawArtifact, getGenerator } from '@/lib/delivery/generators';
-import { runValidationPipeline, ValidatedArtifact } from '@/lib/delivery/validationPipeline';
-import { packageArtifact, ImplementationPackage } from '@/lib/delivery/packager';
-import { assembleBundle, uploadBundle, createBundleRecord } from '@/lib/delivery/bundler';
-import { prisma } from '@/lib/prisma';
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import { Annotation, StateGraph } from '@langchain/langgraph';
+import { Finding, ProjectStatus } from '@prisma/client';
+
 import { runAudit } from '@/lib/audit/runner';
-import { generateComparisonReport, ComparisonReportResult } from '@/lib/delivery/comparisonReport';
+import { assembleBundle, createBundleRecord, uploadBundle } from '@/lib/delivery/bundler';
+import { ComparisonReportResult, generateComparisonReport } from '@/lib/delivery/comparisonReport';
+import { getGenerator, RawArtifact } from '@/lib/delivery/generators';
+import { ImplementationPackage, packageArtifact } from '@/lib/delivery/packager';
+import { runValidationPipeline, ValidatedArtifact } from '@/lib/delivery/validationPipeline';
+import { logger } from '@/lib/logger';
+import { prisma } from '@/lib/prisma';
 
 export interface GeneratedArtifact {
   id: string;
@@ -37,27 +39,27 @@ export interface ComparisonReport {
 export const DeliveryState = Annotation.Root({
   findings: Annotation<Finding[]>({
     reducer: (x, y) => y,
-    default: () => []
+    default: () => [],
   }),
   proposalSections: Annotation<Record<string, any>>({
     reducer: (x, y) => y,
-    default: () => ({})
+    default: () => ({}),
   }),
   artifacts: Annotation<GeneratedArtifact[]>({
     reducer: (x, y) => y,
-    default: () => []
+    default: () => [],
   }),
   packages: Annotation<ImplementationPackage[]>({
     reducer: (x, y) => y,
-    default: () => []
+    default: () => [],
   }),
   bundle: Annotation<any>({
     reducer: (x, y) => y,
-    default: () => null
+    default: () => null,
   }),
   validationSummary: Annotation<ValidationSummary>({
     reducer: (x, y) => y,
-    default: () => ({ totalArtifacts: 0, validatedCount: 0, failedCount: 0, rejectionRate: 0 })
+    default: () => ({ totalArtifacts: 0, validatedCount: 0, failedCount: 0, rejectionRate: 0 }),
   }),
   tenantId: Annotation<string>({ reducer: (x, y) => y }),
   proposalId: Annotation<string>({ reducer: (x, y) => y }),
@@ -65,7 +67,10 @@ export const DeliveryState = Annotation.Root({
   // Post-delivery audit fields
   originalAuditId: Annotation<string | null>({ reducer: (x, y) => y, default: () => null }),
   postDeliveryAuditId: Annotation<string | null>({ reducer: (x, y) => y, default: () => null }),
-  comparisonReport: Annotation<ComparisonReportResult | null>({ reducer: (x, y) => y, default: () => null }),
+  comparisonReport: Annotation<ComparisonReportResult | null>({
+    reducer: (x, y) => y,
+    default: () => null,
+  }),
   improvementScore: Annotation<number>({ reducer: (x, y) => y, default: () => 0 }),
 });
 
@@ -78,7 +83,7 @@ async function generate_artifact(state: typeof DeliveryState.State) {
     try {
       const generator = getGenerator(finding.category);
       if (!generator) {
-        console.warn(`No generator found for category: ${finding.category}`);
+        logger.warn({ category: finding.category }, 'No generator found for category');
         continue;
       }
 
@@ -92,7 +97,7 @@ async function generate_artifact(state: typeof DeliveryState.State) {
         validationResults: [],
       });
     } catch (error) {
-      console.error(`Failed to generate artifact for finding ${finding.id}:`, error);
+      logger.error({ findingId: finding.id, error }, 'Failed to generate artifact');
     }
   }
 
@@ -133,7 +138,7 @@ async function validate_artifact(state: typeof DeliveryState.State) {
         validationResults: validatedArtifact.validationResults,
       });
     } catch (error) {
-      console.error(`Failed to validate artifact ${artifact.id}:`, error);
+      logger.error({ artifactId: artifact.id, error }, 'Failed to validate artifact');
       failedCount++;
       validatedArtifacts.push({
         ...artifact,
@@ -165,7 +170,7 @@ async function package_artifact(state: typeof DeliveryState.State) {
     }
 
     try {
-      const finding = state.findings.find(f => f.id === artifact.id);
+      const finding = state.findings.find((f) => f.id === artifact.id);
       if (!finding) {
         continue;
       }
@@ -185,7 +190,7 @@ async function package_artifact(state: typeof DeliveryState.State) {
       const pkg = await packageArtifact(validatedArtifact, finding, state.proposalSections);
       packages.push(pkg);
     } catch (error) {
-      console.error(`Failed to package artifact ${artifact.id}:`, error);
+      logger.error({ artifactId: artifact.id, error }, 'Failed to package artifact');
     }
   }
 
@@ -194,7 +199,7 @@ async function package_artifact(state: typeof DeliveryState.State) {
 
 async function assemble_bundle(state: typeof DeliveryState.State) {
   if (state.packages.length === 0) {
-    console.warn('No packages to assemble');
+    logger.warn('No packages to assemble');
     return { bundle: null };
   }
 
@@ -213,23 +218,19 @@ async function assemble_bundle(state: typeof DeliveryState.State) {
       },
     };
   } catch (error) {
-    console.error('Failed to assemble bundle:', error);
+    logger.error({ error }, 'Failed to assemble bundle');
     return { bundle: null };
   }
 }
 
 async function upload_bundle(state: typeof DeliveryState.State) {
   if (!state.bundle || !state.bundle.buffer) {
-    console.warn('No bundle to upload');
+    logger.warn('No bundle to upload');
     return { bundle: state.bundle };
   }
 
   try {
-    const zipUrl = await uploadBundle(
-      state.bundle.buffer,
-      state.proposalId,
-      state.tenantId
-    );
+    const zipUrl = await uploadBundle(state.bundle.buffer, state.proposalId, state.tenantId);
 
     // Create bundle record in database
     const bundleRecord = await createBundleRecord(
@@ -254,7 +255,7 @@ async function upload_bundle(state: typeof DeliveryState.State) {
     // Get original audit ID from proposal
     const proposal = await prisma.proposal.findUnique({
       where: { id: state.proposalId },
-      select: { auditId: true }
+      select: { auditId: true },
     });
 
     return {
@@ -267,7 +268,7 @@ async function upload_bundle(state: typeof DeliveryState.State) {
       originalAuditId: proposal?.auditId || null,
     };
   } catch (error) {
-    console.error('Failed to upload bundle:', error);
+    logger.error({ error }, 'Failed to upload bundle');
     return {
       bundle: {
         ...state.bundle,
@@ -284,7 +285,7 @@ async function upload_bundle(state: typeof DeliveryState.State) {
  */
 async function trigger_reaudit(state: typeof DeliveryState.State) {
   if (!state.originalAuditId) {
-    console.warn('[ReAudit] No originalAuditId — skipping re-audit');
+    logger.warn('[ReAudit] No originalAuditId — skipping re-audit');
     return { postDeliveryAuditId: null, improvementScore: 0 };
   }
 
@@ -295,7 +296,7 @@ async function trigger_reaudit(state: typeof DeliveryState.State) {
     });
 
     if (!originalAudit) {
-      console.warn('[ReAudit] Original audit not found');
+      logger.warn('[ReAudit] Original audit not found');
       return { postDeliveryAuditId: null, improvementScore: 0 };
     }
 
@@ -316,7 +317,7 @@ async function trigger_reaudit(state: typeof DeliveryState.State) {
     try {
       await runAudit(reAudit.id);
     } catch (e) {
-      console.error('[ReAudit] runAudit() failed — continuing with empty re-audit', e);
+      logger.error({ error: e }, '[ReAudit] runAudit() failed — continuing with empty re-audit');
     }
 
     // 3. Fetch finished findings
@@ -331,7 +332,10 @@ async function trigger_reaudit(state: typeof DeliveryState.State) {
     const improvementScore =
       originalCount > 0 ? Math.round((resolvedCount / originalCount) * 100) : 100;
 
-    console.log(`[ReAudit] improvementScore=${improvementScore}% (${resolvedCount}/${originalCount} resolved)`);
+    logger.info(
+      { improvementScore, resolvedCount, originalCount },
+      '[ReAudit] Computed improvement score'
+    );
 
     // 4. Gate Project status — if < 50% resolved, flag as NEEDS_REVIEW
     if (improvementScore < 50) {
@@ -339,7 +343,10 @@ async function trigger_reaudit(state: typeof DeliveryState.State) {
         where: { proposalId: state.proposalId },
         data: { status: ProjectStatus.NEEDS_REVIEW },
       });
-      console.warn(`[ReAudit] Improvement ${improvementScore}% < 50% — Project flagged as NEEDS_REVIEW`);
+      logger.warn(
+        { improvementScore, proposalId: state.proposalId },
+        '[ReAudit] Improvement < 50% — Project flagged as NEEDS_REVIEW'
+      );
     }
 
     // 5. Wire re-audit ID into DeliveryTask
@@ -350,7 +357,7 @@ async function trigger_reaudit(state: typeof DeliveryState.State) {
 
     return { postDeliveryAuditId: reAudit.id, improvementScore };
   } catch (error) {
-    console.error('[ReAudit] Unexpected failure', error);
+    logger.error({ error }, '[ReAudit] Unexpected failure');
     return { postDeliveryAuditId: null, improvementScore: 0 };
   }
 }
@@ -360,7 +367,7 @@ async function trigger_reaudit(state: typeof DeliveryState.State) {
  */
 async function generate_comparison(state: typeof DeliveryState.State) {
   if (!state.originalAuditId || !state.postDeliveryAuditId) {
-    console.warn('[Comparison] Missing audit IDs — skipping report generation');
+    logger.warn('[Comparison] Missing audit IDs — skipping report generation');
     return { comparisonReport: null };
   }
 
@@ -376,33 +383,36 @@ async function generate_comparison(state: typeof DeliveryState.State) {
         where: { proposalId: state.proposalId, tenantId: state.tenantId },
         data: { beforeAfterComparison: report as any },
       });
-      console.log(`[Comparison] Report for ${state.proposalId} — ${report.overallImprovementPercent}% improved`);
+      logger.info(
+        { proposalId: state.proposalId, improvementPercent: report.overallImprovementPercent },
+        '[Comparison] Report generated'
+      );
     }
 
     return { comparisonReport: report };
   } catch (error) {
-    console.error('[Comparison] Failed to generate comparison report:', error);
+    logger.error({ error }, '[Comparison] Failed to generate comparison report');
     return { comparisonReport: null };
   }
 }
 
 export const deliveryGraph = new StateGraph(DeliveryState)
-  .addNode("generate_artifact", generate_artifact)
-  .addNode("validate_artifact", validate_artifact)
-  .addNode("package_artifact", package_artifact)
-  .addNode("assemble_bundle", assemble_bundle)
-  .addNode("upload_bundle", upload_bundle)
-  .addNode("trigger_reaudit", trigger_reaudit)
-  .addNode("generate_comparison", generate_comparison)
+  .addNode('generate_artifact', generate_artifact)
+  .addNode('validate_artifact', validate_artifact)
+  .addNode('package_artifact', package_artifact)
+  .addNode('assemble_bundle', assemble_bundle)
+  .addNode('upload_bundle', upload_bundle)
+  .addNode('trigger_reaudit', trigger_reaudit)
+  .addNode('generate_comparison', generate_comparison)
 
-  .addEdge("__start__", "generate_artifact")
-  .addEdge("generate_artifact", "validate_artifact")
-  .addEdge("validate_artifact", "package_artifact")
-  .addEdge("package_artifact", "assemble_bundle")
-  .addEdge("assemble_bundle", "upload_bundle")
-  .addEdge("upload_bundle", "trigger_reaudit")
-  .addEdge("trigger_reaudit", "generate_comparison")
-  .addEdge("generate_comparison", "__end__")
+  .addEdge('__start__', 'generate_artifact')
+  .addEdge('generate_artifact', 'validate_artifact')
+  .addEdge('validate_artifact', 'package_artifact')
+  .addEdge('package_artifact', 'assemble_bundle')
+  .addEdge('assemble_bundle', 'upload_bundle')
+  .addEdge('upload_bundle', 'trigger_reaudit')
+  .addEdge('trigger_reaudit', 'generate_comparison')
+  .addEdge('generate_comparison', '__end__')
   .compile();
 
 /**
@@ -412,11 +422,11 @@ export const deliveryGraph = new StateGraph(DeliveryState)
 export async function runDeliveryAgent(proposalId: string, tenantId: string): Promise<void> {
   const proposal = await prisma.proposal.findUnique({
     where: { id: proposalId },
-    include: { audit: { include: { findings: true } } }
+    include: { audit: { include: { findings: true } } },
   });
 
   if (!proposal?.audit?.findings?.length) {
-    console.warn(`[DeliveryGraph] No findings for proposalId=${proposalId}. Skipping.`);
+    logger.warn({ proposalId }, '[DeliveryGraph] No findings. Skipping.');
     return;
   }
 
