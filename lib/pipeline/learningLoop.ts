@@ -113,8 +113,16 @@ export async function trackOutreachOutcome(
   outcome: OutreachOutcome
 ): Promise<void> {
   try {
-    const { vertical, city, openRate, clickRate, replyRate, conversionRate, tenantId: providedTenantId } = outcome;
-    
+    const {
+      vertical,
+      city,
+      openRate,
+      clickRate,
+      replyRate,
+      conversionRate,
+      tenantId: providedTenantId,
+    } = outcome;
+
     let tenantId = providedTenantId || getTenantIdFromStore();
     if (!tenantId) {
       tenantId = (await getTenantId()) || (await prisma.tenant.findFirst())?.id || 'default-tenant';

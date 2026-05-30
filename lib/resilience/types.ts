@@ -68,7 +68,11 @@ export class ProviderRateLimitError extends ProviderResilienceError {
     public limit: number,
     public resetMs: number
   ) {
-    super(provider, operation, `Rate limit exceeded. Limit: ${limit}/window. Reset in ${resetMs}ms`);
+    super(
+      provider,
+      operation,
+      `Rate limit exceeded. Limit: ${limit}/window. Reset in ${resetMs}ms`
+    );
     this.name = 'ProviderRateLimitError';
   }
 }
@@ -87,4 +91,3 @@ export class CircuitBreakerOpenError extends ProviderResilienceError {
     this.name = 'CircuitBreakerOpenError';
   }
 }
-

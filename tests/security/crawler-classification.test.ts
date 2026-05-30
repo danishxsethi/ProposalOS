@@ -17,7 +17,9 @@ describe('Website Scraper Failure Classification', () => {
       expect(classifyFailure(500, '', {}, 'The request was aborted', 'AbortError')).toBe('TIMEOUT');
 
       // ProviderTimeoutError
-      expect(classifyFailure(500, '', {}, 'Provider timed out', 'ProviderTimeoutError')).toBe('TIMEOUT');
+      expect(classifyFailure(500, '', {}, 'Provider timed out', 'ProviderTimeoutError')).toBe(
+        'TIMEOUT'
+      );
 
       // Message containing 'timeout'
       expect(classifyFailure(500, '', {}, 'Connection timed out')).toBe('TIMEOUT');
@@ -46,7 +48,9 @@ describe('Website Scraper Failure Classification', () => {
       expect(classifyFailure(200, '', { 'cf-ray': '12345' })).toBe('ANTI_BOT');
 
       // cf-challenge keyword in HTML
-      expect(classifyFailure(200, '<html><head><script>cf-challenge</script></head></html>', {})).toBe('ANTI_BOT');
+      expect(
+        classifyFailure(200, '<html><head><script>cf-challenge</script></head></html>', {})
+      ).toBe('ANTI_BOT');
 
       // "just a moment..." keyword in HTML
       expect(classifyFailure(200, '<h1>Just a moment...</h1>', {})).toBe('ANTI_BOT');

@@ -69,10 +69,7 @@ export async function encryptField(plaintext: string, context: EncryptionContext
   const aad = serializeContext(context);
   cipher.setAAD(aad);
 
-  const ciphertext = Buffer.concat([
-    cipher.update(plaintext, 'utf8'),
-    cipher.final()
-  ]);
+  const ciphertext = Buffer.concat([cipher.update(plaintext, 'utf8'), cipher.final()]);
 
   const tag = cipher.getAuthTag();
 
@@ -92,7 +89,10 @@ export async function encryptField(plaintext: string, context: EncryptionContext
  * Decrypts a serialized JSON envelope back to plaintext, validating key, iv, tag, and AAD context.
  * Supports legacy unencrypted values for compatibility during migrations.
  */
-export async function decryptField(envelopeStr: string, context: EncryptionContext): Promise<string> {
+export async function decryptField(
+  envelopeStr: string,
+  context: EncryptionContext
+): Promise<string> {
   if (!envelopeStr) return envelopeStr;
 
   // Compatibility fallback: if not an encrypted field envelope, return as-is
@@ -117,17 +117,14 @@ export async function decryptField(envelopeStr: string, context: EncryptionConte
     const aad = serializeContext(context);
     decipher.setAAD(aad);
 
-    const decrypted = Buffer.concat([
-      decipher.update(ciphertext),
-      decipher.final()
-    ]);
+    const decrypted = Buffer.concat([decipher.update(ciphertext), decipher.final()]);
 
     return decrypted.toString('utf8');
   } catch {
     // Fail closed with a descriptive, typed error, hiding raw cryptographic details or secrets
     throw new Error(
       `[DecryptionFailure] Failed to decrypt field '${context.field}' on model '${context.model}'. ` +
-      `Ensure key management is correctly configured and the decryption context/AAD is valid.`
+        `Ensure key management is correctly configured and the decryption context/AAD is valid.`
     );
   }
 }

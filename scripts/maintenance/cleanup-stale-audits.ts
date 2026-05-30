@@ -31,8 +31,12 @@ async function cleanupStaleAudits() {
   const cutoffTime = new Date(now.getTime() - ttlMs);
 
   console.log(`\n🧹 Starting stale audit cleanup job...`);
-  console.log(`Cutoff time for stale entries: ${cutoffTime.toISOString()} (older than ${ttlMinutes} minutes)`);
-  console.log(`Execution Mode: ${apply ? '⚠️  APPLY / WRITE-BACK' : '🔍 DRY RUN (no database writes)'}\n`);
+  console.log(
+    `Cutoff time for stale entries: ${cutoffTime.toISOString()} (older than ${ttlMinutes} minutes)`
+  );
+  console.log(
+    `Execution Mode: ${apply ? '⚠️  APPLY / WRITE-BACK' : '🔍 DRY RUN (no database writes)'}\n`
+  );
 
   // We wrap database operations in runWithTenantBypass to bypass multi-tenant RLS checks
   await runWithTenantBypass('cleanup-stale-audits', async () => {
@@ -55,7 +59,9 @@ async function cleanupStaleAudits() {
     console.log(`Found ${staleAudits.length} stale RUNNING audits.`);
     for (const audit of staleAudits) {
       const elapsedMins = Math.round((now.getTime() - audit.startedAt.getTime()) / (60 * 1000));
-      console.log(`  - Audit ID: ${audit.id} ("${audit.businessName}"), Tenant: ${audit.tenantId}, StartedAt: ${audit.startedAt.toISOString()} (${elapsedMins} mins ago)`);
+      console.log(
+        `  - Audit ID: ${audit.id} ("${audit.businessName}"), Tenant: ${audit.tenantId}, StartedAt: ${audit.startedAt.toISOString()} (${elapsedMins} mins ago)`
+      );
     }
 
     // 2. Identify stale QUEUED AuditJobs
@@ -80,11 +86,15 @@ async function cleanupStaleAudits() {
     console.log(`\nFound ${staleJobs.length} stale QUEUED/RUNNING audit jobs.`);
     for (const job of staleJobs) {
       const elapsedMins = Math.round((now.getTime() - job.createdAt.getTime()) / (60 * 1000));
-      console.log(`  - Job ID: ${job.id}, Audit ID: ${job.auditId}, Status: ${job.status}, Tenant: ${job.tenantId}, CreatedAt: ${job.createdAt.toISOString()} (${elapsedMins} mins ago)`);
+      console.log(
+        `  - Job ID: ${job.id}, Audit ID: ${job.auditId}, Status: ${job.status}, Tenant: ${job.tenantId}, CreatedAt: ${job.createdAt.toISOString()} (${elapsedMins} mins ago)`
+      );
     }
 
     if (!apply) {
-      console.log(`\n💡 Dry-run completed. Re-run with '--apply' to update these ${staleAudits.length} audits and ${staleJobs.length} jobs.`);
+      console.log(
+        `\n💡 Dry-run completed. Re-run with '--apply' to update these ${staleAudits.length} audits and ${staleJobs.length} jobs.`
+      );
       return;
     }
 

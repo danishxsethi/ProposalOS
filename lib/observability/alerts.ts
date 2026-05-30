@@ -203,7 +203,10 @@ function accumulateAndSum(metric: string, value: number, windowMs: number): numb
 async function fireWebhook(rule: AlertRule, observedValue: number): Promise<void> {
   const webhookUrl = process.env.ALERT_WEBHOOK_URL;
   if (!webhookUrl) {
-    logger.warn({ rule: rule.name, observedValue }, `[Alerts] triggered but ALERT_WEBHOOK_URL not set`);
+    logger.warn(
+      { rule: rule.name, observedValue },
+      `[Alerts] triggered but ALERT_WEBHOOK_URL not set`
+    );
     return;
   }
 

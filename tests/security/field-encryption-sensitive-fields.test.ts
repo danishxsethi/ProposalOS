@@ -42,8 +42,8 @@ describe('NextAuth Adapter Field Encryption Integration', () => {
     const adapter = buildWrappedPrismaAdapter(mockPrisma);
 
     // 1. Mock base adapter's linkAccount to simulate writing to DB
-    const baseAdapter = (adapter as any);
-    
+    const baseAdapter = adapter as any;
+
     // Check encryption on write
     let writtenToDb: any = null;
     mockPrisma.account.create.mockImplementation(async ({ data }: any) => {

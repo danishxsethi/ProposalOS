@@ -117,9 +117,7 @@ const DEFAULT_OBJECTION_PLAYBOOK: ObjectionEntry[] = [
  *
  * Requirements: 15.4
  */
-export async function detectIntent(
-  message: string
-): Promise<{
+export async function detectIntent(message: string): Promise<{
   intent: 'question' | 'objection' | 'purchase_intent' | 'general';
   confidence: number;
 }> {

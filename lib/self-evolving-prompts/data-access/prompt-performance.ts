@@ -123,19 +123,23 @@ export async function logPerformance(
         ON CONFLICT ("versionHash") DO NOTHING
       `;
       const versionId = randomUUID();
-      await executeQuery(insertVersionQuery, [
-        versionId,
-        log.promptVersionHash,
-        log.nodeId,
-        'fallback system prompt',
-        'system',
-        'auto-created fallback version for performance tracking',
-        true,
-        tenantId,
-      ], {
-        operationName: 'PromptVersion.createFallback',
-        requireTenant: false,
-      });
+      await executeQuery(
+        insertVersionQuery,
+        [
+          versionId,
+          log.promptVersionHash,
+          log.nodeId,
+          'fallback system prompt',
+          'system',
+          'auto-created fallback version for performance tracking',
+          true,
+          tenantId,
+        ],
+        {
+          operationName: 'PromptVersion.createFallback',
+          requireTenant: false,
+        }
+      );
     }
   } catch (err) {
     console.error('Self-healing PromptVersion generation failed:', err);

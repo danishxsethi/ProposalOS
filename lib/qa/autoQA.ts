@@ -252,9 +252,16 @@ export function runAutoQA(
   const segment = inferOrganizationSegment(context?.businessUrl, businessName, context?.industry);
   const isNonSmb = segment !== 'smb_local' && segment !== 'baseline_unknown';
   const fullProposalText = JSON.stringify(proposal).toLowerCase();
-  const prohibitedLocalTerms = ['google business profile', 'gbp', 'google maps', 'local reviews', 'local marketing', 'local seo'];
-  const foundLocalTerms = isNonSmb 
-    ? prohibitedLocalTerms.filter(term => fullProposalText.includes(term))
+  const prohibitedLocalTerms = [
+    'google business profile',
+    'gbp',
+    'google maps',
+    'local reviews',
+    'local marketing',
+    'local seo',
+  ];
+  const foundLocalTerms = isNonSmb
+    ? prohibitedLocalTerms.filter((term) => fullProposalText.includes(term))
     : [];
   const passedLocalSEOCheck = !isNonSmb || foundLocalTerms.length === 0;
 
@@ -295,9 +302,9 @@ export function runAutoQA(
       check: 'Non-SMB Local Copy Suppression',
       passed: passedLocalSEOCheck,
       details: isNonSmb
-        ? (foundLocalTerms.length === 0
+        ? foundLocalTerms.length === 0
           ? `Valid non-SMB proposal (Segment: ${segment}): No local marketing terms found.`
-          : `Flagged: Found local marketing terms in non-SMB proposal (Segment: ${segment}): ${foundLocalTerms.join(', ')}`)
+          : `Flagged: Found local marketing terms in non-SMB proposal (Segment: ${segment}): ${foundLocalTerms.join(', ')}`
         : `Skipped: SMB/Unknown target segment: ${segment}`,
     },
   ];

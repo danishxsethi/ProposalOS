@@ -43,10 +43,18 @@ describe('Property 5: Write Latency Guarantee', () => {
   }
 
   // Define generators for inputs
-  const versionHashArb = fc.string({ minLength: 64, maxLength: 64 }).map(s => s.replace(/[^a-zA-Z0-9]/g, 'a'));
-  const nodeIdArb = fc.string({ minLength: 2, maxLength: 50 }).map(s => `node_${s.replace(/[^a-zA-Z0-9]/g, 'x')}`);
+  const versionHashArb = fc
+    .string({ minLength: 64, maxLength: 64 })
+    .map((s) => s.replace(/[^a-zA-Z0-9]/g, 'a'));
+  const nodeIdArb = fc
+    .string({ minLength: 2, maxLength: 50 })
+    .map((s) => `node_${s.replace(/[^a-zA-Z0-9]/g, 'x')}`);
   const qualityScoreArb = fc.float({ min: Math.fround(0.1), max: Math.fround(100), noNaN: true });
-  const downstreamImpactArb = fc.float({ min: Math.fround(0.1), max: Math.fround(100), noNaN: true });
+  const downstreamImpactArb = fc.float({
+    min: Math.fround(0.1),
+    max: Math.fround(100),
+    noNaN: true,
+  });
   const costArb = fc.float({ min: Math.fround(0.01), max: Math.fround(10), noNaN: true });
   const latencyArb = fc.integer({ min: 10, max: 5000 });
   const tokensArb = fc.integer({ min: 10, max: 10000 });
@@ -94,7 +102,15 @@ describe('Property 5: Write Latency Guarantee', () => {
               `INSERT INTO "PromptVersion" ("id", "versionHash", "promptText", "nodeId", "createdBy", "changelog", "tenantId", "createdAt", "updatedAt") 
                VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())
                ON CONFLICT ("versionHash") DO NOTHING`,
-              [versionId, versionHash, 'Test template text', nodeId, 'test-user', 'Initial seed version', testTenantId]
+              [
+                versionId,
+                versionHash,
+                'Test template text',
+                nodeId,
+                'test-user',
+                'Initial seed version',
+                testTenantId,
+              ]
             );
 
             // Measure start time

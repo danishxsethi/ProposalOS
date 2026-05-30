@@ -31,7 +31,10 @@ function makeTestStore() {
     _data: data,
     async get(key: string) {
       const e = data.get(key);
-      if (!e || isExpired(e)) { data.delete(key); return null; }
+      if (!e || isExpired(e)) {
+        data.delete(key);
+        return null;
+      }
       return e.value;
     },
     async set(key: string, value: string, ttlSeconds: number) {
@@ -53,7 +56,9 @@ function makeTestStore() {
       data.set(key, { value: String(next), expiresAt: e.expiresAt });
       return next;
     },
-    async del(key: string) { data.delete(key); },
+    async del(key: string) {
+      data.delete(key);
+    },
   };
 }
 
@@ -109,9 +114,11 @@ function makeRequest(path = '/api/test', headers: Record<string, string> = {}) {
 }
 
 function makeHandler(status = 200, body = '{"ok":true}') {
-  return vi.fn().mockResolvedValue(
-    new Response(body, { status, headers: { 'Content-Type': 'application/json' } })
-  );
+  return vi
+    .fn()
+    .mockResolvedValue(
+      new Response(body, { status, headers: { 'Content-Type': 'application/json' } })
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -190,7 +197,7 @@ describe('withIdempotency', () => {
     const wrapped = withIdempotency(handler);
     const req = () => makeRequest('/api', { 'idempotency-key': 'key-dup' });
 
-    await wrapped(req());            // first call — executes
+    await wrapped(req()); // first call — executes
     const res2 = await wrapped(req()); // duplicate — should be cached
 
     expect(handler).toHaveBeenCalledTimes(1); // handler only called once
@@ -230,7 +237,8 @@ describe('withIdempotency', () => {
   });
 
   it('does NOT cache 5xx responses (safe retry)', async () => {
-    const handler = vi.fn()
+    const handler = vi
+      .fn()
       .mockResolvedValueOnce(new Response('{"error":"server error"}', { status: 500 }))
       .mockResolvedValueOnce(new Response('{"result":"ok"}', { status: 200 }));
     const wrapped = withIdempotency(handler);
@@ -248,9 +256,10 @@ describe('withIdempotency', () => {
     // Simulate a slow handler
     let resolveHandler!: () => void;
     const slowHandler = vi.fn().mockImplementation(
-      () => new Promise<Response>((resolve) => {
-        resolveHandler = () => resolve(new Response('{}', { status: 200 }));
-      })
+      () =>
+        new Promise<Response>((resolve) => {
+          resolveHandler = () => resolve(new Response('{}', { status: 200 }));
+        })
     );
     const wrapped = withIdempotency(slowHandler);
 
@@ -324,7 +333,10 @@ describe('checkRateLimit / withRateLimit', () => {
 
     // Exhaust IP A
     await checkRateLimit(reqA, options);
-    const r2A = await checkRateLimit(makeRequest('/api', { 'x-forwarded-for': '10.0.0.1' }), options);
+    const r2A = await checkRateLimit(
+      makeRequest('/api', { 'x-forwarded-for': '10.0.0.1' }),
+      options
+    );
     expect(r2A.success).toBe(false);
 
     // IP B is unaffected
@@ -339,11 +351,17 @@ describe('checkRateLimit / withRateLimit', () => {
 
     // Exhaust tenant-a
     await checkRateLimit(reqTenantA, optTenantA);
-    const r2 = await checkRateLimit(makeRequest('/api', { 'x-forwarded-for': '1.2.3.4' }), optTenantA);
+    const r2 = await checkRateLimit(
+      makeRequest('/api', { 'x-forwarded-for': '1.2.3.4' }),
+      optTenantA
+    );
     expect(r2.success).toBe(false);
 
     // Same IP but no tenantId → different key → not exhausted
-    const rIp = await checkRateLimit(makeRequest('/api', { 'x-forwarded-for': '1.2.3.4' }), options);
+    const rIp = await checkRateLimit(
+      makeRequest('/api', { 'x-forwarded-for': '1.2.3.4' }),
+      options
+    );
     expect(rIp.success).toBe(true);
   });
 
@@ -354,10 +372,7 @@ describe('checkRateLimit / withRateLimit', () => {
     // First call passes
     await middleware(makeRequest('/api', { 'x-forwarded-for': '9.9.9.9' }), handler);
     // Second call hits the limit
-    const res = await middleware(
-      makeRequest('/api', { 'x-forwarded-for': '9.9.9.9' }),
-      handler
-    );
+    const res = await middleware(makeRequest('/api', { 'x-forwarded-for': '9.9.9.9' }), handler);
 
     expect(res.status).toBe(429);
     const body = await res.json();
@@ -407,10 +422,10 @@ describe('checkRateLimit / withRateLimit', () => {
 
     await checkRateLimit(reqA, { ...options, endpoint: 'audit' });
     // Limit on audit endpoint is exhausted
-    const over = await checkRateLimit(
-      makeRequest('/api/audit', { 'x-forwarded-for': '5.5.5.5' }),
-      { ...options, endpoint: 'audit' }
-    );
+    const over = await checkRateLimit(makeRequest('/api/audit', { 'x-forwarded-for': '5.5.5.5' }), {
+      ...options,
+      endpoint: 'audit',
+    });
     expect(over.success).toBe(false);
 
     // Batch endpoint is unaffected (different key)

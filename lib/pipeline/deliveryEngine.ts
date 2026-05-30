@@ -84,7 +84,7 @@ export class DeliveryEngine implements IDeliveryEngine {
       const finding = proposal.audit.findings.find((f: any) => f.id === findingId);
 
       if (!finding) {
-      logger.warn({ findingId, proposalId }, 'Finding not found');
+        logger.warn({ findingId, proposalId }, 'Finding not found');
         continue;
       }
 
@@ -133,7 +133,10 @@ export class DeliveryEngine implements IDeliveryEngine {
     // For now, we'll create a stub that simulates agent processing
     try {
       // Simulate agent work (in production, this would call the actual agent)
-      logger.info({ deliverableId: deliverable.id, agentType: deliverable.agentType }, 'Dispatching deliverable to agent');
+      logger.info(
+        { deliverableId: deliverable.id, agentType: deliverable.agentType },
+        'Dispatching deliverable to agent'
+      );
 
       // For now, mark as completed immediately (agents will be implemented in subtask 21.5)
       await prisma.deliveryTask.update({

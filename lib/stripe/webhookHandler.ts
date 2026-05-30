@@ -46,7 +46,9 @@ export async function recordFailedWebhook(
     : (fn: () => Promise<any>) => runWithTenantBypass('stripe-webhook-record-failure-bypass', fn);
 
   await runner(async () => {
-    const sanitizedStack = error.stack ? error.stack.replace(/sk_test_[a-zA-Z0-9]+/g, 'sk_test_***') : null;
+    const sanitizedStack = error.stack
+      ? error.stack.replace(/sk_test_[a-zA-Z0-9]+/g, 'sk_test_***')
+      : null;
     const sanitizedMessage = error.message.replace(/sk_test_[a-zA-Z0-9]+/g, 'sk_test_***');
 
     await prisma.failedWebhookEvent.upsert({
@@ -91,7 +93,10 @@ export async function handleStripeWebhookEvent(
 
   // Livemode in test mode environment safeguard
   if (event.livemode && stripeSecretKey().startsWith('sk_test')) {
-    logger.warn({ eventId: event.id }, 'Received livemode Stripe webhook event in test/dev environment. Aborting.');
+    logger.warn(
+      { eventId: event.id },
+      'Received livemode Stripe webhook event in test/dev environment. Aborting.'
+    );
     throw new Error('Livemode event received in test mode environment');
   }
 
@@ -196,7 +201,10 @@ export async function handleStripeWebhookEvent(
         } catch (err: any) {
           // Handle P2002 Unique Constraint violation safely (concurrent race condition)
           if (err.code === 'P2002') {
-            logger.info({ eventId: event.id }, 'Deduplicated concurrent Stripe webhook event transaction');
+            logger.info(
+              { eventId: event.id },
+              'Deduplicated concurrent Stripe webhook event transaction'
+            );
             return;
           }
           throw err;
@@ -247,7 +255,8 @@ export async function handleStripeWebhookEvent(
                 },
               }).catch(() => {});
             } else {
-              const subscriptionId = typeof session.subscription === 'string' ? session.subscription : null;
+              const subscriptionId =
+                typeof session.subscription === 'string' ? session.subscription : null;
               if (!tenantId || !subscriptionId) return;
 
               const subscription = (await withProviderResilience(
@@ -288,7 +297,8 @@ export async function handleStripeWebhookEvent(
                   subscriptionStatus: accessStatus,
                   stripeSubscriptionId: subscription.id,
                   stripeSubscriptionItemId: itemId,
-                  stripeCustomerId: typeof subscription.customer === 'string' ? subscription.customer : null,
+                  stripeCustomerId:
+                    typeof subscription.customer === 'string' ? subscription.customer : null,
                 },
               });
             }
@@ -523,13 +533,19 @@ export async function handleStripeWebhookEvent(
 
     return { received: true, eventId: event.id };
   } catch (error: any) {
-    logger.error({ eventId: event.id, tenantId, error: error.message }, 'Error processing Stripe webhook event');
+    logger.error(
+      { eventId: event.id, tenantId, error: error.message },
+      'Error processing Stripe webhook event'
+    );
 
     if (recordFailures) {
       try {
         await recordFailedWebhook(event, error, tenantId);
       } catch (loggingError) {
-        logger.error({ eventId: event.id, loggingError }, 'Failed to record failed webhook event in database');
+        logger.error(
+          { eventId: event.id, loggingError },
+          'Failed to record failed webhook event in database'
+        );
       }
     }
 

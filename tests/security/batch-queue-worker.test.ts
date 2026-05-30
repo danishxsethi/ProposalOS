@@ -314,7 +314,10 @@ describe('Worker — processAuditJob', () => {
     expect(mocks.runAudit).toHaveBeenCalledWith('audit-1');
     expect(mocks.generateProposal).toHaveBeenCalledWith('audit-1');
     expect(mocks.auditJobUpdate).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { id: 'job-1' }, data: expect.objectContaining({ status: 'SUCCEEDED' }) })
+      expect.objectContaining({
+        where: { id: 'job-1' },
+        data: expect.objectContaining({ status: 'SUCCEEDED' }),
+      })
     );
   });
 
@@ -358,7 +361,7 @@ describe('Worker — processAuditJob', () => {
   it('moves to DEAD after maxAttempts exhausted', async () => {
     const deadJob = mockJob({ status: 'QUEUED', attempts: MAX_RETRIES });
     mocks.auditJobFindUnique
-      .mockResolvedValueOnce(deadJob)                                             // processAuditJob load
+      .mockResolvedValueOnce(deadJob) // processAuditJob load
       .mockResolvedValueOnce({ ...deadJob, status: 'RUNNING', attempts: MAX_RETRIES }) // claimJob post-update
       .mockResolvedValueOnce({ ...deadJob, status: 'RUNNING', attempts: MAX_RETRIES }); // markJobFailed re-read
     mocks.auditJobUpdateMany.mockResolvedValue({ count: 1 });
@@ -463,13 +466,24 @@ describe('GET /api/audit/batch/[batchId] — tenant isolation', () => {
     vi.mocked(getTenantId).mockResolvedValueOnce('tenant-a');
 
     mocks.auditFindMany.mockResolvedValue([
-      { id: 'audit-1', businessName: 'Acme', status: 'COMPLETE', apiCostCents: 10, createdAt: new Date(), completedAt: new Date() },
-      { id: 'audit-2', businessName: 'Beta', status: 'QUEUED', apiCostCents: 0, createdAt: new Date(), completedAt: null },
+      {
+        id: 'audit-1',
+        businessName: 'Acme',
+        status: 'COMPLETE',
+        apiCostCents: 10,
+        createdAt: new Date(),
+        completedAt: new Date(),
+      },
+      {
+        id: 'audit-2',
+        businessName: 'Beta',
+        status: 'QUEUED',
+        apiCostCents: 0,
+        createdAt: new Date(),
+        completedAt: null,
+      },
     ]);
-    mocks.auditJobFindMany.mockResolvedValue([
-      { status: 'SUCCEEDED' },
-      { status: 'QUEUED' },
-    ]);
+    mocks.auditJobFindMany.mockResolvedValue([{ status: 'SUCCEEDED' }, { status: 'QUEUED' }]);
 
     const req = new Request('http://localhost/api/audit/batch/batch-1');
     const res = await batchStatus(req, { params: Promise.resolve({ batchId: 'batch-1' }) });

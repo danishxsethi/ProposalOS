@@ -248,8 +248,8 @@ export function calculateBounceRateImpact(
   methodology: string;
 } {
   const { performanceScore, lcpMs } = extractAuditMetrics(findings);
-  const benchmarks =
-    (INDUSTRY_ROI_BENCHMARKS[industry?.toLowerCase()] || INDUSTRY_ROI_BENCHMARKS.default)!;
+  const benchmarks = (INDUSTRY_ROI_BENCHMARKS[industry?.toLowerCase()] ||
+    INDUSTRY_ROI_BENCHMARKS.default)!;
   const { visitors, source } = estimateMonthlyVisitors(findings, industry);
 
   // Derive load time: prefer LCP (ms->s), else PageSpeed score
@@ -297,8 +297,8 @@ export function calculateFindingROI(
   industry: string = 'default',
   auditContext?: { findings: Finding[] }
 ): RoiEstimation {
-  const benchmarks =
-    (INDUSTRY_ROI_BENCHMARKS[industry?.toLowerCase()] || INDUSTRY_ROI_BENCHMARKS.default)!;
+  const benchmarks = (INDUSTRY_ROI_BENCHMARKS[industry?.toLowerCase()] ||
+    INDUSTRY_ROI_BENCHMARKS.default)!;
   const { avgOrderValue, conversionRate } = benchmarks;
 
   let monthlyValue = 0;

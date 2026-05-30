@@ -1,10 +1,10 @@
 /**
  * Grace Period Service for Subscription Payment Failures
- * 
+ *
  * When Stripe payment fails, tenants enter a grace period instead of
  * immediate suspension. This allows for payment retry and prevents
  * service disruption for temporary payment issues.
- * 
+ *
  * Features:
  * - 7-day grace period for failed payments
  * - Automatic notifications
@@ -347,7 +347,8 @@ export async function processGracePeriodReminders(): Promise<{
     processed++;
 
     const daysInGracePeriod = Math.floor(
-      (now.getTime() - (tenant.gracePeriodNotifiedAt?.getTime() || now.getTime())) / (1000 * 60 * 60 * 24)
+      (now.getTime() - (tenant.gracePeriodNotifiedAt?.getTime() || now.getTime())) /
+        (1000 * 60 * 60 * 24)
     );
 
     const daysRemaining = Math.ceil(

@@ -134,16 +134,15 @@ export function getDynamicPricing(input: DynamicPricingInput): ProposalPricingTi
   // Apply segment multiplier if provided
   if (segment) {
     const segmentMultipliers: Record<OrganizationSegment, number> = {
-      nonprofit: 0.7,               // Lower/tailored pricing for nonprofits
-      baseline_unknown: 0.8,        // Basic minimal packages pricing
-      smb_local: 1.0,               // Standard local business
-      technical_community: 1.2,     // Premium tech positioning
-      healthcare: 1.4,              // Highly regulated high-premium vertical
-      enterprise: 1.6,              // High-end premium enterprise vertical
+      nonprofit: 0.7, // Lower/tailored pricing for nonprofits
+      baseline_unknown: 0.8, // Basic minimal packages pricing
+      smb_local: 1.0, // Standard local business
+      technical_community: 1.2, // Premium tech positioning
+      healthcare: 1.4, // Highly regulated high-premium vertical
+      enterprise: 1.6, // High-end premium enterprise vertical
     };
     multiplier *= segmentMultipliers[segment] || 1.0;
   }
-
 
   // Apply industry multiplier
   const industryKey = (industry || 'general').toLowerCase();

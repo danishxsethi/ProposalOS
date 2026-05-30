@@ -1,7 +1,7 @@
 import { logger } from '@/lib/logger';
 /**
  * Widget Performance Monitoring
- * 
+ *
  * Tracks widget embed performance across client sites globally.
  * Ensures P95 latency < 200ms for widget embed as per Phase N requirements.
  */
@@ -142,17 +142,23 @@ export interface WidgetPerformanceReport {
   /** Error rate */
   errorRate: number;
   /** Measurements by region */
-  byRegion: Record<string, {
-    count: number;
-    p95LatencyMs: number;
-    avgLatencyMs: number;
-  }>;
+  byRegion: Record<
+    string,
+    {
+      count: number;
+      p95LatencyMs: number;
+      avgLatencyMs: number;
+    }
+  >;
   /** Measurements by country */
-  byCountry: Record<string, {
-    count: number;
-    p95LatencyMs: number;
-    avgLatencyMs: number;
-  }>;
+  byCountry: Record<
+    string,
+    {
+      count: number;
+      p95LatencyMs: number;
+      avgLatencyMs: number;
+    }
+  >;
   /** Pass/fail against thresholds */
   passesThresholds: boolean;
   /** Failed threshold details */
@@ -167,13 +173,13 @@ export function generatePerformanceReport(
   periodStart: Date,
   periodEnd: Date
 ): WidgetPerformanceReport {
-  const latencies = metrics.map(m => m.loadTimeMs);
-  const cachedCount = metrics.filter(m => m.fromCache).length;
-  const errorCount = metrics.filter(m => m.error).length;
+  const latencies = metrics.map((m) => m.loadTimeMs);
+  const cachedCount = metrics.filter((m) => m.fromCache).length;
+  const errorCount = metrics.filter((m) => m.error).length;
 
   // Group by region
   const byRegionMap = new Map<string, number[]>();
-  metrics.forEach(m => {
+  metrics.forEach((m) => {
     const existing = byRegionMap.get(m.region) || [];
     existing.push(m.loadTimeMs);
     byRegionMap.set(m.region, existing);
@@ -181,13 +187,14 @@ export function generatePerformanceReport(
 
   // Group by country
   const byCountryMap = new Map<string, number[]>();
-  metrics.forEach(m => {
+  metrics.forEach((m) => {
     const existing = byCountryMap.get(m.country) || [];
     existing.push(m.loadTimeMs);
     byCountryMap.set(m.country, existing);
   });
 
-  const byRegion: Record<string, { count: number; p95LatencyMs: number; avgLatencyMs: number }> = {};
+  const byRegion: Record<string, { count: number; p95LatencyMs: number; avgLatencyMs: number }> =
+    {};
   byRegionMap.forEach((latencies, region) => {
     byRegion[region] = {
       count: latencies.length,
@@ -196,7 +203,8 @@ export function generatePerformanceReport(
     };
   });
 
-  const byCountry: Record<string, { count: number; p95LatencyMs: number; avgLatencyMs: number }> = {};
+  const byCountry: Record<string, { count: number; p95LatencyMs: number; avgLatencyMs: number }> =
+    {};
   byCountryMap.forEach((latencies, country) => {
     byCountry[country] = {
       count: latencies.length,
@@ -214,19 +222,27 @@ export function generatePerformanceReport(
   const failedThresholds: string[] = [];
 
   if (p95Latency > WIDGET_PERFORMANCE_THRESHOLDS.p95LatencyMs) {
-    failedThresholds.push(`P95 latency ${p95Latency}ms > ${WIDGET_PERFORMANCE_THRESHOLDS.p95LatencyMs}ms`);
+    failedThresholds.push(
+      `P95 latency ${p95Latency}ms > ${WIDGET_PERFORMANCE_THRESHOLDS.p95LatencyMs}ms`
+    );
   }
 
   if (p99Latency > WIDGET_PERFORMANCE_THRESHOLDS.p99LatencyMs) {
-    failedThresholds.push(`P99 latency ${p99Latency}ms > ${WIDGET_PERFORMANCE_THRESHOLDS.p99LatencyMs}ms`);
+    failedThresholds.push(
+      `P99 latency ${p99Latency}ms > ${WIDGET_PERFORMANCE_THRESHOLDS.p99LatencyMs}ms`
+    );
   }
 
   if (cacheHitRatio < WIDGET_PERFORMANCE_THRESHOLDS.minCacheHitRatio) {
-    failedThresholds.push(`Cache hit ratio ${cacheHitRatio.toFixed(2)} < ${WIDGET_PERFORMANCE_THRESHOLDS.minCacheHitRatio}`);
+    failedThresholds.push(
+      `Cache hit ratio ${cacheHitRatio.toFixed(2)} < ${WIDGET_PERFORMANCE_THRESHOLDS.minCacheHitRatio}`
+    );
   }
 
   if (errorRate > WIDGET_PERFORMANCE_THRESHOLDS.maxErrorRate) {
-    failedThresholds.push(`Error rate ${errorRate.toFixed(4)} > ${WIDGET_PERFORMANCE_THRESHOLDS.maxErrorRate}`);
+    failedThresholds.push(
+      `Error rate ${errorRate.toFixed(4)} > ${WIDGET_PERFORMANCE_THRESHOLDS.maxErrorRate}`
+    );
   }
 
   return {
@@ -273,13 +289,15 @@ export function getConnectionInfo(): {
   downlink?: number;
   rtt?: number;
 } {
-  const conn = (navigator as Navigator & {
-    connection?: {
-      effectiveType?: string;
-      downlink?: number;
-      rtt?: number;
-    };
-  }).connection;
+  const conn = (
+    navigator as Navigator & {
+      connection?: {
+        effectiveType?: string;
+        downlink?: number;
+        rtt?: number;
+      };
+    }
+  ).connection;
 
   return {
     connectionType: conn?.effectiveType || 'unknown',
@@ -301,7 +319,7 @@ export async function getGeoInfo(): Promise<{
     const response = await fetch('/api/widget/geo', {
       method: 'GET',
       headers: {
-        'Accept': 'application/json',
+        Accept: 'application/json',
       },
     });
 
@@ -354,7 +372,14 @@ export function startWidgetPerformanceObserver(
     for (const entry of list.getEntries()) {
       if (entry.name.includes('widget.js')) {
         // Widget resource loaded
-        logger.info({ name: entry.name, duration: entry.duration, transferSize: (entry as PerformanceResourceTiming).transferSize }, '[Widget Performance] Resource loaded');
+        logger.info(
+          {
+            name: entry.name,
+            duration: entry.duration,
+            transferSize: (entry as PerformanceResourceTiming).transferSize,
+          },
+          '[Widget Performance] Resource loaded'
+        );
       }
     }
   });

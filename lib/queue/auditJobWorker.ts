@@ -20,11 +20,7 @@ import { prisma } from '@/lib/prisma';
 import { generateProposal } from '@/lib/proposal/runner';
 import { runWithTenantAsync } from '@/lib/tenant/context';
 
-import {
-  claimJob,
-  markJobFailed,
-  markJobSucceeded,
-} from './auditJobQueue';
+import { claimJob, markJobFailed, markJobSucceeded } from './auditJobQueue';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 

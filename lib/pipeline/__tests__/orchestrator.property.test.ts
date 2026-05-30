@@ -940,7 +940,12 @@ describe('Pipeline Orchestrator Property Tests', () => {
                 });
 
                 // Log the error
-                await logStageFailure(stage, prospectId, new Error(`Test error ${i}`), testTenantId);
+                await logStageFailure(
+                  stage,
+                  prospectId,
+                  new Error(`Test error ${i}`),
+                  testTenantId
+                );
               }
 
               // Check circuit breaker
@@ -953,7 +958,8 @@ describe('Pipeline Orchestrator Property Tests', () => {
               const actualTotalCount = await prisma.prospectStateTransition.count({
                 where: { tenantId: testTenantId, stage },
               });
-              const actualErrorRate = actualTotalCount > 0 ? actualErrorCount / actualTotalCount : 0;
+              const actualErrorRate =
+                actualTotalCount > 0 ? actualErrorCount / actualTotalCount : 0;
 
               // If the test fails, log the details
               if (!tripped) {
@@ -1052,7 +1058,12 @@ describe('Pipeline Orchestrator Property Tests', () => {
                   },
                 });
 
-                await logStageFailure(stage, prospectId, new Error(`Test error ${i}`), testTenantId);
+                await logStageFailure(
+                  stage,
+                  prospectId,
+                  new Error(`Test error ${i}`),
+                  testTenantId
+                );
               }
 
               // Check circuit breaker
@@ -1131,7 +1142,12 @@ describe('Pipeline Orchestrator Property Tests', () => {
 
           // Log error for 1 out of 20 (5% error rate)
           if (i === 0) {
-            await logStageFailure(healthyStage, prospectId, new Error('Single error'), testTenantId);
+            await logStageFailure(
+              healthyStage,
+              prospectId,
+              new Error('Single error'),
+              testTenantId
+            );
           }
         }
 

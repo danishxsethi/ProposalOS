@@ -69,7 +69,14 @@ describe('Partner Portal', () => {
       },
     });
     leadId = prospect.id;
-    console.log('END beforeEach for:', context.task.name, 'tenantId =', tenantId, 'leadId =', leadId);
+    console.log(
+      'END beforeEach for:',
+      context.task.name,
+      'tenantId =',
+      tenantId,
+      'leadId =',
+      leadId
+    );
   });
 
   afterEach(async (context) => {
@@ -354,7 +361,10 @@ describe('Partner Portal', () => {
     it('should exclude already delivered leads', async () => {
       console.log('DEBUG: leadId =', leadId);
       const allProspects = await prisma.prospectLead.findMany();
-      console.log('DEBUG: allProspects ids =', allProspects.map(p => p.id));
+      console.log(
+        'DEBUG: allProspects ids =',
+        allProspects.map((p) => p.id)
+      );
       // Deliver first lead
       await deliverLead(partnerId, leadId);
 

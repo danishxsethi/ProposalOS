@@ -103,11 +103,12 @@ export async function sendProposalEmail({
   }
 
   // 3. Construct Email with CAN-SPAM compliant footer
-  const physicalAddress = process.env.COMPANY_PHYSICAL_ADDRESS || 
-                          'ProposalOS\n123 Business Street, Suite 100\nCity, ST 12345\nUnited States';
-  
+  const physicalAddress =
+    process.env.COMPANY_PHYSICAL_ADDRESS ||
+    'ProposalOS\n123 Business Street, Suite 100\nCity, ST 12345\nUnited States';
+
   const unsubscribeUrl = `${process.env.NEXTAUTH_URL || 'https://proposalos.com'}/api/email/unsubscribe?email=${encodeURIComponent(recipientEmail)}`;
-  
+
   const finalHtml = `
             <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
                 <h2 style="color: #333;">${brandName}</h2>
@@ -163,7 +164,10 @@ export async function sendProposalEmail({
   } catch (err) {
     const error = err instanceof Error ? err : new Error(String(err));
     recordIntegrationFailure('RESEND', error);
-    logger.error({ err: error, proposalId, recipientEmail }, 'Failed to send proposal email after retries');
+    logger.error(
+      { err: error, proposalId, recipientEmail },
+      'Failed to send proposal email after retries'
+    );
     throw error;
   }
 
@@ -191,4 +195,3 @@ export async function sendProposalEmail({
 
   return { success: true, messageId };
 }
-

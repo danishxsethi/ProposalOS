@@ -478,7 +478,9 @@ describe('Property 2: Append-Only Log Integrity', () => {
             // Assert: All records should still exist
             const allRecords: string[] = [];
             for (const entry of logEntries) {
-              const retrieved = await promptPerformanceDA.getPerformanceByVersion(entry.versionHash);
+              const retrieved = await promptPerformanceDA.getPerformanceByVersion(
+                entry.versionHash
+              );
               for (const record of retrieved) {
                 allRecords.push(record.id);
               }

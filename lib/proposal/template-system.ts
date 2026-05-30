@@ -179,10 +179,13 @@ export class ProposalTemplateSystem {
       // No DB prompt found - return null to use local fallback
       return null;
     } catch (error) {
-      logger.warn({
-        nodeId,
-        error: String(error),
-      }, 'Failed to load prompt from DB, using local fallback');
+      logger.warn(
+        {
+          nodeId,
+          error: String(error),
+        },
+        'Failed to load prompt from DB, using local fallback'
+      );
       return null;
     }
   }

@@ -18,7 +18,13 @@ import {
   validateCitations,
 } from './validation';
 import { PainCluster } from '../diagnosis/types';
-export type { ProposalResult, TierConfig, ComparisonReport, OrganizationSegment, TierMapping } from './types';
+export type {
+  ProposalResult,
+  TierConfig,
+  ComparisonReport,
+  OrganizationSegment,
+  TierMapping,
+} from './types';
 
 /**
  * Infer organization segment based on website URL, business name, and industry.
@@ -33,31 +39,69 @@ export function inferOrganizationSegment(
   const cleanIndustry = (industry || '').toLowerCase().trim();
 
   // 1. Healthcare check
-  const healthcareTerms = ['healthcare', 'medical', 'clinic', 'hospital', 'dental', 'dentist', 'doctor', 'health', 'practice', 'physician', 'nursing'];
+  const healthcareTerms = [
+    'healthcare',
+    'medical',
+    'clinic',
+    'hospital',
+    'dental',
+    'dentist',
+    'doctor',
+    'health',
+    'practice',
+    'physician',
+    'nursing',
+  ];
   if (
-    healthcareTerms.some(term => cleanIndustry.includes(term)) ||
-    healthcareTerms.some(term => cleanName.includes(term)) ||
-    healthcareTerms.some(term => cleanUrl.includes(term))
+    healthcareTerms.some((term) => cleanIndustry.includes(term)) ||
+    healthcareTerms.some((term) => cleanName.includes(term)) ||
+    healthcareTerms.some((term) => cleanUrl.includes(term))
   ) {
     return 'healthcare';
   }
 
   // 2. Technical Community check
-  const techTerms = ['technical_community', 'tech community', 'developer', 'open source', 'open-source', 'software community', 'software foundation', 'coding', 'programming', 'linux', 'python', 'postgresql', 'github', 'gitlab', 'npm', 'apache'];
+  const techTerms = [
+    'technical_community',
+    'tech community',
+    'developer',
+    'open source',
+    'open-source',
+    'software community',
+    'software foundation',
+    'coding',
+    'programming',
+    'linux',
+    'python',
+    'postgresql',
+    'github',
+    'gitlab',
+    'npm',
+    'apache',
+  ];
   if (
-    techTerms.some(term => cleanIndustry.includes(term)) ||
-    techTerms.some(term => cleanName.includes(term)) ||
-    techTerms.some(term => cleanUrl.includes(term))
+    techTerms.some((term) => cleanIndustry.includes(term)) ||
+    techTerms.some((term) => cleanName.includes(term)) ||
+    techTerms.some((term) => cleanUrl.includes(term))
   ) {
     return 'technical_community';
   }
 
   // 3. Nonprofit check
-  const nonprofitTerms = ['nonprofit', 'non-profit', 'charity', 'ngo', 'foundation', 'association', 'public service', 'gnu'];
+  const nonprofitTerms = [
+    'nonprofit',
+    'non-profit',
+    'charity',
+    'ngo',
+    'foundation',
+    'association',
+    'public service',
+    'gnu',
+  ];
   if (
-    nonprofitTerms.some(term => cleanIndustry.includes(term)) ||
-    nonprofitTerms.some(term => cleanName.includes(term)) ||
-    nonprofitTerms.some(term => cleanUrl.includes(term)) ||
+    nonprofitTerms.some((term) => cleanIndustry.includes(term)) ||
+    nonprofitTerms.some((term) => cleanName.includes(term)) ||
+    nonprofitTerms.some((term) => cleanUrl.includes(term)) ||
     cleanUrl.endsWith('.org') ||
     cleanUrl.includes('.org/')
   ) {
@@ -67,19 +111,34 @@ export function inferOrganizationSegment(
   // 4. Enterprise check
   const enterpriseTerms = ['enterprise', 'corporation', 'corp', 'global', 'saas', 'b2b'];
   if (
-    enterpriseTerms.some(term => cleanIndustry.includes(term)) ||
-    enterpriseTerms.some(term => cleanName.includes(term)) ||
-    enterpriseTerms.some(term => cleanUrl.includes(term))
+    enterpriseTerms.some((term) => cleanIndustry.includes(term)) ||
+    enterpriseTerms.some((term) => cleanName.includes(term)) ||
+    enterpriseTerms.some((term) => cleanUrl.includes(term))
   ) {
     return 'enterprise';
   }
 
   // 5. SMB Local check
-  const smbTerms = ['restaurant', 'local', 'smb', 'retail', 'salon', 'contractor', 'plumber', 'cleaning', 'cafe', 'boutique', 'shop', 'bakery', 'store', 'dry cleaner'];
+  const smbTerms = [
+    'restaurant',
+    'local',
+    'smb',
+    'retail',
+    'salon',
+    'contractor',
+    'plumber',
+    'cleaning',
+    'cafe',
+    'boutique',
+    'shop',
+    'bakery',
+    'store',
+    'dry cleaner',
+  ];
   if (
-    smbTerms.some(term => cleanIndustry.includes(term)) ||
-    smbTerms.some(term => cleanName.includes(term)) ||
-    smbTerms.some(term => cleanUrl.includes(term))
+    smbTerms.some((term) => cleanIndustry.includes(term)) ||
+    smbTerms.some((term) => cleanName.includes(term)) ||
+    smbTerms.some((term) => cleanUrl.includes(term))
   ) {
     return 'smb_local';
   }
@@ -155,7 +214,8 @@ export function getCustomizedTiers(
     return {
       essentials: {
         ...defaultTiers.essentials,
-        description: 'Entry point — simple foundation. Optimization, security, and donation-flow accessibility fixes.',
+        description:
+          'Entry point — simple foundation. Optimization, security, and donation-flow accessibility fixes.',
         features: [
           'Donation page speed optimization (image compression, lazy loading)',
           'Basic accessibility fixes (contrast, readable headings)',
@@ -165,7 +225,8 @@ export function getCustomizedTiers(
       },
       growth: {
         ...defaultTiers.growth,
-        description: 'Full community engagement. Donation-rate optimization, sitemap, and outreach mechanics.',
+        description:
+          'Full community engagement. Donation-rate optimization, sitemap, and outreach mechanics.',
         features: [
           'Everything in Starter',
           'Donation funnel optimization (CTAs, clear contribution paths)',
@@ -178,7 +239,8 @@ export function getCustomizedTiers(
       },
       premium: {
         ...defaultTiers.premium,
-        description: 'Full community overhaul & partnership. Campaign trackers, and deep accessibility compliance.',
+        description:
+          'Full community overhaul & partnership. Campaign trackers, and deep accessibility compliance.',
         features: [
           'Everything in Growth',
           'Comprehensive community campaign setup',
@@ -196,7 +258,8 @@ export function getCustomizedTiers(
     return {
       essentials: {
         ...defaultTiers.essentials,
-        description: 'Entry point — developer foundation. Speed, performance, and API reference sitemaps.',
+        description:
+          'Entry point — developer foundation. Speed, performance, and API reference sitemaps.',
         features: [
           'LCP and PageSpeed optimization (caching, fast assets)',
           'Sitemap and schema tags for developer documentation',
@@ -206,7 +269,8 @@ export function getCustomizedTiers(
       },
       growth: {
         ...defaultTiers.growth,
-        description: 'Overtake competing projects. Deep developer SEO, docs accessibility, and open-source compliance.',
+        description:
+          'Overtake competing projects. Deep developer SEO, docs accessibility, and open-source compliance.',
         features: [
           'Everything in Starter',
           'Developer-focused SEO overhaul (doc search optimization, organic discovery)',
@@ -219,7 +283,8 @@ export function getCustomizedTiers(
       },
       premium: {
         ...defaultTiers.premium,
-        description: 'Global tech-community scale. Content creation, deep developer advocacy, and performance monitoring.',
+        description:
+          'Global tech-community scale. Content creation, deep developer advocacy, and performance monitoring.',
         features: [
           'Everything in Growth',
           'Technical content pipeline strategy (3 new developer guides)',
@@ -237,7 +302,8 @@ export function getCustomizedTiers(
     return {
       essentials: {
         ...defaultTiers.essentials,
-        description: 'Compliance & basic speed. Patient data privacy, simple accessibility, and quick performance fixes.',
+        description:
+          'Compliance & basic speed. Patient data privacy, simple accessibility, and quick performance fixes.',
         features: [
           'Basic privacy-first page optimization',
           'Basic sitemap and medical schema tags',
@@ -247,7 +313,8 @@ export function getCustomizedTiers(
       },
       growth: {
         ...defaultTiers.growth,
-        description: 'Patient enrollment & trusted search. Conversion paths, accessibility WCAG compliance, and practice findability.',
+        description:
+          'Patient enrollment & trusted search. Conversion paths, accessibility WCAG compliance, and practice findability.',
         features: [
           'Everything in Starter',
           'High-converting patient appointment CTAs',
@@ -260,7 +327,8 @@ export function getCustomizedTiers(
       },
       premium: {
         ...defaultTiers.premium,
-        description: 'Elite healthcare trust. Multi-channel visibility, specialized page setups, and compliance assurance.',
+        description:
+          'Elite healthcare trust. Multi-channel visibility, specialized page setups, and compliance assurance.',
         features: [
           'Everything in Growth',
           'Patient journey mapping and advanced conversion funnels',
@@ -278,7 +346,8 @@ export function getCustomizedTiers(
     return {
       essentials: {
         ...defaultTiers.essentials,
-        description: 'Enterprise-grade basics. Multi-region latency speed-ups, basic security headers, and compliance schema.',
+        description:
+          'Enterprise-grade basics. Multi-region latency speed-ups, basic security headers, and compliance schema.',
         features: [
           'Multi-region speed and latency analysis',
           'Security headers and basic technical vulnerability fixes',
@@ -288,7 +357,8 @@ export function getCustomizedTiers(
       },
       growth: {
         ...defaultTiers.growth,
-        description: 'Scalable lead-gen and B2B growth. High-throughput performance, strict accessibility, and B2B funnel fixes.',
+        description:
+          'Scalable lead-gen and B2B growth. High-throughput performance, strict accessibility, and B2B funnel fixes.',
         features: [
           'Everything in Starter',
           'High-throughput load time and PageSpeed optimization',
@@ -300,7 +370,8 @@ export function getCustomizedTiers(
       },
       premium: {
         ...defaultTiers.premium,
-        description: 'Ultimate partnership. Dedicated support, high-availability monitoring, custom features, and continuous auditing.',
+        description:
+          'Ultimate partnership. Dedicated support, high-availability monitoring, custom features, and continuous auditing.',
         features: [
           'Everything in Growth',
           'Custom high-availability and architecture review',
@@ -409,7 +480,10 @@ export async function runProposalPipeline(
   businessUrl?: string | null
 ): Promise<ProposalPipelineResult> {
   const segment = inferOrganizationSegment(businessUrl, businessName, businessIndustry);
-  logger.info({ businessName, vertical: playbook?.id, segment }, '[ProposalPipeline] Generating proposal');
+  logger.info(
+    { businessName, vertical: playbook?.id, segment },
+    '[ProposalPipeline] Generating proposal'
+  );
 
   const normalizedFindings = normalizeFindingsForProposal([...findings]);
 
@@ -452,7 +526,10 @@ export async function runProposalPipeline(
       detectedBusinessSize = 'large';
     }
   }
-  logger.info({ detectedBusinessSize, maxReviewCount }, '[ProposalPipeline] Detected business size');
+  logger.info(
+    { detectedBusinessSize, maxReviewCount },
+    '[ProposalPipeline] Detected business size'
+  );
 
   // Step 2: Get pricing (apply playbook multiplier if present)
   const industryPricing = getPricing({
@@ -469,7 +546,15 @@ export async function runProposalPipeline(
     premium: Math.round(industryPricing.premium * multiplier),
     currency: 'USD',
   };
-  logger.info({ essentials: pricing.essentials, growth: pricing.growth, premium: pricing.premium, multiplier }, '[ProposalPipeline] Pricing set');
+  logger.info(
+    {
+      essentials: pricing.essentials,
+      growth: pricing.growth,
+      premium: pricing.premium,
+      multiplier,
+    },
+    '[ProposalPipeline] Pricing set'
+  );
 
   // Step 3: Create tier configs (Starter / Growth / Premium)
   // Starter: entry point, limited scope. Growth: OBVIOUS BEST VALUE (anchoring). Premium: full-service, premium positioning.

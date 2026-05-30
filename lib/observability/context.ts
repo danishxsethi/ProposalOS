@@ -2,7 +2,13 @@ import { AsyncLocalStorage } from 'async_hooks';
 
 import type { NextResponse } from 'next/server';
 
-import { buildTraceparent, generateCorrelationId, generateSpanId, generateTraceId, resolveTracingHeaders } from './ids';
+import {
+  buildTraceparent,
+  generateCorrelationId,
+  generateSpanId,
+  generateTraceId,
+  resolveTracingHeaders,
+} from './ids';
 
 export interface ObservabilityContext {
   correlationId: string;
@@ -25,7 +31,8 @@ const globalForObservabilityStorage = globalThis as unknown as {
 };
 
 const observabilityStorage =
-  globalForObservabilityStorage.observabilityStorage ?? new AsyncLocalStorage<ObservabilityContext>();
+  globalForObservabilityStorage.observabilityStorage ??
+  new AsyncLocalStorage<ObservabilityContext>();
 
 if (process.env.NODE_ENV !== 'production') {
   globalForObservabilityStorage.observabilityStorage = observabilityStorage;

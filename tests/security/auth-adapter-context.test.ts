@@ -147,10 +147,7 @@ describe('runWithAuthAdapterContext', () => {
   it('REFUSES mixed valid+invalid model list (deny-by-presence)', async () => {
     const fn = vi.fn();
     await expect(
-      runWithAuthAdapterContext(
-        { operation: 'mixed', models: ['User', 'Audit' as never] },
-        fn
-      )
+      runWithAuthAdapterContext({ operation: 'mixed', models: ['User', 'Audit' as never] }, fn)
     ).rejects.toBeInstanceOf(AuthAdapterModelNotAllowedError);
     expect(fn).not.toHaveBeenCalled();
     expect(mocks.runWithTenantBypass).not.toHaveBeenCalled();
@@ -166,10 +163,7 @@ describe('runWithAuthAdapterContext', () => {
 
   it('logs structured bypass entry with safe metadata only', async () => {
     const fn = vi.fn().mockResolvedValue({ id: 'u-1' });
-    await runWithAuthAdapterContext(
-      { operation: 'getUserByEmail', models: ['User'] },
-      fn
-    );
+    await runWithAuthAdapterContext({ operation: 'getUserByEmail', models: ['User'] }, fn);
 
     expect(mocks.loggerInfo).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -211,10 +205,7 @@ describe('runWithAuthAdapterContext', () => {
 
   it('AuthAdapterModelNotAllowedError carries the attempted model', async () => {
     try {
-      await runWithAuthAdapterContext(
-        { operation: 'evil', models: ['Audit' as never] },
-        vi.fn()
-      );
+      await runWithAuthAdapterContext({ operation: 'evil', models: ['Audit' as never] }, vi.fn());
       throw new Error('should have thrown');
     } catch (err) {
       expect(err).toBeInstanceOf(AuthAdapterModelNotAllowedError);
@@ -224,7 +215,12 @@ describe('runWithAuthAdapterContext', () => {
   });
 
   it('AUTH_ADAPTER_ALLOWED_MODELS is the canonical list and is frozen', () => {
-    expect(AUTH_ADAPTER_ALLOWED_MODELS).toEqual(['User', 'Account', 'Session', 'VerificationToken']);
+    expect(AUTH_ADAPTER_ALLOWED_MODELS).toEqual([
+      'User',
+      'Account',
+      'Session',
+      'VerificationToken',
+    ]);
     expect(Object.isFrozen(AUTH_ADAPTER_ALLOWED_MODELS)).toBe(true);
   });
 });
@@ -292,7 +288,9 @@ describe('buildWrappedPrismaAdapter', () => {
       userId: 'u-1',
       expires: new Date(),
     });
-    await (adapter as never as { useVerificationToken: (a: unknown) => Promise<unknown> }).useVerificationToken({
+    await (
+      adapter as never as { useVerificationToken: (a: unknown) => Promise<unknown> }
+    ).useVerificationToken({
       identifier: 'a',
       token: 'b',
     });

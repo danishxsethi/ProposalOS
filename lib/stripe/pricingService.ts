@@ -110,11 +110,12 @@ export class PricingService {
     if (config.type === 'saas' || config.type === 'proposal') {
       stripeProduct = await withProviderResilience(
         { provider: 'stripe', operation: 'create-product' },
-        () => stripe.products.create({
-          name: config.name,
-          description: config.description,
-          type: 'service',
-        })
+        () =>
+          stripe.products.create({
+            name: config.name,
+            description: config.description,
+            type: 'service',
+          })
       );
     }
 
@@ -130,22 +131,23 @@ export class PricingService {
 
           const price = await withProviderResilience(
             { provider: 'stripe', operation: 'create-price' },
-            () => stripe.prices.create({
-              unit_amount: Math.round(priceInCurrency * 100), // Convert to cents/smallest unit
-              currency: currency.toLowerCase(),
-              product: stripeProduct!.id,
-              recurring: config.interval
-                ? {
-                    interval: config.interval,
-                    interval_count: 1,
-                  }
-                : undefined,
-              metadata: {
-                tierId: tier.id,
-                planId: config.name.toLowerCase().replace(/\s+/g, '-'),
-                currency: currency,
-              },
-            })
+            () =>
+              stripe.prices.create({
+                unit_amount: Math.round(priceInCurrency * 100), // Convert to cents/smallest unit
+                currency: currency.toLowerCase(),
+                product: stripeProduct!.id,
+                recurring: config.interval
+                  ? {
+                      interval: config.interval,
+                      interval_count: 1,
+                    }
+                  : undefined,
+                metadata: {
+                  tierId: tier.id,
+                  planId: config.name.toLowerCase().replace(/\s+/g, '-'),
+                  currency: currency,
+                },
+              })
           );
           const tierPriceMap = stripePriceIds[tier.id];
           if (tierPriceMap) {
@@ -260,12 +262,11 @@ export class PricingService {
 
     const priceInCurrency = tier.prices?.[currency] ?? this.convertPrice(tier.price, currency);
     const stripePriceId = plan.stripePriceIds?.[tierId]?.[currency];
-    const foundKey = Object.keys(LOCALE_CURRENCY_MAP).find(
-      (key) => {
+    const foundKey =
+      Object.keys(LOCALE_CURRENCY_MAP).find((key) => {
         const item = LOCALE_CURRENCY_MAP[key];
         return item !== undefined && item.code === currency;
-      }
-    ) || 'en-US';
+      }) || 'en-US';
     const currencyConfig = LOCALE_CURRENCY_MAP[foundKey] || LOCALE_CURRENCY_MAP['en-US']!;
 
     return {
@@ -293,9 +294,8 @@ export class PricingService {
     // Update Stripe product if name/description changed
     const updatedStripeProduct = existingPlan.stripeProductId;
     if (updates.name || updates.description) {
-      await withProviderResilience(
-        { provider: 'stripe', operation: 'update-product' },
-        () => stripe.products.update(existingPlan.stripeProductId!, {
+      await withProviderResilience({ provider: 'stripe', operation: 'update-product' }, () =>
+        stripe.products.update(existingPlan.stripeProductId!, {
           name: updates.name || existingPlan.name,
           description: updates.description || existingPlan.description,
         })
@@ -411,22 +411,23 @@ export class PricingService {
           // Create new price for this currency
           const newPrice = await withProviderResilience(
             { provider: 'stripe', operation: 'create-price' },
-            () => stripe.prices.create({
-              unit_amount: expectedPriceCents,
-              currency: currency.toLowerCase(),
-              product: plan.stripeProductId!,
-              recurring: plan.interval
-                ? {
-                    interval: plan.interval,
-                    interval_count: 1,
-                  }
-                : undefined,
-              metadata: {
-                tierId: tier.id,
-                planId: plan.name.toLowerCase().replace(/\s+/g, '-'),
-                currency: currency,
-              },
-            })
+            () =>
+              stripe.prices.create({
+                unit_amount: expectedPriceCents,
+                currency: currency.toLowerCase(),
+                product: plan.stripeProductId!,
+                recurring: plan.interval
+                  ? {
+                      interval: plan.interval,
+                      interval_count: 1,
+                    }
+                  : undefined,
+                metadata: {
+                  tierId: tier.id,
+                  planId: plan.name.toLowerCase().replace(/\s+/g, '-'),
+                  currency: currency,
+                },
+              })
           );
           tierPriceMap[currency] = newPrice.id;
         }
@@ -504,26 +505,27 @@ export class PricingService {
 
     return await withProviderResilience(
       { provider: 'stripe', operation: 'create-checkout-session' },
-      () => stripe.checkout.sessions.create({
-        mode: 'subscription',
-        customer_email: customerEmail,
-        line_items: [
-          {
-            price: stripePriceId,
-            quantity: 1,
+      () =>
+        stripe.checkout.sessions.create({
+          mode: 'subscription',
+          customer_email: customerEmail,
+          line_items: [
+            {
+              price: stripePriceId,
+              quantity: 1,
+            },
+          ],
+          success_url: successUrl,
+          cancel_url: cancelUrl,
+          locale: locale.toLowerCase().replace('-', '_') as Stripe.Checkout.Session.Locale,
+          currency: currency.toLowerCase(),
+          metadata: {
+            planId,
+            tierId,
+            locale,
+            currency,
           },
-        ],
-        success_url: successUrl,
-        cancel_url: cancelUrl,
-        locale: locale.toLowerCase().replace('-', '_') as Stripe.Checkout.Session.Locale,
-        currency: currency.toLowerCase(),
-        metadata: {
-          planId,
-          tierId,
-          locale,
-          currency,
-        },
-      })
+        })
     );
   }
 }

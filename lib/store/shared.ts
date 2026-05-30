@@ -82,7 +82,10 @@ async function getRedisInstance(): Promise<import('ioredis').Redis | null> {
     logger.info({ event: 'shared_store.redis_connected' }, 'SharedStore: Redis connected');
     return _redisInstance;
   } catch (err) {
-    logger.error({ event: 'shared_store.redis_connect_failed', err }, 'SharedStore: Redis connection failed');
+    logger.error(
+      { event: 'shared_store.redis_connect_failed', err },
+      'SharedStore: Redis connection failed'
+    );
     _redisInstance = null;
     return null;
   }
@@ -128,7 +131,9 @@ function makeRedisAdapter(redis: import('ioredis').Redis): SharedStore {
  *   import { createMemoryStore } from '@/lib/store/shared';
  *   const store = createMemoryStore();
  */
-export function createMemoryStore(): SharedStore & { _store: Map<string, { value: string; expiresAt: number }> } {
+export function createMemoryStore(): SharedStore & {
+  _store: Map<string, { value: string; expiresAt: number }>;
+} {
   const _store = new Map<string, { value: string; expiresAt: number }>();
 
   function isExpired(entry: { expiresAt: number }): boolean {

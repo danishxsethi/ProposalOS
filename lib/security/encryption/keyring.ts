@@ -49,7 +49,10 @@ export class EnvKeyProvider implements KeyProvider {
         if (isProd) {
           throw err;
         }
-        logger.warn({ err }, '[Keyring] Failed to decode FIELD_ENCRYPTION_PRIMARY_KEY base64. Falling back to dev key.');
+        logger.warn(
+          { err },
+          '[Keyring] Failed to decode FIELD_ENCRYPTION_PRIMARY_KEY base64. Falling back to dev key.'
+        );
       }
     } else {
       const errorMsg = 'FIELD_ENCRYPTION_PRIMARY_KEY environment variable is missing';
@@ -63,7 +66,10 @@ export class EnvKeyProvider implements KeyProvider {
     if (!this.primaryKey && !isProd) {
       // Create a deterministic fallback key for local dev and test environments
       const crypto = require('crypto') as typeof import('crypto');
-      this.primaryKey = crypto.createHash('sha256').update('dev-fallback-key-proposalos-secure-secret').digest();
+      this.primaryKey = crypto
+        .createHash('sha256')
+        .update('dev-fallback-key-proposalos-secure-secret')
+        .digest();
     }
 
     // 3. Initialize Previous Keys (for rotation lookups)
@@ -79,7 +85,10 @@ export class EnvKeyProvider implements KeyProvider {
           }
         }
       } catch (err) {
-        logger.error({ err }, '[Keyring] Failed to parse FIELD_ENCRYPTION_PREVIOUS_KEYS JSON config.');
+        logger.error(
+          { err },
+          '[Keyring] Failed to parse FIELD_ENCRYPTION_PREVIOUS_KEYS JSON config.'
+        );
       }
     }
   }

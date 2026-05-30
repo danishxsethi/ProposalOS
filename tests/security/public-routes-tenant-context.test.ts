@@ -184,10 +184,7 @@ describe('GET /api/public/audit/[id]', () => {
       expect.any(Function)
     );
     // Tenant-scoped read must be wrapped in runWithTenantAsync
-    expect(mocks.runWithTenantAsync).toHaveBeenCalledWith(
-      'system-tenant-id',
-      expect.any(Function)
-    );
+    expect(mocks.runWithTenantAsync).toHaveBeenCalledWith('system-tenant-id', expect.any(Function));
   });
 
   it('returns 404 when system tenant does not exist', async () => {
@@ -220,7 +217,12 @@ describe('GET /api/public/audit/[id]', () => {
     // Simulate what would happen if the old code ran: Prisma called without context.
     // With the fix, all Prisma calls go through runWithTenantBypass or runWithTenantAsync.
     mocks.tenantFindUnique.mockResolvedValue({ id: 'system-tenant-id' });
-    mocks.auditFindUnique.mockResolvedValue({ status: 'QUEUED', modulesCompleted: [], overallScore: null, findings: [] });
+    mocks.auditFindUnique.mockResolvedValue({
+      status: 'QUEUED',
+      modulesCompleted: [],
+      overallScore: null,
+      findings: [],
+    });
 
     const { GET } = await import('@/app/api/public/audit/[id]/route');
     const response = await GET(new Request('http://localhost/api/public/audit/audit-1'), {
@@ -448,9 +450,7 @@ describe('POST /api/widget/quick-audit', () => {
 
   it('returns 400 when neither tenantDomain nor tenantId is supplied', async () => {
     const { POST } = await import('@/app/api/widget/quick-audit/route');
-    const response = await POST(
-      makeRequest({ websiteUrl: 'https://example.com' })
-    );
+    const response = await POST(makeRequest({ websiteUrl: 'https://example.com' }));
 
     expect(response.status).toBe(400);
     expect(mocks.tenantFindFirst).not.toHaveBeenCalled();
@@ -460,9 +460,7 @@ describe('POST /api/widget/quick-audit', () => {
 
   it('returns 400 when URL is missing', async () => {
     const { POST } = await import('@/app/api/widget/quick-audit/route');
-    const response = await POST(
-      makeRequest({ tenantDomain: 'agency.com' })
-    );
+    const response = await POST(makeRequest({ tenantDomain: 'agency.com' }));
 
     expect(response.status).toBe(400);
     expect(mocks.auditCreate).not.toHaveBeenCalled();

@@ -173,7 +173,9 @@ describe('Audit Trail Hash Chaining & Verification', () => {
 
     expect(result.valid).toBe(false);
     expect(result.tamperedCount).toBe(1);
-    expect(result.errors[0]).toContain('previousHash hash-of-event-1 not found (chain broken/deleted)');
+    expect(result.errors[0]).toContain(
+      'previousHash hash-of-event-1 not found (chain broken/deleted)'
+    );
   });
 
   it('should detect temporal anomalies when a predecessor occurred in the future', async () => {

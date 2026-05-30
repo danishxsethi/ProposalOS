@@ -144,14 +144,22 @@ describe('Token Routes Abuse Defense Integration Tests', () => {
       // The valid token scraping limit is 100 requests per hour.
       // Call 100 times - should all succeed
       for (let i = 0; i < 100; i++) {
-        const req = makeTokenRouteRequest(`http://localhost/api/proposal/token/${validToken}`, '1.1.1.1');
+        const req = makeTokenRouteRequest(
+          `http://localhost/api/proposal/token/${validToken}`,
+          '1.1.1.1'
+        );
         const res = await GET(req, { params: Promise.resolve({ token: validToken }) });
         expect(res.status).toBe(200);
       }
 
       // 101st request should be rate-limited (429)
-      const reqOverLimit = makeTokenRouteRequest(`http://localhost/api/proposal/token/${validToken}`, '1.1.1.1');
-      const resOverLimit = await GET(reqOverLimit, { params: Promise.resolve({ token: validToken }) });
+      const reqOverLimit = makeTokenRouteRequest(
+        `http://localhost/api/proposal/token/${validToken}`,
+        '1.1.1.1'
+      );
+      const resOverLimit = await GET(reqOverLimit, {
+        params: Promise.resolve({ token: validToken }),
+      });
       expect(resOverLimit.status).toBe(429);
       expect(resOverLimit.headers.get('Retry-After')).toBeDefined();
 
@@ -163,8 +171,13 @@ describe('Token Routes Abuse Defense Integration Tests', () => {
         return fakeProposal;
       });
 
-      const reqOtherToken = makeTokenRouteRequest(`http://localhost/api/proposal/token/${otherToken}`, '1.1.1.1');
-      const resOtherToken = await GET(reqOtherToken, { params: Promise.resolve({ token: otherToken }) });
+      const reqOtherToken = makeTokenRouteRequest(
+        `http://localhost/api/proposal/token/${otherToken}`,
+        '1.1.1.1'
+      );
+      const resOtherToken = await GET(reqOtherToken, {
+        params: Promise.resolve({ token: otherToken }),
+      });
       expect(resOtherToken.status).toBe(200);
     });
 
@@ -179,14 +192,22 @@ describe('Token Routes Abuse Defense Integration Tests', () => {
       // Limit is 10 per hour.
       // Call 10 times - should all return 404 (proposal not found)
       for (let i = 0; i < 10; i++) {
-        const req = makeTokenRouteRequest(`http://localhost/api/proposal/token/${invalidToken}`, '2.2.2.2');
+        const req = makeTokenRouteRequest(
+          `http://localhost/api/proposal/token/${invalidToken}`,
+          '2.2.2.2'
+        );
         const res = await GET(req, { params: Promise.resolve({ token: invalidToken }) });
         expect(res.status).toBe(404);
       }
 
       // 11th request from the same IP should return 429
-      const reqOverLimit = makeTokenRouteRequest(`http://localhost/api/proposal/token/${invalidToken}`, '2.2.2.2');
-      const resOverLimit = await GET(reqOverLimit, { params: Promise.resolve({ token: invalidToken }) });
+      const reqOverLimit = makeTokenRouteRequest(
+        `http://localhost/api/proposal/token/${invalidToken}`,
+        '2.2.2.2'
+      );
+      const resOverLimit = await GET(reqOverLimit, {
+        params: Promise.resolve({ token: invalidToken }),
+      });
       expect(resOverLimit.status).toBe(429);
 
       // Verify that audit event was recorded for invalid token rate limiting
@@ -197,7 +218,10 @@ describe('Token Routes Abuse Defense Integration Tests', () => {
       );
 
       // A DIFFERENT IP making an invalid token attempt should still get 404 (not blocked yet)
-      const reqNewIp = makeTokenRouteRequest(`http://localhost/api/proposal/token/${invalidToken}`, '3.3.3.3');
+      const reqNewIp = makeTokenRouteRequest(
+        `http://localhost/api/proposal/token/${invalidToken}`,
+        '3.3.3.3'
+      );
       const resNewIp = await GET(reqNewIp, { params: Promise.resolve({ token: invalidToken }) });
       expect(resNewIp.status).toBe(404);
     });
@@ -223,7 +247,10 @@ describe('Token Routes Abuse Defense Integration Tests', () => {
       // Valid scraping limit is 100 requests per hour.
       // Call 100 times - should return 200 (and the fake PDF)
       for (let i = 0; i < 100; i++) {
-        const req = makeTokenRouteRequest(`http://localhost/api/case-study/${auditId}/generate?token=${validToken}`, '4.4.4.4');
+        const req = makeTokenRouteRequest(
+          `http://localhost/api/case-study/${auditId}/generate?token=${validToken}`,
+          '4.4.4.4'
+        );
         const res = await GET(req, { params: Promise.resolve({ auditId }) });
         expect(res.status).toBe(200);
         const text = await res.text();
@@ -231,7 +258,10 @@ describe('Token Routes Abuse Defense Integration Tests', () => {
       }
 
       // 101st request should return 429
-      const reqOverLimit = makeTokenRouteRequest(`http://localhost/api/case-study/${auditId}/generate?token=${validToken}`, '4.4.4.4');
+      const reqOverLimit = makeTokenRouteRequest(
+        `http://localhost/api/case-study/${auditId}/generate?token=${validToken}`,
+        '4.4.4.4'
+      );
       const resOverLimit = await GET(reqOverLimit, { params: Promise.resolve({ auditId }) });
       expect(resOverLimit.status).toBe(429);
     });
@@ -250,13 +280,19 @@ describe('Token Routes Abuse Defense Integration Tests', () => {
 
       // Call 10 times - should return 403 (Forbidden)
       for (let i = 0; i < 10; i++) {
-        const req = makeTokenRouteRequest(`http://localhost/api/case-study/${auditId}/generate?token=${invalidToken}`, '5.5.5.5');
+        const req = makeTokenRouteRequest(
+          `http://localhost/api/case-study/${auditId}/generate?token=${invalidToken}`,
+          '5.5.5.5'
+        );
         const res = await GET(req, { params: Promise.resolve({ auditId }) });
         expect(res.status).toBe(403);
       }
 
       // 11th attempt should return 429
-      const reqOverLimit = makeTokenRouteRequest(`http://localhost/api/case-study/${auditId}/generate?token=${invalidToken}`, '5.5.5.5');
+      const reqOverLimit = makeTokenRouteRequest(
+        `http://localhost/api/case-study/${auditId}/generate?token=${invalidToken}`,
+        '5.5.5.5'
+      );
       const resOverLimit = await GET(reqOverLimit, { params: Promise.resolve({ auditId }) });
       expect(resOverLimit.status).toBe(429);
 

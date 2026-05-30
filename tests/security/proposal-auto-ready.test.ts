@@ -73,7 +73,9 @@ vi.mock('@/lib/tenant/context', () => ({
 }));
 vi.mock('@/lib/costs/costTracker', () => ({
   CostTracker: class {
-    getTotalCents() { return 5; }
+    getTotalCents() {
+      return 5;
+    }
   },
   checkDailyAuditLimit: vi.fn().mockReturnValue({
     allowed: true,

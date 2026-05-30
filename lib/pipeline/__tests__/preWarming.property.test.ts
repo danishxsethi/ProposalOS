@@ -68,9 +68,7 @@ const dateInRangeArb = (start: Date, end: Date) =>
 const createdTenantIds: string[] = [];
 const createdLeadIds: string[] = [];
 
-async function runPropertyWithTenant(
-  fn: (tenantId: string) => Promise<void>
-): Promise<void> {
+async function runPropertyWithTenant(fn: (tenantId: string) => Promise<void>): Promise<void> {
   const tenantId = randomUUID();
   createdTenantIds.push(tenantId);
   await runWithTenantBypass('create-property-tenant', async () => {

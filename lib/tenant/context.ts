@@ -35,7 +35,10 @@ function getDefaultTenantRuntimeContext(): TenantRuntimeContext {
   };
 }
 
-export function withTenantRuntimeContext<T>(overrides: Partial<TenantRuntimeContext>, fn: () => T): T {
+export function withTenantRuntimeContext<T>(
+  overrides: Partial<TenantRuntimeContext>,
+  fn: () => T
+): T {
   const current = tenantStorage.getStore() ?? getDefaultTenantRuntimeContext();
   return tenantStorage.run({ ...current, ...overrides }, fn);
 }

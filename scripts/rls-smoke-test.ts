@@ -4,7 +4,6 @@ import { PrismaClient } from '@prisma/client';
 import { createExtendedPrismaClient } from '../lib/prisma';
 import { runWithTenantAsync } from '../lib/tenant/context';
 
-
 type ResultRow = {
   test: string;
   connectingRole: string;

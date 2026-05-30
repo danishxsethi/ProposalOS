@@ -80,7 +80,10 @@ describe('Abuse Defense & Rate Limiting Unit Tests', () => {
       });
 
       const hashedApiKey = hashSensitive('secret-api-key-value');
-      expect(incSpy).toHaveBeenLastCalledWith(`rl:api:${hashedApiKey}:test-api`, expect.any(Number));
+      expect(incSpy).toHaveBeenLastCalledWith(
+        `rl:api:${hashedApiKey}:test-api`,
+        expect.any(Number)
+      );
 
       // Test Session ID Hashing
       const sessionReq = new Request('https://proposalos.test/api/audit');
@@ -92,7 +95,10 @@ describe('Abuse Defense & Rate Limiting Unit Tests', () => {
       });
 
       const hashedSession = hashSensitive('session-id-value');
-      expect(incSpy).toHaveBeenLastCalledWith(`rl:session:${hashedSession}:test-session`, expect.any(Number));
+      expect(incSpy).toHaveBeenLastCalledWith(
+        `rl:session:${hashedSession}:test-session`,
+        expect.any(Number)
+      );
 
       // Test IP Hashing
       const ipReq = new Request('https://proposalos.test/api/audit', {

@@ -51,7 +51,8 @@ describe('Auth & Session Architecture Boundary Tests', () => {
   // ─── Rule 2: Secret redaction in logger and console statements ───────────────
   it('ensures no route or lib file prints raw secrets or tokens to logs', () => {
     const rootDir = path.resolve(__dirname, '../../');
-    const logLeakRegex = /(logger|console)\..*(cookie|authorization|sessionToken|refreshToken|webLinkToken|magicToken)/i;
+    const logLeakRegex =
+      /(logger|console)\..*(cookie|authorization|sessionToken|refreshToken|webLinkToken|magicToken)/i;
 
     const scanDirectory = (dir: string) => {
       const entries = fs.readdirSync(dir, { withFileTypes: true });
@@ -125,14 +126,11 @@ describe('Auth & Session Architecture Boundary Tests', () => {
       'pipeline/engagement/route.ts',
     ];
 
-    const exemptSubstring = [
-      '[token]',
-      'proposal/[id]/chat',
-    ];
+    const exemptSubstring = ['[token]', 'proposal/[id]/chat'];
 
     const isPublicOrExemptRoute = (filePath: string) => {
       const relative = path.relative(apiDir, filePath);
-      
+
       const hasPrefix = exemptPrefixes.some((pref) => relative.startsWith(pref));
       if (hasPrefix) return true;
 

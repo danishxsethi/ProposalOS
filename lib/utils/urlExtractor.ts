@@ -37,10 +37,11 @@ export async function extractBusinessFromUrl(url: string): Promise<{
     const rawName = titleMatch?.[1]?.trim() || domain;
 
     // Clean up common title suffixes
-    let name = ((rawName.replace(/\s*[-|–]\s*/g, ' - ').split(' - ')[0] ?? '')
-      .replace(/\s*\|\s*/g, ' | ')
-      .split(' | ')[0] ?? '')
-      .trim();
+    let name = (
+      (rawName.replace(/\s*[-|–]\s*/g, ' - ').split(' - ')[0] ?? '')
+        .replace(/\s*\|\s*/g, ' | ')
+        .split(' | ')[0] ?? ''
+    ).trim();
 
     // Fallback to domain-based name if title is too generic
     if (

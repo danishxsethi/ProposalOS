@@ -399,7 +399,8 @@ async function fetchPageSpeedMobile(
       },
       async () => {
         const mobileRes = await fetch(mobileUrl);
-        if (!mobileRes.ok) throw new Error(`HTTP error ${mobileRes.status}: ${mobileRes.statusText}`);
+        if (!mobileRes.ok)
+          throw new Error(`HTTP error ${mobileRes.status}: ${mobileRes.statusText}`);
         return await mobileRes.json();
       }
     );
@@ -421,7 +422,8 @@ async function fetchPageSpeedMobile(
         },
         async () => {
           const desktopRes = await fetch(desktopUrl);
-          if (!desktopRes.ok) throw new Error(`HTTP error ${desktopRes.status}: ${desktopRes.statusText}`);
+          if (!desktopRes.ok)
+            throw new Error(`HTTP error ${desktopRes.status}: ${desktopRes.statusText}`);
           return await desktopRes.json();
         }
       );

@@ -12,7 +12,8 @@ import * as dotenv from 'dotenv';
 dotenv.config({ path: path.join(process.cwd(), '.env.local') });
 dotenv.config({ path: path.join(process.cwd(), '.env') });
 
-const STAGING_URL = process.env.STAGING_URL || 'https://proposal-engine-staging-ouitkhk5xq-uc.a.run.app';
+const STAGING_URL =
+  process.env.STAGING_URL || 'https://proposal-engine-staging-ouitkhk5xq-uc.a.run.app';
 const API_KEY = process.env.API_KEY || 'local-dev-api-key-change-in-production';
 const TENANT_ID = process.env.DEFAULT_TENANT_ID || '40aaeade-8c22-4848-ae44-79fb030b4553';
 
@@ -91,7 +92,9 @@ async function runSingleAudit(site: { name: string; url: string; category: strin
   }
 
   const durationMs = Date.now() - startTime;
-  console.log(`   🏁 Terminal status for ${site.name}: ${status} in ${Math.round(durationMs / 1000)}s`);
+  console.log(
+    `   🏁 Terminal status for ${site.name}: ${status} in ${Math.round(durationMs / 1000)}s`
+  );
 
   let findingsCount = 0;
   let modulesCompleted: string[] = [];
@@ -102,16 +105,15 @@ async function runSingleAudit(site: { name: string; url: string; category: strin
     findingsCount = auditRecord.findings?.length || 0;
     modulesCompleted = auditRecord.modulesCompleted || [];
     try {
-      modulesFailed = typeof auditRecord.modulesFailed === 'string' 
-        ? JSON.parse(auditRecord.modulesFailed) 
-        : (auditRecord.modulesFailed || []);
+      modulesFailed =
+        typeof auditRecord.modulesFailed === 'string'
+          ? JSON.parse(auditRecord.modulesFailed)
+          : auditRecord.modulesFailed || [];
     } catch {
       modulesFailed = [];
     }
     // Collect first 3 finding titles
-    topFindings = (auditRecord.findings || [])
-      .slice(0, 3)
-      .map((f: any) => f.title);
+    topFindings = (auditRecord.findings || []).slice(0, 3).map((f: any) => f.title);
   }
 
   // 3. Trigger proposal if not FAILED
@@ -129,7 +131,9 @@ async function runSingleAudit(site: { name: string; url: string; category: strin
       if (!proposeRes.ok) {
         console.error(`   ❌ Proposal generation failed for ${site.name}:`, proposalData);
       } else {
-        console.log(`   ✓ Proposal generated. ID: ${proposalData.proposalId}, Status: ${proposalData.status}, QA Score: ${proposalData.qaScore}`);
+        console.log(
+          `   ✓ Proposal generated. ID: ${proposalData.proposalId}, Status: ${proposalData.status}, QA Score: ${proposalData.qaScore}`
+        );
       }
     } catch (err: any) {
       console.error(`   ❌ Exception triggering proposal for ${site.name}:`, err.message);
@@ -152,13 +156,20 @@ async function runSingleAudit(site: { name: string; url: string; category: strin
     autoQaScore: proposalData?.qaScore || null,
     clientScore: proposalData?.clientScore || null,
     webLinkToken: proposalData?.webLinkToken || null,
-    proposalUrl: proposalData?.webLinkToken ? `${STAGING_URL}/proposal/${proposalData.webLinkToken}` : null,
+    proposalUrl: proposalData?.webLinkToken
+      ? `${STAGING_URL}/proposal/${proposalData.webLinkToken}`
+      : null,
     rawProposal: proposalData?.proposal || null,
   };
 }
 
 async function main() {
-  const inputsPath = path.join(process.cwd(), 'docs', 'remediation', '029-beta-day0-five-site-audit-inputs.json');
+  const inputsPath = path.join(
+    process.cwd(),
+    'docs',
+    'remediation',
+    '029-beta-day0-five-site-audit-inputs.json'
+  );
   if (!fs.existsSync(inputsPath)) {
     console.error(`❌ Inputs file not found at ${inputsPath}`);
     process.exit(1);
