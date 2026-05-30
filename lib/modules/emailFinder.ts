@@ -1,6 +1,7 @@
 import * as cheerio from 'cheerio';
 
 import { logger } from '@/lib/logger';
+import { withProviderResilience } from '@/lib/resilience/withProviderResilience';
 
 interface EmailDiscoveryResult {
   emails: string[];
@@ -13,16 +14,29 @@ export async function findEmails(url: string): Promise<EmailDiscoveryResult> {
     // Ensure URL has protocol
     const targetUrl = url.startsWith('http') ? url : `https://${url}`;
 
-    console.log(`[EmailFinder] Scanning ${targetUrl}...`);
+    logger.info({ url: targetUrl }, '[EmailFinder] Scanning');
 
     // Fetch main page
-    const response = await fetch(targetUrl, {
-      headers: {
-        'User-Agent':
-          'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    const response = await withProviderResilience<Response | null>(
+      {
+        provider: 'crawler',
+        operation: 'emailFinder:scan',
+        degrade: true,
+        fallbackValue: null,
       },
-      signal: AbortSignal.timeout(10000), // 10s timeout
-    }).catch(() => null);
+      async () => {
+        const res = await fetch(targetUrl, {
+          headers: {
+            'User-Agent':
+              'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          },
+        });
+        if (!res.ok) {
+          throw new Error(`HTTP error ${res.status}: ${res.statusText}`);
+        }
+        return res;
+      }
+    );
 
     if (!response || !response.ok) {
       return { emails: [], source: 'failed', confidence: 0 };
@@ -36,7 +50,7 @@ export async function findEmails(url: string): Promise<EmailDiscoveryResult> {
     $('a[href^="mailto:"]').each((_, el) => {
       const href = $(el).attr('href');
       if (href) {
-        const email = href.replace('mailto:', '').split('?')[0].trim();
+        const email = href.replace('mailto:', '').split('?')[0]?.trim() || '';
         if (isValidEmail(email)) foundEmails.add(email);
       }
     });
@@ -82,8 +96,8 @@ function isJunkEmail(email: string): boolean {
   // Let's filter only technical junk.
   const technicalJunk = ['sentry', 'bug', 'report', 'noreply', 'no-reply'];
 
-  const domain = email.split('@')[1];
-  const user = email.split('@')[0];
+  const domain = email.split('@')[1] || '';
+  const user = email.split('@')[0] || '';
 
   if (junkDomains.includes(domain)) return true;
   if (technicalJunk.some((j) => user.includes(j))) return true;

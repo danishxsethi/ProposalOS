@@ -219,14 +219,15 @@ ProposalOS/
 
 ## Key Documentation
 
-| Document                                       | Description                     |
-| ---------------------------------------------- | ------------------------------- |
-| [Architecture](docs/ARCHITECTURE.md)           | System design and pipeline flow |
-| [Contributing](CONTRIBUTING.md)                | How to contribute code          |
-| [Branch Protection](docs/BRANCH_PROTECTION.md) | Git workflow                    |
-| [Runbooks](docs/RUNBOOKS.md)                   | Operational procedures          |
-| [Observability](docs/OBSERVABILITY_SETUP.md)   | Monitoring setup                |
-| [Integrations](docs/INTEGRATIONS.md)           | External service integration    |
+| Document                                                            | Description                         |
+| ------------------------------------------------------------------- | ----------------------------------- |
+| [Architecture](docs/ARCHITECTURE.md)                                | System design and pipeline flow     |
+| [Contributing](CONTRIBUTING.md)                                     | How to contribute code              |
+| [Branch Protection](docs/BRANCH_PROTECTION.md)                      | Git workflow                        |
+| [Runbooks](docs/RUNBOOKS.md)                                        | Operational procedures              |
+| [Observability](docs/OBSERVABILITY_SETUP.md)                        | Monitoring setup                    |
+| [Integrations](docs/INTEGRATIONS.md)                                | External service integration        |
+| [Paid Beta Operating System](docs/beta/paid-closed-beta-runbook.md) | Closed Beta runbooks and guidelines |
 
 ## API Quick Reference
 

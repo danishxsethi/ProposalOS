@@ -3,6 +3,7 @@ import util from 'util';
 
 import { NextResponse } from 'next/server';
 
+import { logger } from '@/lib/logger';
 import { withAuth } from '@/lib/middleware/auth';
 import { prisma } from '@/lib/prisma';
 import { getTenantId } from '@/lib/tenant/context';
@@ -46,7 +47,7 @@ export const POST = withAuth(async (req: Request) => {
         verified = true;
       }
     } catch (e: any) {
-      console.log('DNS Lookupp failed', e.code);
+      logger.warn({ event: 'domain.dns_lookup_failed', code: e.code }, 'DNS lookup failed');
       // If ENOTFOUND, simply not verified
     }
 

@@ -253,7 +253,7 @@ function analyzePage(): PageAnalysis {
 function mergeResults(
   home: PageAnalysis,
   contact: PageAnalysis | null
-): ConversionResult['data']['elements'] {
+): ConversionResult['data']['elements'] & { text: string } {
   return {
     ctas: {
       count: home.ctas.count + (contact?.ctas.count ?? 0),
@@ -355,7 +355,7 @@ export async function runConversionModule(
     const elements = mergeResults(homeResult, contactResult);
 
     // Content Analysis
-    const textToAnalyze = (elements as any).text.replace(/\s+/g, ' ').trim();
+    const textToAnalyze = elements.text.replace(/\s+/g, ' ').trim();
     const readabilityScore = rs.fleschReadingEase(textToAnalyze);
     const gradeLevel = Math.round(rs.fleschKincaidGrade(textToAnalyze));
 

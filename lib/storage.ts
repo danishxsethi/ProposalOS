@@ -1,5 +1,7 @@
 import { Storage } from '@google-cloud/storage';
 
+import { logger } from '@/lib/logger';
+
 const storage = new Storage();
 const bucketName = process.env.GCS_BUCKET_NAME;
 
@@ -9,7 +11,7 @@ const bucketName = process.env.GCS_BUCKET_NAME;
  */
 export async function uploadPdf(buffer: Buffer, filename: string): Promise<string | null> {
   if (!bucketName) {
-    console.warn('GCS_BUCKET_NAME not set, skipping PDF upload');
+    logger.warn('GCS_BUCKET_NAME not set, skipping PDF upload');
     return null;
   }
 
@@ -24,7 +26,7 @@ export async function uploadPdf(buffer: Buffer, filename: string): Promise<strin
 
     return `https://storage.googleapis.com/${bucketName}/proposals/${filename}`;
   } catch (error) {
-    console.error('Failed to upload PDF to GCS:', error);
+    logger.error({ error }, 'Failed to upload PDF to GCS');
     return null;
   }
 }
@@ -41,7 +43,7 @@ export async function uploadToGCS(
   contentType?: string
 ): Promise<string | null> {
   if (!bucketName) {
-    console.warn('GCS_BUCKET_NAME not set, skipping upload');
+    logger.warn('GCS_BUCKET_NAME not set, skipping upload');
     return null;
   }
 
@@ -56,7 +58,7 @@ export async function uploadToGCS(
 
     return `https://storage.googleapis.com/${bucketName}/${filename}`;
   } catch (error) {
-    console.error('Failed to upload to GCS:', error);
+    logger.error({ error }, 'Failed to upload to GCS');
     return null;
   }
 }

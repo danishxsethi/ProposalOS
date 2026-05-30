@@ -8,6 +8,7 @@
  */
 
 import { FEATURE_FLAGS } from '@/lib/config/feature-flags';
+import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 
 import { transition } from './stateMachine';
@@ -44,14 +45,14 @@ export async function processStage(
   // Check if stage is paused
   const pausedStages = (config.pausedStages as string[]) || [];
   if (pausedStages.includes(stage)) {
-    console.log(`Stage ${stage} is paused for tenant ${tenantId}`);
+    logger.info({ stage, tenantId }, 'Stage is paused');
     return [];
   }
 
   // Check tenant spending limit
   const canProceed = await checkSpendingLimit(tenantId, config.spendingLimitCents);
   if (!canProceed) {
-    console.log(`Spending limit reached for tenant ${tenantId}, pausing pipeline`);
+    logger.info({ tenantId }, 'Spending limit reached, pausing pipeline');
     await pauseAllStages(tenantId);
     return [];
   }
@@ -389,7 +390,7 @@ function getStageForStatus(status: ProspectStatus): PipelineStage {
   const stageMap: Record<ProspectStatus, PipelineStage> = {
     discovered: PipelineStage.DISCOVERY,
     audited: PipelineStage.DIAGNOSIS,
-    proposed: PipelineStage.OUTREACH,
+    QUALIFIED: PipelineStage.OUTREACH,
     outreach_sent: PipelineStage.CLOSING,
     hot_lead: PipelineStage.CLOSING,
     closing: PipelineStage.CLOSING,
@@ -456,7 +457,7 @@ async function processWithConcurrencyLimit<T, R>(
       })
       .catch((error) => {
         // Log error but don't fail the entire batch
-        console.error('Error processing item:', error);
+        logger.error({ error }, 'Error processing item');
       })
       .finally(() => {
         // Remove from executing set when done

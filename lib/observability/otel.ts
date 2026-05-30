@@ -12,14 +12,14 @@
  * Usage: Import this module in instrumentation.ts to enable distributed tracing.
  */
 
-import { NodeSDK } from '@opentelemetry/sdk-node';
 import { getNodeAutoInstrumentations } from '@opentelemetry/auto-instrumentations-node';
 import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-grpc';
 import { OTLPTraceExporter as HTTPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
 import { Resource } from '@opentelemetry/resources';
-import { SemanticResourceAttributes } from '@opentelemetry/semantic-conventions';
-import { BatchSpanProcessor } from '@opentelemetry/sdk-trace-node';
+import { NodeSDK } from '@opentelemetry/sdk-node';
 import { ConsoleSpanExporter } from '@opentelemetry/sdk-trace-base';
+import { BatchSpanProcessor } from '@opentelemetry/sdk-trace-node';
+import { SemanticResourceAttributes } from '@opentelemetry/semantic-conventions';
 
 import { logger } from '@/lib/logger';
 
@@ -91,14 +91,14 @@ export function initializeOpenTelemetry(): void {
 
     // Initialize the SDK with auto-instrumentations
     sdk = new NodeSDK({
-      resource,
-      spanProcessor: new BatchSpanProcessor(traceExporter),
+      resource: resource as any,
+      spanProcessor: new BatchSpanProcessor(traceExporter as any) as any,
       instrumentations: [
         getNodeAutoInstrumentations({
           // HTTP instrumentation
           '@opentelemetry/instrumentation-http': {
             enabled: true,
-            requireParentforSpans: false,
+            requireParentSpan: false,
             ignoreIncomingRequestHook: (request: any) => {
               // Ignore health checks and static assets
               const url = request.url;
@@ -114,14 +114,14 @@ export function initializeOpenTelemetry(): void {
               ];
               return ignoredPaths.some((path) => url.startsWith(path));
             },
-          },
+          } as any,
           // PostgreSQL instrumentation
           '@opentelemetry/instrumentation-pg': {
             enabled: true,
-            requireParentforSpans: false,
+            requireParentSpan: false,
             // Don't include query parameters in spans to avoid leaking sensitive data
             excludeQueryParameters: true,
-          },
+          } as any,
         }),
       ],
     });

@@ -3,6 +3,7 @@
  * Implements prediction storage and calibration
  */
 
+import { logger } from '@/lib/logger';
 import { getTenantRuntimeContextFromStore } from '@/lib/tenant/context';
 
 import { executeCommand, executeQuery } from '../db';
@@ -298,7 +299,7 @@ export async function adjustConfidenceIntervals(
   predictionType: string,
   adjustmentFactor: number
 ): Promise<void> {
-  console.log(`Adjusting confidence intervals for ${predictionType} by factor ${adjustmentFactor}`);
+  logger.info({ predictionType, adjustmentFactor }, 'Adjusting confidence intervals');
 }
 
 /**

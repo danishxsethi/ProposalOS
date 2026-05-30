@@ -83,8 +83,9 @@ const OPTIONAL_ENV_VARS = [
   'STRIPE_PRICE_ID_PROPOSAL_GROWTH',
   'STRIPE_PRICE_ID_PROPOSAL_PREMIUM',
 
-  // ─── Redis (optional caching layer) ────────────────────────────────────────
+  // ─── Shared store (Redis for distributed rate-limit & idempotency) ──────────
   'REDIS_URL',
+  'SHARED_STORE_REQUIRED',
 
   // ─── Webhook notifications ─────────────────────────────────────────────────
   'WEBHOOK_URL',
@@ -181,5 +182,5 @@ export function validateEnv(): void {
     );
   }
 
-  console.log('[validateEnv] ✅ All required environment variables present');
+  console.info('[validateEnv] ✅ All required environment variables present');
 }

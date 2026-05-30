@@ -21,6 +21,7 @@
 import { Annotation, StateGraph } from '@langchain/langgraph';
 
 import { generateWithGemini } from '@/lib/llm/provider';
+import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 
 // ─── Confidence Interval helper ───────────────────────────────────────────────
@@ -132,7 +133,7 @@ async function gatherSignals(state: typeof PredictiveState.State) {
 
     return { historicalAudits, competitorData, industryBenchmarks, currentFindings };
   } catch (error) {
-    console.error('[PredictiveGraph] gatherSignals failed:', error);
+    logger.error({ error }, '[PredictiveGraph] gatherSignals failed');
     return {};
   }
 }
@@ -162,7 +163,7 @@ async function forecastTraffic(state: typeof PredictiveState.State) {
       },
     };
   } catch (error) {
-    console.error('[PredictiveGraph] forecastTraffic failed:', error);
+    logger.error({ error }, '[PredictiveGraph] forecastTraffic failed');
     return {};
   }
 }
@@ -187,7 +188,7 @@ async function rankingTrajectoryNode(state: typeof PredictiveState.State) {
       },
     };
   } catch (error) {
-    console.error('[PredictiveGraph] rankingTrajectory failed:', error);
+    logger.error({ error }, '[PredictiveGraph] rankingTrajectory failed');
     return {};
   }
 }
@@ -220,7 +221,7 @@ async function competitorThreatNode(state: typeof PredictiveState.State) {
       },
     };
   } catch (error) {
-    console.error('[PredictiveGraph] competitorThreat failed:', error);
+    logger.error({ error }, '[PredictiveGraph] competitorThreat failed');
     return {};
   }
 }
@@ -251,7 +252,7 @@ async function revenueImpactNode(state: typeof PredictiveState.State) {
       },
     };
   } catch (error) {
-    console.error('[PredictiveGraph] revenueImpact failed:', error);
+    logger.error({ error }, '[PredictiveGraph] revenueImpact failed');
     return {};
   }
 }
@@ -345,6 +346,7 @@ ${(ar?.upcomingChanges ?? []).map((c) => `- **${c.name}** (${c.expectedDate}) �
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function getIndustryBenchmarks(industry: string): Record<string, number> {
+  const generic = { conversionRate: 0.025, avgOrderValue: 150 };
   const benchmarks: Record<string, { conversionRate: number; avgOrderValue: number }> = {
     restaurant: { conversionRate: 0.032, avgOrderValue: 45 },
     legal: { conversionRate: 0.018, avgOrderValue: 1200 },
@@ -353,10 +355,9 @@ function getIndustryBenchmarks(industry: string): Record<string, number> {
     'real-estate': { conversionRate: 0.01, avgOrderValue: 5000 },
     plumbing: { conversionRate: 0.04, avgOrderValue: 350 },
     roofing: { conversionRate: 0.035, avgOrderValue: 8000 },
-    generic: { conversionRate: 0.025, avgOrderValue: 150 },
+    generic,
   };
-  const key = Object.keys(benchmarks).find((k) => industry.toLowerCase().includes(k)) ?? 'generic';
-  return benchmarks[key];
+  return benchmarks[industry.toLowerCase()] ?? generic;
 }
 
 // ─── Graph ────────────────────────────────────────────────────────────────────
@@ -403,7 +404,7 @@ export async function runPredictiveAgent(input: {
     });
     return result.predictiveOutlookMarkdown ?? '';
   } catch (error) {
-    console.error('[PredictiveGraph] runPredictiveAgent failed:', error);
+    logger.error({ error }, '[PredictiveGraph] runPredictiveAgent failed');
     return '';
   }
 }

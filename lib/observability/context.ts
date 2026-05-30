@@ -20,7 +20,16 @@ export interface ObservabilityContext {
 }
 
 const OBSERVABILITY_SERVICE_NAME = 'proposal-os';
-const observabilityStorage = new AsyncLocalStorage<ObservabilityContext>();
+const globalForObservabilityStorage = globalThis as unknown as {
+  observabilityStorage: AsyncLocalStorage<ObservabilityContext> | undefined;
+};
+
+const observabilityStorage =
+  globalForObservabilityStorage.observabilityStorage ?? new AsyncLocalStorage<ObservabilityContext>();
+
+if (process.env.NODE_ENV !== 'production') {
+  globalForObservabilityStorage.observabilityStorage = observabilityStorage;
+}
 
 export function getObservabilityContext(): ObservabilityContext | undefined {
   return observabilityStorage.getStore();

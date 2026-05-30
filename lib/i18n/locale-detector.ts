@@ -10,6 +10,8 @@
  * 6. Default to en-US
  */
 
+import { logger } from '@/lib/logger';
+
 import { DetectionContext, LocaleConfig, LocaleDetectionResult } from './types';
 
 export class LocaleDetector {
@@ -227,7 +229,7 @@ export class LocaleDetector {
       const locale = this.tldToLocaleMap.get(tld);
       return locale ?? null;
     } catch (error) {
-      console.error('Error extracting TLD:', error);
+      logger.error({ error }, 'Error extracting TLD');
       return null;
     }
   }
@@ -264,7 +266,7 @@ export class LocaleDetector {
 
       return null;
     } catch (error) {
-      console.error('Error parsing hreflang tags:', error);
+      logger.error({ error }, 'Error parsing hreflang tags');
       return null;
     }
   }
@@ -289,7 +291,7 @@ export class LocaleDetector {
       const locale = gbpToLocaleMap.get(gbpLocation);
       return locale || null;
     } catch (error) {
-      console.error('Error looking up GBP location:', error);
+      logger.error({ error }, 'Error looking up GBP location');
       return null;
     }
   }
@@ -310,7 +312,7 @@ export class LocaleDetector {
       // For now, return null to fall back to default
       return null;
     } catch (error) {
-      console.error('Error geolocating IP:', error);
+      logger.error({ error }, 'Error geolocating IP');
       return null;
     }
   }

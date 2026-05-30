@@ -17,7 +17,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 import { generateTraceId, InternalError, UnauthorizedError } from '@/lib/api/errors';
-import { validateApiKey, API_KEY_SCOPES } from '@/lib/auth/apiKeys';
+import { API_KEY_SCOPES, validateApiKey } from '@/lib/auth/apiKeys';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 
@@ -155,7 +155,7 @@ async function getTenantMetrics(tenantId: string): Promise<TenantMetrics> {
     totalProposals > 0 ? (proposalsAccepted / totalProposals) * 100 : 0;
 
   // Deal Metrics (from accepted proposals with dealValue)
-  const [dealsThisMonth, dealsWithRevenue] = await Promise.all([
+  const [dealsThisMonthAggregate, dealsWithRevenue] = await Promise.all([
     prisma.proposal.aggregate({
       where: {
         tenantId,
@@ -179,7 +179,8 @@ async function getTenantMetrics(tenantId: string): Promise<TenantMetrics> {
 
   const dealsClosed = dealsWithRevenue._count.id;
   const totalRevenue = Number(dealsWithRevenue._sum.dealValue) || 0;
-  
+  const dealsThisMonth = dealsThisMonthAggregate._count.id;
+
   const dealsThisMonthResult = await prisma.proposal.aggregate({
     where: {
       tenantId,
@@ -304,10 +305,10 @@ async function getTenantMetrics(tenantId: string): Promise<TenantMetrics> {
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { tenantId: string } }
+  context: { params: Promise<{ tenantId: string }> }
 ): Promise<NextResponse> {
   const traceId = generateTraceId();
-  const { tenantId } = params;
+  const { tenantId } = await context.params;
 
   try {
     // Validate auth header

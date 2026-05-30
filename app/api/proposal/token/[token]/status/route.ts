@@ -15,6 +15,7 @@ import { generateTraceId, InternalError, NotFoundError, ValidationError } from '
 import { proposalStatusSchema } from '@/lib/api/schemas/proposal';
 import { withIdempotency } from '@/lib/middleware/idempotency';
 import { withRateLimit } from '@/lib/middleware/rateLimit';
+import { recordAuditTrailEvent } from '@/lib/observability/auditTrail';
 import { prisma } from '@/lib/prisma';
 
 interface Params {
@@ -71,6 +72,18 @@ async function handleStatusUpdate(req: Request, { params }: Params): Promise<Nex
       where: { id: proposal.id },
       data: updateData,
     });
+
+    await recordAuditTrailEvent({
+      eventType: 'proposal.status_changed',
+      tenantId: proposal.tenantId,
+      proposalId: proposal.id,
+      auditId: proposal.auditId,
+      triggerSource: 'public_token',
+      payload: {
+        previousStatus: proposal.status,
+        newStatus: updatedProposal.status,
+      },
+    }).catch(() => {});
 
     const response = NextResponse.json({
       success: true,

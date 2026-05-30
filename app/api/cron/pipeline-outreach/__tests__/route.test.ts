@@ -35,6 +35,12 @@ vi.mock('@/lib/prisma', () => ({
     pipelineErrorLog: {
       create: vi.fn(),
     },
+    audit: {
+      findFirst: vi.fn(),
+    },
+    proposal: {
+      findFirst: vi.fn(),
+    },
   },
 }));
 
@@ -153,6 +159,26 @@ describe('Pipeline Outreach Cron Endpoint', () => {
     vi.clearAllMocks();
     // Set CRON_SECRET for auth tests
     process.env.CRON_SECRET = 'test-secret';
+
+    // Set up default prisma mocks
+    vi.mocked(prisma.audit.findFirst).mockResolvedValue({
+      id: 'audit-1',
+      status: 'COMPLETE',
+      findings: [
+        {
+          id: 'f1',
+          title: 'Slow Page Speed',
+          module: 'pagespeed',
+          severity: 'high',
+          impactScore: 85,
+        },
+      ],
+    } as any);
+
+    vi.mocked(prisma.proposal.findFirst).mockResolvedValue({
+      id: 'proposal-1',
+      webLinkToken: 'abc123',
+    } as any);
   });
 
   afterEach(() => {
@@ -454,6 +480,7 @@ describe('Pipeline Outreach Cron Endpoint', () => {
       vi.mocked(prisma.pipelineConfig.findMany).mockResolvedValue(configs);
       vi.mocked(prisma.prospectLead.findMany).mockResolvedValue(prospects);
       vi.mocked(prisma.tenant.findUnique).mockResolvedValue(tenant);
+      vi.mocked(prisma.audit.findFirst).mockResolvedValue(null);
 
       const response = await GET(req);
       const data = await response.json();
@@ -473,6 +500,8 @@ describe('Pipeline Outreach Cron Endpoint', () => {
       vi.mocked(prisma.pipelineConfig.findMany).mockResolvedValue(configs);
       vi.mocked(prisma.prospectLead.findMany).mockResolvedValue(prospects);
       vi.mocked(prisma.tenant.findUnique).mockResolvedValue(tenant);
+      vi.mocked(prisma.audit.findFirst).mockResolvedValue({ id: 'audit-1', findings: [] } as any);
+      vi.mocked(prisma.proposal.findFirst).mockResolvedValue(null);
 
       const response = await GET(req);
       const data = await response.json();

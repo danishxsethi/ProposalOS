@@ -243,7 +243,7 @@ async function handleDiscoveryCron(req: Request): Promise<NextResponse> {
 
 // Auth wrapper
 const authHandler = async (req: Request): Promise<NextResponse> => {
-  const authError = verifyCronAuth(req);
+  const authError = await verifyCronAuth(req);
   if (authError) return authError;
   return handleDiscoveryCron(req);
 };

@@ -8,6 +8,7 @@ import * as tls from 'tls';
 
 import type { CostTracker } from '@/lib/costs/costTracker';
 import { logger } from '@/lib/logger';
+import { withProviderResilience } from '@/lib/resilience/withProviderResilience';
 
 import { LegacyAuditModuleResult } from './types';
 
@@ -50,7 +51,7 @@ function parseUrl(url: string): { protocol: string; host: string; port: number; 
   } catch {
     return {
       protocol: 'https',
-      host: url.replace(/^https?:\/\//, '').split('/')[0],
+      host: url.replace(/^https?:\/\//, '').split('/')[0] || '',
       port: 443,
       path: '/',
     };
@@ -85,7 +86,7 @@ async function fetchWithRedirect(
       (res) => {
         const headers: Record<string, string> = {};
         for (const [k, v] of Object.entries(res.headers)) {
-          if (k && v != null) headers[k.toLowerCase()] = Array.isArray(v) ? v[0] : String(v);
+          if (k && v != null) headers[k.toLowerCase()] = Array.isArray(v) ? (v[0] || '') : String(v);
         }
 
         if (followRedirects && res.statusCode && res.statusCode >= 300 && res.statusCode < 400) {
@@ -129,11 +130,12 @@ async function getSslCertificate(
         return;
       }
 
+      const getVal = (v: string | string[] | undefined) => Array.isArray(v) ? (v[0] || '') : (v || '');
       const valid = new Date(cert.valid_to) > new Date();
       resolve({
         valid,
         expiresAt: cert.valid_to,
-        issuer: cert.issuer?.O || cert.issuer?.CN || 'Unknown',
+        issuer: getVal(cert.issuer?.O) || getVal(cert.issuer?.CN) || 'Unknown',
       });
     });
     socket.on('error', () => {
@@ -144,11 +146,24 @@ async function getSslCertificate(
 
 async function checkMixedContent(url: string): Promise<boolean> {
   try {
-    const res = await fetch(url, {
-      headers: { 'User-Agent': 'ProposalOS-SecurityScan/1.0' },
-      signal: AbortSignal.timeout(10000),
-    });
-    const html = await res.text();
+    const html = await withProviderResilience<string>(
+      {
+        provider: 'generic',
+        operation: 'security_check_mixed_content_fetch',
+        policy: {
+          timeoutMs: 10000,
+          maxAttempts: 2,
+        },
+      },
+      async ({ signal }) => {
+        const res = await fetch(url, {
+          headers: { 'User-Agent': 'ProposalOS-SecurityScan/1.0' },
+          signal,
+        });
+        if (!res.ok) throw new Error(`HTTP error ${res.status}`);
+        return await res.text();
+      }
+    );
     return (
       /src=["']http:\/\//.test(html) ||
       /href=["']http:\/\//.test(html) ||

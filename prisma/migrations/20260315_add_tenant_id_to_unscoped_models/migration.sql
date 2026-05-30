@@ -31,14 +31,14 @@ CREATE INDEX "FollowUpEmailSend_tenantId_idx" ON "FollowUpEmailSend"("tenantId")
 ALTER TABLE "FollowUpEmailSend" ADD CONSTRAINT "FollowUpEmailSend_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "Tenant"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AlterTable - Add tenantId to FailedWebhookEvent (nullable for system-level webhooks)
-ALTER TABLE "FailedWebhookEvent" ADD COLUMN "tenantId" TEXT;
-CREATE INDEX "FailedWebhookEvent_tenantId_idx" ON "FailedWebhookEvent"("tenantId");
-ALTER TABLE "FailedWebhookEvent" ADD CONSTRAINT "FailedWebhookEvent_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "Tenant"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "failed_webhook_events" ADD COLUMN "tenantId" TEXT;
+CREATE INDEX "failed_webhook_events_tenantId_idx" ON "failed_webhook_events"("tenantId");
+ALTER TABLE "failed_webhook_events" ADD CONSTRAINT "failed_webhook_events_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "Tenant"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AlterTable - Add tenantId to CartAbandonmentEvent
-ALTER TABLE "CartAbandonmentEvent" ADD COLUMN "tenantId" TEXT NOT NULL;
-CREATE INDEX "CartAbandonmentEvent_tenantId_idx" ON "CartAbandonmentEvent"("tenantId");
-ALTER TABLE "CartAbandonmentEvent" ADD CONSTRAINT "CartAbandonmentEvent_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "Tenant"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "cart_abandonment_events" ADD COLUMN "tenantId" TEXT NOT NULL;
+CREATE INDEX "cart_abandonment_events_tenantId_idx" ON "cart_abandonment_events"("tenantId");
+ALTER TABLE "cart_abandonment_events" ADD CONSTRAINT "cart_abandonment_events_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "Tenant"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AlterTable - Add tenantId to PartnerDeliveredLead
 ALTER TABLE "PartnerDeliveredLead" ADD COLUMN "tenantId" TEXT NOT NULL;

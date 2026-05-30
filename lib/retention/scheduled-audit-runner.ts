@@ -55,17 +55,24 @@ export async function processScheduledAudits(): Promise<{
           if (comparison) {
             comparisonsGenerated++;
 
-            // Update DeliveryTask with comparison if applicable
-            await prisma.deliveryTask.updateMany({
-              where: {
-                proposal: {
-                  auditId: schedule.lastAuditId,
-                },
-              },
-              data: {
-                beforeAfterComparison: comparison as any,
-              },
+            // Find proposals matching schedule.lastAuditId
+            const matchingProposals = await prisma.proposal.findMany({
+              where: { auditId: schedule.lastAuditId },
+              select: { id: true },
             });
+            const proposalIds = matchingProposals.map((p) => p.id);
+
+            if (proposalIds.length > 0) {
+              // Update DeliveryTask with comparison if applicable
+              await prisma.deliveryTask.updateMany({
+                where: {
+                  proposalId: { in: proposalIds },
+                },
+                data: {
+                  beforeAfterComparison: comparison as any,
+                },
+              });
+            }
           }
         }
 

@@ -1,219 +1,276 @@
 /**
- * Idempotency Middleware for API Endpoints
+ * lib/middleware/idempotency.ts
  *
- * Extracts Idempotency-Key from request headers and ensures
- * duplicate requests return the same response without re-processing.
+ * Distributed Idempotency Middleware
  *
- * Usage: Wrap handlers with withIdempotency() for critical mutating operations.
+ * Ensures that duplicate requests (same Idempotency-Key header) return the
+ * original stored response without re-processing, across all Cloud Run
+ * instances.
+ *
+ * Uses lib/store/shared.ts as the backing store.  In production REDIS_URL
+ * must be set so that idempotency records are shared.
+ *
+ * The deprecated withIdempotencyMemory function is kept for backward
+ * compatibility but now delegates to the same distributed implementation.
+ * It will be removed in a future cleanup pass.
+ *
+ * Key semantics:
+ *   - First request with a key: executes the handler and caches the result.
+ *   - Duplicate request with same key + same body hash: returns cached result.
+ *   - Duplicate request with same key + different body hash: returns 409.
+ *   - Request in progress (another instance holds the lock): returns 409.
+ *   - Cached results expire after ttlSeconds (default 24 h).
+ *   - Failed transient 5xx responses are NOT cached (safe retry behaviour).
  */
 
 import { NextResponse } from 'next/server';
 
-import { IdempotencyConflictError, InternalError } from '@/lib/api/errors';
+import { IdempotencyConflictError } from '@/lib/api/errors';
 import { logger } from '@/lib/logger';
-import { withIdempotency as pipelineWithIdempotency } from '@/lib/pipeline/idempotency';
+import { hashSensitive } from '@/lib/security/abuseDefense/policies';
+import { getSharedStore } from '@/lib/store/shared';
 import { getTenantId } from '@/lib/tenant/context';
 
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+const DEFAULT_TTL_SECONDS = 24 * 60 * 60; // 24 hours
+const IN_PROGRESS_TTL_SECONDS = 60; // lock expires after 60 s if handler crashes
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
 export interface IdempotencyOptions {
-  /** Custom key generator if not using header */
   generateKey?: (req: Request) => string;
-  /** TTL for idempotency records (default: 24 hours) */
-  ttlMs?: number;
-  /** Skip idempotency check conditionally */
+  ttlSeconds?: number;
   skip?: (req: Request) => boolean;
-  /** Include request body in key hash for partial matching */
+  /** Include a hash of the request body in key-conflict detection. */
   includeBody?: boolean;
+  /** Custom tenant ID or resolver function to override default getTenantId() */
+  tenantId?: string | ((req: Request) => Promise<string | null> | string | null);
+  /** Whether to fallback to a server-derived request fingerprint if no client idempotency key is provided */
+  useFingerprintFallback?: boolean;
 }
 
-/**
- * Extract idempotency key from request headers
- */
+interface CachedResponse {
+  status: number;
+  body: string;
+  headers: Record<string, string>;
+  bodyHash?: string;
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
 export function extractIdempotencyKey(req: Request): string | null {
   return (
     req.headers.get('idempotency-key') ||
     req.headers.get('x-idempotency-key') ||
-    req.headers.get('X-Idempotency-Key')
+    req.headers.get('Idempotency-Key') ||
+    null
   );
 }
 
-/**
- * Create a hash of request body for additional uniqueness
- */
 async function hashBody(req: Request): Promise<string> {
   try {
-    const clone = req.clone();
-    const body = await clone.text();
-    return body ? Buffer.from(body).toString('base64url').substring(0, 16) : 'empty';
+    const body = await req.clone().text();
+    return body ? Buffer.from(body).toString('base64url').substring(0, 20) : 'empty';
   } catch {
     return 'unknown';
   }
 }
 
+function buildStoreKey(tenantId: string, idempotencyKey: string): string {
+  return `idempotency:${tenantId}:${idempotencyKey}`;
+}
+
+function buildLockKey(tenantId: string, idempotencyKey: string): string {
+  return `idempotency-lock:${tenantId}:${idempotencyKey}`;
+}
+
+// ─── Core middleware ──────────────────────────────────────────────────────────
+
+async function generateFingerprint(req: Request, tenantId: string): Promise<string> {
+  const forwarded = req.headers.get('x-forwarded-for');
+  const realIp = req.headers.get('x-real-ip');
+  const ip = forwarded?.split(',')[0]?.trim() ?? realIp?.split(',')[0]?.trim() ?? 'unknown';
+  const ipHash = hashSensitive(ip);
+
+  const bodyHash = await hashBody(req);
+  const url = new URL(req.url);
+  const path = url.pathname;
+
+  // Combine components into a stable fingerprint
+  const rawFingerprint = `${req.method}:${path}:${tenantId}:${bodyHash}:${ipHash}`;
+  return `fingerprint:${hashSensitive(rawFingerprint)}`;
+}
+
 /**
- * Wrap a handler with idempotency checking
+ * Wrap a handler with distributed idempotency.
  *
- * @example
- * export const POST = withIdempotency(async (req) => {
- *   // Your handler logic here
- *   return NextResponse.json({ success: true });
- * }, { includeBody: true });
+ * Requires a valid tenant context (getTenantId() or options.tenantId). When no tenant is resolved
+ * the handler runs without idempotency (safe degradation).
  */
 export function withIdempotency<T extends Response | NextResponse>(
-  handler: (req: Request) => Promise<T>,
+  handler: (req: Request, ...args: any[]) => Promise<T>,
   options: IdempotencyOptions = {}
 ) {
-  return async function idempotentHandler(req: Request): Promise<T | NextResponse> {
-    // Check if we should skip idempotency
-    if (options.skip?.(req)) {
-      return handler(req);
-    }
+  return async function idempotentHandler(req: Request, ...args: any[]): Promise<T | NextResponse> {
+    if (options.skip?.(req)) return handler(req, ...args);
 
-    // Extract or generate idempotency key
-    let idempotencyKey = options.generateKey?.(req) || extractIdempotencyKey(req);
-
-    // Include body hash if requested
-    if (options.includeBody && idempotencyKey) {
-      const bodyHash = await hashBody(req);
-      idempotencyKey = `${idempotencyKey}:${bodyHash}`;
-    }
-
-    // If no idempotency key, proceed without idempotency
-    if (!idempotencyKey) {
-      logger.warn({ path: req.url }, 'Idempotency: No key provided');
-      return handler(req);
-    }
-
-    try {
-      const tenantId = await getTenantId();
-      if (!tenantId) {
-        logger.error({ path: req.url }, 'Idempotency: No tenant context');
-        return handler(req);
+    let tenantId: string | null = null;
+    if (options.tenantId) {
+      if (typeof options.tenantId === 'function') {
+        tenantId = await options.tenantId(req);
+      } else {
+        tenantId = options.tenantId;
       }
+    } else {
+      tenantId = await getTenantId();
+    }
 
-      // Use pipeline idempotency wrapper
-      // We use a generic prospectId since this is for general API operations
-      const result = await pipelineWithIdempotency(
-        tenantId,
-        idempotencyKey, // Use key as prospectId for general operations
-        'api_operation',
-        async () => {
-          const response = await handler(req);
-          return {
-            status: response.status,
-            body: await response.clone().text(),
-            headers: Object.fromEntries(response.headers.entries()),
-          };
+    if (!tenantId) {
+      // No tenant context — run without idempotency rather than blocking.
+      logger.warn({ path: req.url }, 'Idempotency: No tenant context — skipping');
+      return handler(req, ...args);
+    }
+
+    let rawKey = options.generateKey?.(req) ?? extractIdempotencyKey(req);
+    if (!rawKey) {
+      if (options.useFingerprintFallback) {
+        rawKey = await generateFingerprint(req, tenantId);
+      } else {
+        logger.debug({ path: req.url }, 'Idempotency: No key provided — skipping');
+        return handler(req, ...args);
+      }
+    }
+
+    const bodyHash = options.includeBody ? await hashBody(req) : undefined;
+    const idempotencyKey = bodyHash ? `${rawKey}:${bodyHash}` : rawKey;
+    const storeKey = buildStoreKey(tenantId, idempotencyKey);
+    const lockKey = buildLockKey(tenantId, idempotencyKey);
+    const ttlSeconds = options.ttlSeconds ?? DEFAULT_TTL_SECONDS;
+
+    const store = await getSharedStore();
+
+    // ── Check for existing result ──────────────────────────────────────────
+    const existing = await store.get(storeKey);
+    if (existing) {
+      try {
+        const cached = JSON.parse(existing) as CachedResponse;
+
+        // Body-hash conflict: same key, different payload
+        if (bodyHash && cached.bodyHash && cached.bodyHash !== bodyHash) {
+          logger.warn(
+            { idempotencyKey: rawKey, tenantId },
+            'Idempotency: Key reused with different request body'
+          );
+          const conflict = new IdempotencyConflictError(
+            'Idempotency key already used with a different request body'
+          );
+          return NextResponse.json(conflict.toEnvelope(req.url), {
+            status: conflict.statusCode,
+          });
         }
-      );
 
-      // Return cached result if duplicate
-      if (result.wasDuplicate) {
-        logger.info({ idempotencyKey, tenantId }, 'Idempotency: Returning cached result');
-
-        const cachedData = result.result as {
-          status?: number;
-          body?: string;
-          headers?: Record<string, string>;
-        };
-        return new NextResponse(cachedData.body, {
-          status: cachedData.status || 200,
+        logger.info({ idempotencyKey: rawKey, tenantId }, 'Idempotency: Returning cached result');
+        return new NextResponse(cached.body, {
+          status: cached.status,
           headers: {
-            ...cachedData.headers,
+            ...cached.headers,
             'X-Idempotency-Cache': 'true',
+            'X-Idempotency-Key': rawKey,
           },
         });
+      } catch {
+        // Corrupted cache entry — fall through and re-execute
+        await store.del(storeKey);
       }
-
-      // Add idempotency header to new response
-      const response = await handler(req);
-      response.headers.set('X-Idempotency-Key', idempotencyKey);
-      return response;
-    } catch (error) {
-      if (error instanceof Error && error.message.includes('already in progress')) {
-        const conflictError = new IdempotencyConflictError(
-          'A request with this idempotency key is already being processed'
-        );
-        return NextResponse.json(conflictError.toEnvelope(req.url), {
-          status: conflictError.statusCode,
-        });
-      }
-
-      // Re-throw other errors
-      throw error;
     }
+
+    // ── Acquire in-progress lock ───────────────────────────────────────────
+    const locked = await store.setIfNotExists(lockKey, '1', IN_PROGRESS_TTL_SECONDS);
+    if (!locked) {
+      logger.warn({ idempotencyKey: rawKey, tenantId }, 'Idempotency: Request already in progress');
+      const conflict = new IdempotencyConflictError(
+        'A request with this idempotency key is already being processed'
+      );
+      return NextResponse.json(conflict.toEnvelope(req.url), {
+        status: conflict.statusCode,
+      });
+    }
+
+    // ── Execute handler ────────────────────────────────────────────────────
+    let response: T;
+    try {
+      response = await handler(req, ...args);
+    } catch (err) {
+      // Release lock; do not cache errors
+      await store.del(lockKey);
+      throw err;
+    }
+
+    // ── Cache successful non-5xx responses ─────────────────────────────────
+    if (response.status < 500) {
+      try {
+        const body = await response.clone().text();
+        const headersObj: Record<string, string> = {};
+        response.headers.forEach((v, k) => {
+          headersObj[k] = v;
+        });
+
+        const cached: CachedResponse = {
+          status: response.status,
+          body,
+          headers: headersObj,
+          bodyHash,
+        };
+
+        await store.set(storeKey, JSON.stringify(cached), ttlSeconds);
+        response.headers.set('X-Idempotency-Key', rawKey);
+      } catch (cacheErr) {
+        logger.error(
+          { err: cacheErr, idempotencyKey: rawKey },
+          'Idempotency: Failed to cache response'
+        );
+      }
+    }
+
+    await store.del(lockKey);
+    return response;
   };
 }
 
 /**
- * Simple in-memory idempotency check (for development/testing)
- * Falls back when database is not available
- */
-const memoryCache = new Map<string, { result: unknown; timestamp: number }>();
-
-export async function checkIdempotencyMemory(
-  key: string,
-  ttlMs: number = 24 * 60 * 60 * 1000
-): Promise<{ isDuplicate: boolean; result?: unknown }> {
-  const now = Date.now();
-  const cached = memoryCache.get(key);
-
-  if (!cached) {
-    return { isDuplicate: false };
-  }
-
-  if (now - cached.timestamp > ttlMs) {
-    memoryCache.delete(key);
-    return { isDuplicate: false };
-  }
-
-  return {
-    isDuplicate: true,
-    result: cached.result,
-  };
-}
-
-export async function setIdempotencyMemory(key: string, result: unknown): Promise<void> {
-  memoryCache.set(key, {
-    result,
-    timestamp: Date.now(),
-  });
-}
-
-/**
- * Lightweight idempotency wrapper using memory cache
- * Useful for non-critical operations or development
+ * @deprecated  withIdempotencyMemory now delegates to the distributed
+ * withIdempotency.  The name is kept for backward compatibility; it will be
+ * removed in a future cleanup.  Callers should migrate to withIdempotency.
  */
 export function withIdempotencyMemory<T extends Response | NextResponse>(
   handler: (req: Request) => Promise<T>,
   options: IdempotencyOptions & { ttlMs?: number } = {}
 ) {
-  return async function idempotentHandler(req: Request): Promise<T | NextResponse> {
-    const idempotencyKey = extractIdempotencyKey(req);
+  // Convert ttlMs → ttlSeconds for the shared-store implementation
+  const ttlSeconds = options.ttlMs ? Math.ceil(options.ttlMs / 1000) : DEFAULT_TTL_SECONDS;
+  return withIdempotency(handler, { ...options, ttlSeconds });
+}
 
-    if (!idempotencyKey) {
-      return handler(req);
-    }
+// ─── Low-level helpers (kept for external callers that import them) ───────────
 
-    const { isDuplicate, result } = await checkIdempotencyMemory(idempotencyKey, options.ttlMs);
+/** @deprecated Use withIdempotency directly */
+export async function checkIdempotencyMemory(
+  key: string,
+  ttlMs: number = 24 * 60 * 60 * 1000
+): Promise<{ isDuplicate: boolean; result?: unknown }> {
+  const store = await getSharedStore();
+  const raw = await store.get(`idempotency-compat:${key}`);
+  if (!raw) return { isDuplicate: false };
+  try {
+    return { isDuplicate: true, result: JSON.parse(raw) };
+  } catch {
+    return { isDuplicate: false };
+  }
+}
 
-    if (isDuplicate) {
-      const cached = result as { status?: number; body?: string };
-      return new NextResponse(cached.body, {
-        status: cached.status || 200,
-        headers: { 'X-Idempotency-Cache': 'true' },
-      });
-    }
-
-    const response = await handler(req);
-
-    // Cache the response
-    const body = await response.clone().text();
-    await setIdempotencyMemory(idempotencyKey, {
-      status: response.status,
-      body,
-    });
-
-    response.headers.set('X-Idempotency-Key', idempotencyKey);
-    return response;
-  };
+/** @deprecated Use withIdempotency directly */
+export async function setIdempotencyMemory(key: string, result: unknown): Promise<void> {
+  const store = await getSharedStore();
+  await store.set(`idempotency-compat:${key}`, JSON.stringify(result), DEFAULT_TTL_SECONDS);
 }

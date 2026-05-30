@@ -3,7 +3,9 @@ import puppeteer from 'puppeteer-core';
 
 import { CostTracker } from '@/lib/costs/costTracker';
 import { logger } from '@/lib/logger';
+import { withProviderResilience } from '@/lib/resilience/withProviderResilience';
 
+import { normalizeConfidence } from './findingGenerator';
 import { AuditModuleResult, Finding } from './types';
 
 export interface MobileUXModuleInput {
@@ -211,6 +213,7 @@ async function analyzeMobileUX(url: string, tracker?: CostTracker): Promise<Mobi
         for (let j = i + 1; j < positions.length; j++) {
           const a = positions[i];
           const b = positions[j];
+          if (!a || !b) continue;
 
           const distance = Math.sqrt(Math.pow(a.x - b.x, 2) + Math.pow(a.y - b.y, 2));
 
@@ -334,25 +337,42 @@ async function analyzeMobileUX(url: string, tracker?: CostTracker): Promise<Mobi
   }
 }
 
-/**
- * Launch Puppeteer browser
- */
 async function launchBrowser() {
-  const isLocal = process.env.NODE_ENV === 'development';
+  const fs = require('fs');
+  const localPaths = [
+    process.env.CHROME_EXECUTABLE_PATH,
+    '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+    '/Applications/Chromium.app/Contents/MacOS/Chromium',
+    '/usr/bin/google-chrome',
+    '/usr/bin/chromium-browser',
+  ].filter(Boolean) as string[];
 
-  if (isLocal) {
-    return await puppeteer.launch({
-      headless: true,
-      args: ['--no-sandbox', '--disable-setuid-sandbox'],
-    });
-  } else {
-    return await puppeteer.launch({
-      args: chromium.args,
-      defaultViewport: { width: 1920, height: 1080, deviceScaleFactor: 1 },
-      executablePath: await chromium.executablePath(),
-      headless: true,
-    });
+  let executablePath: string | undefined;
+  for (const p of localPaths) {
+    if (p && fs.existsSync(p)) {
+      executablePath = p;
+      break;
+    }
   }
+
+  if (!executablePath) {
+    try {
+      executablePath = await chromium.executablePath();
+    } catch {
+      // Ignore
+    }
+  }
+
+  if (!executablePath) {
+    throw new Error('Chromium not found. Install Chrome or set CHROME_EXECUTABLE_PATH.');
+  }
+
+  return puppeteer.launch({
+    args: ['--no-sandbox', '--disable-setuid-sandbox'],
+    defaultViewport: { width: 1920, height: 1080, deviceScaleFactor: 1 },
+    executablePath,
+    headless: true,
+  });
 }
 
 /**
@@ -370,8 +390,19 @@ async function fetchPageSpeedMobile(
 
     // Mobile strategy
     const mobileUrl = `https://www.googleapis.com/pagespeedonline/v5/runPagespeed?url=${encodeURIComponent(url)}&strategy=mobile&key=${apiKey}`;
-    const mobileRes = await fetch(mobileUrl);
-    const mobileData = await mobileRes.json();
+    const mobileData = await withProviderResilience<any>(
+      {
+        provider: 'pagespeed',
+        operation: 'mobileUX:fetchPageSpeedMobile:mobile',
+        degrade: true,
+        fallbackValue: { lighthouseResult: { categories: { performance: { score: 0 } } } },
+      },
+      async () => {
+        const mobileRes = await fetch(mobileUrl);
+        if (!mobileRes.ok) throw new Error(`HTTP error ${mobileRes.status}: ${mobileRes.statusText}`);
+        return await mobileRes.json();
+      }
+    );
 
     const mobileScore = Math.round(
       (mobileData.lighthouseResult?.categories?.performance?.score || 0) * 100
@@ -381,8 +412,19 @@ async function fetchPageSpeedMobile(
     let desktopScore: number | undefined;
     try {
       const desktopUrl = `https://www.googleapis.com/pagespeedonline/v5/runPagespeed?url=${encodeURIComponent(url)}&strategy=desktop&key=${apiKey}`;
-      const desktopRes = await fetch(desktopUrl);
-      const desktopData = await desktopRes.json();
+      const desktopData = await withProviderResilience<any>(
+        {
+          provider: 'pagespeed',
+          operation: 'mobileUX:fetchPageSpeedMobile:desktop',
+          degrade: true,
+          fallbackValue: { lighthouseResult: { categories: { performance: { score: 0 } } } },
+        },
+        async () => {
+          const desktopRes = await fetch(desktopUrl);
+          if (!desktopRes.ok) throw new Error(`HTTP error ${desktopRes.status}: ${desktopRes.statusText}`);
+          return await desktopRes.json();
+        }
+      );
       desktopScore = Math.round(
         (desktopData.lighthouseResult?.categories?.performance?.score || 0) * 100
       );

@@ -1,7 +1,8 @@
 'use client';
 
-import dynamic from 'next/dynamic';
 import { useEffect, useRef, useState } from 'react';
+
+import dynamic from 'next/dynamic';
 
 import { useProposalViewTracking } from './ProposalViewTracker';
 
@@ -154,7 +155,7 @@ function AnimatedGauge({
     const t = setTimeout(() => {
       const dur = 1200;
       const step = 16;
-      let t0 = Date.now();
+      const t0 = Date.now();
       const tick = () => {
         const elapsed = Date.now() - t0;
         const pct = Math.min(1, elapsed / dur);

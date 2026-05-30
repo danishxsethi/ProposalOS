@@ -15,6 +15,7 @@
  *   qa_hallucination_rate — QA hallucination score (0–1)
  */
 
+import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 
 import { checkAlertRules } from './alerts';
@@ -126,7 +127,7 @@ class MetricsRecorderSingleton {
       // Task 4: Check alert rules on every flush
       await checkAlertRules(batch);
     } catch (err) {
-      console.error('[MetricsRecorder] Flush failed:', err);
+      logger.error({ error: err }, '[MetricsRecorder] Flush failed');
       // Re-buffer on failure — put items back at the front
       this.buffer.unshift(...batch);
     }

@@ -98,7 +98,7 @@ export async function matchLeadsToPartner(partnerId: string): Promise<PackagedLe
   });
 
   // Package leads
-  const packagedLeads: PackagedLead[] = matchingProspects.map((prospect) => ({
+  const packagedLeads: PackagedLead[] = matchingProspects.map((prospect: any) => ({
     leadId: prospect.id,
     businessName: prospect.businessName,
     auditSummary: prospect.auditSummarySnippet ? JSON.parse(prospect.auditSummarySnippet) : {},
@@ -163,6 +163,7 @@ export async function deliverLead(partnerId: string, leadId: string): Promise<Pa
     data: {
       partnerId,
       leadId,
+      tenantId: prospect.tenantId,
       packagedData,
       status: 'delivered',
     },
@@ -218,10 +219,10 @@ export async function getPartnerMetrics(partnerId: string): Promise<PartnerMetri
   });
 
   const totalDelivered = deliveredLeads.length;
-  const viewed = deliveredLeads.filter((l) => l.status === 'viewed').length;
-  const contacted = deliveredLeads.filter((l) => l.status === 'contacted').length;
-  const converted = deliveredLeads.filter((l) => l.status === 'converted').length;
-  const rejected = deliveredLeads.filter((l) => l.status === 'rejected').length;
+  const viewed = deliveredLeads.filter((l: any) => l.status === 'viewed').length;
+  const contacted = deliveredLeads.filter((l: any) => l.status === 'contacted').length;
+  const converted = deliveredLeads.filter((l: any) => l.status === 'converted').length;
+  const rejected = deliveredLeads.filter((l: any) => l.status === 'rejected').length;
 
   // Calculate revenue
   let monthlyRevenue = 0;

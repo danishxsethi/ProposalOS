@@ -1,6 +1,8 @@
 import 'server-only';
 import crypto from 'crypto';
 
+import { logger } from '@/lib/logger';
+
 export type ExperimentName = 'exec-summary' | 'narrative-tone' | 'clustering-strategy';
 
 interface ExperimentConfig {
@@ -84,7 +86,7 @@ function loadPrompt(filename: string): string {
   try {
     return fs.readFileSync(filePath, 'utf-8');
   } catch (error) {
-    console.error(`[PromptAB] Failed to load prompt file: ${filename}`, error);
+    logger.error({ filename, error }, '[PromptAB] Failed to load prompt file');
     throw new Error(`Prompt file not found: ${filename}`);
   }
 }

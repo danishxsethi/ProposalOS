@@ -3,6 +3,8 @@ import Link from 'next/link';
 import { prisma } from '@/lib/prisma';
 import { runWithTenantBypass } from '@/lib/tenant/context';
 
+export const dynamic = 'force-dynamic';
+
 export default async function AuditBrowserPage() {
   // Intentional cross-tenant admin surface: this page is a global audit browser.
   const audits = await runWithTenantBypass('admin-page-render:global-audit-browser', () =>

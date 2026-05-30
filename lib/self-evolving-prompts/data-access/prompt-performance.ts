@@ -3,6 +3,8 @@
  * Implements CRUD operations and aggregate queries
  */
 
+import { randomUUID } from 'crypto';
+
 import { getTenantRuntimeContextFromStore } from '@/lib/tenant/context';
 
 import { executeQuery } from '../db';
@@ -97,8 +99,52 @@ export async function logPerformance(
   log: Omit<PromptPerformanceLog, 'id' | 'timestamp'>
 ): Promise<PromptPerformanceLog> {
   const tenantId = getRequiredTenantId('PromptPerformanceLog.create', log.tenantId);
+
+  // Self-heal: ensure PromptVersion exists before writing performance log
+  try {
+    const checkQuery = `SELECT 1 FROM "PromptVersion" WHERE "versionHash" = $1`;
+    const checkRows = await executeQuery(checkQuery, [log.promptVersionHash], {
+      operationName: 'PromptVersion.checkExistence',
+      requireTenant: false,
+    });
+    if (checkRows.length === 0) {
+      const insertVersionQuery = `
+        INSERT INTO "PromptVersion" (
+          "id",
+          "versionHash",
+          "nodeId",
+          "promptText",
+          "createdBy",
+          "changelog",
+          "isActive",
+          "tenantId",
+          "updatedAt"
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
+        ON CONFLICT ("versionHash") DO NOTHING
+      `;
+      const versionId = randomUUID();
+      await executeQuery(insertVersionQuery, [
+        versionId,
+        log.promptVersionHash,
+        log.nodeId,
+        'fallback system prompt',
+        'system',
+        'auto-created fallback version for performance tracking',
+        true,
+        tenantId,
+      ], {
+        operationName: 'PromptVersion.createFallback',
+        requireTenant: false,
+      });
+    }
+  } catch (err) {
+    console.error('Self-healing PromptVersion generation failed:', err);
+  }
+
+  const id = randomUUID();
   const query = `
     INSERT INTO "PromptPerformanceLog" (
+      id,
       "promptVersionHash",
       "nodeId",
       "qualityScore",
@@ -111,7 +157,7 @@ export async function logPerformance(
       "variantId",
       metadata,
       "tenantId"
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::uuid, $10::uuid, $11, $12)
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::uuid, $11::uuid, $12, $13)
     RETURNING
       id,
       timestamp,
@@ -130,6 +176,7 @@ export async function logPerformance(
   `;
 
   const params = [
+    id,
     log.promptVersionHash,
     log.nodeId,
     log.qualityScore,

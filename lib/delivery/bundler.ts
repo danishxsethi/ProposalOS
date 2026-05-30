@@ -2,6 +2,7 @@ import { Readable } from 'stream';
 
 import archiver from 'archiver';
 
+import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 import { uploadToGCS } from '@/lib/storage';
 
@@ -112,7 +113,7 @@ export async function uploadBundle(
     }
     return url;
   } catch (error) {
-    console.error('Failed to upload bundle to GCS:', error);
+    logger.error({ error }, 'Failed to upload bundle to GCS');
     throw error;
   }
 }

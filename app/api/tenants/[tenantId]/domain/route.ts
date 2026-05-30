@@ -12,7 +12,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 import { generateTraceId, InternalError, UnauthorizedError } from '@/lib/api/errors';
-import { validateApiKey, API_KEY_SCOPES } from '@/lib/auth/apiKeys';
+import { API_KEY_SCOPES, validateApiKey } from '@/lib/auth/apiKeys';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 
@@ -39,10 +39,10 @@ export interface VerifyDomainResponse {
  */
 export async function POST(
   request: NextRequest,
-  { params }: { params: { tenantId: string } }
+  context: { params: Promise<{ tenantId: string }> }
 ): Promise<NextResponse> {
   const traceId = generateTraceId();
-  const { tenantId } = params;
+  const { tenantId } = await context.params;
 
   try {
     // Verify tenant owner or admin access
@@ -59,8 +59,7 @@ export async function POST(
     }
 
     const hasAdminScope =
-      validation.scopes.includes(API_KEY_SCOPES.ALL) ||
-      validation.scopes.includes('admin:*');
+      validation.scopes.includes(API_KEY_SCOPES.ALL) || validation.scopes.includes('admin:*');
 
     if (!hasAdminScope && validation.tenantId !== tenantId) {
       throw new UnauthorizedError('Access denied to this tenant');
@@ -158,10 +157,10 @@ export async function POST(
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { tenantId: string } }
+  context: { params: Promise<{ tenantId: string }> }
 ): Promise<NextResponse> {
   const traceId = generateTraceId();
-  const { tenantId } = params;
+  const { tenantId } = await context.params;
 
   try {
     // Verify access
@@ -178,8 +177,7 @@ export async function GET(
     }
 
     const hasAdminScope =
-      validation.scopes.includes(API_KEY_SCOPES.ALL) ||
-      validation.scopes.includes('admin:*');
+      validation.scopes.includes(API_KEY_SCOPES.ALL) || validation.scopes.includes('admin:*');
 
     if (!hasAdminScope && validation.tenantId !== tenantId) {
       throw new UnauthorizedError('Access denied to this tenant');
@@ -230,10 +228,10 @@ export async function GET(
  */
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { tenantId: string } }
+  context: { params: Promise<{ tenantId: string }> }
 ): Promise<NextResponse> {
   const traceId = generateTraceId();
-  const { tenantId } = params;
+  const { tenantId } = await context.params;
 
   try {
     // Verify tenant owner or admin access
@@ -250,8 +248,7 @@ export async function DELETE(
     }
 
     const hasAdminScope =
-      validation.scopes.includes(API_KEY_SCOPES.ALL) ||
-      validation.scopes.includes('admin:*');
+      validation.scopes.includes(API_KEY_SCOPES.ALL) || validation.scopes.includes('admin:*');
 
     if (!hasAdminScope && validation.tenantId !== tenantId) {
       throw new UnauthorizedError('Access denied to this tenant');

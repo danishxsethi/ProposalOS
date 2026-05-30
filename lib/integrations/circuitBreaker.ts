@@ -1,13 +1,13 @@
 /**
  * Integration Circuit Breaker
- * 
+ *
  * Circuit breaker pattern for external API integrations.
  * Prevents cascade failures by failing fast when services are unavailable.
  */
 
 import { logger } from '@/lib/logger';
 
-import { INTEGRATIONS, CIRCUIT_BREAKER_CONFIG } from './config';
+import { CIRCUIT_BREAKER_CONFIG, INTEGRATIONS } from './config';
 
 /**
  * Circuit breaker states
@@ -47,14 +47,11 @@ export class IntegrationCircuitBreaker {
   private lastSuccessAt?: Date;
   private openedAt?: Date;
   private halfOpenAttempts = 0;
-  
+
   private readonly config: IntegrationCircuitConfig;
   private readonly integrationName: string;
 
-  constructor(
-    integrationName: string,
-    config?: Partial<IntegrationCircuitConfig>
-  ) {
+  constructor(integrationName: string, config?: Partial<IntegrationCircuitConfig>) {
     this.integrationName = integrationName;
     this.config = {
       failureThreshold: config?.failureThreshold ?? CIRCUIT_BREAKER_CONFIG.failureThreshold,

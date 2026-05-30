@@ -13,6 +13,7 @@
 import { NextResponse } from 'next/server';
 
 import { generateTraceId, InternalError } from '@/lib/api/errors';
+import { logger } from '@/lib/logger';
 import { verifyCronAuth } from '@/lib/middleware/cronAuth';
 import { withRateLimit } from '@/lib/middleware/rateLimit';
 import { WebhookRetryService } from '@/lib/stripe/webhookRetryService';
@@ -24,14 +25,20 @@ async function handleRetryWebhooks(req: Request): Promise<NextResponse> {
   const traceId = generateTraceId();
 
   try {
-    console.log('Starting webhook retry cron job...');
+    logger.info({ event: 'webhook_retry.start' }, 'Starting webhook retry cron job');
 
     const startTime = Date.now();
     const result = await WebhookRetryService.retryFailedWebhooks();
     const duration = Date.now() - startTime;
 
-    console.log(
-      `Webhook retry completed: ${result.processed} processed, ${result.errors} errors, took ${duration}ms`
+    logger.info(
+      {
+        event: 'webhook_retry.complete',
+        processed: result.processed,
+        errors: result.errors,
+        durationMs: duration,
+      },
+      'Webhook retry completed'
     );
 
     const response = NextResponse.json({
@@ -54,7 +61,7 @@ async function handleRetryWebhooks(req: Request): Promise<NextResponse> {
 
 // Auth wrapper
 const authHandler = async (req: Request): Promise<NextResponse> => {
-  const authError = verifyCronAuth(req);
+  const authError = await verifyCronAuth(req);
   if (authError) return authError;
   return handleRetryWebhooks(req);
 };

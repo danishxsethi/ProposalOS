@@ -4,19 +4,27 @@ import path from 'path';
 import fs from 'fs-extra';
 import Redis from 'ioredis';
 
+import { logger } from '@/lib/logger';
+
 import { Metrics } from '../metrics';
 
 const CACHE_DIR = path.join(process.cwd(), 'lib', 'cache', 'store');
 const USE_REDIS = !!process.env.REDIS_URL;
+const ALLOW_LOCAL_CACHE = process.env.ALLOW_LOCAL_CACHE === 'true';
+const IS_PROD = process.env.NODE_ENV === 'production';
 
 let redis: Redis | null = null;
 if (USE_REDIS && process.env.REDIS_URL) {
   redis = new Redis(process.env.REDIS_URL);
-  console.log('[Cache] Using Redis for caching');
-} else {
-  // Ensure cache dir exists
+  logger.info('[Cache] Using Redis for caching');
+} else if (!IS_PROD && ALLOW_LOCAL_CACHE) {
+  // Ensure cache dir exists only if allowed
   fs.ensureDirSync(CACHE_DIR);
-  console.log('[Cache] Using File System for caching');
+  logger.info('[Cache] Using File System for caching (explicitly allowed)');
+} else {
+  logger.warn(
+    '[Cache] apiCache.ts: Caching disabled (no Redis configured and local cache not allowed)'
+  );
 }
 
 export interface CacheOptions {
@@ -51,25 +59,39 @@ export async function cachedFetch<T>(
   const ttlHours = options.ttlHours || 24;
   const ttlMs = ttlHours * 60 * 60 * 1000;
 
-  // 1. Try to get from cache
+  // 1. Protection checks
+  if (!USE_REDIS) {
+    if (IS_PROD) {
+      const msg = `[Cache] FATAL: apiCache.cachedFetch called in production with no Redis configured (unsafe local filesystem fallback prevented) for API: ${apiName}`;
+      logger.error({ apiName }, msg);
+      throw new Error(msg);
+    }
+    if (!ALLOW_LOCAL_CACHE) {
+      // Act as a silent no-op cache (fall through directly to live execution)
+      logger.debug(
+        { apiName },
+        '[Cache] apiCache.cachedFetch: local cache disabled, falling through to fetchFn'
+      );
+      return fetchFn();
+    }
+  }
+
+  // 2. Try to get from cache
   try {
     if (USE_REDIS && redis) {
       const cached = await redis.get(key);
       if (cached) {
         const entry: CacheEntry<T> = JSON.parse(cached);
-        // Redis handles TTL usually, but we double check or just rely on Redis TTL
         Metrics.increment('cache_hit');
-        // console.log(`[Cache] HIT: ${apiName}`);
         return entry.data;
       }
-    } else {
+    } else if (ALLOW_LOCAL_CACHE) {
       // File Cache
       const filePath = path.join(CACHE_DIR, `${key}.json`);
       if (await fs.pathExists(filePath)) {
         const entry: CacheEntry<T> = await fs.readJson(filePath);
         if (Date.now() < entry.expiresAt) {
           Metrics.increment('cache_hit');
-          // console.log(`[Cache] HIT: ${apiName}`);
           return entry.data;
         } else {
           // Expired
@@ -78,15 +100,14 @@ export async function cachedFetch<T>(
       }
     }
   } catch (error) {
-    console.warn(`[Cache] Error reading cache for ${key}:`, error);
+    logger.warn({ key, error }, '[Cache] Error reading cache');
   }
 
-  // 2. Fetch fresh data
+  // 3. Fetch fresh data
   Metrics.increment('cache_miss');
-  // console.log(`[Cache] MISS: ${apiName}`);
   const data = await fetchFn();
 
-  // 3. Save to cache
+  // 4. Save to cache
   try {
     const entry: CacheEntry<T> = {
       data,
@@ -97,12 +118,12 @@ export async function cachedFetch<T>(
     if (USE_REDIS && redis) {
       // Set with TTL in seconds
       await redis.set(key, JSON.stringify(entry), 'EX', ttlHours * 60 * 60);
-    } else {
+    } else if (ALLOW_LOCAL_CACHE) {
       const filePath = path.join(CACHE_DIR, `${key}.json`);
       await fs.writeJson(filePath, entry);
     }
   } catch (error) {
-    console.warn(`[Cache] Error writing cache for ${key}:`, error);
+    logger.warn({ key, error }, '[Cache] Error writing cache');
   }
 
   return data;
@@ -114,9 +135,11 @@ export async function cachedFetch<T>(
 export async function clearCache(): Promise<void> {
   if (USE_REDIS && redis) {
     await redis.flushdb();
-    console.log('[Cache] Redis cleared');
-  } else {
+    logger.info('[Cache] Redis cleared');
+  } else if (!IS_PROD && ALLOW_LOCAL_CACHE) {
     await fs.emptyDir(CACHE_DIR);
-    console.log('[Cache] File cache cleared');
+    logger.info('[Cache] File cache cleared');
+  } else {
+    logger.info('[Cache] clearCache: No-op (no Redis and local cache disabled)');
   }
 }

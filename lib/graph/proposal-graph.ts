@@ -3,12 +3,14 @@ import { Annotation, StateGraph } from '@langchain/langgraph';
 import { Finding } from '@/lib/diagnosis/types';
 import { adversarialQAGraph } from '@/lib/graph/adversarial-qa-graph';
 import { runPredictiveAgent } from '@/lib/graph/predictive-graph';
+import { logger } from '@/lib/logger';
+import { inferOrganizationSegment, OrganizationSegment } from '@/lib/proposal';
 import { proposalCache } from '@/lib/proposal/caching';
 import { generateExecutiveSummary } from '@/lib/proposal/executiveSummary';
 import { ProposalLLMOrchestrator } from '@/lib/proposal/llm-orchestrator';
 import { getPricing } from '@/lib/proposal/pricing';
 import { calculateTierROI } from '@/lib/proposal/roiCalculator';
-import { validateCompleteProposal } from '@/lib/proposal/schemas';
+import { FindingRuntime, validateCompleteProposal } from '@/lib/proposal/schemas';
 import { mapToTiers } from '@/lib/proposal/tierMapping';
 import { ProposalResult, TierConfig } from '@/lib/proposal/types';
 import {
@@ -25,6 +27,8 @@ export const PROPOSAL_GRAPH_TIMEOUT_MS = 90_000;
 export const ProposalState = Annotation.Root({
   businessName: Annotation<string>({ reducer: (x, y) => y }),
   businessIndustry: Annotation<string | undefined>({ reducer: (x, y) => y }),
+  businessUrl: Annotation<string | undefined>({ reducer: (x, y) => y }),
+  segment: Annotation<OrganizationSegment | undefined>({ reducer: (x, y) => y }),
   clusters: Annotation<any[]>({ reducer: (x, y) => y, default: () => [] }),
   findings: Annotation<Finding[]>({ reducer: (x, y) => y, default: () => [] }),
   tierMapping: Annotation<any>({ reducer: (x, y) => y }),
@@ -73,9 +77,14 @@ function nodeError(node: string, error: unknown): NodeError {
 async function map_to_tiers(state: typeof ProposalState.State) {
   try {
     const mapping = mapToTiers(state.clusters, state.findings);
-    return { tierMapping: mapping };
+    const segment = inferOrganizationSegment(
+      (state as any).businessUrl,
+      state.businessName,
+      state.businessIndustry
+    );
+    return { tierMapping: mapping, segment };
   } catch (error) {
-    console.error('[ProposalGraph] map_to_tiers failed:', error);
+    logger.error({ error }, '[ProposalGraph] map_to_tiers failed');
     return {
       tierMapping: { essentials: [], growth: [], premium: [] },
       errors: [nodeError('map_to_tiers', error)],
@@ -85,7 +94,10 @@ async function map_to_tiers(state: typeof ProposalState.State) {
 
 async function calculate_pricing(state: typeof ProposalState.State) {
   try {
-    const industryPricing = getPricing(state.businessIndustry);
+    const industryPricing = getPricing({
+      industry: state.businessIndustry || null,
+      segment: (state as any).segment,
+    } as any);
     return {
       pricing: {
         essentials: industryPricing.essentials,
@@ -95,7 +107,7 @@ async function calculate_pricing(state: typeof ProposalState.State) {
       },
     };
   } catch (error) {
-    console.error('[ProposalGraph] calculate_pricing failed:', error);
+    logger.error({ error }, '[ProposalGraph] calculate_pricing failed');
     return {
       pricing: {
         essentials: 0,
@@ -123,12 +135,16 @@ async function generate_complete_proposal(state: typeof ProposalState.State) {
           state.businessName,
           state.businessIndustry,
           state.clusters,
-          state.findings
+          state.findings,
+          { segment: (state as any).segment }
         )
     );
 
     // Validate the complete proposal
-    const validation = validateCompleteProposal(completeProposal, state.findings);
+    const validation = validateCompleteProposal(
+      completeProposal,
+      state.findings as unknown as FindingRuntime[]
+    );
 
     return {
       completeProposal,
@@ -143,7 +159,7 @@ async function generate_complete_proposal(state: typeof ProposalState.State) {
       validation: validation.proposalValidation,
     };
   } catch (error) {
-    console.error('[ProposalGraph] generate_complete_proposal failed:', error);
+    logger.error({ error }, '[ProposalGraph] generate_complete_proposal failed');
     return {
       completeProposal: {
         executiveSummary: `Failed to generate complete proposal: ${String(error)}`,
@@ -200,7 +216,7 @@ async function draft_proposal(state: typeof ProposalState.State) {
     );
     return { executiveSummary };
   } catch (error) {
-    console.error('[ProposalGraph] draft_proposal failed:', error);
+    logger.error({ error }, '[ProposalGraph] draft_proposal failed');
     return {
       executiveSummary: `Failed to generate executive summary: ${String(error)}`,
       errors: [nodeError('draft_proposal', error)],
@@ -252,7 +268,7 @@ async function generate_roi_model(state: typeof ProposalState.State) {
     };
     return { tiers };
   } catch (error) {
-    console.error('[ProposalGraph] generate_roi_model failed:', error);
+    logger.error({ error }, '[ProposalGraph] generate_roi_model failed');
     return {
       tiers: {
         essentials: { name: 'Starter', price: 0, roi: { monthlyValue: 0, ratio: 0 } },
@@ -276,7 +292,7 @@ async function validate_claims(state: typeof ProposalState.State) {
     const validation = validateCitations(proposalToValidate, state.findings);
     return { validation };
   } catch (error) {
-    console.error('[ProposalGraph] validate_claims failed:', error);
+    logger.error({ error }, '[ProposalGraph] validate_claims failed');
     return {
       validation: { valid: false, errors: [`Validation failed: ${String(error)}`] },
       errors: [nodeError('validate_claims', error)],
@@ -288,7 +304,7 @@ async function apply_tone(state: typeof ProposalState.State) {
   try {
     return {};
   } catch (error) {
-    console.error('[ProposalGraph] apply_tone failed:', error);
+    logger.error({ error }, '[ProposalGraph] apply_tone failed');
     return {
       errors: [nodeError('apply_tone', error)],
     };
@@ -333,12 +349,14 @@ async function adversarial_qa(state: State) {
   });
 
   if (retryTriggered) {
-    console.warn(
-      `[ProposalGraph] QA hallucination score ${qaScore.toFixed(2)} > 0.3 — triggering QA retry (attempt ${state.qaRetryCount + 1})`
+    logger.warn(
+      { qaScore, qaRetryCount: state.qaRetryCount + 1 },
+      '[ProposalGraph] QA hallucination score > 0.3 — triggering QA retry'
     );
   } else if ((result.hallucinationFlags?.length ?? 0) > 0) {
-    console.warn(
-      `[ProposalGraph] ${result.hallucinationFlags?.length ?? 0} hallucination flag(s), score ${qaScore.toFixed(2)} — within threshold, proceeding`
+    logger.warn(
+      { qaScore, flags: result.hallucinationFlags?.length ?? 0 },
+      '[ProposalGraph] Hallucination flag(s) within threshold, proceeding'
     );
   }
 
@@ -357,8 +375,9 @@ function route_qa(state: State): string {
   if (qaScore > HALLUCINATION_THRESHOLD) {
     // Deterministic terminal routing when cap is hit
     if ((state.qaRetryCount ?? 0) >= MAX_QA_RETRIES) {
-      console.warn(
-        `[ProposalGraph] QA retry cap reached (${MAX_QA_RETRIES}); routing to format_output`
+      logger.warn(
+        { maxRetries: MAX_QA_RETRIES },
+        '[ProposalGraph] QA retry cap reached; routing to format_output'
       );
       return 'format_output';
     }
@@ -382,7 +401,7 @@ async function format_output(state: typeof ProposalState.State) {
     };
     return { proposalDef };
   } catch (error) {
-    console.error('[ProposalGraph] format_output failed:', error);
+    logger.error({ error }, '[ProposalGraph] format_output failed');
     return {
       proposalDef: {
         executiveSummary: state.executiveSummary || '',
@@ -460,7 +479,7 @@ async function visual_annotation(state: typeof ProposalState.State) {
 
     return { tiers: updatedTiers };
   } catch (error) {
-    console.error('[ProposalGraph] visual_annotation failed:', error);
+    logger.error({ error }, '[ProposalGraph] visual_annotation failed');
     return {
       tiers: state.tiers || {},
       errors: [nodeError('visual_annotation', error)],
@@ -487,7 +506,7 @@ async function predict_outlook(state: typeof ProposalState.State) {
     });
     return { predictiveOutlookMarkdown: outlook };
   } catch (error) {
-    console.error('[ProposalGraph] predict_outlook failed (non-blocking):', error);
+    logger.error({ error }, '[ProposalGraph] predict_outlook failed (non-blocking)');
     return { predictiveOutlookMarkdown: '' };
   }
 }
@@ -546,10 +565,10 @@ export async function invokeProposalGraphWithTimeout(
     ]);
   } catch (error) {
     if (error instanceof Error && error.message.startsWith('PROPOSAL_GRAPH_TIMEOUT')) {
-      console.error('[ProposalGraph] Timed out — returning fallback proposal state', {
-        timeoutMs,
-        error: error.message,
-      });
+      logger.error(
+        { timeoutMs, error },
+        '[ProposalGraph] Timed out — returning fallback proposal state'
+      );
 
       const fallbackPricing = initialState.pricing ?? {
         essentials: 0,

@@ -1,6 +1,15 @@
 -- AlterSchema
 -- Add composite indexes for top query patterns
 -- Migration: 20260321_add_composite_indexes
+--
+-- REMEDIATION NOTE (2026-05-14):
+-- Several tables referenced in this migration are defined in schema.prisma but were
+-- not included in the 20260227000000_init migration. Those index creations are wrapped
+-- in DO $$ ... $$ blocks so they are skipped gracefully on a fresh empty-DB replay
+-- while still applying correctly on databases where those tables already exist.
+-- Affected tables: ClientDashboard, CompetitorSignal, NotificationPreference,
+--   PromptPerformanceLog, ReEngagementCampaign, ScheduledAuditRun,
+--   UpsellOpportunity, WinBackCampaign.
 
 -- Audit: URL lookup by tenant (top query: find audit by businessUrl+tenantId)
 CREATE INDEX IF NOT EXISTS "Audit_tenantId_businessUrl_idx" ON "Audit"("tenantId", "businessUrl");
@@ -51,10 +60,14 @@ CREATE INDEX IF NOT EXISTS "DeadLetterQueue_tenantId_status_createdAt_idx" ON "D
 CREATE INDEX IF NOT EXISTS "UsageRecord_tenantId_timestamp_idx" ON "UsageRecord"("tenantId", "timestamp");
 
 -- PromptPerformanceLog: Performance by prompt version and timestamp (analytics)
-CREATE INDEX IF NOT EXISTS "PromptPerformanceLog_promptVersionHash_timestamp_idx" ON "PromptPerformanceLog"("promptVersionHash", "timestamp");
-
--- PromptPerformanceLog: Performance by node for prompt optimization
-CREATE INDEX IF NOT EXISTS "PromptPerformanceLog_nodeId_timestamp_idx" ON "PromptPerformanceLog"("nodeId", "timestamp");
+-- Wrapped in DO block: table may not exist on a fresh empty-DB replay.
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'PromptPerformanceLog') THEN
+    CREATE INDEX IF NOT EXISTS "PromptPerformanceLog_promptVersionHash_timestamp_idx" ON "PromptPerformanceLog"("promptVersionHash", "timestamp");
+    CREATE INDEX IF NOT EXISTS "PromptPerformanceLog_nodeId_timestamp_idx" ON "PromptPerformanceLog"("nodeId", "timestamp");
+  END IF;
+END $$;
 
 -- GeneratedArtifact: Artifacts by tenant and proposal (delivery queries)
 CREATE INDEX IF NOT EXISTS "GeneratedArtifact_tenantId_proposalId_status_idx" ON "GeneratedArtifact"("tenantId", "proposalId", "status");
@@ -81,31 +94,73 @@ CREATE INDEX IF NOT EXISTS "QATelemetry_graphName_createdAt_idx" ON "QATelemetry
 CREATE INDEX IF NOT EXISTS "QATelemetry_tenantId_qaScore_idx" ON "QATelemetry"("tenantId", "qaScore");
 
 -- CartAbandonmentEvent: Events by proposal for funnel analysis
-CREATE INDEX IF NOT EXISTS "CartAbandonmentEvent_proposalId_step_timestamp_idx" ON "CartAbandonmentEvent"("proposalId", "step", "timestamp");
+CREATE INDEX IF NOT EXISTS "cart_abandonment_events_proposalId_step_timestamp_idx" ON "cart_abandonment_events"("proposalId", "step", "timestamp");
 
 -- CartAbandonmentEvent: Events by tenant and checkout type
-CREATE INDEX IF NOT EXISTS "CartAbandonmentEvent_tenantId_checkoutType_timestamp_idx" ON "CartAbandonmentEvent"("tenantId", "checkoutType", "timestamp");
+CREATE INDEX IF NOT EXISTS "cart_abandonment_events_tenantId_checkoutType_timestamp_idx" ON "cart_abandonment_events"("tenantId", "checkoutType", "timestamp");
 
 -- CompetitorSignal: Signals by tenant and type (competitor monitoring)
-CREATE INDEX IF NOT EXISTS "CompetitorSignal_tenantId_signalType_detectedAt_idx" ON "CompetitorSignal"("tenantId", "signalType", "detectedAt");
+-- Wrapped in DO block: table may not exist on a fresh empty-DB replay.
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'CompetitorSignal') THEN
+    CREATE INDEX IF NOT EXISTS "CompetitorSignal_tenantId_signalType_detectedAt_idx" ON "CompetitorSignal"("tenantId", "signalType", "detectedAt");
+  END IF;
+END $$;
 
 -- ReEngagementCampaign: Campaigns by tenant and status
-CREATE INDEX IF NOT EXISTS "ReEngagementCampaign_tenantId_status_proposalId_idx" ON "ReEngagementCampaign"("tenantId", "status", "proposalId");
+-- Wrapped in DO block: table may not exist on a fresh empty-DB replay.
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'ReEngagementCampaign') THEN
+    CREATE INDEX IF NOT EXISTS "ReEngagementCampaign_tenantId_status_proposalId_idx" ON "ReEngagementCampaign"("tenantId", "status", "proposalId");
+  END IF;
+END $$;
 
 -- WinBackCampaign: Campaigns by tenant and former tenant
-CREATE INDEX IF NOT EXISTS "WinBackCampaign_tenantId_formerTenantId_status_idx" ON "WinBackCampaign"("tenantId", "formerTenantId", "status");
+-- Wrapped in DO block: table may not exist on a fresh empty-DB replay.
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'WinBackCampaign') THEN
+    CREATE INDEX IF NOT EXISTS "WinBackCampaign_tenantId_formerTenantId_status_idx" ON "WinBackCampaign"("tenantId", "formerTenantId", "status");
+  END IF;
+END $$;
 
 -- UpsellOpportunity: Opportunities by tenant and status
-CREATE INDEX IF NOT EXISTS "UpsellOpportunity_tenantId_status_triggerType_idx" ON "UpsellOpportunity"("tenantId", "status", "triggerType");
+-- Wrapped in DO block: table may not exist on a fresh empty-DB replay.
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'UpsellOpportunity') THEN
+    CREATE INDEX IF NOT EXISTS "UpsellOpportunity_tenantId_status_triggerType_idx" ON "UpsellOpportunity"("tenantId", "status", "triggerType");
+  END IF;
+END $$;
 
 -- ScheduledAuditRun: Runs by tenant and schedule
-CREATE INDEX IF NOT EXISTS "ScheduledAuditRun_tenantId_scheduleId_status_idx" ON "ScheduledAuditRun"("tenantId", "scheduleId", "status");
+-- Wrapped in DO block: table may not exist on a fresh empty-DB replay.
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'ScheduledAuditRun') THEN
+    CREATE INDEX IF NOT EXISTS "ScheduledAuditRun_tenantId_scheduleId_status_idx" ON "ScheduledAuditRun"("tenantId", "scheduleId", "status");
+  END IF;
+END $$;
 
 -- ClientDashboard: Dashboard by tenant and audit
-CREATE INDEX IF NOT EXISTS "ClientDashboard_tenantId_healthScore_idx" ON "ClientDashboard"("tenantId", "healthScore");
+-- Wrapped in DO block: table may not exist on a fresh empty-DB replay.
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'ClientDashboard') THEN
+    CREATE INDEX IF NOT EXISTS "ClientDashboard_tenantId_healthScore_idx" ON "ClientDashboard"("tenantId", "healthScore");
+  END IF;
+END $$;
 
 -- NotificationPreference: Preferences by tenant and user
-CREATE INDEX IF NOT EXISTS "NotificationPreference_tenantId_userId_idx" ON "NotificationPreference"("tenantId", "userId");
+-- Wrapped in DO block: table may not exist on a fresh empty-DB replay.
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'NotificationPreference') THEN
+    CREATE INDEX IF NOT EXISTS "NotificationPreference_tenantId_userId_idx" ON "NotificationPreference"("tenantId", "userId");
+  END IF;
+END $$;
 
 -- HallucinationLog: Logs by tenant and category (QA analysis)
 CREATE INDEX IF NOT EXISTS "HallucinationLog_tenantId_category_weekStart_idx" ON "HallucinationLog"("tenantId", "category", "weekStart");

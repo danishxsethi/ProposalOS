@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto';
 import fc from 'fast-check';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
@@ -64,6 +65,8 @@ describe('Partner Portal - Property Tests', () => {
               prisma.prospectLead.create({
                 data: {
                   tenantId,
+                  source: 'test_partner_portal',
+                  sourceExternalId: `ext-id-${idx}-${randomUUID()}`,
                   businessName: `Business ${idx}`,
                   website: `https://business${idx}.com`,
                   city: partnerConfigs[idx].geographies[0],
@@ -138,6 +141,8 @@ describe('Partner Portal - Property Tests', () => {
               prisma.prospectLead.create({
                 data: {
                   tenantId,
+                  source: 'test_partner_portal',
+                  sourceExternalId: `ext-id-${idx}-${randomUUID()}`,
                   businessName: `Business ${idx}`,
                   website: `https://business${idx}.com`,
                   city: 'New York',
@@ -222,6 +227,8 @@ describe('Partner Portal - Property Tests', () => {
           const prospect = await prisma.prospectLead.create({
             data: {
               tenantId,
+              source: 'test_partner_portal',
+              sourceExternalId: `ext-id-single-${randomUUID()}`,
               businessName: prospectData.businessName,
               website: 'https://test.com',
               city: 'New York',

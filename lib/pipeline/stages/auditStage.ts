@@ -8,15 +8,13 @@
  * Requirements: 2.1, 2.2, 2.3, 2.4, 2.6
  */
 
+// P0-3: Redirect to single source of truth
 import { runAudit } from '@/lib/audit/runner';
-import { CostTracker } from '@/lib/costs/costTracker';
 import { prisma } from '@/lib/prisma';
 
 import { logStageFailure } from '../metrics';
 import { transition } from '../stateMachine';
-// P0-3: Redirect to single source of truth
-
-import { PipelineStage, type ProspectStatus, type StageResult } from '../types';
+import { PipelineStage, type StageResult } from '../types';
 
 /**
  * Process a batch of prospects in "discovered" status through the audit stage.

@@ -10,8 +10,6 @@
  * - Rate limiting thresholds
  */
 
-import { randomBytes } from 'crypto';
-
 // Allowed origins for CORS (comma-separated in env var)
 export const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(',').map((o) => o.trim())
@@ -23,11 +21,16 @@ export const WIDGET_ALLOWED_ORIGINS = process.env.WIDGET_ALLOWED_ORIGINS
   : [];
 
 /**
- * Generate a cryptographically secure nonce for CSP
+ * Generate a cryptographically secure nonce for CSP.
+ * Uses the Web Crypto API so this function is safe to call from both the
+ * Edge Runtime (middleware) and Node.js API routes.
  * @returns Base64-encoded nonce string
  */
 export function generateNonce(): string {
-  return randomBytes(16).toString('base64');
+  const bytes = new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+  // btoa is available in both Edge and Node 16+ globals
+  return btoa(String.fromCharCode(...bytes));
 }
 
 /**
@@ -93,10 +96,7 @@ export const CSP_DIRECTIVES = {
     'https://www.googletagmanager.com',
     'https://js.posthog.com',
   ],
-  'style-src': [
-    "'self'",
-    'https://fonts.googleapis.com',
-  ],
+  'style-src': ["'self'", 'https://fonts.googleapis.com'],
   'img-src': ["'self'", 'data:', 'blob:', 'https:'],
   'font-src': ["'self'", 'data:', 'https://fonts.gstatic.com'],
   'connect-src': [

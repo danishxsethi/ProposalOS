@@ -1,13 +1,18 @@
 /**
  * POST /api/audit/batch
- * Create and run batch audits for multiple businesses.
+ * Create and enqueue batch audits for multiple businesses.
+ *
+ * BEFORE: Ran all audits sequentially in the request path (blocking, unsafe).
+ * AFTER:  Creates Audit records, enqueues AuditJob rows, returns immediately.
+ *         Jobs are processed asynchronously by the worker endpoint.
  *
  * Features:
- * - Zod validation with batchAuditSchema
+ * - Zod validation with batchAuditSchema (max 100 items)
  * - Rate limiting (2 requests/minute for batch operations)
  * - Idempotency support via Idempotency-Key header
  * - Standardized error responses
- * - Per-item error isolation
+ * - Per-item error isolation (partial success is OK)
+ * - No request-bound sequential processing
  */
 
 import { NextResponse } from 'next/server';
@@ -19,11 +24,11 @@ import { batchAuditSchema } from '@/lib/api/schemas/audit';
 import { processBatch } from '@/lib/audit/batchProcessor';
 import { logger } from '@/lib/logger';
 import { withAuth } from '@/lib/middleware/auth';
-import { withIdempotencyMemory } from '@/lib/middleware/idempotency';
+import { withIdempotency } from '@/lib/middleware/idempotency';
 import { RateLimitPresets, withRateLimit } from '@/lib/middleware/rateLimit';
 import { withRole } from '@/lib/middleware/withRole';
 import { prisma } from '@/lib/prisma';
-import { getTenantId, runWithTenantAsync } from '@/lib/tenant/context';
+import { getTenantId } from '@/lib/tenant/context';
 
 /**
  * Inner handler for batch audit creation
@@ -40,7 +45,7 @@ async function handleBatchAuditCreation(req: Request): Promise<NextResponse> {
       );
     }
 
-    // Parse and validate body using Zod schema
+    // Parse and validate body
     const body = await req.json();
     const result = batchAuditSchema.safeParse(body);
 
@@ -56,6 +61,50 @@ async function handleBatchAuditCreation(req: Request): Promise<NextResponse> {
     }
 
     const { name: batchName, items } = result.data;
+
+    // Restrict max batch size strictly to 50
+    if (items.length > 50) {
+      return NextResponse.json(
+        new ValidationError('Batch size exceeds maximum limit of 50 audits').toEnvelope(
+          req.url,
+          traceId
+        ),
+        { status: 400 }
+      );
+    }
+
+    // Check Daily Quota / Cost Budget
+    const { checkDailyAuditLimit, incrementAuditCount } = await import('@/lib/costs/costTracker');
+    const dailyLimit = checkDailyAuditLimit(tenantId);
+    if (!dailyLimit.allowed || items.length > dailyLimit.remaining) {
+      const recordAuditTrailEvent = (await import('@/lib/observability/auditTrail'))
+        .recordAuditTrailEvent;
+      await recordAuditTrailEvent({
+        eventType: 'abuse.quota_exceeded',
+        tenantId,
+        payload: {
+          routeClass: 'batch_audit',
+          limit: dailyLimit.limit,
+          todayCount: dailyLimit.todayCount,
+          remaining: dailyLimit.remaining,
+          requestedCount: items.length,
+        },
+      }).catch(() => {});
+
+      return NextResponse.json(
+        {
+          error: {
+            code: 'QUOTA_EXCEEDED',
+            message: `Daily Audit Limit Exceeded. You have ${dailyLimit.remaining} remaining audits today, but requested ${items.length}.`,
+            details: { reason: 'DAILY_CAP_REACHED', upgrade: true },
+            timestamp: new Date().toISOString(),
+            traceId,
+          },
+        },
+        { status: 429 }
+      );
+    }
+
     const batchId = uuidv4();
     const auditIds: string[] = [];
     const creationErrors: Array<{ item: unknown; error: string }> = [];
@@ -70,13 +119,14 @@ async function handleBatchAuditCreation(req: Request): Promise<NextResponse> {
             businessUrl: item.url,
             placeId: item.placeId ?? null,
             status: 'QUEUED',
-            batchId: batchId,
+            batchId,
           },
         });
         auditIds.push(audit.id);
+        incrementAuditCount(tenantId);
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
-        logger.error({ batchId, item, error: msg }, 'Failed to create audit record in batch');
+        logger.error({ batchId, item, error: msg }, 'Batch: failed to create audit record');
         creationErrors.push({ item, error: msg });
       }
     }
@@ -96,40 +146,50 @@ async function handleBatchAuditCreation(req: Request): Promise<NextResponse> {
       );
     }
 
+    // Enqueue all audit jobs — returns immediately, no in-process execution
+    const enqueueResult = await processBatch(batchId, tenantId, auditIds);
+
     logger.info(
       {
-        event: 'batch.created',
+        event: 'batch.accepted',
         batchId,
         batchName,
-        count: auditIds.length,
-        errorCount: creationErrors.length,
+        auditCount: auditIds.length,
+        enqueued: enqueueResult.enqueued,
+        enqueueFailed: enqueueResult.errors.length,
+        auditCreationErrors: creationErrors.length,
       },
-      'Batch audit created'
+      'Batch accepted — jobs enqueued'
     );
-
-    // Process batch asynchronously with tenant context
-    runWithTenantAsync(tenantId, () => processBatch(batchId, auditIds)).catch((err) => {
-      logger.error({ batchId, error: err }, 'Batch processing crashed');
-    });
 
     const response = NextResponse.json({
       success: true,
       batchId,
       batchName,
+      accepted: enqueueResult.enqueued,
+      rejected: creationErrors.length + enqueueResult.errors.length,
       auditIds,
-      partialErrors: creationErrors.length > 0 ? creationErrors : undefined,
-      message: 'Batch started. Poll status at /api/audit/batch/[batchId]',
+      partialErrors:
+        creationErrors.length > 0 || enqueueResult.errors.length > 0
+          ? [
+              ...creationErrors,
+              ...enqueueResult.errors.map((e) => ({
+                item: { auditId: e.auditId },
+                error: e.error,
+              })),
+            ]
+          : undefined,
+      message: `${enqueueResult.enqueued} jobs queued. Poll status at /api/audit/batch/${batchId}`,
+      statusUrl: `/api/audit/batch/${batchId}`,
     });
 
     response.headers.set('X-Trace-Id', traceId);
     return response;
   } catch (error) {
-    logger.error({ error }, 'Error creating batch');
-
+    logger.error({ error }, 'Batch: unhandled error');
     const internalError = new InternalError('Failed to create batch', {
       originalError: error instanceof Error ? error.message : String(error),
     });
-
     return NextResponse.json(internalError.toEnvelope(req.url, traceId), { status: 500 });
   }
 }
@@ -137,6 +197,6 @@ async function handleBatchAuditCreation(req: Request): Promise<NextResponse> {
 // Apply middleware stack: withRole -> withAuth -> withRateLimit -> withIdempotency
 const rateLimitedHandler = (req: Request) =>
   withRateLimit(RateLimitPresets.batchOperations)(req, () => handleBatchAuditCreation(req));
-const idempotentHandler = (req: Request) => withIdempotencyMemory(rateLimitedHandler)(req);
+const idempotentHandler = (req: Request) => withIdempotency(rateLimitedHandler)(req);
 const authHandler = (req: Request) => withAuth(idempotentHandler)(req, [] as any);
-export const POST = (req: Request) => withRole('member', authHandler)(req, [] as any);
+export const POST = (req: Request) => withRole('agency_member', authHandler)(req, [] as any);

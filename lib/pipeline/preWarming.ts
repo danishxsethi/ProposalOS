@@ -8,6 +8,7 @@
  */
 
 import { prisma } from '@/lib/db';
+import { logger } from '@/lib/logger';
 
 import type { PreWarmingAction, PreWarmingConfig, PreWarmingEngine } from './types';
 
@@ -146,7 +147,7 @@ export async function executeAction(action: PreWarmingAction): Promise<void> {
     // - Instagram: Like post, comment, follow
 
     // For now, we simulate the action execution
-    console.log(`Executing ${action.actionType} on ${action.platform} for lead ${action.leadId}`);
+    logger.info({ actionType: action.actionType, platform: action.platform, leadId: action.leadId }, 'Executing pre-warming action');
 
     // Simulate API call delay
     await new Promise((resolve) => setTimeout(resolve, 100));
@@ -161,7 +162,7 @@ export async function executeAction(action: PreWarmingAction): Promise<void> {
     });
   } catch (error) {
     // Log error and mark action as failed
-    console.error(`Failed to execute pre-warming action ${action.id}:`, error);
+    logger.error({ actionId: action.id, error }, 'Failed to execute pre-warming action');
 
     await prisma.preWarmingAction.update({
       where: { id: action.id },
@@ -194,7 +195,7 @@ export async function checkWindowComplete(leadId: string): Promise<boolean> {
 
   // Check if all actions are in a terminal state
   const allComplete = actions.every(
-    (action) =>
+    (action: any) =>
       action.status === 'completed' || action.status === 'failed' || action.status === 'skipped'
   );
 
@@ -203,7 +204,7 @@ export async function checkWindowComplete(leadId: string): Promise<boolean> {
   }
 
   // Check if the latest scheduled action is in the past
-  const latestScheduledAt = Math.max(...actions.map((action) => action.scheduledAt.getTime()));
+  const latestScheduledAt = Math.max(...actions.map((action: any) => action.scheduledAt.getTime()));
   const now = Date.now();
 
   // If the latest action was scheduled more than 24 hours ago and still not complete,

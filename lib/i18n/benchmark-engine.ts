@@ -174,7 +174,7 @@ export class BenchmarkEngine {
 
     // cohortId may be a cache key like "dental|small|en-US" or an actual UUID.
     // Try to find the cohort by id first, then by key.
-    let cohort = this.findCohortById(cohortId) ?? this.cohortCache.get(cohortId);
+    const cohort = this.findCohortById(cohortId) ?? this.cohortCache.get(cohortId);
 
     if (!cohort) {
       return this.emptyBenchmarkCohort({ industry: 'unknown', locale: 'en-US' });
@@ -248,7 +248,10 @@ export class BenchmarkEngine {
 
     // Build cohort for each group.
     for (const [key, groupMetrics] of groups.entries()) {
-      const [industry, businessSize, locale] = key.split('|'); const ind = industry ?? '*'; const bs = businessSize ?? '*'; const loc = locale ?? '*';
+      const [industry, businessSize, locale] = key.split('|');
+      const ind = industry ?? '*';
+      const bs = businessSize ?? '*';
+      const loc = locale ?? '*';
       const cohort = this.buildCohort(ind, bs, loc, groupMetrics);
       this.cohortCache.set(key, cohort);
     }
@@ -269,12 +272,14 @@ export class BenchmarkEngine {
     // industry + locale (drop businessSize → use '*')
     const byIndustryLocale = new Map<string, StoredMetric[]>();
     for (const metric of this.metrics.values()) {
-      const key = this.cohortKey(metric.industry, metric.businessSize ?? '*', metric.locale);
+      const key = this.cohortKey(metric.industry, '*', metric.locale);
       if (!byIndustryLocale.has(key)) byIndustryLocale.set(key, []);
       byIndustryLocale.get(key)!.push(metric);
     }
     for (const [key, groupMetrics] of byIndustryLocale.entries()) {
-      const [industry, , locale] = key.split('|'); const ind2 = industry ?? '*'; const loc2 = locale ?? '*';
+      const [industry, , locale] = key.split('|');
+      const ind2 = industry ?? '*';
+      const loc2 = locale ?? '*';
       const cohort = this.buildCohort(ind2, '*', loc2, groupMetrics);
       this.cohortCache.set(key, cohort);
     }
@@ -287,7 +292,8 @@ export class BenchmarkEngine {
       byIndustry.get(key)!.push(metric);
     }
     for (const [key, groupMetrics] of byIndustry.entries()) {
-      const [industry] = key.split('|'); const ind3 = industry ?? '*';
+      const [industry] = key.split('|');
+      const ind3 = industry ?? '*';
       const cohort = this.buildCohort(ind3, '*', '*', groupMetrics);
       this.cohortCache.set(key, cohort);
     }
@@ -347,7 +353,15 @@ export class BenchmarkEngine {
     const p75 = this.percentile(sorted, 75) ?? 0;
     const p95 = this.percentile(sorted, 95) ?? 0;
 
-    return { name, mean, median: median ?? 0, p25: p25 ?? 0, p75: p75 ?? 0, p95: p95 ?? 0, sampleSize: n };
+    return {
+      name,
+      mean,
+      median: median ?? 0,
+      p25: p25 ?? 0,
+      p75: p75 ?? 0,
+      p95: p95 ?? 0,
+      sampleSize: n,
+    };
   }
 
   /**

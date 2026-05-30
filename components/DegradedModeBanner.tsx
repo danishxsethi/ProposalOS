@@ -2,12 +2,12 @@
 
 /**
  * Degraded Mode Banner Component
- * 
+ *
  * Displays a banner when the platform is running in degraded mode due to:
  * - LLM provider outage (Gemini down)
  * - Email provider issues
  * - Other critical service failures
- * 
+ *
  * The banner is shown to admins/operators to indicate reduced functionality.
  */
 
@@ -77,9 +77,12 @@ export function DegradedModeBanner() {
             </svg>
             <div>
               <p className="text-sm font-medium text-amber-800">
-                {degradedServices.length === 1
-                  ? `${degradedServices[0].name} is ${degradedServices[0].status}`
-                  : `${degradedServices.length} services experiencing issues`}
+                {(() => {
+                  const firstService = degradedServices[0];
+                  return degradedServices.length === 1 && firstService
+                    ? `${firstService.name} is ${firstService.status}`
+                    : `${degradedServices.length} services experiencing issues`;
+                })()}
               </p>
               <p className="text-xs text-amber-700 mt-0.5">
                 {degradedServices.map((service) => service.fallback).join(' • ')}

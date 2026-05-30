@@ -1,3 +1,5 @@
+import { OrganizationSegment } from './types';
+
 // Fixed pricing tiers — distinct positioning, Growth as recommended
 
 export interface ProposalPricingTiers {
@@ -94,6 +96,7 @@ export interface DynamicPricingInput {
   employeeCount?: number;
   revenue?: string;
   location?: string; // Premium markets (NYC, SF, etc.)
+  segment?: OrganizationSegment;
 }
 
 /**
@@ -104,7 +107,7 @@ export interface DynamicPricingInput {
  * Premium: $1997-$4997
  */
 export function getDynamicPricing(input: DynamicPricingInput): ProposalPricingTiers {
-  const { industry, businessSize, employeeCount, revenue, location } = input;
+  const { industry, businessSize, employeeCount, revenue, location, segment } = input;
 
   // Custom Industry Multipliers from Requirements
   const customIndustryMultipliers: Record<string, number> = {
@@ -118,7 +121,7 @@ export function getDynamicPricing(input: DynamicPricingInput): ProposalPricingTi
   };
 
   // Custom Size Multipliers from Requirements
-  const customSizeMultipliers: Record<string, number> = {
+  const customSizeMultipliers: Record<BusinessSize, number> = {
     small: 0.8,
     medium: 1.0,
     large: 1.3,
@@ -127,6 +130,20 @@ export function getDynamicPricing(input: DynamicPricingInput): ProposalPricingTi
   };
 
   let multiplier = 1.0;
+
+  // Apply segment multiplier if provided
+  if (segment) {
+    const segmentMultipliers: Record<OrganizationSegment, number> = {
+      nonprofit: 0.7,               // Lower/tailored pricing for nonprofits
+      baseline_unknown: 0.8,        // Basic minimal packages pricing
+      smb_local: 1.0,               // Standard local business
+      technical_community: 1.2,     // Premium tech positioning
+      healthcare: 1.4,              // Highly regulated high-premium vertical
+      enterprise: 1.6,              // High-end premium enterprise vertical
+    };
+    multiplier *= segmentMultipliers[segment] || 1.0;
+  }
+
 
   // Apply industry multiplier
   const industryKey = (industry || 'general').toLowerCase();
@@ -171,7 +188,7 @@ export function getDynamicPricing(input: DynamicPricingInput): ProposalPricingTi
   }
 
   // Floor/Ceiling constants
-  const bounds = {
+  const bounds: Record<'starter' | 'growth' | 'premium', [number, number]> = {
     starter: [397, 797],
     growth: [997, 2497],
     premium: [1997, 4997],
@@ -180,7 +197,7 @@ export function getDynamicPricing(input: DynamicPricingInput): ProposalPricingTi
   // Calculate final prices and clamp to boundaries, rounding to nearest $10
   const roundToNearest10 = (val: number) => Math.round(val / 10) * 10 - 3; // e.g. 500 -> 497
 
-  const calcBoundedPrice = (base: number, [min, max]: number[]) => {
+  const calcBoundedPrice = (base: number, [min, max]: [number, number]) => {
     let raw = base * multiplier;
     raw = Math.max(min, Math.min(raw, max));
     // We round to nearest 10, then subtract 3 to get ending in 7 ($497, $997, etc)

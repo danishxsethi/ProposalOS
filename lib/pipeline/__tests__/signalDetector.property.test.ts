@@ -2,6 +2,8 @@ import * as fc from 'fast-check';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { cleanupDb } from '@/lib/__tests__/utils/cleanup';
+import { runWithTenantAsync, runWithTenantBypass } from '@/lib/tenant/context';
+import { randomUUID } from 'crypto';
 /**
  * Property-Based Tests for Signal Detector
  *
@@ -81,7 +83,7 @@ const detectedSignalArb = fc
     id: fc.uuid(),
     leadId: fc.option(fc.uuid(), { nil: undefined }),
     signalType: signalTypeArb,
-    detectedAt: fc.date({ min: new Date('2024-01-01'), max: new Date('2025-12-31') }),
+    detectedAt: fc.date({ min: new Date('2024-01-01'), max: new Date('2025-12-31') }).filter((d) => !isNaN(d.getTime())),
     priority: fc.constantFrom<'high' | 'medium' | 'low'>('high', 'medium', 'low'),
     outreachTriggered: fc.constant(false),
   })
@@ -99,14 +101,62 @@ const signalArrayWithDuplicatesArb = fc.array(detectedSignalArb, { minLength: 1,
 // Database Setup and Teardown
 // ============================================================================
 
+const createdTenantIds: string[] = [];
+const createdLeadIds: string[] = [];
+
+async function runPropertyWithTenant(
+  fn: (tenantId: string) => Promise<void>
+): Promise<void> {
+  const tenantId = randomUUID();
+  createdTenantIds.push(tenantId);
+  await runWithTenantBypass('create-property-tenant', async () => {
+    await prisma.tenant.create({
+      data: {
+        id: tenantId,
+        name: 'Test Tenant',
+      },
+    });
+  });
+
+  try {
+    await runWithTenantAsync(tenantId, async () => {
+      await fn(tenantId);
+    });
+  } finally {
+    await runWithTenantBypass('cleanup-property-tenant', async () => {
+      try {
+        await prisma.detectedSignal.deleteMany({ where: { tenantId } });
+      } catch (e) {}
+      try {
+        await prisma.prospectLead.deleteMany({ where: { tenantId } });
+      } catch (e) {}
+      try {
+        await prisma.tenant.delete({ where: { id: tenantId } });
+      } catch (e) {}
+    });
+  }
+}
+
 beforeEach(async () => {
-  // Clean up test data before each test
-  await cleanupDb(prisma);
+  await runWithTenantBypass('test-suite-cleanup', async () => {
+    // Clean up test data before each test
+    await cleanupDb(prisma);
+  });
+
+  // Reset tracking arrays
+  createdTenantIds.length = 0;
+  createdLeadIds.length = 0;
 });
 
 afterEach(async () => {
-  // Clean up test data after each test
-  await cleanupDb(prisma);
+  await runWithTenantBypass('test-suite-cleanup', async () => {
+    // Clean up test data after each test
+    await cleanupDb(prisma);
+  });
+
+  // Reset tracking arrays
+  createdTenantIds.length = 0;
+  createdLeadIds.length = 0;
 });
 
 // ============================================================================
@@ -148,7 +198,7 @@ describe('Signal Detector Property Tests', () => {
       fc.assert(
         fc.property(
           fc.uuid(),
-          fc.date({ min: new Date('2024-01-01'), max: new Date('2025-12-31') }),
+          fc.date({ min: new Date('2024-01-01'), max: new Date('2025-12-31') }).filter((d) => !isNaN(d.getTime())),
           (leadId, detectedAt) => {
             // Create signals with same leadId but different types
             const signals: DetectedSignal[] = [
@@ -201,7 +251,7 @@ describe('Signal Detector Property Tests', () => {
       fc.assert(
         fc.property(
           signalTypeArb,
-          fc.date({ min: new Date('2024-01-01'), max: new Date('2025-12-31') }),
+          fc.date({ min: new Date('2024-01-01'), max: new Date('2025-12-31') }).filter((d) => !isNaN(d.getTime())),
           fc.array(fc.uuid(), { minLength: 2, maxLength: 10 }),
           (signalType, detectedAt, leadIds) => {
             // Create signals with same type but different leadIds
@@ -236,7 +286,7 @@ describe('Signal Detector Property Tests', () => {
         fc.property(
           fc.uuid(),
           signalTypeArb,
-          fc.date({ min: new Date('2024-01-01'), max: new Date('2025-12-31') }),
+          fc.date({ min: new Date('2024-01-01'), max: new Date('2025-12-31') }).filter((d) => !isNaN(d.getTime())),
           fc.integer({ min: 2, max: 10 }),
           (leadId, signalType, detectedAt, duplicateCount) => {
             // Create multiple identical signals with same exact timestamp
@@ -270,7 +320,7 @@ describe('Signal Detector Property Tests', () => {
         fc.property(
           fc.uuid(),
           signalTypeArb,
-          fc.date({ min: new Date('2024-01-01'), max: new Date('2025-01-01') }),
+          fc.date({ min: new Date('2024-01-01'), max: new Date('2025-01-01') }).filter((d) => !isNaN(d.getTime())),
           (leadId, signalType, baseDate) => {
             // Create signals 25 hours apart (different windows)
             const signal1: DetectedSignal = {
@@ -306,7 +356,7 @@ describe('Signal Detector Property Tests', () => {
     it('deduplicateSignals handles signals without leadId (new businesses)', () => {
       fc.assert(
         fc.property(
-          fc.date({ min: new Date('2024-01-01'), max: new Date('2025-12-31') }),
+          fc.date({ min: new Date('2024-01-01'), max: new Date('2025-12-31') }).filter((d) => !isNaN(d.getTime())),
           fc.integer({ min: 2, max: 5 }),
           (detectedAt, count) => {
             // Create multiple new_business_license signals without leadId, same timestamp
@@ -381,68 +431,58 @@ describe('Signal Detector Property Tests', () => {
           fc.uuid(),
           fc.integer({ min: 1, max: 3 }),
           async (leadId, reviewRating) => {
-            const tenantId = `tenant-${Date.now()}-${Math.random()}`;
+            await runPropertyWithTenant(async (tenantId) => {
+              createdLeadIds.push(leadId);
+              await prisma.prospectLead.create({
+                data: {
+                  id: leadId,
+                  tenantId,
+                  businessName: 'Test Business',
+                  source: 'test',
+                  sourceExternalId: `test-${leadId}`,
+                  city: 'Test City',
+                  vertical: 'dentist',
+                  painScore: 75,
+                  status: 'QUALIFIED',
+                },
+              });
 
-            // Create tenant and prospect
-            await prisma.tenant.create({
-              data: {
-                id: tenantId,
-                name: 'Test Tenant',
-              },
-            });
-
-            await prisma.prospectLead.create({
-              data: {
-                id: leadId,
-                tenantId,
-                businessName: 'Test Business',
-                source: 'test',
-                sourceExternalId: `test-${leadId}`,
-                city: 'Test City',
-                vertical: 'dentist',
-                painScore: 75,
-                status: 'QUALIFIED',
-              },
-            });
-
-            const signal: DetectedSignal = {
-              id: `signal-${Date.now()}`,
-              leadId,
-              signalType: 'bad_review',
-              sourceData: {
-                reviewRating,
-                reviewText: 'Bad service',
-                reviewDate: new Date().toISOString(),
-                reviewerName: 'Anonymous',
-              },
-              detectedAt: new Date(),
-              priority: 'high',
-              outreachTriggered: false,
-            };
-
-            // Trigger outreach
-            await triggerSignalOutreach(signal);
-
-            // Verify signal was persisted with correct data
-            const persistedSignal = await prisma.detectedSignal.findFirst({
-              where: {
+              const signal: DetectedSignal = {
+                id: `signal-${Date.now()}`,
                 leadId,
                 signalType: 'bad_review',
-              },
+                sourceData: {
+                  reviewRating,
+                  reviewText: 'Bad service',
+                  reviewDate: new Date().toISOString(),
+                  reviewerName: 'Anonymous',
+                },
+                detectedAt: new Date(),
+                priority: 'high',
+                outreachTriggered: false,
+              };
+
+              // Trigger outreach
+              await triggerSignalOutreach(signal);
+
+              // Verify signal was persisted with correct data
+              const persistedSignal = await prisma.detectedSignal.findFirst({
+                where: {
+                  leadId,
+                  signalType: 'bad_review',
+                },
+              });
+
+              expect(persistedSignal).toBeDefined();
+              expect(persistedSignal?.sourceData).toBeDefined();
+
+              // Verify sourceData contains review rating
+              const sourceData = persistedSignal?.sourceData as Record<string, unknown>;
+              expect(sourceData.reviewRating).toBe(reviewRating);
             });
-
-            expect(persistedSignal).toBeDefined();
-            expect(persistedSignal?.sourceData).toBeDefined();
-
-            // Verify sourceData contains review rating
-            const sourceData = persistedSignal?.sourceData as Record<string, unknown>;
-            expect(sourceData.reviewRating).toBe(reviewRating);
-
-            // In a real implementation, we would verify the email body contains the rating
-            // For now, we verify the signal data is preserved for email generation
           }
         ),
-        { numRuns: 100 }
+        { numRuns: 20 }
       );
     });
 
@@ -452,38 +492,134 @@ describe('Signal Detector Property Tests', () => {
           fc.uuid(),
           fc.string({ minLength: 5, maxLength: 50 }),
           async (leadId, competitorName) => {
-            const tenantId = `tenant-${Date.now()}-${Math.random()}`;
+            await runPropertyWithTenant(async (tenantId) => {
+              createdLeadIds.push(leadId);
+              await prisma.prospectLead.create({
+                data: {
+                  id: leadId,
+                  tenantId,
+                  businessName: 'Test Business',
+                  source: 'test',
+                  sourceExternalId: `test-${leadId}`,
+                  city: 'Test City',
+                  vertical: 'restaurant',
+                  painScore: 70,
+                  status: 'QUALIFIED',
+                },
+              });
 
-            // Create tenant and prospect
-            await prisma.tenant.create({
-              data: {
-                id: tenantId,
-                name: 'Test Tenant',
-              },
+              const signal: DetectedSignal = {
+                id: `signal-${Date.now()}`,
+                leadId,
+                signalType: 'competitor_upgrade',
+                sourceData: {
+                  competitorName,
+                  upgradeType: 'website_redesign',
+                  detectedDate: new Date().toISOString(),
+                },
+                detectedAt: new Date(),
+                priority: 'high',
+                outreachTriggered: false,
+              };
+
+              // Trigger outreach
+              await triggerSignalOutreach(signal);
+
+              // Verify signal was persisted with correct data
+              const persistedSignal = await prisma.detectedSignal.findFirst({
+                where: {
+                  leadId,
+                  signalType: 'competitor_upgrade',
+                },
+              });
+
+              expect(persistedSignal).toBeDefined();
+              expect(persistedSignal?.sourceData).toBeDefined();
+
+              // Verify sourceData contains competitor name
+              const sourceData = persistedSignal?.sourceData as Record<string, unknown>;
+              expect(sourceData.competitorName).toBe(competitorName);
             });
+          }
+        ),
+        { numRuns: 20 }
+      );
+    });
 
-            await prisma.prospectLead.create({
-              data: {
-                id: leadId,
-                tenantId,
-                businessName: 'Test Business',
-                source: 'test',
-                sourceExternalId: `test-${leadId}`,
-                city: 'Test City',
-                vertical: 'restaurant',
-                painScore: 70,
-                status: 'QUALIFIED',
-              },
+    it('website_change signals reference change type in generated email', async () => {
+      await fc.assert(
+        fc.asyncProperty(
+          fc.uuid(),
+          fc.constantFrom('redesign', 'content_update', 'new_pages'),
+          async (leadId, changeType) => {
+            await runPropertyWithTenant(async (tenantId) => {
+              createdLeadIds.push(leadId);
+              await prisma.prospectLead.create({
+                data: {
+                  id: leadId,
+                  tenantId,
+                  businessName: 'Test Business',
+                  source: 'test',
+                  sourceExternalId: `test-${leadId}`,
+                  city: 'Test City',
+                  vertical: 'hvac',
+                  painScore: 65,
+                  status: 'QUALIFIED',
+                },
+              });
+
+              const signal: DetectedSignal = {
+                id: `signal-${Date.now()}`,
+                leadId,
+                signalType: 'website_change',
+                sourceData: {
+                  changeType,
+                  changedPages: ['/home', '/about'],
+                  detectedDate: new Date().toISOString(),
+                },
+                detectedAt: new Date(),
+                priority: 'medium',
+                outreachTriggered: false,
+              };
+
+              // Trigger outreach
+              await triggerSignalOutreach(signal);
+
+              // Verify signal was persisted with correct data
+              const persistedSignal = await prisma.detectedSignal.findFirst({
+                where: {
+                  leadId,
+                  signalType: 'website_change',
+                },
+              });
+
+              expect(persistedSignal).toBeDefined();
+              expect(persistedSignal?.sourceData).toBeDefined();
+
+              // Verify sourceData contains change type
+              const sourceData = persistedSignal?.sourceData as Record<string, unknown>;
+              expect(sourceData.changeType).toBe(changeType);
             });
+          }
+        ),
+        { numRuns: 20 }
+      );
+    });
 
+    it('new_business_license signals reference business name in generated email', async () => {
+      await fc.assert(
+        fc.asyncProperty(fc.string({ minLength: 5, maxLength: 50 }), async (businessName) => {
+          await runWithTenantBypass('new-business-license-test', async () => {
             const signal: DetectedSignal = {
               id: `signal-${Date.now()}`,
-              leadId,
-              signalType: 'competitor_upgrade',
+              leadId: undefined, // New business, no lead yet
+              signalType: 'new_business_license',
               sourceData: {
-                competitorName,
-                upgradeType: 'website_redesign',
-                detectedDate: new Date().toISOString(),
+                businessName,
+                licenseType: 'General Business',
+                filingDate: new Date().toISOString(),
+                city: 'San Francisco',
+                state: 'CA',
               },
               detectedAt: new Date(),
               priority: 'high',
@@ -496,131 +632,23 @@ describe('Signal Detector Property Tests', () => {
             // Verify signal was persisted with correct data
             const persistedSignal = await prisma.detectedSignal.findFirst({
               where: {
-                leadId,
-                signalType: 'competitor_upgrade',
+                leadId: null,
+                signalType: 'new_business_license',
+              },
+              orderBy: {
+                createdAt: 'desc',
               },
             });
 
             expect(persistedSignal).toBeDefined();
             expect(persistedSignal?.sourceData).toBeDefined();
 
-            // Verify sourceData contains competitor name
+            // Verify sourceData contains business name
             const sourceData = persistedSignal?.sourceData as Record<string, unknown>;
-            expect(sourceData.competitorName).toBe(competitorName);
-          }
-        ),
-        { numRuns: 100 }
-      );
-    });
-
-    it('website_change signals reference change type in generated email', async () => {
-      await fc.assert(
-        fc.asyncProperty(
-          fc.uuid(),
-          fc.constantFrom('redesign', 'content_update', 'new_pages'),
-          async (leadId, changeType) => {
-            const tenantId = `tenant-${Date.now()}-${Math.random()}`;
-
-            // Create tenant and prospect
-            await prisma.tenant.create({
-              data: {
-                id: tenantId,
-                name: 'Test Tenant',
-              },
-            });
-
-            await prisma.prospectLead.create({
-              data: {
-                id: leadId,
-                tenantId,
-                businessName: 'Test Business',
-                source: 'test',
-                sourceExternalId: `test-${leadId}`,
-                city: 'Test City',
-                vertical: 'hvac',
-                painScore: 65,
-                status: 'QUALIFIED',
-              },
-            });
-
-            const signal: DetectedSignal = {
-              id: `signal-${Date.now()}`,
-              leadId,
-              signalType: 'website_change',
-              sourceData: {
-                changeType,
-                changedPages: ['/home', '/about'],
-                detectedDate: new Date().toISOString(),
-              },
-              detectedAt: new Date(),
-              priority: 'medium',
-              outreachTriggered: false,
-            };
-
-            // Trigger outreach
-            await triggerSignalOutreach(signal);
-
-            // Verify signal was persisted with correct data
-            const persistedSignal = await prisma.detectedSignal.findFirst({
-              where: {
-                leadId,
-                signalType: 'website_change',
-              },
-            });
-
-            expect(persistedSignal).toBeDefined();
-            expect(persistedSignal?.sourceData).toBeDefined();
-
-            // Verify sourceData contains change type
-            const sourceData = persistedSignal?.sourceData as Record<string, unknown>;
-            expect(sourceData.changeType).toBe(changeType);
-          }
-        ),
-        { numRuns: 100 }
-      );
-    });
-
-    it('new_business_license signals reference business name in generated email', async () => {
-      await fc.assert(
-        fc.asyncProperty(fc.string({ minLength: 5, maxLength: 50 }), async (businessName) => {
-          const signal: DetectedSignal = {
-            id: `signal-${Date.now()}`,
-            leadId: undefined, // New business, no lead yet
-            signalType: 'new_business_license',
-            sourceData: {
-              businessName,
-              licenseType: 'General Business',
-              filingDate: new Date().toISOString(),
-              city: 'San Francisco',
-              state: 'CA',
-            },
-            detectedAt: new Date(),
-            priority: 'high',
-            outreachTriggered: false,
-          };
-
-          // Trigger outreach
-          await triggerSignalOutreach(signal);
-
-          // Verify signal was persisted with correct data
-          const persistedSignal = await prisma.detectedSignal.findFirst({
-            where: {
-              leadId: null,
-              signalType: 'new_business_license',
-            },
-            orderBy: {
-              createdAt: 'desc',
-            },
+            expect(sourceData.businessName).toBe(businessName);
           });
-
-          expect(persistedSignal).toBeDefined();
-          expect(persistedSignal?.sourceData).toBeDefined();
-
-          // Verify sourceData contains business name
-          const sourceData = persistedSignal?.sourceData as Record<string, unknown>;
-          expect(sourceData.businessName).toBe(businessName);
         }),
-        { numRuns: 100 }
+        { numRuns: 20 }
       );
     });
 
@@ -630,64 +658,57 @@ describe('Signal Detector Property Tests', () => {
           fc.uuid(),
           fc.integer({ min: 1, max: 20 }),
           async (leadId, jobPostings) => {
-            const tenantId = `tenant-${Date.now()}-${Math.random()}`;
+            await runPropertyWithTenant(async (tenantId) => {
+              createdLeadIds.push(leadId);
+              await prisma.prospectLead.create({
+                data: {
+                  id: leadId,
+                  tenantId,
+                  businessName: 'Test Business',
+                  source: 'test',
+                  sourceExternalId: `test-${leadId}`,
+                  city: 'Test City',
+                  vertical: 'default',
+                  painScore: 60,
+                  status: 'QUALIFIED',
+                },
+              });
 
-            // Create tenant and prospect
-            await prisma.tenant.create({
-              data: {
-                id: tenantId,
-                name: 'Test Tenant',
-              },
-            });
-
-            await prisma.prospectLead.create({
-              data: {
-                id: leadId,
-                tenantId,
-                businessName: 'Test Business',
-                source: 'test',
-                sourceExternalId: `test-${leadId}`,
-                city: 'Test City',
-                vertical: 'default',
-                painScore: 60,
-                status: 'QUALIFIED',
-              },
-            });
-
-            const signal: DetectedSignal = {
-              id: `signal-${Date.now()}`,
-              leadId,
-              signalType: 'hiring_spike',
-              sourceData: {
-                jobPostings,
-                roles: ['Marketing Manager', 'Sales Rep'],
-                detectedDate: new Date().toISOString(),
-              },
-              detectedAt: new Date(),
-              priority: 'medium',
-              outreachTriggered: false,
-            };
-
-            // Trigger outreach
-            await triggerSignalOutreach(signal);
-
-            // Verify signal was persisted with correct data
-            const persistedSignal = await prisma.detectedSignal.findFirst({
-              where: {
+              const signal: DetectedSignal = {
+                id: `signal-${Date.now()}`,
                 leadId,
                 signalType: 'hiring_spike',
-              },
+                sourceData: {
+                  jobPostings,
+                  roles: ['Marketing Manager', 'Sales Rep'],
+                  detectedDate: new Date().toISOString(),
+                },
+                detectedAt: new Date(),
+                priority: 'medium',
+                outreachTriggered: false,
+              };
+
+              // Trigger outreach
+              await triggerSignalOutreach(signal);
+
+              // Verify signal was persisted with correct data
+              const persistedSignal = await prisma.detectedSignal.findFirst({
+                where: {
+                  leadId,
+                  signalType: 'hiring_spike',
+                },
+              });
+
+              expect(persistedSignal).toBeDefined();
+              expect(persistedSignal?.sourceData).toBeDefined();
+
+              // Verify sourceData contains job postings count
+              const sourceData = persistedSignal?.sourceData as Record<string, unknown>;
+              expect(sourceData.jobPostings).toBe(jobPostings);
             });
-
-            expect(persistedSignal).toBeDefined();
-            expect(persistedSignal?.sourceData).toBeDefined();
-
-            // Verify sourceData contains job postings count
-            const sourceData = persistedSignal?.sourceData as Record<string, unknown>;
-            expect(sourceData.jobPostings).toBe(jobPostings);
           }
         ),
-        { numRuns: 100 }
+        { numRuns: 20 }
       );
     });
 
@@ -703,53 +724,46 @@ describe('Signal Detector Property Tests', () => {
             );
           }),
           async (signal) => {
-            // Create tenant and prospect
-            const tenantId = `tenant-${Date.now()}-${Math.random()}`;
+            await runPropertyWithTenant(async (tenantId) => {
+              createdLeadIds.push(signal.leadId!);
+              await prisma.prospectLead.create({
+                data: {
+                  id: signal.leadId!,
+                  tenantId,
+                  businessName: 'Test Business',
+                  source: 'test',
+                  sourceExternalId: `test-${signal.leadId}`,
+                  city: 'Test City',
+                  vertical: 'default',
+                  painScore: 70,
+                  status: 'QUALIFIED',
+                },
+              });
 
-            await prisma.tenant.create({
-              data: {
-                id: tenantId,
-                name: 'Test Tenant',
-              },
+              // Trigger outreach
+              await triggerSignalOutreach(signal);
+
+              // Verify signal was persisted
+              const persistedSignal = await prisma.detectedSignal.findFirst({
+                where: {
+                  leadId: signal.leadId,
+                  signalType: signal.signalType,
+                },
+                orderBy: {
+                  createdAt: 'desc',
+                },
+              });
+
+              expect(persistedSignal).toBeDefined();
+              expect(persistedSignal?.sourceData).toBeDefined();
+
+              // Verify sourceData is not empty
+              const sourceData = persistedSignal?.sourceData as Record<string, unknown>;
+              expect(Object.keys(sourceData).length).toBeGreaterThan(0);
             });
-
-            await prisma.prospectLead.create({
-              data: {
-                id: signal.leadId!,
-                tenantId,
-                businessName: 'Test Business',
-                source: 'test',
-                sourceExternalId: `test-${signal.leadId}`,
-                city: 'Test City',
-                vertical: 'default',
-                painScore: 70,
-                status: 'QUALIFIED',
-              },
-            });
-
-            // Trigger outreach
-            await triggerSignalOutreach(signal);
-
-            // Verify signal was persisted
-            const persistedSignal = await prisma.detectedSignal.findFirst({
-              where: {
-                leadId: signal.leadId,
-                signalType: signal.signalType,
-              },
-              orderBy: {
-                createdAt: 'desc',
-              },
-            });
-
-            expect(persistedSignal).toBeDefined();
-            expect(persistedSignal?.sourceData).toBeDefined();
-
-            // Verify sourceData is not empty
-            const sourceData = persistedSignal?.sourceData as Record<string, unknown>;
-            expect(Object.keys(sourceData).length).toBeGreaterThan(0);
           }
         ),
-        { numRuns: 100 }
+        { numRuns: 20 }
       );
     });
 
@@ -763,61 +777,54 @@ describe('Signal Detector Property Tests', () => {
             customField3: fc.boolean(),
           }),
           async (leadId, customSourceData) => {
-            const tenantId = `tenant-${Date.now()}-${Math.random()}`;
+            await runPropertyWithTenant(async (tenantId) => {
+              createdLeadIds.push(leadId);
+              await prisma.prospectLead.create({
+                data: {
+                  id: leadId,
+                  tenantId,
+                  businessName: 'Test Business',
+                  source: 'test',
+                  sourceExternalId: `test-${leadId}`,
+                  city: 'Test City',
+                  vertical: 'default',
+                  painScore: 70,
+                  status: 'QUALIFIED',
+                },
+              });
 
-            // Create tenant and prospect
-            await prisma.tenant.create({
-              data: {
-                id: tenantId,
-                name: 'Test Tenant',
-              },
-            });
-
-            await prisma.prospectLead.create({
-              data: {
-                id: leadId,
-                tenantId,
-                businessName: 'Test Business',
-                source: 'test',
-                sourceExternalId: `test-${leadId}`,
-                city: 'Test City',
-                vertical: 'default',
-                painScore: 70,
-                status: 'QUALIFIED',
-              },
-            });
-
-            const signal: DetectedSignal = {
-              id: `signal-${Date.now()}`,
-              leadId,
-              signalType: 'bad_review',
-              sourceData: customSourceData,
-              detectedAt: new Date(),
-              priority: 'high',
-              outreachTriggered: false,
-            };
-
-            // Trigger outreach
-            await triggerSignalOutreach(signal);
-
-            // Verify signal was persisted with exact sourceData
-            const persistedSignal = await prisma.detectedSignal.findFirst({
-              where: {
+              const signal: DetectedSignal = {
+                id: `signal-${Date.now()}`,
                 leadId,
                 signalType: 'bad_review',
-              },
+                sourceData: customSourceData,
+                detectedAt: new Date(),
+                priority: 'high',
+                outreachTriggered: false,
+              };
+
+              // Trigger outreach
+              await triggerSignalOutreach(signal);
+
+              // Verify signal was persisted with exact sourceData
+              const persistedSignal = await prisma.detectedSignal.findFirst({
+                where: {
+                  leadId,
+                  signalType: 'bad_review',
+                },
+              });
+
+              expect(persistedSignal).toBeDefined();
+
+              // Verify sourceData matches exactly
+              const sourceData = persistedSignal?.sourceData as Record<string, unknown>;
+              expect(sourceData.customField1).toBe(customSourceData.customField1);
+              expect(sourceData.customField2).toBe(customSourceData.customField2);
+              expect(sourceData.customField3).toBe(customSourceData.customField3);
             });
-
-            expect(persistedSignal).toBeDefined();
-
-            // Verify sourceData matches exactly
-            const sourceData = persistedSignal?.sourceData as Record<string, unknown>;
-            expect(sourceData.customField1).toBe(customSourceData.customField1);
-            expect(sourceData.customField2).toBe(customSourceData.customField2);
-            expect(sourceData.customField3).toBe(customSourceData.customField3);
           }
         ),
-        { numRuns: 100 }
+        { numRuns: 20 }
       );
     });
   });

@@ -14,6 +14,8 @@ import { withChildObservabilityContext } from '@/lib/observability/context';
 import { MetricsRecorder } from '@/lib/observability/MetricsRecorder';
 import { prisma } from '@/lib/prisma';
 import { runProposalPipeline } from '@/lib/proposal';
+import { determineProposalStatus } from '@/lib/proposal/status';
+import { runAutoQA } from '@/lib/qa/autoQA';
 import { createParentTrace } from '@/lib/tracing';
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
@@ -136,11 +138,41 @@ export async function generateProposal(auditId: string) {
     // Use complete proposal if available, otherwise fall back to old format
     const finalProposal = proposalGraphState.completeProposal || proposalResult;
 
-    // Step 3: Save proposal to database (serialize to JSON)
+    // Step 3: Run automated QA to determine proposal status.
+    // This mirrors the logic in app/api/audit/[id]/propose/route.ts so both
+    // the interactive route and the background runner use identical criteria.
+    const qaStatus = runAutoQA(
+      finalProposal,
+      audit.findings,
+      audit.businessName,
+      audit.businessCity,
+      {
+        industry: audit.businessIndustry,
+        comparisonReport: comparisonReport ?? undefined,
+      }
+    );
+
+    const proposalStatus = determineProposalStatus(qaStatus);
+
+    logger.info(
+      {
+        event: 'proposal.status.decided',
+        auditId,
+        qaScore: qaStatus.score,
+        passedChecks: qaStatus.passedChecks,
+        totalChecks: qaStatus.totalChecks,
+        hardFails: qaStatus.clientPerfect.hardFails.length,
+        needsReview: qaStatus.needsReview,
+        status: proposalStatus,
+      },
+      'Proposal status decided'
+    );
+
+    // Step 4: Save proposal to database (serialize to JSON)
     const proposal = await prisma.proposal.create({
       data: {
         auditId,
-        tenantId: audit.tenantId, // Fixed TS error
+        tenantId: audit.tenantId,
         executiveSummary: finalProposal.executiveSummary,
         painClusters: finalProposal.painClusters as any,
         tierEssentials: finalProposal.tiers.essentials as any,
@@ -151,7 +183,11 @@ export async function generateProposal(auditId: string) {
         disclaimers: finalProposal.disclaimers,
         nextSteps: finalProposal.nextSteps,
         comparisonReport: comparisonReport ? (comparisonReport as any) : undefined,
-        status: 'DRAFT',
+        status: proposalStatus,
+        qaScore: qaStatus.score,
+        clientScore: qaStatus.clientPerfect.score,
+        qaResults: JSON.parse(JSON.stringify(qaStatus)),
+        clientScoreResults: JSON.parse(JSON.stringify(qaStatus.clientPerfect)),
       },
     });
 
@@ -164,7 +200,7 @@ export async function generateProposal(auditId: string) {
     });
 
     const duration_ms = Date.now() - startTime;
-    MetricsRecorder.proposalGenerated(audit.tenantId, 'DRAFT', undefined);
+    MetricsRecorder.proposalGenerated(audit.tenantId, proposalStatus, undefined);
     await recordAuditTrailEvent({
       eventType: 'proposal.generated',
       tenantId: audit.tenantId,
@@ -173,7 +209,8 @@ export async function generateProposal(auditId: string) {
       findingsCount: audit.findings.length,
       proposalGenerated: true,
       payload: {
-        status: 'DRAFT',
+        status: proposalStatus,
+        qaScore: qaStatus.score,
         durationMs: duration_ms,
         costCents: tracker.getTotalCents(),
       },
@@ -207,6 +244,8 @@ export async function generateProposal(auditId: string) {
       auditId,
       proposalId: proposal.id,
       webLinkToken: proposal.webLinkToken,
+      status: proposalStatus,
+      qaScore: qaStatus.score,
       costCents: tracker.getTotalCents(),
     };
   } catch (error) {

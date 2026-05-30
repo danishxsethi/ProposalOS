@@ -4,21 +4,30 @@ import { CostTracker } from '../costs/costTracker';
 import { runProposalPipeline } from '../proposal';
 
 // Mock dependencies
-vi.mock('../llm/proposal', () => ({
+vi.mock('../proposal/executiveSummary', () => ({
   generateExecutiveSummary: vi.fn().mockResolvedValue('Exec Summary'),
-  generateAssumptions: vi.fn().mockResolvedValue(['Assumption 1']),
-  generateNextSteps: vi.fn().mockResolvedValue(['Step 1']),
+}));
+
+vi.mock('../proposal/validation', () => ({
+  generateAssumptions: vi.fn().mockReturnValue(['Assumption 1']),
+  generateDisclaimers: vi.fn().mockReturnValue(['Disclaimer 1']),
+  generateNextSteps: vi.fn().mockReturnValue(['Step 1']),
+  validateCitations: vi.fn().mockReturnValue({ valid: true, errors: [] }),
 }));
 
 describe('Proposal Pipeline', () => {
   it('should generate proposal structure', async () => {
     const mockClusters: any[] = [
       {
+        id: '1',
         title: 'SEO Issues',
         findings: [{ id: '1', title: 'Slow LCP', impactScore: 90 }],
+        findingIds: ['1'],
         painPoint: 'Low Visibility',
         whyItMatters: 'Lost Revenue',
         urgency: 'HIGH',
+        severity: 'high',
+        narrative: 'Severe SEO issues',
       },
     ];
     const mockFindings: any[] = [

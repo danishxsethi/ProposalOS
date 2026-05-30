@@ -184,8 +184,8 @@ describe('generateEmail', () => {
     const context = createMockContext();
     const email = await generateEmail(context);
 
-    expect(email.scorecardUrl).toBe('/preview/abc123');
-    expect(email.body).toContain('/preview/abc123');
+    expect(email.scorecardUrl).toContain(encodeURIComponent('/preview/abc123'));
+    expect(email.body).toContain(encodeURIComponent('/preview/abc123'));
   });
 
   it('should use vertical-specific pain language in the body', async () => {
@@ -233,7 +233,7 @@ describe('generateEmail', () => {
     });
     const email = await generateEmail(context);
 
-    expect(email.scorecardUrl).toBe('/preview/proposal-fallback');
+    expect(email.scorecardUrl).toContain(encodeURIComponent('/preview/proposal-fallback'));
   });
 
   it('should handle HVAC vertical pain language', async () => {

@@ -1,13 +1,13 @@
 FROM node:20-alpine AS base
+RUN apk add --no-cache libc6-compat openssl
 
 # Install dependencies only when needed
 FROM base AS deps
-RUN apk add --no-cache libc6-compat openssl
 WORKDIR /app
 
 # Install dependencies based on the preferred package manager
 COPY package.json package-lock.json* ./
-RUN npm ci
+RUN npm ci --legacy-peer-deps
 
 # Rebuild the source code only when needed
 FROM base AS builder
@@ -18,7 +18,10 @@ COPY . .
 # Generate Prisma Client
 RUN npx prisma generate
 
-# Build Next.js (skip env validation — vars are provided at runtime on Cloud Run)
+# Build Next.js
+# SKIP_ENV_VALIDATION=true is intentional here: secrets are not available at Docker image
+# build time on Cloud Run. They are injected at runtime via Secret Manager. The running
+# server validates all required env vars via instrumentation.ts on startup.
 ENV SKIP_ENV_VALIDATION=true
 RUN npm run build
 
@@ -30,9 +33,6 @@ ENV NODE_ENV=production
 
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
-
-# Install OpenSSL for Prisma
-RUN apk add --no-cache openssl
 
 COPY --from=builder /app/public ./public
 

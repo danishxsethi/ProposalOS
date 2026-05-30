@@ -1,38 +1,11 @@
 import { NextResponse } from 'next/server';
 
+import { logger } from '@/lib/logger';
+import { withAuth } from '@/lib/middleware/auth';
+import { checkRateLimit } from '@/lib/middleware/rateLimit';
+import { recordAuditTrailEvent } from '@/lib/observability/auditTrail';
 import { prisma } from '@/lib/prisma';
-
-// Simple in-memory rate limiting (for demo purposes)
-// In production, use Redis or database-based rate limiting
-const rateLimitMap = new Map<string, { count: number; timestamp: number }>();
-
-function isRateLimited(identifier: string): boolean {
-  const now = Date.now();
-  const windowMs = 60 * 1000; // 1 minute
-  const maxRequests = 10;
-
-  const record = rateLimitMap.get(identifier);
-
-  if (!record) {
-    rateLimitMap.set(identifier, { count: 1, timestamp: now });
-    return false;
-  }
-
-  // Reset counter if window has passed
-  if (now - record.timestamp > windowMs) {
-    rateLimitMap.set(identifier, { count: 1, timestamp: now });
-    return false;
-  }
-
-  // Check if limit exceeded
-  if (record.count >= maxRequests) {
-    return true;
-  }
-
-  // Increment count
-  rateLimitMap.set(identifier, { count: record.count + 1, timestamp: record.timestamp });
-  return false;
-}
+import { hashSensitive } from '@/lib/security/abuseDefense/policies';
 
 interface Params {
   params: Promise<{ token: string }>;
@@ -46,16 +19,7 @@ export async function GET(request: Request, { params }: Params) {
   try {
     const { token } = await params;
 
-    // Rate limiting
-    const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'anonymous';
-
-    if (isRateLimited(ip)) {
-      return NextResponse.json(
-        { error: 'Rate limit exceeded. Please try again later.' },
-        { status: 429 }
-      );
-    }
-
+    // Find proposal by token first
     const proposal = await prisma.proposal.findUnique({
       where: { webLinkToken: token },
       include: {
@@ -71,11 +35,78 @@ export async function GET(request: Request, { params }: Params) {
     });
 
     if (!proposal) {
+      // 1. Invalid Token Attempt: IP-scoped strict rate limit (10 attempts per hour)
+      const invalidLimit = await checkRateLimit(request, {
+        windowMs: 60 * 60 * 1000, // 1 hour
+        max: 10,
+        endpoint: 'invalid_token_attempt',
+        routeClass: 'token_download',
+        auditOnBlock: false, // We will audit explicitly to use the correct eventType
+        failClosed: true,
+      });
+
+      if (!invalidLimit.success) {
+        const forwarded = request.headers.get('x-forwarded-for');
+        const realIp = request.headers.get('x-real-ip');
+        const ip = forwarded?.split(',')[0]?.trim() ?? realIp?.split(',')[0]?.trim() ?? 'unknown';
+
+        await recordAuditTrailEvent({
+          eventType: 'abuse.invalid_token_rate_limited',
+          tenantId: null,
+          payload: {
+            routeClass: 'token_download',
+            ipHash: hashSensitive(ip),
+            endpoint: request.url,
+            limit: 10,
+            retryAfter: invalidLimit.retryAfter ?? 3600,
+          },
+        }).catch(() => {});
+
+        return NextResponse.json(
+          { error: 'Too many invalid attempts. Please try again later.' },
+          { status: 429, headers: { 'Retry-After': String(invalidLimit.retryAfter ?? 3600) } }
+        );
+      }
+
       return NextResponse.json({ error: 'Proposal not found' }, { status: 404 });
     }
 
-    // Log proposal access for security monitoring
-    console.log(`[SECURITY] Proposal accessed: ${proposal.id} from IP: ${ip}`);
+    // 2. Valid Token Usage: Token-hash-scoped scraping limit (100 requests per hour)
+
+    const validLimit = await checkRateLimit(request, {
+      windowMs: 60 * 60 * 1000, // 1 hour
+      max: 100,
+      sessionId: token, // This hashes the token internally in buildRateLimitKey using hashSensitive(token)
+      endpoint: 'valid_token_scrape',
+      routeClass: 'token_download',
+      auditOnBlock: true,
+      failClosed: true,
+      tenantId: proposal.tenantId,
+    });
+
+    if (!validLimit.success) {
+      return NextResponse.json(
+        { error: 'Rate limit exceeded for this proposal.' },
+        { status: 429, headers: { 'Retry-After': String(validLimit.retryAfter ?? 3600) } }
+      );
+    }
+
+    // Verify expiration: Status is REJECTED or older than 90 days
+    if (proposal.status === 'REJECTED') {
+      return NextResponse.json({ error: 'Proposal has been rejected' }, { status: 410 });
+    }
+
+    const ageMs = Date.now() - proposal.createdAt.getTime();
+    const expiryMs = 90 * 24 * 60 * 60 * 1000; // 90 days
+    if (ageMs > expiryMs) {
+      return NextResponse.json({ error: 'Proposal has expired' }, { status: 410 });
+    }
+
+    // Log proposal access for security monitoring (structured — no PII in message, token/IP redacted by logger)
+    logger.info(
+      { event: 'proposal.accessed', proposalId: proposal.id },
+      'Proposal accessed via public token'
+    );
 
     return NextResponse.json({
       id: proposal.id,
@@ -112,8 +143,6 @@ export async function GET(request: Request, { params }: Params) {
     return NextResponse.json({ error: 'Failed to fetch proposal' }, { status: 500 });
   }
 }
-
-import { withAuth } from '@/lib/middleware/auth';
 
 /**
  * PATCH /api/proposal/token/[token]

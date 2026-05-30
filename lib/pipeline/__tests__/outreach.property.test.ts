@@ -2,6 +2,13 @@ import * as fc from 'fast-check';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { cleanupDb } from '@/lib/__tests__/utils/cleanup';
+import { runWithTenantBypass } from '@/lib/tenant/context';
+
+// Mock Resend Email Sender to avoid live API calls
+vi.mock('../../outreach/emailSender', () => ({
+  sendEmail: vi.fn().mockResolvedValue({ success: true, messageId: 'msg-123' }),
+}));
+
 /**
  * Property-Based Tests for Outreach Agent
  *
@@ -23,9 +30,9 @@ import {
 import {
   generateAndQualifyEmail,
   generateEmail,
-  pauseFollowUpSequence,
   scheduleFollowUps,
 } from '../outreach';
+import { pauseFollowUpSequence } from '../followUpSequence';
 
 import type { EmailQAConfig, GeneratedEmail, OutreachContext } from '../types';
 
@@ -422,36 +429,248 @@ describe('Outreach Agent Property Tests', () => {
    */
   describe('Property 17: Inbox rotation daily limit per domain', () => {
     it('domain selection respects daily limits', async () => {
-      const tenantId = 'test-tenant-' + Date.now();
+      const tenantId = crypto.randomUUID();
+      const leadId = crypto.randomUUID();
 
-      // Create a tenant first
-      await prisma.tenant.create({
-        data: {
-          id: tenantId,
-          name: 'Test Tenant',
-        },
-      });
+      await runWithTenantBypass('test', async () => {
+        // Create a tenant first
+        await prisma.tenant.create({
+          data: {
+            id: tenantId,
+            name: 'Test Tenant',
+          },
+        });
 
-      // Create a domain with a low daily limit
-      const domain = await prisma.outreachSendingDomain.create({
-        data: {
-          tenantId,
-          domain: 'test.example.com',
-          fromEmail: 'test@example.com',
-          fromName: 'Test Sender',
-          dailyLimit: 5,
-          isActive: true,
-        },
-      });
+        // Create a prospect lead with decisionMakerEmail
+        await prisma.prospectLead.create({
+          data: {
+            tenantId,
+            id: leadId,
+            businessName: 'Test Business',
+            source: 'test',
+            sourceExternalId: 'test-respects-limits',
+            city: 'Test City',
+            vertical: 'dentist',
+            painScore: 75,
+            status: 'QUALIFIED',
+            decisionMakerEmail: 'recipient@example.com',
+          },
+        });
 
-      // Send emails up to the limit
-      for (let i = 0; i < 5; i++) {
+        // Create a domain with a low daily limit
+        const domain = await prisma.outreachSendingDomain.create({
+          data: {
+            id: crypto.randomUUID(),
+            tenantId,
+            domain: 'test.example.com',
+            fromEmail: 'test@example.com',
+            fromName: 'Test Sender',
+            dailyLimit: 5,
+            isActive: true,
+          },
+        });
+
+        // Send emails up to the limit
+        for (let i = 0; i < 5; i++) {
+          const email: GeneratedEmail = {
+            id: crypto.randomUUID(),
+            subject: 'Test',
+            body: 'Test body',
+            prospectId: leadId,
+            proposalId: crypto.randomUUID(),
+            findingReferences: ['finding1', 'finding2'],
+            scorecardUrl: 'https://example.com/scorecard',
+            generatedAt: new Date(),
+          };
+
+          const result = await sendWithRotation(email, tenantId);
+          expect(result.status).toBe('sent');
+        }
+
+        // Next email should be queued (limit reached)
         const email: GeneratedEmail = {
-          id: `email-${i}`,
+          id: crypto.randomUUID(),
           subject: 'Test',
           body: 'Test body',
-          prospectId: 'prospect-1',
-          proposalId: 'proposal-1',
+          prospectId: leadId,
+          proposalId: crypto.randomUUID(),
+          findingReferences: ['finding1', 'finding2'],
+          scorecardUrl: 'https://example.com/scorecard',
+          generatedAt: new Date(),
+        };
+
+        const result = await sendWithRotation(email, tenantId);
+        expect(result.status).toBe('queued');
+
+        // Verify sent count
+        const sentCount = await getDomainSentCount(domain.id);
+        expect(sentCount).toBe(5);
+      });
+    });
+
+    it('multiple domains distribute load', async () => {
+      const tenantId = crypto.randomUUID();
+      const leadId = crypto.randomUUID();
+
+      await runWithTenantBypass('test', async () => {
+        // Create a tenant first
+        await prisma.tenant.create({
+          data: {
+            id: tenantId,
+            name: 'Test Tenant Multi',
+          },
+        });
+
+        // Create a prospect lead with decisionMakerEmail
+        await prisma.prospectLead.create({
+          data: {
+            tenantId,
+            id: leadId,
+            businessName: 'Test Business Multi',
+            source: 'test',
+            sourceExternalId: 'test-multiple-domains',
+            city: 'Test City',
+            vertical: 'dentist',
+            painScore: 75,
+            status: 'QUALIFIED',
+            decisionMakerEmail: 'recipient-multi@example.com',
+          },
+        });
+
+        // Create multiple domains
+        const domain1 = await prisma.outreachSendingDomain.create({
+          data: {
+            id: crypto.randomUUID(),
+            tenantId,
+            domain: 'domain1.example.com',
+            fromEmail: 'test1@example.com',
+            fromName: 'Test Sender 1',
+            dailyLimit: 10,
+            isActive: true,
+          },
+        });
+
+        const domain2 = await prisma.outreachSendingDomain.create({
+          data: {
+            id: crypto.randomUUID(),
+            tenantId,
+            domain: 'domain2.example.com',
+            fromEmail: 'test2@example.com',
+            fromName: 'Test Sender 2',
+            dailyLimit: 10,
+            isActive: true,
+          },
+        });
+
+        // Send multiple emails
+        const sentDomains: string[] = [];
+        for (let i = 0; i < 15; i++) {
+          const email: GeneratedEmail = {
+            id: crypto.randomUUID(),
+            subject: 'Test',
+            body: 'Test body',
+            prospectId: leadId,
+            proposalId: crypto.randomUUID(),
+            findingReferences: ['finding1', 'finding2'],
+            scorecardUrl: 'https://example.com/scorecard',
+            generatedAt: new Date(),
+          };
+
+          const result = await sendWithRotation(email, tenantId);
+          if (result.status === 'sent') {
+            sentDomains.push(result.sendingDomain);
+          }
+        }
+
+        // Both domains should have been used
+        const uniqueDomains = new Set(sentDomains);
+        expect(uniqueDomains.size).toBeGreaterThan(1);
+
+        // Neither domain should exceed its limit
+        const count1 = await getDomainSentCount(domain1.id);
+        const count2 = await getDomainSentCount(domain2.id);
+        expect(count1).toBeLessThanOrEqual(10);
+        expect(count2).toBeLessThanOrEqual(10);
+      });
+    });
+
+    it('selects domain with lowest usage', async () => {
+      const tenantId = crypto.randomUUID();
+      const leadId = crypto.randomUUID();
+
+      await runWithTenantBypass('test', async () => {
+        // Create a tenant first
+        await prisma.tenant.create({
+          data: {
+            id: tenantId,
+            name: 'Test Tenant Lowest',
+          },
+        });
+
+        // Create a prospect lead with decisionMakerEmail
+        await prisma.prospectLead.create({
+          data: {
+            tenantId,
+            id: leadId,
+            businessName: 'Test Business Lowest',
+            source: 'test',
+            sourceExternalId: 'test-lowest-usage',
+            city: 'Test City',
+            vertical: 'dentist',
+            painScore: 75,
+            status: 'QUALIFIED',
+            decisionMakerEmail: 'recipient-lowest@example.com',
+          },
+        });
+
+        // Create two domains
+        const domain1 = await prisma.outreachSendingDomain.create({
+          data: {
+            id: crypto.randomUUID(),
+            tenantId,
+            domain: 'domain1.example.com',
+            fromEmail: 'test1@example.com',
+            fromName: 'Test Sender 1',
+            dailyLimit: 50,
+            isActive: true,
+          },
+        });
+
+        const domain2 = await prisma.outreachSendingDomain.create({
+          data: {
+            id: crypto.randomUUID(),
+            tenantId,
+            domain: 'domain2.example.com',
+            fromEmail: 'test2@example.com',
+            fromName: 'Test Sender 2',
+            dailyLimit: 50,
+            isActive: true,
+          },
+        });
+
+        // Pre-populate domain1 with some usage
+        const today = new Date();
+        today.setUTCHours(0, 0, 0, 0);
+        await prisma.outreachDomainDailyStat.create({
+          data: {
+            id: crypto.randomUUID(),
+            tenantId,
+            domainId: domain1.id,
+            day: today,
+            sentCount: 10,
+            openCount: 0,
+            clickCount: 0,
+            replyCount: 0,
+          },
+        });
+
+        // Send an email - should use domain2 (lower usage)
+        const email: GeneratedEmail = {
+          id: crypto.randomUUID(),
+          subject: 'Test',
+          body: 'Test body',
+          prospectId: leadId,
+          proposalId: crypto.randomUUID(),
           findingReferences: ['finding1', 'finding2'],
           scorecardUrl: 'https://example.com/scorecard',
           generatedAt: new Date(),
@@ -459,157 +678,8 @@ describe('Outreach Agent Property Tests', () => {
 
         const result = await sendWithRotation(email, tenantId);
         expect(result.status).toBe('sent');
-      }
-
-      // Next email should be queued (limit reached)
-      const email: GeneratedEmail = {
-        id: 'email-over-limit',
-        subject: 'Test',
-        body: 'Test body',
-        prospectId: 'prospect-1',
-        proposalId: 'proposal-1',
-        findingReferences: ['finding1', 'finding2'],
-        scorecardUrl: 'https://example.com/scorecard',
-        generatedAt: new Date(),
-      };
-
-      const result = await sendWithRotation(email, tenantId);
-      expect(result.status).toBe('queued');
-
-      // Verify sent count
-      const sentCount = await getDomainSentCount(domain.id);
-      expect(sentCount).toBe(5);
-    });
-
-    it('multiple domains distribute load', async () => {
-      const tenantId = 'test-tenant-multi-' + Date.now();
-
-      // Create a tenant first
-      await prisma.tenant.create({
-        data: {
-          id: tenantId,
-          name: 'Test Tenant Multi',
-        },
+        expect(result.sendingDomain).toBe('test2@example.com');
       });
-
-      // Create multiple domains
-      const domain1 = await prisma.outreachSendingDomain.create({
-        data: {
-          tenantId,
-          domain: 'domain1.example.com',
-          fromEmail: 'test1@example.com',
-          fromName: 'Test Sender 1',
-          dailyLimit: 10,
-          isActive: true,
-        },
-      });
-
-      const domain2 = await prisma.outreachSendingDomain.create({
-        data: {
-          tenantId,
-          domain: 'domain2.example.com',
-          fromEmail: 'test2@example.com',
-          fromName: 'Test Sender 2',
-          dailyLimit: 10,
-          isActive: true,
-        },
-      });
-
-      // Send multiple emails
-      const sentDomains: string[] = [];
-      for (let i = 0; i < 15; i++) {
-        const email: GeneratedEmail = {
-          id: `email-${i}`,
-          subject: 'Test',
-          body: 'Test body',
-          prospectId: 'prospect-1',
-          proposalId: 'proposal-1',
-          findingReferences: ['finding1', 'finding2'],
-          scorecardUrl: 'https://example.com/scorecard',
-          generatedAt: new Date(),
-        };
-
-        const result = await sendWithRotation(email, tenantId);
-        if (result.status === 'sent') {
-          sentDomains.push(result.sendingDomain);
-        }
-      }
-
-      // Both domains should have been used
-      const uniqueDomains = new Set(sentDomains);
-      expect(uniqueDomains.size).toBeGreaterThan(1);
-
-      // Neither domain should exceed its limit
-      const count1 = await getDomainSentCount(domain1.id);
-      const count2 = await getDomainSentCount(domain2.id);
-      expect(count1).toBeLessThanOrEqual(10);
-      expect(count2).toBeLessThanOrEqual(10);
-    });
-
-    it('selects domain with lowest usage', async () => {
-      const tenantId = 'test-tenant-lowest-' + Date.now();
-
-      // Create a tenant first
-      await prisma.tenant.create({
-        data: {
-          id: tenantId,
-          name: 'Test Tenant Lowest',
-        },
-      });
-
-      // Create two domains
-      const domain1 = await prisma.outreachSendingDomain.create({
-        data: {
-          tenantId,
-          domain: 'domain1.example.com',
-          fromEmail: 'test1@example.com',
-          fromName: 'Test Sender 1',
-          dailyLimit: 50,
-          isActive: true,
-        },
-      });
-
-      const domain2 = await prisma.outreachSendingDomain.create({
-        data: {
-          tenantId,
-          domain: 'domain2.example.com',
-          fromEmail: 'test2@example.com',
-          fromName: 'Test Sender 2',
-          dailyLimit: 50,
-          isActive: true,
-        },
-      });
-
-      // Pre-populate domain1 with some usage
-      const today = new Date();
-      today.setUTCHours(0, 0, 0, 0);
-      await prisma.outreachDomainDailyStat.create({
-        data: {
-          tenantId,
-          domainId: domain1.id,
-          day: today,
-          sentCount: 10,
-          openCount: 0,
-          clickCount: 0,
-          replyCount: 0,
-        },
-      });
-
-      // Send an email - should use domain2 (lower usage)
-      const email: GeneratedEmail = {
-        id: 'email-test',
-        subject: 'Test',
-        body: 'Test body',
-        prospectId: 'prospect-1',
-        proposalId: 'proposal-1',
-        findingReferences: ['finding1', 'finding2'],
-        scorecardUrl: 'https://example.com/scorecard',
-        generatedAt: new Date(),
-      };
-
-      const result = await sendWithRotation(email, tenantId);
-      expect(result.status).toBe('sent');
-      expect(result.sendingDomain).toBe('test2@example.com');
     });
   });
 
@@ -624,229 +694,241 @@ describe('Outreach Agent Property Tests', () => {
    */
   describe('Property 18: Reply pauses follow-up sequence', () => {
     it('reply pauses all pending follow-ups', async () => {
-      const tenantId = 'test-tenant-reply-' + Date.now();
-      const leadId = 'lead-' + Date.now();
+      const tenantId = crypto.randomUUID();
+      const leadId = crypto.randomUUID();
 
-      // Create a tenant first
-      await prisma.tenant.create({
-        data: {
-          id: tenantId,
-          name: 'Test Tenant Reply',
-        },
+      await runWithTenantBypass('test', async () => {
+        // Create a tenant first
+        await prisma.tenant.create({
+          data: {
+            id: tenantId,
+            name: 'Test Tenant Reply',
+          },
+        });
+
+        // Create a prospect
+        await prisma.prospectLead.create({
+          data: {
+            tenantId,
+            id: leadId,
+            businessName: 'Test Business',
+            source: 'test',
+            sourceExternalId: 'test-123',
+            city: 'Test City',
+            vertical: 'dentist',
+            painScore: 75,
+            status: 'QUALIFIED',
+          },
+        });
+
+        // Create a domain
+        const domain = await prisma.outreachSendingDomain.create({
+          data: {
+            id: crypto.randomUUID(),
+            tenantId,
+            domain: 'test.example.com',
+            fromEmail: 'test@example.com',
+            fromName: 'Test Sender',
+            dailyLimit: 50,
+            isActive: true,
+          },
+        });
+
+        // Create initial email
+        const initialEmail = await prisma.outreachEmail.create({
+          data: {
+            id: crypto.randomUUID(),
+            tenantId,
+            leadId,
+            domainId: domain.id,
+            type: 'INITIAL',
+            status: 'SENT',
+            subject: 'Initial Email',
+            body: 'Test body',
+            qualityScore: 95,
+            sentAt: new Date(),
+          },
+        });
+
+        // Schedule follow-ups
+        await scheduleFollowUps(leadId, initialEmail.id);
+
+        // Verify follow-ups were created
+        const followUpsBefore = await prisma.outreachEmail.findMany({
+          where: { leadId, status: 'PENDING' },
+        });
+        expect(followUpsBefore.length).toBeGreaterThan(0);
+
+        // Handle reply
+        await handleReply(tenantId, leadId, initialEmail.id);
+
+        // Verify follow-ups were paused
+        const followUpsAfter = await prisma.outreachEmail.findMany({
+          where: { leadId, status: 'PENDING' },
+        });
+        expect(followUpsAfter.length).toBe(0);
+
+        // Verify follow-ups were suppressed
+        const suppressedFollowUps = await prisma.outreachEmail.findMany({
+          where: { leadId, status: 'SUPPRESSED' },
+        });
+        expect(suppressedFollowUps.length).toBe(followUpsBefore.length);
       });
-
-      // Create a prospect
-      await prisma.prospectLead.create({
-        data: {
-          tenantId,
-          id: leadId,
-          businessName: 'Test Business',
-          source: 'test',
-          sourceExternalId: 'test-123',
-          city: 'Test City',
-          vertical: 'dentist',
-          painScore: 75,
-          status: 'QUALIFIED',
-        },
-      });
-
-      // Create a domain
-      const domain = await prisma.outreachSendingDomain.create({
-        data: {
-          tenantId,
-          domain: 'test.example.com',
-          fromEmail: 'test@example.com',
-          fromName: 'Test Sender',
-          dailyLimit: 50,
-          isActive: true,
-        },
-      });
-
-      // Create initial email
-      const initialEmail = await prisma.outreachEmail.create({
-        data: {
-          tenantId,
-          leadId,
-          domainId: domain.id,
-          type: 'INITIAL',
-          status: 'SENT',
-          subject: 'Initial Email',
-          body: 'Test body',
-          qualityScore: 95,
-          sentAt: new Date(),
-        },
-      });
-
-      // Schedule follow-ups
-      await scheduleFollowUps(leadId, initialEmail.id);
-
-      // Verify follow-ups were created
-      const followUpsBefore = await prisma.outreachEmail.findMany({
-        where: { leadId, status: 'PENDING' },
-      });
-      expect(followUpsBefore.length).toBeGreaterThan(0);
-
-      // Handle reply
-      await handleReply(tenantId, leadId, initialEmail.id);
-
-      // Verify follow-ups were paused
-      const followUpsAfter = await prisma.outreachEmail.findMany({
-        where: { leadId, status: 'PENDING' },
-      });
-      expect(followUpsAfter.length).toBe(0);
-
-      // Verify follow-ups were suppressed
-      const suppressedFollowUps = await prisma.outreachEmail.findMany({
-        where: { leadId, status: 'SUPPRESSED' },
-      });
-      expect(suppressedFollowUps.length).toBe(followUpsBefore.length);
     });
 
     it('reply event is recorded', async () => {
-      const tenantId = 'test-tenant-reply-event-' + Date.now();
-      const leadId = 'lead-' + Date.now();
+      const tenantId = crypto.randomUUID();
+      const leadId = crypto.randomUUID();
 
-      // Create a tenant first
-      await prisma.tenant.create({
-        data: {
-          id: tenantId,
-          name: 'Test Tenant Reply Event',
-        },
+      await runWithTenantBypass('test', async () => {
+        // Create a tenant first
+        await prisma.tenant.create({
+          data: {
+            id: tenantId,
+            name: 'Test Tenant Reply Event',
+          },
+        });
+
+        // Create a prospect
+        await prisma.prospectLead.create({
+          data: {
+            tenantId,
+            id: leadId,
+            businessName: 'Test Business',
+            source: 'test',
+            sourceExternalId: 'test-456',
+            city: 'Test City',
+            vertical: 'dentist',
+            painScore: 75,
+            status: 'QUALIFIED',
+          },
+        });
+
+        // Create a domain
+        const domain = await prisma.outreachSendingDomain.create({
+          data: {
+            id: crypto.randomUUID(),
+            tenantId,
+            domain: 'test.example.com',
+            fromEmail: 'test@example.com',
+            fromName: 'Test Sender',
+            dailyLimit: 50,
+            isActive: true,
+          },
+        });
+
+        // Create initial email
+        const initialEmail = await prisma.outreachEmail.create({
+          data: {
+            id: crypto.randomUUID(),
+            tenantId,
+            leadId,
+            domainId: domain.id,
+            type: 'INITIAL',
+            status: 'SENT',
+            subject: 'Initial Email',
+            body: 'Test body',
+            qualityScore: 95,
+            sentAt: new Date(),
+          },
+        });
+
+        // Handle reply
+        await handleReply(tenantId, leadId, initialEmail.id);
+
+        // Verify reply event was recorded
+        const replyEvent = await prisma.outreachEmailEvent.findFirst({
+          where: {
+            leadId,
+            type: 'REPLY_RECEIVED',
+          },
+        });
+
+        expect(replyEvent).toBeDefined();
+        expect(replyEvent?.tenantId).toBe(tenantId);
       });
-
-      // Create a prospect
-      await prisma.prospectLead.create({
-        data: {
-          tenantId,
-          id: leadId,
-          businessName: 'Test Business',
-          source: 'test',
-          sourceExternalId: 'test-456',
-          city: 'Test City',
-          vertical: 'dentist',
-          painScore: 75,
-          status: 'QUALIFIED',
-        },
-      });
-
-      // Create a domain
-      const domain = await prisma.outreachSendingDomain.create({
-        data: {
-          tenantId,
-          domain: 'test.example.com',
-          fromEmail: 'test@example.com',
-          fromName: 'Test Sender',
-          dailyLimit: 50,
-          isActive: true,
-        },
-      });
-
-      // Create initial email
-      const initialEmail = await prisma.outreachEmail.create({
-        data: {
-          tenantId,
-          leadId,
-          domainId: domain.id,
-          type: 'INITIAL',
-          status: 'SENT',
-          subject: 'Initial Email',
-          body: 'Test body',
-          qualityScore: 95,
-          sentAt: new Date(),
-        },
-      });
-
-      // Handle reply
-      await handleReply(tenantId, leadId, initialEmail.id);
-
-      // Verify reply event was recorded
-      const replyEvent = await prisma.outreachEmailEvent.findFirst({
-        where: {
-          leadId,
-          type: 'REPLY_RECEIVED',
-        },
-      });
-
-      expect(replyEvent).toBeDefined();
-      expect(replyEvent?.tenantId).toBe(tenantId);
     });
 
     it('pauseFollowUpSequence suppresses all pending emails', async () => {
-      const tenantId = 'test-tenant-pause-' + Date.now();
-      const leadId = 'lead-' + Date.now();
+      const tenantId = crypto.randomUUID();
+      const leadId = crypto.randomUUID();
 
-      // Create a tenant first
-      await prisma.tenant.create({
-        data: {
-          id: tenantId,
-          name: 'Test Tenant Pause',
-        },
+      await runWithTenantBypass('test', async () => {
+        // Create a tenant first
+        await prisma.tenant.create({
+          data: {
+            id: tenantId,
+            name: 'Test Tenant Pause',
+          },
+        });
+
+        // Create a prospect
+        await prisma.prospectLead.create({
+          data: {
+            tenantId,
+            id: leadId,
+            businessName: 'Test Business',
+            source: 'test',
+            sourceExternalId: 'test-789',
+            city: 'Test City',
+            vertical: 'dentist',
+            painScore: 75,
+            status: 'QUALIFIED',
+          },
+        });
+
+        // Create a domain
+        const domain = await prisma.outreachSendingDomain.create({
+          data: {
+            id: crypto.randomUUID(),
+            tenantId,
+            domain: 'test.example.com',
+            fromEmail: 'test@example.com',
+            fromName: 'Test Sender',
+            dailyLimit: 50,
+            isActive: true,
+          },
+        });
+
+        // Create initial email
+        const initialEmail = await prisma.outreachEmail.create({
+          data: {
+            id: crypto.randomUUID(),
+            tenantId,
+            leadId,
+            domainId: domain.id,
+            type: 'INITIAL',
+            status: 'SENT',
+            subject: 'Initial Email',
+            body: 'Test body',
+            qualityScore: 95,
+            sentAt: new Date(),
+          },
+        });
+
+        // Schedule follow-ups
+        await scheduleFollowUps(leadId, initialEmail.id);
+
+        // Verify follow-ups exist
+        const followUpsBefore = await prisma.outreachEmail.findMany({
+          where: { leadId, status: 'PENDING' },
+        });
+        expect(followUpsBefore.length).toBeGreaterThan(0);
+
+        // Pause sequence
+        await pauseFollowUpSequence(leadId);
+
+        // Verify all pending follow-ups are suppressed
+        const pendingAfter = await prisma.outreachEmail.findMany({
+          where: { leadId, status: 'PENDING' },
+        });
+        expect(pendingAfter.length).toBe(0);
+
+        const suppressedAfter = await prisma.outreachEmail.findMany({
+          where: { leadId, status: 'SUPPRESSED' },
+        });
+        expect(suppressedAfter.length).toBe(followUpsBefore.length);
       });
-
-      // Create a prospect
-      await prisma.prospectLead.create({
-        data: {
-          tenantId,
-          id: leadId,
-          businessName: 'Test Business',
-          source: 'test',
-          sourceExternalId: 'test-789',
-          city: 'Test City',
-          vertical: 'dentist',
-          painScore: 75,
-          status: 'QUALIFIED',
-        },
-      });
-
-      // Create a domain
-      const domain = await prisma.outreachSendingDomain.create({
-        data: {
-          tenantId,
-          domain: 'test.example.com',
-          fromEmail: 'test@example.com',
-          fromName: 'Test Sender',
-          dailyLimit: 50,
-          isActive: true,
-        },
-      });
-
-      // Create initial email
-      const initialEmail = await prisma.outreachEmail.create({
-        data: {
-          tenantId,
-          leadId,
-          domainId: domain.id,
-          type: 'INITIAL',
-          status: 'SENT',
-          subject: 'Initial Email',
-          body: 'Test body',
-          qualityScore: 95,
-          sentAt: new Date(),
-        },
-      });
-
-      // Schedule follow-ups
-      await scheduleFollowUps(leadId, initialEmail.id);
-
-      // Verify follow-ups exist
-      const followUpsBefore = await prisma.outreachEmail.findMany({
-        where: { leadId, status: 'PENDING' },
-      });
-      expect(followUpsBefore.length).toBeGreaterThan(0);
-
-      // Pause sequence
-      await pauseFollowUpSequence(leadId);
-
-      // Verify all pending follow-ups are suppressed
-      const pendingAfter = await prisma.outreachEmail.findMany({
-        where: { leadId, status: 'PENDING' },
-      });
-      expect(pendingAfter.length).toBe(0);
-
-      const suppressedAfter = await prisma.outreachEmail.findMany({
-        where: { leadId, status: 'SUPPRESSED' },
-      });
-      expect(suppressedAfter.length).toBe(followUpsBefore.length);
     });
   });
 });

@@ -10,7 +10,8 @@ import { BRANDING } from '@/lib/config/branding';
 export async function generateCaseStudyPdf(
   auditId: string,
   baseUrl: string = process.env.BASE_URL || 'http://localhost:3000',
-  businessName?: string
+  businessName?: string,
+  token?: string
 ): Promise<Buffer> {
   let browser;
 
@@ -53,7 +54,9 @@ export async function generateCaseStudyPdf(
     } as Parameters<typeof puppeteer.launch>[0]);
 
     const page = await browser.newPage();
-    const url = `${baseUrl}/case-study/${auditId}/pdf`;
+    const url = token
+      ? `${baseUrl}/case-study/${auditId}/pdf?token=${encodeURIComponent(token)}`
+      : `${baseUrl}/case-study/${auditId}/pdf`;
 
     await page.goto(url, { waitUntil: 'load', timeout: 45000 });
     await new Promise((r) => setTimeout(r, 2000));

@@ -1,10 +1,10 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
-import { cachedFetch } from '@/lib/cache/apiCache';
 import { CostTracker } from '@/lib/costs/costTracker';
 import { logger } from '@/lib/logger';
 import { traceLlmCall } from '@/lib/tracing';
 
+import { normalizeConfidence } from './findingGenerator';
 import { AuditModuleResult, Finding } from './types';
 
 export interface SocialDeepModuleInput {
@@ -227,21 +227,9 @@ async function analyzeProfile(
     // Real implementation would use SerpAPI /google_search
 
     // Mocking extraction for demo speed, assuming valid URL
-    // In prod, use: await fetch(url) -> parse meta tags
-
-    // Let's try to fetch meta tags for description (Followers often in description)
-    /*
-        const res = await fetch(url, { headers: { 'User-Agent': 'Bot' } });
-        const html = await res.text();
-        const desc = extractMeta(html, 'description');
-        if (desc) {
-            // "100 Followers, 20 Following"
-            const followers = parseFollowers(desc);
-            if (followers) profile.followers = followers;
-        }
-        */
+    // In prod, we would call a resilient fetcher or use social APIs.
   } catch (e) {
-    console.error(`Failed to analyze ${platform}`, e);
+    logger.error({ platform, error: e }, 'Failed to analyze social profile');
     profile.exists = false;
   }
 

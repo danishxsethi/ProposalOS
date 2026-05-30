@@ -12,6 +12,7 @@
 
 import { FindingStatus } from '@prisma/client';
 
+import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 
 export interface HealthScoreResult {
@@ -168,7 +169,7 @@ export async function updateClientDashboard(auditId: string): Promise<void> {
     });
   } catch (error) {
     // Table may not exist yet if migration hasn't run
-    console.warn('ClientDashboard upsert failed - run migration first:', error);
+    logger.warn({ error }, 'ClientDashboard upsert failed - run migration first');
   }
 }
 

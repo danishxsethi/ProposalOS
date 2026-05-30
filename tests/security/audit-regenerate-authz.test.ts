@@ -11,6 +11,9 @@ const mocks = vi.hoisted(() => ({
   auditUpdate: vi.fn(),
   invokeDiagnosisGraphWithTimeout: vi.fn(),
   runProposalPipeline: vi.fn(),
+  runAutoQA: vi.fn(),
+  getTenantId: vi.fn(),
+  runWithTenantAsync: vi.fn(),
 }));
 
 vi.mock('@/lib/auth', () => ({
@@ -25,6 +28,7 @@ vi.mock('@/lib/logger', () => ({
   logger: {
     info: vi.fn(),
     warn: vi.fn(),
+    debug: vi.fn(),
   },
   logError: vi.fn(),
 }));
@@ -44,6 +48,11 @@ vi.mock('@/lib/prisma', () => ({
   },
 }));
 
+vi.mock('@/lib/tenant/context', () => ({
+  getTenantId: mocks.getTenantId,
+  runWithTenantAsync: mocks.runWithTenantAsync,
+}));
+
 vi.mock('@/lib/costs/costTracker', () => ({
   CostTracker: class CostTracker {
     getTotalCents() {
@@ -54,6 +63,21 @@ vi.mock('@/lib/costs/costTracker', () => ({
       return {};
     }
   },
+  checkDailyAuditLimit: vi.fn().mockReturnValue({
+    allowed: true,
+    limit: 100,
+    todayCount: 5,
+    remaining: 95,
+  }),
+}));
+
+vi.mock('@/lib/middleware/rateLimit', () => ({
+  withRateLimit: () => (req: any, handler: any) => handler(),
+  checkRateLimit: vi.fn().mockResolvedValue({ success: true }),
+}));
+
+vi.mock('@/lib/middleware/idempotency', () => ({
+  withIdempotency: (handler: any) => handler,
 }));
 
 vi.mock('@/lib/graph/diagnosis-graph', () => ({
@@ -64,11 +88,20 @@ vi.mock('@/lib/proposal', () => ({
   runProposalPipeline: mocks.runProposalPipeline,
 }));
 
+vi.mock('@/lib/qa/autoQA', () => ({
+  runAutoQA: mocks.runAutoQA,
+}));
+
 import { POST } from '@/app/api/audit/[id]/regenerate/route';
 
 describe('audit regenerate authorization', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.getTenantId.mockResolvedValue('tenant-a');
+    mocks.runWithTenantAsync.mockImplementation(async (tenantId, fn) => {
+      mocks.getTenantId.mockResolvedValue(tenantId);
+      return fn();
+    });
     mocks.validateApiKey.mockResolvedValue(null);
     mocks.evidenceFindMany.mockResolvedValue([]);
     mocks.invokeDiagnosisGraphWithTimeout.mockResolvedValue({
@@ -76,11 +109,34 @@ describe('audit regenerate authorization', () => {
     });
     mocks.runProposalPipeline.mockResolvedValue({
       executiveSummary: 'Updated summary',
-      tiers: { essentials: {}, growth: {}, premium: {} },
-      pricing: { essentials: 100, growth: 200, premium: 300 },
-      assumptions: [],
-      disclaimers: [],
-      nextSteps: [],
+      tiers: {
+        essentials: { name: 'Essentials', findingIds: ['finding-1'], deliveryTime: '5 days' },
+        growth: { name: 'Growth', findingIds: ['finding-1'], deliveryTime: '10 days' },
+        premium: { name: 'Premium', findingIds: ['finding-1'], deliveryTime: '15 days' },
+      },
+      pricing: { essentials: 100, growth: 200, premium: 300, currency: 'USD' },
+      assumptions: ['Access required'],
+      disclaimers: ['Results may vary'],
+      nextSteps: ['Reply to schedule'],
+    });
+    mocks.runAutoQA.mockReturnValue({
+      score: 75,
+      passedChecks: 10,
+      totalChecks: 13,
+      results: [],
+      warnings: [],
+      needsReview: false,
+      clientPerfect: {
+        score: 75,
+        hardFails: [],
+        requiresHumanReview: false,
+        gates: {
+          truth: { weight: 0.4, score: 75, passedChecks: 5, totalChecks: 5, checks: [] },
+          fit: { weight: 0.35, score: 75, passedChecks: 4, totalChecks: 4, checks: [] },
+          decision: { weight: 0.25, score: 75, passedChecks: 6, totalChecks: 6, checks: [] },
+        },
+        humanCloseability: { provided: false, score: null, passed: null },
+      },
     });
     mocks.proposalCreate.mockResolvedValue({
       id: 'proposal-2',
@@ -140,7 +196,8 @@ describe('audit regenerate authorization', () => {
       tenantId: 'tenant-a',
       businessName: 'Acme Dental',
       businessIndustry: 'Dental',
-      findings: [{ id: 'finding-1' }],
+      businessCity: 'Regina',
+      findings: [{ id: 'finding-1', impactScore: 8, type: 'PAINKILLER', evidence: [] }],
       proposals: [],
     });
 
@@ -154,6 +211,7 @@ describe('audit regenerate authorization', () => {
       id: 'proposal-2',
       version: 1,
       webLinkToken: 'token-2',
+      status: 'READY', // QA score 75 >= 60 → READY
       regenerationsRemaining: 2,
       costCents: 11,
     });
@@ -162,6 +220,7 @@ describe('audit regenerate authorization', () => {
         data: expect.objectContaining({
           auditId: 'audit-1',
           tenantId: 'tenant-a',
+          status: 'READY',
         }),
       })
     );

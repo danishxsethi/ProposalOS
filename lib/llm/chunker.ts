@@ -91,7 +91,7 @@ function trySemanticChunking(text: string, opts: Required<ChunkOptions>): string
 
   while (remaining.length > opts.maxChunkSize) {
     // Find the best break point within the max chunk size
-    let breakPoint = findBestBreakPoint(remaining, opts.maxChunkSize, opts.semanticBoundaries);
+    const breakPoint = findBestBreakPoint(remaining, opts.maxChunkSize, opts.semanticBoundaries);
 
     if (breakPoint === -1) {
       // No good break point found, fall back to character chunking
@@ -99,7 +99,7 @@ function trySemanticChunking(text: string, opts: Required<ChunkOptions>): string
     }
 
     // Extract chunk
-    let chunk = remaining.substring(0, breakPoint).trim();
+    const chunk = remaining.substring(0, breakPoint).trim();
 
     // Ensure chunk meets minimum size
     if (chunk.length < opts.minChunkSize) {

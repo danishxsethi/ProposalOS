@@ -9,7 +9,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 import { generateTraceId, InternalError, UnauthorizedError } from '@/lib/api/errors';
-import { validateApiKey, API_KEY_SCOPES } from '@/lib/auth/apiKeys';
+import { API_KEY_SCOPES, validateApiKey } from '@/lib/auth/apiKeys';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 
@@ -24,35 +24,35 @@ async function verifyDnsRecord(domain: string): Promise<boolean> {
     // In production, use: await dns.resolve4(domain) or a DNS-over-HTTPS API
     // For now, we'll use a simple fetch to check if the domain resolves
     // This is a placeholder - implement proper DNS verification in production
-    
+
     // Option 1: Use Google DNS-over-HTTPS
     const response = await fetch(
       `https://dns.google/resolve?name=${encodeURIComponent(domain)}&type=CNAME`,
       { headers: { accept: 'application/dns-json' } }
     );
-    
+
     if (!response.ok) return false;
-    
-    const data = await response.json() as { 
-      Status: number; 
-      Answer?: { type: number; data: string }[] 
+
+    const data = (await response.json()) as {
+      Status: number;
+      Answer?: { type: number; data: string }[];
     };
-    
+
     // Status 0 = NOERROR
     if (data.Status !== 0) return false;
-    
+
     // Check if CNAME points to our app
     const cnameRecord = data.Answer?.find((a) => a.type === 5); // Type 5 = CNAME
     if (cnameRecord && cnameRecord.data.includes('proposalos')) {
       return true;
     }
-    
+
     // Also check A records
     const aRecord = data.Answer?.find((a) => a.type === 1); // Type 1 = A
     if (aRecord) {
       return true; // Domain has an A record (could be proxied through CDN)
     }
-    
+
     return false;
   } catch (error) {
     logger.error({ error, domain }, 'DNS verification failed');
@@ -67,10 +67,10 @@ async function verifyDnsRecord(domain: string): Promise<boolean> {
  */
 export async function POST(
   request: NextRequest,
-  { params }: { params: { tenantId: string } }
+  context: { params: Promise<{ tenantId: string }> }
 ): Promise<NextResponse> {
   const traceId = generateTraceId();
-  const { tenantId } = params;
+  const { tenantId } = await context.params;
 
   try {
     // Verify tenant owner or admin access
@@ -87,8 +87,7 @@ export async function POST(
     }
 
     const hasAdminScope =
-      validation.scopes.includes(API_KEY_SCOPES.ALL) ||
-      validation.scopes.includes('admin:*');
+      validation.scopes.includes(API_KEY_SCOPES.ALL) || validation.scopes.includes('admin:*');
 
     if (!hasAdminScope && validation.tenantId !== tenantId) {
       throw new UnauthorizedError('Access denied to this tenant');

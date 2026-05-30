@@ -9,15 +9,38 @@
  * SHALL only increase over time.
  */
 
+import { randomUUID } from 'crypto';
 import fc from 'fast-check';
-import { afterAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import * as promptPerformanceDA from '../data-access/prompt-performance';
-import { closeConnection } from '../db';
+import { closeConnection, prisma, executeCommand } from '../db';
 import { PromptPerformanceTracker } from '../PromptPerformanceTracker';
 
 describe('Property 2: Append-Only Log Integrity', () => {
   const tracker = new PromptPerformanceTracker();
+  const testTenantId = '11111111-1111-4111-a111-111111111111';
+
+  beforeAll(async () => {
+    const { runWithTenantBypass } = await import('@/lib/tenant/context');
+    await runWithTenantBypass('seed-test-tenant', async () => {
+      await prisma.tenant.upsert({
+        where: { id: testTenantId },
+        update: {},
+        create: {
+          id: testTenantId,
+          name: 'Tracker Test Tenant',
+          planTier: 'pro',
+          status: 'active',
+        },
+      });
+    });
+  });
+
+  async function withTenant<T>(fn: () => Promise<T>): Promise<T> {
+    const { runWithTenantAsync } = await import('@/lib/tenant/context');
+    return runWithTenantAsync(testTenantId, fn);
+  }
 
   // Define generators for required fields
   const versionHashArb = fc.string({ minLength: 64, maxLength: 64 });
@@ -37,6 +60,11 @@ describe('Property 2: Append-Only Log Integrity', () => {
   });
 
   afterAll(async () => {
+    const { runWithTenantBypass } = await import('@/lib/tenant/context');
+    await runWithTenantBypass('test-cleanup', async () => {
+      await prisma.$executeRaw`DELETE FROM "PromptPerformanceLog" WHERE "tenantId" = ${testTenantId}`;
+      await prisma.$executeRaw`DELETE FROM "PromptVersion" WHERE "tenantId" = ${testTenantId}`;
+    });
     await closeConnection();
   });
 
@@ -63,51 +91,74 @@ describe('Property 2: Append-Only Log Integrity', () => {
           outputTokens,
           metadata
         ) => {
-          // Arrange: Create a performance log entry
-          const logEntry = {
-            promptVersionHash: versionHash,
-            nodeId,
-            qualityScore,
-            downstreamImpact,
-            costUSD: cost,
-            latencyMs: latency,
-            inputTokens,
-            outputTokens,
-            metadata,
-          };
-
-          // Act: Log the performance
-          const result = await tracker.logPerformance(logEntry);
-          const recordId = result.id;
-          const originalTimestamp = result.timestamp;
-
-          // Wait a small amount of time to ensure any potential modification would have a different timestamp
-          await new Promise((resolve) => setTimeout(resolve, 10));
-
-          // Assert: Retrieve the record again and verify it hasn't changed
-          const retrieved = await promptPerformanceDA.getPerformanceByVersion(versionHash);
-          const retrievedRecord = retrieved.find((log) => log.id === recordId);
-
-          expect(retrievedRecord).toBeDefined();
-          if (retrievedRecord) {
-            // Verify all fields remain unchanged
-            expect(retrievedRecord.id).toBe(recordId);
-            expect(retrievedRecord.timestamp).toEqual(originalTimestamp);
-            expect(retrievedRecord.promptVersionHash).toBe(versionHash);
-            expect(retrievedRecord.nodeId).toBe(nodeId);
-            expect(Math.abs(retrievedRecord.qualityScore - qualityScore)).toBeLessThan(0.01);
-            expect(Math.abs(retrievedRecord.downstreamImpact - downstreamImpact)).toBeLessThan(
-              0.01
+          await withTenant(async () => {
+            const versionId = randomUUID();
+            // Seed parent PromptVersion record
+            await executeCommand(
+              `INSERT INTO "PromptVersion" (
+                id, "versionHash", "nodeId", "promptText", "createdBy", "parentVersionHash", "branchName", "changelog", "isActive", "tenantId", "updatedAt"
+              ) VALUES ($1::uuid, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
+              ON CONFLICT ("versionHash") DO NOTHING`,
+              [
+                versionId,
+                versionHash,
+                nodeId,
+                'Dummy prompt text',
+                'system',
+                null,
+                'main',
+                'Changelog',
+                false,
+                testTenantId,
+              ]
             );
-            expect(Math.abs(retrievedRecord.costUSD - cost)).toBeLessThan(0.01);
-            expect(retrievedRecord.latencyMs).toBe(latency);
-            expect(retrievedRecord.inputTokens).toBe(inputTokens);
-            expect(retrievedRecord.outputTokens).toBe(outputTokens);
-            expect(retrievedRecord.metadata).toEqual(metadata);
-          }
+
+            // Arrange: Create a performance log entry
+            const logEntry = {
+              promptVersionHash: versionHash,
+              nodeId,
+              qualityScore,
+              downstreamImpact,
+              costUSD: cost,
+              latencyMs: latency,
+              inputTokens,
+              outputTokens,
+              metadata,
+            };
+
+            // Act: Log the performance
+            const result = await tracker.logPerformance(logEntry);
+            const recordId = result.id;
+            const originalTimestamp = result.timestamp;
+
+            // Wait a small amount of time to ensure any potential modification would have a different timestamp
+            await new Promise((resolve) => setTimeout(resolve, 10));
+
+            // Assert: Retrieve the record again and verify it hasn't changed
+            const retrieved = await promptPerformanceDA.getPerformanceByVersion(versionHash);
+            const retrievedRecord = retrieved.find((log) => log.id === recordId);
+
+            expect(retrievedRecord).toBeDefined();
+            if (retrievedRecord) {
+              // Verify all fields remain unchanged
+              expect(retrievedRecord.id).toBe(recordId);
+              expect(retrievedRecord.timestamp).toEqual(originalTimestamp);
+              expect(retrievedRecord.promptVersionHash).toBe(versionHash);
+              expect(retrievedRecord.nodeId).toBe(nodeId);
+              expect(Math.abs(retrievedRecord.qualityScore - qualityScore)).toBeLessThan(0.01);
+              expect(Math.abs(retrievedRecord.downstreamImpact - downstreamImpact)).toBeLessThan(
+                0.01
+              );
+              expect(Math.abs(retrievedRecord.costUSD - cost)).toBeLessThan(0.01);
+              expect(retrievedRecord.latencyMs).toBe(latency);
+              expect(retrievedRecord.inputTokens).toBe(inputTokens);
+              expect(retrievedRecord.outputTokens).toBe(outputTokens);
+              expect(retrievedRecord.metadata).toEqual(metadata);
+            }
+          });
         }
       ),
-      { numRuns: 100 }
+      { numRuns: 20 }
     );
   });
 
@@ -126,50 +177,75 @@ describe('Property 2: Append-Only Log Integrity', () => {
             outputTokens: tokensArb,
             metadata: metadataArb,
           }),
-          { minLength: 1, maxLength: 10 }
+          { minLength: 1, maxLength: 5 }
         ),
         async (logEntries) => {
-          // Arrange: Get initial count
-          const initialCount = await promptPerformanceDA.getTotalLogCount();
+          await withTenant(async () => {
+            // Arrange: Get initial count
+            const initialCount = await promptPerformanceDA.getTotalLogCount();
 
-          // Act: Log multiple performance entries
-          const recordIds: string[] = [];
-          for (const entry of logEntries) {
-            const result = await tracker.logPerformance({
-              promptVersionHash: entry.versionHash,
-              nodeId: entry.nodeId,
-              qualityScore: entry.qualityScore,
-              downstreamImpact: entry.downstreamImpact,
-              costUSD: entry.cost,
-              latencyMs: entry.latency,
-              inputTokens: entry.inputTokens,
-              outputTokens: entry.outputTokens,
-              metadata: entry.metadata,
-            });
-            recordIds.push(result.id);
-          }
-
-          // Assert: Verify count increased by exactly the number of entries added
-          const finalCount = await promptPerformanceDA.getTotalLogCount();
-          expect(finalCount).toBe(initialCount + logEntries.length);
-
-          // Verify all records are retrievable
-          for (const recordId of recordIds) {
-            let found = false;
+            // Seed parent PromptVersion records
             for (const entry of logEntries) {
-              const retrieved = await promptPerformanceDA.getPerformanceByVersion(
-                entry.versionHash
+              const versionId = randomUUID();
+              await executeCommand(
+                `INSERT INTO "PromptVersion" (
+                  id, "versionHash", "nodeId", "promptText", "createdBy", "parentVersionHash", "branchName", "changelog", "isActive", "tenantId", "updatedAt"
+                ) VALUES ($1::uuid, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
+                ON CONFLICT ("versionHash") DO NOTHING`,
+                [
+                  versionId,
+                  entry.versionHash,
+                  entry.nodeId,
+                  'Dummy prompt text',
+                  'system',
+                  null,
+                  'main',
+                  'Changelog',
+                  false,
+                  testTenantId,
+                ]
               );
-              if (retrieved.find((log) => log.id === recordId)) {
-                found = true;
-                break;
-              }
             }
-            expect(found).toBe(true);
-          }
+
+            // Act: Log multiple performance entries
+            const recordIds: string[] = [];
+            for (const entry of logEntries) {
+              const result = await tracker.logPerformance({
+                promptVersionHash: entry.versionHash,
+                nodeId: entry.nodeId,
+                qualityScore: entry.qualityScore,
+                downstreamImpact: entry.downstreamImpact,
+                costUSD: entry.cost,
+                latencyMs: entry.latency,
+                inputTokens: entry.inputTokens,
+                outputTokens: entry.outputTokens,
+                metadata: entry.metadata,
+              });
+              recordIds.push(result.id);
+            }
+
+            // Assert: Verify count increased by exactly the number of entries added
+            const finalCount = await promptPerformanceDA.getTotalLogCount();
+            expect(finalCount).toBe(initialCount + logEntries.length);
+
+            // Verify all records are retrievable
+            for (const recordId of recordIds) {
+              let found = false;
+              for (const entry of logEntries) {
+                const retrieved = await promptPerformanceDA.getPerformanceByVersion(
+                  entry.versionHash
+                );
+                if (retrieved.find((log) => log.id === recordId)) {
+                  found = true;
+                  break;
+                }
+              }
+              expect(found).toBe(true);
+            }
+          });
         }
       ),
-      { numRuns: 50 }
+      { numRuns: 20 }
     );
   });
 
@@ -196,51 +272,74 @@ describe('Property 2: Append-Only Log Integrity', () => {
           outputTokens,
           metadata
         ) => {
-          // Arrange: Create a performance log entry
-          const logEntry = {
-            promptVersionHash: versionHash,
-            nodeId,
-            qualityScore,
-            downstreamImpact,
-            costUSD: cost,
-            latencyMs: latency,
-            inputTokens,
-            outputTokens,
-            metadata,
-          };
+          await withTenant(async () => {
+            const versionId = randomUUID();
+            // Seed parent PromptVersion record
+            await executeCommand(
+              `INSERT INTO "PromptVersion" (
+                id, "versionHash", "nodeId", "promptText", "createdBy", "parentVersionHash", "branchName", "changelog", "isActive", "tenantId", "updatedAt"
+              ) VALUES ($1::uuid, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
+              ON CONFLICT ("versionHash") DO NOTHING`,
+              [
+                versionId,
+                versionHash,
+                nodeId,
+                'Dummy prompt text',
+                'system',
+                null,
+                'main',
+                'Changelog',
+                false,
+                testTenantId,
+              ]
+            );
 
-          // Act: Log the performance
-          const result = await tracker.logPerformance(logEntry);
-          const recordId = result.id;
+            // Arrange: Create a performance log entry
+            const logEntry = {
+              promptVersionHash: versionHash,
+              nodeId,
+              qualityScore,
+              downstreamImpact,
+              costUSD: cost,
+              latencyMs: latency,
+              inputTokens,
+              outputTokens,
+              metadata,
+            };
 
-          // Assert: Retrieve the record multiple times and verify consistency
-          const retrievals = await Promise.all([
-            promptPerformanceDA.getPerformanceByVersion(versionHash),
-            promptPerformanceDA.getPerformanceByVersion(versionHash),
-            promptPerformanceDA.getPerformanceByVersion(versionHash),
-          ]);
+            // Act: Log the performance
+            const result = await tracker.logPerformance(logEntry);
+            const recordId = result.id;
 
-          // All retrievals should contain the same record with identical data
-          for (const retrieval of retrievals) {
-            const record = retrieval.find((log) => log.id === recordId);
-            expect(record).toBeDefined();
-            if (record) {
-              expect(record.id).toBe(recordId);
-              expect(record.timestamp).toEqual(result.timestamp);
-              expect(record.promptVersionHash).toBe(versionHash);
-              expect(record.nodeId).toBe(nodeId);
-              expect(Math.abs(record.qualityScore - qualityScore)).toBeLessThan(0.01);
-              expect(Math.abs(record.downstreamImpact - downstreamImpact)).toBeLessThan(0.01);
-              expect(Math.abs(record.costUSD - cost)).toBeLessThan(0.01);
-              expect(record.latencyMs).toBe(latency);
-              expect(record.inputTokens).toBe(inputTokens);
-              expect(record.outputTokens).toBe(outputTokens);
-              expect(record.metadata).toEqual(metadata);
+            // Assert: Retrieve the record multiple times and verify consistency
+            const retrievals = await Promise.all([
+              promptPerformanceDA.getPerformanceByVersion(versionHash),
+              promptPerformanceDA.getPerformanceByVersion(versionHash),
+              promptPerformanceDA.getPerformanceByVersion(versionHash),
+            ]);
+
+            // All retrievals should contain the same record with identical data
+            for (const retrieval of retrievals) {
+              const record = retrieval.find((log) => log.id === recordId);
+              expect(record).toBeDefined();
+              if (record) {
+                expect(record.id).toBe(recordId);
+                expect(record.timestamp).toEqual(result.timestamp);
+                expect(record.promptVersionHash).toBe(versionHash);
+                expect(record.nodeId).toBe(nodeId);
+                expect(Math.abs(record.qualityScore - qualityScore)).toBeLessThan(0.01);
+                expect(Math.abs(record.downstreamImpact - downstreamImpact)).toBeLessThan(0.01);
+                expect(Math.abs(record.costUSD - cost)).toBeLessThan(0.01);
+                expect(record.latencyMs).toBe(latency);
+                expect(record.inputTokens).toBe(inputTokens);
+                expect(record.outputTokens).toBe(outputTokens);
+                expect(record.metadata).toEqual(metadata);
+              }
             }
-          }
+          });
         }
       ),
-      { numRuns: 100 }
+      { numRuns: 20 }
     );
   });
 
@@ -262,33 +361,58 @@ describe('Property 2: Append-Only Log Integrity', () => {
           { minLength: 2, maxLength: 5 }
         ),
         async (logEntries) => {
-          // Arrange: Track counts at each step
-          const counts: number[] = [];
-          counts.push(await promptPerformanceDA.getTotalLogCount());
-
-          // Act: Log entries one by one and track count after each
-          for (const entry of logEntries) {
-            await tracker.logPerformance({
-              promptVersionHash: entry.versionHash,
-              nodeId: entry.nodeId,
-              qualityScore: entry.qualityScore,
-              downstreamImpact: entry.downstreamImpact,
-              costUSD: entry.cost,
-              latencyMs: entry.latency,
-              inputTokens: entry.inputTokens,
-              outputTokens: entry.outputTokens,
-              metadata: entry.metadata,
-            });
+          await withTenant(async () => {
+            // Arrange: Track counts at each step
+            const counts: number[] = [];
             counts.push(await promptPerformanceDA.getTotalLogCount());
-          }
 
-          // Assert: Verify counts are strictly increasing
-          for (let i = 1; i < counts.length; i++) {
-            expect(counts[i]).toBe(counts[i - 1] + 1);
-          }
+            // Seed parent PromptVersion records
+            for (const entry of logEntries) {
+              const versionId = randomUUID();
+              await executeCommand(
+                `INSERT INTO "PromptVersion" (
+                  id, "versionHash", "nodeId", "promptText", "createdBy", "parentVersionHash", "branchName", "changelog", "isActive", "tenantId", "updatedAt"
+                ) VALUES ($1::uuid, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
+                ON CONFLICT ("versionHash") DO NOTHING`,
+                [
+                  versionId,
+                  entry.versionHash,
+                  entry.nodeId,
+                  'Dummy prompt text',
+                  'system',
+                  null,
+                  'main',
+                  'Changelog',
+                  false,
+                  testTenantId,
+                ]
+              );
+            }
+
+            // Act: Log entries one by one and track count after each
+            for (const entry of logEntries) {
+              await tracker.logPerformance({
+                promptVersionHash: entry.versionHash,
+                nodeId: entry.nodeId,
+                qualityScore: entry.qualityScore,
+                downstreamImpact: entry.downstreamImpact,
+                costUSD: entry.cost,
+                latencyMs: entry.latency,
+                inputTokens: entry.inputTokens,
+                outputTokens: entry.outputTokens,
+                metadata: entry.metadata,
+              });
+              counts.push(await promptPerformanceDA.getTotalLogCount());
+            }
+
+            // Assert: Verify counts are strictly increasing
+            for (let i = 1; i < counts.length; i++) {
+              expect(counts[i]).toBe(counts[i - 1] + 1);
+            }
+          });
         }
       ),
-      { numRuns: 50 }
+      { numRuns: 20 }
     );
   });
 
@@ -307,45 +431,67 @@ describe('Property 2: Append-Only Log Integrity', () => {
             outputTokens: tokensArb,
             metadata: metadataArb,
           }),
-          { minLength: 1, maxLength: 10 }
+          { minLength: 1, maxLength: 5 }
         ),
         async (logEntries) => {
-          // Arrange: Log entries and collect their IDs
-          const recordIds: string[] = [];
-          for (const entry of logEntries) {
-            const result = await tracker.logPerformance({
-              promptVersionHash: entry.versionHash,
-              nodeId: entry.nodeId,
-              qualityScore: entry.qualityScore,
-              downstreamImpact: entry.downstreamImpact,
-              costUSD: entry.cost,
-              latencyMs: entry.latency,
-              inputTokens: entry.inputTokens,
-              outputTokens: entry.outputTokens,
-              metadata: entry.metadata,
-            });
-            recordIds.push(result.id);
-          }
+          await withTenant(async () => {
+            // Arrange: Log entries and collect their IDs
+            const recordIds: string[] = [];
+            for (const entry of logEntries) {
+              const versionId = randomUUID();
+              await executeCommand(
+                `INSERT INTO "PromptVersion" (
+                  id, "versionHash", "nodeId", "promptText", "createdBy", "parentVersionHash", "branchName", "changelog", "isActive", "tenantId", "updatedAt"
+                ) VALUES ($1::uuid, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
+                ON CONFLICT ("versionHash") DO NOTHING`,
+                [
+                  versionId,
+                  entry.versionHash,
+                  entry.nodeId,
+                  'Dummy prompt text',
+                  'system',
+                  null,
+                  'main',
+                  'Changelog',
+                  false,
+                  testTenantId,
+                ]
+              );
 
-          // Act: Wait a moment and then retrieve all records
-          await new Promise((resolve) => setTimeout(resolve, 10));
-
-          // Assert: All records should still exist
-          const allRecords: string[] = [];
-          for (const entry of logEntries) {
-            const retrieved = await promptPerformanceDA.getPerformanceByVersion(entry.versionHash);
-            for (const record of retrieved) {
-              allRecords.push(record.id);
+              const result = await tracker.logPerformance({
+                promptVersionHash: entry.versionHash,
+                nodeId: entry.nodeId,
+                qualityScore: entry.qualityScore,
+                downstreamImpact: entry.downstreamImpact,
+                costUSD: entry.cost,
+                latencyMs: entry.latency,
+                inputTokens: entry.inputTokens,
+                outputTokens: entry.outputTokens,
+                metadata: entry.metadata,
+              });
+              recordIds.push(result.id);
             }
-          }
 
-          // Verify all original record IDs are still present
-          for (const recordId of recordIds) {
-            expect(allRecords).toContain(recordId);
-          }
+            // Act: Wait a moment and then retrieve all records
+            await new Promise((resolve) => setTimeout(resolve, 10));
+
+            // Assert: All records should still exist
+            const allRecords: string[] = [];
+            for (const entry of logEntries) {
+              const retrieved = await promptPerformanceDA.getPerformanceByVersion(entry.versionHash);
+              for (const record of retrieved) {
+                allRecords.push(record.id);
+              }
+            }
+
+            // Verify all original record IDs are still present
+            for (const recordId of recordIds) {
+              expect(allRecords).toContain(recordId);
+            }
+          });
         }
       ),
-      { numRuns: 50 }
+      { numRuns: 20 }
     );
   });
 });

@@ -3,7 +3,9 @@ import {
   trackPromptOutcome as flywheelTrackPromptOutcome,
   updateBenchmark as flywheelUpdateBenchmark,
 } from '@/lib/flywheel/dataFlywheel';
+import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
+import { getTenantId, getTenantIdFromStore } from '@/lib/tenant/context';
 
 /**
  * Learning Loop Extensions
@@ -62,6 +64,7 @@ export interface OutreachOutcome {
   conversionRate: number;
   vertical: string;
   city: string;
+  tenantId?: string;
 }
 
 export interface WinLossData {
@@ -110,7 +113,12 @@ export async function trackOutreachOutcome(
   outcome: OutreachOutcome
 ): Promise<void> {
   try {
-    const { vertical, city, openRate, clickRate, replyRate, conversionRate } = outcome;
+    const { vertical, city, openRate, clickRate, replyRate, conversionRate, tenantId: providedTenantId } = outcome;
+    
+    let tenantId = providedTenantId || getTenantIdFromStore();
+    if (!tenantId) {
+      tenantId = (await getTenantId()) || (await prisma.tenant.findFirst())?.id || 'default-tenant';
+    }
 
     // Sanitize rates to handle NaN and Infinity
     const sanitizeRate = (rate: number): number => {
@@ -126,7 +134,8 @@ export async function trackOutreachOutcome(
     // Upsert the performance record
     const existing = await prisma.outreachTemplatePerformance.findUnique({
       where: {
-        templateId_vertical_city: {
+        tenantId_templateId_vertical_city: {
+          tenantId,
           templateId,
           vertical,
           city: city || '',
@@ -160,6 +169,7 @@ export async function trackOutreachOutcome(
       // Create new record
       await prisma.outreachTemplatePerformance.create({
         data: {
+          tenantId,
           templateId,
           vertical,
           city: city || '',
@@ -176,11 +186,9 @@ export async function trackOutreachOutcome(
       });
     }
 
-    console.log(
-      `[LearningLoop] Tracked outreach outcome for template ${templateId} in ${vertical}/${city}`
-    );
+    logger.info({ templateId, vertical, city }, '[LearningLoop] Tracked outreach outcome');
   } catch (error) {
-    console.error('[LearningLoop] Failed to track outreach outcome:', error);
+    logger.error({ error }, '[LearningLoop] Failed to track outreach outcome');
     throw error;
   }
 }
@@ -217,9 +225,9 @@ export async function trackWinLoss(
       },
     });
 
-    console.log(`[LearningLoop] Tracked ${data.outcome} outcome for proposal ${proposalId}`);
+    logger.info({ proposalId, outcome: data.outcome }, '[LearningLoop] Tracked win/loss');
   } catch (error) {
-    console.error('[LearningLoop] Failed to track win/loss:', error);
+    logger.error({ error }, '[LearningLoop] Failed to track win/loss');
     throw error;
   }
 }
@@ -316,7 +324,7 @@ export async function recalibratePricing(
       sampleSize: records.length,
     };
   } catch (error) {
-    console.error('[LearningLoop] Failed to recalibrate pricing:', error);
+    logger.error({ error }, '[LearningLoop] Failed to recalibrate pricing');
     throw error;
   }
 }
@@ -454,7 +462,7 @@ export async function getVerticalInsights(vertical: string): Promise<VerticalIns
       avgPainScore,
     };
   } catch (error) {
-    console.error('[LearningLoop] Failed to get vertical insights:', error);
+    logger.error({ error }, '[LearningLoop] Failed to get vertical insights');
     throw error;
   }
 }

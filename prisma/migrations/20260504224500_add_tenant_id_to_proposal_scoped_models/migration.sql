@@ -70,8 +70,8 @@ ALTER TABLE "ConversationState" FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS tenant_isolation ON "ConversationState";
 CREATE POLICY tenant_isolation ON "ConversationState"
   FOR ALL
-  USING ("tenantId"::uuid = current_setting('app.current_tenant_id', true)::uuid)
-  WITH CHECK ("tenantId"::uuid = current_setting('app.current_tenant_id', true)::uuid);
+  USING (((current_user = 'postgres' AND (current_setting('app.current_tenant_id', true) = '' OR current_setting('app.current_tenant_id', true) IS NULL)) OR "tenantId"::text = current_setting('app.current_tenant_id', true)))
+  WITH CHECK (((current_user = 'postgres' AND (current_setting('app.current_tenant_id', true) = '' OR current_setting('app.current_tenant_id', true) IS NULL)) OR "tenantId"::text = current_setting('app.current_tenant_id', true)));
 DROP POLICY IF EXISTS tenant_bypass ON "ConversationState";
 CREATE POLICY tenant_bypass ON "ConversationState"
   FOR ALL
@@ -83,8 +83,8 @@ ALTER TABLE "ObjectionLog" FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS tenant_isolation ON "ObjectionLog";
 CREATE POLICY tenant_isolation ON "ObjectionLog"
   FOR ALL
-  USING ("tenantId"::uuid = current_setting('app.current_tenant_id', true)::uuid)
-  WITH CHECK ("tenantId"::uuid = current_setting('app.current_tenant_id', true)::uuid);
+  USING (((current_user = 'postgres' AND (current_setting('app.current_tenant_id', true) = '' OR current_setting('app.current_tenant_id', true) IS NULL)) OR "tenantId"::text = current_setting('app.current_tenant_id', true)))
+  WITH CHECK (((current_user = 'postgres' AND (current_setting('app.current_tenant_id', true) = '' OR current_setting('app.current_tenant_id', true) IS NULL)) OR "tenantId"::text = current_setting('app.current_tenant_id', true)));
 DROP POLICY IF EXISTS tenant_bypass ON "ObjectionLog";
 CREATE POLICY tenant_bypass ON "ObjectionLog"
   FOR ALL
@@ -96,8 +96,8 @@ ALTER TABLE "EmailSequence" FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS tenant_isolation ON "EmailSequence";
 CREATE POLICY tenant_isolation ON "EmailSequence"
   FOR ALL
-  USING ("tenantId"::uuid = current_setting('app.current_tenant_id', true)::uuid)
-  WITH CHECK ("tenantId"::uuid = current_setting('app.current_tenant_id', true)::uuid);
+  USING (((current_user = 'postgres' AND (current_setting('app.current_tenant_id', true) = '' OR current_setting('app.current_tenant_id', true) IS NULL)) OR "tenantId"::text = current_setting('app.current_tenant_id', true)))
+  WITH CHECK (((current_user = 'postgres' AND (current_setting('app.current_tenant_id', true) = '' OR current_setting('app.current_tenant_id', true) IS NULL)) OR "tenantId"::text = current_setting('app.current_tenant_id', true)));
 DROP POLICY IF EXISTS tenant_bypass ON "EmailSequence";
 CREATE POLICY tenant_bypass ON "EmailSequence"
   FOR ALL

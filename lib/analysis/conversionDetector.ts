@@ -90,8 +90,9 @@ function getElementApproxHeight(
 ): number {
   const $el = $(el as never);
   const style = $el.attr('style') || '';
-  const heightMatch = style.match(/height:\s*(\d+)px/);
-  if (heightMatch) return parseInt(heightMatch[1], 10);
+  const heightMatch = style.match(/height\s*:\s*(\d+)px/i);
+  const heightStr = heightMatch?.[1];
+  if (heightStr) return parseInt(heightStr, 10);
   return 0;
 }
 

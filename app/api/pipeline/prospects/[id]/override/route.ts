@@ -15,7 +15,13 @@ import { NextRequest, NextResponse } from 'next/server';
 
 import { z } from 'zod';
 
-import { generateTraceId, InternalError, NotFoundError, UnauthorizedError } from '@/lib/api/errors';
+import {
+  generateTraceId,
+  InternalError,
+  NotFoundError,
+  UnauthorizedError,
+  ValidationError,
+} from '@/lib/api/errors';
 import { auth } from '@/lib/auth';
 import { withRateLimit } from '@/lib/middleware/rateLimit';
 import { withRole } from '@/lib/middleware/withRole';
@@ -72,7 +78,7 @@ async function handleStatusOverride(req: NextRequest, params: Params): Promise<N
         message: e.message,
       }));
       return NextResponse.json(
-        new NotFoundError('Invalid override data', errorDetails).toEnvelope(req.url, traceId),
+        new ValidationError('Invalid override data', errorDetails).toEnvelope(req.url, traceId),
         { status: 400 }
       );
     }
@@ -91,7 +97,7 @@ async function handleStatusOverride(req: NextRequest, params: Params): Promise<N
         });
       }
 
-      await overrideProspectStatus(id, newStatus, session.user.id, session.user.email, reason);
+      await overrideProspectStatus(id, newStatus, session.user.id!, session.user.email!, reason);
 
       const response = NextResponse.json({
         success: true,
@@ -133,6 +139,6 @@ const rateLimitedHandler = (req: NextRequest, params: Params) =>
     message: 'Too many override requests. Please wait before trying again.',
   })(req, () => handleStatusOverride(req, params));
 
-export const POST = withRole('admin', (req: NextRequest, params: Params) =>
+export const POST = withRole('agency_admin', (req: NextRequest, params: Params) =>
   rateLimitedHandler(req, params)
 );

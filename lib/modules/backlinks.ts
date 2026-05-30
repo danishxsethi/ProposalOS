@@ -1,7 +1,9 @@
-import { cachedFetch } from '@/lib/cache/apiCache';
+import { withModuleCache } from '@/lib/cache/moduleCache';
 import { CostTracker } from '@/lib/costs/costTracker';
 import { logger } from '@/lib/logger';
+import { withProviderResilience } from '@/lib/resilience/withProviderResilience';
 
+import { normalizeConfidence } from './findingGenerator';
 import { AuditModuleResult, Finding } from './types';
 
 export interface BacklinksModuleInput {
@@ -126,32 +128,68 @@ async function getProfile(
     const siteQuery = `site:${domain}`;
     const serpUrl = `https://serpapi.com/search.json?q=${encodeURIComponent(siteQuery)}&api_key=${serpApiKey}`;
 
-    const data = await cachedFetch(
-      'se_site:' + domain,
-      {},
-      async () => {
-        const res = await fetch(serpUrl);
-        return await res.json();
+    const data = await withModuleCache<{ search_information?: { total_results?: number } }>(
+      {
+        module: 'backlinks',
+        version: 1,
+        input: { type: 'site_search', domain },
       },
-      { ttlHours: 168 }
+      { ttlSeconds: 168 * 3600 },
+      async () => {
+        return withProviderResilience<{ search_information?: { total_results?: number } }>(
+          {
+            provider: 'serpapi',
+            operation: 'backlinks:site_search',
+            degrade: true,
+            fallbackValue: { search_information: { total_results: 0 } },
+          },
+          async () => {
+            const res = await fetch(serpUrl);
+            if (!res.ok) {
+              throw new Error(`HTTP error ${res.status}: ${res.statusText}`);
+            }
+            return await res.json();
+          }
+        );
+      }
     );
 
     // SerpAPI returns "About X results" in search_information.total_results
     profile.indexedPages = data.search_information?.total_results || 0;
   } catch (e) {
-    console.error('Site search failed', e);
+    logger.error({ error: e }, 'Site search failed');
   }
 
   // 2. Link Estimation (link:domain.com) - Less reliable on Google but nonzero
   try {
     tracker?.addApiCall('SERP');
     const linkQuery = `link:${domain}`;
-    const data = await cachedFetch('se_link:' + domain, {}, async () => {
-      const res = await fetch(
-        `https://serpapi.com/search.json?q=${encodeURIComponent(linkQuery)}&api_key=${serpApiKey}`
-      );
-      return await res.json();
-    });
+    const data = await withModuleCache<{ search_information?: { total_results?: number } }>(
+      {
+        module: 'backlinks',
+        version: 1,
+        input: { type: 'link_search', domain },
+      },
+      { ttlSeconds: 24 * 3600 },
+      async () => {
+        const url = `https://serpapi.com/search.json?q=${encodeURIComponent(linkQuery)}&api_key=${serpApiKey}`;
+        return withProviderResilience<{ search_information?: { total_results?: number } }>(
+          {
+            provider: 'serpapi',
+            operation: 'backlinks:link_search',
+            degrade: true,
+            fallbackValue: { search_information: { total_results: 0 } },
+          },
+          async () => {
+            const res = await fetch(url);
+            if (!res.ok) {
+              throw new Error(`HTTP error ${res.status}: ${res.statusText}`);
+            }
+            return await res.json();
+          }
+        );
+      }
+    );
     profile.estimatedLinks = data.search_information?.total_results || 0;
   } catch (e) {}
 
@@ -186,14 +224,30 @@ async function checkLinkPresence(
   try {
     tracker?.addApiCall('SERP');
     const url = `https://serpapi.com/search.json?q=${encodeURIComponent(query)}&api_key=${apiKey}`;
-    const data = await cachedFetch(
-      'se_check:' + query,
-      {},
-      async () => {
-        const res = await fetch(url);
-        return await res.json();
+    const data = await withModuleCache<{ organic_results?: Array<{ link: string }> }>(
+      {
+        module: 'backlinks',
+        version: 1,
+        input: { type: 'check_presence', query },
       },
-      { ttlHours: 168 }
+      { ttlSeconds: 168 * 3600 },
+      async () => {
+        return withProviderResilience<{ organic_results?: Array<{ link: string }> }>(
+          {
+            provider: 'serpapi',
+            operation: 'backlinks:check_presence',
+            degrade: true,
+            fallbackValue: { organic_results: [] },
+          },
+          async () => {
+            const res = await fetch(url);
+            if (!res.ok) {
+              throw new Error(`HTTP error ${res.status}: ${res.statusText}`);
+            }
+            return await res.json();
+          }
+        );
+      }
     );
 
     // Check if any result is NOT the target domain itself

@@ -1,7 +1,8 @@
 import { createHash } from 'crypto';
 
-import { cachedFetch } from '@/lib/cache/apiCache';
+import { withModuleCache } from '@/lib/cache/moduleCache';
 import { logger } from '@/lib/logger';
+import { withProviderResilience } from '@/lib/resilience/withProviderResilience';
 
 import { normalizeVertical, VERTICAL_SEARCH_QUERIES } from './config';
 
@@ -177,42 +178,55 @@ async function discoverFromGooglePlaces(input: DiscoveryInput): Promise<SourceDi
     const textQuery = `${phrase} in ${location}`;
     queryCount += 1;
 
-    const response = await cachedFetch(
-      'outreach_places_search',
-      { textQuery, maxPerQuery },
-      async () => {
-        const res = await fetch('https://places.googleapis.com/v1/places:searchText', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-Goog-Api-Key': apiKey,
-            'X-Goog-FieldMask': [
-              'places.id',
-              'places.displayName',
-              'places.formattedAddress',
-              'places.websiteUri',
-              'places.nationalPhoneNumber',
-              'places.internationalPhoneNumber',
-              'places.rating',
-              'places.userRatingCount',
-              'places.primaryTypeDisplayName',
-              'places.googleMapsUri',
-            ].join(','),
-          },
-          body: JSON.stringify({
-            textQuery,
-            maxResultCount: Math.min(20, maxPerQuery),
-          }),
-        });
-
-        if (!res.ok) {
-          const errorText = await res.text();
-          throw new Error(`Places search failed (${res.status}): ${errorText}`);
-        }
-
-        return res.json() as Promise<{ places?: Array<Record<string, unknown>> }>;
+    const response = await withModuleCache<{ places?: Array<Record<string, unknown>> }>(
+      {
+        module: 'outreach_discovery',
+        version: 1,
+        input: { type: 'places_search', textQuery, maxPerQuery },
       },
-      { ttlHours: 24 }
+      { ttlSeconds: 24 * 3600 },
+      async () => {
+        return withProviderResilience<{ places?: Array<Record<string, unknown>> }>(
+          {
+            provider: 'google-places',
+            operation: 'outreach:places_search',
+            degrade: true,
+            fallbackValue: { places: [] },
+          },
+          async () => {
+            const res = await fetch('https://places.googleapis.com/v1/places:searchText', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'X-Goog-Api-Key': apiKey,
+                'X-Goog-FieldMask': [
+                  'places.id',
+                  'places.displayName',
+                  'places.formattedAddress',
+                  'places.websiteUri',
+                  'places.nationalPhoneNumber',
+                  'places.internationalPhoneNumber',
+                  'places.rating',
+                  'places.userRatingCount',
+                  'places.primaryTypeDisplayName',
+                  'places.googleMapsUri',
+                ].join(','),
+              },
+              body: JSON.stringify({
+                textQuery,
+                maxResultCount: Math.min(20, maxPerQuery),
+              }),
+            });
+
+            if (!res.ok) {
+              const errorText = await res.text();
+              throw new Error(`Places search failed (${res.status}): ${errorText}`);
+            }
+
+            return await res.json() as { places?: Array<Record<string, unknown>> };
+          }
+        );
+      }
     );
 
     for (const place of response.places ?? []) {
@@ -271,18 +285,31 @@ async function discoverFromYelp(input: DiscoveryInput): Promise<SourceDiscoveryR
     api_key: serpApiKey,
   });
 
-  const response = await cachedFetch(
-    'outreach_serpapi_yelp',
-    { phrase, location },
-    async () => {
-      const res = await fetch(`https://serpapi.com/search.json?${endpointParams.toString()}`);
-      if (!res.ok) {
-        const text = await res.text();
-        throw new Error(`SerpAPI Yelp failed (${res.status}): ${text}`);
-      }
-      return res.json() as Promise<{ organic_results?: Array<Record<string, unknown>> }>;
+  const response = await withModuleCache<{ organic_results?: Array<Record<string, unknown>> }>(
+    {
+      module: 'outreach_discovery',
+      version: 1,
+      input: { type: 'yelp_search', phrase, location },
     },
-    { ttlHours: 24 }
+    { ttlSeconds: 24 * 3600 },
+    async () => {
+      return withProviderResilience<{ organic_results?: Array<Record<string, unknown>> }>(
+        {
+          provider: 'serpapi',
+          operation: 'outreach:yelp_search',
+          degrade: true,
+          fallbackValue: { organic_results: [] },
+        },
+        async () => {
+          const res = await fetch(`https://serpapi.com/search.json?${endpointParams.toString()}`);
+          if (!res.ok) {
+            const text = await res.text();
+            throw new Error(`SerpAPI Yelp failed (${res.status}): ${text}`);
+          }
+          return await res.json() as { organic_results?: Array<Record<string, unknown>> };
+        }
+      );
+    }
   );
 
   const businesses: DiscoveredBusiness[] = [];
@@ -337,18 +364,31 @@ async function discoverFromDirectoryFallback(
     api_key: serpApiKey,
   });
 
-  const response = await cachedFetch(
-    'outreach_serpapi_local',
-    { phrase, location },
-    async () => {
-      const res = await fetch(`https://serpapi.com/search.json?${endpointParams.toString()}`);
-      if (!res.ok) {
-        const text = await res.text();
-        throw new Error(`SerpAPI local failed (${res.status}): ${text}`);
-      }
-      return res.json() as Promise<{ local_results?: Array<Record<string, unknown>> }>;
+  const response = await withModuleCache<{ local_results?: Array<Record<string, unknown>> }>(
+    {
+      module: 'outreach_discovery',
+      version: 1,
+      input: { type: 'local_search', phrase, location },
     },
-    { ttlHours: 24 }
+    { ttlSeconds: 24 * 3600 },
+    async () => {
+      return withProviderResilience<{ local_results?: Array<Record<string, unknown>> }>(
+        {
+          provider: 'serpapi',
+          operation: 'outreach:local_search',
+          degrade: true,
+          fallbackValue: { local_results: [] },
+        },
+        async () => {
+          const res = await fetch(`https://serpapi.com/search.json?${endpointParams.toString()}`);
+          if (!res.ok) {
+            const text = await res.text();
+            throw new Error(`SerpAPI local failed (${res.status}): ${text}`);
+          }
+          return await res.json() as { local_results?: Array<Record<string, unknown>> };
+        }
+      );
+    }
   );
 
   const businesses: DiscoveredBusiness[] = [];

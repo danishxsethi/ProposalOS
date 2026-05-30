@@ -24,7 +24,8 @@ export interface AggregatedContext {
 export async function aggregateContext(
   audit: Audit & { findings: Finding[]; evidence: EvidenceSnapshot[] }
 ): Promise<AggregatedContext> {
-  const findingCount = audit.findings.length;
+  const findings = audit.findings || [];
+  const findingCount = findings.length;
   let pruningLevel: 'NONE' | 'MODERATE' | 'AGGRESSIVE' = 'NONE';
 
   if (findingCount >= 30) {
@@ -40,7 +41,8 @@ export async function aggregateContext(
 
   // Process Evidence & Visuals
   textContext += `--- EVIDENCE SNAPSHOTS ---\n`;
-  audit.evidence.forEach((ev) => {
+  const evidence = audit.evidence || [];
+  evidence.forEach((ev) => {
     // Assume visual prompts or screenshots tag their source or module appropriately
     if (
       ev.source.toLowerCase().includes('screenshot') ||
@@ -77,7 +79,7 @@ export async function aggregateContext(
 
   // Process Findings
   textContext += `\n--- RAW FINDINGS ---\n`;
-  audit.findings.forEach((f, idx) => {
+  findings.forEach((f, idx) => {
     textContext += `Finding ${idx + 1}: [${f.impactScore}/10] ${f.title}\n`;
 
     if (pruningLevel !== 'AGGRESSIVE' && f.description) {

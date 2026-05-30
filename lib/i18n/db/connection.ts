@@ -3,6 +3,8 @@ import * as path from 'path';
 
 import { Pool, PoolClient } from 'pg';
 
+import { logger } from '@/lib/logger';
+
 let pool: Pool | null = null;
 
 /**
@@ -13,13 +15,20 @@ export function initializePool(config?: any): Pool {
     return pool;
   }
 
-  const dbConfig = config || {
-    host: process.env.DB_HOST || 'localhost',
-    port: parseInt(process.env.DB_PORT || '5432'),
-    database: process.env.DB_NAME || 'deep_localization',
-    user: process.env.DB_USER || 'postgres',
-    password: process.env.DB_PASSWORD || 'postgres',
-  };
+  let dbConfig: any;
+  if (config) {
+    dbConfig = config;
+  } else if (process.env.DATABASE_URL) {
+    dbConfig = { connectionString: process.env.DATABASE_URL };
+  } else {
+    dbConfig = {
+      host: process.env.DB_HOST || 'localhost',
+      port: parseInt(process.env.DB_PORT || '5432'),
+      database: process.env.DB_NAME || 'deep_localization',
+      user: process.env.DB_USER || 'postgres',
+      password: process.env.DB_PASSWORD || 'postgres',
+    };
+  }
 
   pool = new Pool(dbConfig);
   return pool;
@@ -67,7 +76,7 @@ export async function runMigrations(): Promise<void> {
     const seed = fs.readFileSync(seedPath, 'utf-8');
     await client.query(seed);
 
-    console.log('Database migrations completed successfully');
+    logger.info('Database migrations completed successfully');
   } finally {
     client.release();
   }

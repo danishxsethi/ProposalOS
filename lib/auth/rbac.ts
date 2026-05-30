@@ -13,10 +13,15 @@ import { getTenantId } from '@/lib/tenant/context';
  * - agency_member: Manage team members, audits, proposals, and settings
  * - white_label_partner: API-only access for white-label partners (limited to their scoped data)
  * - bic_user: B2C User with read-only access to audits and reports
- * 
+ *
  * Legacy aliases for backward compatibility with existing code
  */
-export type Role = 'super_admin' | 'agency_admin' | 'agency_member' | 'white_label_partner' | 'bic_user';
+export type Role =
+  | 'super_admin'
+  | 'agency_admin'
+  | 'agency_member'
+  | 'white_label_partner'
+  | 'bic_user';
 
 // Legacy role aliases - these are type aliases for backward compatibility
 export type owner = 'super_admin';
@@ -36,11 +41,11 @@ export const LEGACY_ROLE_MAP: Record<'owner' | 'admin' | 'member' | 'viewer' | '
 
 // Legacy role value aliases for string comparisons
 export const LEGACY_ROLE_VALUES: Record<string, Role> = {
-  'owner': 'super_admin',
-  'admin': 'agency_admin',
-  'member': 'agency_member',
-  'viewer': 'bic_user',
-  'partner': 'white_label_partner',
+  owner: 'super_admin',
+  admin: 'agency_admin',
+  member: 'agency_member',
+  viewer: 'bic_user',
+  partner: 'white_label_partner',
 };
 
 /**
@@ -135,7 +140,34 @@ export function hasPermission(currentRole: Role | undefined, permission: string)
  * ```
  */
 export function withRole(role: Role, handler: Function) {
-  return async (req: Request, ...args: unknown[]) => {
+  return async (req: Request, ...args: any[]) => {
+    // 1. Check for API key in headers
+    const authHeader = req.headers.get('Authorization');
+    const xApiKey = req.headers.get('x-api-key')?.trim();
+    const token =
+      xApiKey || (authHeader?.startsWith('Bearer ') ? authHeader.slice(7).trim() : null);
+
+    if (token) {
+      if (process.env.API_KEY && token === process.env.API_KEY) {
+        return handler(req, ...args);
+      }
+
+      if (token.startsWith('pe_live_')) {
+        const { validateApiKey } = await import('@/lib/auth/apiKeys');
+        const validation = await validateApiKey(token);
+        if (validation && !('error' in validation)) {
+          const scopes = validation.scopes;
+          if (
+            scopes.includes('*') ||
+            scopes.includes('audit:create') ||
+            scopes.includes('audit:*')
+          ) {
+            return handler(req, ...args);
+          }
+        }
+      }
+    }
+
     const session = await auth();
     const userRole = (session?.user as { role?: string })?.role as Role | undefined;
 
@@ -161,7 +193,46 @@ export function withRole(role: Role, handler: Function) {
  * ```
  */
 export function withPermission(permission: string, handler: Function) {
-  return async (req: Request, ...args: unknown[]) => {
+  return async (req: Request, ...args: any[]) => {
+    // Check for API key in headers
+    const authHeader = req.headers.get('Authorization');
+    const xApiKey = req.headers.get('x-api-key')?.trim();
+    const token =
+      xApiKey || (authHeader?.startsWith('Bearer ') ? authHeader.slice(7).trim() : null);
+
+    if (token) {
+      if (process.env.API_KEY && token === process.env.API_KEY) {
+        return handler(req, ...args);
+      }
+
+      if (token.startsWith('pe_live_')) {
+        const { validateApiKey } = await import('@/lib/auth/apiKeys');
+        const validation = await validateApiKey(token);
+        if (validation && !('error' in validation)) {
+          if (validation.scopes.includes('*')) {
+            return handler(req, ...args);
+          }
+          const permToScopeMap: Record<string, string[]> = {
+            manage_audits: ['audit:create', 'audit:update', 'audit:delete', 'audit:*'],
+            view_audits: ['audit:read', 'audit:*'],
+            manage_proposals: [
+              'proposal:create',
+              'proposal:update',
+              'proposal:delete',
+              'proposal:*',
+            ],
+            view_proposals: ['proposal:read', 'proposal:*'],
+            manage_settings: ['tenant:update', 'tenant:*'],
+            manage_api_keys: ['api_key:create', 'api_key:delete', 'api_key:*'],
+          };
+          const requiredScopes = permToScopeMap[permission] || [];
+          if (requiredScopes.some((s) => validation.scopes.includes(s))) {
+            return handler(req, ...args);
+          }
+        }
+      }
+    }
+
     const session = await auth();
     const userRole = (session?.user as { role?: string })?.role as Role | undefined;
 

@@ -228,9 +228,12 @@ describe('Pipeline Delivery Cron Endpoint', () => {
         .mockResolvedValueOnce([]); // Verified tasks
 
       vi.mocked(deliveryEngineModule.deliveryEngine.verifyDeliverable).mockResolvedValue({
-        verified: true,
+        deliverableId: 'task-1',
+        passed: true,
+        auditId: 'audit-1',
+        beforeMetrics: { score: 50 },
+        afterMetrics: { score: 85 },
         improvementPercent: 35,
-        beforeAfterComparison: { before: { score: 50 }, after: { score: 85 } },
       });
       vi.mocked(deliveryEngineModule.deliveryEngine.escalateOverdue).mockResolvedValue([]);
 
@@ -417,8 +420,8 @@ describe('Pipeline Delivery Cron Endpoint', () => {
       const data = await response.json();
 
       expect(response.status).toBe(500);
-      expect(data.error).toBe('Internal Server Error');
-      expect(data.message).toBe('Database error');
+      expect(data.error.code).toBe('INTERNAL_ERROR');
+      expect(data.error.message).toBe('Delivery cron failed');
     });
   });
 
@@ -453,9 +456,12 @@ describe('Pipeline Delivery Cron Endpoint', () => {
 
       vi.mocked(deliveryEngineModule.deliveryEngine.dispatchToAgent).mockResolvedValue();
       vi.mocked(deliveryEngineModule.deliveryEngine.verifyDeliverable).mockResolvedValue({
-        verified: true,
+        deliverableId: 'task-2',
+        passed: true,
+        auditId: 'audit-2',
+        beforeMetrics: {},
+        afterMetrics: {},
         improvementPercent: 40,
-        beforeAfterComparison: {},
       });
       vi.mocked(deliveryEngineModule.deliveryEngine.escalateOverdue).mockResolvedValue(
         escalatedTasks

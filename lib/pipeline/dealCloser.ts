@@ -1,6 +1,7 @@
-import { OutreachEventType } from '@prisma/client';
+import { OutreachEventType, Prisma } from '@prisma/client';
 
 import { stripe } from '@/lib/billing/stripe';
+import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 import { runWithTenantAsync, runWithTenantBypass } from '@/lib/tenant/context';
 
@@ -64,7 +65,7 @@ export async function recordEvent(leadId: string, event: EngagementEvent): Promi
         leadId,
         emailId: event.metadata?.emailId as string | undefined,
         type: outreachEventType,
-        metadata: (event.metadata || {}) as Record<string, unknown>,
+        metadata: (event.metadata || {}) as Prisma.InputJsonValue,
         occurredAt: event.timestamp,
       },
     });
@@ -235,7 +236,7 @@ export async function createCheckoutSession(leadId: string, tier: string): Promi
   const proposal = lead.proposalId
     ? await runWithTenantBypass('deal-closer-checkout-session-bootstrap', () =>
         prisma.proposal.findUnique({
-          where: { id: lead.proposalId },
+          where: { id: lead.proposalId! },
         })
       )
     : null;
@@ -434,7 +435,7 @@ export async function handlePaymentFailure(leadId: string, stripeSessionId: stri
   }
 
   // Send payment recovery email (logged for observability)
-  console.log(`[PaymentRetry] Sending recovery email to ${lead.decisionMakerEmail}`);
+  logger.info({ leadId: lead.id }, '[PaymentRetry] Sending recovery email');
 
   // Update retry count
   // In production, this would be stored in a separate payment attempts table

@@ -92,7 +92,7 @@ function resetSchemaAndRls() {
   );
 
   runShell(
-    `DATABASE_URL='${POOLED_POSTGRES_URL}' DIRECT_URL='${DIRECT_URL}' pnpm exec prisma db push --skip-generate`
+    `DATABASE_URL='${POOLED_POSTGRES_URL}' DIRECT_URL='${DIRECT_URL}' npx prisma db push --skip-generate`
   );
 
   runShell(

@@ -1,6 +1,6 @@
 /**
  * Cost tracking for external APIs and LLMs
- * 
+ *
  * Features:
  * - Per-audit cost tracking
  * - Per-tenant spend aggregation
@@ -109,9 +109,9 @@ export interface TenantSpendRecord {
 class GlobalSpendTracker {
   private static instance: GlobalSpendTracker;
   private tenantSpends: Map<string, TenantSpendRecord> = new Map();
-  
+
   private constructor() {}
-  
+
   static getInstance(): GlobalSpendTracker {
     if (!GlobalSpendTracker.instance) {
       GlobalSpendTracker.instance = new GlobalSpendTracker();
@@ -137,7 +137,7 @@ class GlobalSpendTracker {
       this.tenantSpends.set(tenantId, newRecord);
       return newRecord;
     }
-    
+
     // Check if we need to reset monthly/daily counters
     this.checkAndResetCounters(existing);
     return existing;
@@ -149,7 +149,7 @@ class GlobalSpendTracker {
   addSpend(tenantId: string, amountCents: number, tier?: TenantTier): TenantSpendRecord {
     const record = this.getOrCreateRecord(tenantId, tier);
     record.currentMonthSpendCents += amountCents;
-    
+
     // Check budget limits
     const budget = TIER_BUDGETS[record.tier];
     if (record.currentMonthSpendCents >= budget.monthlyBudgetCents) {
@@ -159,7 +159,7 @@ class GlobalSpendTracker {
         'Tenant monthly budget exceeded'
       );
     }
-    
+
     return record;
   }
 
@@ -170,7 +170,7 @@ class GlobalSpendTracker {
     const record = this.getOrCreateRecord(tenantId);
     record.currentMonthAuditCount++;
     record.todayAuditCount++;
-    
+
     const budget = TIER_BUDGETS[record.tier];
     if (record.todayAuditCount > budget.maxAuditsPerDay) {
       record.alertsTriggered.push('DAILY_AUDIT_LIMIT_EXCEEDED');
@@ -179,7 +179,7 @@ class GlobalSpendTracker {
         'Tenant daily audit limit exceeded'
       );
     }
-    
+
     return record;
   }
 
@@ -277,20 +277,22 @@ export class CostTracker {
   private alertTriggered: boolean = false;
   private trackedGeminiSpend: Record<string, number> = {}; // Per-model spend tracking
 
-  constructor(options?: { 
-    capCents?: number; 
-    auditId?: string; 
+  constructor(options?: {
+    capCents?: number;
+    auditId?: string;
     tenantId?: string;
     tenantTier?: TenantTier;
-    alertThresholdPercent?: number 
+    alertThresholdPercent?: number;
   }) {
     // Use tier-based cap if tenant tier provided
-    const tierCap = options?.tenantTier ? TIER_BUDGETS[options.tenantTier].perAuditCapCents : undefined;
+    const tierCap = options?.tenantTier
+      ? TIER_BUDGETS[options.tenantTier].perAuditCapCents
+      : undefined;
     this.capCents = tierCap ?? options?.capCents ?? 200; // Default $2.00
     this.auditId = options?.auditId;
     this.tenantId = options?.tenantId;
     this.tenantTier = options?.tenantTier ?? 'STARTER';
-    
+
     // Default alert threshold at 80% of cap
     const alertPercent = options?.alertThresholdPercent ?? 80;
     this.alertThresholdCents = (this.capCents * alertPercent) / 100;
@@ -380,8 +382,10 @@ export class CostTracker {
     this.trackedGeminiSpend[modelKey] = (this.trackedGeminiSpend[modelKey] || 0) + cost;
 
     this.usage[modelKey] = (this.usage[modelKey] || 0) + 1;
-    this.usage[`${modelKey}_INPUT_TOKENS`] = (this.usage[`${modelKey}_INPUT_TOKENS`] || 0) + inputTokens;
-    this.usage[`${modelKey}_OUTPUT_TOKENS`] = (this.usage[`${modelKey}_OUTPUT_TOKENS`] || 0) + outputTokens;
+    this.usage[`${modelKey}_INPUT_TOKENS`] =
+      (this.usage[`${modelKey}_INPUT_TOKENS`] || 0) + inputTokens;
+    this.usage[`${modelKey}_OUTPUT_TOKENS`] =
+      (this.usage[`${modelKey}_OUTPUT_TOKENS`] || 0) + outputTokens;
     if (thoughtsTokenCount > 0) {
       this.usage[`${modelKey}_THOUGHTS_TOKENS`] =
         (this.usage[`${modelKey}_THOUGHTS_TOKENS`] || 0) + thoughtsTokenCount;
@@ -458,13 +462,13 @@ export class CostTracker {
     maxAuditsPerDay: number;
   } | null {
     if (!this.tenantId) return null;
-    
+
     const record = globalSpendTracker.getRecord(this.tenantId);
     if (!record) return null;
-    
+
     const budget = TIER_BUDGETS[record.tier];
     const budgetUsedPercent = (record.currentMonthSpendCents / budget.monthlyBudgetCents) * 100;
-    
+
     return {
       tenantId: this.tenantId,
       tier: record.tier,
@@ -482,7 +486,7 @@ export class CostTracker {
 /**
  * Get tier budget configuration
  */
-export function getTierBudget(tier: TenantTier): typeof TIER_BUDGETS[TenantTier] {
+export function getTierBudget(tier: TenantTier): (typeof TIER_BUDGETS)[TenantTier] {
   return TIER_BUDGETS[tier];
 }
 
@@ -497,12 +501,17 @@ export function checkDailyAuditLimit(tenantId: string): {
 } {
   const record = globalSpendTracker.getRecord(tenantId);
   if (!record) {
-    return { allowed: true, todayCount: 0, limit: TIER_BUDGETS.STARTER.maxAuditsPerDay, remaining: TIER_BUDGETS.STARTER.maxAuditsPerDay };
+    return {
+      allowed: true,
+      todayCount: 0,
+      limit: TIER_BUDGETS.STARTER.maxAuditsPerDay,
+      remaining: TIER_BUDGETS.STARTER.maxAuditsPerDay,
+    };
   }
-  
+
   const budget = TIER_BUDGETS[record.tier];
   const remaining = Math.max(0, budget.maxAuditsPerDay - record.todayAuditCount);
-  
+
   return {
     allowed: record.todayAuditCount < budget.maxAuditsPerDay,
     todayCount: record.todayAuditCount,
@@ -516,4 +525,11 @@ export function checkDailyAuditLimit(tenantId: string): {
  */
 export function getGlobalSpendSummary() {
   return globalSpendTracker.getGlobalSummary();
+}
+
+/**
+ * Increment daily audit counter for tenant
+ */
+export function incrementAuditCount(tenantId: string): void {
+  globalSpendTracker.incrementAuditCount(tenantId);
 }

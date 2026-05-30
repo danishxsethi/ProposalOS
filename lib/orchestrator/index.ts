@@ -5,19 +5,20 @@
  */
 import { deduplicateFindings } from '@/lib/audit/runner';
 import { CostTracker } from '@/lib/costs/costTracker';
+import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 
 import { AuditOrchestrator, OrchestratorResult } from './auditOrchestrator';
 
 export async function runAuditOrchestrator(auditId: string) {
-  console.log(`[Runner] Starting audit ${auditId}`);
+  logger.info({ auditId }, '[Runner] Starting audit');
 
   // 1. Fetch Audit
   const audit = await prisma.audit.findUnique({ where: { id: auditId } });
   if (!audit) throw new Error('Audit not found');
 
   if (audit.status !== 'QUEUED') {
-    console.log(`[Runner] Audit ${auditId} already ${audit.status}`);
+    logger.info({ auditId, status: audit.status }, '[Runner] Audit already processed');
     return;
   }
 
@@ -62,7 +63,7 @@ export async function runAuditOrchestrator(auditId: string) {
     // 4. Run
     const result: OrchestratorResult = await orchestrator.run();
 
-    console.log(`[Runner] Audit ${auditId} orchestrator complete: ${result.status}`);
+    logger.info({ auditId, status: result.status }, '[Runner] Audit orchestrator complete');
 
     // 5. Save Final Results (map DEGRADED to PARTIAL for Prisma enum)
     const dbStatus = result.status === 'DEGRADED' ? 'PARTIAL' : result.status;
@@ -101,9 +102,9 @@ export async function runAuditOrchestrator(auditId: string) {
       }
     }
 
-    console.log(`[Runner] Audit ${auditId} saved to database`);
+    logger.info({ auditId }, '[Runner] Audit saved to database');
   } catch (error) {
-    console.error(`[Runner] Audit ${auditId} crash`, error);
+    logger.error({ auditId, error }, '[Runner] Audit crash');
     await prisma.audit.update({
       where: { id: auditId },
       data: { status: 'FAILED' },

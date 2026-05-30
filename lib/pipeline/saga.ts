@@ -268,13 +268,13 @@ export async function diagnosisProposalSaga(
     );
 
     // Step 2: Execute diagnosis
-    const diagnosisResult = await executeStep(
+    const diagnosisResult = (await executeStep(
       saga,
       async () => {
         return await executeDiagnosis();
       },
       { type: 'DELETE_FINDINGS', auditId }
-    );
+    )) as any;
     clusters = diagnosisResult.clusters;
 
     // Step 3: Execute proposal generation
@@ -383,13 +383,13 @@ export async function fullPipelineSaga(
     }
 
     // Step 3: Diagnosis
-    const diagnosisResult = await executeStep(
+    const diagnosisResult = (await executeStep(
       saga,
       async () => {
         return await stages.diagnose();
       },
       { type: 'DELETE_FINDINGS', auditId: auditId! }
-    );
+    )) as any;
     clusters = diagnosisResult.clusters;
 
     // Step 4: Proposal

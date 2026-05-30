@@ -1,5 +1,6 @@
 import { ProposalStatus } from '@prisma/client';
 
+import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 
 export interface CartAbandonmentEvent {
@@ -313,16 +314,14 @@ export class CartAbandonmentService {
     try {
       // In a real implementation, this would send an email or trigger a notification
       // For now, we'll just log the follow-up
-      console.log(
-        `Triggering follow-up for abandoned cart: ${email}, proposal: ${proposalId}, tier: ${tierId}`
-      );
+      logger.info({ proposalId, tierId }, 'Triggering follow-up for abandoned cart');
 
       // You could integrate with your email service here
       // await sendAbandonedCartEmail(email, proposalId, tierId);
 
       return true;
     } catch (error) {
-      console.error('Error triggering follow-up:', error);
+      logger.error({ error }, 'Error triggering follow-up');
       return false;
     }
   }

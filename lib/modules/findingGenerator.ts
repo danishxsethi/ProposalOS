@@ -356,7 +356,7 @@ export function generateWebsiteFindings(data: any): Finding[] {
   // Normalize: support both { scores, coreWebVitals, finalUrl } and raw lighthouse format
   let scores = data.scores ?? {};
   let coreWebVitals = data.coreWebVitals ?? {};
-  let finalUrl = data.finalUrl ?? data.loadingExperience?.origin_fallback ?? '';
+  const finalUrl = data.finalUrl ?? data.loadingExperience?.origin_fallback ?? '';
 
   if (data.lighthouseResult && (!scores.performance || Object.keys(coreWebVitals).length === 0)) {
     const lh = data.lighthouseResult;
@@ -1686,7 +1686,7 @@ export function generateGBPCompletenessFindings(
     const missingCount = completeness.breakdown.filter((b) => !b.present).length;
     const gradeText = `Grade: ${completeness.grade}`;
     const compText = completeness.competitorComparison?.length
-      ? ` You: ${completeness.competitorComparison[0].you} | Competitor: ${completeness.competitorComparison[0].competitor}`
+      ? ` You: ${completeness.competitorComparison[0]!.you} | Competitor: ${completeness.competitorComparison[0]!.competitor}`
       : '';
     const quickWinsText =
       completeness.recommendations.length > 0

@@ -16,12 +16,13 @@ type PrismaWithModels = typeof prisma & {
   aBVariant: any;
 };
 
-export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
+    const { id } = await context.params;
     const prismaWithModels = prisma as PrismaWithModels;
 
     const experiment = await prismaWithModels.aBExperiment.findUnique({
-      where: { id: params.id },
+      where: { id },
       include: {
         variants: {
           include: {
@@ -43,15 +44,16 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
   }
 }
 
-export async function PUT(request: NextRequest, { params }: { params: { id: string } }) {
+export async function PUT(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
+    const { id } = await context.params;
     const body = await request.json();
     const { status } = body;
 
     const prismaWithModels = prisma as PrismaWithModels;
 
     const experiment = await prismaWithModels.aBExperiment.update({
-      where: { id: params.id },
+      where: { id },
       data: {
         status,
         endDate: status === 'completed' || status === 'paused' ? new Date() : undefined,
@@ -72,8 +74,9 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
   }
 }
 
-export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
+    const { id } = await context.params;
     const searchParams = request.nextUrl.searchParams;
     const action = searchParams.get('action') || 'complete';
     const winnerVariantId = searchParams.get('winnerVariantId');
@@ -82,17 +85,17 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
 
     if (action === 'promote' && winnerVariantId) {
       // Promote a specific variant
-      const result = await manualPromote(params.id, winnerVariantId);
+      const result = await manualPromote(id, winnerVariantId);
       return NextResponse.json({ result });
     } else if (action === 'check') {
       // Check for winner without promoting
       const results = await checkAndPromoteWinners();
-      const thisExperimentResult = results.find((r) => r.experimentId === params.id);
+      const thisExperimentResult = results.find((r) => r.experimentId === id);
       return NextResponse.json({ result: thisExperimentResult || null });
     } else {
       // Just complete without promotion
       await prismaWithModels.aBExperiment.update({
-        where: { id: params.id },
+        where: { id },
         data: {
           status: 'completed',
           endDate: new Date(),

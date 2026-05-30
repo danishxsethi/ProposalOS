@@ -33,12 +33,8 @@ export const revalidate = 0;
  * 5. Logs deletion for audit trail
  * 6. Returns deletion certificate
  */
-async function handleDataDeletion(
-  req: Request,
-  params: { params: { tenantId: string } }
-): Promise<NextResponse> {
+async function handleDataDeletion(req: Request, tenantId: string): Promise<NextResponse> {
   const traceId = generateTraceId();
-  const { tenantId } = params.params;
 
   try {
     // Verify tenant exists
@@ -274,12 +270,7 @@ async function handleDataDeletion(
 /**
  * Get deletion status for a tenant
  */
-async function getDeletionStatus(
-  req: Request,
-  params: { params: { tenantId: string } }
-): Promise<NextResponse> {
-  const { tenantId } = params.params;
-
+async function getDeletionStatus(req: Request, tenantId: string): Promise<NextResponse> {
   try {
     const deletionEvents = await prisma.auditTrailEvent.findMany({
       where: {
@@ -315,12 +306,14 @@ async function getDeletionStatus(
 // Auth wrapper - only allow tenant admins or system admins
 const authHandler = async (
   req: Request,
-  params: { params: { tenantId: string } }
+  context: { params: Promise<{ tenantId: string }> }
 ): Promise<NextResponse> => {
+  const { tenantId } = await context.params;
+
   // For cron requests, verify cron auth
   const isCronRequest = req.headers.get('X-Cron-Auth') === 'true';
   if (isCronRequest) {
-    const authError = verifyCronAuth(req);
+    const authError = await verifyCronAuth(req);
     if (authError) return authError;
   }
 
@@ -333,9 +326,9 @@ const authHandler = async (
 
   if (req.method === 'DELETE') {
     // The route param is the authority for this destructive tenant-local workflow.
-    return runWithTenantAsync(params.params.tenantId, () => handleDataDeletion(req, params));
+    return runWithTenantAsync(tenantId, () => handleDataDeletion(req, tenantId));
   } else if (req.method === 'GET') {
-    return runWithTenantAsync(params.params.tenantId, () => getDeletionStatus(req, params));
+    return runWithTenantAsync(tenantId, () => getDeletionStatus(req, tenantId));
   }
 
   return NextResponse.json({ error: 'Method not allowed' }, { status: 405 });

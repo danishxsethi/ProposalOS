@@ -10,23 +10,38 @@ export interface TenantRuntimeContext {
   tenantId: string | null;
   bypassRls: boolean;
   currentTx: Prisma.TransactionClient | null;
+  isDispatching?: boolean;
 }
 
 type Awaitable<T> = T | PromiseLike<T>;
 
-const tenantStorage = new AsyncLocalStorage<TenantRuntimeContext>();
+const globalForTenantStorage = globalThis as unknown as {
+  tenantStorage: AsyncLocalStorage<TenantRuntimeContext> | undefined;
+};
+
+const tenantStorage =
+  globalForTenantStorage.tenantStorage ?? new AsyncLocalStorage<TenantRuntimeContext>();
+
+if (process.env.NODE_ENV !== 'production') {
+  globalForTenantStorage.tenantStorage = tenantStorage;
+}
 
 function getDefaultTenantRuntimeContext(): TenantRuntimeContext {
   return {
     tenantId: null,
     bypassRls: false,
     currentTx: null,
+    isDispatching: false,
   };
 }
 
-function withTenantRuntimeContext<T>(overrides: Partial<TenantRuntimeContext>, fn: () => T): T {
+export function withTenantRuntimeContext<T>(overrides: Partial<TenantRuntimeContext>, fn: () => T): T {
   const current = tenantStorage.getStore() ?? getDefaultTenantRuntimeContext();
   return tenantStorage.run({ ...current, ...overrides }, fn);
+}
+
+export function runWithDispatch<T>(fn: () => T): T {
+  return withTenantRuntimeContext({ isDispatching: true }, fn);
 }
 
 function assertBypassReason(reason: unknown): string {

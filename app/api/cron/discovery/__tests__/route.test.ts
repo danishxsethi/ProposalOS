@@ -217,6 +217,7 @@ describe('GET /api/cron/discovery', () => {
     const res = await GET(makeRequest('Bearer test-secret'));
     expect(res.status).toBe(500);
     const body = await res.json();
-    expect(body.error).toBe('Internal Server Error');
+    expect(body.error.code).toBe('INTERNAL_ERROR');
+    expect(body.error.message).toBe('Discovery cron failed');
   });
 });

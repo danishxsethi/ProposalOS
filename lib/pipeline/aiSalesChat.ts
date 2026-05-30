@@ -217,7 +217,7 @@ Intent definitions:
       };
     }
   } catch (error) {
-    console.error('[AI Sales Chat] Intent detection error:', error);
+    logger.error({ error }, '[AI Sales Chat] Intent detection error');
   }
 
   // Default fallback
@@ -342,7 +342,7 @@ RESPONSE:`;
 
     // Log if response took longer than 5 seconds (requirement 15.2)
     if (elapsedTime > 5000) {
-      console.warn(`[AI Sales Chat] Response took ${elapsedTime}ms (>5s threshold)`);
+      logger.warn({ elapsedTime }, '[AI Sales Chat] Response took >5s threshold');
     }
 
     return {
@@ -353,7 +353,7 @@ RESPONSE:`;
       intent,
     };
   } catch (error) {
-    console.error('[AI Sales Chat] Error generating response:', error);
+    logger.error({ error }, '[AI Sales Chat] Error generating response');
 
     // Fallback response
     return {
@@ -437,11 +437,9 @@ export async function recordOutcome(
     }
 
     // Log for learning loop
-    console.log(
-      `[AI Sales Chat] Recorded outcome: ${outcome} for proposal ${proposalId}, objections: ${objections.join(', ')}`
-    );
+    logger.info({ proposalId, outcome }, '[AI Sales Chat] Recorded outcome');
   } catch (error) {
-    console.error('[AI Sales Chat] Error recording outcome:', error);
+    logger.error({ error }, '[AI Sales Chat] Error recording outcome');
   }
 }
 

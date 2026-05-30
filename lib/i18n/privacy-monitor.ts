@@ -5,6 +5,8 @@
 
 import { randomUUID } from 'crypto';
 
+import { logger } from '@/lib/logger';
+
 // ============================================================================
 // Types
 // ============================================================================
@@ -147,8 +149,9 @@ export class PrivacyMonitor {
 
     // In production this would integrate with email / Slack / PagerDuty
     // e.g. await slackClient.postMessage({ channel: '#privacy-alerts', text: ... });
-    console.warn(
-      `[PrivacyMonitor] ALERT [${concern.severity.toUpperCase()}] ${concern.type}: ${concern.description} (id=${concern.id})`
+    logger.warn(
+      { concernId: concern.id, type: concern.type, severity: concern.severity },
+      `[PrivacyMonitor] ALERT: ${concern.description}`
     );
   }
 

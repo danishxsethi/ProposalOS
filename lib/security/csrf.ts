@@ -11,7 +11,7 @@
  * OWASP Reference: https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html
  */
 
-import { randomBytes, createHash } from 'crypto';
+import { createHash, randomBytes } from 'crypto';
 
 const CSRF_COOKIE_NAME = '__Host-csrf-token';
 const CSRF_HEADER_NAME = 'x-csrf-token';

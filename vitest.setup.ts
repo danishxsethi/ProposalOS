@@ -1,9 +1,11 @@
 import '@testing-library/jest-dom';
 import { loadEnvConfig } from '@next/env';
-loadEnvConfig(process.cwd());
 import { http, HttpResponse } from 'msw';
 import { setupServer } from 'msw/node';
-import { afterAll, afterEach, beforeAll } from 'vitest';
+import { afterAll, afterEach, beforeAll, vi } from 'vitest';
+
+loadEnvConfig(process.cwd());
+vi.mock('server-only', () => ({}));
 
 // Mock Server for API calls
 export const server = setupServer(

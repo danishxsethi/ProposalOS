@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 
 import { invokeDiagnosisGraphWithTimeout } from '@/lib/graph/diagnosis-graph';
+import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 // P0-3: Use LangGraph path — includes evidence verification, validation retry, adversarial QA
 import { getTenantId } from '@/lib/tenant/context';
@@ -37,8 +38,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       return NextResponse.json({ error: 'No findings to diagnose' }, { status: 400 });
     }
 
-    console.log(
-      `[Diagnose] Running diagnosis for audit ${auditId} with ${audit.findings.length} findings...`
+    logger.info(
+      { event: 'diagnose.start', auditId, findingsCount: audit.findings.length },
+      'Running diagnosis'
     );
 
     const evidenceSnapshots = await prisma.evidenceSnapshot.findMany({
@@ -57,7 +59,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       mode: 'MULTI_STEP',
     });
 
-    console.log(`[Diagnose] Generated ${diagnosisResult.clusters?.length || 0} clusters`);
+    logger.info(
+      { event: 'diagnose.complete', auditId, clusterCount: diagnosisResult.clusters?.length ?? 0 },
+      'Diagnosis complete'
+    );
 
     return NextResponse.json({
       success: true,

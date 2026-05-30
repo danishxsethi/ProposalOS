@@ -5,6 +5,7 @@
  * based on recipient engagement (opens, clicks, replies).
  */
 
+import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 
 export type EngagementState =
@@ -340,7 +341,10 @@ export async function processPendingEmailSequences(): Promise<{
 
     if (decision.shouldSend) {
       // TODO: Trigger actual email send via email sender
-      console.log(`Would send email ${decision.nextStep} to proposal ${proposal.id}`);
+      logger.info(
+        { event: 'email.sequence.pending_send', proposalId: proposal.id, step: decision.nextStep },
+        'Email sequence step ready to send'
+      );
       sent++;
     } else {
       skipped++;

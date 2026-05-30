@@ -9,7 +9,7 @@ const tracker = new PromptPerformanceTracker();
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request) {
-  const authError = verifyCronAuth(request);
+  const authError = await verifyCronAuth(request);
   if (authError) return authError;
 
   try {

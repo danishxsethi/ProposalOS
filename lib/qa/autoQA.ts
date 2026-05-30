@@ -1,6 +1,6 @@
 import { Finding } from '@prisma/client';
 
-import { ProposalResult } from '@/lib/proposal';
+import { inferOrganizationSegment, ProposalResult } from '@/lib/proposal';
 import { ComparisonReport } from '@/lib/proposal/types';
 
 export interface QAResult {
@@ -63,6 +63,7 @@ export interface QAContext {
   industry?: string | null;
   comparisonReport?: ComparisonReport | null;
   humanCloseability?: HumanCloseabilityInput | null;
+  businessUrl?: string | null;
 }
 
 const METRIC_PATTERN =
@@ -248,6 +249,15 @@ export function runAutoQA(
     },
   ];
 
+  const segment = inferOrganizationSegment(context?.businessUrl, businessName, context?.industry);
+  const isNonSmb = segment !== 'smb_local' && segment !== 'baseline_unknown';
+  const fullProposalText = JSON.stringify(proposal).toLowerCase();
+  const prohibitedLocalTerms = ['google business profile', 'gbp', 'google maps', 'local reviews', 'local marketing', 'local seo'];
+  const foundLocalTerms = isNonSmb 
+    ? prohibitedLocalTerms.filter(term => fullProposalText.includes(term))
+    : [];
+  const passedLocalSEOCheck = !isNonSmb || foundLocalTerms.length === 0;
+
   // --- Fit Gate (35%) ---
   const fitChecks: QAResult[] = [
     {
@@ -279,6 +289,16 @@ export function runAutoQA(
         competitorNames.length > 0
           ? `Competitors considered: ${competitorNames.slice(0, 3).join(', ')}`
           : 'No competitor context provided',
+    },
+    {
+      category: 'Fit',
+      check: 'Non-SMB Local Copy Suppression',
+      passed: passedLocalSEOCheck,
+      details: isNonSmb
+        ? (foundLocalTerms.length === 0
+          ? `Valid non-SMB proposal (Segment: ${segment}): No local marketing terms found.`
+          : `Flagged: Found local marketing terms in non-SMB proposal (Segment: ${segment}): ${foundLocalTerms.join(', ')}`)
+        : `Skipped: SMB/Unknown target segment: ${segment}`,
     },
   ];
 

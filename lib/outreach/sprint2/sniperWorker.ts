@@ -15,6 +15,7 @@ import { runAudit } from '@/lib/audit/runner';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 import { generateProposal } from '@/lib/proposal/runner';
+import { withProviderResilience } from '@/lib/resilience/withProviderResilience';
 
 import { incrementDomainCounter, selectDomainForSend } from './domainRotation';
 import { ensureBaseUrl, ensureLeadScorecardToken, scorecardUrlForToken } from './scorecard';
@@ -134,7 +135,7 @@ async function ensureProposalUrlForLead(
       select: { id: true },
     });
     runAudit(created.id).catch((error) => {
-      console.error(`Bg audit failed for ${created.id}:`, error);
+      logger.error({ auditId: created.id, error }, 'Bg audit failed');
     });
   }
 
@@ -172,23 +173,35 @@ async function sendWithResend(params: {
 
   const resend = new Resend(key);
   const fromName = params.fromName || process.env.OUTREACH_SENDER_NAME || 'ProposalOS';
-  const response = await resend.emails.send({
-    from: `${fromName} <${params.fromEmail}>`,
-    to: params.toEmail,
-    subject: params.subject,
-    html: params.html,
-    tags: [
-      { name: 'category', value: 'outreach-sniper' },
-      { name: 'lead_id', value: params.leadId },
-      { name: 'tenant_id', value: params.tenantId },
-    ],
-  });
 
-  if (response.error) {
-    throw new Error(response.error.message || 'Resend send failed');
-  }
+  const messageId = await withProviderResilience<string | null>(
+    {
+      provider: 'resend',
+      operation: 'outreach:send_email',
+      tenantId: params.tenantId,
+    },
+    async () => {
+      const response = await resend.emails.send({
+        from: `${fromName} <${params.fromEmail}>`,
+        to: params.toEmail,
+        subject: params.subject,
+        html: params.html,
+        tags: [
+          { name: 'category', value: 'outreach-sniper' },
+          { name: 'lead_id', value: params.leadId },
+          { name: 'tenant_id', value: params.tenantId },
+        ],
+      });
 
-  return { messageId: response.data?.id ?? null };
+      if (response.error) {
+        throw new Error(response.error.message || 'Resend send failed');
+      }
+
+      return response.data?.id ?? null;
+    }
+  );
+
+  return { messageId };
 }
 
 async function fetchEligibleLeads(tenantId: string, limit: number): Promise<LeadWithOutreach[]> {

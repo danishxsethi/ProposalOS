@@ -3,18 +3,20 @@ import { describe, expect, it, vi } from 'vitest';
 import { CostTracker } from '../costs/costTracker';
 import { runDiagnosisPipeline } from '../diagnosis';
 
-// Mock LLM clustering
-vi.mock('../diagnosis/llmCluster', () => ({
-  llmClusterFindings: vi.fn().mockResolvedValue([
-    {
-      id: 'cluster-1',
-      rootCause: 'SEO Issues',
-      severity: 'high' as const,
-      findingIds: ['1'],
-      narrative: 'Low visibility affects revenue',
-    },
-  ]),
-  generateNarratives: vi.fn().mockImplementation((clusters: any[]) => Promise.resolve(clusters)),
+// Mock LangGraph diagnosis graph
+vi.mock('@/lib/graph/diagnosis-graph', () => ({
+  invokeDiagnosisGraphWithTimeout: vi.fn().mockResolvedValue({
+    clusters: [
+      {
+        id: 'cluster-1',
+        rootCause: 'SEO Issues',
+        severity: 'high',
+        findingIds: ['1'],
+        narrative: 'Low visibility affects revenue',
+      },
+    ],
+    validation: { valid: true },
+  }),
 }));
 
 describe('Diagnosis Pipeline', () => {

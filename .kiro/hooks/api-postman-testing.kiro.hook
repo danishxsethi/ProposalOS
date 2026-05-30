@@ -7,15 +7,13 @@
     "type": "fileEdited",
     "patterns": [
       "*.ts",
-      "*.tsx",
       "*.js",
-      "*.jsx",
+      "*.mjs",
+      "*.json",
       "openapi.yaml",
       "openapi.yml",
       "swagger.yaml",
-      "swagger.yml",
-      "api.yaml",
-      "api.yml"
+      "swagger.yml"
     ]
   },
   "then": {

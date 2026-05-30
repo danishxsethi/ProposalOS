@@ -11,6 +11,8 @@
  * Requirements: 1.5, 1.8
  */
 
+import { Prisma } from '@prisma/client';
+
 import { prisma } from '@/lib/prisma';
 
 import type { EnrichmentResult } from './types';
@@ -213,7 +215,7 @@ export async function enrichProspect(
         where: { id: enrichmentRun.id },
         data: {
           status: 'SUCCESS',
-          responsePayload: result as Record<string, unknown>,
+          responsePayload: result as unknown as Prisma.InputJsonValue,
           completedAt: new Date(),
         },
       });

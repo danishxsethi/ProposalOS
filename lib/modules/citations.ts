@@ -1,9 +1,11 @@
 import * as cheerio from 'cheerio';
 
-import { cachedFetch } from '@/lib/cache/apiCache';
+import { withModuleCache } from '@/lib/cache/moduleCache';
 import { CostTracker } from '@/lib/costs/costTracker';
 import { logger } from '@/lib/logger';
+import { withProviderResilience } from '@/lib/resilience/withProviderResilience';
 
+import { normalizeConfidence } from './findingGenerator';
 import { AuditModuleResult, Finding } from './types';
 
 export interface CitationsModuleInput {
@@ -162,9 +164,23 @@ async function checkYelp(
 
     if (!serpApiKey) {
       // Fallback: direct HTTP scraping (less reliable)
-      const html = await fetch(url, {
-        headers: { 'User-Agent': 'Mozilla/5.0 (compatible; ProposalOSBot/1.0)' },
-      }).then((r) => r.text());
+      const html = await withProviderResilience<string>(
+        {
+          provider: 'crawler',
+          operation: 'citations:yelp_scrape',
+          degrade: true,
+          fallbackValue: '',
+        },
+        async () => {
+          const res = await fetch(url, {
+            headers: { 'User-Agent': 'Mozilla/5.0 (compatible; ProposalOSBot/1.0)' },
+          });
+          if (!res.ok) {
+            throw new Error(`HTTP error ${res.status}: ${res.statusText}`);
+          }
+          return await res.text();
+        }
+      );
 
       const $ = cheerio.load(html);
       const firstResult = $('.businessName').first();
@@ -196,14 +212,39 @@ async function checkYelp(
     tracker?.addApiCall('SERP');
     const serpUrl = `https://serpapi.com/search.json?engine=yelp&find_desc=${encodeURIComponent(input.businessName)}&find_loc=${encodeURIComponent(input.city)}&api_key=${serpApiKey}`;
 
-    const data = await cachedFetch(
-      'citations_yelp',
-      { business: input.businessName, city: input.city },
-      async () => {
-        const res = await fetch(serpUrl);
-        return await res.json();
+    const data = await withModuleCache<{
+      organic_results?: Array<{ link: string; title: string; rating?: number; reviews?: number }>;
+    }>(
+      {
+        module: 'citations',
+        version: 1,
+        input: { type: 'yelp', businessName: input.businessName, city: input.city },
       },
-      { ttlHours: 168 } // 7 days
+      { ttlSeconds: 168 * 3600 },
+      async () => {
+        return withProviderResilience<{
+          organic_results?: Array<{
+            link: string;
+            title: string;
+            rating?: number;
+            reviews?: number;
+          }>;
+        }>(
+          {
+            provider: 'serpapi',
+            operation: 'citations:yelp_search',
+            degrade: true,
+            fallbackValue: { organic_results: [] },
+          },
+          async () => {
+            const res = await fetch(serpUrl);
+            if (!res.ok) {
+              throw new Error(`HTTP error ${res.status}: ${res.statusText}`);
+            }
+            return await res.json();
+          }
+        );
+      }
     );
 
     if (!data.organic_results || data.organic_results.length === 0) {
@@ -211,6 +252,9 @@ async function checkYelp(
     }
 
     const firstResult = data.organic_results[0];
+    if (!firstResult) {
+      return { directory: 'Yelp', found: false };
+    }
 
     return {
       directory: 'Yelp',
@@ -248,14 +292,32 @@ async function checkFacebook(
     tracker?.addApiCall('SERP');
     const serpUrl = `https://serpapi.com/search.json?q=${encodeURIComponent(searchQuery)}&api_key=${serpApiKey}`;
 
-    const data = await cachedFetch(
-      'citations_facebook',
-      { business: input.businessName, city: input.city },
-      async () => {
-        const res = await fetch(serpUrl);
-        return await res.json();
+    const data = await withModuleCache<{
+      organic_results?: Array<{ link: string; title: string }>;
+    }>(
+      {
+        module: 'citations',
+        version: 1,
+        input: { type: 'facebook', businessName: input.businessName, city: input.city },
       },
-      { ttlHours: 168 }
+      { ttlSeconds: 168 * 3600 },
+      async () => {
+        return withProviderResilience<{ organic_results?: Array<{ link: string; title: string }> }>(
+          {
+            provider: 'serpapi',
+            operation: 'citations:facebook_search',
+            degrade: true,
+            fallbackValue: { organic_results: [] },
+          },
+          async () => {
+            const res = await fetch(serpUrl);
+            if (!res.ok) {
+              throw new Error(`HTTP error ${res.status}: ${res.statusText}`);
+            }
+            return await res.json();
+          }
+        );
+      }
     );
 
     if (!data.organic_results || data.organic_results.length === 0) {
@@ -296,9 +358,23 @@ async function checkBBB(
     logger.info({ searchQuery }, '[Citations] Checking BBB');
 
     // Direct scraping (BBB is scrapable)
-    const html = await fetch(url, {
-      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; ProposalOSBot/1.0)' },
-    }).then((r) => r.text());
+    const html = await withProviderResilience<string>(
+      {
+        provider: 'crawler',
+        operation: 'citations:bbb_scrape',
+        degrade: true,
+        fallbackValue: '',
+      },
+      async () => {
+        const res = await fetch(url, {
+          headers: { 'User-Agent': 'Mozilla/5.0 (compatible; ProposalOSBot/1.0)' },
+        });
+        if (!res.ok) {
+          throw new Error(`HTTP error ${res.status}: ${res.statusText}`);
+        }
+        return await res.text();
+      }
+    );
 
     const $ = cheerio.load(html);
     const firstResult = $('.result-item').first();
@@ -339,9 +415,23 @@ async function checkYellowPages(
     logger.info({ searchQuery }, '[Citations] Checking Yellow Pages');
 
     // Direct scraping
-    const html = await fetch(url, {
-      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; ProposalOSBot/1.0)' },
-    }).then((r) => r.text());
+    const html = await withProviderResilience<string>(
+      {
+        provider: 'crawler',
+        operation: 'citations:yellowpages_scrape',
+        degrade: true,
+        fallbackValue: '',
+      },
+      async () => {
+        const res = await fetch(url, {
+          headers: { 'User-Agent': 'Mozilla/5.0 (compatible; ProposalOSBot/1.0)' },
+        });
+        if (!res.ok) {
+          throw new Error(`HTTP error ${res.status}: ${res.statusText}`);
+        }
+        return await res.text();
+      }
+    );
 
     const $ = cheerio.load(html);
     const firstResult = $('.result').first();
@@ -390,14 +480,32 @@ async function checkAppleMaps(
     tracker?.addApiCall('SERP');
     const serpUrl = `https://serpapi.com/search.json?q=${encodeURIComponent(searchQuery)}&api_key=${serpApiKey}`;
 
-    const data = await cachedFetch(
-      'citations_apple_maps',
-      { business: input.businessName, city: input.city },
-      async () => {
-        const res = await fetch(serpUrl);
-        return await res.json();
+    const data = await withModuleCache<{
+      organic_results?: Array<{ link: string; title: string }>;
+    }>(
+      {
+        module: 'citations',
+        version: 1,
+        input: { type: 'apple_maps', businessName: input.businessName, city: input.city },
       },
-      { ttlHours: 168 }
+      { ttlSeconds: 168 * 3600 },
+      async () => {
+        return withProviderResilience<{ organic_results?: Array<{ link: string; title: string }> }>(
+          {
+            provider: 'serpapi',
+            operation: 'citations:applemaps_search',
+            degrade: true,
+            fallbackValue: { organic_results: [] },
+          },
+          async () => {
+            const res = await fetch(serpUrl);
+            if (!res.ok) {
+              throw new Error(`HTTP error ${res.status}: ${res.statusText}`);
+            }
+            return await res.json();
+          }
+        );
+      }
     );
 
     if (!data.organic_results || data.organic_results.length === 0) {

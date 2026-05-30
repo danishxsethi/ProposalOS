@@ -522,7 +522,7 @@ describe('Delivery Engine Property Tests', () => {
           });
 
           // Verify result
-          expect(result.verified).toBe(true);
+          expect(result.passed).toBe(true);
           expect(result.improvementPercent).toBeGreaterThan(0);
         }),
         { numRuns: 100 }

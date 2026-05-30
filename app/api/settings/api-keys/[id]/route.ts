@@ -11,10 +11,11 @@
 
 import { NextResponse } from 'next/server';
 
-import { ForbiddenError, generateTraceId, InternalError, NotFoundError } from '@/lib/api/errors';
+import { ForbiddenError, generateTraceId, NotFoundError } from '@/lib/api/errors';
 import { withAuth } from '@/lib/middleware/auth';
 import { withRateLimit } from '@/lib/middleware/rateLimit';
 import { withRole } from '@/lib/middleware/withRole';
+import { recordAuditTrailEvent } from '@/lib/observability/auditTrail';
 import { prisma } from '@/lib/prisma';
 import { getTenantId } from '@/lib/tenant/context';
 
@@ -58,6 +59,16 @@ async function handleRevokeKey(req: Request, { params }: Params): Promise<NextRe
     data: { isActive: false },
   });
 
+  await recordAuditTrailEvent({
+    eventType: 'apikey.revoked',
+    tenantId,
+    payload: {
+      apiKeyId: apiKey.id,
+      name: apiKey.name,
+      prefix: apiKey.keyPrefix,
+    },
+  }).catch(() => {});
+
   const response = NextResponse.json({ success: true });
   response.headers.set('X-Trace-Id', traceId);
   return response;
@@ -74,4 +85,4 @@ const revokeHandler = (req: Request, params: Params) =>
     message: 'Too many key revocation requests. Please wait before trying again.',
   })(req, () => handleRevokeKey(req, params));
 
-export const DELETE = withRole('owner', withAuth(revokeHandler));
+export const DELETE = withRole('super_admin', withAuth(revokeHandler));

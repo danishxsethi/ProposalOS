@@ -145,9 +145,9 @@ const MODEL_CONTEXT_WINDOWS: Record<string, number> = {
 
 function getContextWindow(model: string): number {
   for (const [key, limit] of Object.entries(MODEL_CONTEXT_WINDOWS)) {
-    if (model.includes(key) || key === 'default') return limit;
+    if (limit !== undefined && (model.includes(key) || key === 'default')) return limit;
   }
-  return MODEL_CONTEXT_WINDOWS.default;
+  return MODEL_CONTEXT_WINDOWS.default ?? 1_000_000;
 }
 
 const performanceTracker = new PromptPerformanceTracker();
@@ -460,7 +460,7 @@ export async function generateWithGemini(
 
       // Execute with circuit breaker
       const result = await circuitBreaker.execute(async () => {
-        return await model.generateContent({ contents, signal: abortController.signal });
+        return await model.generateContent({ contents }, { signal: abortController.signal });
       });
 
       clearTimeout(timeoutId);

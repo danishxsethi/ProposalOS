@@ -1,4 +1,6 @@
+import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
+import { withProviderResilience } from '@/lib/resilience/withProviderResilience';
 import { stripe } from '@/lib/stripe/stripe';
 
 export async function reconcileSubscriptions() {
@@ -11,8 +13,12 @@ export async function reconcileSubscriptions() {
     const customerId = tenant.stripeCustomerId;
     if (!customerId) continue;
 
-    const subs = await stripe.subscriptions.list({ customer: customerId, limit: 10 });
-    for (const sub of subs.data) {
+    const subs = await withProviderResilience(
+      { provider: 'stripe', operation: 'list-subscriptions' },
+      () => stripe.subscriptions.list({ customer: customerId, limit: 10 })
+    );
+    for (const subRaw of subs.data) {
+      const sub = subRaw as any;
       const primaryItem = sub.items.data[0];
       await prisma.subscription.upsert({
         where: { stripeSubscriptionId: sub.id },
@@ -35,8 +41,12 @@ export async function reconcileSubscriptions() {
       });
     }
 
-    const invoices = await stripe.invoices.list({ customer: customerId, limit: 20 });
-    for (const inv of invoices.data) {
+    const invoices = await withProviderResilience(
+      { provider: 'stripe', operation: 'list-invoices' },
+      () => stripe.invoices.list({ customer: customerId, limit: 20 })
+    );
+    for (const invRaw of invoices.data) {
+      const inv = invRaw as any;
       if (!inv.id) continue;
       await prisma.payment.upsert({
         where: { stripeInvoiceId: inv.id },
@@ -75,9 +85,7 @@ export async function reconcileSubscriptions() {
   });
 
   if (abandoned.length > 0) {
-    console.warn(
-      `[BillingReconcile] Found ${abandoned.length} abandoned checkout attempts older than 1 hour`
-    );
+    logger.warn({ abandonedCount: abandoned.length }, '[BillingReconcile] Found abandoned checkout attempts older than 1 hour');
   }
 
   return {
@@ -85,3 +93,4 @@ export async function reconcileSubscriptions() {
     abandonedAttempts: abandoned.length,
   };
 }
+

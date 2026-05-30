@@ -1,5 +1,13 @@
 import { PainCluster } from '../diagnosis/types';
 
+export type OrganizationSegment =
+  | 'smb_local'
+  | 'nonprofit'
+  | 'technical_community'
+  | 'enterprise'
+  | 'healthcare'
+  | 'baseline_unknown';
+
 export interface TierMapping {
   essentials: string[]; // Finding IDs
   growth: string[]; // Finding IDs
@@ -91,6 +99,10 @@ export interface ComparisonReport {
 
 export interface ProposalResult {
   executiveSummary: string;
+  aiDisclaimer?: {
+    disclaimer: string;
+    verificationRequired: boolean;
+  };
   painClusters: PainCluster[];
   comparisonReport?: ComparisonReport | null;
   topActions?: Array<{

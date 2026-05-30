@@ -6,6 +6,7 @@
  */
 
 import { generateWithGemini } from '@/lib/llm/provider';
+import { logger } from '@/lib/logger';
 import { sendProposalEmail } from '@/lib/outreach/emailSender';
 import { prisma } from '@/lib/prisma';
 
@@ -98,7 +99,7 @@ export async function sendNPSSurvey(
     where: { id: proposalId },
     include: {
       audit: true,
-      tenant: true,
+      project: true,
     },
   });
 
@@ -113,9 +114,11 @@ export async function sendNPSSurvey(
   // Check if survey was already sent recently
   const existingSurvey = await prisma.nPSSurvey.findFirst({
     where: {
-      proposalId,
-      surveyType,
-      sentAt: { not: null },
+      project: {
+        proposalId,
+      },
+      surveyDay: surveyType === 'DAY_30' ? 30 : 90,
+      status: { in: ['SENT', 'RESPONDED', 'FLAGGED_DETRACTOR', 'REFERRAL_SENT'] },
     },
   });
 
@@ -132,10 +135,28 @@ export async function sendNPSSurvey(
     proposal.prospectEmail
   );
 
-  // Generate a unique survey link (you would integrate with a survey tool like Typeform)
-  const surveyToken = `${proposalId}-${surveyType.toLowerCase()}-${Date.now()}`;
-  const surveyLink = `${process.env.NEXT_PUBLIC_APP_URL}/survey/${surveyToken}`;
+  let project = proposal.project;
+  if (!project) {
+    project = await prisma.project.create({
+      data: {
+        proposalId,
+        tenantId: proposal.tenantId,
+        status: 'KICKOFF',
+      },
+    });
+  }
 
+  // Create survey record as PENDING first to get an ID for the link
+  const survey = await prisma.nPSSurvey.create({
+    data: {
+      projectId: project.id,
+      tenantId: proposal.tenantId,
+      surveyDay: surveyType === 'DAY_30' ? 30 : 90,
+      status: 'PENDING',
+    },
+  });
+
+  const surveyLink = `${process.env.NEXT_PUBLIC_APP_URL}/survey/${survey.id}`;
   const personalizedBody = body.replace(/\[SURVEY_LINK\]/g, surveyLink);
 
   try {
@@ -148,14 +169,12 @@ export async function sendNPSSurvey(
       tenantId: proposal.tenantId || undefined,
     });
 
-    // Create survey record
-    await prisma.nPSSurvey.create({
+    // Update survey to SENT
+    await prisma.nPSSurvey.update({
+      where: { id: survey.id },
       data: {
-        proposalId,
-        tenantId: proposal.tenantId || '',
-        surveyType,
+        status: 'SENT',
         sentAt: new Date(),
-        surveyToken,
       },
     });
 
@@ -194,7 +213,11 @@ export async function processPendingNPSSurveys(): Promise<{
       },
     },
     include: {
-      nPSSurveys: true,
+      project: {
+        include: {
+          npsSurveys: true,
+        },
+      },
     },
   });
 
@@ -208,13 +231,17 @@ export async function processPendingNPSSurveys(): Promise<{
       },
     },
     include: {
-      nPSSurveys: true,
+      project: {
+        include: {
+          npsSurveys: true,
+        },
+      },
     },
   });
 
   // Process Day 30 surveys
   for (const proposal of day30Proposals) {
-    const hasDay30Survey = proposal.nPSSurveys.some((s) => s.surveyType === 'DAY_30');
+    const hasDay30Survey = proposal.project?.npsSurveys?.some((s) => s.surveyDay === 30);
 
     if (!hasDay30Survey) {
       const result = await sendNPSSurvey(proposal.id, 'DAY_30');
@@ -229,7 +256,7 @@ export async function processPendingNPSSurveys(): Promise<{
 
   // Process Day 90 surveys
   for (const proposal of day90Proposals) {
-    const hasDay90Survey = proposal.nPSSurveys.some((s) => s.surveyType === 'DAY_90');
+    const hasDay90Survey = proposal.project?.npsSurveys?.some((s) => s.surveyDay === 90);
 
     if (!hasDay90Survey) {
       const result = await sendNPSSurvey(proposal.id, 'DAY_90');
@@ -261,9 +288,11 @@ export async function recordNPSResponse(
   // Find the pending survey
   const survey = await prisma.nPSSurvey.findFirst({
     where: {
-      proposalId,
+      project: {
+        proposalId,
+      },
       respondedAt: null,
-      sentAt: { not: null },
+      status: 'SENT',
     },
     orderBy: { sentAt: 'desc' },
   });
@@ -283,6 +312,7 @@ export async function recordNPSResponse(
     data: {
       score,
       feedback: feedback || null,
+      status: score <= 6 ? 'FLAGGED_DETRACTOR' : 'RESPONDED',
       respondedAt: new Date(),
     },
   });
@@ -291,12 +321,12 @@ export async function recordNPSResponse(
   const category = score >= 9 ? 'PROMOTER' : score >= 7 ? 'PASSIVE' : 'DETRACTOR';
 
   // Log the NPS result for analytics
-  console.log(`NPS Survey Response: Proposal ${proposalId}, Score ${score}, Category ${category}`);
+  logger.info({ proposalId, score, category }, 'NPS Survey Response');
 
   // If detractor, flag for manager review
   if (score <= 6) {
     // Could trigger additional follow-up logic here
-    console.log(`Detractor NPS score for proposal ${proposalId} - flag for follow-up`);
+    logger.info({ proposalId }, 'Detractor NPS score - flag for follow-up');
   }
 
   return { success: true };

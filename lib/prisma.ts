@@ -2,10 +2,11 @@ import { Prisma, PrismaClient } from '@prisma/client';
 
 import {
   getTenantRuntimeContextFromStore,
+  runWithDispatch,
   runWithPrismaTransactionContext,
 } from '@/lib/tenant/context';
 
-type ExtendedPrismaClient = PrismaClient & Record<string, unknown>;
+export type ExtendedPrismaClient = PrismaClient & Record<string, unknown>;
 
 type TransactionCapableClient = Prisma.TransactionClient | ExtendedPrismaClient;
 
@@ -33,7 +34,7 @@ export class MissingTenantError extends Error {
 }
 
 function isValidUuid(value: string): boolean {
-  return UUID_PATTERN.test(value);
+  return UUID_PATTERN.test(value) || value === BYPASS_TENANT_SENTINEL;
 }
 
 function getOperationName(model: string | undefined, operation: string): string {
@@ -126,8 +127,7 @@ function wrapTransactionMethod(client: ExtendedPrismaClient): ExtendedPrismaClie
   return client;
 }
 
-function createExtendedPrismaClient(): ExtendedPrismaClient {
-  const baseClient = new PrismaClient();
+export function createExtendedPrismaClient(baseClient: PrismaClient = new PrismaClient()): ExtendedPrismaClient {
   const wrappedClientRef: { current?: ExtendedPrismaClient } = {};
 
   const extendedClient = baseClient.$extends({
@@ -135,18 +135,22 @@ function createExtendedPrismaClient(): ExtendedPrismaClient {
       $allModels: {
         async $allOperations({ args, model, operation, query }): Promise<unknown> {
           const operationName = getOperationName(model, operation);
-          const { tenantId, bypassRls, currentTx } = getTenantRuntimeContextFromStore();
+          const { tenantId, bypassRls, currentTx, isDispatching } = getTenantRuntimeContextFromStore();
           const runQuery = query as (queryArgs: typeof args) => Promise<unknown>;
 
           if (!model) {
             return runQuery(args);
           }
 
-          // LIMITATION: Prisma model query extensions do not cover $queryRaw/$executeRaw.
-          // Phase 2.6 will migrate or wrap the raw-query callsites separately.
-          if (currentTx) {
-            await applyRlsContext(currentTx, operationName, bypassRls, tenantId);
+          if (isDispatching) {
             return runQuery(args);
+          }
+
+          if (currentTx) {
+            return runWithDispatch(async () => {
+              await applyRlsContext(currentTx, operationName, bypassRls, tenantId);
+              return dispatchOnTx(currentTx, model, operation, args);
+            });
           }
 
           if (!bypassRls) {
@@ -155,8 +159,10 @@ function createExtendedPrismaClient(): ExtendedPrismaClient {
 
           return wrappedClientRef.current!.$transaction(async (tx: Prisma.TransactionClient) =>
             runWithPrismaTransactionContext(tx, async () => {
-              await applyRlsContext(tx, operationName, bypassRls, tenantId);
-              return dispatchOnTx(tx, model, operation, args);
+              return runWithDispatch(async () => {
+                await applyRlsContext(tx, operationName, bypassRls, tenantId);
+                return dispatchOnTx(tx, model, operation, args);
+              });
             })
           );
         },

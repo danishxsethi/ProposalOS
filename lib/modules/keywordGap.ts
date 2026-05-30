@@ -1,9 +1,11 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
-import { cachedFetch } from '@/lib/cache/apiCache';
+import { withModuleCache } from '@/lib/cache/moduleCache';
 import { CostTracker } from '@/lib/costs/costTracker';
 import { logger } from '@/lib/logger';
+import { withProviderResilience } from '@/lib/resilience/withProviderResilience';
 
+import { normalizeConfidence } from './findingGenerator';
 import { AuditModuleResult, Finding } from './types';
 
 export interface KeywordGapInput {
@@ -127,17 +129,30 @@ async function generateKeywordList(
     - Problem-based keywords (e.g., 'burst pipe repair')
     - Comparison keywords (e.g., 'best plumber ${input.city}')
     - Long-tail keywords (e.g., 'how much does a plumber cost in ${input.city}')
-
+ 
     Return ONLY a JSON array with objects: { "term": string, "category": string, "volumeLabel": "low"|"medium"|"high" }`;
 
-  const result = await cachedFetch(
-    'keyword_gen_gemini',
-    { industry: input.industry, city: input.city },
-    async () => {
-      const res = await model.generateContent(prompt);
-      return res.response.text();
+  const result = await withModuleCache<string>(
+    {
+      module: 'keyword_gap',
+      version: 1,
+      input: { type: 'keyword_gen_gemini', industry: input.industry, city: input.city },
     },
-    { ttlHours: 24 * 30 } // Cache keyword lists for a month per industry/city combo
+    { ttlSeconds: 30 * 24 * 60 * 60 },
+    async () => {
+      return withProviderResilience<string>(
+        {
+          provider: 'gemini',
+          operation: 'keywordGap:generateKeywordList',
+          degrade: true,
+          fallbackValue: '[]',
+        },
+        async () => {
+          const res = await model.generateContent(prompt);
+          return res.response.text();
+        }
+      );
+    }
   );
 
   try {
@@ -166,9 +181,13 @@ async function checkRankings(
     tracker?.addApiCall('SERP_API_SEARCH');
 
     try {
-      const data = await cachedFetch(
-        'serp_ranking_check',
-        { keyword: kw.term, city: input.city }, // Cache by keyword+city
+      const data = await withModuleCache<any>(
+        {
+          module: 'keyword_gap',
+          version: 1,
+          input: { type: 'serp_ranking_check', keyword: kw.term, city: input.city },
+        },
+        { ttlSeconds: 7 * 24 * 60 * 60 },
         async () => {
           const params = new URLSearchParams({
             engine: 'google',
@@ -177,10 +196,23 @@ async function checkRankings(
             num: '20', // Top 20 results
             api_key: process.env.SERP_API_KEY!,
           });
-          const res = await fetch(`https://serpapi.com/search.json?${params.toString()}`);
-          return res.json();
-        },
-        { ttlHours: 24 * 7 }
+          const url = `https://serpapi.com/search.json?${params.toString()}`;
+          return withProviderResilience<any>(
+            {
+              provider: 'serpapi',
+              operation: 'keywordGap:checkRankings',
+              degrade: true,
+              fallbackValue: { organic_results: [], local_results: [] },
+            },
+            async () => {
+              const res = await fetch(url);
+              if (!res.ok) {
+                throw new Error(`HTTP error ${res.status}: ${res.statusText}`);
+              }
+              return res.json();
+            }
+          );
+        }
       );
 
       let rank: number | null = null;
@@ -355,10 +387,10 @@ function generateKeywordFindings(analysis: KeywordGapAnalysis, input: KeywordGap
       type: 'VITAMIN',
       category: 'Visibility',
       title: 'Missing Long-Tail Search Intent',
-      description: `Potential customers asking questions like "${longTailGaps[0].keyword}" are finding your competitors, not you. These searches translate to high conversion rates.`,
+      description: `Potential customers asking questions like "${longTailGaps[0]!.keyword}" are finding your competitors, not you. These searches translate to high conversion rates.`,
       impactScore: 4,
       confidenceScore: normalizeConfidence(80, '0-100'),
-      evidence: [{ type: 'text', value: longTailGaps[0].keyword, label: 'Example Question' }],
+      evidence: [{ type: 'text', value: longTailGaps[0]!.keyword, label: 'Example Question' }],
       metrics: {},
       effortEstimate: 'MEDIUM',
       recommendedFix: ['Publish FAQ or Blog content answering these specific questions'],

@@ -10,6 +10,8 @@
  * Requirements: 3.1, 3.2, 3.3, 3.4, 11.1
  */
 
+import { logger } from '@/lib/logger';
+
 import { LocaleConfig } from './types';
 
 // Search engine types
@@ -79,7 +81,7 @@ export class GoogleSearchAdapter implements SearchEngineAdapter {
   async search(options: SearchOptions): Promise<SearchResult[]> {
     if (!this.apiKey || !this.cx) {
       // Fallback to returning empty results if API not configured
-      console.warn('[GoogleSearchAdapter] API credentials not configured');
+      logger.warn('[GoogleSearchAdapter] API credentials not configured');
       return [];
     }
 
@@ -103,7 +105,7 @@ export class GoogleSearchAdapter implements SearchEngineAdapter {
         snippet: item.snippet,
       }));
     } catch (error) {
-      console.error('[GoogleSearchAdapter] Search failed:', error);
+      logger.error({ error }, '[GoogleSearchAdapter] Search failed');
       return [];
     }
   }
@@ -169,7 +171,7 @@ export class YandexSearchAdapter implements SearchEngineAdapter {
 
   async search(options: SearchOptions): Promise<SearchResult[]> {
     if (!this.apiKey) {
-      console.warn('[YandexSearchAdapter] API key not configured');
+      logger.warn('[YandexSearchAdapter] API key not configured');
       return [];
     }
 
@@ -190,7 +192,7 @@ export class YandexSearchAdapter implements SearchEngineAdapter {
         snippet: item.snippet,
       }));
     } catch (error) {
-      console.error('[YandexSearchAdapter] Search failed:', error);
+      logger.error({ error }, '[YandexSearchAdapter] Search failed');
       return [];
     }
   }
@@ -240,7 +242,7 @@ export class BaiduSearchAdapter implements SearchEngineAdapter {
 
   async search(options: SearchOptions): Promise<SearchResult[]> {
     if (!this.apiKey || !this.secretKey) {
-      console.warn('[BaiduSearchAdapter] API credentials not configured');
+      logger.warn('[BaiduSearchAdapter] API credentials not configured');
       return [];
     }
 
@@ -268,7 +270,7 @@ export class BaiduSearchAdapter implements SearchEngineAdapter {
         snippet: item.abstract,
       }));
     } catch (error) {
-      console.error('[BaiduSearchAdapter] Search failed:', error);
+      logger.error({ error }, '[BaiduSearchAdapter] Search failed');
       return [];
     }
   }
@@ -319,7 +321,7 @@ export class NaverSearchAdapter implements SearchEngineAdapter {
 
   async search(options: SearchOptions): Promise<SearchResult[]> {
     if (!this.clientId || !this.clientSecret) {
-      console.warn('[NaverSearchAdapter] API credentials not configured');
+      logger.warn('[NaverSearchAdapter] API credentials not configured');
       return [];
     }
 
@@ -345,7 +347,7 @@ export class NaverSearchAdapter implements SearchEngineAdapter {
         snippet: this.stripHtml(item.description),
       }));
     } catch (error) {
-      console.error('[NaverSearchAdapter] Search failed:', error);
+      logger.error({ error }, '[NaverSearchAdapter] Search failed');
       return [];
     }
   }

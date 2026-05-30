@@ -1,6 +1,9 @@
 import { randomUUID } from 'crypto';
 
 import { PrismaClient } from '@prisma/client';
+import { createExtendedPrismaClient } from '../lib/prisma';
+import { runWithTenantAsync } from '../lib/tenant/context';
+
 
 type ResultRow = {
   test: string;
@@ -50,6 +53,7 @@ async function main() {
   const postgresPool = makeClient(postgresPgbouncerUrl);
   const appUserPool = makeClient(appUserPgbouncerUrl);
   const appUserDirect = makeClient(appUserDirectUrl);
+  const appUserPoolShim = createExtendedPrismaClient(appUserPool);
   const results: ResultRow[] = [];
 
   const runId = randomUUID().slice(0, 8);
@@ -348,7 +352,10 @@ async function main() {
         actualValue: `setting=${settingRows[0]?.current_setting ?? '(none)'}; rows=${formatNames(
           auditRows.map((row) => row.businessName)
         )}`,
-        passCondition: (settingRows[0]?.current_setting ?? null) === null && auditRows.length === 0,
+        passCondition:
+          ((settingRows[0]?.current_setting ?? '') === '' ||
+            (settingRows[0]?.current_setting ?? null) === null) &&
+          auditRows.length === 0,
       });
     } catch (error) {
       addResult({
@@ -399,18 +406,19 @@ async function main() {
     }
 
     try {
-      const names = await appUserPool.$transaction(async (tx) => {
-        await tx.$executeRawUnsafe(`SET LOCAL app.current_tenant_id = '${tenant1Id}'`);
-        const rows = await appUserPool.audit.findMany({
-          orderBy: {
-            businessName: 'asc',
-          },
-          select: {
-            businessName: true,
-          },
-        });
-        return rows.map((row) => row.businessName);
-      });
+      const names = await runWithTenantAsync(tenant1Id, () =>
+        appUserPoolShim.$transaction(async (tx) => {
+          const rows = await appUserPoolShim.audit.findMany({
+            orderBy: {
+              businessName: 'asc',
+            },
+            select: {
+              businessName: true,
+            },
+          });
+          return rows.map((row) => row.businessName);
+        })
+      );
 
       addResult({
         test: 'Current shim pattern (query outside tx)',

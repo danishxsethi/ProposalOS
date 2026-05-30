@@ -4,7 +4,6 @@
  * all orchestration to runner.ts (MODULE_REGISTRY path).
  */
 import { CostTracker } from '@/lib/costs/costTracker';
-
 // Import all modules
 import { captureScreenshots } from '@/lib/evidence/screenshotCapture';
 import { logger } from '@/lib/logger';

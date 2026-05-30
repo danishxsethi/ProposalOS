@@ -1,7 +1,7 @@
 import { createHash, randomBytes } from 'crypto';
 
-import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
+import { prisma } from '@/lib/prisma';
 
 export const API_KEY_PREFIX = 'pe_live_';
 

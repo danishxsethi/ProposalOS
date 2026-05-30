@@ -14,10 +14,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
 import {
-  ForbiddenError,
   generateTraceId,
   InternalError,
   UnauthorizedError,
+  ValidationError,
 } from '@/lib/api/errors';
 import { auth } from '@/lib/auth';
 import { withRateLimit } from '@/lib/middleware/rateLimit';
@@ -110,7 +110,7 @@ async function handleCreatePartner(req: NextRequest): Promise<NextResponse> {
         message: e.message,
       }));
       return NextResponse.json(
-        new ForbiddenError('Invalid partner data', errorDetails).toEnvelope(req.url, traceId),
+        new ValidationError('Invalid partner data', errorDetails).toEnvelope(req.url, traceId),
         { status: 400 }
       );
     }
@@ -155,4 +155,4 @@ const rateLimitedPost = (req: NextRequest) =>
   })(req, () => handleCreatePartner(req));
 
 export const GET = rateLimitedGet;
-export const POST = withRole('admin', rateLimitedPost);
+export const POST = withRole('agency_admin', rateLimitedPost);

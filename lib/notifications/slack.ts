@@ -1,6 +1,7 @@
 /**
  * Slack notifications for human escalation
  */
+import { logger } from '@/lib/logger';
 
 interface SlackNotificationConfig {
   webhookUrl: string;
@@ -85,7 +86,7 @@ class SlackNotifier {
 
       return response.ok;
     } catch (error) {
-      console.error('Slack notification failed:', error);
+      logger.error({ error }, 'Slack notification failed');
       return false;
     }
   }
@@ -139,7 +140,7 @@ class SlackNotifier {
 
       return response.ok;
     } catch (error) {
-      console.error('Slack prospect alert failed:', error);
+      logger.error({ error }, 'Slack prospect alert failed');
       return false;
     }
   }
@@ -165,7 +166,7 @@ export async function sendSlackNotification(
     if (webhookUrl) {
       slackNotifier = new SlackNotifier({ webhookUrl });
     } else {
-      console.warn('Slack notifier not initialized - no webhook URL provided');
+      logger.warn('Slack notifier not initialized - no webhook URL provided');
       return false;
     }
   }
@@ -182,7 +183,7 @@ export async function sendSlackProspectAlert(
     if (webhookUrl) {
       slackNotifier = new SlackNotifier({ webhookUrl });
     } else {
-      console.warn('Slack notifier not initialized - no webhook URL provided');
+      logger.warn('Slack notifier not initialized - no webhook URL provided');
       return false;
     }
   }
@@ -209,7 +210,7 @@ export async function sendAlert(options: AlertOptions): Promise<boolean> {
   try {
     const webhookUrl = process.env.SLACK_WEBHOOK_URL;
     if (!webhookUrl) {
-      console.warn('Slack webhook URL not configured');
+      logger.warn('Slack webhook URL not configured');
       return false;
     }
 
@@ -273,7 +274,7 @@ export async function sendAlert(options: AlertOptions): Promise<boolean> {
 
     return response.ok;
   } catch (error) {
-    console.error('Slack alert failed:', error);
+    logger.error({ error }, 'Slack alert failed');
     return false;
   }
 }

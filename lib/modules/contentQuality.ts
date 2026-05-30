@@ -5,6 +5,7 @@ import { traceable } from 'langsmith/traceable';
 import { CostTracker } from '@/lib/costs/costTracker';
 import { logger } from '@/lib/logger';
 
+import { normalizeConfidence } from './findingGenerator';
 import { AuditModuleResult, Finding } from './types';
 
 export interface ContentQualityModuleInput {
@@ -139,6 +140,13 @@ function extractPageTexts(
 
   pagesToAnalyze.forEach((page) => {
     try {
+      if (!page || typeof page.html !== 'string') {
+        logger.warn(
+          { url: page?.url },
+          '[ContentQuality] Invalid page or page html is not a string'
+        );
+        return;
+      }
       const $ = cheerio.load(page.html);
 
       // Remove script, style, nav, footer

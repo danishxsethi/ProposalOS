@@ -12,8 +12,10 @@
  * Requirements: 1.1, 1.2, 1.3, 1.4, 1.6, 1.7, 1.9
  */
 
+import { Prisma } from '@prisma/client';
 import { v4 as uuidv4 } from 'uuid';
 
+import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 
 import { calculate as calculatePainScore } from './painScore';
@@ -146,7 +148,7 @@ export async function queryExternalSources(
     const provider = providers.googlePlaces ?? defaultGooglePlacesProvider;
     sourceQueries.push(
       provider(config.city, config.vertical, config.targetLeads, config.state).catch((err) => {
-        console.error('Google Places provider error:', err);
+        logger.error({ error: err }, 'Google Places provider error');
         return [] as RawBusinessRecord[];
       })
     );
@@ -156,7 +158,7 @@ export async function queryExternalSources(
     const provider = providers.yelp ?? defaultYelpProvider;
     sourceQueries.push(
       provider(config.city, config.vertical, config.targetLeads, config.state).catch((err) => {
-        console.error('Yelp provider error:', err);
+        logger.error({ error: err }, 'Yelp provider error');
         return [] as RawBusinessRecord[];
       })
     );
@@ -166,7 +168,7 @@ export async function queryExternalSources(
     const provider = providers.directories ?? defaultDirectoriesProvider;
     sourceQueries.push(
       provider(config.city, config.vertical, config.targetLeads, config.state).catch((err) => {
-        console.error('Directories provider error:', err);
+        logger.error({ error: err }, 'Directories provider error');
         return [] as RawBusinessRecord[];
       })
     );
@@ -300,9 +302,9 @@ export async function persistQualifiedProspect(
       rating: record.rating ?? null,
       reviewCount: record.reviewCount ?? null,
       painScore: Math.round(painScore),
-      painBreakdown: breakdown as Record<string, number>,
+      painBreakdown: breakdown as unknown as Prisma.InputJsonValue,
       topFindings,
-      qualificationEvidence: signals as Record<string, unknown>,
+      qualificationEvidence: signals as unknown as Prisma.InputJsonValue,
       pipelineStatus: 'discovered',
       qualifiedAt: new Date(),
     },
@@ -382,7 +384,7 @@ export async function discover(
 ): Promise<DiscoveryResult> {
   const jobId = uuidv4();
   const startTime = Date.now();
-  let costCents = 0;
+  const costCents = 0;
 
   // 1. Fetch tenant pipeline config for daily volume limit
   const pipelineConfig = await prisma.pipelineConfig.findUnique({
@@ -455,7 +457,7 @@ export async function discover(
       await triggerEnrichment(leadId);
     } catch (err) {
       // Log error but continue processing remaining records
-      console.error(`Error qualifying prospect ${record.businessName}:`, err);
+      logger.error({ businessName: record.businessName, error: err }, 'Error qualifying prospect');
     }
   }
 

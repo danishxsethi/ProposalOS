@@ -78,7 +78,7 @@ export class OpenAIProvider implements LLMProviderInterface {
   }
 
   getModelInfo(modelName: string): ProviderModel {
-    return OPENAI_MODELS[modelName] || OPENAI_MODELS['gpt-3.5-turbo'];
+    return OPENAI_MODELS[modelName] ?? OPENAI_MODELS['gpt-3.5-turbo']!;
   }
 
   async generateContent(options: ProviderCallOptions): Promise<ProviderResponse> {

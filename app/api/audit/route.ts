@@ -19,7 +19,7 @@ import { checkAuditLimit } from '@/lib/billing/limits';
 import { logError, logger } from '@/lib/logger';
 import { Metrics } from '@/lib/metrics';
 import { withAuth } from '@/lib/middleware/auth';
-import { withIdempotencyMemory } from '@/lib/middleware/idempotency';
+import { withIdempotency } from '@/lib/middleware/idempotency';
 import { RateLimitPresets, withRateLimit } from '@/lib/middleware/rateLimit';
 import { withRole } from '@/lib/middleware/withRole';
 import { recordAuditTrailEvent } from '@/lib/observability/auditTrail';
@@ -87,6 +87,36 @@ async function handleAuditCreation(req: Request): Promise<NextResponse> {
           );
         }
 
+        // Check Daily Quota
+        const { checkDailyAuditLimit, incrementAuditCount } =
+          await import('@/lib/costs/costTracker');
+        const dailyLimit = checkDailyAuditLimit(tenantId);
+        if (!dailyLimit.allowed) {
+          await recordAuditTrailEvent({
+            eventType: 'abuse.quota_exceeded',
+            tenantId,
+            payload: {
+              routeClass: 'authenticated_audit',
+              limit: dailyLimit.limit,
+              todayCount: dailyLimit.todayCount,
+              remaining: dailyLimit.remaining,
+            },
+          }).catch(() => {});
+
+          return NextResponse.json(
+            {
+              error: {
+                code: 'QUOTA_EXCEEDED',
+                message: 'Daily Audit Limit Exceeded',
+                details: { reason: 'DAILY_CAP_REACHED', upgrade: true },
+                timestamp: new Date().toISOString(),
+                traceId,
+              },
+            },
+            { status: 429 }
+          );
+        }
+
         let name = businessName;
         const city = businessCity;
         let targetUrl = url;
@@ -111,6 +141,8 @@ async function handleAuditCreation(req: Request): Promise<NextResponse> {
             apiCostCents: 0,
           },
         });
+
+        incrementAuditCount(tenantId);
 
         Metrics.increment('audits_total');
 
@@ -144,15 +176,14 @@ async function handleAuditCreation(req: Request): Promise<NextResponse> {
           { ...currentContext, tenantId, auditId: audit.id, workflow: 'audit-runner' },
           () => runWithTenantAsync(tenantId, () => runAudit(audit.id))
         ).catch((err) => {
-          logError('Error running audit asynchronously', err);
+          logError('Error running audit asynchronously', err, { auditId: audit.id });
           prisma.audit
             .update({
               where: { id: audit.id },
               data: {
                 status: 'FAILED',
                 completedAt: new Date(),
-                error: `AUDIT_KICKOFF_FAILED: ${String(err)}`,
-              } as any,
+              },
             })
             .catch((updateErr) => {
               logError('Failed to persist async kickoff failure on audit record', updateErr, {
@@ -191,6 +222,6 @@ async function handleAuditCreation(req: Request): Promise<NextResponse> {
 // Apply middleware stack: withRole -> withAuth -> withRateLimit -> withIdempotency
 const rateLimitedHandler = (req: Request) =>
   withRateLimit(RateLimitPresets.auditTrigger)(req, () => handleAuditCreation(req));
-const idempotentHandler = (req: Request) => withIdempotencyMemory(rateLimitedHandler)(req);
+const idempotentHandler = (req: Request) => withIdempotency(rateLimitedHandler)(req);
 const authHandler = (req: Request) => withAuth(idempotentHandler)(req, [] as any);
 export const POST = (req: Request) => withRole('agency_member', authHandler)(req, [] as any);

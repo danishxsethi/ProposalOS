@@ -634,6 +634,9 @@ function containsPII(value: unknown): boolean {
     if (val instanceof Map) {
       return Object.fromEntries(val);
     }
+    if (typeof val === 'number') {
+      return 0; // Replace numbers to avoid matching random decimals as phone numbers
+    }
     return val;
   });
 

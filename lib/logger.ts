@@ -1,6 +1,7 @@
 import pino from 'pino';
 
 import { getObservabilityContext } from '@/lib/observability/context';
+import { isEncryptedField } from '@/lib/security/encryption/envelope';
 import { PiiScrubber } from '@/lib/security/piiScrubber';
 
 // Pretty printing for local development
@@ -11,6 +12,7 @@ const URL_REDACTED = '[URL_REDACTED]';
 const SCRUBBED_KEY_PATTERNS = [
   /(^|\.)(businessName|businessUrl|targetUrl|websiteUrl|url|sourceUrl|proposalUrl|pdfUrl|webhookUrl)$/i,
   /(^|\.)(findings?|rawResponse|prompt|input|output|content|emailBody|recipientEmail|prospectEmail)$/i,
+  /(^|\.)(access_token|refresh_token|id_token|accessToken|refreshToken|idToken|apiKey|password|secret|privateKey|credential|resend|stripe)$/i,
 ];
 
 function sanitizeString(value: string): string {
@@ -26,6 +28,9 @@ function sanitizeValue(value: unknown, path: string = ''): unknown {
   if (value == null) return value;
 
   if (typeof value === 'string') {
+    if (isEncryptedField(value)) {
+      return '[ENCRYPTED]';
+    }
     return shouldScrubKey(path) ? REDACTED : sanitizeString(value);
   }
 

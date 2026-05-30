@@ -6,6 +6,7 @@
  */
 
 import { generateWithGemini } from '@/lib/llm/provider';
+import { logger } from '@/lib/logger';
 import { sendProposalEmail } from '@/lib/outreach/emailSender';
 import { prisma } from '@/lib/prisma';
 
@@ -70,7 +71,6 @@ export async function processCompetitorSignals(): Promise<{
     where: { status: 'ACCEPTED' },
     include: {
       audit: true,
-      tenant: true,
     },
   });
 
@@ -162,7 +162,7 @@ async function triggerUpsellProposal(
 
     return true;
   } catch (error) {
-    console.error('Failed to send upsell proposal:', error);
+    logger.error({ error }, 'Failed to send upsell proposal');
     return false;
   }
 }

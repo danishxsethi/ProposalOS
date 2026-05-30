@@ -37,11 +37,15 @@ vi.mock('@/lib/prisma', () => {
 vi.mock('../memory', () => {
   const mockGetOrCreateSession = vi.fn();
   const mockAddMessage = vi.fn();
+  const mockUpdateSentiment = vi.fn().mockResolvedValue(undefined);
+  const mockLogObjection = vi.fn().mockResolvedValue(undefined);
 
   return {
     ConversationMemory: {
       getOrCreateSession: mockGetOrCreateSession,
       addMessage: mockAddMessage,
+      updateSentiment: mockUpdateSentiment,
+      logObjection: mockLogObjection,
     },
   };
 });

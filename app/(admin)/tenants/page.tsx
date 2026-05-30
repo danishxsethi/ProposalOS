@@ -1,6 +1,8 @@
 import { prisma } from '@/lib/prisma';
 import { runWithTenantBypass } from '@/lib/tenant/context';
 
+export const dynamic = 'force-dynamic';
+
 // Server Component
 export default async function TenantsPage() {
   // Intentional cross-tenant admin surface: this page lists every tenant.

@@ -1,5 +1,6 @@
 import { CostTracker } from '@/lib/costs/costTracker';
 import { logger } from '@/lib/logger';
+import { withProviderResilience } from '@/lib/resilience/withProviderResilience';
 
 import { LegacyAuditModuleResult } from './types';
 
@@ -48,23 +49,28 @@ export async function runSocialModule(
   }
 
   try {
-    // Fetch homepage HTML (with timeout — spec: <3s, 3000ms)
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 3000);
-
-    const response = await fetch(input.websiteUrl, {
-      signal: controller.signal,
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (compatible; ProposalEngine/1.0)',
+    const html = await withProviderResilience<string>(
+      {
+        provider: 'generic',
+        operation: 'social_fetch_website',
+        policy: {
+          timeoutMs: 3000,
+          maxAttempts: 2,
+        },
       },
-    });
-    clearTimeout(timeoutId);
-
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`);
-    }
-
-    const html = await response.text();
+      async ({ signal }) => {
+        const response = await fetch(input.websiteUrl, {
+          signal,
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (compatible; ProposalEngine/1.0)',
+          },
+        });
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+        return await response.text();
+      }
+    );
 
     // Parse for social media links
     const foundPlatforms: SocialPlatform[] = [];

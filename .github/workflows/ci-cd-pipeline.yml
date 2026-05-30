@@ -178,6 +178,10 @@ jobs:
         run: npx prisma generate
 
       - name: Build Application
+        # SKIP_ENV_VALIDATION is intentionally set here for the `next build` step only.
+        # Real secrets are not available at CI build time — they are injected at Cloud Run
+        # startup via Secret Manager. The running server validates env via instrumentation.ts.
+        # This flag must NOT appear in next.config.mjs or any runtime config.
         env:
           SKIP_ENV_VALIDATION: true
         run: npm run build
@@ -224,6 +228,9 @@ jobs:
         run: gcloud auth configure-docker ${{ env.GCP_REGION }}-docker.pkg.dev
 
       - name: Build Docker Image
+        # --build-arg SKIP_ENV_VALIDATION=true is intentional: secrets are not available
+        # at Docker image build time. They are injected at Cloud Run startup via Secret Manager.
+        # The running container validates env via instrumentation.ts on first request.
         run: |
           docker build \
             -t ${{ steps.vars.outputs.image-tag }} \
