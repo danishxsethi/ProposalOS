@@ -36,7 +36,7 @@ terraform {
   # Production: Use GCS backend for remote state
   # Initialize with: terraform init -backend-config="bucket=${var.project_id}-terraform-state" -backend-config="prefix=terraform/state"
   backend "gcs" {
-    bucket = "swinglabs-fund-terraform-state"
+    bucket = "proposal-487522-terraform-state"
     prefix = "terraform/state/proposalos"
   }
 }
