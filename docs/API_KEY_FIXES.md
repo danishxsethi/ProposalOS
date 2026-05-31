@@ -13,7 +13,7 @@
 
 **Fix:** Generate a new API key
 
-1. Go to: https://console.cloud.google.com/apis/credentials?project=proposal-engine-mvp
+1. Go to: https://console.cloud.google.com/apis/credentials?project=proposal-487522
 2. Click "Create Credentials" > "API Key"
 3. Restrict it to "PageSpeed Insights API"
 4. Copy the key and update `.env.local`:
@@ -27,14 +27,14 @@
 
 **Fix:** Enable the API
 
-- Visit: https://console.developers.google.com/apis/api/places.googleapis.com/overview?project=652959865775
+- Visit: https://console.developers.google.com/apis/api/places.googleapis.com/overview?project=120416863832
 - Click "Enable"
 - Wait 2-3 minutes for propagation
 
-**Note:** Your Places API key is using project `652959865775` instead of `proposal-engine-mvp`. Either:
+**Note:** Your Places API key is using project `120416863832` (proposal-487522). The legacy project `652959865775` (ixcc-486621) is deprecated. Either:
 
 - Option A: Use the same API key for both projects
-- Option B: Generate a new key in project `proposal-engine-mvp`
+- Option B: Generate a new key in project `proposal-487522`
 
 ### 3. Vertex AI - AUTH MISSING
 
@@ -60,5 +60,5 @@ gcloud auth application-default login
 gcloud config get-value project
 
 # If needed, switch to the right project
-gcloud config set project proposal-engine-mvp
+gcloud config set project proposal-487522
 ```

@@ -1,7 +1,7 @@
 # Terraform Variables Configuration for ProposalOS
-# Project: swinglabs-fund
+# Project: proposal-487522
 
-project_id  = "swinglabs-fund"
+project_id  = "proposal-487522"
 region      = "us-central1"
 zone        = "us-central1-a"
 app_name    = "proposalos"

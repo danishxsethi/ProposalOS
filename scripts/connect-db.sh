@@ -3,7 +3,7 @@
 # Connect to Production Cloud SQL Database locally
 # Usage: ./scripts/connect-db.sh
 
-INSTANCE_CONNECTION_NAME="ixcc-486621:us-central1:proposal-engine-db"
+INSTANCE_CONNECTION_NAME="proposal-487522:us-central1:proposal-db"
 LOCAL_PORT="5433"
 
 echo "🚀 Starting Cloud SQL Proxy..."

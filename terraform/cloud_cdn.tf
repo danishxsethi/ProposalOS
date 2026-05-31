@@ -231,10 +231,10 @@ output "cdn_widget_backend_bucket" {
 
 output "cdn_static_assets_url" {
   description = "CDN URL for static assets (to be configured with load balancer)"
-  value       = "https://cdn.${var.dns.domain != null ? var.dns.domain : 'proposalos.com'}/static"
+  value       = "https://cdn.${var.dns.domain != null ? var.dns.domain : "proposalos.com"}/static"
 }
 
 output "cdn_widget_url" {
   description = "CDN URL for widget embed"
-  value       = "https://cdn.${var.dns.domain != null ? var.dns.domain : 'proposalos.com'}/widget.js"
+  value       = "https://cdn.${var.dns.domain != null ? var.dns.domain : "proposalos.com"}/widget.js"
 }

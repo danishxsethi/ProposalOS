@@ -61,7 +61,7 @@ NEW_PASSWORD=$(openssl rand -base64 32)
 
 # 2. Update Cloud SQL user password
 gcloud sql users set-password postgres \
-  --instance=proposal-engine-mvp:us-central1:proposal-db \
+  --instance=proposal-487522:us-central1:proposal-db \
   --password="$NEW_PASSWORD"
 
 # 3. Update Secret Manager
