@@ -22,6 +22,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { generateTraceId, InternalError, ValidationError } from '@/lib/api/errors';
 import { batchAuditSchema } from '@/lib/api/schemas/audit';
 import { processBatch } from '@/lib/audit/batchProcessor';
+import { checkAndDecrementQuota } from '@/lib/billing/limits';
 import { logger } from '@/lib/logger';
 import { withAuth } from '@/lib/middleware/auth';
 import { withIdempotency } from '@/lib/middleware/idempotency';
@@ -109,40 +110,39 @@ async function handleBatchAuditCreation(req: Request): Promise<NextResponse> {
     const auditIds: string[] = [];
     const creationErrors: Array<{ item: unknown; error: string }> = [];
 
-    // Create all Audit records immediately (tenant-scoped)
-    for (const item of items) {
-      try {
-        const audit = await prisma.audit.create({
-          data: {
-            tenantId,
-            businessName: item.businessName || 'Unknown',
-            businessUrl: item.url,
-            placeId: item.placeId ?? null,
-            status: 'QUEUED',
-            batchId,
-          },
-        });
-        auditIds.push(audit.id);
-        incrementAuditCount(tenantId);
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        logger.error({ batchId, item, error: msg }, 'Batch: failed to create audit record');
-        creationErrors.push({ item, error: msg });
-      }
-    }
+    // Transactionally check quota with SELECT FOR UPDATE row lock and create all batch audits
+    try {
+      await prisma.$transaction(async (tx) => {
+        // Run quota check for the entire batch size!
+        await checkAndDecrementQuota(tenantId, tx, items.length);
 
-    if (auditIds.length === 0) {
+        for (const item of items) {
+          const audit = await tx.audit.create({
+            data: {
+              tenantId,
+              businessName: item.businessName || 'Unknown',
+              businessUrl: item.url,
+              placeId: item.placeId ?? null,
+              status: 'QUEUED',
+              batchId,
+            },
+          });
+          auditIds.push(audit.id);
+          incrementAuditCount(tenantId);
+        }
+      });
+    } catch (quotaError: any) {
       return NextResponse.json(
         {
           error: {
-            code: 'BATCH_CREATION_FAILED',
-            message: 'No valid audit records could be created',
-            details: creationErrors,
+            code: 'QUOTA_EXCEEDED',
+            message: quotaError instanceof Error ? quotaError.message : String(quotaError),
+            details: { reason: 'QUOTA_EXHAUSTED', upgrade: true },
             timestamp: new Date().toISOString(),
             traceId,
           },
         },
-        { status: 422 }
+        { status: 429 }
       );
     }
 

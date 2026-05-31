@@ -15,7 +15,7 @@ import { NextResponse } from 'next/server';
 import { generateTraceId, InternalError, ValidationError } from '@/lib/api/errors';
 import { auditTriggerSchema } from '@/lib/api/schemas/audit';
 import { runAudit } from '@/lib/audit/runner';
-import { checkAuditLimit } from '@/lib/billing/limits';
+import { checkAndDecrementQuota, checkAuditLimit } from '@/lib/billing/limits';
 import { logError, logger } from '@/lib/logger';
 import { Metrics } from '@/lib/metrics';
 import { withAuth } from '@/lib/middleware/auth';
@@ -70,23 +70,6 @@ async function handleAuditCreation(req: Request): Promise<NextResponse> {
 
         const { url, industry, businessName, businessCity, placeId } = result.data;
 
-        // Check Usage Limits
-        const limits = await checkAuditLimit();
-        if (!limits.allowed) {
-          return NextResponse.json(
-            {
-              error: {
-                code: 'QUOTA_EXCEEDED',
-                message: 'Plan Limit Exceeded',
-                details: { reason: limits.reason, upgrade: true },
-                timestamp: new Date().toISOString(),
-                traceId,
-              },
-            },
-            { status: 429 }
-          );
-        }
-
         // Check Daily Quota
         const { checkDailyAuditLimit, incrementAuditCount } =
           await import('@/lib/costs/costTracker');
@@ -128,19 +111,39 @@ async function handleAuditCreation(req: Request): Promise<NextResponse> {
           targetUrl = extracted.url;
         }
 
-        // Create Audit record (runner will execute modules)
-        const audit = await prisma.audit.create({
-          data: {
-            tenantId,
-            businessName: name || 'Pending...',
-            businessCity: city ?? null,
-            businessUrl: targetUrl ?? null,
-            placeId: placeId ?? null,
-            businessIndustry: industry || 'Generic',
-            status: 'QUEUED',
-            apiCostCents: 0,
-          },
-        });
+        // Transactionally check monthly/plan limit with SELECT FOR UPDATE row lock and create audit
+        let audit;
+        try {
+          audit = await prisma.$transaction(async (tx) => {
+            await checkAndDecrementQuota(tenantId, tx);
+
+            return await tx.audit.create({
+              data: {
+                tenantId,
+                businessName: name || 'Pending...',
+                businessCity: city ?? null,
+                businessUrl: targetUrl ?? null,
+                placeId: placeId ?? null,
+                businessIndustry: industry || 'Generic',
+                status: 'QUEUED',
+                apiCostCents: 0,
+              },
+            });
+          });
+        } catch (quotaError: any) {
+          return NextResponse.json(
+            {
+              error: {
+                code: 'QUOTA_EXCEEDED',
+                message: quotaError instanceof Error ? quotaError.message : String(quotaError),
+                details: { reason: 'QUOTA_EXHAUSTED', upgrade: true },
+                timestamp: new Date().toISOString(),
+                traceId,
+              },
+            },
+            { status: 429 }
+          );
+        }
 
         incrementAuditCount(tenantId);
 

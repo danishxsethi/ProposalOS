@@ -1,7 +1,73 @@
+import { Prisma } from '@prisma/client';
+
 import { prisma } from '@/lib/prisma';
+import { PlanCatalogService } from '@/lib/stripe/PlanCatalogService';
 import { getTenantId, runWithTenantAsync } from '@/lib/tenant/context';
 
-import { getPlanById } from './stripe';
+export async function checkAndDecrementQuota(
+  tenantId: string,
+  tx: Prisma.TransactionClient,
+  countRequested: number = 1
+): Promise<void> {
+  // 1. Lock the Tenant row to serialize quota check and audit creation
+  await tx.$executeRawUnsafe(`SELECT id FROM "Tenant" WHERE id = $1 FOR UPDATE`, tenantId);
+
+  const tenant = await tx.tenant.findUnique({
+    where: { id: tenantId },
+  });
+
+  if (!tenant) {
+    throw new Error('Tenant not found');
+  }
+
+  // Handle trial logic override
+  if (tenant.status === 'trial') {
+    const trialLimit = 100;
+    const count = await tx.audit.count({
+      where: { tenantId, status: { not: 'FAILED' } },
+    });
+    if (count + countRequested > trialLimit) {
+      throw new Error(`Quota exceeded: Pro Trial limit of ${trialLimit} audits would be exceeded.`);
+    }
+    return;
+  }
+
+  const planTier = tenant.planTier || 'free';
+  const plan = PlanCatalogService.getPlanById(planTier);
+  const limit = plan?.limits?.audits ?? 3;
+
+  // Retrieve active subscription to find current billing cycle start/end
+  const sub = await tx.subscription.findFirst({
+    where: { tenantId },
+    orderBy: { currentPeriodEnd: 'desc' },
+  });
+
+  const billingCycleStart =
+    sub?.currentPeriodStart || new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+  const billingCycleEnd =
+    sub?.currentPeriodEnd || new Date(new Date().getFullYear(), new Date().getMonth() + 1, 1);
+
+  // Count non-failed audits within current billing cycle
+  const count = await tx.audit.count({
+    where: {
+      tenantId,
+      status: { not: 'FAILED' },
+      createdAt: {
+        gte: billingCycleStart,
+        lte: billingCycleEnd,
+      },
+    },
+  });
+
+  if (count + countRequested > limit) {
+    throw new Error(
+      `Quota exceeded: Requesting ${countRequested} audits, but only ${Math.max(
+        0,
+        limit - count
+      )} remaining of your ${limit} audit monthly limit.`
+    );
+  }
+}
 
 export async function checkAuditLimit() {
   const tenantId = await getTenantId();
@@ -24,25 +90,50 @@ export async function checkAuditLimit() {
     };
 
   // Handle Trial Logic: if status is trial, grant Pro access
-  const effectiveTier = tenant.status === 'trial' ? 'trial' : tenant.planTier;
-  const plan = getPlanById(effectiveTier);
+  if (tenant.status === 'trial') {
+    const trialLimit = 100;
+    const count = await runWithTenantAsync(tenantId, () =>
+      prisma.audit.count({
+        where: { tenantId, status: { not: 'FAILED' } },
+      })
+    );
+    return {
+      allowed: count < trialLimit,
+      current: count,
+      limit: trialLimit,
+      planTier: 'trial',
+    };
+  }
 
-  // Count audits in current month
-  const now = new Date();
-  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  const planTier = tenant.planTier || 'free';
+  const plan = PlanCatalogService.getPlanById(planTier);
+  const limit = plan?.limits?.audits ?? 3;
+
+  // Retrieve active subscription
+  const sub = await runWithTenantAsync(tenantId, () =>
+    prisma.subscription.findFirst({
+      where: { tenantId },
+      orderBy: { currentPeriodEnd: 'desc' },
+    })
+  );
+
+  const billingCycleStart =
+    sub?.currentPeriodStart || new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+  const billingCycleEnd =
+    sub?.currentPeriodEnd || new Date(new Date().getFullYear(), new Date().getMonth() + 1, 1);
 
   const count = await runWithTenantAsync(tenantId, () =>
     prisma.audit.count({
       where: {
         tenantId,
+        status: { not: 'FAILED' },
         createdAt: {
-          gte: startOfMonth,
+          gte: billingCycleStart,
+          lte: billingCycleEnd,
         },
       },
     })
   );
-
-  const limit = plan?.limits?.audits || 0;
 
   if (count >= limit) {
     return {
@@ -76,8 +167,17 @@ export async function checkSeatLimit() {
   if (!tenant) return { allowed: false, current: 0, limit: 0, planTier: 'unknown' };
 
   // Handle Trial Logic
-  const effectiveTier = tenant.status === 'trial' ? 'trial' : tenant.planTier;
-  const plan = getPlanById(effectiveTier);
+  if (tenant.status === 'trial') {
+    return {
+      allowed: tenant.users.length < 100,
+      current: tenant.users.length,
+      limit: 100,
+      planTier: 'trial',
+    };
+  }
+
+  const planTier = tenant.planTier || 'free';
+  const plan = PlanCatalogService.getPlanById(planTier);
 
   const activeUsers = tenant.users.length;
   const pendingInvites = 0; // TODO: add invitations relation to Tenant when schema supports it
