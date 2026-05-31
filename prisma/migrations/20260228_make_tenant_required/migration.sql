@@ -1,3 +1,19 @@
+-- Create table checkout_attempts if it doesn't exist
+CREATE TABLE IF NOT EXISTS "checkout_attempts" (
+    "id" TEXT NOT NULL,
+    "stripeSessionId" TEXT NOT NULL,
+    "tenantId" TEXT,
+    "proposalId" TEXT,
+    "type" TEXT NOT NULL,
+    "completedAt" TIMESTAMP(3),
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "checkout_attempts_pkey" PRIMARY KEY ("id")
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS "checkout_attempts_stripeSessionId_key" ON "checkout_attempts"("stripeSessionId");
+CREATE INDEX IF NOT EXISTS "checkout_attempts_proposalId_idx" ON "checkout_attempts"("proposalId");
+
 -- P1-1: Backfill Finding.tenantId and make it required
 UPDATE "Finding" f
 SET "tenantId" = a."tenantId"
