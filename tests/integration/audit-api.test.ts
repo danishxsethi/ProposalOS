@@ -82,13 +82,22 @@ vi.mock('@/lib/tenant/context', () => ({
   getTenantId: vi.fn(() => 'tenant-123'),
   runWithTenantAsync: vi.fn(async (_tenantId: string, fn: () => unknown) => await fn()),
 }));
-vi.mock('@/lib/prisma', () => ({
-  prisma: {
-    audit: { create: vi.fn(() => ({ id: 'audit-123' })), update: vi.fn(() => Promise.resolve({})) },
-  },
-}));
+vi.mock('@/lib/prisma', () => {
+  const mockAudit = {
+    create: vi.fn(() => ({ id: 'audit-123', status: 'QUEUED' })),
+    update: vi.fn(() => Promise.resolve({})),
+  };
+  const mockPrisma = {
+    audit: mockAudit,
+    $transaction: vi.fn(async (cb) => {
+      return cb({ audit: mockAudit });
+    }),
+  };
+  return { prisma: mockPrisma };
+});
 vi.mock('@/lib/billing/limits', () => ({
   checkAuditLimit: vi.fn(() => Promise.resolve({ allowed: true })),
+  checkAndDecrementQuota: vi.fn(() => Promise.resolve()),
 }));
 
 describe('Integration: POST /api/audit', () => {

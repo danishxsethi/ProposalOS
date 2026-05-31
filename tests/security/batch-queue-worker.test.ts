@@ -85,8 +85,8 @@ vi.mock('@/lib/logger', () => ({
   logError: mocks.loggerError,
 }));
 
-vi.mock('@/lib/prisma', () => ({
-  prisma: {
+vi.mock('@/lib/prisma', () => {
+  const mockPrisma = {
     audit: {
       create: mocks.auditCreate,
       findUnique: mocks.auditFindUnique,
@@ -101,7 +101,30 @@ vi.mock('@/lib/prisma', () => ({
       update: mocks.auditJobUpdate,
       updateMany: mocks.auditJobUpdateMany,
     },
+    $transaction: vi.fn(async (cb) => {
+      return cb(mockPrisma);
+    }),
+  };
+  return { prisma: mockPrisma };
+});
+
+vi.mock('@/lib/costs/costTracker', () => ({
+  CostTracker: class {
+    getTotalCents() {
+      return 5;
+    }
   },
+  checkDailyAuditLimit: vi.fn().mockReturnValue({
+    allowed: true,
+    limit: 100,
+    todayCount: 5,
+    remaining: 95,
+  }),
+  incrementAuditCount: vi.fn(),
+}));
+
+vi.mock('@/lib/billing/limits', () => ({
+  checkAndDecrementQuota: vi.fn(() => Promise.resolve()),
 }));
 
 vi.mock('@/lib/audit/runner', () => ({ runAudit: mocks.runAudit }));
