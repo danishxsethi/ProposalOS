@@ -94,10 +94,13 @@ CREATE INDEX IF NOT EXISTS "QATelemetry_graphName_createdAt_idx" ON "QATelemetry
 CREATE INDEX IF NOT EXISTS "QATelemetry_tenantId_qaScore_idx" ON "QATelemetry"("tenantId", "qaScore");
 
 -- CartAbandonmentEvent: Events by proposal for funnel analysis
-CREATE INDEX IF NOT EXISTS "cart_abandonment_events_proposalId_step_timestamp_idx" ON "cart_abandonment_events"("proposalId", "step", "timestamp");
-
--- CartAbandonmentEvent: Events by tenant and checkout type
-CREATE INDEX IF NOT EXISTS "cart_abandonment_events_tenantId_checkoutType_timestamp_idx" ON "cart_abandonment_events"("tenantId", "checkoutType", "timestamp");
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'cart_abandonment_events') THEN
+    CREATE INDEX IF NOT EXISTS "cart_abandonment_events_proposalId_step_timestamp_idx" ON "cart_abandonment_events"("proposalId", "step", "timestamp");
+    CREATE INDEX IF NOT EXISTS "cart_abandonment_events_tenantId_checkoutType_timestamp_idx" ON "cart_abandonment_events"("tenantId", "checkoutType", "timestamp");
+  END IF;
+END $$;
 
 -- CompetitorSignal: Signals by tenant and type (competitor monitoring)
 -- Wrapped in DO block: table may not exist on a fresh empty-DB replay.
