@@ -128,7 +128,7 @@ resource "google_sql_database_instance" "main" {
       value = "200"
     }
 
-    labels = local.common_labels
+    user_labels = local.common_labels
   }
 
   depends_on = [google_service_networking_connection.private_vpc_connection]

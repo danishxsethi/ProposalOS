@@ -24,15 +24,15 @@ resource "google_dns_managed_zone" "main" {
     state = "on"
     
     default_key_specs {
-      algorithm  = "ECDSAP256SHA256"
+      algorithm  = "ecdsap256sha256"
       key_length = 256
-      key_type   = "ksk"  # Key Signing Key
+      key_type   = "keySigning"  # Key Signing Key
     }
     
     default_key_specs {
-      algorithm  = "ECDSAP256SHA256"
+      algorithm  = "ecdsap256sha256"
       key_length = 256
-      key_type   = "zsk"  # Zone Signing Key
+      key_type   = "zoneSigning"  # Zone Signing Key
     }
   }
 

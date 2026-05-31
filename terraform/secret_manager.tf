@@ -401,8 +401,6 @@ resource "google_monitoring_alert_policy" "secret_rotation_reminder" {
     content   = "Secrets approaching 90-day rotation deadline. Please rotate secrets."
     mime_type = "text/markdown"
   }
-
-  labels = local.common_labels
 }
 
 # -----------------------------------------------------------------------------

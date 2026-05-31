@@ -48,8 +48,6 @@ resource "google_compute_subnetwork" "main" {
     flow_sampling        = 0.5
     metadata             = "INCLUDE_ALL_METADATA"
   }
-
-  labels = local.common_labels
 }
 
 # -----------------------------------------------------------------------------
@@ -65,8 +63,6 @@ resource "google_vpc_access_connector" "cloud_run" {
 
   min_instances = 2
   max_instances = 10
-
-  labels = local.common_labels
 }
 
 # -----------------------------------------------------------------------------
@@ -81,8 +77,6 @@ resource "google_compute_router" "main" {
   bgp {
     asn = 64514
   }
-
-  labels = local.common_labels
 }
 
 resource "google_compute_router_nat" "main" {
@@ -116,8 +110,6 @@ resource "google_compute_firewall" "allow_health_checks" {
 
   source_ranges = ["35.191.0.0/16", "130.211.0.0/22"]
   target_tags   = ["${local.prefix}-app"]
-
-  labels = local.common_labels
 }
 
 # Deny all egress except to Google APIs (optional, for enhanced security)
@@ -131,8 +123,6 @@ resource "google_compute_firewall" "deny_egress" {
 
   destination_ranges = ["0.0.0.0/0"]
   priority           = 1000
-
-  labels = local.common_labels
 }
 
 # -----------------------------------------------------------------------------

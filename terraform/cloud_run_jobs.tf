@@ -20,94 +20,98 @@ resource "google_cloud_run_v2_job" "batch_audit" {
   location = var.region
   project  = var.project_id
 
-  deletion_protection = false
-
   # Labels
   labels = local.common_labels
 
   # Job configuration
   template {
     parallelism  = 10  # Process 10 audits in parallel
-    max_retries  = 2
-    timeout      = "3600s"  # 1 hour timeout for batch jobs
     
-    container {
-      image = "us-central1-docker.pkg.dev/${var.project_id}/${google_artifact_registry_repository.containers.repository_id}/proposal-engine:latest"
+    template {
+      max_retries  = 2
+      timeout      = "3600s"  # 1 hour timeout for batch jobs
+      service_account = google_service_account.cloud_run_api.email
       
-      # Resource allocation (smaller than regular Cloud Run for cost savings)
-      resources {
-        cpu    = "1"
-        memory = "1Gi"
-      }
-
-      # Environment variables
-      env {
-        name  = "NODE_ENV"
-        value = "production"
-      }
-
-      env {
-        name  = "JOB_MODE"
-        value = "batch_audit"
-      }
-
-      env {
-        name  = "GCP_PROJECT_ID"
-        value = var.project_id
-      }
-
-      env {
-        name  = "GCP_REGION"
-        value = var.region
-      }
-
-      # Secrets
-      env {
-        name = "DATABASE_URL"
-        value_source {
-          secret_key_ref {
-            secret  = "DATABASE_URL"
-            version = "latest"
+      containers {
+        image = "us-central1-docker.pkg.dev/${var.project_id}/${google_artifact_registry_repository.containers.repository_id}/proposal-engine:latest"
+        
+        # Resource allocation (smaller than regular Cloud Run for cost savings)
+        resources {
+          limits = {
+            cpu    = "1"
+            memory = "1Gi"
           }
         }
-      }
 
-      env {
-        name = "GOOGLE_AI_API_KEY"
-        value_source {
-          secret_key_ref {
-            secret  = "GOOGLE_AI_API_KEY"
-            version = "latest"
+        # Environment variables
+        env {
+          name  = "NODE_ENV"
+          value = "production"
+        }
+
+        env {
+          name  = "JOB_MODE"
+          value = "batch_audit"
+        }
+
+        env {
+          name  = "GCP_PROJECT_ID"
+          value = var.project_id
+        }
+
+        env {
+          name  = "GCP_REGION"
+          value = var.region
+        }
+
+        # Secrets
+        env {
+          name = "DATABASE_URL"
+          value_source {
+            secret_key_ref {
+              secret  = "DATABASE_URL"
+              version = "latest"
+            }
           }
         }
-      }
 
-      env {
-        name = "GOOGLE_PAGESPEED_API_KEY"
-        value_source {
-          secret_key_ref {
-            secret  = "GOOGLE_PAGESPEED_API_KEY"
-            version = "latest"
+        env {
+          name = "GOOGLE_AI_API_KEY"
+          value_source {
+            secret_key_ref {
+              secret  = "GOOGLE_AI_API_KEY"
+              version = "latest"
+            }
           }
         }
-      }
 
-      env {
-        name = "GOOGLE_PLACES_API_KEY"
-        value_source {
-          secret_key_ref {
-            secret  = "GOOGLE_PLACES_API_KEY"
-            version = "latest"
+        env {
+          name = "GOOGLE_PAGESPEED_API_KEY"
+          value_source {
+            secret_key_ref {
+              secret  = "GOOGLE_PAGESPEED_API_KEY"
+              version = "latest"
+            }
           }
         }
-      }
 
-      env {
-        name = "SERP_API_KEY"
-        value_source {
-          secret_key_ref {
-            secret  = "SERP_API_KEY"
-            version = "latest"
+        env {
+          name = "GOOGLE_PLACES_API_KEY"
+          value_source {
+            secret_key_ref {
+              secret  = "GOOGLE_PLACES_API_KEY"
+              version = "latest"
+            }
+          }
+        }
+
+        env {
+          name = "SERP_API_KEY"
+          value_source {
+            secret_key_ref {
+              secret  = "SERP_API_KEY"
+              version = "latest"
+            }
           }
         }
       }
@@ -118,9 +122,6 @@ resource "google_cloud_run_v2_job" "batch_audit" {
         egress    = "PRIVATE_RANGES_ONLY"
       }
     }
-
-    # Service account
-    service_account = google_service_account.cloud_run_api.email
   }
 }
 
@@ -133,59 +134,63 @@ resource "google_cloud_run_v2_job" "batch_outreach" {
   location = var.region
   project  = var.project_id
 
-  deletion_protection = false
-
   labels = local.common_labels
 
   template {
     parallelism  = 20  # Process 20 emails in parallel
-    max_retries  = 3
-    timeout      = "1800s"  # 30 minutes
     
-    container {
-      image = "us-central1-docker.pkg.dev/${var.project_id}/${google_artifact_registry_repository.containers.repository_id}/proposal-engine:latest"
+    template {
+      max_retries  = 3
+      timeout      = "1800s"  # 30 minutes
+      service_account = google_service_account.cloud_run_api.email
       
-      resources {
-        cpu    = "1"
-        memory = "512Mi"
-      }
-
-      env {
-        name  = "NODE_ENV"
-        value = "production"
-      }
-
-      env {
-        name  = "JOB_MODE"
-        value = "batch_outreach"
-      }
-
-      env {
-        name = "DATABASE_URL"
-        value_source {
-          secret_key_ref {
-            secret  = "DATABASE_URL"
-            version = "latest"
+      containers {
+        image = "us-central1-docker.pkg.dev/${var.project_id}/${google_artifact_registry_repository.containers.repository_id}/proposal-engine:latest"
+        
+        resources {
+          limits = {
+            cpu    = "1"
+            memory = "512Mi"
           }
         }
-      }
 
-      env {
-        name = "RESEND_API_KEY"
-        value_source {
-          secret_key_ref {
-            secret  = "RESEND_API_KEY"
-            version = "latest"
+        env {
+          name  = "NODE_ENV"
+          value = "production"
+        }
+
+        env {
+          name  = "JOB_MODE"
+          value = "batch_outreach"
+        }
+
+        env {
+          name = "DATABASE_URL"
+          value_source {
+            secret_key_ref {
+              secret  = "DATABASE_URL"
+              version = "latest"
+            }
           }
         }
-      }
 
-      env {
-        name = "GOOGLE_AI_API_KEY"
-        value_source {
-          secret_key_ref {
-            secret  = "GOOGLE_AI_API_KEY"
-            version = "latest"
+        env {
+          name = "RESEND_API_KEY"
+          value_source {
+            secret_key_ref {
+              secret  = "RESEND_API_KEY"
+              version = "latest"
+            }
+          }
+        }
+
+        env {
+          name = "GOOGLE_AI_API_KEY"
+          value_source {
+            secret_key_ref {
+              secret  = "GOOGLE_AI_API_KEY"
+              version = "latest"
+            }
           }
         }
       }
@@ -195,8 +200,6 @@ resource "google_cloud_run_v2_job" "batch_outreach" {
         egress    = "PRIVATE_RANGES_ONLY"
       }
     }
-
-    service_account = google_service_account.cloud_run_api.email
   }
 }
 
@@ -209,46 +212,50 @@ resource "google_cloud_run_v2_job" "batch_reports" {
   location = var.region
   project  = var.project_id
 
-  deletion_protection = false
-
   labels = local.common_labels
 
   template {
     parallelism  = 5  # PDF generation is resource intensive
-    max_retries  = 2
-    timeout      = "1800s"  # 30 minutes
     
-    container {
-      image = "us-central1-docker.pkg.dev/${var.project_id}/${google_artifact_registry_repository.containers.repository_id}/proposal-engine:latest"
+    template {
+      max_retries  = 2
+      timeout      = "1800s"  # 30 minutes
+      service_account = google_service_account.cloud_run_api.email
       
-      resources {
-        cpu    = "2"  # More CPU for PDF generation
-        memory = "2Gi"
-      }
-
-      env {
-        name  = "NODE_ENV"
-        value = "production"
-      }
-
-      env {
-        name  = "JOB_MODE"
-        value = "batch_reports"
-      }
-
-      env {
-        name = "DATABASE_URL"
-        value_source {
-          secret_key_ref {
-            secret  = "DATABASE_URL"
-            version = "latest"
+      containers {
+        image = "us-central1-docker.pkg.dev/${var.project_id}/${google_artifact_registry_repository.containers.repository_id}/proposal-engine:latest"
+        
+        resources {
+          limits = {
+            cpu    = "2"  # More CPU for PDF generation
+            memory = "2Gi"
           }
         }
-      }
 
-      env {
-        name = "GCS_BUCKET_NAME"
-        value = google_storage_bucket.proposals.name
+        env {
+          name  = "NODE_ENV"
+          value = "production"
+        }
+
+        env {
+          name  = "JOB_MODE"
+          value = "batch_reports"
+        }
+
+        env {
+          name = "DATABASE_URL"
+          value_source {
+            secret_key_ref {
+              secret  = "DATABASE_URL"
+              version = "latest"
+            }
+          }
+        }
+
+        env {
+          name = "GCS_BUCKET_NAME"
+          value = google_storage_bucket.proposals.name
+        }
       }
 
       vpc_access {
@@ -256,8 +263,6 @@ resource "google_cloud_run_v2_job" "batch_reports" {
         egress    = "PRIVATE_RANGES_ONLY"
       }
     }
-
-    service_account = google_service_account.cloud_run_api.email
   }
 }
 
@@ -270,46 +275,50 @@ resource "google_cloud_run_v2_job" "batch_export" {
   location = var.region
   project  = var.project_id
 
-  deletion_protection = false
-
   labels = local.common_labels
 
   template {
     parallelism  = 5
-    max_retries  = 3
-    timeout      = "3600s"  # 1 hour for large exports
     
-    container {
-      image = "us-central1-docker.pkg.dev/${var.project_id}/${google_artifact_registry_repository.containers.repository_id}/proposal-engine:latest"
+    template {
+      max_retries  = 3
+      timeout      = "3600s"  # 1 hour for large exports
+      service_account = google_service_account.cloud_run_api.email
       
-      resources {
-        cpu    = "2"
-        memory = "4Gi"  # More memory for data processing
-      }
-
-      env {
-        name  = "NODE_ENV"
-        value = "production"
-      }
-
-      env {
-        name  = "JOB_MODE"
-        value = "batch_export"
-      }
-
-      env {
-        name = "DATABASE_URL"
-        value_source {
-          secret_key_ref {
-            secret  = "DATABASE_URL"
-            version = "latest"
+      containers {
+        image = "us-central1-docker.pkg.dev/${var.project_id}/${google_artifact_registry_repository.containers.repository_id}/proposal-engine:latest"
+        
+        resources {
+          limits = {
+            cpu    = "2"
+            memory = "4Gi"  # More memory for data processing
           }
         }
-      }
 
-      env {
-        name = "GCS_BUCKET_NAME"
-        value = google_storage_bucket.audit_snapshots.name
+        env {
+          name  = "NODE_ENV"
+          value = "production"
+        }
+
+        env {
+          name  = "JOB_MODE"
+          value = "batch_export"
+        }
+
+        env {
+          name = "DATABASE_URL"
+          value_source {
+            secret_key_ref {
+              secret  = "DATABASE_URL"
+              version = "latest"
+            }
+          }
+        }
+
+        env {
+          name = "GCS_BUCKET_NAME"
+          value = google_storage_bucket.audit_snapshots.name
+        }
       }
 
       vpc_access {
@@ -317,8 +326,6 @@ resource "google_cloud_run_v2_job" "batch_export" {
         egress    = "PRIVATE_RANGES_ONLY"
       }
     }
-
-    service_account = google_service_account.cloud_run_api.email
   }
 }
 

@@ -36,16 +36,16 @@ resource "google_cloud_run_v2_service" "api" {
   # Labels
   labels = local.common_labels
 
-  # Scaling configuration
-  scaling {
-    min_instance_count = var.cloud_run_api.min_instances  # 1 = always on, no cold starts
-    max_instance_count = var.cloud_run_api.max_instances  # 50 = handle traffic spikes
-  }
-
   # Request configuration
   template {
     max_instance_request_concurrency = var.cloud_run_api.concurrency
     timeout                          = "${var.cloud_run_api.timeout_seconds}s"
+
+    # Scaling configuration
+    scaling {
+      min_instance_count = var.cloud_run_api.min_instances  # 1 = always on, no cold starts
+      max_instance_count = var.cloud_run_api.max_instances  # 50 = handle traffic spikes
+    }
 
     # Container configuration
     containers {
@@ -57,8 +57,10 @@ resource "google_cloud_run_v2_service" "api" {
 
       # Resource limits
       resources {
-        cpu    = var.cloud_run_api.cpu
-        memory = var.cloud_run_api.memory
+        limits = {
+          cpu    = var.cloud_run_api.cpu
+          memory = var.cloud_run_api.memory
+        }
       }
 
       # Environment variables
@@ -173,11 +175,6 @@ resource "google_cloud_run_v2_service" "api" {
         }
       }
 
-      # VPC Access for private database connection
-      vpc_access {
-        connector = google_vpc_access_connector.cloud_run.id
-        egress    = "PRIVATE_RANGES_ONLY"
-      }
     }
 
     # Service account
@@ -222,16 +219,16 @@ resource "google_cloud_run_v2_service" "frontend" {
 
   labels = local.common_labels
 
-  # Scaling configuration
-  scaling {
-    min_instance_count = var.cloud_run_frontend.min_instances
-    max_instance_count = var.cloud_run_frontend.max_instances
-  }
-
   # Request configuration
   template {
     max_instance_request_concurrency = var.cloud_run_frontend.concurrency
     timeout                          = "${var.cloud_run_frontend.timeout_seconds}s"
+
+    # Scaling configuration
+    scaling {
+      min_instance_count = var.cloud_run_frontend.min_instances
+      max_instance_count = var.cloud_run_frontend.max_instances
+    }
 
     containers {
       image = "us-central1-docker.pkg.dev/${var.project_id}/${google_artifact_registry_repository.containers.repository_id}/claraud-web:latest"
@@ -241,8 +238,10 @@ resource "google_cloud_run_v2_service" "frontend" {
       }
 
       resources {
-        cpu    = var.cloud_run_frontend.cpu
-        memory = var.cloud_run_frontend.memory
+        limits = {
+          cpu    = var.cloud_run_frontend.cpu
+          memory = var.cloud_run_frontend.memory
+        }
       }
 
       env {
@@ -253,12 +252,6 @@ resource "google_cloud_run_v2_service" "frontend" {
       env {
         name  = "NEXT_PUBLIC_APP_URL"
         value = "https://${google_cloud_run_v2_service.api.uri}"
-      }
-
-      # VPC Access
-      vpc_access {
-        connector = google_vpc_access_connector.cloud_run.id
-        egress    = "PRIVATE_RANGES_ONLY"
       }
     }
 
@@ -294,14 +287,15 @@ resource "google_cloud_run_v2_service" "audit_worker" {
   description = "ProposalOS Audit Processing Worker"
   labels      = local.common_labels
 
-  scaling {
-    min_instance_count = 0  # Scale to zero when idle
-    max_instance_count = 10
-  }
-
   template {
     max_instance_request_concurrency = 1  # Process one audit at a time
     timeout                          = "600s"  # 10 minute timeout for audits
+
+    # Scaling configuration
+    scaling {
+      min_instance_count = 0  # Scale to zero when idle
+      max_instance_count = 10
+    }
 
     containers {
       image = "us-central1-docker.pkg.dev/${var.project_id}/${google_artifact_registry_repository.containers.repository_id}/proposal-engine:latest"
@@ -311,19 +305,22 @@ resource "google_cloud_run_v2_service" "audit_worker" {
       }
 
       resources {
-        cpu    = "2"  # More CPU for audit processing
-        memory = "2Gi"
+        limits = {
+          cpu    = "2"  # More CPU for audit processing
+          memory = "2Gi"
+        }
       }
 
       env {
         name  = "WORKER_MODE"
         value = "audit"
       }
+    }
 
-      vpc_access {
-        connector = google_vpc_access_connector.cloud_run.id
-        egress    = "PRIVATE_RANGES_ONLY"
-      }
+    # VPC connector for private egress
+    vpc_access {
+      connector = google_vpc_access_connector.cloud_run.id
+      egress    = "PRIVATE_RANGES_ONLY"
     }
 
     service_account = google_service_account.cloud_run_api.email
@@ -346,14 +343,15 @@ resource "google_cloud_run_v2_service" "outreach_worker" {
   description = "ProposalOS Cold Outreach Worker"
   labels      = local.common_labels
 
-  scaling {
-    min_instance_count = 0
-    max_instance_count = 5
-  }
-
   template {
     max_instance_request_concurrency = 10
     timeout                          = "300s"
+
+    # Scaling configuration
+    scaling {
+      min_instance_count = 0
+      max_instance_count = 5
+    }
 
     containers {
       image = "us-central1-docker.pkg.dev/${var.project_id}/${google_artifact_registry_repository.containers.repository_id}/proposal-engine:latest"
@@ -363,19 +361,22 @@ resource "google_cloud_run_v2_service" "outreach_worker" {
       }
 
       resources {
-        cpu    = "1"
-        memory = "1Gi"
+        limits = {
+          cpu    = "1"
+          memory = "1Gi"
+        }
       }
 
       env {
         name  = "WORKER_MODE"
         value = "outreach"
       }
+    }
 
-      vpc_access {
-        connector = google_vpc_access_connector.cloud_run.id
-        egress    = "PRIVATE_RANGES_ONLY"
-      }
+    # VPC connector for private egress
+    vpc_access {
+      connector = google_vpc_access_connector.cloud_run.id
+      egress    = "PRIVATE_RANGES_ONLY"
     }
 
     service_account = google_service_account.cloud_run_api.email
