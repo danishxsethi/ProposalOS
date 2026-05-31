@@ -12,7 +12,7 @@
  * 7. The runner (background path) applies the same logic as the route.
  */
 
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // ---------------------------------------------------------------------------
 // Shared mocks
@@ -34,6 +34,7 @@ const mocks = vi.hoisted(() => ({
   invokeDiagnosisGraphWithTimeout: vi.fn(),
   invokeProposalGraphWithTimeout: vi.fn(),
   runAutoQA: vi.fn(),
+  evaluateProposal: vi.fn(),
   createParentTrace: vi.fn(),
   detectVertical: vi.fn(),
   getPlaybook: vi.fn(),
@@ -102,6 +103,11 @@ vi.mock('@/lib/playbooks', () => ({
   getPlaybook: mocks.getPlaybook,
 }));
 vi.mock('@/lib/qa/autoQA', () => ({ runAutoQA: mocks.runAutoQA }));
+vi.mock('@/lib/proposal/ProposalQAService', () => ({
+  ProposalQAService: {
+    evaluateProposal: mocks.evaluateProposal,
+  },
+}));
 vi.mock('@/lib/tracing', () => ({ createParentTrace: mocks.createParentTrace }));
 
 // ---------------------------------------------------------------------------
@@ -249,7 +255,15 @@ describe('determineProposalStatus', () => {
 // ---------------------------------------------------------------------------
 
 describe('POST /api/audit/[id]/propose — proposal status promotion', () => {
+  let originalKillSwitch: string | undefined;
+  let originalAutoPromotion: string | undefined;
+
   beforeEach(() => {
+    originalKillSwitch = process.env.KILL_SWITCH_FORCE_MANUAL_MODE;
+    originalAutoPromotion = process.env.AUTOMATION_AUTO_QA_PROMOTION;
+    process.env.KILL_SWITCH_FORCE_MANUAL_MODE = 'false';
+    process.env.AUTOMATION_AUTO_QA_PROMOTION = 'true';
+
     vi.clearAllMocks();
     mocks.getTenantId.mockResolvedValue('tenant-a');
     mocks.runWithTenantAsync.mockImplementation(async (tenantId, fn) => {
@@ -265,14 +279,58 @@ describe('POST /api/audit/[id]/propose — proposal status promotion', () => {
     mocks.invokeProposalGraphWithTimeout.mockResolvedValue(proposalGraphResult);
     mocks.createParentTrace.mockResolvedValue(undefined);
     mocks.auditUpdate.mockResolvedValue({});
-    mocks.proposalCreate.mockResolvedValue({
-      id: 'proposal-1',
-      webLinkToken: 'token-1',
+    mocks.proposalCreate.mockImplementation(async (args: any) => {
+      return {
+        id: 'proposal-1',
+        webLinkToken: 'token-1',
+        status: args?.data?.status ?? 'DRAFT',
+        qaScore: args?.data?.qaScore,
+        clientScore: args?.data?.clientScore,
+      };
     });
     mocks.auth.mockResolvedValue({
       user: { email: 'owner@example.com', tenantId: 'tenant-a' },
     });
     mocks.auditFindFirst.mockResolvedValue(makeAudit());
+
+    // Bridge evaluateProposal to runAutoQA
+    mocks.evaluateProposal.mockImplementation(
+      (proposal: any, findings: any, businessName: any, city: any, context: any) => {
+        const autoQAStatus = mocks.runAutoQA(proposal, findings, businessName, city, context);
+        const passed =
+          autoQAStatus.score >= 60 &&
+          (!autoQAStatus.clientPerfect?.hardFails ||
+            autoQAStatus.clientPerfect.hardFails.length === 0);
+        return {
+          dimensions: {
+            evidenceQuality: 10,
+            relevance: 10,
+            specificity: 10,
+            clarity: 10,
+            pricingFit: 10,
+            copywritingSafety: 10,
+            clientReadiness: 10,
+          },
+          overallScore: autoQAStatus.score,
+          passed,
+          feedbackLogs: autoQAStatus.warnings,
+          autoQAStatus,
+        };
+      }
+    );
+  });
+
+  afterEach(() => {
+    if (originalKillSwitch !== undefined) {
+      process.env.KILL_SWITCH_FORCE_MANUAL_MODE = originalKillSwitch;
+    } else {
+      delete process.env.KILL_SWITCH_FORCE_MANUAL_MODE;
+    }
+    if (originalAutoPromotion !== undefined) {
+      process.env.AUTOMATION_AUTO_QA_PROMOTION = originalAutoPromotion;
+    } else {
+      delete process.env.AUTOMATION_AUTO_QA_PROMOTION;
+    }
   });
 
   it('persists READY and returns status=READY when QA score >= 60', async () => {

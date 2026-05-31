@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   invokeDiagnosisGraphWithTimeout: vi.fn(),
   runProposalPipeline: vi.fn(),
   runAutoQA: vi.fn(),
+  evaluateProposal: vi.fn(),
   getTenantId: vi.fn(),
   runWithTenantAsync: vi.fn(),
 }));
@@ -92,6 +93,12 @@ vi.mock('@/lib/qa/autoQA', () => ({
   runAutoQA: mocks.runAutoQA,
 }));
 
+vi.mock('@/lib/proposal/ProposalQAService', () => ({
+  ProposalQAService: {
+    evaluateProposal: mocks.evaluateProposal,
+  },
+}));
+
 import { POST } from '@/app/api/audit/[id]/regenerate/route';
 
 describe('audit regenerate authorization', () => {
@@ -138,14 +145,43 @@ describe('audit regenerate authorization', () => {
         humanCloseability: { provided: false, score: null, passed: null },
       },
     });
-    mocks.proposalCreate.mockResolvedValue({
-      id: 'proposal-2',
-      version: 1,
-      webLinkToken: 'token-2',
-      executiveSummary: 'Updated summary',
-      pricing: { essentials: 100 },
+    mocks.proposalCreate.mockImplementation(async (args: any) => {
+      return {
+        id: 'proposal-2',
+        version: args?.data?.version ?? 1,
+        webLinkToken: 'token-2',
+        executiveSummary: args?.data?.executiveSummary ?? 'Updated summary',
+        pricing: args?.data?.pricing ?? { essentials: 100 },
+        status: args?.data?.status ?? 'READY',
+      };
     });
     mocks.auditUpdate.mockResolvedValue({});
+
+    // Bridge evaluateProposal to runAutoQA
+    mocks.evaluateProposal.mockImplementation(
+      (proposal: any, findings: any, businessName: any, city: any, context: any) => {
+        const autoQAStatus = mocks.runAutoQA(proposal, findings, businessName, city, context);
+        const passed =
+          autoQAStatus.score >= 60 &&
+          (!autoQAStatus.clientPerfect?.hardFails ||
+            autoQAStatus.clientPerfect.hardFails.length === 0);
+        return {
+          dimensions: {
+            evidenceQuality: 10,
+            relevance: 10,
+            specificity: 10,
+            clarity: 10,
+            pricingFit: 10,
+            copywritingSafety: 10,
+            clientReadiness: 10,
+          },
+          overallScore: autoQAStatus.score,
+          passed,
+          feedbackLogs: autoQAStatus.warnings,
+          autoQAStatus,
+        };
+      }
+    );
   });
 
   it('returns 401 when unauthenticated', async () => {

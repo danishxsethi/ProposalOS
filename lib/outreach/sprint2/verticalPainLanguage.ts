@@ -80,7 +80,10 @@ export function toVerticalBusinessPain(vertical: string, key: PainKey): string {
 
 export function topPainSentence(vertical: string, keys: PainKey[]): string {
   const unique = [...new Set(keys)];
-  if (unique.length === 0) return 'you are leaking demand online';
-  const phrases = unique.slice(0, 2).map((key) => toVerticalBusinessPain(vertical, key));
-  return phrases.join(' and ');
+  if (unique.length === 0) return 'You are leaking demand online';
+  const phrases = unique.slice(0, 2).map((key) => {
+    const p = toVerticalBusinessPain(vertical, key);
+    return p.charAt(0).toUpperCase() + p.slice(1);
+  });
+  return phrases.join('. ');
 }

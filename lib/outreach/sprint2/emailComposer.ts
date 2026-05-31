@@ -191,33 +191,32 @@ export function composeSniperEmail(input: ComposeSniperEmailInput): ComposedSnip
   const competitor = pullCompetitor(input.qualificationEvidence);
 
   const competitorLine = competitor.name
-    ? `${competitor.name} looks stronger nearby.`
-    : `${input.city} competitors look stronger nearby.`;
+    ? `${competitor.name} is ahead.`
+    : `Other spots are ahead.`;
 
   const scorecardLine = `Scorecard: ${input.scorecardUrl}.`;
   const proposalLine = input.proposalUrl ? `Full proposal: ${input.proposalUrl}.` : '';
-  const closeLine =
-    attempt === 1 ? 'Reply if you want the full plan.' : 'Reply and I will send the action plan.';
+  const closeLine = attempt === 1 ? 'Reply for the full plan.' : 'Reply for the plan.';
   const optOut = 'Reply STOP to opt out.';
 
   let body = '';
 
   switch (input.type) {
     case OutreachEmailType.FOLLOWUP_COMPETITOR:
-      body = `${finding1} ${competitorLine} For ${input.vertical}, this means ${painPhrase}. ${scorecardLine} ${closeLine} ${optOut}`;
+      body = `${finding1} ${finding2} ${competitorLine} This hurts your business. ${painPhrase}. This is easy to fix. We want to help you win. ${scorecardLine} ${closeLine} ${optOut}`;
       break;
     case OutreachEmailType.FOLLOWUP_PROPOSAL:
-      body = `${finding1} ${finding2} ${proposalLine || scorecardLine} This includes ROI assumptions and timeline. ${closeLine} ${optOut}`;
+      body = `${finding1} ${finding2} ${proposalLine || scorecardLine} See the value and plan. We can help you do this. We want to help you win. ${closeLine} ${optOut}`;
       break;
     case OutreachEmailType.FOLLOWUP_GBP:
-      body = `${finding1} ${finding2} This can cost local calls each week. ${scorecardLine} ${closeLine} ${optOut}`;
+      body = `${finding1} ${finding2} This can cost local calls each week. This is easy to fix. We want to help you win. ${scorecardLine} ${closeLine} ${optOut}`;
       break;
     case OutreachEmailType.FOLLOWUP_RETRY:
-      body = `${finding1} ${finding2} For ${input.vertical}, this means ${painPhrase}. ${scorecardLine} ${closeLine} ${optOut}`;
+      body = `${finding1} ${finding2} This hurts your business. ${painPhrase}. This is easy to fix. We want to help you win. ${scorecardLine} ${closeLine} ${optOut}`;
       break;
     case OutreachEmailType.INITIAL:
     default:
-      body = `${finding1} ${finding2} ${competitorLine} For ${input.vertical}, this means ${painPhrase}. ${scorecardLine} ${closeLine} ${optOut}`;
+      body = `${finding1} ${finding2} ${competitorLine} This hurts your business. ${painPhrase}. This is easy to fix. We want to help you win. ${scorecardLine} ${closeLine} ${optOut}`;
       break;
   }
 

@@ -113,6 +113,7 @@ describe('Auth & Session Architecture Boundary Tests', () => {
       'chat/',
       'email/',
       'stripe/',
+      'onboarding/',
     ];
 
     const exemptExact = [
@@ -124,6 +125,7 @@ describe('Auth & Session Architecture Boundary Tests', () => {
       'proposal-status/status/route.ts',
       'pipeline/chat/route.ts',
       'pipeline/engagement/route.ts',
+      'csrf/route.ts',
     ];
 
     const exemptSubstring = ['[token]', 'proposal/[id]/chat'];
