@@ -51,7 +51,7 @@ resource "google_cloud_run_v2_service" "api" {
     containers {
       image = "us-central1-docker.pkg.dev/${var.project_id}/${google_artifact_registry_repository.containers.repository_id}/proposal-engine:latest"
       ports {
-        name           = "http"
+        name           = "http1"
         container_port = var.cloud_run_api.container_port
       }
 
@@ -233,7 +233,7 @@ resource "google_cloud_run_v2_service" "frontend" {
     containers {
       image = "us-central1-docker.pkg.dev/${var.project_id}/${google_artifact_registry_repository.containers.repository_id}/claraud-web:latest"
       ports {
-        name           = "http"
+        name           = "http1"
         container_port = var.cloud_run_frontend.container_port
       }
 
@@ -300,7 +300,7 @@ resource "google_cloud_run_v2_service" "audit_worker" {
     containers {
       image = "us-central1-docker.pkg.dev/${var.project_id}/${google_artifact_registry_repository.containers.repository_id}/proposal-engine:latest"
       ports {
-        name           = "http"
+        name           = "http1"
         container_port = var.cloud_run_api.container_port
       }
 
@@ -356,7 +356,7 @@ resource "google_cloud_run_v2_service" "outreach_worker" {
     containers {
       image = "us-central1-docker.pkg.dev/${var.project_id}/${google_artifact_registry_repository.containers.repository_id}/proposal-engine:latest"
       ports {
-        name           = "http"
+        name           = "http1"
         container_port = var.cloud_run_api.container_port
       }
 
@@ -430,7 +430,7 @@ resource "google_monitoring_uptime_check_config" "api" {
     type = "uptime_url"
     labels = {
       project_id = var.project_id
-      url        = trimprefix(google_cloud_run_v2_service.api.uri, "https://")
+      host       = trimprefix(google_cloud_run_v2_service.api.uri, "https://")
     }
   }
 
@@ -456,7 +456,7 @@ resource "google_monitoring_uptime_check_config" "frontend" {
     type = "uptime_url"
     labels = {
       project_id = var.project_id
-      url        = trimprefix(google_cloud_run_v2_service.frontend.uri, "https://")
+      host       = trimprefix(google_cloud_run_v2_service.frontend.uri, "https://")
     }
   }
 

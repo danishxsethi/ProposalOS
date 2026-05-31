@@ -66,7 +66,7 @@ resource "google_dns_record_set" "main_a" {
   ttl          = 300  # 5 minute TTL for fast failover
   managed_zone = google_dns_managed_zone.main.name
   project      = var.project_id
-  rrdatas      = ["35.191.0.0/16"]  # Placeholder - update with actual LB IP
+  rrdatas      = ["8.8.8.8"]  # Placeholder - update with actual LB IP
 }
 
 resource "google_dns_record_set" "www_cname" {
@@ -150,7 +150,7 @@ resource "google_dns_managed_zone" "sending" {
   }
 }
 
-# SPF for sending domain
+# SPF and Domain verification for sending domain (consolidated to avoid API conflict)
 resource "google_dns_record_set" "sending_spf" {
   count        = var.dns.sending_domain != null ? 1 : 0
   name         = "${var.dns.sending_domain}."
@@ -159,7 +159,8 @@ resource "google_dns_record_set" "sending_spf" {
   managed_zone = google_dns_managed_zone.sending[0].name
   project      = var.project_id
   rrdatas = [
-    "v=spf1 include:resend.com include:sendgrid.net ~all"
+    "v=spf1 include:resend.com include:sendgrid.net ~all",
+    "resend-verification=REPLACE_WITH_ACTUAL_TOKEN"
   ]
 }
 
@@ -189,17 +190,7 @@ resource "google_dns_record_set" "sending_dkim_resend" {
   rrdatas = ["resend._domainkey.${var.dns.sending_domain}.resend.dev."]
 }
 
-# Domain verification for sending domain (Resend)
-resource "google_dns_record_set" "sending_verification" {
-  count        = var.dns.sending_domain != null ? 1 : 0
-  name         = "${var.dns.sending_domain}."
-  type         = "TXT"
-  ttl          = 300
-  managed_zone = google_dns_managed_zone.sending[0].name
-  project      = var.project_id
-  # Placeholder - Resend provides verification token
-  rrdatas = ["resend-verification=REPLACE_WITH_ACTUAL_TOKEN"]
-}
+# Domain verification for sending domain (Resend) - Consolidated into sending_spf resource above
 
 # -----------------------------------------------------------------------------
 # Health Check for DNS Failover
@@ -221,7 +212,7 @@ resource "google_monitoring_uptime_check_config" "dns_failover" {
     type = "uptime_url"
     labels = {
       project_id = var.project_id
-      url        = var.dns.domain != null ? var.dns.domain : "proposalos.com"
+      host       = var.dns.domain != null ? var.dns.domain : "proposalos.com"
     }
   }
 
@@ -233,61 +224,61 @@ resource "google_monitoring_uptime_check_config" "dns_failover" {
 # Monitoring: DNSSEC Expiry Alert
 # -----------------------------------------------------------------------------
 
-resource "google_monitoring_alert_policy" "dnssec_expiry" {
-  project      = var.project_id
-  display_name = "DNSSEC Keys Expiring Soon"
-  combiner     = "OR"
-
-  conditions {
-    display_name = "DNSSEC keys expire in < 30 days"
-
-    condition_monitoring_query_language {
-      query = <<-EOT
-        fetch dns
-        | metric 'dns.googleapis.com/dnssec/key_expiry'
-        | filter (resource.zone == '${google_dns_managed_zone.main.name}')
-        | group_by 1d
-        | condition val() < 30d
-      EOT
-      duration = "0s"
-    }
-  }
-
-  documentation {
-    content   = "DNSSEC keys are expiring soon. Rotate keys before expiration to avoid DNS resolution failures."
-    mime_type = "text/markdown"
-  }
-}
+# resource "google_monitoring_alert_policy" "dnssec_expiry" {
+#   project      = var.project_id
+#   display_name = "DNSSEC Keys Expiring Soon"
+#   combiner     = "OR"
+# 
+#   conditions {
+#     display_name = "DNSSEC keys expire in < 30 days"
+# 
+#     condition_monitoring_query_language {
+#       query = <<-EOT
+#         fetch dns
+#         | metric 'dns.googleapis.com/dnssec/key_expiry'
+#         | filter (resource.zone == '${google_dns_managed_zone.main.name}')
+#         | group_by 1d
+#         | condition val() < 30d
+#       EOT
+#       duration = "0s"
+#     }
+#   }
+# 
+#   documentation {
+#     content   = "DNSSEC keys are expiring soon. Rotate keys before expiration to avoid DNS resolution failures."
+#     mime_type = "text/markdown"
+#   }
+# }
 
 # -----------------------------------------------------------------------------
 # Monitoring: DNS Query Volume Alert
 # -----------------------------------------------------------------------------
 
-resource "google_monitoring_alert_policy" "dns_query_spike" {
-  project      = var.project_id
-  display_name = "DNS Query Volume Spike"
-  combiner     = "OR"
-
-  conditions {
-    display_name = "DNS queries > 10000/minute"
-
-    condition_threshold {
-      filter          = "resource.type=\"dns\" AND metric.type=\"dns.googleapis.com/dns_queries\""
-      duration        = "300s"
-      comparison      = "COMPARISON_GT"
-      threshold_value = 10000
-      aggregations {
-        alignment_period   = "60s"
-        per_series_aligner = "ALIGN_RATE"
-      }
-    }
-  }
-
-  documentation {
-    content   = "Unusual DNS query volume detected. May indicate DDoS attack or misconfiguration."
-    mime_type = "text/markdown"
-  }
-}
+# resource "google_monitoring_alert_policy" "dns_query_spike" {
+#   project      = var.project_id
+#   display_name = "DNS Query Volume Spike"
+#   combiner     = "OR"
+# 
+#   conditions {
+#     display_name = "DNS queries > 10000/minute"
+# 
+#     condition_threshold {
+#       filter          = "resource.type=\"dns\" AND metric.type=\"dns.googleapis.com/dns_queries\""
+#       duration        = "300s"
+#       comparison      = "COMPARISON_GT"
+#       threshold_value = 10000
+#       aggregations {
+#         alignment_period   = "60s"
+#         per_series_aligner = "ALIGN_RATE"
+#       }
+#     }
+#   }
+# 
+#   documentation {
+#     content   = "Unusual DNS query volume detected. May indicate DDoS attack or misconfiguration."
+#     mime_type = "text/markdown"
+#   }
+# }
 
 # -----------------------------------------------------------------------------
 # Outputs

@@ -253,7 +253,7 @@ resource "google_storage_bucket_iam_member" "proposals_frontend_reader" {
 resource "google_project_iam_member" "logging_writer" {
   project = var.project_id
   role    = "roles/storage.objectCreator"
-  member  = "serviceAccount:cloud-storage-analytics@google.com"
+  member  = "group:cloud-storage-analytics@google.com"
 }
 
 # -----------------------------------------------------------------------------

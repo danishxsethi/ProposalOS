@@ -16,10 +16,10 @@ locals {
   prefix = "${var.app_name}-${var.environment}"
 
   # API service URL
-  api_service_url = "${local.prefix}-api"
+  api_service_url = "proposal-engine"
 
   # Frontend service URL
-  frontend_service_url = "${local.prefix}-web"
+  frontend_service_url = "claraud-web"
 }
 
 # -----------------------------------------------------------------------------
@@ -55,7 +55,7 @@ resource "google_compute_subnetwork" "main" {
 # -----------------------------------------------------------------------------
 
 resource "google_vpc_access_connector" "cloud_run" {
-  name          = "${local.prefix}-vpc-connector"
+  name          = "prop-prod-connector"
   project       = var.project_id
   region        = var.region
   network       = google_compute_network.main.name
@@ -63,6 +63,14 @@ resource "google_vpc_access_connector" "cloud_run" {
 
   min_instances = 2
   max_instances = 10
+  machine_type  = "e2-micro"
+
+  lifecycle {
+    ignore_changes = [
+      max_throughput,
+      min_throughput
+    ]
+  }
 }
 
 # -----------------------------------------------------------------------------
@@ -114,8 +122,9 @@ resource "google_compute_firewall" "allow_health_checks" {
 
 # Deny all egress except to Google APIs (optional, for enhanced security)
 resource "google_compute_firewall" "deny_egress" {
-  name    = "${local.prefix}-deny-egress"
-  network = google_compute_network.main.name
+  name      = "${local.prefix}-deny-egress"
+  network   = google_compute_network.main.name
+  direction = "EGRESS"
 
   deny {
     protocol = "all"

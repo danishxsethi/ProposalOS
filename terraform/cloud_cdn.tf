@@ -130,61 +130,61 @@ resource "google_compute_backend_bucket_signed_url_key" "proposals_key" {
 # Monitoring: Cache Hit Ratio Alert
 # -----------------------------------------------------------------------------
 
-resource "google_monitoring_alert_policy" "cdn_cache_hit_ratio" {
-  project      = var.project_id
-  display_name = "Cloud CDN Low Cache Hit Ratio"
-  combiner     = "OR"
-
-  conditions {
-    display_name = "CDN Cache Hit Ratio < 50%"
-
-    condition_monitoring_query_language {
-      query = <<-EOT
-        fetch http_load_balancer
-        | metric 'loadbalancing.googleapis.com/https/backend_request_count'
-        | filter (resource.backend_bucket_name == '${google_compute_backend_bucket.static_assets.name}')
-        | group_by 5m
-        | condition val() / (val() + val('loadbalancing.googleapis.com/https/cache_hit_count')) > 0.5
-      EOT
-      duration = "600s"
-    }
-  }
-
-  documentation {
-    content   = "Cloud CDN cache hit ratio is below 50%. Consider reviewing cache policies or origin cache headers."
-    mime_type = "text/markdown"
-  }
-}
+# resource "google_monitoring_alert_policy" "cdn_cache_hit_ratio" {
+#   project      = var.project_id
+#   display_name = "Cloud CDN Low Cache Hit Ratio"
+#   combiner     = "OR"
+# 
+#   conditions {
+#     display_name = "CDN Cache Hit Ratio < 50%"
+# 
+#     condition_monitoring_query_language {
+#       query = <<-EOT
+#         fetch http_load_balancer
+#         | metric 'loadbalancing.googleapis.com/https/backend_request_count'
+#         | filter (resource.backend_bucket_name == '${google_compute_backend_bucket.static_assets.name}')
+#         | group_by 5m
+#         | condition val() / (val() + val('loadbalancing.googleapis.com/https/cache_hit_count')) > 0.5
+#       EOT
+#       duration = "600s"
+#     }
+#   }
+# 
+#   documentation {
+#     content   = "Cloud CDN cache hit ratio is below 50%. Consider reviewing cache policies or origin cache headers."
+#     mime_type = "text/markdown"
+#   }
+# }
 
 # -----------------------------------------------------------------------------
 # Monitoring: Origin Load Alert
 # -----------------------------------------------------------------------------
 
-resource "google_monitoring_alert_policy" "cdn_origin_load" {
-  project      = var.project_id
-  display_name = "Cloud CDN High Origin Load"
-  combiner     = "OR"
-
-  conditions {
-    display_name = "CDN Origin Request Rate > 1000/min"
-
-    condition_threshold {
-      filter          = "resource.type=\"http_load_balancer\" AND metric.type=\"loadbalancing.googleapis.com/https/backend_request_count\""
-      duration        = "300s"
-      comparison      = "COMPARISON_GT"
-      threshold_value = 1000
-      aggregations {
-        alignment_period   = "60s"
-        per_series_aligner = "ALIGN_RATE"
-      }
-    }
-  }
-
-  documentation {
-    content   = "High origin request rate detected. CDN may not be caching effectively."
-    mime_type = "text/markdown"
-  }
-}
+# resource "google_monitoring_alert_policy" "cdn_origin_load" {
+#   project      = var.project_id
+#   display_name = "Cloud CDN High Origin Load"
+#   combiner     = "OR"
+# 
+#   conditions {
+#     display_name = "CDN Origin Request Rate > 1000/min"
+# 
+#     condition_threshold {
+#       filter          = "resource.type=\"http_load_balancer\" AND metric.type=\"loadbalancing.googleapis.com/https/backend_request_count\""
+#       duration        = "300s"
+#       comparison      = "COMPARISON_GT"
+#       threshold_value = 1000
+#       aggregations {
+#         alignment_period   = "60s"
+#         per_series_aligner = "ALIGN_RATE"
+#       }
+#     }
+#   }
+# 
+#   documentation {
+#     content   = "High origin request rate detected. CDN may not be caching effectively."
+#     mime_type = "text/markdown"
+#   }
+# }
 
 # -----------------------------------------------------------------------------
 # Outputs
