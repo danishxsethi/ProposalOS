@@ -47,7 +47,7 @@ fi
 
 # Start proxy in background using gcloud authentication token to bypass expired/challenged ADC RAPT errors
 echo "Starting Cloud SQL Proxy..."
-cloud-sql-proxy "${CONNECTION}" --port="${MIGRATE_PORT}" --token "$(gcloud auth print-access-token)" &
+cloud-sql-proxy "${CONNECTION}" --port="${MIGRATE_PORT}" --private-ip --token "$(gcloud auth print-access-token)" &
 PROXY_PID=$!
 sleep 3
 

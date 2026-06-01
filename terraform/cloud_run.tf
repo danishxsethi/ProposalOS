@@ -175,6 +175,56 @@ resource "google_cloud_run_v2_service" "api" {
         }
       }
 
+      env {
+        name  = "BASE_URL"
+        value = "https://proposal-engine-120416863832.us-central1.run.app"
+      }
+
+      env {
+        name  = "NEXTAUTH_URL"
+        value = "https://proposal-engine-120416863832.us-central1.run.app"
+      }
+
+      env {
+        name  = "NEXT_PUBLIC_APP_URL"
+        value = "https://proposal-engine-120416863832.us-central1.run.app"
+      }
+
+      env {
+        name  = "FROM_EMAIL"
+        value = "noreply@proposalengine.app"
+      }
+
+      env {
+        name = "CRON_SECRET"
+        value_source {
+          secret_key_ref {
+            secret  = "CRON_SECRET"
+            version = "latest"
+          }
+        }
+      }
+
+      env {
+        name = "ADMIN_SECRET"
+        value_source {
+          secret_key_ref {
+            secret  = "ADMIN_SECRET"
+            version = "latest"
+          }
+        }
+      }
+
+      env {
+        name = "STRIPE_WEBHOOK_SECRET"
+        value_source {
+          secret_key_ref {
+            secret  = "STRIPE_WEBHOOK_SECRET"
+            version = "latest"
+          }
+        }
+      }
+
     }
 
     # Service account
@@ -312,8 +362,169 @@ resource "google_cloud_run_v2_service" "audit_worker" {
       }
 
       env {
+        name  = "NODE_ENV"
+        value = "production"
+      }
+
+      env {
+        name  = "GCP_PROJECT_ID"
+        value = var.project_id
+      }
+
+      env {
+        name  = "GCP_REGION"
+        value = var.region
+      }
+
+      env {
+        name  = "GCS_BUCKET_NAME"
+        value = google_storage_bucket.proposals.name
+      }
+
+      env {
+        name  = "BASE_URL"
+        value = "https://proposal-engine-120416863832.us-central1.run.app"
+      }
+
+      env {
+        name  = "NEXTAUTH_URL"
+        value = "https://proposal-engine-120416863832.us-central1.run.app"
+      }
+
+      env {
+        name  = "NEXT_PUBLIC_APP_URL"
+        value = "https://proposal-engine-120416863832.us-central1.run.app"
+      }
+
+      env {
+        name  = "FROM_EMAIL"
+        value = "noreply@proposalengine.app"
+      }
+
+      env {
         name  = "WORKER_MODE"
         value = "audit"
+      }
+
+      # Secrets from Secret Manager
+      env {
+        name = "DATABASE_URL"
+        value_source {
+          secret_key_ref {
+            secret  = "DATABASE_URL"
+            version = "latest"
+          }
+        }
+      }
+
+      env {
+        name = "API_KEY"
+        value_source {
+          secret_key_ref {
+            secret  = "API_KEY"
+            version = "latest"
+          }
+        }
+      }
+
+      env {
+        name = "NEXTAUTH_SECRET"
+        value_source {
+          secret_key_ref {
+            secret  = "NEXTAUTH_SECRET"
+            version = "latest"
+          }
+        }
+      }
+
+      env {
+        name = "STRIPE_SECRET_KEY"
+        value_source {
+          secret_key_ref {
+            secret  = "STRIPE_SECRET_KEY"
+            version = "latest"
+          }
+        }
+      }
+
+      env {
+        name = "RESEND_API_KEY"
+        value_source {
+          secret_key_ref {
+            secret  = "RESEND_API_KEY"
+            version = "latest"
+          }
+        }
+      }
+
+      env {
+        name = "GOOGLE_AI_API_KEY"
+        value_source {
+          secret_key_ref {
+            secret  = "GOOGLE_AI_API_KEY"
+            version = "latest"
+          }
+        }
+      }
+
+      env {
+        name = "GOOGLE_PAGESPEED_API_KEY"
+        value_source {
+          secret_key_ref {
+            secret  = "GOOGLE_PAGESPEED_API_KEY"
+            version = "latest"
+          }
+        }
+      }
+
+      env {
+        name = "GOOGLE_PLACES_API_KEY"
+        value_source {
+          secret_key_ref {
+            secret  = "GOOGLE_PLACES_API_KEY"
+            version = "latest"
+          }
+        }
+      }
+
+      env {
+        name = "SERP_API_KEY"
+        value_source {
+          secret_key_ref {
+            secret  = "SERP_API_KEY"
+            version = "latest"
+          }
+        }
+      }
+
+      env {
+        name = "CRON_SECRET"
+        value_source {
+          secret_key_ref {
+            secret  = "CRON_SECRET"
+            version = "latest"
+          }
+        }
+      }
+
+      env {
+        name = "ADMIN_SECRET"
+        value_source {
+          secret_key_ref {
+            secret  = "ADMIN_SECRET"
+            version = "latest"
+          }
+        }
+      }
+
+      env {
+        name = "STRIPE_WEBHOOK_SECRET"
+        value_source {
+          secret_key_ref {
+            secret  = "STRIPE_WEBHOOK_SECRET"
+            version = "latest"
+          }
+        }
       }
     }
 
@@ -368,8 +579,169 @@ resource "google_cloud_run_v2_service" "outreach_worker" {
       }
 
       env {
+        name  = "NODE_ENV"
+        value = "production"
+      }
+
+      env {
+        name  = "GCP_PROJECT_ID"
+        value = var.project_id
+      }
+
+      env {
+        name  = "GCP_REGION"
+        value = var.region
+      }
+
+      env {
+        name  = "GCS_BUCKET_NAME"
+        value = google_storage_bucket.proposals.name
+      }
+
+      env {
+        name  = "BASE_URL"
+        value = "https://proposal-engine-120416863832.us-central1.run.app"
+      }
+
+      env {
+        name  = "NEXTAUTH_URL"
+        value = "https://proposal-engine-120416863832.us-central1.run.app"
+      }
+
+      env {
+        name  = "NEXT_PUBLIC_APP_URL"
+        value = "https://proposal-engine-120416863832.us-central1.run.app"
+      }
+
+      env {
+        name  = "FROM_EMAIL"
+        value = "noreply@proposalengine.app"
+      }
+
+      env {
         name  = "WORKER_MODE"
         value = "outreach"
+      }
+
+      # Secrets from Secret Manager
+      env {
+        name = "DATABASE_URL"
+        value_source {
+          secret_key_ref {
+            secret  = "DATABASE_URL"
+            version = "latest"
+          }
+        }
+      }
+
+      env {
+        name = "API_KEY"
+        value_source {
+          secret_key_ref {
+            secret  = "API_KEY"
+            version = "latest"
+          }
+        }
+      }
+
+      env {
+        name = "NEXTAUTH_SECRET"
+        value_source {
+          secret_key_ref {
+            secret  = "NEXTAUTH_SECRET"
+            version = "latest"
+          }
+        }
+      }
+
+      env {
+        name = "STRIPE_SECRET_KEY"
+        value_source {
+          secret_key_ref {
+            secret  = "STRIPE_SECRET_KEY"
+            version = "latest"
+          }
+        }
+      }
+
+      env {
+        name = "RESEND_API_KEY"
+        value_source {
+          secret_key_ref {
+            secret  = "RESEND_API_KEY"
+            version = "latest"
+          }
+        }
+      }
+
+      env {
+        name = "GOOGLE_AI_API_KEY"
+        value_source {
+          secret_key_ref {
+            secret  = "GOOGLE_AI_API_KEY"
+            version = "latest"
+          }
+        }
+      }
+
+      env {
+        name = "GOOGLE_PAGESPEED_API_KEY"
+        value_source {
+          secret_key_ref {
+            secret  = "GOOGLE_PAGESPEED_API_KEY"
+            version = "latest"
+          }
+        }
+      }
+
+      env {
+        name = "GOOGLE_PLACES_API_KEY"
+        value_source {
+          secret_key_ref {
+            secret  = "GOOGLE_PLACES_API_KEY"
+            version = "latest"
+          }
+        }
+      }
+
+      env {
+        name = "SERP_API_KEY"
+        value_source {
+          secret_key_ref {
+            secret  = "SERP_API_KEY"
+            version = "latest"
+          }
+        }
+      }
+
+      env {
+        name = "CRON_SECRET"
+        value_source {
+          secret_key_ref {
+            secret  = "CRON_SECRET"
+            version = "latest"
+          }
+        }
+      }
+
+      env {
+        name = "ADMIN_SECRET"
+        value_source {
+          secret_key_ref {
+            secret  = "ADMIN_SECRET"
+            version = "latest"
+          }
+        }
+      }
+
+      env {
+        name = "STRIPE_WEBHOOK_SECRET"
+        value_source {
+          secret_key_ref {
+            secret  = "STRIPE_WEBHOOK_SECRET"
+            version = "latest"
+          }
+        }
       }
     }
 

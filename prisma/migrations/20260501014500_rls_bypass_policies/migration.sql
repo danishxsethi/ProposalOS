@@ -263,32 +263,52 @@ CREATE POLICY tenant_bypass ON "UsageRecord"
   WITH CHECK (current_setting('app.bypass_rls', true) = 'true');
 
 -- VERIFIED SOURCE: FailedWebhookEvent -> failed_webhook_events
-DROP POLICY IF EXISTS tenant_bypass ON "failed_webhook_events";
-CREATE POLICY tenant_bypass ON "failed_webhook_events"
-  FOR ALL
-  USING (current_setting('app.bypass_rls', true) = 'true')
-  WITH CHECK (current_setting('app.bypass_rls', true) = 'true');
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'failed_webhook_events') THEN
+    DROP POLICY IF EXISTS tenant_bypass ON "failed_webhook_events";
+    CREATE POLICY tenant_bypass ON "failed_webhook_events"
+      FOR ALL
+      USING (current_setting('app.bypass_rls', true) = 'true')
+      WITH CHECK (current_setting('app.bypass_rls', true) = 'true');
+  END IF;
+END $$;
 
 -- VERIFIED SOURCE: CartAbandonmentEvent -> cart_abandonment_events
-DROP POLICY IF EXISTS tenant_bypass ON "cart_abandonment_events";
-CREATE POLICY tenant_bypass ON "cart_abandonment_events"
-  FOR ALL
-  USING (current_setting('app.bypass_rls', true) = 'true')
-  WITH CHECK (current_setting('app.bypass_rls', true) = 'true');
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'cart_abandonment_events') THEN
+    DROP POLICY IF EXISTS tenant_bypass ON "cart_abandonment_events";
+    CREATE POLICY tenant_bypass ON "cart_abandonment_events"
+      FOR ALL
+      USING (current_setting('app.bypass_rls', true) = 'true')
+      WITH CHECK (current_setting('app.bypass_rls', true) = 'true');
+  END IF;
+END $$;
 
 -- VERIFIED SOURCE: Subscription -> subscriptions
-DROP POLICY IF EXISTS tenant_bypass ON "subscriptions";
-CREATE POLICY tenant_bypass ON "subscriptions"
-  FOR ALL
-  USING (current_setting('app.bypass_rls', true) = 'true')
-  WITH CHECK (current_setting('app.bypass_rls', true) = 'true');
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'subscriptions') THEN
+    DROP POLICY IF EXISTS tenant_bypass ON "subscriptions";
+    CREATE POLICY tenant_bypass ON "subscriptions"
+      FOR ALL
+      USING (current_setting('app.bypass_rls', true) = 'true')
+      WITH CHECK (current_setting('app.bypass_rls', true) = 'true');
+  END IF;
+END $$;
 
 -- VERIFIED SOURCE: Payment -> payments
-DROP POLICY IF EXISTS tenant_bypass ON "payments";
-CREATE POLICY tenant_bypass ON "payments"
-  FOR ALL
-  USING (current_setting('app.bypass_rls', true) = 'true')
-  WITH CHECK (current_setting('app.bypass_rls', true) = 'true');
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'payments') THEN
+    DROP POLICY IF EXISTS tenant_bypass ON "payments";
+    CREATE POLICY tenant_bypass ON "payments"
+      FOR ALL
+      USING (current_setting('app.bypass_rls', true) = 'true')
+      WITH CHECK (current_setting('app.bypass_rls', true) = 'true');
+  END IF;
+END $$;
 
 -- VERIFIED SOURCE: GeneratedArtifact -> GeneratedArtifact
 DROP POLICY IF EXISTS tenant_bypass ON "GeneratedArtifact";

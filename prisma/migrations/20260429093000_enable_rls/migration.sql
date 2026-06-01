@@ -363,40 +363,60 @@ CREATE POLICY tenant_isolation ON "UsageRecord"
   WITH CHECK (((current_user = 'postgres' AND (current_setting('app.current_tenant_id', true) = '' OR current_setting('app.current_tenant_id', true) IS NULL)) OR "tenantId"::text = current_setting('app.current_tenant_id', true)));
 
 -- VERIFIED: FailedWebhookEvent -> failed_webhook_events
-ALTER TABLE "failed_webhook_events" ENABLE ROW LEVEL SECURITY;
-ALTER TABLE "failed_webhook_events" FORCE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS tenant_isolation ON "failed_webhook_events";
-CREATE POLICY tenant_isolation ON "failed_webhook_events"
-  FOR ALL
-  USING (((current_user = 'postgres' AND (current_setting('app.current_tenant_id', true) = '' OR current_setting('app.current_tenant_id', true) IS NULL)) OR "tenantId" IS NULL OR "tenantId"::text = current_setting('app.current_tenant_id', true)))
-  WITH CHECK (((current_user = 'postgres' AND (current_setting('app.current_tenant_id', true) = '' OR current_setting('app.current_tenant_id', true) IS NULL)) OR "tenantId" IS NULL OR "tenantId"::text = current_setting('app.current_tenant_id', true)));
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'failed_webhook_events') THEN
+    ALTER TABLE "failed_webhook_events" ENABLE ROW LEVEL SECURITY;
+    ALTER TABLE "failed_webhook_events" FORCE ROW LEVEL SECURITY;
+    DROP POLICY IF EXISTS tenant_isolation ON "failed_webhook_events";
+    CREATE POLICY tenant_isolation ON "failed_webhook_events"
+      FOR ALL
+      USING (((current_user = 'postgres' AND (current_setting('app.current_tenant_id', true) = '' OR current_setting('app.current_tenant_id', true) IS NULL)) OR "tenantId" IS NULL OR "tenantId"::text = current_setting('app.current_tenant_id', true)))
+      WITH CHECK (((current_user = 'postgres' AND (current_setting('app.current_tenant_id', true) = '' OR current_setting('app.current_tenant_id', true) IS NULL)) OR "tenantId" IS NULL OR "tenantId"::text = current_setting('app.current_tenant_id', true)));
+  END IF;
+END $$;
 
 -- VERIFIED: CartAbandonmentEvent -> cart_abandonment_events
-ALTER TABLE "cart_abandonment_events" ENABLE ROW LEVEL SECURITY;
-ALTER TABLE "cart_abandonment_events" FORCE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS tenant_isolation ON "cart_abandonment_events";
-CREATE POLICY tenant_isolation ON "cart_abandonment_events"
-  FOR ALL
-  USING (((current_user = 'postgres' AND (current_setting('app.current_tenant_id', true) = '' OR current_setting('app.current_tenant_id', true) IS NULL)) OR "tenantId"::text = current_setting('app.current_tenant_id', true)))
-  WITH CHECK (((current_user = 'postgres' AND (current_setting('app.current_tenant_id', true) = '' OR current_setting('app.current_tenant_id', true) IS NULL)) OR "tenantId"::text = current_setting('app.current_tenant_id', true)));
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'cart_abandonment_events') THEN
+    ALTER TABLE "cart_abandonment_events" ENABLE ROW LEVEL SECURITY;
+    ALTER TABLE "cart_abandonment_events" FORCE ROW LEVEL SECURITY;
+    DROP POLICY IF EXISTS tenant_isolation ON "cart_abandonment_events";
+    CREATE POLICY tenant_isolation ON "cart_abandonment_events"
+      FOR ALL
+      USING (((current_user = 'postgres' AND (current_setting('app.current_tenant_id', true) = '' OR current_setting('app.current_tenant_id', true) IS NULL)) OR "tenantId"::text = current_setting('app.current_tenant_id', true)))
+      WITH CHECK (((current_user = 'postgres' AND (current_setting('app.current_tenant_id', true) = '' OR current_setting('app.current_tenant_id', true) IS NULL)) OR "tenantId"::text = current_setting('app.current_tenant_id', true)));
+  END IF;
+END $$;
 
 -- VERIFIED: Subscription -> subscriptions
-ALTER TABLE "subscriptions" ENABLE ROW LEVEL SECURITY;
-ALTER TABLE "subscriptions" FORCE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS tenant_isolation ON "subscriptions";
-CREATE POLICY tenant_isolation ON "subscriptions"
-  FOR ALL
-  USING (((current_user = 'postgres' AND (current_setting('app.current_tenant_id', true) = '' OR current_setting('app.current_tenant_id', true) IS NULL)) OR "tenantId"::text = current_setting('app.current_tenant_id', true)))
-  WITH CHECK (((current_user = 'postgres' AND (current_setting('app.current_tenant_id', true) = '' OR current_setting('app.current_tenant_id', true) IS NULL)) OR "tenantId"::text = current_setting('app.current_tenant_id', true)));
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'subscriptions') THEN
+    ALTER TABLE "subscriptions" ENABLE ROW LEVEL SECURITY;
+    ALTER TABLE "subscriptions" FORCE ROW LEVEL SECURITY;
+    DROP POLICY IF EXISTS tenant_isolation ON "subscriptions";
+    CREATE POLICY tenant_isolation ON "subscriptions"
+      FOR ALL
+      USING (((current_user = 'postgres' AND (current_setting('app.current_tenant_id', true) = '' OR current_setting('app.current_tenant_id', true) IS NULL)) OR "tenantId"::text = current_setting('app.current_tenant_id', true)))
+      WITH CHECK (((current_user = 'postgres' AND (current_setting('app.current_tenant_id', true) = '' OR current_setting('app.current_tenant_id', true) IS NULL)) OR "tenantId"::text = current_setting('app.current_tenant_id', true)));
+  END IF;
+END $$;
 
 -- VERIFIED: Payment -> payments
-ALTER TABLE "payments" ENABLE ROW LEVEL SECURITY;
-ALTER TABLE "payments" FORCE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS tenant_isolation ON "payments";
-CREATE POLICY tenant_isolation ON "payments"
-  FOR ALL
-  USING (((current_user = 'postgres' AND (current_setting('app.current_tenant_id', true) = '' OR current_setting('app.current_tenant_id', true) IS NULL)) OR "tenantId"::text = current_setting('app.current_tenant_id', true)))
-  WITH CHECK (((current_user = 'postgres' AND (current_setting('app.current_tenant_id', true) = '' OR current_setting('app.current_tenant_id', true) IS NULL)) OR "tenantId"::text = current_setting('app.current_tenant_id', true)));
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'payments') THEN
+    ALTER TABLE "payments" ENABLE ROW LEVEL SECURITY;
+    ALTER TABLE "payments" FORCE ROW LEVEL SECURITY;
+    DROP POLICY IF EXISTS tenant_isolation ON "payments";
+    CREATE POLICY tenant_isolation ON "payments"
+      FOR ALL
+      USING (((current_user = 'postgres' AND (current_setting('app.current_tenant_id', true) = '' OR current_setting('app.current_tenant_id', true) IS NULL)) OR "tenantId"::text = current_setting('app.current_tenant_id', true)))
+      WITH CHECK (((current_user = 'postgres' AND (current_setting('app.current_tenant_id', true) = '' OR current_setting('app.current_tenant_id', true) IS NULL)) OR "tenantId"::text = current_setting('app.current_tenant_id', true)));
+  END IF;
+END $$;
 
 -- VERIFIED: GeneratedArtifact -> GeneratedArtifact
 ALTER TABLE "GeneratedArtifact" ENABLE ROW LEVEL SECURITY;

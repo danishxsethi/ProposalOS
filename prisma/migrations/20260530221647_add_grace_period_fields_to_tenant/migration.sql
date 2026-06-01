@@ -87,10 +87,10 @@ DROP INDEX "ReviewSnapshot_auditId_date_idx";
 DROP INDEX "UsageRecord_tenantId_timestamp_idx";
 
 -- DropIndex
-DROP INDEX "cart_abandonment_events_proposalId_step_timestamp_idx";
+DROP INDEX IF EXISTS "cart_abandonment_events_proposalId_step_timestamp_idx";
 
 -- DropIndex
-DROP INDEX "cart_abandonment_events_tenantId_checkoutType_timestamp_idx";
+DROP INDEX IF EXISTS "cart_abandonment_events_tenantId_checkoutType_timestamp_idx";
 
 -- AlterTable
 ALTER TABLE "AuditTrailEvent" ALTER COLUMN "occurredAt" SET DATA TYPE TIMESTAMP(3);
@@ -339,181 +339,229 @@ CREATE TABLE "Scenario" (
 );
 
 -- CreateIndex
-CREATE UNIQUE INDEX "ClientDashboard_auditId_key" ON "ClientDashboard"("auditId");
+CREATE UNIQUE INDEX IF NOT EXISTS "ClientDashboard_auditId_key" ON "ClientDashboard"("auditId");
 
 -- CreateIndex
-CREATE INDEX "ClientDashboard_tenantId_idx" ON "ClientDashboard"("tenantId");
+CREATE INDEX IF NOT EXISTS "ClientDashboard_tenantId_idx" ON "ClientDashboard"("tenantId");
 
 -- CreateIndex
-CREATE INDEX "ClientDashboard_auditId_idx" ON "ClientDashboard"("auditId");
+CREATE INDEX IF NOT EXISTS "ClientDashboard_auditId_idx" ON "ClientDashboard"("auditId");
 
 -- CreateIndex
-CREATE INDEX "UpsellOpportunity_tenantId_status_idx" ON "UpsellOpportunity"("tenantId", "status");
+CREATE INDEX IF NOT EXISTS "UpsellOpportunity_tenantId_status_idx" ON "UpsellOpportunity"("tenantId", "status");
 
 -- CreateIndex
-CREATE INDEX "UpsellOpportunity_triggerType_idx" ON "UpsellOpportunity"("triggerType");
+CREATE INDEX IF NOT EXISTS "UpsellOpportunity_triggerType_idx" ON "UpsellOpportunity"("triggerType");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "NotificationPreference_tenantId_userId_key" ON "NotificationPreference"("tenantId", "userId");
+CREATE UNIQUE INDEX IF NOT EXISTS "NotificationPreference_tenantId_userId_key" ON "NotificationPreference"("tenantId", "userId");
 
 -- CreateIndex
-CREATE INDEX "ScheduledAuditRun_tenantId_idx" ON "ScheduledAuditRun"("tenantId");
+CREATE INDEX IF NOT EXISTS "ScheduledAuditRun_tenantId_idx" ON "ScheduledAuditRun"("tenantId");
 
 -- CreateIndex
-CREATE INDEX "ScheduledAuditRun_scheduleId_idx" ON "ScheduledAuditRun"("scheduleId");
+CREATE INDEX IF NOT EXISTS "ScheduledAuditRun_scheduleId_idx" ON "ScheduledAuditRun"("scheduleId");
 
 -- CreateIndex
-CREATE INDEX "ScheduledAuditRun_auditId_idx" ON "ScheduledAuditRun"("auditId");
+CREATE INDEX IF NOT EXISTS "ScheduledAuditRun_auditId_idx" ON "ScheduledAuditRun"("auditId");
 
 -- CreateIndex
-CREATE INDEX "CompetitorSignal_tenantId_signalType_detectedAt_idx" ON "CompetitorSignal"("tenantId", "signalType", "detectedAt");
+CREATE INDEX IF NOT EXISTS "CompetitorSignal_tenantId_signalType_detectedAt_idx" ON "CompetitorSignal"("tenantId", "signalType", "detectedAt");
 
 -- CreateIndex
-CREATE INDEX "CompetitorSignal_leadId_idx" ON "CompetitorSignal"("leadId");
+CREATE INDEX IF NOT EXISTS "CompetitorSignal_leadId_idx" ON "CompetitorSignal"("leadId");
 
 -- CreateIndex
-CREATE INDEX "ReEngagementCampaign_tenantId_status_idx" ON "ReEngagementCampaign"("tenantId", "status");
+CREATE INDEX IF NOT EXISTS "ReEngagementCampaign_tenantId_status_idx" ON "ReEngagementCampaign"("tenantId", "status");
 
 -- CreateIndex
-CREATE INDEX "ReEngagementCampaign_proposalId_idx" ON "ReEngagementCampaign"("proposalId");
+CREATE INDEX IF NOT EXISTS "ReEngagementCampaign_proposalId_idx" ON "ReEngagementCampaign"("proposalId");
 
 -- CreateIndex
-CREATE INDEX "WinBackCampaign_tenantId_status_idx" ON "WinBackCampaign"("tenantId", "status");
+CREATE INDEX IF NOT EXISTS "WinBackCampaign_tenantId_status_idx" ON "WinBackCampaign"("tenantId", "status");
 
 -- CreateIndex
-CREATE INDEX "WinBackCampaign_formerTenantId_idx" ON "WinBackCampaign"("formerTenantId");
+CREATE INDEX IF NOT EXISTS "WinBackCampaign_formerTenantId_idx" ON "WinBackCampaign"("formerTenantId");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "PromptVersion_versionHash_key" ON "PromptVersion"("versionHash");
+CREATE UNIQUE INDEX IF NOT EXISTS "PromptVersion_versionHash_key" ON "PromptVersion"("versionHash");
 
 -- CreateIndex
-CREATE INDEX "PromptVersion_nodeId_idx" ON "PromptVersion"("nodeId");
+CREATE INDEX IF NOT EXISTS "PromptVersion_nodeId_idx" ON "PromptVersion"("nodeId");
 
 -- CreateIndex
-CREATE INDEX "PromptVersion_versionHash_idx" ON "PromptVersion"("versionHash");
+CREATE INDEX IF NOT EXISTS "PromptVersion_versionHash_idx" ON "PromptVersion"("versionHash");
 
 -- CreateIndex
-CREATE INDEX "PromptVersion_isActive_idx" ON "PromptVersion"("isActive");
+CREATE INDEX IF NOT EXISTS "PromptVersion_isActive_idx" ON "PromptVersion"("isActive");
 
 -- CreateIndex
-CREATE INDEX "PromptVersion_environment_idx" ON "PromptVersion"("environment");
+CREATE INDEX IF NOT EXISTS "PromptVersion_environment_idx" ON "PromptVersion"("environment");
 
 -- CreateIndex
-CREATE INDEX "PromptVersion_tenantId_idx" ON "PromptVersion"("tenantId");
+CREATE INDEX IF NOT EXISTS "PromptVersion_tenantId_idx" ON "PromptVersion"("tenantId");
 
 -- CreateIndex
-CREATE INDEX "PromptVersion_createdAt_idx" ON "PromptVersion"("createdAt");
+CREATE INDEX IF NOT EXISTS "PromptVersion_createdAt_idx" ON "PromptVersion"("createdAt");
 
 -- CreateIndex
-CREATE INDEX "PromptPerformanceLog_promptVersionHash_idx" ON "PromptPerformanceLog"("promptVersionHash");
+CREATE INDEX IF NOT EXISTS "PromptPerformanceLog_promptVersionHash_idx" ON "PromptPerformanceLog"("promptVersionHash");
 
 -- CreateIndex
-CREATE INDEX "PromptPerformanceLog_nodeId_idx" ON "PromptPerformanceLog"("nodeId");
+CREATE INDEX IF NOT EXISTS "PromptPerformanceLog_nodeId_idx" ON "PromptPerformanceLog"("nodeId");
 
 -- CreateIndex
-CREATE INDEX "PromptPerformanceLog_experimentId_idx" ON "PromptPerformanceLog"("experimentId");
+CREATE INDEX IF NOT EXISTS "PromptPerformanceLog_experimentId_idx" ON "PromptPerformanceLog"("experimentId");
 
 -- CreateIndex
-CREATE INDEX "PromptPerformanceLog_timestamp_idx" ON "PromptPerformanceLog"("timestamp");
+CREATE INDEX IF NOT EXISTS "PromptPerformanceLog_timestamp_idx" ON "PromptPerformanceLog"("timestamp");
 
 -- CreateIndex
-CREATE INDEX "PromptPerformanceLog_tenantId_idx" ON "PromptPerformanceLog"("tenantId");
+CREATE INDEX IF NOT EXISTS "PromptPerformanceLog_tenantId_idx" ON "PromptPerformanceLog"("tenantId");
 
 -- CreateIndex
-CREATE INDEX "ABExperiment_nodeId_idx" ON "ABExperiment"("nodeId");
+CREATE INDEX IF NOT EXISTS "ABExperiment_nodeId_idx" ON "ABExperiment"("nodeId");
 
 -- CreateIndex
-CREATE INDEX "ABExperiment_status_idx" ON "ABExperiment"("status");
+CREATE INDEX IF NOT EXISTS "ABExperiment_status_idx" ON "ABExperiment"("status");
 
 -- CreateIndex
-CREATE INDEX "ABExperiment_tenantId_idx" ON "ABExperiment"("tenantId");
+CREATE INDEX IF NOT EXISTS "ABExperiment_tenantId_idx" ON "ABExperiment"("tenantId");
 
 -- CreateIndex
-CREATE INDEX "ABVariant_experimentId_idx" ON "ABVariant"("experimentId");
+CREATE INDEX IF NOT EXISTS "ABVariant_experimentId_idx" ON "ABVariant"("experimentId");
 
 -- CreateIndex
-CREATE INDEX "ABVariant_promptVersionHash_idx" ON "ABVariant"("promptVersionHash");
+CREATE INDEX IF NOT EXISTS "ABVariant_promptVersionHash_idx" ON "ABVariant"("promptVersionHash");
 
 -- CreateIndex
-CREATE INDEX "ABVariant_tenantId_idx" ON "ABVariant"("tenantId");
+CREATE INDEX IF NOT EXISTS "ABVariant_tenantId_idx" ON "ABVariant"("tenantId");
 
 -- CreateIndex
-CREATE INDEX "Prediction_auditId_idx" ON "Prediction"("auditId");
+CREATE INDEX IF NOT EXISTS "Prediction_auditId_idx" ON "Prediction"("auditId");
 
 -- CreateIndex
-CREATE INDEX "Prediction_predictionType_idx" ON "Prediction"("predictionType");
+CREATE INDEX IF NOT EXISTS "Prediction_predictionType_idx" ON "Prediction"("predictionType");
 
 -- CreateIndex
-CREATE INDEX "Prediction_tenantId_idx" ON "Prediction"("tenantId");
+CREATE INDEX IF NOT EXISTS "Prediction_tenantId_idx" ON "Prediction"("tenantId");
 
 -- CreateIndex
-CREATE INDEX "Prediction_predictionDate_idx" ON "Prediction"("predictionDate");
+CREATE INDEX IF NOT EXISTS "Prediction_predictionDate_idx" ON "Prediction"("predictionDate");
 
 -- CreateIndex
-CREATE INDEX "Scenario_auditId_idx" ON "Scenario"("auditId");
+CREATE INDEX IF NOT EXISTS "Scenario_auditId_idx" ON "Scenario"("auditId");
 
 -- CreateIndex
-CREATE INDEX "Scenario_tenantId_idx" ON "Scenario"("tenantId");
+CREATE INDEX IF NOT EXISTS "Scenario_tenantId_idx" ON "Scenario"("tenantId");
 
 -- CreateIndex
-CREATE INDEX "Scenario_createdAt_idx" ON "Scenario"("createdAt");
+CREATE INDEX IF NOT EXISTS "Scenario_createdAt_idx" ON "Scenario"("createdAt");
 
 -- CreateIndex
-CREATE INDEX "EvidenceSnapshot_tenantId_idx" ON "EvidenceSnapshot"("tenantId");
+CREATE INDEX IF NOT EXISTS "EvidenceSnapshot_tenantId_idx" ON "EvidenceSnapshot"("tenantId");
 
 -- CreateIndex
-CREATE INDEX "Finding_tenantId_idx" ON "Finding"("tenantId");
+CREATE INDEX IF NOT EXISTS "Finding_tenantId_idx" ON "Finding"("tenantId");
 
 -- CreateIndex
-CREATE INDEX "Proposal_tenantId_idx" ON "Proposal"("tenantId");
+CREATE INDEX IF NOT EXISTS "Proposal_tenantId_idx" ON "Proposal"("tenantId");
 
 -- CreateIndex
-CREATE INDEX "ProposalTemplate_tenantId_idx" ON "ProposalTemplate"("tenantId");
+CREATE INDEX IF NOT EXISTS "ProposalTemplate_tenantId_idx" ON "ProposalTemplate"("tenantId");
 
 -- CreateIndex
-CREATE INDEX "QATelemetry_tenantId_idx" ON "QATelemetry"("tenantId");
+CREATE INDEX IF NOT EXISTS "QATelemetry_tenantId_idx" ON "QATelemetry"("tenantId");
 
 -- CreateIndex
-CREATE INDEX "User_tenantId_idx" ON "User"("tenantId");
+CREATE INDEX IF NOT EXISTS "User_tenantId_idx" ON "User"("tenantId");
 
 -- CreateIndex
-CREATE INDEX "checkout_attempts_tenantId_idx" ON "checkout_attempts"("tenantId");
+CREATE INDEX IF NOT EXISTS "checkout_attempts_tenantId_idx" ON "checkout_attempts"("tenantId");
 
 -- AddForeignKey
-ALTER TABLE "Audit" ADD CONSTRAINT "Audit_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "Tenant"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'Audit_tenantId_fkey') THEN
+    ALTER TABLE "Audit" ADD CONSTRAINT "Audit_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "Tenant"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+  END IF;
+END $$;
 
 -- AddForeignKey
-ALTER TABLE "User" ADD CONSTRAINT "User_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "Tenant"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'User_tenantId_fkey') THEN
+    ALTER TABLE "User" ADD CONSTRAINT "User_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "Tenant"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+  END IF;
+END $$;
 
 -- AddForeignKey
-ALTER TABLE "PromptVersion" ADD CONSTRAINT "PromptVersion_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "Tenant"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'PromptVersion_tenantId_fkey') THEN
+    ALTER TABLE "PromptVersion" ADD CONSTRAINT "PromptVersion_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "Tenant"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+  END IF;
+END $$;
 
 -- AddForeignKey
-ALTER TABLE "PromptPerformanceLog" ADD CONSTRAINT "PromptPerformanceLog_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "Tenant"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'PromptPerformanceLog_tenantId_fkey') THEN
+    ALTER TABLE "PromptPerformanceLog" ADD CONSTRAINT "PromptPerformanceLog_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "Tenant"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+  END IF;
+END $$;
 
 -- AddForeignKey
-ALTER TABLE "PromptPerformanceLog" ADD CONSTRAINT "PromptPerformanceLog_promptVersionHash_fkey" FOREIGN KEY ("promptVersionHash") REFERENCES "PromptVersion"("versionHash") ON DELETE CASCADE ON UPDATE CASCADE;
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'PromptPerformanceLog_promptVersionHash_fkey') THEN
+    ALTER TABLE "PromptPerformanceLog" ADD CONSTRAINT "PromptPerformanceLog_promptVersionHash_fkey" FOREIGN KEY ("promptVersionHash") REFERENCES "PromptVersion"("versionHash") ON DELETE CASCADE ON UPDATE CASCADE;
+  END IF;
+END $$;
 
 -- AddForeignKey
-ALTER TABLE "ABExperiment" ADD CONSTRAINT "ABExperiment_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "Tenant"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'ABExperiment_tenantId_fkey') THEN
+    ALTER TABLE "ABExperiment" ADD CONSTRAINT "ABExperiment_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "Tenant"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+  END IF;
+END $$;
 
 -- AddForeignKey
-ALTER TABLE "ABVariant" ADD CONSTRAINT "ABVariant_experimentId_fkey" FOREIGN KEY ("experimentId") REFERENCES "ABExperiment"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'ABVariant_experimentId_fkey') THEN
+    ALTER TABLE "ABVariant" ADD CONSTRAINT "ABVariant_experimentId_fkey" FOREIGN KEY ("experimentId") REFERENCES "ABExperiment"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+  END IF;
+END $$;
 
 -- AddForeignKey
-ALTER TABLE "ABVariant" ADD CONSTRAINT "ABVariant_promptVersionHash_fkey" FOREIGN KEY ("promptVersionHash") REFERENCES "PromptVersion"("versionHash") ON DELETE RESTRICT ON UPDATE CASCADE;
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'ABVariant_promptVersionHash_fkey') THEN
+    ALTER TABLE "ABVariant" ADD CONSTRAINT "ABVariant_promptVersionHash_fkey" FOREIGN KEY ("promptVersionHash") REFERENCES "PromptVersion"("versionHash") ON DELETE RESTRICT ON UPDATE CASCADE;
+  END IF;
+END $$;
 
 -- AddForeignKey
-ALTER TABLE "ABVariant" ADD CONSTRAINT "ABVariant_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "Tenant"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'ABVariant_tenantId_fkey') THEN
+    ALTER TABLE "ABVariant" ADD CONSTRAINT "ABVariant_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "Tenant"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+  END IF;
+END $$;
 
 -- AddForeignKey
-ALTER TABLE "Prediction" ADD CONSTRAINT "Prediction_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "Tenant"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'Prediction_tenantId_fkey') THEN
+    ALTER TABLE "Prediction" ADD CONSTRAINT "Prediction_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "Tenant"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+  END IF;
+END $$;
 
 -- AddForeignKey
-ALTER TABLE "Prediction" ADD CONSTRAINT "Prediction_promptVersionHash_fkey" FOREIGN KEY ("promptVersionHash") REFERENCES "PromptVersion"("versionHash") ON DELETE SET NULL ON UPDATE CASCADE;
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'Prediction_promptVersionHash_fkey') THEN
+    ALTER TABLE "Prediction" ADD CONSTRAINT "Prediction_promptVersionHash_fkey" FOREIGN KEY ("promptVersionHash") REFERENCES "PromptVersion"("versionHash") ON DELETE SET NULL ON UPDATE CASCADE;
+  END IF;
+END $$;
 
 -- AddForeignKey
-ALTER TABLE "Scenario" ADD CONSTRAINT "Scenario_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "Tenant"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'Scenario_tenantId_fkey') THEN
+    ALTER TABLE "Scenario" ADD CONSTRAINT "Scenario_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "Tenant"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+  END IF;
+END $$;
 
 -- RenameIndex
 ALTER INDEX "OutreachTemplatePerformance_tenantId_templateId_vertical_city_k" RENAME TO "OutreachTemplatePerformance_tenantId_templateId_vertical_ci_key";

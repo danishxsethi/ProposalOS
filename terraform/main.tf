@@ -134,6 +134,22 @@ resource "google_compute_firewall" "deny_egress" {
   priority           = 1000
 }
 
+# Allow SQL egress to private DB range (bypasses deny_egress for DB access)
+resource "google_compute_firewall" "allow_sql_egress" {
+  name      = "proposalos-prod-allow-sql-egress"
+  network   = google_compute_network.main.name
+  direction = "EGRESS"
+  priority  = 900
+
+  allow {
+    protocol = "tcp"
+    ports    = ["3307", "5432"]
+  }
+
+  destination_ranges = ["10.137.0.0/16"]
+}
+
+
 # -----------------------------------------------------------------------------
 # Service Accounts
 # -----------------------------------------------------------------------------
