@@ -225,6 +225,10 @@ resource "google_cloud_run_v2_service" "api" {
         }
       }
 
+      volume_mounts {
+        name       = "cloudsql"
+        mount_path = "/cloudsql"
+      }
     }
 
     # Service account
@@ -234,6 +238,13 @@ resource "google_cloud_run_v2_service" "api" {
     vpc_access {
       connector = google_vpc_access_connector.cloud_run.id
       egress    = "PRIVATE_RANGES_ONLY"
+    }
+
+    volumes {
+      name = "cloudsql"
+      cloud_sql_instance {
+        instances = [google_sql_database_instance.main.connection_name]
+      }
     }
   }
 
@@ -526,6 +537,11 @@ resource "google_cloud_run_v2_service" "audit_worker" {
           }
         }
       }
+
+      volume_mounts {
+        name       = "cloudsql"
+        mount_path = "/cloudsql"
+      }
     }
 
     # VPC connector for private egress
@@ -535,6 +551,13 @@ resource "google_cloud_run_v2_service" "audit_worker" {
     }
 
     service_account = google_service_account.cloud_run_api.email
+
+    volumes {
+      name = "cloudsql"
+      cloud_sql_instance {
+        instances = [google_sql_database_instance.main.connection_name]
+      }
+    }
   }
 
   traffic {
@@ -743,6 +766,11 @@ resource "google_cloud_run_v2_service" "outreach_worker" {
           }
         }
       }
+
+      volume_mounts {
+        name       = "cloudsql"
+        mount_path = "/cloudsql"
+      }
     }
 
     # VPC connector for private egress
@@ -752,6 +780,13 @@ resource "google_cloud_run_v2_service" "outreach_worker" {
     }
 
     service_account = google_service_account.cloud_run_api.email
+
+    volumes {
+      name = "cloudsql"
+      cloud_sql_instance {
+        instances = [google_sql_database_instance.main.connection_name]
+      }
+    }
   }
 
   traffic {
