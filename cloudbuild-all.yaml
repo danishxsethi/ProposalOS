@@ -1,0 +1,14 @@
+steps:
+  # Build backend (proposal-engine)
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['build', '-t', 'us-central1-docker.pkg.dev/proposal-487522/proposalos-prod-containers/proposal-engine:latest', '-f', 'Dockerfile', '.']
+    id: 'build-backend'
+
+  # Build frontend (claraud-web)
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['build', '-t', 'us-central1-docker.pkg.dev/proposal-487522/proposalos-prod-containers/claraud-web:latest', '-f', 'claraud-web/Dockerfile', '.']
+    id: 'build-frontend'
+
+images:
+  - 'us-central1-docker.pkg.dev/proposal-487522/proposalos-prod-containers/proposal-engine:latest'
+  - 'us-central1-docker.pkg.dev/proposal-487522/proposalos-prod-containers/claraud-web:latest'

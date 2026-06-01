@@ -176,17 +176,20 @@
 
   /* Screen Reader Only */
   .sr-only {
-    @apply absolute w-px h-px p-0 m-0 overflow-hidden whitespace-nowrap border-0 clip-rect(0 0 0 0);
+    @apply absolute w-px h-px p-0 m-0 overflow-hidden whitespace-nowrap border-0;
+    clip: rect(0 0 0 0);
   }
 
   /* Not Screen Reader Only */
   .not-sr-only {
-    @apply static w-auto h-auto p-0 m-0 overflow-visible whitespace-normal border clip-auto;
+    @apply static w-auto h-auto p-0 m-0 overflow-visible whitespace-normal border;
+    clip: auto;
   }
 
   /* Responsive Tables — Horizontal Scroll at 320px */
   .table-responsive {
-    @apply overflow-x-auto -webkit-overflow-scrolling-touch;
+    @apply overflow-x-auto;
+    -webkit-overflow-scrolling: touch;
     max-width: 100%;
   }
 

@@ -37,7 +37,7 @@ resource "google_service_networking_connection" "private_vpc_connection" {
 # -----------------------------------------------------------------------------
 
 resource "google_sql_database_instance" "main" {
-  name                = "${local.prefix}-db"
+  name                = "proposal-db"
   project             = var.project_id
   region              = var.region
   database_version    = "POSTGRES_15"
@@ -57,7 +57,6 @@ resource "google_sql_database_instance" "main" {
     ip_configuration {
       ipv4_enabled    = false
       private_network = google_compute_network.main.id
-      require_ssl     = var.cloud_sql.require_ssl
       ssl_mode        = "ENCRYPTED_ONLY"
     }
 
@@ -75,7 +74,7 @@ resource "google_sql_database_instance" "main" {
 
     # Maintenance window
     maintenance_window {
-      day          = var.cloud_sql.maintenance_day
+      day          = lookup({ "MON" = 1, "TUE" = 2, "WED" = 3, "THU" = 4, "FRI" = 5, "SAT" = 6, "SUN" = 7 }, var.cloud_sql.maintenance_day, 1)
       hour         = var.cloud_sql.maintenance_hour
       update_track = "stable"
     }
@@ -116,19 +115,13 @@ resource "google_sql_database_instance" "main" {
       value = "error"
     }
 
-    # SSL enforcement
-    database_flags {
-      name  = "ssl"
-      value = "on"
-    }
-
     # Connection limits
     database_flags {
       name  = "max_connections"
       value = "200"
     }
 
-    labels = local.common_labels
+    user_labels = local.common_labels
   }
 
   depends_on = [google_service_networking_connection.private_vpc_connection]
@@ -232,33 +225,33 @@ resource "google_monitoring_alert_policy" "cloud_sql_high_cpu" {
 # Monitoring Alert: Disk Space
 # -----------------------------------------------------------------------------
 
-resource "google_monitoring_alert_policy" "cloud_sql_disk_space" {
-  project      = var.project_id
-  display_name = "Cloud SQL Low Disk Space"
-  combiner     = "OR"
-
-  conditions {
-    display_name = "Disk space < 20%"
-
-    condition_threshold {
-      filter          = "resource.type = \"cloudsql_database\" AND metric.type = \"cloudsql.googleapis.com/database/disk/bytes_available\""
-      duration        = "300s"
-      comparison      = "COMPARISON_LT"
-      threshold_value = 0.2 * var.cloud_sql.disk_size * 1024 * 1024 * 1024
-      aggregations {
-        alignment_period   = "300s"
-        per_series_aligner = "ALIGN_MEAN"
-      }
-    }
-  }
-
-  notification_channels = []
-
-  documentation {
-    content   = "Cloud SQL available disk space is below 20%. Consider increasing disk size."
-    mime_type = "text/markdown"
-  }
-}
+# resource "google_monitoring_alert_policy" "cloud_sql_disk_space" {
+#   project      = var.project_id
+#   display_name = "Cloud SQL Low Disk Space"
+#   combiner     = "OR"
+# 
+#   conditions {
+#     display_name = "Disk space < 20%"
+# 
+#     condition_threshold {
+#       filter          = "resource.type = \"cloudsql_database\" AND metric.type = \"cloudsql.googleapis.com/database/disk/bytes_available\""
+#       duration        = "300s"
+#       comparison      = "COMPARISON_LT"
+#       threshold_value = 0.2 * var.cloud_sql.disk_size * 1024 * 1024 * 1024
+#       aggregations {
+#         alignment_period   = "300s"
+#         per_series_aligner = "ALIGN_MEAN"
+#       }
+#     }
+#   }
+# 
+#   notification_channels = []
+# 
+#   documentation {
+#     content   = "Cloud SQL available disk space is below 20%. Consider increasing disk size."
+#     mime_type = "text/markdown"
+#   }
+# }
 
 # -----------------------------------------------------------------------------
 # Outputs

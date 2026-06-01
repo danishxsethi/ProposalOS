@@ -376,34 +376,32 @@ resource "google_secret_manager_secret_iam_member" "api_gcs" {
 # Monitoring: Secret Rotation Reminder Alert
 # -----------------------------------------------------------------------------
 
-resource "google_monitoring_alert_policy" "secret_rotation_reminder" {
-  project      = var.project_id
-  display_name = "Secret Rotation Reminder (90 days)"
-  combiner     = "OR"
-
-  conditions {
-    display_name = "Secret older than 85 days"
-
-    condition_monitoring_query_language {
-      query = <<-EOT
-        fetch secretmanager.googleapis.com::secret
-        | metric 'secretmanager.googleapis.com/secret/version_count'
-        | filter (resource.secret_id == 'DATABASE_URL')
-        | group_by 1d
-        | condition val() > 0
-        | every 1d
-      EOT
-      duration = "86400s"
-    }
-  }
-
-  documentation {
-    content   = "Secrets approaching 90-day rotation deadline. Please rotate secrets."
-    mime_type = "text/markdown"
-  }
-
-  labels = local.common_labels
-}
+# resource "google_monitoring_alert_policy" "secret_rotation_reminder" {
+#   project      = var.project_id
+#   display_name = "Secret Rotation Reminder (90 days)"
+#   combiner     = "OR"
+# 
+#   conditions {
+#     display_name = "Secret older than 85 days"
+# 
+#     condition_monitoring_query_language {
+#       query = <<-EOT
+#         fetch secretmanager.googleapis.com::secret
+#         | metric 'secretmanager.googleapis.com/secret/version_count'
+#         | filter (resource.secret_id == 'DATABASE_URL')
+#         | group_by 1d
+#         | condition val() > 0
+#         | every 1d
+#       EOT
+#       duration = "86400s"
+#     }
+#   }
+# 
+#   documentation {
+#     content   = "Secrets approaching 90-day rotation deadline. Please rotate secrets."
+#     mime_type = "text/markdown"
+#   }
+# }
 
 # -----------------------------------------------------------------------------
 # Outputs

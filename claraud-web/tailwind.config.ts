@@ -57,6 +57,8 @@ const config = {
           foreground: 'hsl(var(--card-foreground))',
         },
         // Custom colors
+        'brand-primary': 'var(--brand-primary)',
+        'brand-accent': 'var(--brand-accent)',
         'bg-primary': 'var(--bg-primary)',
         'bg-secondary': 'var(--bg-secondary)',
         'bg-tertiary': 'var(--bg-tertiary)',

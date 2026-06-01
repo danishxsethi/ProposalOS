@@ -1,7 +1,10 @@
 'use client';
 
+import * as React from 'react';
+
 import { motion } from 'framer-motion';
-import { CheckCircle2, Clock, Loader2, AlertCircle, Zap } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Clock, Loader2, Zap } from 'lucide-react';
+
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 
@@ -40,7 +43,7 @@ const statusColors = {
   failed: 'bg-red-500/10 border-red-500/20 text-red-400',
 };
 
-const moduleIcons: Record<string, JSX.Element> = {
+const moduleIcons: Record<string, React.ReactNode> = {
   website: <Zap className="w-4 h-4" />,
   google: <CheckCircle2 className="w-4 h-4" />,
   seo: <Zap className="w-4 h-4" />,

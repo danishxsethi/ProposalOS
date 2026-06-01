@@ -1,5 +1,8 @@
-import type { NextConfig } from 'next';
+import path from 'path';
+
 import bundleAnalyzer from '@next/bundle-analyzer';
+
+import type { NextConfig } from 'next';
 
 const withBundleAnalyzer = bundleAnalyzer({
   enabled: process.env.ANALYZE === 'true',
@@ -15,7 +18,7 @@ const nextConfig: NextConfig = {
     ? {}
     : {
         turbopack: {
-          root: __dirname,
+          root: path.resolve(__dirname, '..'),
         },
       }),
   images: {

@@ -4,5 +4,4 @@ node_modules
 .env*
 *.md
 tests/
-claraud-web/
 terraform/
