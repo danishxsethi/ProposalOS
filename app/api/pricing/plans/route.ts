@@ -18,6 +18,7 @@ import { generateTraceId, InternalError, NotFoundError, UnauthorizedError } from
 import { getServerSession } from '@/lib/auth';
 import { withRateLimit } from '@/lib/middleware/rateLimit';
 import { PricingPlanConfig, PricingService } from '@/lib/stripe/pricingService';
+import { runWithTenantBypass } from '@/lib/tenant/context';
 
 /**
  * Query params schema for GET requests
@@ -71,8 +72,10 @@ async function handleGetPlans(req: NextRequest): Promise<NextResponse> {
     }
 
     if (planId) {
-      // Get specific plan by ID
-      const plan = await PricingService.getPricingPlanById(planId);
+      // Get specific plan by ID — pricing plans are global system data, bypass RLS
+      const plan = await runWithTenantBypass('pricing-plans-get-by-id', () =>
+        PricingService.getPricingPlanById(planId)
+      );
       if (!plan) {
         return NextResponse.json(
           new NotFoundError('Pricing plan', planId).toEnvelope(req.url, traceId),
@@ -83,15 +86,21 @@ async function handleGetPlans(req: NextRequest): Promise<NextResponse> {
       response.headers.set('X-Trace-Id', traceId);
       return response;
     } else if (type) {
-      // Get plans by type
-      const plans = await PricingService.getPricingPlans(type);
+      // Get plans by type — pricing plans are global system data, bypass RLS
+      const plans = await runWithTenantBypass('pricing-plans-get-by-type', () =>
+        PricingService.getPricingPlans(type)
+      );
       const response = NextResponse.json(plans);
       response.headers.set('X-Trace-Id', traceId);
       return response;
     } else {
-      // Get all active plans
-      const saasPlans = await PricingService.getPricingPlans('saas');
-      const proposalPlans = await PricingService.getPricingPlans('proposal');
+      // Get all active plans — pricing plans are global system data, bypass RLS
+      const [saasPlans, proposalPlans] = await runWithTenantBypass('pricing-plans-get-all', () =>
+        Promise.all([
+          PricingService.getPricingPlans('saas'),
+          PricingService.getPricingPlans('proposal'),
+        ])
+      );
       const response = NextResponse.json({ saas: saasPlans, proposal: proposalPlans });
       response.headers.set('X-Trace-Id', traceId);
       return response;
