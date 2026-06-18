@@ -1,45 +1,32 @@
 /**
  * app/api/admin/feature-flags/route.ts
  *
- * Feature Flag Management API
- * Allows admins to view and toggle feature flags
- *
- * Features:
- * - Auth & admin scoping
- * - Zod validation
- * - Rate limiting
- * - Standardized error responses
+ * Feature Flag Management API — super_admin only.
+ * Reads/writes global feature flags (cross-tenant system data).
+ * RLS bypassed intentionally; gated by withRole('super_admin'). [#7]
  */
 
 import { NextResponse } from 'next/server';
 
 import { z } from 'zod';
 
-import {
-  generateTraceId,
-  InternalError,
-  UnauthorizedError,
-  ValidationError,
-} from '@/lib/api/errors';
-import { auth } from '@/lib/auth';
+import { generateTraceId, InternalError, ValidationError } from '@/lib/api/errors';
 import { FEATURE_FLAGS } from '@/lib/config/feature-flags';
 import { logger } from '@/lib/logger';
 import { withRateLimit } from '@/lib/middleware/rateLimit';
+import { withRole } from '@/lib/middleware/withRole';
 import { prisma } from '@/lib/prisma';
+import { runWithTenantBypass } from '@/lib/tenant/context';
 
-// Simple in-memory cache to represent the values until the next application restart
+// ─── Cache ────────────────────────────────────────────────────────────────────
+
 let flagsCache: Record<string, boolean | number | string> | null = null;
 let lastCacheUpdate = 0;
 
-/**
- * List of valid feature flag keys
- * Used for validation to prevent typos and invalid flags
- */
 const VALID_FLAG_KEYS = Object.keys(FEATURE_FLAGS);
 
-/**
- * Feature flag update schema with enhanced validation
- */
+// ─── Schemas ─────────────────────────────────────────────────────────────────
+
 const featureFlagSchema = z.object({
   key: z
     .string()
@@ -47,34 +34,18 @@ const featureFlagSchema = z.object({
     .refine((key) => VALID_FLAG_KEYS.includes(key), {
       message: `Invalid flag key. Must be one of: ${VALID_FLAG_KEYS.join(', ')}`,
     }),
-  value: z.union([
-    z.string(),
-    z.boolean(),
-    z.number().int().min(0).max(100).optional(), // For percentage flags
-  ]),
+  value: z.union([z.string(), z.boolean(), z.number().int().min(0).max(100).optional()]),
 });
 
-/**
- * Audit log schema for flag changes
- */
-const auditLogSchema = z.object({
-  flagKey: z.string(),
-  oldValue: z.string().optional(),
-  newValue: z.string(),
-  changedBy: z.string(),
-  timestamp: z.string(),
-});
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 async function getMergedFlags() {
   const now = Date.now();
-  if (flagsCache && now - lastCacheUpdate < 60000) {
-    return flagsCache;
-  }
+  if (flagsCache && now - lastCacheUpdate < 60000) return flagsCache;
 
   try {
     const dbFlags = await prisma.featureFlag.findMany();
     const merged = { ...FEATURE_FLAGS } as Record<string, boolean | number | string>;
-
     for (const flag of dbFlags) {
       if (flag.value === 'true' || flag.value === 'false') {
         merged[flag.key] = flag.value === 'true';
@@ -84,110 +55,52 @@ async function getMergedFlags() {
         merged[flag.key] = flag.value;
       }
     }
-
     flagsCache = merged;
     lastCacheUpdate = now;
     return merged;
   } catch {
-    // Fallback to env vars if DB is unavailable
     return FEATURE_FLAGS;
   }
 }
 
-/**
- * Log feature flag change for audit trail
- */
-async function logFlagChange(data: {
-  flagKey: string;
-  oldValue: string;
-  newValue: string;
-  userId: string;
-}): Promise<void> {
-  try {
-    const auditLog = auditLogSchema.parse({
-      flagKey: data.flagKey,
-      oldValue: data.oldValue,
-      newValue: data.newValue,
-      changedBy: data.userId,
-      timestamp: new Date().toISOString(),
-    });
+// ─── Handlers ─────────────────────────────────────────────────────────────────
 
-    // Log to structured logger for audit trail
-    // Note: If you want persistent audit logging, create a FeatureFlagAudit model in Prisma
-    logger.info({ event: 'feature_flag.audit', ...auditLog }, 'Feature flag changed');
-  } catch (error) {
-    console.error('Failed to log feature flag change:', error);
-  }
-}
-
-/**
- * Inner handler for GET flags
- */
 async function handleGetFlags(req: Request): Promise<NextResponse> {
   const traceId = generateTraceId();
-
   try {
-    const session = await auth();
-    if (!session?.user) {
-      return NextResponse.json(
-        new UnauthorizedError('Authentication required').toEnvelope(req.url, traceId),
-        { status: 401 }
-      );
-    }
-
-    const flags = await getMergedFlags();
+    // Feature flags are cross-tenant system data: bypass RLS, gated by super_admin role above.
+    const flags = await runWithTenantBypass('admin-feature-flags-read', () => getMergedFlags());
     const response = NextResponse.json({ success: true, flags });
     response.headers.set('X-Trace-Id', traceId);
     return response;
   } catch (error) {
-    const internalError = new InternalError('Failed to fetch feature flags', {
-      originalError: error instanceof Error ? error.message : String(error),
-    });
-    return NextResponse.json(internalError.toEnvelope(req.url, traceId), { status: 500 });
+    return NextResponse.json(
+      new InternalError('Failed to fetch feature flags', {
+        originalError: error instanceof Error ? error.message : String(error),
+      }).toEnvelope(req.url, traceId),
+      { status: 500 }
+    );
   }
 }
 
-/**
- * Inner handler for POST flags
- */
 async function handlePostFlags(req: Request): Promise<NextResponse> {
   const traceId = generateTraceId();
-
   try {
-    const session = await auth();
-    if (!session?.user) {
-      return NextResponse.json(
-        new UnauthorizedError('Authentication required').toEnvelope(req.url, traceId),
-        { status: 401 }
-      );
-    }
-
     const body = await req.json();
-
-    // Validate request body
     const result = featureFlagSchema.safeParse(body);
     if (!result.success) {
-      const errorDetails = result.error.errors.map((e) => ({
-        field: e.path.join('.'),
-        message: e.message,
-      }));
       return NextResponse.json(
-        new ValidationError('Invalid flag data', errorDetails).toEnvelope(req.url, traceId),
+        new ValidationError(
+          'Invalid flag data',
+          result.error.errors.map((e) => ({ field: e.path.join('.'), message: e.message }))
+        ).toEnvelope(req.url, traceId),
         { status: 400 }
       );
     }
 
     const { key, value } = result.data;
-
-    // Get the current value for audit logging
-    const existingFlag = await prisma.featureFlag.findUnique({
-      where: { key },
-    });
-
-    const oldValue = existingFlag?.value || 'undefined';
     const newValue = String(value);
 
-    // Validate percentage flags have values between 0-100
     if (key.includes('PCT') || key.includes('PERCENTAGE') || key.includes('ROLLOUT')) {
       const numValue = typeof value === 'number' ? value : parseInt(value as string, 10);
       if (isNaN(numValue) || numValue < 0 || numValue > 100) {
@@ -200,56 +113,42 @@ async function handlePostFlags(req: Request): Promise<NextResponse> {
       }
     }
 
-    const flag = await prisma.featureFlag.upsert({
-      where: { key },
-      update: { value: newValue },
-      create: { key, value: newValue },
+    const flag = await runWithTenantBypass('admin-feature-flags-write', async () => {
+      const existing = await prisma.featureFlag.findUnique({ where: { key } });
+      const oldValue = existing?.value ?? 'undefined';
+      const updated = await prisma.featureFlag.upsert({
+        where: { key },
+        update: { value: newValue },
+        create: { key, value: newValue },
+      });
+      logger.info(
+        { event: 'feature_flag.audit', flagKey: key, oldValue, newValue, changedBy: 'super_admin' },
+        'Feature flag changed'
+      );
+      return updated;
     });
 
-    // Log the change for audit trail
-    await logFlagChange({
-      flagKey: key,
-      oldValue,
-      newValue,
-      userId: session.user.id || session.user.email || 'unknown',
-    });
-
-    // Invalidate cache immediately on write
     flagsCache = null;
-
-    const response = NextResponse.json({
-      success: true,
-      flag,
-      audit: {
-        changedBy: session.user.email,
-        timestamp: new Date().toISOString(),
-      },
-    });
+    const response = NextResponse.json({ success: true, flag });
     response.headers.set('X-Trace-Id', traceId);
     return response;
   } catch (error) {
-    console.error('Feature Flag Update Error:', error);
-    const internalError = new InternalError('Failed to update feature flag', {
-      originalError: error instanceof Error ? error.message : String(error),
-    });
-    return NextResponse.json(internalError.toEnvelope(req.url, traceId), { status: 500 });
+    return NextResponse.json(
+      new InternalError('Failed to update feature flag', {
+        originalError: error instanceof Error ? error.message : String(error),
+      }).toEnvelope(req.url, traceId),
+      { status: 500 }
+    );
   }
 }
 
-// Apply rate limiting
+// ─── Exports — super_admin required ───────────────────────────────────────────
+
 const rateLimitedGet = (req: Request) =>
-  withRateLimit({
-    windowMs: 60 * 1000,
-    max: 30,
-    message: 'Too many flag requests. Please wait before trying again.',
-  })(req, () => handleGetFlags(req));
+  withRateLimit({ windowMs: 60 * 1000, max: 30 })(req, () => handleGetFlags(req));
 
 const rateLimitedPost = (req: Request) =>
-  withRateLimit({
-    windowMs: 60 * 1000,
-    max: 10,
-    message: 'Too many flag update requests. Please wait before trying again.',
-  })(req, () => handlePostFlags(req));
+  withRateLimit({ windowMs: 60 * 1000, max: 10 })(req, () => handlePostFlags(req));
 
-export const GET = rateLimitedGet;
-export const POST = rateLimitedPost;
+export const GET = withRole('super_admin', rateLimitedGet);
+export const POST = withRole('super_admin', rateLimitedPost);

@@ -20,6 +20,7 @@ import { generateTraceId, InternalError, UnauthorizedError } from '@/lib/api/err
 import { API_KEY_SCOPES, validateApiKey } from '@/lib/auth/apiKeys';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
+import { runWithTenantAsync } from '@/lib/tenant/context';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -339,7 +340,10 @@ export async function GET(
       }
     }
 
-    const metrics = await getTenantMetrics(tenantId);
+    // Wrap in runWithTenantAsync so the Prisma RLS middleware has the correct
+    // tenant context. Without this, all Prisma calls inside getTenantMetrics
+    // throw MissingTenantError. Fix for register #22. [#22]
+    const metrics = await runWithTenantAsync(tenantId, () => getTenantMetrics(tenantId));
 
     logger.info(
       {
