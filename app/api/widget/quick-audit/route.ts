@@ -230,8 +230,10 @@ async function handleQuickAudit(req: Request): Promise<NextResponse> {
       });
 
       const [crawlRes, gbpRes] = await Promise.all([
-        crawlWebsite({ url: normalizedUrl!, businessName: audit.businessName }),
-        runGBPModule({ businessName: audit.businessName, city: 'Unknown' }),
+        crawlWebsite({ url: normalizedUrl!, businessName: audit.businessName }).catch(() => null),
+        runGBPModule({ businessName: audit.businessName, city: 'Unknown' }).catch(() => ({
+          status: 'failed',
+        })),
       ]);
 
       let score = 50;
