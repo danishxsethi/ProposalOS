@@ -5,6 +5,7 @@ import { z } from 'zod';
 
 import { withRateLimit } from '@/lib/middleware/rateLimit';
 import { prisma } from '@/lib/prisma';
+import { runWithTenantBypass } from '@/lib/tenant/context';
 
 const registerSchema = z.object({
   name: z.string().min(2),
@@ -21,10 +22,10 @@ async function handleRegister(request: Request) {
     const body = await request.json();
     const { name, email, password, companyName } = registerSchema.parse(body);
 
-    // Check if user exists
-    const existingUser = await prisma.user.findUnique({
-      where: { email },
-    });
+    // Check if user exists (global uniqueness — no tenant context yet)
+    const existingUser = await runWithTenantBypass('auth-register-email-uniqueness-check', () =>
+      prisma.user.findUnique({ where: { email } })
+    );
 
     if (existingUser) {
       return NextResponse.json({ error: 'User already exists' }, { status: 400 });
@@ -32,29 +33,31 @@ async function handleRegister(request: Request) {
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Create Tenant and User in transaction
-    const result = await prisma.$transaction(async (tx) => {
-      const tenant = await tx.tenant.create({
-        data: {
-          name: companyName,
-          planTier: 'free',
-          status: 'pending',
-          subscriptionStatus: 'pending',
-        },
-      });
+    // Create Tenant and User in transaction (no tenant exists yet — bypass RLS for creation)
+    const result = await runWithTenantBypass('auth-register-create-tenant-and-user', () =>
+      prisma.$transaction(async (tx) => {
+        const tenant = await tx.tenant.create({
+          data: {
+            name: companyName,
+            planTier: 'free',
+            status: 'pending',
+            subscriptionStatus: 'pending',
+          },
+        });
 
-      const user = await tx.user.create({
-        data: {
-          name,
-          email,
-          passwordHash: hashedPassword,
-          role: 'owner',
-          tenantId: tenant.id,
-        },
-      });
+        const user = await tx.user.create({
+          data: {
+            name,
+            email,
+            passwordHash: hashedPassword,
+            role: 'owner',
+            tenantId: tenant.id,
+          },
+        });
 
-      return { user, tenant };
-    });
+        return { user, tenant };
+      })
+    );
 
     return NextResponse.json({
       user: {
