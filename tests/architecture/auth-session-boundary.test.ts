@@ -10,6 +10,15 @@ describe('Auth & Session Architecture Boundary Tests', () => {
       path.resolve(rootDir, 'lib/auth.ts'),
       path.resolve(rootDir, 'lib/auth/adapterContext.ts'),
       path.resolve(rootDir, 'lib/auth/wrappedPrismaAdapter.ts'),
+      // RAOS adapter-filter coverage scanner: references the symbol name in
+      // JSDoc documentation only (not an import or call). Approved exception
+      // — the scanner describes the bypass mechanism for documentation purposes.
+      // Fix for register #3 (arch-boundary false positive). [#3]
+      path.resolve(rootDir, 'lib/raos/tenantIsolation/adapterFilterCoverage.ts'),
+      // RAOS adapter-filter inventory: references the symbol in a comment and
+      // a string description field (not an import or call). Approved exception
+      // for the same reason as adapterFilterCoverage.ts above. [#3]
+      path.resolve(rootDir, 'lib/raos/tenantIsolation/adapterFilterInventory.ts'),
     ];
 
     const scanDirectory = (dir: string) => {
