@@ -131,7 +131,8 @@ describe('Auth & Session Architecture Boundary Tests', () => {
       'openapi/route.ts',
       'metrics/route.ts',
       'predictions/route.ts',
-      'proposal-status/status/route.ts',
+      // NOTE: proposal-status/status/route.ts intentionally removed from exemption
+      // after fix for register #4 (added withAuth guard). Do not re-add.
       'pipeline/chat/route.ts',
       'pipeline/engagement/route.ts',
       'csrf/route.ts',

@@ -1,14 +1,25 @@
 import { NextResponse } from 'next/server';
 
+import { withAuth } from '@/lib/middleware/auth';
 import { prisma } from '@/lib/prisma';
+import { getTenantId } from '@/lib/tenant/context';
 
 /**
  * PATCH /api/proposal-status/status
  * Update proposal status (draft → ready → sent → viewed → accepted/rejected)
  * Expects { id, status } in request body.
+ *
+ * Auth: requires authenticated session or API key via withAuth.
+ * Tenant: RLS enforced by Prisma middleware (withAuth sets runWithTenantAsync context).
+ * Fix: register #4 — previously had zero auth guards. [#4]
  */
-export async function PATCH(request: Request) {
+async function handleUpdateStatus(request: Request): Promise<NextResponse> {
   try {
+    const tenantId = await getTenantId();
+    if (!tenantId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const body = await request.json();
     const { id, status } = body;
 
@@ -25,9 +36,10 @@ export async function PATCH(request: Request) {
       );
     }
 
-    // Find proposal
-    const proposal = await prisma.proposal.findUnique({
-      where: { id },
+    // Find proposal — RLS middleware enforces tenant isolation automatically;
+    // the explicit tenantId filter is defense-in-depth.
+    const proposal = await prisma.proposal.findFirst({
+      where: { id, tenantId },
     });
 
     if (!proposal) {
@@ -35,13 +47,13 @@ export async function PATCH(request: Request) {
     }
 
     // Update status and set timestamp if transitioning to 'sent'
-    const updateData: any = { status };
+    const updateData: Record<string, unknown> = { status };
     if (status === 'sent' && !proposal.sentAt) {
       updateData.sentAt = new Date();
     }
 
     const updatedProposal = await prisma.proposal.update({
-      where: { id },
+      where: { id, tenantId },
       data: updateData,
     });
 
@@ -54,7 +66,8 @@ export async function PATCH(request: Request) {
       },
     });
   } catch (error) {
-    console.error('[Proposal Status Update] Error:', error);
     return NextResponse.json({ error: 'Failed to update proposal status' }, { status: 500 });
   }
 }
+
+export const PATCH = withAuth(handleUpdateStatus);
