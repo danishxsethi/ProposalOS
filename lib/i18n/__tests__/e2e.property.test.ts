@@ -93,10 +93,11 @@ function buildIntelligenceAPI(benchmarkEngine: BenchmarkEngine): IntelligenceAPI
  */
 const PII_PATTERNS = [
   /\b[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}\b/, // email
-  // Phone: require at least one separator to avoid false-positives on float
-  // serializations (e.g. "19.999960327148436" matching as 999-960-3271).
-  // Real phone numbers in serialized JSON will have hyphens, dots, or spaces.
-  /\b\d{3}[-.\s]\d{3}[-.\s]?\d{4}\b/, // phone (at least one separator required)
+  // Phone: use negative lookbehind/lookahead for digits and dots to avoid
+  // false-positives on float serializations (e.g. "19.999960327148436")
+  // while still catching bare 10-digit numbers like "5551234567".
+  // A real phone at a word boundary won't be preceded/followed by . or more digits.
+  /(?<![.\d])\d{3}[-.\s]?\d{3}[-.\s]?\d{4}(?![.\d])/, // phone
 ];
 const PII_FIELD_NAMES = ['clientId', 'clientName', 'domain', 'contactInfo', 'email', 'phone'];
 
@@ -496,5 +497,39 @@ describe('Property Round-Trip: Benchmark Collection', () => {
       ),
       { numRuns: 100 }
     );
+  });
+});
+
+// ============================================================================
+// Regression: PII phone-number detection coverage
+//
+// The phone regex must catch all common formats (with AND without separators)
+// while rejecting float serializations that happen to contain long digit runs.
+// ============================================================================
+describe('PII phone-number regex regression', () => {
+  it('catches bare 10-digit phone numbers (no separators)', () => {
+    expect(containsPII({ phone: '5551234567' })).toBe(true);
+    expect(containsPII('call 5551234567 today')).toBe(true);
+  });
+
+  it('catches phone numbers with hyphens, dots, or spaces', () => {
+    expect(containsPII('123-456-7890')).toBe(true);
+    expect(containsPII('123.456.7890')).toBe(true);
+    expect(containsPII('123 456 7890')).toBe(true);
+  });
+
+  it('does NOT flag float serializations as phone numbers', () => {
+    // The original flake counterexample
+    expect(containsPII({ mean: 19.999960327148436, p95: 99.9998046875 })).toBe(false);
+    // Other float patterns that could false-positive
+    expect(containsPII({ score: 99.99977111816406 })).toBe(false);
+    expect(containsPII(JSON.stringify({ p75: 0, p95: 99.9998046875, sampleSize: 10 }))).toBe(false);
+  });
+
+  it('flags PII field names regardless of format', () => {
+    expect(containsPII({ clientId: 'abc-123' })).toBe(true);
+    expect(containsPII({ contactInfo: 'anything' })).toBe(true);
+    expect(containsPII({ email: 'x@y.z' })).toBe(true);
+    expect(containsPII({ domain: 'example.com' })).toBe(true);
   });
 });
