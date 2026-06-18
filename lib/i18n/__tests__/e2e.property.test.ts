@@ -93,7 +93,10 @@ function buildIntelligenceAPI(benchmarkEngine: BenchmarkEngine): IntelligenceAPI
  */
 const PII_PATTERNS = [
   /\b[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}\b/, // email
-  /\b\d{3}[-.\s]?\d{3}[-.\s]?\d{4}\b/, // phone
+  // Phone: require at least one separator to avoid false-positives on float
+  // serializations (e.g. "19.999960327148436" matching as 999-960-3271).
+  // Real phone numbers in serialized JSON will have hyphens, dots, or spaces.
+  /\b\d{3}[-.\s]\d{3}[-.\s]?\d{4}\b/, // phone (at least one separator required)
 ];
 const PII_FIELD_NAMES = ['clientId', 'clientName', 'domain', 'contactInfo', 'email', 'phone'];
 
