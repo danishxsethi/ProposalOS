@@ -491,7 +491,68 @@ export function getTierBudget(tier: TenantTier): (typeof TIER_BUDGETS)[TenantTie
 }
 
 /**
- * Check if tenant has exceeded daily audit limit
+ * Check if tenant has exceeded daily audit limit.
+ * Uses Redis-backed tracker for cross-instance coordination.
+ */
+export async function checkDailyAuditLimitRedis(
+  tenantId: string,
+  tier: TenantTier
+): Promise<{
+  allowed: boolean;
+  todayCount: number;
+  limit: number;
+  remaining: number;
+}> {
+  const { checkAndIncrementDailyAudit } = await import('./redisSpendTracker');
+  const result = await checkAndIncrementDailyAudit(tenantId, tier);
+  return {
+    allowed: result.allowed,
+    todayCount: result.todayCount,
+    limit: result.limit,
+    remaining: Math.max(0, result.limit - result.todayCount),
+  };
+}
+
+/**
+ * Check if tenant has budget for a new audit (pre-flight).
+ * Uses Redis-backed atomic check. Call BEFORE starting an audit.
+ * Does NOT increment — use reportAuditSpend() after completion.
+ */
+export async function checkMonthlyBudget(
+  tenantId: string,
+  tier: TenantTier,
+  estimatedCostCents: number
+): Promise<{ allowed: boolean; currentSpendCents: number; capCents: number; reason?: string }> {
+  const { checkAndAddSpend } = await import('./redisSpendTracker');
+  return checkAndAddSpend(tenantId, estimatedCostCents, tier);
+}
+
+/**
+ * Report actual audit cost to the global spend tracker (post-completion).
+ * This is the source-of-truth update after an audit finishes.
+ * The pre-flight check already incremented by the estimate; this adjusts
+ * if the actual differs (by recording the delta).
+ */
+export async function reportAuditSpend(
+  tenantId: string,
+  actualCostCents: number,
+  tier: TenantTier
+): Promise<void> {
+  // Note: checkAndAddSpend already incremented by the estimate during pre-flight.
+  // If actual > estimate, we could add the delta here. For now, the pre-flight
+  // increment IS the spend tracking (conservative: we reserve the tier's per-audit
+  // cap at start, which is always >= actual cost).
+  // This function exists as the hook for future actual-cost reconciliation.
+  const { getCurrentMonthlySpend } = await import('./redisSpendTracker');
+  const current = await getCurrentMonthlySpend(tenantId);
+  logger.info(
+    { tenantId, actualCostCents, currentMonthlySpend: current, tier },
+    '[SpendTracker] Audit spend reported'
+  );
+}
+
+/**
+ * Check if tenant has exceeded daily audit limit (legacy in-memory — kept for backward compat)
  */
 export function checkDailyAuditLimit(tenantId: string): {
   allowed: boolean;

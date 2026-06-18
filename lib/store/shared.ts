@@ -51,6 +51,26 @@ export interface SharedStore {
   increment(key: string, ttlSeconds: number): Promise<number>;
 
   /**
+   * Atomically increment a float value. Returns the new value after increment.
+   * Sets TTL on first write (key creation). Safe for concurrent instances.
+   */
+  incrementFloat(key: string, amount: number, ttlSeconds: number): Promise<number>;
+
+  /**
+   * Atomic check-and-increment: increment a float counter ONLY if the result
+   * would not exceed `cap`. Returns { allowed, newValue }.
+   *
+   * Uses a Lua script for atomicity — no race between read and write.
+   * If key doesn't exist, it's created with TTL on first write.
+   */
+  checkAndIncrementFloat(
+    key: string,
+    amount: number,
+    cap: number,
+    ttlSeconds: number
+  ): Promise<{ allowed: boolean; newValue: number }>;
+
+  /**
    * Delete a key.  No-op when the key does not exist.
    */
   del(key: string): Promise<void>;
@@ -112,6 +132,45 @@ function makeRedisAdapter(redis: import('ioredis').Redis): SharedStore {
       const count = results?.[0]?.[1] as number | undefined;
       return count ?? 1;
     },
+    async incrementFloat(key, amount, ttlSeconds) {
+      const pipeline = redis.pipeline();
+      pipeline.incrbyfloat(key, amount);
+      pipeline.expire(key, ttlSeconds);
+      const results = await pipeline.exec();
+      const val = results?.[0]?.[1] as string | undefined;
+      return parseFloat(val ?? '0');
+    },
+    async checkAndIncrementFloat(key, amount, cap, ttlSeconds) {
+      // Lua script: atomic read-check-increment
+      // Returns: [allowed (0/1), newValue]
+      const luaScript = `
+        local current = tonumber(redis.call('GET', KEYS[1]) or '0')
+        local amount = tonumber(ARGV[1])
+        local cap = tonumber(ARGV[2])
+        local ttl = tonumber(ARGV[3])
+        local newVal = current + amount
+        if newVal > cap then
+          return {0, tostring(current)}
+        end
+        redis.call('SET', KEYS[1], tostring(newVal))
+        if current == 0 then
+          redis.call('EXPIRE', KEYS[1], ttl)
+        end
+        return {1, tostring(newVal)}
+      `;
+      const result = (await redis.eval(
+        luaScript,
+        1,
+        key,
+        String(amount),
+        String(cap),
+        String(ttlSeconds)
+      )) as [number, string];
+      return {
+        allowed: result[0] === 1,
+        newValue: parseFloat(result[1]),
+      };
+    },
     async del(key) {
       await redis.del(key);
     },
@@ -168,6 +227,28 @@ export function createMemoryStore(): SharedStore & {
       const next = parseInt(entry.value, 10) + 1;
       _store.set(key, { value: String(next), expiresAt: entry.expiresAt });
       return next;
+    },
+    async incrementFloat(key, amount, ttlSeconds) {
+      const entry = _store.get(key);
+      if (!entry || isExpired(entry)) {
+        _store.set(key, { value: String(amount), expiresAt: Date.now() + ttlSeconds * 1000 });
+        return amount;
+      }
+      const next = parseFloat(entry.value) + amount;
+      _store.set(key, { value: String(next), expiresAt: entry.expiresAt });
+      return next;
+    },
+    async checkAndIncrementFloat(key, amount, cap, ttlSeconds) {
+      const entry = _store.get(key);
+      const current = entry && !isExpired(entry) ? parseFloat(entry.value) : 0;
+      const newVal = current + amount;
+      if (newVal > cap) {
+        return { allowed: false, newValue: current };
+      }
+      const expiresAt =
+        entry && !isExpired(entry) ? entry.expiresAt : Date.now() + ttlSeconds * 1000;
+      _store.set(key, { value: String(newVal), expiresAt });
+      return { allowed: true, newValue: newVal };
     },
     async del(key) {
       _store.delete(key);
