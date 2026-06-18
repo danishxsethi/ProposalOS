@@ -25,7 +25,7 @@ Proceed in sequence: 1.1 → 1.2 → 1.3 → … → 1.8 (prep + STOP) → 1.9 �
 | 1.9  | #19   | Fix 2 critical CVEs                                                                       | `npm audit --audit-level=critical` → 0                | DONE (commit `6deba97`)                    |
 | 1.10 | #10   | Replace 127 `console.*` with logger                                                       | grep prod paths → 0                                   | TODO                                       |
 | 1.11 | #28   | Guard 2 `$executeRawUnsafe` paths with RLS context                                        | targeted RLS test green                               | TODO                                       |
-| 1.12 | #9    | Make coverage gate real (>=80% or tracked waiver)                                         | `vitest run --coverage` exit 0                        | TODO                                       |
+| 1.12 | #9    | Make coverage gate real (>=80% or tracked waiver)                                         | `vitest run --coverage` exit 0                        | TODO — see Coverage Plan below             |
 | 1.13 | —     | Re-run 4 live smokes                                                                      | `smoke:phase-z` → 4/4                                 | TODO                                       |
 
 ## Rules
@@ -50,3 +50,43 @@ excluded from CI scope and coverage as of 2026-06-18 via:
 - `vitest.config.ts` coverage `exclude` (prevents v8 counting them as 0%)
 
 **Do NOT commit without first clearing all lint/tsc errors and binding to a task in this file.**
+
+## Coverage Plan (Task 1.12)
+
+**Current state (2026-06-18):**
+
+- Coverage scope: `lib/**/*.ts` excluding `lib/raos/`, `lib/audit-engine/`, `lib/prisma.ts`, tests
+- Source files in scope: ~355
+- Configured threshold: 80% lines/branches/functions/statements
+- Actual measured (fast tests only): ~8%
+- Full suite (estimated): substantially higher, but never measured at 80%
+- The 80% threshold was **never enforced** — `main` uses `test.yml` (no coverage);
+  `ci-cd-pipeline.yml` (which has the coverage stage) doesn't gate PRs today
+
+**Why the threshold is aspirational, not real:**
+
+- The codebase grew around business features, not test-first coverage targets
+- Many `lib/` files (billing, orchestrator, modules) are integration-heavy with DB/API deps
+- Writing mocked unit tests for 355 files is multi-sprint work, not a toggle
+
+**Interim plan (ratchet-up approach):**
+
+1. **Phase 1 (immediate):** Lower threshold to a realistic passing baseline. Run the full
+   suite with coverage once (long), capture the actual number, set threshold to
+   `actual - 2%` as the floor. This makes the gate real without red-gating everything.
+2. **Phase 2 (per-task):** Each new task landing in `lib/` must include tests that maintain
+   or improve the floor. The threshold ratchets up by 1% per 5 commits (tracked here).
+3. **Phase 3 (enforcement):** Once the ratchet reaches 60%, switch `test.yml` to run
+   `test:coverage` on PRs. Target 80% as a long-term goal after the full pipeline
+   (Stripe, Redis, SSRF) is wired and testable.
+
+**Exit criterion for 1.12:** The coverage gate runs without erroring (`exit 0`) at a
+threshold the codebase actually meets, with the ratchet-up documented and enforced
+per-commit. "Real" means "red when someone drops coverage," not "aspirationally 80%."
+
+## Lint Warnings (non-blocking, tracked)
+
+As of 2026-06-18: **1666 warnings** on committed code (0 errors). Predominantly
+`@typescript-eslint/no-explicit-any` and `@typescript-eslint/no-unused-vars`.
+Non-blocking since eslint exits 0 with only warnings. Future cleanup ticket — not
+Stage 1 scope, but do not let the count grow. Track quarterly.
