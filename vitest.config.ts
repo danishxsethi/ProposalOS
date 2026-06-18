@@ -27,6 +27,9 @@ export default defineConfig({
       '**/{karma,rollup,webpack,vite,vitest}.config.*',
       'tests/e2e/**',
       'tests/load/**',
+      // RAOS WIP — un-integrated, excluded from CI scope.
+      'lib/audit-engine/**',
+      'lib/raos/**',
     ],
     coverage: {
       provider: 'v8',
@@ -47,6 +50,10 @@ export default defineConfig({
         'lib/prisma.ts',
         'lib/**/__tests__/**',
         'lib/**/*.test.ts',
+        // RAOS WIP — un-integrated, excluded from CI scope + coverage.
+        // Do not remove until lint/tsc errors are cleared and code is committed.
+        'lib/audit-engine/**',
+        'lib/raos/**',
       ],
     },
     alias: {

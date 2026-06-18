@@ -67,3 +67,10 @@ crash.log
 
 # Cache store
 lib/cache/store/
+
+# RAOS WIP — un-integrated, not Stage 1 scope.
+# Contains 150 lint errors + 13 tsc errors as of 2026-06-18.
+# Do NOT commit without first clearing lint/tsc and binding to a task.
+# See .kiro/specs/100m-stage-1/tasks.md for documentation.
+lib/audit-engine/
+lib/raos/
