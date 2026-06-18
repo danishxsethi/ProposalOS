@@ -4,6 +4,7 @@ import { withModuleCache } from '@/lib/cache/moduleCache';
 import { CostTracker } from '@/lib/costs/costTracker';
 import { logger } from '@/lib/logger';
 import { withProviderResilience } from '@/lib/resilience/withProviderResilience';
+import { safeFetchResponseDerived } from '@/lib/security/safeFetch';
 
 import { normalizeConfidence } from './findingGenerator';
 import { AuditModuleResult, Finding, GBPModuleInput } from './types';
@@ -377,7 +378,7 @@ async function analyzePhotosWithGemini(
             degrade: false,
           },
           async () => {
-            const res = await fetch(url);
+            const res = await safeFetchResponseDerived(url);
             if (!res.ok) throw new Error(`Fetch photo failed: ${res.statusText}`);
             return res;
           }

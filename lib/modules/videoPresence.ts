@@ -5,6 +5,7 @@ import { withModuleCache } from '@/lib/cache/moduleCache';
 import { CostTracker } from '@/lib/costs/costTracker';
 import { logger } from '@/lib/logger';
 import { withProviderResilience } from '@/lib/resilience/withProviderResilience';
+import { safeFetch } from '@/lib/security/safeFetch';
 
 import { normalizeConfidence } from './findingGenerator';
 import { AuditModuleResult, Finding } from './types';
@@ -303,7 +304,7 @@ async function analyzeWebsiteVideo(url: string): Promise<WebsiteVideoAnalysis> {
         fallbackValue: '',
       },
       async () => {
-        const res = await fetch(url);
+        const res = await safeFetch(url);
         if (!res.ok) {
           throw new Error(`HTTP error ${res.status}: ${res.statusText}`);
         }

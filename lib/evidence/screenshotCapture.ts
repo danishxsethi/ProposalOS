@@ -4,6 +4,7 @@ import puppeteer, { Browser, Page } from 'puppeteer-core';
 import sharp from 'sharp';
 
 import { logger } from '@/lib/logger';
+import { validateForBrowserNavigation } from '@/lib/security/safeFetch';
 
 const storage = new Storage();
 const BUCKET_NAME = 'proposal-engine-assets';
@@ -194,6 +195,7 @@ async function captureScreenshot(
 
     // Navigate to page
     logger.info({ url: options.url, device: options.device }, 'Capturing screenshot');
+    await validateForBrowserNavigation(options.url);
     await page.goto(options.url, {
       waitUntil: 'networkidle2',
       timeout: 10000,
@@ -330,12 +332,14 @@ export async function captureComparisonScreenshot(
     await page.setViewport(viewport);
 
     // Capture left side
+    await validateForBrowserNavigation(leftUrl);
     await page.goto(leftUrl, { waitUntil: 'networkidle2', timeout: 10000 });
     await new Promise((r) => setTimeout(r, 500));
     const leftData = await page.screenshot({ type: 'png', fullPage: false });
     const leftBuffer = Buffer.isBuffer(leftData) ? leftData : Buffer.from(leftData);
 
     // Capture right side
+    await validateForBrowserNavigation(rightUrl);
     await page.goto(rightUrl, { waitUntil: 'networkidle2', timeout: 10000 });
     await new Promise((r) => setTimeout(r, 500));
     const rightData = await page.screenshot({ type: 'png', fullPage: false });

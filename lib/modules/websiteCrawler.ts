@@ -4,6 +4,7 @@ import robotsParser from 'robots-parser';
 import { withModuleCache } from '@/lib/cache/moduleCache';
 import { logger } from '@/lib/logger';
 import { withProviderResilience } from '@/lib/resilience/withProviderResilience';
+import { safeFetch } from '@/lib/security/safeFetch';
 
 interface PageMetrics {
   url: string;
@@ -108,7 +109,7 @@ async function isAllowedByRobots(url: string, baseUrl: URL): Promise<boolean> {
             fallbackValue: '',
           },
           async ({ signal }) => {
-            const res = await fetch(robotsUrl, { signal });
+            const res = await safeFetch(robotsUrl, { signal });
             if (!res.ok) return '';
             return await res.text();
           }
@@ -207,7 +208,7 @@ async function analyzePage(url: string): Promise<PageMetrics> {
         degrade: false,
       },
       async ({ signal }) => {
-        const res = await fetch(url, {
+        const res = await safeFetch(url, {
           signal,
           headers: {
             'User-Agent':
@@ -439,7 +440,7 @@ export async function crawlWebsite(input: WebsiteCrawlerInput): Promise<CrawlRes
             fallbackValue: '',
           },
           async ({ signal }) => {
-            const response = await fetch(url, {
+            const response = await safeFetch(url, {
               signal,
               headers: {
                 'User-Agent':

@@ -1,5 +1,6 @@
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
+import { safeFetch } from '@/lib/security/safeFetch';
 
 import { PluginInput, PluginOutput } from './sdk';
 
@@ -55,7 +56,7 @@ export async function runPlugin(
       log: (msg: string) => logger.info({ plugin: installation.plugin.name }, msg),
       fetch: async (url: string) => {
         // Rate limited fetch wrapper
-        const res = await fetch(url);
+        const res = await safeFetch(url);
         return res.json();
       },
     };

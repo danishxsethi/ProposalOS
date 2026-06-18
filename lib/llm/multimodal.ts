@@ -1,3 +1,5 @@
+import { safeFetch } from '@/lib/security/safeFetch';
+
 import { MultimodalContent } from './provider';
 
 /**
@@ -6,7 +8,7 @@ import { MultimodalContent } from './provider';
 export async function fetchGCSImageAsBuffer(gcsUrl: string): Promise<Buffer> {
   // In a real implementation you would use @google-cloud/storage
   // Currently we use a standard fetch if it's a public URL, or internal GCP tools.
-  const response = await fetch(gcsUrl);
+  const response = await safeFetch(gcsUrl);
   if (!response.ok) {
     throw new Error(`Failed to fetch image from GCS: ${response.statusText}`);
   }

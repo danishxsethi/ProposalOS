@@ -3,6 +3,7 @@
  * Fetches title from the website to use as business name
  */
 import { logger } from '@/lib/logger';
+import { safeFetch } from '@/lib/security/safeFetch';
 export async function extractBusinessFromUrl(url: string): Promise<{
   url: string;
   name: string;
@@ -19,7 +20,7 @@ export async function extractBusinessFromUrl(url: string): Promise<{
     const domain = urlObj.hostname.replace('www.', '');
 
     // Fetch homepage to extract business name from title
-    const response = await fetch(url, {
+    const response = await safeFetch(url, {
       headers: {
         'User-Agent': 'Mozilla/5.0 (compatible; ProposalOS/1.0; +https://proposalengine.com/bot)',
       },

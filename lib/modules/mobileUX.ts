@@ -4,6 +4,7 @@ import puppeteer from 'puppeteer-core';
 import { CostTracker } from '@/lib/costs/costTracker';
 import { logger } from '@/lib/logger';
 import { withProviderResilience } from '@/lib/resilience/withProviderResilience';
+import { validateForBrowserNavigation } from '@/lib/security/safeFetch';
 
 import { normalizeConfidence } from './findingGenerator';
 import { AuditModuleResult, Finding } from './types';
@@ -128,6 +129,7 @@ async function analyzeMobileUX(url: string, tracker?: CostTracker): Promise<Mobi
     });
 
     // Navigate to page
+    await validateForBrowserNavigation(url);
     await page.goto(url, { waitUntil: 'networkidle2', timeout: 15000 });
 
     // Wait for any animations/transitions

@@ -2,6 +2,7 @@ import * as cheerio from 'cheerio';
 
 import { logger } from '@/lib/logger';
 import { withProviderResilience } from '@/lib/resilience/withProviderResilience';
+import { safeFetch } from '@/lib/security/safeFetch';
 
 interface EmailDiscoveryResult {
   emails: string[];
@@ -25,7 +26,7 @@ export async function findEmails(url: string): Promise<EmailDiscoveryResult> {
         fallbackValue: null,
       },
       async () => {
-        const res = await fetch(targetUrl, {
+        const res = await safeFetch(targetUrl, {
           headers: {
             'User-Agent':
               'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',

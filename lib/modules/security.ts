@@ -9,6 +9,7 @@ import * as tls from 'tls';
 import type { CostTracker } from '@/lib/costs/costTracker';
 import { logger } from '@/lib/logger';
 import { withProviderResilience } from '@/lib/resilience/withProviderResilience';
+import { safeFetch } from '@/lib/security/safeFetch';
 
 import { LegacyAuditModuleResult } from './types';
 
@@ -157,7 +158,7 @@ async function checkMixedContent(url: string): Promise<boolean> {
         },
       },
       async ({ signal }) => {
-        const res = await fetch(url, {
+        const res = await safeFetch(url, {
           headers: { 'User-Agent': 'ProposalOS-SecurityScan/1.0' },
           signal,
         });

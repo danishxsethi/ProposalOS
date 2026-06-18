@@ -2,6 +2,7 @@ import { withModuleCache } from '@/lib/cache/moduleCache';
 import { CostTracker } from '@/lib/costs/costTracker';
 import { logger } from '@/lib/logger';
 import { withProviderResilience } from '@/lib/resilience/withProviderResilience';
+import { safeFetch } from '@/lib/security/safeFetch';
 
 import { normalizeConfidence } from './findingGenerator';
 import { AuditModuleResult, Finding } from './types';
@@ -289,7 +290,7 @@ async function detectTrackingPixels(url: string): Promise<TrackingPixels> {
         fallbackValue: '',
       },
       async () => {
-        const response = await fetch(url, {
+        const response = await safeFetch(url, {
           headers: { 'User-Agent': 'Mozilla/5.0 (compatible; ProposalOSBot/1.0)' },
         });
         if (!response.ok) {

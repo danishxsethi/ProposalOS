@@ -6,6 +6,7 @@ import * as cheerio from 'cheerio';
 import { CostTracker } from '@/lib/costs/costTracker';
 import { logger } from '@/lib/logger';
 import { withProviderResilience } from '@/lib/resilience/withProviderResilience';
+import { safeFetch } from '@/lib/security/safeFetch';
 
 import { normalizeConfidence } from './findingGenerator';
 import { AuditModuleResult, Finding } from './types';
@@ -54,7 +55,7 @@ export async function runTechStackModule(
           },
         },
         async ({ signal }) => {
-          const response = await fetch(input.url, {
+          const response = await safeFetch(input.url, {
             signal,
             headers: {
               'User-Agent': 'Mozilla/5.0 (compatible; ProposalOS/1.0; +http://proposalos.com)',

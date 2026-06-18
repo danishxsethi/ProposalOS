@@ -6,6 +6,7 @@ import puppeteer from 'puppeteer-core';
 import { CostTracker } from '@/lib/costs/costTracker';
 import { logger } from '@/lib/logger';
 import { withProviderResilience } from '@/lib/resilience/withProviderResilience';
+import { safeFetch, validateForBrowserNavigation } from '@/lib/security/safeFetch';
 
 import { normalizeConfidence } from './findingGenerator';
 import { AuditModuleResult, Finding } from './types';
@@ -68,6 +69,7 @@ export async function runPrivacyModule(
 
     try {
       await page.setViewport({ width: 1280, height: 800 });
+      await validateForBrowserNavigation(input.url);
       await page.goto(input.url, { waitUntil: 'networkidle2', timeout: 30000 });
 
       // Count initial cookies
@@ -325,7 +327,7 @@ async function fetchPolicyText(url: string): Promise<string | null> {
         },
       },
       async () => {
-        const res = await fetch(url);
+        const res = await safeFetch(url);
         if (!res.ok) throw new Error(`HTTP error ${res.status}`);
         return await res.text();
       }

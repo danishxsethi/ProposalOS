@@ -3,6 +3,7 @@ import { withModuleCache } from '@/lib/cache/moduleCache';
 import { CostTracker } from '@/lib/costs/costTracker';
 import { logger } from '@/lib/logger';
 import { withProviderResilience } from '@/lib/resilience/withProviderResilience';
+import { safeFetch } from '@/lib/security/safeFetch';
 
 import { type CoreWebVitalsFull, extractCoreWebVitalsFromAudits } from './coreWebVitals';
 import { normalizeConfidence } from './findingGenerator';
@@ -40,7 +41,7 @@ export async function runWebsiteModule(
           degrade: false,
         },
         async ({ signal }) => {
-          const htmlRes = await fetch(input.url, {
+          const htmlRes = await safeFetch(input.url, {
             signal,
             headers: {
               'User-Agent':

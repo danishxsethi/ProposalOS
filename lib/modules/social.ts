@@ -1,6 +1,7 @@
 import { CostTracker } from '@/lib/costs/costTracker';
 import { logger } from '@/lib/logger';
 import { withProviderResilience } from '@/lib/resilience/withProviderResilience';
+import { safeFetch } from '@/lib/security/safeFetch';
 
 import { LegacyAuditModuleResult } from './types';
 
@@ -59,7 +60,7 @@ export async function runSocialModule(
         },
       },
       async ({ signal }) => {
-        const response = await fetch(input.websiteUrl, {
+        const response = await safeFetch(input.websiteUrl, {
           signal,
           headers: {
             'User-Agent': 'Mozilla/5.0 (compatible; ProposalEngine/1.0)',

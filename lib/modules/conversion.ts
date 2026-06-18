@@ -10,6 +10,7 @@ import rs from 'text-readability';
 
 import type { CostTracker } from '@/lib/costs/costTracker';
 import { logger } from '@/lib/logger';
+import { validateForBrowserNavigation } from '@/lib/security/safeFetch';
 
 import { LegacyAuditModuleResult } from './types';
 
@@ -336,11 +337,13 @@ export async function runConversionModule(
     const parsed = new URL(baseUrl);
     const contactUrl = `${parsed.origin}/contact`;
 
+    await validateForBrowserNavigation(baseUrl);
     await page.goto(baseUrl, { waitUntil: 'domcontentloaded', timeout: 20000 });
     const homeResult = await page.evaluate(analyzePage);
 
     let contactResult: PageAnalysis | null = null;
     try {
+      await validateForBrowserNavigation(contactUrl);
       const contactRes = await page.goto(contactUrl, {
         waitUntil: 'domcontentloaded',
         timeout: 10000,

@@ -4,6 +4,7 @@ import { withModuleCache } from '@/lib/cache/moduleCache';
 import { CostTracker } from '@/lib/costs/costTracker';
 import { logger } from '@/lib/logger';
 import { withProviderResilience } from '@/lib/resilience/withProviderResilience';
+import { safeFetch } from '@/lib/security/safeFetch';
 
 import { generateSEOFindings, normalizeConfidence } from './findingGenerator';
 import { AuditModuleResult, EffortLevel, Finding, FindingType } from './types';
@@ -94,7 +95,7 @@ async function fetchHtmlAnalysis(url: string) {
         degrade: false,
       },
       async () => {
-        const res = await fetch(url, { headers: { 'User-Agent': 'ProposalOS-Audit-Bot/1.0' } });
+        const res = await safeFetch(url, { headers: { 'User-Agent': 'ProposalOS-Audit-Bot/1.0' } });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         return await res.text();
       }
@@ -175,7 +176,7 @@ async function checkEndpoint(baseUrl: string, path: string) {
         fallbackValue: 404,
       },
       async () => {
-        const res = await fetch(u, { method: 'HEAD' });
+        const res = await safeFetch(u, { method: 'HEAD' });
         return res.status;
       }
     );

@@ -6,6 +6,7 @@ import * as cheerio from 'cheerio';
 
 import type { CostTracker } from '@/lib/costs/costTracker';
 import { withProviderResilience } from '@/lib/resilience/withProviderResilience';
+import { safeFetch } from '@/lib/security/safeFetch';
 
 import { LegacyAuditModuleResult } from './types';
 
@@ -286,7 +287,7 @@ export async function runSchemaMarkupModule(
         },
       },
       async ({ signal }) => {
-        const response = await fetch(url, {
+        const response = await safeFetch(url, {
           signal,
           headers: {
             'User-Agent': 'Mozilla/5.0 (compatible; ProposalOS-SchemaBot/1.0)',
