@@ -90,3 +90,35 @@ As of 2026-06-18: **1666 warnings** on committed code (0 errors). Predominantly
 `@typescript-eslint/no-explicit-any` and `@typescript-eslint/no-unused-vars`.
 Non-blocking since eslint exits 0 with only warnings. Future cleanup ticket — not
 Stage 1 scope, but do not let the count grow. Track quarterly.
+
+## Tracked Security Residuals
+
+### SSRF DNS Rebinding / TOCTOU (from Task 1.5)
+
+**Status:** Open — tracked for Stage 2 (P2 hardening)
+**Severity:** Medium (reduces but does not eliminate SSRF surface)
+**Added:** 2026-06-18
+
+**Description:** `validateUrl` resolves DNS at validation time; `fetch()` re-resolves at
+connect time. An attacker with a DNS server returning TTL=0 can serve a public IP at
+validation, then a private/metadata IP at connection (classic DNS rebinding). The
+`redirect:'manual'` + per-hop re-validation closes the most common vector (open
+redirect → metadata), but the TOCTOU window remains for direct rebinding attacks.
+
+**Proper fix:** Pin the validated resolved IP for the actual TCP connection — either:
+
+1. Use a custom `undici.Agent` dispatcher with `connect: { lookup }` that returns only
+   the pre-validated IP (prevents re-resolution at connect time), OR
+2. Use Node.js `dns.setServers` with a validating resolver that caches results for the
+   connection lifetime.
+
+**Target:** Stage 2 task (post-go-live hardening). The redirect-chain fix and scheme
+blocking deployed in 1.5 are the priority controls; rebinding is a residual risk
+requiring a lower-level fix. Do NOT overstate "SSRF hardened" — the safeFetch header
+comment explicitly documents this limitation.
+
+**Why not Stage 1:** The undici dispatcher approach requires testing against the full
+module suite with real DNS, and risks breaking legitimate fetch behavior. The risk is
+mitigated by: (a) cloud metadata services requiring specific headers (`Metadata-Flavor: Google`)
+that safeFetch does not set, (b) short validation-to-connect window, (c) the redirect
+chain closes the most exploitable path.
