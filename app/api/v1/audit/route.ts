@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 
 import { generateTraceId, InternalError, ValidationError } from '@/lib/api/errors';
 import { runAudit } from '@/lib/audit/runner';
+import { trackUsage } from '@/lib/billing/metering';
 import { logError, logger } from '@/lib/logger';
 import { withAuth } from '@/lib/middleware/auth';
 import { withRateLimit } from '@/lib/middleware/rateLimit';
@@ -84,6 +85,9 @@ async function handlePOST(req: Request) {
           },
           'Starting v1 audit'
         );
+
+        // Record billable usage (fire-and-forget — never blocks the audit)
+        trackUsage(tenantId, 'audit.created').catch(() => {});
         await recordAuditTrailEvent({
           eventType: 'audit.requested',
           tenantId,

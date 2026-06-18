@@ -14,6 +14,7 @@ import { NextResponse } from 'next/server';
 import { generateTraceId, InternalError, ValidationError } from '@/lib/api/errors';
 import { auditTriggerSchema } from '@/lib/api/schemas/audit';
 import { runAudit } from '@/lib/audit/runner';
+import { trackUsage } from '@/lib/billing/metering';
 import { logError, logger } from '@/lib/logger';
 import { withIdempotency } from '@/lib/middleware/idempotency';
 import { withRateLimit } from '@/lib/middleware/rateLimit';
@@ -87,6 +88,10 @@ async function handlePublicAudit(req: Request): Promise<NextResponse> {
 
         // Trigger orchestrator (fire and forget)
         const currentContext = getObservabilityContext();
+
+        // Record billable usage (fire-and-forget — never blocks the audit)
+        trackUsage(systemTenant.id, 'audit.created').catch(() => {});
+
         logger.info(
           {
             event: 'audit.public.start',

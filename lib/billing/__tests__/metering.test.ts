@@ -308,10 +308,67 @@ describe('sweepUnreportedUsage', () => {
     mocks.usageRecordUpdate.mockResolvedValue({});
 
     const { sweepUnreportedUsage } = await importMetering();
-    const reported = await sweepUnreportedUsage();
+    const result = await sweepUnreportedUsage();
 
-    expect(reported).toBe(2);
+    expect(result.reported).toBe(2);
+    expect(result.poisoned).toBe(0);
     expect(mocks.stripeMeterEventsCreate).toHaveBeenCalledTimes(2);
+  });
+
+  it('marks records as NOT_BILLABLE when tenant has no stripeCustomerId (poison)', async () => {
+    const records = [
+      {
+        id: 'rec-poison-1',
+        tenantId: 'tenant-free',
+        credits: 1,
+        timestamp: new Date(),
+        stripeUsageRecordId: null,
+      },
+    ];
+
+    mocks.usageRecordFindMany.mockResolvedValue(records);
+    mocks.tenantFindUnique.mockResolvedValue({ stripeCustomerId: null });
+    mocks.usageRecordUpdate.mockResolvedValue({});
+
+    const { sweepUnreportedUsage } = await importMetering();
+    const result = await sweepUnreportedUsage();
+
+    expect(result.poisoned).toBe(1);
+    expect(result.reported).toBe(0);
+    expect(mocks.usageRecordUpdate).toHaveBeenCalledWith({
+      where: { id: 'rec-poison-1' },
+      data: { stripeUsageRecordId: 'NOT_BILLABLE' },
+    });
+    expect(mocks.stripeMeterEventsCreate).not.toHaveBeenCalled();
+  });
+
+  it('marks records older than 34 days as EXPIRED_UNDELIVERED', async () => {
+    const oldDate = new Date();
+    oldDate.setDate(oldDate.getDate() - 35);
+
+    const records = [
+      {
+        id: 'rec-old',
+        tenantId: 'tenant-a',
+        credits: 1,
+        timestamp: oldDate,
+        stripeUsageRecordId: null,
+      },
+    ];
+
+    mocks.usageRecordFindMany.mockResolvedValue(records);
+    mocks.tenantFindUnique.mockResolvedValue({ stripeCustomerId: 'cus_test' });
+    mocks.usageRecordUpdate.mockResolvedValue({});
+
+    const { sweepUnreportedUsage } = await importMetering();
+    const result = await sweepUnreportedUsage();
+
+    expect(result.poisoned).toBe(1);
+    expect(mocks.usageRecordUpdate).toHaveBeenCalledWith({
+      where: { id: 'rec-old' },
+      data: { stripeUsageRecordId: 'EXPIRED_UNDELIVERED' },
+    });
+    expect(mocks.stripeMeterEventsCreate).not.toHaveBeenCalled();
   });
 });
 

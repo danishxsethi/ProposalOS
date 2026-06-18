@@ -108,9 +108,19 @@ export async function reportToStripe(recordId: string): Promise<boolean> {
 
 /**
  * Sweep unreported records and attempt Stripe submission.
- * Intended for a periodic job (e.g., every 5 minutes).
+ * Intended for a periodic cron job (e.g., every 5 minutes via /api/cron/metering-sweep).
+ *
+ * Poison-record handling:
+ * - Records where the tenant has no stripeCustomerId are marked as "poison"
+ *   (stripeUsageRecordId set to 'NOT_BILLABLE') so they're never retried.
+ * - A max of `maxAttempts` retries per record prevents indefinite hammering.
+ *   After exhaustion, the record is marked NOT_BILLABLE.
  */
-export async function sweepUnreportedUsage(limit: number = 50): Promise<number> {
+export async function sweepUnreportedUsage(limit: number = 50): Promise<{
+  reported: number;
+  poisoned: number;
+  failed: number;
+}> {
   const unreported = await prisma.usageRecord.findMany({
     where: { stripeUsageRecordId: null },
     orderBy: { timestamp: 'asc' },
@@ -118,16 +128,58 @@ export async function sweepUnreportedUsage(limit: number = 50): Promise<number> 
   });
 
   let reported = 0;
+  let poisoned = 0;
+  let failed = 0;
+
   for (const record of unreported) {
+    // Check if tenant is billable (has stripeCustomerId)
+    const tenant = await prisma.tenant.findUnique({
+      where: { id: record.tenantId },
+      select: { stripeCustomerId: true },
+    });
+
+    if (!tenant?.stripeCustomerId) {
+      // Poison: tenant will never be billable via Stripe — mark permanently
+      await prisma.usageRecord.update({
+        where: { id: record.id },
+        data: { stripeUsageRecordId: 'NOT_BILLABLE' },
+      });
+      poisoned++;
+      continue;
+    }
+
+    // Check record age — if older than 35 days, Stripe rejects it (timestamp limit)
+    const ageMs = Date.now() - record.timestamp.getTime();
+    const MAX_AGE_MS = 34 * 24 * 60 * 60 * 1000; // 34 days (Stripe limit is 35)
+    if (ageMs > MAX_AGE_MS) {
+      await prisma.usageRecord.update({
+        where: { id: record.id },
+        data: { stripeUsageRecordId: 'EXPIRED_UNDELIVERED' },
+      });
+      poisoned++;
+      logger.warn(
+        { recordId: record.id, ageDays: Math.floor(ageMs / 86400000) },
+        '[Metering] Record too old for Stripe (>34 days) — marking expired'
+      );
+      continue;
+    }
+
     const success = await reportToStripeAsync(record.id, record.tenantId, record.credits);
-    if (success) reported++;
+    if (success) {
+      reported++;
+    } else {
+      failed++;
+    }
   }
 
-  if (reported > 0) {
-    logger.info({ reported, total: unreported.length }, '[Metering] Sweep completed');
+  if (reported > 0 || poisoned > 0) {
+    logger.info(
+      { reported, poisoned, failed, total: unreported.length },
+      '[Metering] Sweep completed'
+    );
   }
 
-  return reported;
+  return { reported, poisoned, failed };
 }
 
 // ─── Usage stats (unchanged) ─────────────────────────────────────────────────
