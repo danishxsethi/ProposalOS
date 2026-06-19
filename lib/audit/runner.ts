@@ -1108,304 +1108,352 @@ async function runAuditInternal(auditId: string, signal?: AbortSignal) {
       });
 
       const costTracker = new CostTracker();
-      let parentTrace: RunTree | undefined;
+
+      // Reserve budget for this audit (atomic, cross-instance safe).
+      // settled in the finally block below regardless of success/failure.
+      let reservedCents = 0;
       try {
-        parentTrace = await createParentTrace(audit.id, 'audit-data-collection', {
-          tenantId: audit.tenantId,
-          hasBusinessName: Boolean(name),
-          hasUrl: Boolean(url),
-        });
-      } catch (e) {
-        logger.error({ error: e }, 'Failed to create parent trace');
+        const { reserveAuditBudget } = await import('@/lib/costs/costTracker');
+        const reservation = await reserveAuditBudget(
+          audit.tenantId,
+          (audit as any).tenant?.planTier || 'STARTER'
+        );
+        if (!reservation.allowed) {
+          logger.warn(
+            { auditId: audit.id, tenantId: audit.tenantId },
+            '[runAudit] Monthly budget exceeded — audit blocked'
+          );
+          await prisma.audit.update({
+            where: { id: audit.id },
+            data: { status: 'FAILED', error: 'BUDGET_EXCEEDED', completedAt: new Date() },
+          });
+          return { success: false, auditId: audit.id, status: 'FAILED', error: 'BUDGET_EXCEEDED' };
+        }
+        reservedCents = reservation.reservedCents;
+      } catch (budgetErr) {
+        // Budget check failure is non-fatal — proceed with audit (conservative)
+        logger.warn({ error: budgetErr }, '[runAudit] Budget reservation failed — proceeding');
       }
 
-      const moduleInput: ModuleInput = {
-        auditId: audit.id,
-        url: url || undefined,
-        businessName: name || undefined,
-        city: city || undefined,
-        industry: audit.businessIndustry || undefined,
-        tenantId: audit.tenantId,
-      };
+      try {
+        let parentTrace: RunTree | undefined;
+        try {
+          parentTrace = await createParentTrace(audit.id, 'audit-data-collection', {
+            tenantId: audit.tenantId,
+            hasBusinessName: Boolean(name),
+            hasUrl: Boolean(url),
+          });
+        } catch (e) {
+          logger.error({ error: e }, 'Failed to create parent trace');
+        }
 
-      const results = new Map<string, ModuleResult>();
+        const moduleInput: ModuleInput = {
+          auditId: audit.id,
+          url: url || undefined,
+          businessName: name || undefined,
+          city: city || undefined,
+          industry: audit.businessIndustry || undefined,
+          tenantId: audit.tenantId,
+        };
 
-      // Phase 1: Foundation
-      await executePhase(
-        1,
-        MODULE_REGISTRY,
-        results,
-        moduleInput,
-        costTracker,
-        parentTrace,
-        signal
-      );
+        const results = new Map<string, ModuleResult>();
 
-      // Phase 2: Analysis (uses Phase 1 outputs)
-      await executePhase(
-        2,
-        MODULE_REGISTRY,
-        results,
-        moduleInput,
-        costTracker,
-        parentTrace,
-        signal
-      );
+        // Phase 1: Foundation
+        await executePhase(
+          1,
+          MODULE_REGISTRY,
+          results,
+          moduleInput,
+          costTracker,
+          parentTrace,
+          signal
+        );
 
-      // Phase 3: Synthesis (uses Phase 1 + 2 outputs)
-      await executePhase(
-        3,
-        MODULE_REGISTRY,
-        results,
-        moduleInput,
-        costTracker,
-        parentTrace,
-        signal
-      );
+        // Phase 2: Analysis (uses Phase 1 outputs)
+        await executePhase(
+          2,
+          MODULE_REGISTRY,
+          results,
+          moduleInput,
+          costTracker,
+          parentTrace,
+          signal
+        );
 
-      const allFindings: any[] = [];
-      const modulesCompleted: string[] = [];
-      const modulesFailed: any[] = [];
-      let failedEvidenceWrites = 0;
+        // Phase 3: Synthesis (uses Phase 1 + 2 outputs)
+        await executePhase(
+          3,
+          MODULE_REGISTRY,
+          results,
+          moduleInput,
+          costTracker,
+          parentTrace,
+          signal
+        );
 
-      // Synthesize results into discoveries and evidence
-      for (const [modName, res] of Array.from(results.entries())) {
-        if (res.status === 'COMPLETE') {
-          modulesCompleted.push(modName);
-          const ext = extractFindingsFromRegistryResult(modName, res, moduleInput);
-          allFindings.push(...ext.findings);
+        const allFindings: any[] = [];
+        const modulesCompleted: string[] = [];
+        const modulesFailed: any[] = [];
+        let failedEvidenceWrites = 0;
 
-          for (const snap of ext.snapshots) {
-            try {
-              await prisma.evidenceSnapshot.create({
-                data: {
-                  auditId: audit.id,
-                  module: modName,
-                  source: snap.source || modName,
-                  rawResponse: snap.rawResponse ?? snap,
-                  tenantId: audit.tenantId,
-                },
-              });
-            } catch (error) {
-              failedEvidenceWrites += 1;
-              Metrics.increment('failed_evidence_writes' as any);
-              logger.warn(
-                {
-                  event: 'audit.evidence_snapshot_write_failed',
-                  auditId: audit.id,
-                  module: modName,
-                  source: snap.source || modName,
-                  error: String(error),
-                },
-                'Failed to persist evidence snapshot (non-fatal)'
-              );
+        // Synthesize results into discoveries and evidence
+        for (const [modName, res] of Array.from(results.entries())) {
+          if (res.status === 'COMPLETE') {
+            modulesCompleted.push(modName);
+            const ext = extractFindingsFromRegistryResult(modName, res, moduleInput);
+            allFindings.push(...ext.findings);
+
+            for (const snap of ext.snapshots) {
+              try {
+                await prisma.evidenceSnapshot.create({
+                  data: {
+                    auditId: audit.id,
+                    module: modName,
+                    source: snap.source || modName,
+                    rawResponse: snap.rawResponse ?? snap,
+                    tenantId: audit.tenantId,
+                  },
+                });
+              } catch (error) {
+                failedEvidenceWrites += 1;
+                Metrics.increment('failed_evidence_writes' as any);
+                logger.warn(
+                  {
+                    event: 'audit.evidence_snapshot_write_failed',
+                    auditId: audit.id,
+                    module: modName,
+                    source: snap.source || modName,
+                    error: String(error),
+                  },
+                  'Failed to persist evidence snapshot (non-fatal)'
+                );
+              }
+            }
+          } else if (res.status === 'FAILED') {
+            modulesFailed.push({ module: modName, error: res.error });
+          }
+        }
+
+        // GBP missing fallback (Preserves original behavior)
+        if (!modulesCompleted.includes('gbp') && name && city) {
+          allFindings.push({
+            module: 'gbp',
+            category: 'Local SEO',
+            type: 'PAINKILLER',
+            title: 'No Google Business Listing Detected',
+            description:
+              'No Google Business listing was found for this business. This is a major missed opportunity.',
+            evidence: [{ type: 'text', value: 'Places API returned no results', label: 'Search' }],
+            metrics: { businessName: name, city },
+            impactScore: 9,
+            confidenceScore: 90,
+            effortEstimate: 'MEDIUM',
+            recommendedFix: ['Create a Google Business Profile'],
+          });
+        }
+
+        // P2-3: Deduplicate findings before persisting
+        const dedupedFindings = deduplicateFindings(allFindings);
+
+        // Create Finding records in DB
+        if (dedupedFindings.length > 0) {
+          await prisma.finding.createMany({
+            data: dedupedFindings.map((f) => ({
+              ...f,
+              evidence: f.evidence ?? [],
+              metrics: f.metrics ?? {},
+              recommendedFix: f.recommendedFix ?? [],
+              auditId: audit.id,
+              tenantId: audit.tenantId,
+              manuallyEdited: false,
+              excluded: false,
+            })),
+          });
+        }
+
+        // Calculate total API cost
+        const totalCostCents = costTracker.getTotalCents();
+
+        // Determine final status
+        const totalModules = MODULE_REGISTRY.filter((m) => !m.optional).length;
+        const completedRequiredModules = [...results.entries()].filter(([n, r]) => {
+          const specs = MODULE_REGISTRY.find((x) => x.name === n);
+          return specs && !specs.optional && r.status === 'COMPLETE';
+        }).length;
+
+        let finalStatus =
+          completedRequiredModules >= totalModules * 0.8
+            ? 'COMPLETE'
+            : completedRequiredModules >= totalModules * 0.5
+              ? 'PARTIAL'
+              : completedRequiredModules >= 1
+                ? 'DEGRADED'
+                : 'FAILED';
+
+        const failedCriticalModules = CANONICAL_MODULES.filter((moduleName: string) => {
+          const moduleResult = results.get(moduleName);
+          return !moduleResult || moduleResult.status !== 'COMPLETE';
+        });
+
+        // Guardrail: never emit COMPLETE if any critical module failed/skipped.
+        if (finalStatus === 'COMPLETE' && failedCriticalModules.length > 0) {
+          finalStatus = 'PARTIAL';
+          logger.warn(
+            {
+              event: 'audit.final_status_downgraded_for_critical_failures',
+              auditId: audit.id,
+              failedCriticalModules,
+            },
+            'Downgrading audit status from COMPLETE because critical modules were not completed'
+          );
+        }
+
+        const detectIndustryFromCategory = (type: string): string => {
+          const t = type.toLowerCase();
+          if (t.includes('law') || t.includes('attorney') || t.includes('legal')) return 'legal';
+          if (t.includes('dent') || t.includes('ortho')) return 'dental';
+          if (t.includes('med') || t.includes('health') || t.includes('clinic')) return 'medical';
+          if (t.includes('construct') || t.includes('build')) return 'construction';
+          if (t.includes('plumb')) return 'plumbing';
+          if (t.includes('hvac') || t.includes('air')) return 'hvac';
+          if (t.includes('real') || t.includes('estate') || t.includes('realtor'))
+            return 'real_estate';
+          if (t.includes('roof')) return 'roofing';
+          return 'general';
+        };
+
+        let detectedIndustry: string | null = null;
+        const gbpData = results.get('gbp')?.data;
+        const gbpTypes = gbpData?.types || [];
+        if (gbpTypes.length > 0) {
+          for (const type of gbpTypes) {
+            const industry = detectIndustryFromCategory(type);
+            if (industry !== 'general') {
+              detectedIndustry = industry;
+              break;
             }
           }
-        } else if (res.status === 'FAILED') {
-          modulesFailed.push({ module: modName, error: res.error });
         }
-      }
 
-      // GBP missing fallback (Preserves original behavior)
-      if (!modulesCompleted.includes('gbp') && name && city) {
-        allFindings.push({
-          module: 'gbp',
-          category: 'Local SEO',
-          type: 'PAINKILLER',
-          title: 'No Google Business Listing Detected',
-          description:
-            'No Google Business listing was found for this business. This is a major missed opportunity.',
-          evidence: [{ type: 'text', value: 'Places API returned no results', label: 'Search' }],
-          metrics: { businessName: name, city },
-          impactScore: 9,
-          confidenceScore: 90,
-          effortEstimate: 'MEDIUM',
-          recommendedFix: ['Create a Google Business Profile'],
+        const verticalPlaybookId = detectVertical({
+          businessName: name,
+          businessIndustry: detectedIndustry,
+          businessCity: city,
+          businessUrl: url,
+          gbpCategories: gbpTypes,
+          reviewCount: gbpData?.reviewCount,
+          rating: gbpData?.rating,
         });
-      }
 
-      // P2-3: Deduplicate findings before persisting
-      const dedupedFindings = deduplicateFindings(allFindings);
-
-      // Create Finding records in DB
-      if (dedupedFindings.length > 0) {
-        await prisma.finding.createMany({
-          data: dedupedFindings.map((f) => ({
-            ...f,
-            evidence: f.evidence ?? [],
-            metrics: f.metrics ?? {},
-            recommendedFix: f.recommendedFix ?? [],
-            auditId: audit.id,
-            tenantId: audit.tenantId,
-            manuallyEdited: false,
-            excluded: false,
-          })),
-        });
-      }
-
-      // Calculate total API cost
-      const totalCostCents = costTracker.getTotalCents();
-
-      // Determine final status
-      const totalModules = MODULE_REGISTRY.filter((m) => !m.optional).length;
-      const completedRequiredModules = [...results.entries()].filter(([n, r]) => {
-        const specs = MODULE_REGISTRY.find((x) => x.name === n);
-        return specs && !specs.optional && r.status === 'COMPLETE';
-      }).length;
-
-      let finalStatus =
-        completedRequiredModules >= totalModules * 0.8
-          ? 'COMPLETE'
-          : completedRequiredModules >= totalModules * 0.5
-            ? 'PARTIAL'
-            : completedRequiredModules >= 1
-              ? 'DEGRADED'
-              : 'FAILED';
-
-      const failedCriticalModules = CANONICAL_MODULES.filter((moduleName: string) => {
-        const moduleResult = results.get(moduleName);
-        return !moduleResult || moduleResult.status !== 'COMPLETE';
-      });
-
-      // Guardrail: never emit COMPLETE if any critical module failed/skipped.
-      if (finalStatus === 'COMPLETE' && failedCriticalModules.length > 0) {
-        finalStatus = 'PARTIAL';
-        logger.warn(
-          {
-            event: 'audit.final_status_downgraded_for_critical_failures',
-            auditId: audit.id,
-            failedCriticalModules,
+        await prisma.audit.update({
+          where: { id: audit.id },
+          data: {
+            status: finalStatus as any,
+            modulesCompleted,
+            modulesFailed,
+            apiCostCents: totalCostCents,
+            completedAt: new Date(),
+            businessIndustry: detectedIndustry ?? undefined,
+            verticalPlaybookId: verticalPlaybookId !== 'general' ? verticalPlaybookId : undefined,
           },
-          'Downgrading audit status from COMPLETE because critical modules were not completed'
+        });
+
+        const duration_ms = Date.now() - startTime;
+        MetricsRecorder.auditCompleted(
+          audit.tenantId,
+          finalStatus,
+          duration_ms,
+          totalCostCents / 100
         );
-      }
+        if (finalStatus === 'FAILED') {
+          MetricsRecorder.auditFailure(audit.tenantId, 'audit_failed');
+        }
+        await recordAuditTrailEvent({
+          eventType: finalStatus === 'FAILED' ? 'audit.failed' : 'audit.completed',
+          tenantId: audit.tenantId,
+          auditId: audit.id,
+          targetUrl: audit.businessUrl,
+          modulesRun: modulesCompleted,
+          findingsCount: dedupedFindings.length,
+          proposalGenerated: false,
+          payload: {
+            status: finalStatus,
+            durationMs: duration_ms,
+            apiCostCents: totalCostCents,
+            modulesFailed,
+          },
+        });
 
-      const detectIndustryFromCategory = (type: string): string => {
-        const t = type.toLowerCase();
-        if (t.includes('law') || t.includes('attorney') || t.includes('legal')) return 'legal';
-        if (t.includes('dent') || t.includes('ortho')) return 'dental';
-        if (t.includes('med') || t.includes('health') || t.includes('clinic')) return 'medical';
-        if (t.includes('construct') || t.includes('build')) return 'construction';
-        if (t.includes('plumb')) return 'plumbing';
-        if (t.includes('hvac') || t.includes('air')) return 'hvac';
-        if (t.includes('real') || t.includes('estate') || t.includes('realtor'))
-          return 'real_estate';
-        if (t.includes('roof')) return 'roofing';
-        return 'general';
-      };
+        logger.info(
+          {
+            event: 'audit.complete',
+            auditId: audit.id,
+            status: finalStatus,
+            findingsCount: allFindings.length,
+            modulesCompleted: modulesCompleted.length,
+            modulesFailed: modulesFailed.length,
+            failedEvidenceWrites,
+            failedCriticalModules,
+            duration_ms,
+            apiCostCents: totalCostCents,
+          },
+          'Audit complete'
+        );
 
-      let detectedIndustry: string | null = null;
-      const gbpData = results.get('gbp')?.data;
-      const gbpTypes = gbpData?.types || [];
-      if (gbpTypes.length > 0) {
-        for (const type of gbpTypes) {
-          const industry = detectIndustryFromCategory(type);
-          if (industry !== 'general') {
-            detectedIndustry = industry;
-            break;
+        const result = {
+          success: true,
+          auditId: audit.id,
+          status: finalStatus,
+          modulesCompleted,
+          modulesFailed,
+          findingsCount: allFindings.length,
+          costCents: totalCostCents,
+          duration_ms,
+        };
+
+        // P0 FIX: Cache successful audit results for 24h
+        if (urlHash && finalStatus === 'COMPLETE') {
+          try {
+            await redisCache.set(
+              'audit',
+              urlHash,
+              {
+                status: finalStatus,
+                modulesCompleted,
+                findingsCount: allFindings.length,
+                costCents: totalCostCents,
+                duration_ms,
+                completedAt: new Date().toISOString(),
+              },
+              { ttl: 24 * 60 * 60 } // 24 hours
+            );
+            logger.info({ auditId, urlHash }, '[runAudit] Cached audit result');
+          } catch (error) {
+            logger.warn({ error }, '[runAudit] Failed to cache audit result');
+          }
+        }
+
+        return result;
+      } finally {
+        // Settle budget reservation — release unused portion (runs even on crash/throw)
+        if (reservedCents > 0) {
+          try {
+            const { settleAuditSpend } = await import('@/lib/costs/costTracker');
+            await settleAuditSpend(
+              audit.tenantId,
+              reservedCents,
+              costTracker.getTotalCents(),
+              (audit as any).tenant?.planTier || 'STARTER'
+            );
+          } catch (settleErr) {
+            // Non-critical: reservation stays (conservative, self-heals at month boundary via TTL)
+            logger.warn(
+              { error: settleErr, auditId: audit.id },
+              '[runAudit] Failed to settle reservation'
+            );
           }
         }
       }
-
-      const verticalPlaybookId = detectVertical({
-        businessName: name,
-        businessIndustry: detectedIndustry,
-        businessCity: city,
-        businessUrl: url,
-        gbpCategories: gbpTypes,
-        reviewCount: gbpData?.reviewCount,
-        rating: gbpData?.rating,
-      });
-
-      await prisma.audit.update({
-        where: { id: audit.id },
-        data: {
-          status: finalStatus as any,
-          modulesCompleted,
-          modulesFailed,
-          apiCostCents: totalCostCents,
-          completedAt: new Date(),
-          businessIndustry: detectedIndustry ?? undefined,
-          verticalPlaybookId: verticalPlaybookId !== 'general' ? verticalPlaybookId : undefined,
-        },
-      });
-
-      const duration_ms = Date.now() - startTime;
-      MetricsRecorder.auditCompleted(
-        audit.tenantId,
-        finalStatus,
-        duration_ms,
-        totalCostCents / 100
-      );
-      if (finalStatus === 'FAILED') {
-        MetricsRecorder.auditFailure(audit.tenantId, 'audit_failed');
-      }
-      await recordAuditTrailEvent({
-        eventType: finalStatus === 'FAILED' ? 'audit.failed' : 'audit.completed',
-        tenantId: audit.tenantId,
-        auditId: audit.id,
-        targetUrl: audit.businessUrl,
-        modulesRun: modulesCompleted,
-        findingsCount: dedupedFindings.length,
-        proposalGenerated: false,
-        payload: {
-          status: finalStatus,
-          durationMs: duration_ms,
-          apiCostCents: totalCostCents,
-          modulesFailed,
-        },
-      });
-
-      logger.info(
-        {
-          event: 'audit.complete',
-          auditId: audit.id,
-          status: finalStatus,
-          findingsCount: allFindings.length,
-          modulesCompleted: modulesCompleted.length,
-          modulesFailed: modulesFailed.length,
-          failedEvidenceWrites,
-          failedCriticalModules,
-          duration_ms,
-          apiCostCents: totalCostCents,
-        },
-        'Audit complete'
-      );
-
-      const result = {
-        success: true,
-        auditId: audit.id,
-        status: finalStatus,
-        modulesCompleted,
-        modulesFailed,
-        findingsCount: allFindings.length,
-        costCents: totalCostCents,
-        duration_ms,
-      };
-
-      // P0 FIX: Cache successful audit results for 24h
-      if (urlHash && finalStatus === 'COMPLETE') {
-        try {
-          await redisCache.set(
-            'audit',
-            urlHash,
-            {
-              status: finalStatus,
-              modulesCompleted,
-              findingsCount: allFindings.length,
-              costCents: totalCostCents,
-              duration_ms,
-              completedAt: new Date().toISOString(),
-            },
-            { ttl: 24 * 60 * 60 } // 24 hours
-          );
-          logger.info({ auditId, urlHash }, '[runAudit] Cached audit result');
-        } catch (error) {
-          logger.warn({ error }, '[runAudit] Failed to cache audit result');
-        }
-      }
-
-      return result;
     }
   );
 }
