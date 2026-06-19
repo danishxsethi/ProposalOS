@@ -94,3 +94,14 @@ reconcile-billing:
   endpoint: '/api/cron/reconcile-billing'
   description: 'Reconcile Stripe subscriptions, payments, and abandoned checkouts'
   timezone: 'America/New_York'
+
+
+# 12. Metering Sweep - Every 5 minutes
+# Reports unreported UsageRecords to Stripe via Meter Events API.
+# Durable delivery guarantee for billing (inline reporting is best-effort in serverless).
+# Handles poison records: marks NOT_BILLABLE (no stripeCustomerId) or EXPIRED_UNDELIVERED (>34 days).
+metering-sweep:
+  schedule: '*/5 * * * *'
+  endpoint: '/api/cron/metering-sweep'
+  description: 'Sweep unreported usage records to Stripe (billing delivery guarantee)'
+  timezone: 'UTC'
