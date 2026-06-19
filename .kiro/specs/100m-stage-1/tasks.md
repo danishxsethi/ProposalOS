@@ -12,21 +12,21 @@ Proceed in sequence: 1.1 → 1.2 → 1.3 → … → 1.8 (prep + STOP) → 1.9 �
 
 ## Tasks
 
-| Task | Issue | What                                                                                      | Verification                                          | Status                                     |
-| ---- | ----- | ----------------------------------------------------------------------------------------- | ----------------------------------------------------- | ------------------------------------------ |
-| 1.1  | #3    | Fix `auth-session-boundary` arch test (CI meta-blocker)                                   | `vitest run tests/architecture/` exit 0               | DONE                                       |
-| 1.2  | #4    | Auth-guard `PATCH /api/proposal-status/status`                                            | unauth → 401; cross-tenant → 404                      | DONE (commit `80780ae`, re-verify pending) |
-| 1.3  | #7    | Role-guard 4 admin routes (feature-flags, hallucination-telemetry, human-review, metrics) | non-admin session → 403; super-admin → 200            | DONE (commit `8f09ef8`, re-verify pending) |
-| 1.4  | #22   | Wrap `analytics/tenant/[tenantId]/metrics` in `runWithTenantAsync`                        | valid key → 200; wrong tenant → 403                   | DONE (commit `8f09ef8`, re-verify pending) |
-| 1.5  | #5    | Wire `urlValidator`/`safeFetch` into all 27 fetch paths                                   | metadata/private-IP throws; 0 raw `fetch(` in modules | TODO                                       |
-| 1.6  | #1    | Wire Stripe usage reporting + `stripeSubscriptionItemId` schema                           | usage appears in Stripe test dashboard                | TODO                                       |
-| 1.7  | #8    | Move `GlobalSpendTracker` to Redis `SharedStore`                                          | two processes share spend; cap enforced               | TODO                                       |
-| 1.8  | #2    | Purge git-history secrets + rotate **(GATED — prep + STOP)**                              | `gitleaks --all` → 0                                  | TODO                                       |
-| 1.9  | #19   | Fix 2 critical CVEs                                                                       | `npm audit --audit-level=critical` → 0                | DONE (commit `6deba97`)                    |
-| 1.10 | #10   | Replace 127 `console.*` with logger                                                       | grep prod paths → 0                                   | TODO                                       |
-| 1.11 | #28   | Guard 2 `$executeRawUnsafe` paths with RLS context                                        | targeted RLS test green                               | TODO                                       |
-| 1.12 | #9    | Make coverage gate real (>=80% or tracked waiver)                                         | `vitest run --coverage` exit 0                        | TODO — see Coverage Plan below             |
-| 1.13 | —     | Re-run 4 live smokes                                                                      | `smoke:phase-z` → 4/4                                 | TODO                                       |
+| Task | Issue | What                                                                                      | Verification                                          | Status                                          |
+| ---- | ----- | ----------------------------------------------------------------------------------------- | ----------------------------------------------------- | ----------------------------------------------- |
+| 1.1  | #3    | Fix `auth-session-boundary` arch test (CI meta-blocker)                                   | `vitest run tests/architecture/` exit 0               | DONE (94a9a8d — post-rewrite SHA)               |
+| 1.2  | #4    | Auth-guard `PATCH /api/proposal-status/status`                                            | unauth → 401; cross-tenant → 404                      | DONE (cf8e45f + 675710a)                        |
+| 1.3  | #7    | Role-guard 4 admin routes (feature-flags, hallucination-telemetry, human-review, metrics) | non-admin session → 403; super-admin → 200            | TODO — re-verify needed (commit rewritten)      |
+| 1.4  | #22   | Wrap `analytics/tenant/[tenantId]/metrics` in `runWithTenantAsync`                        | valid key → 200; wrong tenant → 403                   | TODO — re-verify needed (commit rewritten)      |
+| 1.5  | #5    | Wire `urlValidator`/`safeFetch` into all 27 fetch paths                                   | metadata/private-IP throws; 0 raw `fetch(` in modules | DONE (797610c)                                  |
+| 1.6  | #1    | Wire Stripe usage reporting + `stripeSubscriptionItemId` schema                           | usage appears in Stripe test dashboard                | DONE (3a3e0ef, meter event verified 2026-06-18) |
+| 1.7  | #8    | Move `GlobalSpendTracker` to Redis `SharedStore`                                          | two processes share spend; cap enforced               | DONE (0072cd9 + withAuditBudget helper)         |
+| 1.8  | #2    | Purge git-history secrets + rotate **(GATED — prep + STOP)**                              | `gitleaks --all` → 0                                  | DONE (certified --all → 0, 2026-06-18)          |
+| 1.9  | #19   | Fix 2 critical CVEs                                                                       | `npm audit --audit-level=critical` → 0                | DONE (c6da2db; 0 critical, 17 high tracked)     |
+| 1.10 | #10   | Replace 127 `console.*` with logger                                                       | grep prod paths → 0                                   | TODO                                            |
+| 1.11 | #28   | Guard 2 `$executeRawUnsafe` paths with RLS context                                        | targeted RLS test green                               | TODO                                            |
+| 1.12 | #9    | Make coverage gate real (>=80% or tracked waiver)                                         | `vitest run --coverage` exit 0                        | TODO — see Coverage Plan below                  |
+| 1.13 | —     | Re-run 4 live smokes                                                                      | `smoke:phase-z` → 4/4                                 | TODO                                            |
 
 ## Rules
 
