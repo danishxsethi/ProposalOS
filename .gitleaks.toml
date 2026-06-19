@@ -20,6 +20,12 @@ regexes = [
   '''secret_api_key_123''',
   '''whsec_test_secret''',
   '''test-idempotency''',
+  # Synthetic test fixtures used to prove PiiScrubber detects Stripe patterns
+  # These are obviously fake (all-same-char, 40 chars of filler)
+ 
+ 
+  # Specific webLinkToken used in logger test — synthetic UUID
+  '''f37e7853-8d5b-43de-b17f-d69561175571''',
 ]
 
 # Paths containing only test fixtures, docs placeholders, or internal audit evidence
