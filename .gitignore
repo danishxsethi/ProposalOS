@@ -48,6 +48,21 @@ next-env.d.ts
 # Scratch outputs containing data
 scratch/proposal_summaries.txt
 scratch/*.log
+# JS scripts in scratch that are dev/test tooling — never commit
+scratch/*.js
+scratch/*.sh
+
+# RAOS WIP scripts (reference lib/raos/ and lib/audit-engine/ — both gitignored)
+scripts/raos/
+scripts/raos-drift-run.ts
+
+# RAOS and audit-engine Kiro specs (WIP, not Stage 1 scope)
+.kiro/specs/proposal-engine-audit-system/
+.kiro/specs/proposal-engine-remediation-and-operations/
+
+# Workflow files added by RAOS automation (not CI-pipeline approved)
+.github/workflows/drift-run.yml
+.github/workflows/release-gate.yml
 
 # Data files (prospect lists, customer PII — never commit)
 data/
