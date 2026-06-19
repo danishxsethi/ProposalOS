@@ -514,9 +514,69 @@ export async function checkDailyAuditLimitRedis(
 }
 
 /**
- * Check if tenant has budget for a new audit (pre-flight).
- * Uses Redis-backed atomic check. Call BEFORE starting an audit.
- * Does NOT increment — use reportAuditSpend() after completion.
+ * Reserve budget for a new audit (pre-flight) — ATOMIC.
+ *
+ * Implements RESERVE-THEN-SETTLE:
+ * - Atomically increments the global spend by the tier's perAuditCapCents
+ * - Returns allowed=false if this would exceed the monthly budget
+ * - After audit completion, call settleAuditSpend() to release unused reservation
+ *
+ * Worst-case overshoot: ZERO (cap enforced at reservation time, atomically).
+ * Worst-case under-utilization: N_concurrent × (perAuditCapCents - actualCost).
+ * This is conservative but guarantees the cap is never breached.
+ */
+export async function reserveAuditBudget(
+  tenantId: string,
+  tier: TenantTier
+): Promise<{
+  allowed: boolean;
+  reservedCents: number;
+  currentSpendCents: number;
+  capCents: number;
+  reason?: string;
+}> {
+  const { checkAndAddSpend } = await import('./redisSpendTracker');
+  const budget = TIER_BUDGETS[tier];
+  const reservationCents = budget.perAuditCapCents;
+  const result = await checkAndAddSpend(tenantId, reservationCents, tier);
+  return { ...result, reservedCents: reservationCents };
+}
+
+/**
+ * Settle an audit's actual cost — release unused reservation back to budget.
+ *
+ * Call AFTER the audit completes with the real cost from CostTracker.getTotalCents().
+ * If actual < reserved, the difference is released (INCRBYFLOAT negative delta).
+ */
+export async function settleAuditSpend(
+  tenantId: string,
+  reservedCents: number,
+  actualCents: number,
+  tier: TenantTier
+): Promise<void> {
+  const delta = actualCents - reservedCents;
+  if (delta >= 0) return; // No release needed (exact or over — over shouldn't happen)
+
+  const now = new Date();
+  const monthKey = `spend:${tenantId}:monthly:${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}`;
+  try {
+    const { getSharedStore } = await import('@/lib/store/shared');
+    const store = await getSharedStore();
+    await store.incrementFloat(monthKey, delta, 31 * 24 * 3600); // negative delta = release
+    logger.info(
+      { tenantId, reserved: reservedCents, actual: actualCents, released: -delta },
+      '[SpendTracker] Settled audit — released unused reservation'
+    );
+  } catch {
+    // Non-critical: reservation stays (conservative — budget slightly over-reserved)
+    logger.warn({ tenantId }, '[SpendTracker] Failed to release reservation (conservative)');
+  }
+}
+
+/**
+ * Check if tenant has budget for a new audit (pre-flight) — atomic increment.
+ * Reserves the estimatedCostCents against the monthly cap.
+ * @deprecated Use reserveAuditBudget() for proper reserve-then-settle semantics.
  */
 export async function checkMonthlyBudget(
   tenantId: string,
@@ -528,26 +588,18 @@ export async function checkMonthlyBudget(
 }
 
 /**
- * Report actual audit cost to the global spend tracker (post-completion).
- * This is the source-of-truth update after an audit finishes.
- * The pre-flight check already incremented by the estimate; this adjusts
- * if the actual differs (by recording the delta).
+ * @deprecated Use settleAuditSpend() for proper reserve-then-settle.
  */
 export async function reportAuditSpend(
   tenantId: string,
   actualCostCents: number,
   tier: TenantTier
 ): Promise<void> {
-  // Note: checkAndAddSpend already incremented by the estimate during pre-flight.
-  // If actual > estimate, we could add the delta here. For now, the pre-flight
-  // increment IS the spend tracking (conservative: we reserve the tier's per-audit
-  // cap at start, which is always >= actual cost).
-  // This function exists as the hook for future actual-cost reconciliation.
   const { getCurrentMonthlySpend } = await import('./redisSpendTracker');
   const current = await getCurrentMonthlySpend(tenantId);
   logger.info(
     { tenantId, actualCostCents, currentMonthlySpend: current, tier },
-    '[SpendTracker] Audit spend reported'
+    '[SpendTracker] Audit spend reported (legacy)'
   );
 }
 
