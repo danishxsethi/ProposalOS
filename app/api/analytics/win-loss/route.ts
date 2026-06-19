@@ -199,7 +199,7 @@ export const GET = withAuth(async (req: Request) => {
       })),
     });
   } catch (error) {
-    console.error('[API] Error fetching win/loss analytics:', error);
+    logger.error('[API] Error fetching win/loss analytics:', error);
     return NextResponse.json({ error: 'Failed to fetch analytics' }, { status: 500 });
   }
 });

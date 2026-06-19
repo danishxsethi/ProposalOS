@@ -188,7 +188,7 @@ async function handleGetLeads(req: NextRequest): Promise<NextResponse> {
     response.headers.set('X-Trace-Id', traceId);
     return response;
   } catch (error) {
-    console.error('Error fetching outreach leads:', error);
+    logger.error('Error fetching outreach leads:', error);
     const internalError = new InternalError('Failed to fetch outreach leads', {
       originalError: error instanceof Error ? error.message : String(error),
     });

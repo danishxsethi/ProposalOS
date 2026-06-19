@@ -32,7 +32,7 @@ export const GET = withAuth(
 
       return NextResponse.json(audit);
     } catch (error) {
-      console.error('Error fetching audit:', error);
+      logger.error('Error fetching audit:', error);
       return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
     }
   }

@@ -166,7 +166,7 @@ export const GET = withAuth(async (req: Request) => {
       },
     });
   } catch (error) {
-    console.error('Analytics Error:', error);
+    logger.error('Analytics Error:', error);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 });

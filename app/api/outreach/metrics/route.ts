@@ -345,7 +345,7 @@ async function handleGetOutreachMetrics(req: NextRequest): Promise<NextResponse>
     response.headers.set('X-Trace-Id', traceId);
     return response;
   } catch (error) {
-    console.error('Error fetching outreach metrics:', error);
+    logger.error('Error fetching outreach metrics:', error);
     const internalError = new InternalError('Failed to fetch outreach metrics', {
       originalError: error instanceof Error ? error.message : String(error),
     });

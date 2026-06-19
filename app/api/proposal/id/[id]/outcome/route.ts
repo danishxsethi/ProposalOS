@@ -181,7 +181,7 @@ export const POST = withAuth(async (req: Request, { params }: Params) => {
       },
     });
   } catch (error) {
-    console.error('[API] Error updating proposal outcome:', error);
+    logger.error('[API] Error updating proposal outcome:', error);
     return NextResponse.json({ error: 'Failed to update proposal outcome' }, { status: 500 });
   }
 });

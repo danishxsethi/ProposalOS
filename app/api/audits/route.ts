@@ -130,7 +130,7 @@ async function handleListAudits(req: Request): Promise<NextResponse> {
     response.headers.set('X-Trace-Id', traceId);
     return response;
   } catch (error) {
-    console.error('[API] Error fetching audits:', error);
+    logger.error('[API] Error fetching audits:', error);
     return NextResponse.json({ error: 'Failed to fetch audits' }, { status: 500 });
   }
 }

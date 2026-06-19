@@ -70,7 +70,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       diagnosis: diagnosisResult,
     });
   } catch (error) {
-    console.error('[Diagnose] Error:', error);
+    logger.error('[Diagnose] Error:', error);
     return NextResponse.json(
       { error: 'Internal Server Error', details: String(error) },
       { status: 500 }

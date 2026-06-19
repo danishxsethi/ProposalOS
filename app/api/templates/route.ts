@@ -22,7 +22,7 @@ export const GET = withAuth(async (req: Request) => {
 
     return NextResponse.json({ templates });
   } catch (error) {
-    console.error('[API] Error fetching templates:', error);
+    logger.error('[API] Error fetching templates:', error);
     return NextResponse.json({ error: 'Failed to fetch templates' }, { status: 500 });
   }
 });
@@ -66,7 +66,7 @@ export const POST = withAuth(async (req: Request) => {
 
     return NextResponse.json({ template }, { status: 201 });
   } catch (error) {
-    console.error('[API] Error creating template:', error);
+    logger.error('[API] Error creating template:', error);
     return NextResponse.json({ error: 'Failed to create template' }, { status: 500 });
   }
 });

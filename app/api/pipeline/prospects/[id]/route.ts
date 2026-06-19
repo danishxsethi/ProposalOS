@@ -66,7 +66,7 @@ async function handleGetProspect(req: NextRequest, { params }: Params): Promise<
       return response;
     });
   } catch (error) {
-    console.error('Error fetching prospect details:', error);
+    logger.error('Error fetching prospect details:', error);
     const internalError = new InternalError('Failed to fetch prospect details', {
       originalError: error instanceof Error ? error.message : String(error),
     });

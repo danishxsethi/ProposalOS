@@ -73,7 +73,7 @@ export const GET = withAuth(
         },
       });
     } catch (error) {
-      console.error('Comparison Error:', error);
+      logger.error('Comparison Error:', error);
       return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
     }
   }

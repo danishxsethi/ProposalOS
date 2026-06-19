@@ -97,7 +97,7 @@ async function handleFollowUpsCron(req: Request): Promise<NextResponse> {
           results.push({ id: item.id, status: 'failed', reason: 'no email' });
         }
       } catch (err) {
-        console.error(`Failed to process follow-up ${item.id}`, err);
+        logger.error(`Failed to process follow-up ${item.id}`, err);
         await prisma.proposalFollowUp.update({
           where: { id: item.id },
           data: { status: 'failed' },
@@ -109,7 +109,7 @@ async function handleFollowUpsCron(req: Request): Promise<NextResponse> {
     response.headers.set('X-Trace-Id', traceId);
     return response;
   } catch (error) {
-    console.error('Cron Error:', error);
+    logger.error('Cron Error:', error);
     const internalError = new InternalError('Follow-ups cron failed', {
       originalError: error instanceof Error ? error.message : String(error),
     });

@@ -70,7 +70,7 @@ async function handleIntelligenceAggregation(req: NextRequest): Promise<NextResp
           }
         });
       } catch (error) {
-        console.error(`Error aggregating patterns for tenant ${tenant.id}:`, error);
+        logger.error(`Error aggregating patterns for tenant ${tenant.id}:`, error);
         errors++;
       }
     }
@@ -89,7 +89,7 @@ async function handleIntelligenceAggregation(req: NextRequest): Promise<NextResp
     response.headers.set('X-Trace-Id', traceId);
     return response;
   } catch (error) {
-    console.error('Intelligence aggregation cron error:', error);
+    logger.error('Intelligence aggregation cron error:', error);
     const internalError = new InternalError('Intelligence aggregation cron failed', {
       originalError: error instanceof Error ? error.message : String(error),
     });

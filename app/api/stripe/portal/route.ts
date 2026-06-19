@@ -24,7 +24,7 @@ export const POST = withAuth(async () => {
 
     return NextResponse.json({ url: session.url });
   } catch (error) {
-    console.error('Stripe Portal Error:', error);
+    logger.error('Stripe Portal Error:', error);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 });

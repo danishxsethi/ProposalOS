@@ -252,7 +252,7 @@ async function handleChat(req: NextRequest): Promise<NextResponse> {
           sessionId
         );
       } catch (slackError) {
-        console.error('Slack notification failed:', slackError);
+        logger.error('Slack notification failed:', slackError);
       }
     }
 
@@ -264,7 +264,7 @@ async function handleChat(req: NextRequest): Promise<NextResponse> {
     chatResponse.headers.set('X-Trace-Id', traceId);
     return chatResponse;
   } catch (error) {
-    console.error('[Chat API] Error:', error);
+    logger.error('[Chat API] Error:', error);
 
     const internalError = new InternalError('Failed to process message', {
       originalError: error instanceof Error ? error.message : String(error),
@@ -312,7 +312,7 @@ async function storeConversation(
       });
     }
   } catch (error) {
-    console.error('[Chat API] Error storing conversation:', error);
+    logger.error('[Chat API] Error storing conversation:', error);
   }
 }
 

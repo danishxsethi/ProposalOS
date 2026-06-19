@@ -371,7 +371,7 @@ export async function processSniperOutreach(
           });
 
           // eslint-disable-next-line no-console
-          console.log(
+          logger.info(
             'DEBUG SEQUENCE:',
             JSON.stringify(
               sequence.map((s) => ({

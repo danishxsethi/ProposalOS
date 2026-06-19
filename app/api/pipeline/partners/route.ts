@@ -77,7 +77,7 @@ async function handleGetPartners(req: NextRequest): Promise<NextResponse> {
     response.headers.set('X-Trace-Id', traceId);
     return response;
   } catch (error) {
-    console.error('Error listing partners:', error);
+    logger.error('Error listing partners:', error);
     const internalError = new InternalError('Failed to list partners', {
       originalError: error instanceof Error ? error.message : String(error),
     });
@@ -131,7 +131,7 @@ async function handleCreatePartner(req: NextRequest): Promise<NextResponse> {
     response.headers.set('X-Trace-Id', traceId);
     return response;
   } catch (error) {
-    console.error('Error creating partner:', error);
+    logger.error('Error creating partner:', error);
     const internalError = new InternalError('Failed to create partner', {
       originalError: error instanceof Error ? error.message : String(error),
     });

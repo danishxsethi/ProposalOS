@@ -1,4 +1,5 @@
 import { generateWithGemini } from '@/lib/llm/provider';
+import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 
 import { generatePersonalizationDirectives, ProspectMetadata } from './personalization';
@@ -133,7 +134,7 @@ Write like a sharp senior strategist — not like a generic AI mailer.`;
       proposalId === 'test' ||
       proposalId === 'p1'
     ) {
-      console.warn(
+      logger.warn(
         `[Mock Mode] Proposal ID "${typeof proposalId === 'object' ? JSON.stringify(proposalId) : proposalId}" not found in DB. Skipping database save.`
       );
       return { emails: emailsData };

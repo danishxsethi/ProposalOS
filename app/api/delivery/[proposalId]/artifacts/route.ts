@@ -32,7 +32,7 @@ export async function GET(
       count: artifacts.length,
     });
   } catch (error) {
-    console.error('Failed to get artifacts:', error);
+    logger.error('Failed to get artifacts:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

@@ -54,7 +54,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(queue);
   } catch (error) {
-    console.error('Error fetching review queue:', error);
+    logger.error('Error fetching review queue:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
@@ -113,7 +113,7 @@ export async function POST(request: NextRequest) {
       message: `Prospect ${action}d successfully`,
     });
   } catch (error) {
-    console.error('Error processing review action:', error);
+    logger.error('Error processing review action:', error);
 
     if (error instanceof Error && error.message.includes('not found')) {
       return NextResponse.json({ error: error.message }, { status: 404 });

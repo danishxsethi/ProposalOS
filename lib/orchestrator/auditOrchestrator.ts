@@ -381,11 +381,11 @@ export class AuditOrchestrator {
    * Run the Orchestrator
    */
   async run(): Promise<OrchestratorResult> {
-    console.warn(
+    logger.warn(
       "[DEPRECATED] AuditOrchestrator.run() called. This path has 15 modules vs MODULE_REGISTRY's 27. " +
         'Migrate to runAudit() from lib/audit/runner.ts for full scan depth.'
     );
-    console.error('[DEPRECATION_METRIC] AuditOrchestrator used — caller should be migrated');
+    logger.error('[DEPRECATION_METRIC] AuditOrchestrator used — caller should be migrated');
 
     logger.info('[Orchestrator] Starting Audit...');
 

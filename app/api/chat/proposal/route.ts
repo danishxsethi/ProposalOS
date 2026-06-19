@@ -19,7 +19,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json(result);
   } catch (error) {
-    console.error('Chat error:', error);
+    logger.error('Chat error:', error);
     return NextResponse.json({ error: 'Failed to process message' }, { status: 500 });
   }
 }

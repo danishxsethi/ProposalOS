@@ -1,0 +1,146 @@
+name: release-gate
+
+# ============================================================================
+# RAOS CI Release_Gate — bounded CI profile (task 13.1, Requirement 17).
+#
+# This blocking gate runs a BOUNDED CI profile on the CANDIDATE COMMIT:
+#   Static_Checks + P0 safety only —
+#     - tenant-isolation (RLS coverage / adapter tenantId filter / zero BYPASSRLS)
+#     - secret scan (gitleaks)
+#     - dependency audit (npm audit)
+#   + the Gate_Verdict computation.
+#
+# It does NOT run any synthetic Default_Sample or Deep_Run — those are
+# minutes-to-hours long and live in the scheduled Drift_Run (release-drift.yml,
+# task 13.2). Synthetic-derived domains (latency/cost/AI-quality/reliability)
+# are reused from the latest scheduled full run and tagged provisional-on-candidate
+# (R17.5).
+#
+# Verdict -> outcome (R17.1-R17.6), computed by lib/raos/releaseGate.ts via
+# scripts/raos/release-gate.ts:
+#   - any unresolved Critical            -> FAIL  (R17.1)
+#   - provisional Gate_Verdict           -> FAIL by default; WARN with a recorded
+#     (incl. reused-synthetic provisional)   override when RELEASE_GATE_WARN_ONLY=true (R17.2/R17.6)
+#   - static-and-P0-clean, no reused     -> PASS as a non-provisional Gate_Verdict (R17.3/R17.4)
+#     synthetic provisional remaining
+# ============================================================================
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      warn_only:
+        description: 'Allow a provisional Gate_Verdict to warn instead of fail (records an override)'
+        type: boolean
+        default: false
+      warn_only_reason:
+        description: 'Why the provisional verdict is allowed (required when warn_only=true)'
+        type: string
+        default: ''
+
+# Fail-by-default on provisional: warn-only is opt-in via this env/dispatch input
+# and is recorded as an explicit override by the gate (R17.2).
+env:
+  RELEASE_GATE_WARN_ONLY: ${{ github.event.inputs.warn_only || 'false' }}
+  RELEASE_GATE_WARN_ONLY_AUTHORIZED_BY: ${{ github.actor }}
+  RELEASE_GATE_WARN_ONLY_REASON: ${{ github.event.inputs.warn_only_reason || '' }}
+
+jobs:
+  release-gate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout candidate commit
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma Client
+        run: npx prisma generate
+
+      - name: Prepare gate working dir
+        run: mkdir -p .kiro/raos/state release-gate
+
+      # ── P0 safety check 1: tenant-isolation (RLS / adapter / BYPASSRLS) ──
+      # Computes the three tenant-isolation legs from committed migration SQL +
+      # the adapter inventory (lib/raos/tenantIsolation/*), emitting per-check
+      # criticalCount into the P0 results file the verdict step aggregates.
+      - name: P0 — tenant-isolation coverage (RLS / adapter / BYPASSRLS)
+        id: tenant
+        run: npx tsx scripts/raos/p0-tenant-isolation.ts --out release-gate/p0-results.json
+        continue-on-error: true
+
+      # ── P0 safety check 2: secret scan (gitleaks) ──
+      - name: P0 — secret scan (gitleaks)
+        id: secrets
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          config-path: .gitleaks.toml
+        continue-on-error: true
+
+      # ── P0 safety check 3: dependency audit (npm audit) ──
+      - name: P0 — dependency audit (npm audit)
+        id: audit
+        run: npm audit --audit-level=high --omit=dev
+        continue-on-error: true
+
+      # Fold the secret-scan + dependency-audit step outcomes into the P0 results
+      # file so the Gate_Verdict reflects every P0 check, not just tenant-isolation.
+      - name: Record secret-scan + dependency-audit outcomes
+        run: |
+          npx tsx scripts/raos/p0-merge-outcomes.ts \
+            --results release-gate/p0-results.json \
+            --secret-scan "${{ steps.secrets.outcome }}" \
+            --dependency-audit "${{ steps.audit.outcome }}"
+
+      # ── Reuse latest scheduled-run synthetic findings (tagged provisional) ──
+      # If a prior scheduled Drift_Run published synthetic-derived findings as an
+      # artifact, the gate reuses them (tagged provisional-on-candidate, R17.5).
+      # Absent -> the file simply does not exist and the gate reuses nothing.
+      - name: Fetch latest scheduled synthetic findings (if any)
+        run: |
+          if [ -f .kiro/raos/state/latest-synthetic.json ]; then
+            cp .kiro/raos/state/latest-synthetic.json release-gate/reused-synthetic.json
+          fi
+        continue-on-error: true
+
+      # ── Compute the Gate_Verdict and map to the CI outcome (R17.1-R17.6) ──
+      - name: Compute Gate_Verdict (Static + P0 only; no synthetic)
+        run: |
+          REUSED_ARG=""
+          if [ -f release-gate/reused-synthetic.json ]; then
+            REUSED_ARG="--reused release-gate/reused-synthetic.json"
+          fi
+          WARN_ARGS=""
+          if [ "${RELEASE_GATE_WARN_ONLY}" = "true" ]; then
+            WARN_ARGS="--warn-only --authorized-by ${RELEASE_GATE_WARN_ONLY_AUTHORIZED_BY} --reason \"${RELEASE_GATE_WARN_ONLY_REASON}\""
+          fi
+          eval npx tsx scripts/raos/release-gate.ts \
+            --commit "${{ github.event.pull_request.head.sha || github.sha }}" \
+            --results release-gate/p0-results.json \
+            $REUSED_ARG \
+            $WARN_ARGS \
+            --out .kiro/raos/state/gate-verdict.json
+
+      - name: Upload Gate_Verdict evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gate-verdict
+          path: |
+            .kiro/raos/state/gate-verdict.json
+            release-gate/p0-results.json
+          if-no-files-found: warn

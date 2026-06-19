@@ -32,7 +32,7 @@ export const GET = withAuth(async (request: Request, { params }: Params) => {
 
     return NextResponse.json(finding);
   } catch (error) {
-    console.error('[API] Error fetching finding:', error);
+    logger.error('[API] Error fetching finding:', error);
     return NextResponse.json({ error: 'Failed to fetch finding' }, { status: 500 });
   }
 });
@@ -103,7 +103,7 @@ export const PATCH = withAuth(async (request: Request, { params }: Params) => {
 
     return NextResponse.json(finding);
   } catch (error) {
-    console.error('[API] Error updating finding:', error);
+    logger.error('[API] Error updating finding:', error);
     return NextResponse.json({ error: 'Failed to update finding' }, { status: 500 });
   }
 });
@@ -136,7 +136,7 @@ export const DELETE = withAuth(async (request: Request, { params }: Params) => {
       message: 'Finding excluded from proposals',
     });
   } catch (error) {
-    console.error('[API] Error deleting finding:', error);
+    logger.error('[API] Error deleting finding:', error);
     return NextResponse.json({ error: 'Failed to delete finding' }, { status: 500 });
   }
 });

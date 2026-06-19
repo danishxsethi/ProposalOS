@@ -139,7 +139,7 @@ export async function GET(request: Request, { params }: Params) {
       createdAt: proposal.createdAt,
     });
   } catch (error) {
-    console.error('[API] Error fetching proposal:', error);
+    logger.error('[API] Error fetching proposal:', error);
     return NextResponse.json({ error: 'Failed to fetch proposal' }, { status: 500 });
   }
 }
@@ -183,7 +183,7 @@ export const PATCH = withAuth(async (request: Request, { params }: Params) => {
       viewedAt: proposal.viewedAt,
     });
   } catch (error) {
-    console.error('[API] Error updating proposal:', error);
+    logger.error('[API] Error updating proposal:', error);
     return NextResponse.json({ error: 'Failed to update proposal' }, { status: 500 });
   }
 });

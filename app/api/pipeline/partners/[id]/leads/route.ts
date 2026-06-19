@@ -67,7 +67,7 @@ async function handleGetPartnerLeads(req: NextRequest, { params }: Params): Prom
     response.headers.set('X-Trace-Id', traceId);
     return response;
   } catch (error) {
-    console.error('Error fetching partner leads:', error);
+    logger.error('Error fetching partner leads:', error);
     const internalError = new InternalError('Failed to fetch partner leads', {
       originalError: error instanceof Error ? error.message : String(error),
     });
@@ -134,7 +134,7 @@ async function handlePartnerLeadAction(
       return NextResponse.json(error.toEnvelope(req.url, traceId), { status: 400 });
     }
   } catch (error) {
-    console.error('Error processing partner lead action:', error);
+    logger.error('Error processing partner lead action:', error);
     const internalError = new InternalError('Failed to process partner lead action', {
       originalError: error instanceof Error ? error.message : String(error),
     });

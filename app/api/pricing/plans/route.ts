@@ -106,7 +106,7 @@ async function handleGetPlans(req: NextRequest): Promise<NextResponse> {
       return response;
     }
   } catch (error) {
-    console.error('Error fetching pricing plans:', error);
+    logger.error('Error fetching pricing plans:', error);
     const internalError = new InternalError('Failed to fetch pricing plans', {
       originalError: error instanceof Error ? error.message : String(error),
     });
@@ -150,7 +150,7 @@ async function handleCreatePlan(req: NextRequest): Promise<NextResponse> {
     response.headers.set('X-Trace-Id', traceId);
     return response;
   } catch (error) {
-    console.error('Error creating pricing plan:', error);
+    logger.error('Error creating pricing plan:', error);
     const internalError = new InternalError('Failed to create pricing plan', {
       originalError: error instanceof Error ? error.message : String(error),
     });
@@ -197,7 +197,7 @@ async function handleUpdatePlan(req: NextRequest): Promise<NextResponse> {
     response.headers.set('X-Trace-Id', traceId);
     return response;
   } catch (error) {
-    console.error('Error updating pricing plan:', error);
+    logger.error('Error updating pricing plan:', error);
     const internalError = new InternalError('Failed to update pricing plan', {
       originalError: error instanceof Error ? error.message : String(error),
     });
@@ -242,7 +242,7 @@ async function handleSyncWithStripe(req: NextRequest): Promise<NextResponse> {
         return NextResponse.json(actionError.toEnvelope(req.url, traceId), { status: 400 });
     }
   } catch (error) {
-    console.error('Error in patch operation:', error);
+    logger.error('Error in patch operation:', error);
     const internalError = new InternalError('Failed to sync with Stripe', {
       originalError: error instanceof Error ? error.message : String(error),
     });

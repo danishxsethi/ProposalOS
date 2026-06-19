@@ -148,7 +148,7 @@ export async function GET(req: Request) {
               );
             }
           } catch (error) {
-            console.error(`[Pipeline Closing] Error processing prospect ${prospect.id}:`, error);
+            logger.error(`[Pipeline Closing] Error processing prospect ${prospect.id}:`, error);
             results.errors.push(
               `Prospect ${prospect.id}: ${error instanceof Error ? error.message : 'Unknown error'}`
             );
@@ -157,7 +157,7 @@ export async function GET(req: Request) {
 
         results.tenantsProcessed++;
       } catch (error) {
-        console.error(`[Pipeline Closing] Error processing tenant ${tenant.id}:`, error);
+        logger.error(`[Pipeline Closing] Error processing tenant ${tenant.id}:`, error);
         results.errors.push(
           `Tenant ${tenant.id}: ${error instanceof Error ? error.message : 'Unknown error'}`
         );
@@ -172,7 +172,7 @@ export async function GET(req: Request) {
       results,
     });
   } catch (error) {
-    console.error('[Pipeline Closing] Fatal error:', error);
+    logger.error('[Pipeline Closing] Fatal error:', error);
     return NextResponse.json(
       {
         success: false,

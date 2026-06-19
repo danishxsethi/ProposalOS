@@ -35,7 +35,7 @@ export async function GET(
       createdAt: bundle?.createdAt,
     });
   } catch (error) {
-    console.error('Failed to get bundle:', error);
+    logger.error('Failed to get bundle:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
@@ -93,7 +93,7 @@ export async function POST(
       artifactCount: result.bundle?.artifactCount || 0,
     });
   } catch (error) {
-    console.error('Failed to create bundle:', error);
+    logger.error('Failed to create bundle:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

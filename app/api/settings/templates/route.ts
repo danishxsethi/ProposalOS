@@ -64,7 +64,7 @@ export const POST = withAuth(async (req: Request) => {
 
     return NextResponse.json(template);
   } catch (error) {
-    console.error(error);
+    logger.error(error);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 });

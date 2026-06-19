@@ -77,7 +77,7 @@ export async function POST(req: Request) {
     const expectedAmountCents = Math.round(expectedAmount * 100);
     const delta = Math.abs(expectedAmountCents - stripeAmount) / stripeAmount;
     if (delta > 0.01) {
-      console.error('[StripeProposalCheckout] Proposal pricing mismatch', {
+      logger.error('[StripeProposalCheckout] Proposal pricing mismatch', {
         proposalId,
         tierId,
         expectedAmountCents,
@@ -141,7 +141,7 @@ export async function POST(req: Request) {
       headers: { 'X-Idempotency-Key': idempotencyKey || '' },
     });
   } catch (error: any) {
-    console.error('Stripe Proposal Checkout Error:', error);
+    logger.error('Stripe Proposal Checkout Error:', error);
     const internalError = new InternalError('Checkout creation failed', {
       originalError: error instanceof Error ? error.message : String(error),
     });

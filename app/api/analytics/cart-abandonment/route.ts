@@ -110,7 +110,7 @@ async function handleGetCartAbandonment(req: NextRequest): Promise<NextResponse>
         return NextResponse.json(invalidActionError.toEnvelope(req.url, traceId), { status: 400 });
     }
   } catch (error) {
-    console.error('Error fetching cart abandonment data:', error);
+    logger.error('Error fetching cart abandonment data:', error);
     const internalError = new InternalError('Failed to fetch cart abandonment data', {
       originalError: error instanceof Error ? error.message : String(error),
     });
@@ -160,7 +160,7 @@ async function handleTrackEvent(req: NextRequest): Promise<NextResponse> {
     response.headers.set('X-Trace-Id', traceId);
     return response;
   } catch (error) {
-    console.error('Error tracking cart abandonment event:', error);
+    logger.error('Error tracking cart abandonment event:', error);
     const internalError = new InternalError('Failed to track cart abandonment event', {
       originalError: error instanceof Error ? error.message : String(error),
     });
@@ -204,7 +204,7 @@ async function handleFollowUp(req: NextRequest): Promise<NextResponse> {
     response.headers.set('X-Trace-Id', traceId);
     return response;
   } catch (error) {
-    console.error('Error triggering follow-up:', error);
+    logger.error('Error triggering follow-up:', error);
     const internalError = new InternalError('Failed to trigger follow-up', {
       originalError: error instanceof Error ? error.message : String(error),
     });
@@ -232,7 +232,7 @@ async function handleCleanup(req: NextRequest): Promise<NextResponse> {
     response.headers.set('X-Trace-Id', traceId);
     return response;
   } catch (error) {
-    console.error('Error cleaning up old events:', error);
+    logger.error('Error cleaning up old events:', error);
     const internalError = new InternalError('Failed to cleanup old events', {
       originalError: error instanceof Error ? error.message : String(error),
     });

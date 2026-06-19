@@ -47,7 +47,7 @@ export const POST = withAuth(async (req: Request) => {
 
     return NextResponse.json({ url: publicUrl });
   } catch (error) {
-    console.error('Upload error:', error);
+    logger.error('Upload error:', error);
     return NextResponse.json({ error: 'Upload failed' }, { status: 500 });
   }
 });

@@ -248,7 +248,7 @@ async function handleRegeneration(request: Request, { params }: Params): Promise
       },
     });
   } catch (error) {
-    console.error('[Regenerate] Error:', error);
+    logger.error('[Regenerate] Error:', error);
     return NextResponse.json({ error: 'Failed to regenerate proposal' }, { status: 500 });
   }
 }

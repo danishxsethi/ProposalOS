@@ -36,7 +36,7 @@ export async function POST(request: NextRequest) {
       branding: result.branding,
     });
   } catch (error) {
-    console.error('Error onboarding tenant:', error);
+    logger.error('Error onboarding tenant:', error);
 
     if (error instanceof Error && error.message.includes('not found')) {
       return NextResponse.json({ error: error.message }, { status: 404 });

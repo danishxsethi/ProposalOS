@@ -5,6 +5,7 @@
 
 import { randomUUID } from 'crypto';
 
+import { logger } from '@/lib/logger';
 import { getTenantRuntimeContextFromStore } from '@/lib/tenant/context';
 
 import { executeQuery } from '../db';
@@ -142,7 +143,7 @@ export async function logPerformance(
       );
     }
   } catch (err) {
-    console.error('Self-healing PromptVersion generation failed:', err);
+    logger.error('Self-healing PromptVersion generation failed:', err);
   }
 
   const id = randomUUID();

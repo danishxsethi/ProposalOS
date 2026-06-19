@@ -173,7 +173,7 @@ export const POST = withAuth(async (req: Request, { params }: Params) => {
       proposal: updated,
     });
   } catch (error) {
-    console.error('[API] Error submitting closeability review:', error);
+    logger.error('[API] Error submitting closeability review:', error);
     return NextResponse.json({ error: 'Failed to submit closeability review' }, { status: 500 });
   }
 });

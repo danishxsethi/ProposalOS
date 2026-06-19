@@ -13,7 +13,7 @@ export async function GET(req: Request) {
     await monitorReputation();
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error('Reputation Monitor Error:', error);
+    logger.error('Reputation Monitor Error:', error);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }

@@ -38,7 +38,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(metrics);
   } catch (error) {
-    console.error('Error fetching pipeline metrics:', error);
+    logger.error('Error fetching pipeline metrics:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

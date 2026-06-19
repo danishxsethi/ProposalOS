@@ -150,7 +150,7 @@ async function handleGetBenchmarks(req: NextRequest): Promise<NextResponse> {
     response.headers.set('X-Trace-Id', traceId);
     return response;
   } catch (error) {
-    console.error('[API] Error fetching benchmarks:', error);
+    logger.error('[API] Error fetching benchmarks:', error);
     const internalError = new InternalError('Failed to fetch benchmarks', {
       originalError: error instanceof Error ? error.message : String(error),
     });

@@ -178,7 +178,7 @@ async function handleGetJobs(req: NextRequest): Promise<NextResponse> {
     response.headers.set('X-Trace-Id', traceId);
     return response;
   } catch (error) {
-    console.error('Error fetching outreach jobs:', error);
+    logger.error('Error fetching outreach jobs:', error);
     const internalError = new InternalError('Failed to fetch outreach jobs', {
       originalError: error instanceof Error ? error.message : String(error),
     });
@@ -291,7 +291,7 @@ async function handleCreateJobs(req: NextRequest): Promise<NextResponse> {
     response.headers.set('X-Trace-Id', traceId);
     return response;
   } catch (error) {
-    console.error('Error creating outreach jobs:', error);
+    logger.error('Error creating outreach jobs:', error);
     const internalError = new InternalError('Failed to create outreach jobs', {
       originalError: error instanceof Error ? error.message : String(error),
     });

@@ -63,7 +63,7 @@ export const POST = withAuth(async (req: Request) => {
 
     return NextResponse.json({ url: session.url });
   } catch (error) {
-    console.error('Stripe SaaS Checkout Error:', error);
+    logger.error('Stripe SaaS Checkout Error:', error);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 });

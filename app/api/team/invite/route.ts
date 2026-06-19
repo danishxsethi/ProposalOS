@@ -64,13 +64,13 @@ export const POST = withAuth(async (req: Request) => {
       );
 
       // 5. Send Email
-      // console.log(`[Email Mock] Sending invite to ${email} with token ${token}`);
+      // logger.info(`[Email Mock] Sending invite to ${email} with token ${token}`);
       // In real impl:
       // await resend.emails.send({ ... })
 
       return NextResponse.json({ success: true, invitation });
     } catch (e: any) {
-      console.error(e);
+      logger.error(e);
       return NextResponse.json({ error: e.message }, { status: 500 });
     }
   });

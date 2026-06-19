@@ -408,7 +408,7 @@ export async function GET(request: Request, { params }: Params) {
       },
     });
   } catch (error) {
-    console.error('Presentation export error:', error);
+    logger.error('Presentation export error:', error);
     return NextResponse.json({ error: 'Failed to generate presentation' }, { status: 500 });
   }
 }

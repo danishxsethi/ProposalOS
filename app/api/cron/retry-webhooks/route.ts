@@ -51,7 +51,7 @@ async function handleRetryWebhooks(req: Request): Promise<NextResponse> {
     response.headers.set('X-Trace-Id', traceId);
     return response;
   } catch (error) {
-    console.error('Webhook retry cron job failed:', error);
+    logger.error('Webhook retry cron job failed:', error);
     const internalError = new InternalError('Webhook retry cron failed', {
       originalError: error instanceof Error ? error.message : String(error),
     });

@@ -122,7 +122,7 @@ async function handleStatusOverride(req: NextRequest, params: Params): Promise<N
 
     return runWithTenantAsync(tenantId, executeOverride);
   } catch (error) {
-    console.error('Error overriding prospect status:', error);
+    logger.error('Error overriding prospect status:', error);
 
     const internalError = new InternalError('Failed to override prospect status', {
       originalError: error instanceof Error ? error.message : String(error),

@@ -86,7 +86,7 @@ async function handleGetConfig(req: NextRequest): Promise<NextResponse> {
     response.headers.set('X-Trace-Id', traceId);
     return response;
   } catch (error) {
-    console.error('Error fetching pipeline config:', error);
+    logger.error('Error fetching pipeline config:', error);
     const internalError = new InternalError('Failed to fetch pipeline config', {
       originalError: error instanceof Error ? error.message : String(error),
     });
@@ -132,7 +132,7 @@ async function handleUpdateConfig(req: NextRequest): Promise<NextResponse> {
     response.headers.set('X-Trace-Id', traceId);
     return response;
   } catch (error) {
-    console.error('Error updating pipeline config:', error);
+    logger.error('Error updating pipeline config:', error);
 
     if (error instanceof Error && error.message.includes('must be')) {
       const validationError = new InternalError('Validation error');

@@ -25,7 +25,7 @@ export const GET = withAuth(async (req: Request, { params }: Params) => {
 
     return NextResponse.json({ template });
   } catch (error) {
-    console.error('[API] Error fetching template:', error);
+    logger.error('[API] Error fetching template:', error);
     return NextResponse.json({ error: 'Failed to fetch template' }, { status: 500 });
   }
 });
@@ -44,7 +44,7 @@ export const DELETE = withAuth(async (req: Request, { params }: Params) => {
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error('[API] Error deleting template:', error);
+    logger.error('[API] Error deleting template:', error);
     return NextResponse.json({ error: 'Failed to delete template' }, { status: 500 });
   }
 });

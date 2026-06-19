@@ -35,7 +35,7 @@ async function handleReconcileBilling(req: Request): Promise<NextResponse> {
     response.headers.set('X-Trace-Id', traceId);
     return response;
   } catch (error) {
-    console.error('Billing reconciliation cron error:', error);
+    logger.error('Billing reconciliation cron error:', error);
     const internalError = new InternalError('Billing reconciliation cron failed', {
       originalError: error instanceof Error ? error.message : String(error),
     });

@@ -58,7 +58,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
     // For simplicity, return success and let frontend redirect to login
     return NextResponse.json({ success: true });
   } catch (e: any) {
-    console.error(e);
+    logger.error(e);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }

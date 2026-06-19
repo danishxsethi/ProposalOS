@@ -84,7 +84,7 @@ export const POST = withRole(
         createdAt: apiKey.createdAt,
       });
     } catch (error) {
-      console.error('Create API Key Error:', error);
+      logger.error('Create API Key Error:', error);
       return NextResponse.json({ error: 'Failed to create API key' }, { status: 500 });
     }
   })

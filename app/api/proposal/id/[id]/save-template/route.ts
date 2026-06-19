@@ -55,7 +55,7 @@ export const POST = withAuth(async (req: Request, { params }: Params) => {
 
     return NextResponse.json({ template }, { status: 201 });
   } catch (error) {
-    console.error('[API] Error saving template:', error);
+    logger.error('[API] Error saving template:', error);
     return NextResponse.json({ error: 'Failed to save template' }, { status: 500 });
   }
 });
