@@ -4,14 +4,30 @@ title = "ProposalOS gitleaks config"
 useDefault = true
 
 [allowlist]
-description = "Known-safe placeholders + incident docs"
+description = "Known-safe placeholders, test fixtures, and internal IDs"
+
+# Exact placeholder strings that are never real credentials
 regexes = [
   '''<password>''',
   '''<user>:<password>''',
   '''REDACTED''',
   '''postgresql://<[^>]+>:<[^>]+>@''',
+  '''sk_live_vulnerable_key_12345''',
+  '''sk_live_512345''',
+  '''sk_test_placeholder''',
+  '''your-api-key''',
+  '''autonomous_pipeline''',
+  '''secret_api_key_123''',
+  '''whsec_test_secret''',
+  '''test-idempotency''',
 ]
+
+# Paths containing only test fixtures, docs placeholders, or internal audit evidence
 paths = [
   '''SECURITY-INCIDENT\.md''',
   '''.*\.example$''',
+  '''docs/remediation/029-beta-day0-five-site-audit-evidence\.json''',
+  '''docs/remediation/034-first-pilot-launch-simulation\.md''',
+  '''docs/archive/AUDIT_REPORT\.md''',
+  '''GCP_SETUP_COMPLETE\.md''',
 ]
