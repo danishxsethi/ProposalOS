@@ -36,4 +36,8 @@ paths = [
   '''docs/remediation/034-first-pilot-launch-simulation\.md''',
   '''docs/archive/AUDIT_REPORT\.md''',
   '''GCP_SETUP_COMPLETE\.md''',
+  # logger-pii-scrubbing.test.ts — historical commit e095886 uses real-format
+  # keys as test fixtures before they were replaced with synthetic equivalents
+  # in the next commit. The keys are test-mode only (sk_test_51...).
+  '''tests/security/logger-pii-scrubbing\.test\.ts''',
 ]
