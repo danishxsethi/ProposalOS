@@ -49,6 +49,12 @@ next-env.d.ts
 scratch/proposal_summaries.txt
 scratch/*.log
 
+# Data files (prospect lists, customer PII — never commit)
+data/
+
+# Script output (transient, may contain PII)
+scripts/output/
+
 # GCP binaries
 cloud-sql-proxy
 
