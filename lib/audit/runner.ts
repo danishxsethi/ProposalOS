@@ -128,7 +128,11 @@ const websiteAdapter = async (input: ModuleInput, tracker: CostTracker): Promise
 
 const websiteCrawlerAdapter = async (input: ModuleInput): Promise<ModuleResult> => {
   if (!input.url || !input.businessName) throw new Error('url and businessName required');
-  const data = await runWebsiteCrawlerModule({ url: input.url, businessName: input.businessName });
+  const data = await runWebsiteCrawlerModule({
+    url: input.url,
+    businessName: input.businessName,
+    auditId: input.auditId,
+  });
   return { status: 'COMPLETE', data };
 };
 
@@ -193,8 +197,21 @@ const securityAdapter = async (input: ModuleInput): Promise<ModuleResult> => {
 const emailFinderAdapter = async (input: ModuleInput): Promise<ModuleResult> => {
   if (!input.url) throw new Error('url required');
   const data = await runEmailFinderModule(input.url);
-  if ((data as unknown as Record<string, any>).status === 'error')
-    throw new Error((data as unknown as Record<string, any>).error);
+  // P2-28 (Wave 5): `findEmails()` (lib/modules/emailFinder.ts) never returns a
+  // `status` field — the previous `data.status === 'error'` check was dead code that
+  // could never fire, letting a total fetch failure (source: 'failed'/'error', empty
+  // emails) report COMPLETE with an empty result indistinguishable from a genuine
+  // "page fetched successfully, no public emails found" outcome. `findEmails`'s real
+  // signal is its `source` field: 'failed' (fetch/provider unavailable) and 'error'
+  // (unexpected exception during scan) are both real implementation failure, never a
+  // verified absence of emails.
+  if (data.source === 'failed' || data.source === 'error') {
+    return {
+      status: 'FAILED',
+      data: null,
+      error: `Email discovery failed (source: ${data.source})`,
+    };
+  }
   return { status: 'COMPLETE', data };
 };
 
@@ -384,12 +401,20 @@ const privacyComplianceAdapter = async (
 const schemaMarkupAdapter = async (input: ModuleInput): Promise<ModuleResult> => {
   if (!input.url) throw new Error('url required');
   const gbpData = input.dependencyResults?.gbp;
-  const data = await runSchemaMarkupModule({
+  const raw = await runSchemaMarkupModule({
     url: input.url,
     businessName: input.businessName,
     gbpTypes: gbpData?.types,
   });
-  return { status: 'COMPLETE', data: (data as unknown as Record<string, any>)?.data || data };
+  const legacy = raw as unknown as Record<string, any>;
+  // P1-33 (Wave 5): `runSchemaMarkupModule` now reports its own outer status
+  // honestly (fixed alongside P1-33 — fetch/parse failure used to always be
+  // laundered into an outer 'success'). Provider/fetch failure must never be
+  // reported as COMPLETE.
+  if (legacy?.status === 'failed' || legacy?.status === 'error') {
+    return { status: 'FAILED', data: null, error: legacy.error || 'Schema markup analysis failed' };
+  }
+  return { status: 'COMPLETE', data: legacy?.data ?? legacy };
 };
 
 const keywordGapAdapter = async (
@@ -409,13 +434,48 @@ const keywordGapAdapter = async (
   return { status: 'COMPLETE', data };
 };
 
+/**
+ * P1-39 (Wave 5): the `competitor` module (lib/modules/competitor.ts) returns its real
+ * competitor list under `data.topCompetitors` — never `data.results`, which does not
+ * exist on the module's output shape. Every adapter that reads the competitor
+ * dependency must use this one canonical field name; reading a nonexistent field
+ * silently produces `undefined`, which both downstream adapters previously treated as
+ * "no competitors" via `?.` chaining, discarding real, already-collected data instead
+ * of forwarding it.
+ */
+function getCanonicalCompetitors(competitorDependencyData: unknown): Array<{
+  name: string;
+  website?: string;
+  placeId?: string;
+  rating?: number;
+  reviews?: number;
+}> {
+  const list = (competitorDependencyData as Record<string, unknown> | undefined)?.topCompetitors;
+  if (!Array.isArray(list)) return [];
+  // Defensive: reject entries with an unrecognized/legacy shape (no `name`) rather
+  // than silently passing through `undefined` fields to dependents.
+  return list.filter(
+    (
+      c
+    ): c is {
+      name: string;
+      website?: string;
+      placeId?: string;
+      rating?: number;
+      reviews?: number;
+    } => !!c && typeof c === 'object' && typeof (c as Record<string, unknown>).name === 'string'
+  );
+}
+
 const videoPresenceAdapter = async (
   input: ModuleInput,
   tracker: CostTracker
 ): Promise<ModuleResult> => {
   if (!input.businessName || !input.city) throw new Error('name, city required');
   const compData = input.dependencyResults?.competitor;
-  const competitors = compData?.results?.slice(0, 3).map((r: any) => r.title) || [];
+  const competitors = getCanonicalCompetitors(compData)
+    .slice(0, 3)
+    .map((c) => c.name);
   const data = await runVideoPresenceModule(
     {
       businessName: input.businessName,
@@ -429,14 +489,31 @@ const videoPresenceAdapter = async (
   return { status: 'COMPLETE', data };
 };
 
+/** Normalize for self-exclusion comparison: lowercase, strip punctuation, collapse spaces. */
+function normalizeBusinessName(s: string): string {
+  return s
+    .toLowerCase()
+    .replace(/[^\w\s]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 const competitorStrategyAdapter = async (
   input: ModuleInput,
   tracker: CostTracker
 ): Promise<ModuleResult> => {
   if (!input.url || !input.businessName || !input.city) throw new Error('url, name, city required');
   const compData = input.dependencyResults?.competitor;
-  const topComp = compData?.results?.find(
-    (r: any) => r.link && r.title && r.title !== input.businessName
+  // P2-47 (Wave 5): self-exclusion previously compared `title !== businessName` as an
+  // exact string — any case, whitespace, or punctuation difference between the SERP
+  // listing's title and the input business name (e.g. "Joe's Plumbing" vs "Joes
+  // Plumbing Inc") let the subject business be selected as its own "competitor".
+  // Normalize both sides the same way the `gbp` module already does for its own
+  // name-consistency check (lib/modules/gbp.ts::normalize).
+  const selfNormalized = normalizeBusinessName(input.businessName);
+  const topComp = getCanonicalCompetitors(compData).find(
+    (c): c is typeof c & { website: string } =>
+      !!c.website && !!c.name && normalizeBusinessName(c.name) !== selfNormalized
   );
   if (!topComp) return { status: 'SKIPPED', data: null, error: 'No major competitor found' };
   const data = await runCompetitorStrategyModule(
@@ -445,8 +522,8 @@ const competitorStrategyAdapter = async (
       industry: input.industry || 'Generic',
       city: input.city,
       websiteUrl: input.url,
-      competitorName: topComp.title,
-      competitorWebsite: topComp.link,
+      competitorName: topComp.name,
+      competitorWebsite: topComp.website,
       competitorPlaceId: topComp.placeId,
     },
     tracker
@@ -575,6 +652,18 @@ const schemaAnalysisAdapter = async (input: ModuleInput): Promise<ModuleResult> 
   const findings: any[] = [];
 
   // Generate findings for missing critical schema types
+  //
+  // P1-34 (Wave 5): each finding below carries `metrics.schemaFingerprint` identifying
+  // its exact root cause (e.g. `schema-missing:LocalBusiness`) using the same key
+  // scheme `schemaMarkup` (lib/modules/schemaMarkup.ts::buildSchemaMarkupFindings)
+  // assigns for the identical observation from the same crawled HTML, so
+  // `deduplicateFindings` merges true duplicates instead of presenting the customer
+  // two near-identical "you're missing X schema" findings. This module's own
+  // zero-evidence gap (these findings currently carry no `evidence`, so Wave 3's
+  // contract rejects them before they can reach aggregation at all) is a separate,
+  // pre-existing module-implementation defect out of Wave 5's adapter-repair scope —
+  // tracked for Wave 6/7, not fixed here — but the fingerprint is added now so
+  // dedup is already correct once that gap closes.
   if (!analysis.hasLocalBusinessOrOrganization.present) {
     findings.push({
       module: 'schemaAnalysis',
@@ -584,6 +673,7 @@ const schemaAnalysisAdapter = async (input: ModuleInput): Promise<ModuleResult> 
       description: analysis.hasLocalBusinessOrOrganization.recommendation,
       impactScore: 8,
       confidenceScore: 95,
+      metrics: { schemaFingerprint: 'schema-missing:LocalBusiness' },
       effortEstimate: 'LOW',
       recommendedFix: [
         'Add JSON-LD LocalBusiness schema with name, address, phone, hours, and geo coordinates',
@@ -599,6 +689,7 @@ const schemaAnalysisAdapter = async (input: ModuleInput): Promise<ModuleResult> 
       description: analysis.hasReviewAggregateRating.recommendation,
       impactScore: 5,
       confidenceScore: 90,
+      metrics: { schemaFingerprint: 'schema-missing:AggregateRating' },
       effortEstimate: 'LOW',
       recommendedFix: [
         'Add AggregateRating schema referencing your review platform (Google, Yelp, etc.)',
@@ -1031,17 +1122,48 @@ export async function runModuleSubset(
   });
 }
 
-// ─── P2-3: Finding deduplication ────────────────────────────────────────────
-// Deduplicates by type + normalised title before DB insert.
-// If two modules produce the same finding, we keep the one with the higher impactScore.
+// ─── P2-3 / P1-34: Finding deduplication ────────────────────────────────────
+/**
+ * Deduplicates findings before DB insert.
+ *
+ * P1-34 (Wave 5): title-only matching under-deduplicates (two modules phrasing the
+ * same root-cause observation slightly differently, e.g. "Missing LocalBusiness
+ * Schema" vs "Missing LocalBusiness/Organization Schema" both stay) and can
+ * over-merge unrelated findings that happen to share a title. A finding may declare
+ * a stable root-cause key at `metrics.schemaFingerprint` (or the more generic
+ * `metrics.fingerprint`) — set by modules that know they might overlap with another
+ * module's observation of the exact same underlying fact (e.g. `schemaMarkup` and
+ * `schemaAnalysis` both observing "no LocalBusiness schema present"). When present,
+ * that fingerprint is the dedup key instead of type+title, so near-title duplicates
+ * with the same root cause correctly merge while distinct schema issues (different
+ * fingerprint) never do. Findings without a fingerprint keep the original
+ * type+title behavior unchanged.
+ *
+ * The surviving finding keeps the higher impactScore, but retains the UNION of both
+ * findings' evidence (deterministically ordered: survivor's own evidence first, then
+ * any evidence from the merged-away finding not already present by pointer) rather
+ * than silently discarding the loser's real evidence.
+ */
 export function deduplicateFindings(findings: any[]): any[] {
   const seen = new Map<string, any>();
   for (const finding of findings) {
-    const key = `${finding.type}:${(finding.title || '').toLowerCase().trim()}`;
+    const fingerprint = finding?.metrics?.schemaFingerprint || finding?.metrics?.fingerprint;
+    const key = fingerprint
+      ? `fp:${fingerprint}`
+      : `${finding.type}:${(finding.title || '').toLowerCase().trim()}`;
     const existing = seen.get(key);
-    if (!existing || (finding.impactScore ?? 0) > (existing.impactScore ?? 0)) {
+    if (!existing) {
       seen.set(key, finding);
+      continue;
     }
+    const winner = (finding.impactScore ?? 0) > (existing.impactScore ?? 0) ? finding : existing;
+    const loser = winner === finding ? existing : finding;
+    const winnerPointers = new Set((winner.evidence || []).map((e: any) => e?.pointer));
+    const mergedEvidence = [
+      ...(winner.evidence || []),
+      ...(loser.evidence || []).filter((e: any) => !winnerPointers.has(e?.pointer)),
+    ];
+    seen.set(key, { ...winner, evidence: mergedEvidence });
   }
   return Array.from(seen.values());
 }

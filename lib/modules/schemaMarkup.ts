@@ -8,7 +8,8 @@ import type { CostTracker } from '@/lib/costs/costTracker';
 import { withProviderResilience } from '@/lib/resilience/withProviderResilience';
 import { safeFetch } from '@/lib/security/safeFetch';
 
-import { LegacyAuditModuleResult } from './types';
+import { normalizeConfidence } from './findingGenerator';
+import { createEvidence, Finding, LegacyAuditModuleResult } from './types';
 
 export interface SchemaMarkupResult {
   status: 'success' | 'error';
@@ -23,6 +24,17 @@ export interface SchemaMarkupResult {
     schemasMissing: string[];
     score: number;
     recommendations: string[];
+    /**
+     * P1-33 (Wave 5): the module always performed real completeness/vertical
+     * analysis and returned it under `schemasFound`/`schemasMissing`/`recommendations`,
+     * but never populated a `findings` array — the one field
+     * `extractFindingsFromRegistryResult`'s `schemaMarkup` branch (lib/audit/runner.ts)
+     * actually reads. Real analysis work was silently discarded end to end. This array
+     * is now built from the same `schemasMissing`/`schemasFound` analysis, each with
+     * real evidence identifying the analyzed URL, the schema type/property, and the
+     * collection timestamp — never fabricated.
+     */
+    findings: Finding[];
   };
 }
 
@@ -250,6 +262,92 @@ function detectVertical(gbpTypes?: string[]): string {
 }
 
 /**
+ * Build customer-facing Findings from real schema-completeness analysis.
+ *
+ * P1-34 (Wave 5): `schemaAnalysis` (lib/modules/schemaAnalysis.ts) already emits a
+ * presence-only finding for the same "Missing LocalBusiness/Organization Schema" /
+ * "Missing BreadcrumbList" / etc. observations from the identical crawled HTML.
+ * `schemaMarkup`'s findings are given a distinct, stable fingerprint
+ * (`metrics.schemaFingerprint`) of the form `schema-missing:<Type>` so the aggregation
+ * boundary can merge true duplicates (same root cause, different module/title) instead
+ * of presenting the customer with two near-identical "you're missing X schema"
+ * findings. Vertical-specific / completeness findings that `schemaAnalysis` does not
+ * produce (e.g. per-type property completeness, industry-vertical detection from real
+ * GBP categories) remain genuinely distinct and are not deduplicated away.
+ */
+function buildSchemaMarkupFindings(
+  data: Omit<SchemaMarkupResult['data'], 'findings'>,
+  url: string,
+  collectedAt: string
+): Finding[] {
+  const findings: Finding[] = [];
+
+  for (const missingType of data.schemasMissing) {
+    findings.push({
+      module: 'schemaMarkup',
+      category: 'SEO',
+      type: 'VITAMIN',
+      title: `Missing ${missingType} Schema`,
+      description: `No ${missingType} structured data was found on the analyzed page. Adding it can unlock richer search results and better local-search visibility.`,
+      impactScore: missingType === 'LocalBusiness' || missingType === 'Organization' ? 7 : 4,
+      confidenceScore: normalizeConfidence(90, '0-100'),
+      evidence: [
+        createEvidence({
+          pointer: url,
+          source: 'schema_markup_analysis',
+          collected_at: collectedAt,
+          type: 'text',
+          value: `${missingType}: not found`,
+          label: `Missing ${missingType} Schema`,
+        }),
+      ],
+      metrics: { schemaFingerprint: `schema-missing:${missingType}`, schemaType: missingType },
+      effortEstimate: 'LOW',
+      recommendedFix:
+        data.recommendations.length > 0
+          ? data.recommendations
+          : [`Add ${missingType} schema (JSON-LD recommended).`],
+    });
+  }
+
+  for (const found of data.schemasFound) {
+    if (found.completeness < 100 && found.missingProperties.length > 0) {
+      findings.push({
+        module: 'schemaMarkup',
+        category: 'SEO',
+        type: 'VITAMIN',
+        title: `${found.type} Schema Missing Properties`,
+        description: `${found.type} schema is present but missing: ${found.missingProperties.join(', ')}. Incomplete schema reduces eligibility for rich results.`,
+        impactScore: 3,
+        confidenceScore: normalizeConfidence(85, '0-100'),
+        evidence: [
+          createEvidence({
+            pointer: url,
+            source: 'schema_markup_analysis',
+            collected_at: collectedAt,
+            type: 'text',
+            value: `${found.type} (${found.source}) missing: ${found.missingProperties.join(', ')}`,
+            label: `${found.type} Completeness`,
+          }),
+        ],
+        metrics: {
+          schemaFingerprint: `schema-incomplete:${found.type}`,
+          schemaType: found.type,
+          completeness: found.completeness,
+          missingProperties: found.missingProperties,
+        },
+        effortEstimate: 'LOW',
+        recommendedFix: [
+          `Add the missing ${found.type} properties: ${found.missingProperties.join(', ')}.`,
+        ],
+      });
+    }
+  }
+
+  return findings;
+}
+
+/**
  * Run schema markup analysis on a URL.
  */
 export async function runSchemaMarkupModule(
@@ -259,20 +357,16 @@ export async function runSchemaMarkupModule(
   const { url, gbpTypes } = input;
 
   if (!url) {
+    // No URL is a missing-input/configuration problem (the adapter itself already
+    // throws before calling this when `input.url` is falsy — this branch guards the
+    // module's own public contract for any other caller), never a real "0 schemas
+    // found" observation, so it must not report the outer status as 'success'.
     return {
       moduleId: 'schemaMarkup',
-      status: 'success',
+      status: 'failed',
       timestamp: new Date().toISOString(),
-      data: {
-        status: 'error',
-        data: {
-          schemasFound: [],
-          schemasExpected: VERTICAL_SCHEMAS.general,
-          schemasMissing: VERTICAL_SCHEMAS.general,
-          score: 0,
-          recommendations: ['No URL provided for schema analysis.'],
-        },
-      },
+      data: null,
+      error: 'No URL provided for schema analysis.',
     };
   }
 
@@ -370,15 +464,19 @@ export async function runSchemaMarkupModule(
     const coverage = schemasExpected.length > 0 ? foundExpected / schemasExpected.length : 0;
     const score = Math.round(coverage * 60 + (completenessAvg / 100) * 40);
 
+    const collectedAt = new Date().toISOString();
+    const analysisData = {
+      schemasFound,
+      schemasExpected,
+      schemasMissing,
+      score: Math.min(100, Math.max(0, score)),
+      recommendations,
+    };
+    const findings = buildSchemaMarkupFindings(analysisData, url, collectedAt);
+
     const result: SchemaMarkupResult = {
       status: 'success',
-      data: {
-        schemasFound,
-        schemasExpected,
-        schemasMissing,
-        score: Math.min(100, Math.max(0, score)),
-        recommendations,
-      },
+      data: { ...analysisData, findings },
     };
 
     return {
@@ -389,20 +487,18 @@ export async function runSchemaMarkupModule(
     };
   } catch (error) {
     const errMsg = error instanceof Error ? error.message : 'Unknown error';
+    // P1-33/status-laundering fix: fetch/parse failure is a real module failure
+    // (UNAVAILABLE/FAILED at the adapter boundary), never "missing schema" — the
+    // outer `LegacyAuditModuleResult.status` must say so honestly instead of always
+    // reporting 'success' regardless of what happened, mirroring the same
+    // provider-failure-vs-absence fix already applied to gbp/competitor (Wave 3,
+    // P1-28/P1-49).
     return {
       moduleId: 'schemaMarkup',
-      status: 'success',
+      status: 'failed',
       timestamp: new Date().toISOString(),
-      data: {
-        status: 'error',
-        data: {
-          schemasFound: [],
-          schemasExpected: VERTICAL_SCHEMAS.general,
-          schemasMissing: VERTICAL_SCHEMAS.general,
-          score: 0,
-          recommendations: [`Schema analysis failed: ${errMsg}. Ensure the URL is accessible.`],
-        },
-      },
+      data: null,
+      error: `Schema analysis failed: ${errMsg}`,
     };
   }
 }

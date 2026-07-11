@@ -3,10 +3,21 @@ import { logger } from '@/lib/logger';
 import { normalizeConfidence } from './findingGenerator';
 import { AuditModuleResult, EvidenceItem, Finding } from './types';
 import { CrawlResult, crawlWebsite } from './websiteCrawler';
+import { captureScreenshots } from '../evidence/screenshotCapture';
 
 interface WebsiteCrawlerModuleInput {
   url: string;
   businessName: string;
+  /**
+   * When provided, a real homepage screenshot is captured and attached as a
+   * `type: 'screenshot'` evidence snapshot so the canonical `vision` module
+   * (dependsOn: ['websiteCrawler']) can run (P1-43, Wave 5). Optional because this
+   * module is also called from a non-canonical path (`lib/modules/website.ts`,
+   * pre-existing duplicate invocation — P1-27, Wave 7) that has no auditId and must
+   * not have a fabricated one used for GCS screenshot storage paths; that caller
+   * simply gets no screenshot, which is correct (its result never feeds `vision`).
+   */
+  auditId?: string;
 }
 
 /**
@@ -422,9 +433,50 @@ export async function runWebsiteCrawlerModule(
       '[WebsiteCrawler] Crawl complete'
     );
 
+    // P1-43 (Wave 5): capture a real homepage screenshot as part of this module's
+    // existing work, using the same shared Wave 4 browser boundary
+    // (`captureScreenshots` → `safePageGoto`) the deprecated AuditOrchestrator called
+    // inline. Screenshot capture is intentionally NOT a 28th canonical module — see
+    // packages/shared/src/audit.ts's comment above `CANONICAL_AUDIT_MODULE_IDS` — it
+    // is shared input-acquisition infrastructure for `vision`, which already declares
+    // `dependsOn: ['websiteCrawler']`. Feeding it here (rather than adding a new
+    // registry entry) makes `vision` reachable in the canonical engine without
+    // changing the 27-module manifest. Best-effort: a screenshot failure must not fail
+    // the crawl itself (which already produced real, independent findings); `vision`
+    // simply reports SKIPPED (no screenshots captured) when this yields nothing,
+    // exactly like any other genuinely-unavailable optional dependency.
+    let screenshotSnapshot: Record<string, unknown> | null = null;
+    if (input.auditId) {
+      try {
+        const [screenshot] = await captureScreenshots([
+          {
+            auditId: input.auditId,
+            options: { url: input.url, name: 'homepage-desktop', device: 'desktop' },
+          },
+        ]);
+        if (screenshot) {
+          screenshotSnapshot = {
+            module: 'website_crawler',
+            source: 'homepage_screenshot',
+            type: 'screenshot',
+            ...screenshot,
+            rawResponse: { name: screenshot.name, url: screenshot.url },
+            collectedAt: screenshot.capturedAt,
+          };
+        }
+      } catch (screenshotError) {
+        logger.warn(
+          { error: screenshotError, businessName: input.businessName },
+          '[WebsiteCrawler] Homepage screenshot capture failed (non-fatal, vision will report unavailable)'
+        );
+      }
+    }
+
     return {
       findings,
-      evidenceSnapshots: [evidenceSnapshot],
+      evidenceSnapshots: screenshotSnapshot
+        ? [evidenceSnapshot, screenshotSnapshot]
+        : [evidenceSnapshot],
     };
   } catch (error) {
     logger.error({ error, businessName: input.businessName }, '[WebsiteCrawler] Crawl failed');
