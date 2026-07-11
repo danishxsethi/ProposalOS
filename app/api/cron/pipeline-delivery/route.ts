@@ -13,7 +13,7 @@
 import { NextResponse } from 'next/server';
 
 import { generateTraceId, InternalError, UnauthorizedError } from '@/lib/api/errors';
-import { prisma } from '@/lib/db';
+import { withSystemDbBypass } from '@/lib/db';
 import { logger } from '@/lib/logger';
 import { verifyCronAuth } from '@/lib/middleware/cronAuth';
 import { withRateLimit } from '@/lib/middleware/rateLimit';
@@ -35,14 +35,18 @@ async function handleDeliveryCron(req: Request): Promise<NextResponse> {
       'Starting delivery cron job'
     );
 
-    // 2. Process queued delivery tasks
-    const queuedTasks = await prisma.deliveryTask.findMany({
-      where: {
-        status: 'queued',
-      },
-      take: MAX_TASKS_PER_RUN,
-      orderBy: { createdAt: 'asc' },
-    });
+    // 2. Process queued delivery tasks (cross-tenant maintenance sweep)
+    const queuedTasks = await withSystemDbBypass(
+      'cron:pipeline-delivery:list-queued-tasks',
+      (prisma) =>
+        prisma.deliveryTask.findMany({
+          where: {
+            status: 'queued',
+          },
+          take: MAX_TASKS_PER_RUN,
+          orderBy: { createdAt: 'asc' },
+        })
+    );
 
     logger.info(
       {
@@ -104,14 +108,18 @@ async function handleDeliveryCron(req: Request): Promise<NextResponse> {
       }
     }
 
-    // 3. Verify completed tasks
-    const completedTasks = await prisma.deliveryTask.findMany({
-      where: {
-        status: 'completed',
-      },
-      take: MAX_TASKS_PER_RUN,
-      orderBy: { completedAt: 'asc' },
-    });
+    // 3. Verify completed tasks (cross-tenant maintenance sweep)
+    const completedTasks = await withSystemDbBypass(
+      'cron:pipeline-delivery:list-completed-tasks',
+      (prisma) =>
+        prisma.deliveryTask.findMany({
+          where: {
+            status: 'completed',
+          },
+          take: MAX_TASKS_PER_RUN,
+          orderBy: { completedAt: 'asc' },
+        })
+    );
 
     logger.info(
       {
@@ -176,16 +184,20 @@ async function handleDeliveryCron(req: Request): Promise<NextResponse> {
       `Escalated ${escalated.length} overdue tasks`
     );
 
-    // 5. Check for completed proposals and transition to "delivered"
-    const verifiedTasks = await prisma.deliveryTask.findMany({
-      where: {
-        status: 'verified',
-      },
-      select: {
-        proposalId: true,
-      },
-      distinct: ['proposalId'],
-    });
+    // 5. Check for completed proposals and transition to "delivered" (cross-tenant sweep)
+    const verifiedTasks = await withSystemDbBypass(
+      'cron:pipeline-delivery:list-verified-tasks',
+      (prisma) =>
+        prisma.deliveryTask.findMany({
+          where: {
+            status: 'verified',
+          },
+          select: {
+            proposalId: true,
+          },
+          distinct: ['proposalId'],
+        })
+    );
 
     const deliveredProposals: string[] = [];
 

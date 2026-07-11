@@ -8,7 +8,6 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { prisma } from '@/lib/db';
 import * as deliveryEngineModule from '@/lib/pipeline/deliveryEngine';
 
 import { GET } from '../route';
@@ -17,12 +16,20 @@ import { GET } from '../route';
 // Mocks
 // ============================================================================
 
-vi.mock('@/lib/db', () => ({
+// lib/db.ts now exports withSystemDbBypass (Wave 1 P1-05) instead of a bare `prisma` client.
+// The mock keeps a shared `prisma` fixture so existing assertions on call args still work,
+// while routing through the new bypass-wrapper shape the route now imports.
+const { prisma } = vi.hoisted(() => ({
   prisma: {
     deliveryTask: {
       findMany: vi.fn(),
     },
   },
+}));
+
+vi.mock('@/lib/db', () => ({
+  withSystemDbBypass: async (_reason: string, fn: (client: typeof prisma) => Promise<unknown>) =>
+    fn(prisma),
 }));
 
 vi.mock('@/lib/logger', () => ({

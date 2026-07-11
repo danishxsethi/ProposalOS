@@ -4,8 +4,9 @@ import { DeliveryEngine } from '../deliveryEngine';
 
 import type { Deliverable } from '../types';
 
-// Mock Prisma
-vi.mock('@/lib/db', () => ({
+// Mock the canonical scoped Prisma client (delivery engine now imports from @/lib/prisma,
+// and resolves the owning tenant via runScopedToOwnerTenant / withSystemDbBypass — Wave 1 P1-05).
+vi.mock('@/lib/prisma', () => ({
   prisma: {
     proposal: {
       findUnique: vi.fn(),
@@ -16,11 +17,35 @@ vi.mock('@/lib/db', () => ({
       updateMany: vi.fn(),
       findUnique: vi.fn(),
       findMany: vi.fn(),
+      findFirst: vi.fn(),
     },
   },
 }));
 
-import { prisma } from '@/lib/db';
+// Tenant-context helpers are exercised for real elsewhere (tests/security/wave1-tenant-scoping.test.ts).
+// Here we make them transparent passthroughs so existing prisma-call assertions stay focused on
+// business logic, while still calling through to the (mocked) lookup/prisma the way production does.
+vi.mock('@/lib/tenant/context', () => ({
+  runScopedToOwnerTenant: async (
+    _reason: string,
+    lookupTenantId: () => Promise<string | null>,
+    fn: (tenantId: string) => Promise<unknown>
+  ) => {
+    const tenantId = await lookupTenantId();
+    if (!tenantId) throw new Error('runScopedToOwnerTenant: could not resolve owning tenant');
+    return fn(tenantId);
+  },
+  runWithTenantAsync: async (_tenantId: string, fn: () => Promise<unknown>) => fn(),
+}));
+
+vi.mock('@/lib/db', () => ({
+  withSystemDbBypass: async (_reason: string, fn: (client: unknown) => Promise<unknown>) => {
+    const { prisma } = await import('@/lib/prisma');
+    return fn(prisma);
+  },
+}));
+
+import { prisma } from '@/lib/prisma';
 
 describe('Delivery Engine Unit Tests', () => {
   let deliveryEngine: DeliveryEngine;
@@ -28,6 +53,9 @@ describe('Delivery Engine Unit Tests', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     deliveryEngine = new DeliveryEngine();
+    // Default: resolve to a tenant for checkAllComplete's owner-tenant lookup;
+    // individual tests override deliveryTask.findMany/findUnique as needed.
+    (prisma.deliveryTask.findFirst as any).mockResolvedValue({ tenantId: 'tenant-123' });
   });
 
   describe('generateDeliverables', () => {
@@ -240,6 +268,9 @@ describe('Delivery Engine Unit Tests', () => {
         ...deliverable,
         status: 'in_progress',
       });
+      (prisma.deliveryTask.findUnique as any).mockResolvedValue({
+        tenantId: 'tenant-123',
+      });
 
       await deliveryEngine.dispatchToAgent(deliverable);
 
@@ -271,6 +302,9 @@ describe('Delivery Engine Unit Tests', () => {
       (prisma.deliveryTask.update as any)
         .mockResolvedValueOnce({ ...deliverable, status: 'in_progress' })
         .mockRejectedValueOnce(new Error('Agent failed'));
+      (prisma.deliveryTask.findUnique as any).mockResolvedValue({
+        tenantId: 'tenant-123',
+      });
 
       await expect(deliveryEngine.dispatchToAgent(deliverable)).rejects.toThrow('Agent failed');
 
@@ -290,6 +324,7 @@ describe('Delivery Engine Unit Tests', () => {
 
       (prisma.deliveryTask.findUnique as any).mockResolvedValue({
         id: deliverableId,
+        tenantId: 'tenant-123',
         status: 'completed',
       });
 

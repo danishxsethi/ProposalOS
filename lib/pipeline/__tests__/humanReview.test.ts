@@ -10,7 +10,7 @@ import { cleanupDb } from '@/lib/__tests__/utils/cleanup';
  * Requirements: 10.3, 10.4, 10.5
  */
 
-import { prisma } from '@/lib/db';
+import { prisma } from '@/lib/prisma';
 
 import {
   approveProspect,

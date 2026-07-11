@@ -41,7 +41,11 @@ export const LEGACY_ROLE_MAP: Record<'owner' | 'admin' | 'member' | 'viewer' | '
 
 // Legacy role value aliases for string comparisons
 export const LEGACY_ROLE_VALUES: Record<string, Role> = {
-  owner: 'super_admin',
+  // 'owner' historically meant "owner of their own self-registered tenant", never
+  // platform-wide super_admin. Mapping it to super_admin (as this table previously did)
+  // is a privilege-escalation bug: every self-registered tenant admin would normalize to
+  // platform super_admin. agency_admin is the correct, least-privileged equivalent.
+  owner: 'agency_admin',
   admin: 'agency_admin',
   member: 'agency_member',
   viewer: 'bic_user',

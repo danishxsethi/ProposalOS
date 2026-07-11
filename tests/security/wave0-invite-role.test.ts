@@ -83,13 +83,15 @@ describe('P0-21: invite role validation helpers', () => {
     });
   });
 
-  it('rejects unknown/legacy raw strings that are not valid roles', () => {
+  it('rejects unknown raw strings that are not valid roles', () => {
     expect(assertAssignableInviteRole('root', 'agency_admin')).toEqual({
       error: 'Invalid or unknown role',
     });
-    // legacy owner normalizes to super_admin → still not assignable
+    // 'owner' is a legacy alias that now correctly normalizes to agency_admin (Wave 1
+    // fix — it previously, incorrectly, normalized to super_admin). It IS assignable
+    // via invite since agency_admin is in INVITE_ASSIGNABLE_ROLES.
     expect(assertAssignableInviteRole('owner', 'agency_admin')).toEqual({
-      error: 'Role is not assignable via invitation',
+      role: 'agency_admin',
     });
   });
 });

@@ -10,7 +10,7 @@ import { cleanupDb } from '@/lib/__tests__/utils/cleanup';
  * Requirements: 9.2, 9.6
  */
 
-import { prisma } from '@/lib/db';
+import { prisma } from '@/lib/prisma';
 
 import {
   applyBrandingToEmail,

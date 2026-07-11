@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { cleanupDb } from '@/lib/__tests__/utils/cleanup';
-import { prisma } from '@/lib/db';
+import { prisma } from '@/lib/prisma';
 
 import {
   aggregatePatterns,

@@ -112,6 +112,29 @@ export async function runWithTenantBypass<T>(
   >;
 }
 
+/**
+ * For operations whose entry point is a business-object ID rather than a tenant ID
+ * (e.g. "verify deliverable #123") — resolve the owning tenant via a narrow, explicitly
+ * bypassed lookup, then run `fn` scoped to that real tenant for the remainder of the
+ * operation. The bypass is minimum-scope: callers should have `lookupTenantId` select
+ * only the tenant-identifying field(s), not the full record.
+ *
+ * Throws if the lookup cannot resolve a tenant (record not found / not tenant-owned).
+ */
+export async function runScopedToOwnerTenant<T>(
+  reason: string,
+  lookupTenantId: () => Awaitable<string | null | undefined>,
+  fn: (tenantId: string) => Awaitable<T>
+): Promise<T> {
+  const tenantId = await runWithTenantBypass(reason, lookupTenantId);
+
+  if (!tenantId) {
+    throw new Error(`runScopedToOwnerTenant: could not resolve owning tenant (${reason})`);
+  }
+
+  return runWithTenantAsync(tenantId, () => fn(tenantId));
+}
+
 export async function runWithPrismaTransactionContext<T>(
   tx: Prisma.TransactionClient,
   fn: () => Awaitable<T>

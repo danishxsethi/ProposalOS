@@ -50,7 +50,12 @@ async function handleRegister(request: Request) {
             name,
             email,
             passwordHash: hashedPassword,
-            role: 'owner',
+            // P2-07/owner-carryover: 'owner' is not a Role in lib/auth/rbac.ts's
+            // ROLE_HIERARCHY — normalizeRole() now fails closed on it (Wave 0), which
+            // would lock a self-registered tenant admin out of their own gated routes.
+            // agency_admin is the least-privileged real role that can administer a
+            // newly created tenant (never super_admin).
+            role: 'agency_admin',
             tenantId: tenant.id,
           },
         });

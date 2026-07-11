@@ -23,6 +23,11 @@ export const prisma = sharedPrisma;
 
 export interface RawExecutionOptions {
   operationName?: string;
+  /**
+   * P2-18: defaults to true — tenant-owned queries cannot opt out through omission.
+   * Set explicitly to false ONLY for a genuinely system/global query, and prefer
+   * documenting why at the call site.
+   */
   requireTenant?: boolean;
   tenantIdOverride?: string | null;
 }
@@ -106,7 +111,8 @@ async function withRawExecutor<T>(
   callback: (client: Prisma.TransactionClient | typeof prisma) => Promise<T>
 ): Promise<T> {
   const operationName = options.operationName ?? 'self-evolving-prompts.raw';
-  const requireTenant = options.requireTenant ?? false;
+  // P2-18: fail-closed default — omission never opts a tenant-owned query out of scoping.
+  const requireTenant = options.requireTenant ?? true;
   const { tenantId, bypassRls, currentTx } = getTenantRuntimeContextFromStore();
   const effectiveTenantId = options.tenantIdOverride ?? tenantId;
   const needsScopedTransaction = bypassRls || requireTenant || !!effectiveTenantId;

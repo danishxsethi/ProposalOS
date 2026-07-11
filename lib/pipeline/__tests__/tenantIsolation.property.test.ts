@@ -13,7 +13,7 @@ import { cleanupDb } from '@/lib/__tests__/utils/cleanup';
  * Validates: Requirements 9.1, 9.3, 9.4
  */
 
-import { prisma } from '@/lib/db';
+import { prisma } from '@/lib/prisma';
 
 import { applyBrandingToEmail, applyBrandingToProposal, getTenantConfig } from '../tenantConfig';
 

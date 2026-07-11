@@ -6,7 +6,7 @@
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { prisma } from '@/lib/db';
+import { prisma } from '@/lib/prisma';
 
 import {
   checkWindowComplete,
@@ -17,8 +17,9 @@ import {
 
 import type { PreWarmingConfig } from '../types';
 
-// Mock Prisma
-vi.mock('@/lib/db', () => ({
+// Mock the canonical scoped Prisma client (Wave 1 P1-05 — preWarming now imports from
+// @/lib/prisma and resolves tenant context via runScopedToOwnerTenant / withSystemDbBypass).
+vi.mock('@/lib/prisma', () => ({
   prisma: {
     prospectLead: {
       findUnique: vi.fn(),
@@ -27,8 +28,29 @@ vi.mock('@/lib/db', () => ({
       create: vi.fn(),
       update: vi.fn(),
       findMany: vi.fn(),
+      findUnique: vi.fn(),
       count: vi.fn(),
     },
+  },
+}));
+
+vi.mock('@/lib/tenant/context', () => ({
+  runWithTenantAsync: async (_tenantId: string, fn: () => Promise<unknown>) => fn(),
+  runScopedToOwnerTenant: async (
+    _reason: string,
+    lookupTenantId: () => Promise<string | null | undefined>,
+    fn: (tenantId: string) => Promise<unknown>
+  ) => {
+    const tenantId = await lookupTenantId();
+    if (!tenantId) throw new Error('runScopedToOwnerTenant: could not resolve owning tenant');
+    return fn(tenantId);
+  },
+}));
+
+vi.mock('@/lib/db', () => ({
+  withSystemDbBypass: async (_reason: string, fn: (client: unknown) => Promise<unknown>) => {
+    const { prisma } = await import('@/lib/prisma');
+    return fn(prisma);
   },
 }));
 
@@ -174,6 +196,9 @@ describe('Pre-Warming Engine', () => {
         status: 'completed',
         executedAt: new Date(),
       } as any);
+      vi.mocked(prisma.preWarmingAction.findUnique).mockResolvedValue({
+        tenantId: 'tenant-456',
+      } as any);
 
       await executeAction(action);
 
@@ -204,6 +229,9 @@ describe('Pre-Warming Engine', () => {
           status: 'failed',
           errorMessage: 'API error',
         } as any);
+      vi.mocked(prisma.preWarmingAction.findUnique).mockResolvedValue({
+        tenantId: 'tenant-456',
+      } as any);
 
       await executeAction(action);
 
@@ -220,6 +248,12 @@ describe('Pre-Warming Engine', () => {
   });
 
   describe('checkWindowComplete', () => {
+    beforeEach(() => {
+      vi.mocked(prisma.prospectLead.findUnique).mockResolvedValue({
+        tenantId: 'tenant-456',
+      } as any);
+    });
+
     it('should return true if no actions scheduled', async () => {
       vi.mocked(prisma.preWarmingAction.findMany).mockResolvedValue([]);
 

@@ -18,6 +18,7 @@ import { logger } from '@/lib/logger';
 import { recordAuditTrailEvent } from '@/lib/observability/auditTrail';
 import { prisma } from '@/lib/prisma';
 import { hashSensitive } from '@/lib/security/abuseDefense/policies';
+import { getClientIp } from '@/lib/security/getClientIp';
 import { getSharedStore } from '@/lib/store/shared';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -67,9 +68,7 @@ function buildRateLimitKey(req: Request, options: RateLimitOptions): string {
   if (options.sessionId) return `rl:session:${hashSensitive(options.sessionId)}${endpointSuffix}`;
   if (options.tenantId) return `rl:tenant:${options.tenantId}${endpointSuffix}`;
 
-  const forwarded = req.headers.get('x-forwarded-for');
-  const realIp = req.headers.get('x-real-ip');
-  const ip = forwarded?.split(',')[0]?.trim() ?? realIp?.split(',')[0]?.trim() ?? 'unknown';
+  const ip = getClientIp(req);
   return `rl:ip:${hashSensitive(ip)}${endpointSuffix}`;
 }
 
@@ -106,9 +105,7 @@ export async function checkRateLimit(
     const success = count <= options.max;
 
     if (!success && options.auditOnBlock) {
-      const forwarded = req.headers.get('x-forwarded-for');
-      const realIp = req.headers.get('x-real-ip');
-      const ip = forwarded?.split(',')[0]?.trim() ?? realIp?.split(',')[0]?.trim() ?? 'unknown';
+      const ip = getClientIp(req);
       await recordAuditTrailEvent({
         eventType: 'abuse.rate_limited',
         tenantId: options.tenantId || null,

@@ -7,9 +7,16 @@
  * Requirements: 9.1, 9.2, 9.3, 9.4, 9.5, 9.6
  */
 
-import { prisma } from '@/lib/db';
+import { prisma as scopedPrisma } from '@/lib/prisma';
+import { runWithTenantAsync } from '@/lib/tenant/context';
 
 import type { PipelineConfig, Tenant, TenantBranding } from '@prisma/client';
+
+// ponytail: pre-existing type mismatch (schema `Tenant` has no `branding`/`pipelineConfig`
+// relation the way this file's `include` assumes) was masked by lib/db.ts's `prisma: any`
+// before Wave 1 (P1-05). Preserved as-is (unchanged runtime behavior); tracked as a new
+// finding for a future wave (see REMEDIATION_FINDINGS.json P2-56).
+const prisma = scopedPrisma as any;
 
 export interface PipelineConfigInput {
   concurrencyLimit?: number;
@@ -39,9 +46,11 @@ export interface TenantConfigResult {
  * Requirement 9.2: Allow tenant to configure pipeline settings
  */
 export async function getPipelineConfig(tenantId: string): Promise<PipelineConfig | null> {
-  return prisma.pipelineConfig.findUnique({
-    where: { tenantId },
-  });
+  return runWithTenantAsync(tenantId, () =>
+    prisma.pipelineConfig.findUnique({
+      where: { tenantId },
+    })
+  );
 }
 
 /**
@@ -49,29 +58,31 @@ export async function getPipelineConfig(tenantId: string): Promise<PipelineConfi
  * Requirement 9.3, 9.4: Apply tenant branding to outreach and proposals
  */
 export async function getTenantConfig(tenantId: string): Promise<TenantConfigResult | null> {
-  const tenant = await prisma.tenant.findUnique({
-    where: { id: tenantId },
-    include: {
-      pipelineConfig: true,
-      branding: true,
-    },
+  return runWithTenantAsync(tenantId, async () => {
+    const tenant = await prisma.tenant.findUnique({
+      where: { id: tenantId },
+      include: {
+        pipelineConfig: true,
+        branding: true,
+      },
+    });
+
+    if (!tenant) {
+      return null;
+    }
+
+    return {
+      config: tenant.pipelineConfig!,
+      branding: tenant.branding,
+      tenant: {
+        id: tenant.id,
+        name: tenant.name,
+        slug: tenant.slug,
+        createdAt: tenant.createdAt,
+        updatedAt: tenant.updatedAt,
+      } as Tenant,
+    };
   });
-
-  if (!tenant) {
-    return null;
-  }
-
-  return {
-    config: tenant.pipelineConfig!,
-    branding: tenant.branding,
-    tenant: {
-      id: tenant.id,
-      name: tenant.name,
-      slug: tenant.slug,
-      createdAt: tenant.createdAt,
-      updatedAt: tenant.updatedAt,
-    } as Tenant,
-  };
 }
 
 /**
@@ -106,14 +117,16 @@ export async function upsertPipelineConfig(
   if (input.currency !== undefined) data.currency = input.currency;
   if (input.pricingMultiplier !== undefined) data.pricingMultiplier = input.pricingMultiplier;
 
-  return prisma.pipelineConfig.upsert({
-    where: { tenantId },
-    create: {
-      tenantId,
-      ...data,
-    },
-    update: data,
-  });
+  return runWithTenantAsync(tenantId, () =>
+    prisma.pipelineConfig.upsert({
+      where: { tenantId },
+      create: {
+        tenantId,
+        ...data,
+      },
+      update: data,
+    })
+  );
 }
 
 /**
@@ -206,41 +219,43 @@ function validatePipelineConfig(input: PipelineConfigInput): void {
  * Requirement 9.6: Provision tenant pipeline configuration with sensible defaults
  */
 export async function onboardTenant(tenantId: string): Promise<TenantConfigResult> {
-  // Check if tenant exists
-  const tenant = await prisma.tenant.findUnique({
-    where: { id: tenantId },
+  return runWithTenantAsync(tenantId, async () => {
+    // Check if tenant exists
+    const tenant = await prisma.tenant.findUnique({
+      where: { id: tenantId },
+    });
+
+    if (!tenant) {
+      throw new Error(`Tenant ${tenantId} not found`);
+    }
+
+    // Create default pipeline config if it doesn't exist
+    const config = await prisma.pipelineConfig.upsert({
+      where: { tenantId },
+      create: {
+        tenantId,
+        // Defaults are defined in the Prisma schema
+      },
+      update: {},
+    });
+
+    // Get or create default branding
+    const branding = await prisma.tenantBranding.upsert({
+      where: { tenantId },
+      create: {
+        tenantId,
+        brandName: tenant.name,
+        // Other defaults are defined in the Prisma schema
+      },
+      update: {},
+    });
+
+    return {
+      config,
+      branding,
+      tenant,
+    };
   });
-
-  if (!tenant) {
-    throw new Error(`Tenant ${tenantId} not found`);
-  }
-
-  // Create default pipeline config if it doesn't exist
-  const config = await prisma.pipelineConfig.upsert({
-    where: { tenantId },
-    create: {
-      tenantId,
-      // Defaults are defined in the Prisma schema
-    },
-    update: {},
-  });
-
-  // Get or create default branding
-  const branding = await prisma.tenantBranding.upsert({
-    where: { tenantId },
-    create: {
-      tenantId,
-      brandName: tenant.name,
-      // Other defaults are defined in the Prisma schema
-    },
-    update: {},
-  });
-
-  return {
-    config,
-    branding,
-    tenant,
-  };
 }
 
 /**
@@ -371,10 +386,12 @@ export async function pauseStage(tenantId: string, stage: string): Promise<Pipel
     pausedStages.push(stage);
   }
 
-  return prisma.pipelineConfig.update({
-    where: { tenantId },
-    data: { pausedStages },
-  });
+  return runWithTenantAsync(tenantId, () =>
+    prisma.pipelineConfig.update({
+      where: { tenantId },
+      data: { pausedStages },
+    })
+  );
 }
 
 /**
@@ -390,10 +407,12 @@ export async function resumeStage(tenantId: string, stage: string): Promise<Pipe
 
   const pausedStages = ((config.pausedStages as string[]) || []).filter((s) => s !== stage);
 
-  return prisma.pipelineConfig.update({
-    where: { tenantId },
-    data: { pausedStages },
-  });
+  return runWithTenantAsync(tenantId, () =>
+    prisma.pipelineConfig.update({
+      where: { tenantId },
+      data: { pausedStages },
+    })
+  );
 }
 
 /**

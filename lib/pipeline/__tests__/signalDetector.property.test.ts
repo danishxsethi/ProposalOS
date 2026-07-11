@@ -13,7 +13,7 @@ import { randomUUID } from 'crypto';
  * Feature: autonomous-proposal-engine
  */
 
-import { prisma } from '@/lib/db';
+import { prisma } from '@/lib/prisma';
 
 import { deduplicateSignals, triggerSignalOutreach } from '../signalDetector';
 
