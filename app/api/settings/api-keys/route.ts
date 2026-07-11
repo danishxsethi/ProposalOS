@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 
-import { generateApiKey } from '@/lib/auth/apiKeys';
+import { generateApiKey, sanitizeApiKeyScopes } from '@/lib/auth/apiKeys';
+import { logger } from '@/lib/logger';
 import { withAuth } from '@/lib/middleware/auth';
 import { withRole } from '@/lib/middleware/withRole';
 import { recordAuditTrailEvent } from '@/lib/observability/auditTrail';
@@ -44,6 +45,11 @@ export const POST = withRole(
 
       if (!name) return NextResponse.json({ error: 'Name is required' }, { status: 400 });
 
+      const scopeResult = sanitizeApiKeyScopes(scopes);
+      if ('error' in scopeResult) {
+        return NextResponse.json({ error: scopeResult.error }, { status: 400 });
+      }
+
       const { key, hash, prefix } = generateApiKey();
 
       let expiresAt = null;
@@ -58,7 +64,7 @@ export const POST = withRole(
           name,
           keyHash: hash,
           keyPrefix: prefix,
-          scopes: scopes || ['audit:read'],
+          scopes: scopeResult.scopes,
           expiresAt,
         },
       });

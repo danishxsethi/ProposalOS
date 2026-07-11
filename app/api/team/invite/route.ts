@@ -2,8 +2,10 @@ import { NextResponse } from 'next/server';
 
 import { nanoid } from 'nanoid';
 
-import { withRole } from '@/lib/auth/rbac';
+import { auth } from '@/lib/auth';
+import { assertAssignableInviteRole, normalizeRole, type Role, withRole } from '@/lib/auth/rbac';
 import { checkSeatLimit } from '@/lib/billing/limits';
+import { logger } from '@/lib/logger';
 import { withAuth } from '@/lib/middleware/auth';
 import { prisma } from '@/lib/prisma';
 import { getTenantId, runWithTenantAsync, runWithTenantBypass } from '@/lib/tenant/context';
@@ -25,9 +27,24 @@ export const POST = withAuth(async (req: Request) => {
   const rbacMiddleware = withRole('agency_admin', async () => {
     try {
       const body = await req.json();
-      const { email, role } = body;
+      const { email, role: requestedRole } = body;
 
-      if (!email || !role) return NextResponse.json({ error: 'Missing fields' }, { status: 400 });
+      if (!email || !requestedRole) {
+        return NextResponse.json({ error: 'Missing fields' }, { status: 400 });
+      }
+
+      const session = await auth();
+      const inviterRole = normalizeRole(
+        (session?.user as { role?: string; id?: string } | undefined)?.role
+      );
+      // API-key callers (no session role) are treated as agency_admin ceiling only —
+      // they already passed withRole('agency_admin') and cannot assign super_admin.
+      const effectiveInviter: Role = inviterRole ?? 'agency_admin';
+
+      const roleCheck = assertAssignableInviteRole(requestedRole, effectiveInviter);
+      if ('error' in roleCheck) {
+        return NextResponse.json({ error: roleCheck.error }, { status: 400 });
+      }
 
       // 2. Limit Check
       const seats = await checkSeatLimit();
@@ -49,16 +66,17 @@ export const POST = withAuth(async (req: Request) => {
       // 4. Create Invitation
       const token = nanoid(32);
       const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
+      const invitedBy = (session?.user as { id?: string } | undefined)?.id ?? 'api-key-inviter';
 
       const invitation = await runWithTenantAsync(tenantId, () =>
         prisma.invitation.create({
           data: {
             email,
-            role,
+            role: roleCheck.role,
             token,
             tenantId,
             expiresAt,
-            invitedBy: 'current-user-id', // TODO: Get actual ID
+            invitedBy,
           },
         })
       );

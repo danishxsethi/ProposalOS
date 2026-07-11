@@ -12,6 +12,7 @@ export const API_KEY_SCOPES = {
   AUDIT_CREATE: 'audit:create',
   AUDIT_UPDATE: 'audit:update',
   AUDIT_DELETE: 'audit:delete',
+  AUDIT_ALL: 'audit:*',
 
   // Proposal scopes
   PROPOSAL_READ: 'proposal:read',
@@ -19,21 +20,56 @@ export const API_KEY_SCOPES = {
   PROPOSAL_UPDATE: 'proposal:update',
   PROPOSAL_DELETE: 'proposal:delete',
   PROPOSAL_SEND: 'proposal:send',
+  PROPOSAL_ALL: 'proposal:*',
 
   // Tenant management scopes
   TENANT_READ: 'tenant:read',
   TENANT_UPDATE: 'tenant:update',
+  TENANT_ALL: 'tenant:*',
 
   // API key management
   API_KEY_READ: 'api_key:read',
   API_KEY_CREATE: 'api_key:create',
   API_KEY_DELETE: 'api_key:delete',
+  API_KEY_ALL: 'api_key:*',
 
-  // Full access (owner level)
+  // Full *tenant* access (not platform super_admin)
   ALL: '*',
 } as const;
 
 export type ApiKeyScope = (typeof API_KEY_SCOPES)[keyof typeof API_KEY_SCOPES];
+
+/** Server-defined allowlist — client-invented scope strings fail closed. */
+export const ALLOWED_API_KEY_SCOPE_SET: ReadonlySet<string> = new Set(
+  Object.values(API_KEY_SCOPES)
+);
+
+/**
+ * Validate and normalize scopes for API key creation.
+ * Unknown/empty scopes fail closed.
+ */
+export function sanitizeApiKeyScopes(scopes: unknown): { scopes: string[] } | { error: string } {
+  if (scopes == null) {
+    return { scopes: [API_KEY_SCOPES.AUDIT_READ] };
+  }
+  if (!Array.isArray(scopes)) {
+    return { error: 'scopes must be an array of strings' };
+  }
+  if (scopes.length === 0) {
+    return { error: 'scopes must not be empty' };
+  }
+
+  const normalized: string[] = [];
+  for (const scope of scopes) {
+    if (typeof scope !== 'string' || !ALLOWED_API_KEY_SCOPE_SET.has(scope)) {
+      return { error: `unknown or disallowed scope: ${String(scope)}` };
+    }
+    if (!normalized.includes(scope)) {
+      normalized.push(scope);
+    }
+  }
+  return { scopes: normalized };
+}
 
 export interface ApiKeyValidationResult {
   tenantId: string;

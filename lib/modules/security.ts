@@ -2,16 +2,19 @@
  * SSL and Security Headers Audit Module
  * Checks HTTPS, certificate, and security headers. Frames as trust signals for proposals.
  */
-import * as http from 'http';
-import * as https from 'https';
 import * as tls from 'tls';
 
 import type { CostTracker } from '@/lib/costs/costTracker';
 import { logger } from '@/lib/logger';
 import { withProviderResilience } from '@/lib/resilience/withProviderResilience';
 import { safeFetch } from '@/lib/security/safeFetch';
+import { validateUrl } from '@/lib/security/urlValidator';
 
 import { LegacyAuditModuleResult } from './types';
+
+/** Match safeFetch redirect ceiling. */
+const MAX_SECURITY_REDIRECTS = 5;
+const FETCH_TIMEOUT_MS = 15_000;
 
 export interface SecurityResult {
   status: 'success' | 'error';
@@ -67,62 +70,110 @@ function getGrade(score: number): 'A' | 'B' | 'C' | 'D' | 'F' {
   return 'F';
 }
 
-async function fetchWithRedirect(
+function isRedirectStatus(status: number): boolean {
+  return [301, 302, 303, 307, 308].includes(status);
+}
+
+/**
+ * Header/HTTPS probe with SSRF controls (P0-24).
+ * Validates the initial URL and every redirect hop via validateUrl;
+ * caps hops; aborts on timeout; does not disable TLS verification.
+ * Exported for regression tests.
+ */
+export async function fetchWithRedirect(
   url: string,
   followRedirects = true
 ): Promise<{ statusCode: number; headers: Record<string, string>; finalUrl: string }> {
-  return new Promise((resolve, reject) => {
-    const parsed = parseUrl(url);
-    const protocol = parsed.protocol === 'https' ? https : http;
-    const req = protocol.request(
-      {
-        hostname: parsed.host,
-        port: parsed.port,
-        path: parsed.path,
+  let currentUrl = url;
+  let hop = 0;
+  const maxHops = followRedirects ? MAX_SECURITY_REDIRECTS : 0;
+
+  while (true) {
+    const validation = await validateUrl(currentUrl, { allowHttp: true });
+    if (!validation.isValid) {
+      throw new Error(`SSRF blocked: ${validation.error ?? 'blocked by SSRF policy'}`);
+    }
+
+    let parsed: URL;
+    try {
+      parsed = new URL(currentUrl);
+    } catch {
+      throw new Error('Invalid URL');
+    }
+    if (parsed.username || parsed.password) {
+      throw new Error('SSRF blocked: credentialed URLs are not allowed');
+    }
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      throw new Error(`SSRF blocked: blocked scheme ${parsed.protocol}`);
+    }
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+
+    try {
+      const res = await fetch(currentUrl, {
         method: 'GET',
-        timeout: 15000,
+        redirect: 'manual',
+        signal: controller.signal,
         headers: { 'User-Agent': 'ProposalOS-SecurityScan/1.0' },
-        rejectUnauthorized: false,
-      },
-      (res) => {
-        const headers: Record<string, string> = {};
-        for (const [k, v] of Object.entries(res.headers)) {
-          if (k && v != null) headers[k.toLowerCase()] = Array.isArray(v) ? v[0] || '' : String(v);
-        }
+        // Intentionally do not forward cookies/auth across hops.
+      });
 
-        if (followRedirects && res.statusCode && res.statusCode >= 300 && res.statusCode < 400) {
-          const loc = res.headers.location;
-          if (loc) {
-            const nextUrl = loc.startsWith('http')
-              ? loc
-              : `${parsed.protocol}://${parsed.host}${loc}`;
-            fetchWithRedirect(nextUrl, true).then(resolve).catch(reject);
-            return;
-          }
-        }
+      const headers: Record<string, string> = {};
+      res.headers.forEach((value, key) => {
+        headers[key.toLowerCase()] = value;
+      });
 
-        resolve({
-          statusCode: res.statusCode || 0,
-          headers,
-          finalUrl: `${parsed.protocol}://${parsed.host}${parsed.path}`,
-        });
+      // Drain/cancel body — we only need status + headers for this module.
+      try {
+        await res.body?.cancel();
+      } catch {
+        /* ignore */
       }
-    );
-    req.on('error', reject);
-    req.on('timeout', () => {
-      req.destroy();
-      reject(new Error('Request timeout'));
-    });
-    req.end();
-  });
+
+      if (!followRedirects || !isRedirectStatus(res.status)) {
+        return {
+          statusCode: res.status,
+          headers,
+          finalUrl: currentUrl,
+        };
+      }
+
+      hop += 1;
+      if (hop > maxHops) {
+        throw new Error(`Exceeded maximum redirect limit (${MAX_SECURITY_REDIRECTS})`);
+      }
+
+      const location = res.headers.get('location');
+      if (!location) {
+        throw new Error('Redirect with no Location header');
+      }
+
+      let nextUrl: string;
+      try {
+        nextUrl = new URL(location, currentUrl).toString();
+      } catch {
+        throw new Error('Invalid redirect Location URL');
+      }
+
+      // Headers/credentials are not forwarded — each hop is a fresh GET.
+      currentUrl = nextUrl;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
 }
 
+/**
+ * Inspect TLS certificate with verification enabled.
+ * Invalid/untrusted certificates report as invalid (TLS verification always on).
+ */
 async function getSslCertificate(
   host: string,
   port: number
 ): Promise<{ valid: boolean; expiresAt: string; issuer: string }> {
   return new Promise((resolve) => {
-    const socket = tls.connect({ host, port, servername: host, rejectUnauthorized: false }, () => {
+    const socket = tls.connect({ host, port, servername: host, rejectUnauthorized: true }, () => {
       const cert = socket.getPeerCertificate();
       socket.end();
 

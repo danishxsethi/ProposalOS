@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 
 import bcrypt from 'bcryptjs';
 
+import { INVITE_ASSIGNABLE_ROLES, normalizeRole } from '@/lib/auth/rbac';
+import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 
 export async function POST(req: Request, { params }: { params: Promise<{ token: string }> }) {
@@ -22,6 +24,16 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
       return NextResponse.json({ error: 'Invalid or expired invitation' }, { status: 400 });
     }
 
+    // Revalidate stored role at accept time — fail closed on legacy/invalid values.
+    const role = normalizeRole(invitation.role);
+    if (!role || role === 'super_admin' || !INVITE_ASSIGNABLE_ROLES.includes(role)) {
+      logger.error(
+        { invitationId: invitation.id, storedRole: invitation.role },
+        'Invitation accept rejected: invalid stored role'
+      );
+      return NextResponse.json({ error: 'Invalid invitation role' }, { status: 400 });
+    }
+
     // Check if user already exists (just in case)
     const existingUser = await prisma.user.findUnique({
       where: { email: invitation.email },
@@ -40,7 +52,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
           name,
           email: invitation.email,
           passwordHash: hashedPassword,
-          role: invitation.role,
+          role,
           tenantId: invitation.tenantId,
           emailVerified: new Date(),
         },
@@ -56,7 +68,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
 
     // Auto-login? Or just redirect to login?
     // For simplicity, return success and let frontend redirect to login
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ success: true, userId: user.id });
   } catch (e: any) {
     logger.error(e);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
