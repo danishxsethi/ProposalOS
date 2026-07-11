@@ -101,26 +101,26 @@ work**, tracked so a later wave can complete them; they are NOT confirmed defect
 
 ## Remediation waves
 
-| Wave | Theme                                          | Findings                                                                                                              | Groups | Status                      |
-| ---- | ---------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- | ------ | --------------------------- |
-| 0    | Emergency security containment                 | P0-19, P0-20, P0-21, P0-24, P1-14, P1-16, P2-52                                                                       | A, G   | **VERIFIED / COMMITTED**    |
-| 1    | Tenant & auth foundation                       | P1-05, P1-06, P1-07, P1-15, P1-17, P1-18, P2-07, P2-18, P2-22, P2-23                                                  | B, K   | PARTIAL — see Wave 1 result |
-| 2    | Canonical engine + durable job execution       | P0-22, P0-23, P1-03, P1-20, P1-21, P1-22, P1-23, P1-24, P2-08, P2-12, P2-24, P2-25                                    | C      | open                        |
-| 3    | Finding/Evidence enforcement layer             | P1-09, P1-25, P1-26, P1-31, P2-13, P2-36, P2-40                                                                       | D      | open                        |
-| 4    | Shared network/browser/provider safety         | P1-46, P1-47, P1-48, P2-53, P2-54                                                                                     | G      | open                        |
-| 5    | Module adapter & failure-state repair          | P1-28, P1-33, P1-34, P1-39, P1-43, P2-28, P2-47                                                                       | E, H   | open                        |
-| 6    | Fully implement broken/missing modules         | P0-25, P1-30, P1-37, P1-41, P1-42, P2-30                                                                              | F      | open                        |
-| 7    | Harden remaining partial modules               | P1-27, P1-29, P1-32, P1-35, P1-38, P2-27, P2-31, P2-32, P2-34, P2-35, P2-38, P2-41, P2-42, P2-43, P2-44, P2-46, P2-50 | I, H   | open                        |
-| 8    | Diagnosis + proposal claim-policy enforcement  | P0-26, P1-36, P1-40                                                                                                   | F      | open                        |
-| 9    | Delivery/outreach/closing/retention pipelines  | (Passes 9-12 audit work)                                                                                              | —      | open                        |
-| 10   | Billing, metering, webhook, unit economics     | P1-08, P2-21                                                                                                          | L      | open                        |
-| 11   | Multi-tenancy/white-label/frontend convergence | P1-01, P1-19, P2-10, P2-11, P2-15, P2-20                                                                              | K      | open                        |
-| 12   | LLM layer, prompt security, cost governance    | P1-45, P2-37, P2-49                                                                                                   | J      | open                        |
-| 13   | Observability, infrastructure, CI              | P1-02, P1-44, P2-04, P2-09, P2-14, P2-19                                                                              | N      | open                        |
-| 14   | Complete tests, adversarial fixtures, coverage | P2-29, P2-33, P2-39, P2-45, P2-48, P2-51, P2-55                                                                       | M      | open                        |
-| 15   | Controlled end-to-end runtime certification    | (Pass 4C.2/17 runtime)                                                                                                | O      | open                        |
-| 16   | Documentation & marketing reconciliation       | P1-04, P2-06                                                                                                          | O, N   | open                        |
-| 17   | Final re-audit & GO/NO-GO + P2 hygiene         | P2-01, P2-02, P2-03, P2-05, P2-16, P2-17                                                                              | P      | open                        |
+| Wave | Theme                                          | Findings                                                                                                              | Groups | Status                           |
+| ---- | ---------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- | ------ | -------------------------------- |
+| 0    | Emergency security containment                 | P0-19, P0-20, P0-21, P0-24, P1-14, P1-16, P2-52                                                                       | A, G   | **VERIFIED / COMMITTED**         |
+| 1    | Tenant & auth foundation                       | P1-05, P1-06, P1-07, P1-15, P1-17, P1-18, P2-07, P2-18, P2-22, P2-23                                                  | B, K   | **COMPLETE — see Wave 1 result** |
+| 2    | Canonical engine + durable job execution       | P0-22, P0-23, P1-03, P1-20, P1-21, P1-22, P1-23, P1-24, P2-08, P2-12, P2-24, P2-25                                    | C      | open                             |
+| 3    | Finding/Evidence enforcement layer             | P1-09, P1-25, P1-26, P1-31, P2-13, P2-36, P2-40                                                                       | D      | open                             |
+| 4    | Shared network/browser/provider safety         | P1-46, P1-47, P1-48, P2-53, P2-54                                                                                     | G      | open                             |
+| 5    | Module adapter & failure-state repair          | P1-28, P1-33, P1-34, P1-39, P1-43, P2-28, P2-47                                                                       | E, H   | open                             |
+| 6    | Fully implement broken/missing modules         | P0-25, P1-30, P1-37, P1-41, P1-42, P2-30                                                                              | F      | open                             |
+| 7    | Harden remaining partial modules               | P1-27, P1-29, P1-32, P1-35, P1-38, P2-27, P2-31, P2-32, P2-34, P2-35, P2-38, P2-41, P2-42, P2-43, P2-44, P2-46, P2-50 | I, H   | open                             |
+| 8    | Diagnosis + proposal claim-policy enforcement  | P0-26, P1-36, P1-40                                                                                                   | F      | open                             |
+| 9    | Delivery/outreach/closing/retention pipelines  | (Passes 9-12 audit work)                                                                                              | —      | open                             |
+| 10   | Billing, metering, webhook, unit economics     | P1-08, P2-21                                                                                                          | L      | open                             |
+| 11   | Multi-tenancy/white-label/frontend convergence | P1-01, P1-19, P2-10, P2-11, P2-15, P2-20                                                                              | K      | open                             |
+| 12   | LLM layer, prompt security, cost governance    | P1-45, P2-37, P2-49                                                                                                   | J      | open                             |
+| 13   | Observability, infrastructure, CI              | P1-02, P1-44, P2-04, P2-09, P2-14, P2-19                                                                              | N      | open                             |
+| 14   | Complete tests, adversarial fixtures, coverage | P2-29, P2-33, P2-39, P2-45, P2-48, P2-51, P2-55                                                                       | M      | open                             |
+| 15   | Controlled end-to-end runtime certification    | (Pass 4C.2/17 runtime)                                                                                                | O      | open                             |
+| 16   | Documentation & marketing reconciliation       | P1-04, P2-06                                                                                                          | O, N   | open                             |
+| 17   | Final re-audit & GO/NO-GO + P2 hygiene         | P2-01, P2-02, P2-03, P2-05, P2-16, P2-17                                                                              | P      | open                             |
 
 Wave assignments beyond the current wave are provisional and refined on wave entry. Each wave, on
 entry, must record: included findings + unfinished passes, files in scope, prerequisites,
@@ -169,9 +169,14 @@ acceptance criteria, exact verification commands, rollback strategy, and expecte
 - **Fixed (code changed, full acceptance criteria not exhaustively verified):** P1-06
   (repository-side fail-fast DB-role guard added; live production role confirmation is
   an operator fact, recorded BLOCKED below).
-- **Still open (not attempted this wave):** P1-07, P1-18 (claraud-web tenant-scoping
-  client — separate subproject, not explored this session), P2-23 (enumeration +
-  audit-trail reliability — deprioritized under time budget).
+- **Still open (fixed but not fully verified — operator fact blocked):** P1-06
+  (repository-side fail-fast DB-role guard added; live production role confirmation is
+  an operator fact, recorded BLOCKED below).
+- **Completed in the Wave 1 continuation session (2026-07-11):** P1-07, P1-18
+  (claraud-web tenant-scoping client — full rewrite of `claraud-web/src/lib/prisma.ts`;
+  see `REMEDIATION_VERIFICATION.md`'s "Wave 1 continuation" section), P2-23
+  (registration enumeration response + audit-trail criticality classification extended
+  to cover tenant-deletion and role-change events).
 - **New findings discovered and logged:** P2-56 (latent type debt uncovered by removing
   the `any`-typed client, in `signalDetector.ts`/`tenantConfig.ts` — preserved exact
   prior runtime behavior via a documented `as any` cast rather than blind-fixing under
@@ -194,10 +199,13 @@ acceptance criteria, exact verification commands, rollback strategy, and expecte
    Read-only check: `SELECT rolname, rolsuper, rolbypassrls FROM pg_roles WHERE rolname
 = current_user;` run against the production connection. `lib/config/dbRoleGuard.ts`'s
    `assertSafeDbRole()` automates this check but is not yet wired into a startup probe.
-2. **P1-07/P1-18:** claraud-web same-physical-DB-as-root-app fact was already recorded
-   BLOCKED in Pass 2/3 of the audit; still unconfirmed. The code defect itself (wrong
-   connection, unparameterized SQL) is independent of this fact and remains open work,
-   not yet started.
+2. **P1-07/P1-18:** the code defect itself (wrong connection, unparameterized SQL, no
+   fail-closed default) is now fully fixed and tested (Wave 1 continuation,
+   2026-07-11) — this is no longer blocked. The separate, purely factual question of
+   whether claraud-web's database is the SAME physical Postgres instance as the root
+   app's was already recorded BLOCKED in Pass 2/3 of the audit and remains
+   unconfirmed; it does not affect the fix's correctness (the tenant-scoping client is
+   now structurally sound regardless of which physical database it points at).
 
 ### Unresolved decisions (Wave 1, carried forward)
 
@@ -326,3 +334,33 @@ mandatory whole-tree `tsc --noEmit` gate must be green before/after the remainin
   from Wave 1's own tenant/auth commits and from the stashed Wave 2 WIP).
 - **Next:** resume and complete the two remaining Wave 1 findings (P1-07/P1-18, P2-23) from this
   now-clean baseline.
+
+## Wave 1 — FINAL result (continuation session, 2026-07-11)
+
+All 10 Wave 1 findings resolved:
+
+- **Verified (9):** P1-05, P1-07, P1-15, P1-17, P1-18, P2-07, P2-18, P2-22, P2-23.
+- **Fixed, operator-fact blocked (1):** P1-06 — repository-side fail-fast DB-role guard
+  shipped and tested; the live production `DATABASE_URL` role cannot be confirmed from the
+  repository (see the exact read-only SQL check recorded above).
+
+Plus one out-of-plan baseline repair, isolated and committed separately from the Wave 1
+finding set: `lib/audit/runner.ts`'s `BUDGET_EXCEEDED` branch wrote a schema-invalid `error`
+column; fixed to use `modulesFailed` (commit `2f94df6`).
+
+New findings discovered this wave, logged (none block Wave 1 closure): P2-56, P2-57 (from
+the first continuation session), P2-58, P2-59, P2-60 (from this session) — all low-priority,
+inert, or explicitly out-of-scope product decisions, recorded in
+`REMEDIATION_FINDINGS.json`.
+
+### Wave 2 WIP stash — still isolated, untouched
+
+`stash@{0}` (`proposalos-wave2-wip-before-wave1-completion-2026-07-11`) remains exactly as
+recorded earlier in this file: 15 tracked files + `lib/audit/dispatch.ts` (untracked),
+representing an unauthorized, incomplete Wave 2 (canonical audit engine / durable job
+queue) excursion from a prior terminated session. **Not applied, popped, or dropped at any
+point in this Wave 1 work.** A fresh Wave 2 session must inspect it before applying.
+
+## Next wave
+
+**Wave 2 — Canonical audit engine and durable job execution.**

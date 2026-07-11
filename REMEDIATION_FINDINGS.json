@@ -5,13 +5,13 @@
   "severityTotals": {
     "P0": 8,
     "P1": 44,
-    "P2": 57,
-    "total": 109
+    "P2": 60,
+    "total": 112
   },
   "openAuditPasses": [
-    "Pass 4C.2 — cost controls, persistence, idempotency, result integrity",
-    "Pass 4C.3 — browser-navigation SSRF interception + timeout signal propagation (per P1-46/P1-48)",
-    "Passes 5-20 — proposal compiler/claim policy, diagnosis, delivery/outreach/closing/retention, billing/metering/webhooks, multi-tenancy/white-label/frontend, LLM/prompt security/cost governance, observability/infra/CI, adversarial QA, runtime certification, docs/marketing reconciliation, final GO/NO-GO (not yet performed by the audit)"
+    "Pass 4C.2 \u2014 cost controls, persistence, idempotency, result integrity",
+    "Pass 4C.3 \u2014 browser-navigation SSRF interception + timeout signal propagation (per P1-46/P1-48)",
+    "Passes 5-20 \u2014 proposal compiler/claim policy, diagnosis, delivery/outreach/closing/retention, billing/metering/webhooks, multi-tenancy/white-label/frontend, LLM/prompt security/cost governance, observability/infra/CI, adversarial QA, runtime certification, docs/marketing reconciliation, final GO/NO-GO (not yet performed by the audit)"
   ],
   "findings": [
     {
@@ -66,7 +66,7 @@
     {
       "id": "P0-22",
       "severity": "P0",
-      "title": "POST /api/client/scan creates QUEUED Audit and returns success but calls no execution mechanism — 100% stuck audits",
+      "title": "POST /api/client/scan creates QUEUED Audit and returns success but calls no execution mechanism \u2014 100% stuck audits",
       "status": "open",
       "rootCauseGroup": "C",
       "dependencies": ["P1-24"],
@@ -104,7 +104,7 @@
         "grep confirms no rejectUnauthorized:false in app/ lib/"
       ],
       "wave": 0,
-      "notes": "Rewritten with fetch+redirect:manual, per-hop validateUrl (shared helper), hop cap 5, AbortController timeout, credentialed/bad-scheme rejection, no header forwarding; tls.connect rejectUnauthorized:true. P2-52 widened blast radius (both engines) — no extra remediation beyond this fix."
+      "notes": "Rewritten with fetch+redirect:manual, per-hop validateUrl (shared helper), hop cap 5, AbortController timeout, credentialed/bad-scheme rejection, no header forwarding; tls.connect rejectUnauthorized:true. P2-52 widened blast radius (both engines) \u2014 no extra remediation beyond this fix."
     },
     {
       "id": "P0-25",
@@ -118,7 +118,7 @@
         "Implement real profile verification OR disable PAINKILLER absence finding until real check exists; test asserting no fabricated absence finding"
       ],
       "wave": 6,
-      "notes": "MISSING module — fabricated customer-facing deficiency."
+      "notes": "MISSING module \u2014 fabricated customer-facing deficiency."
     },
     {
       "id": "P0-26",
@@ -231,13 +231,18 @@
       "id": "P1-07",
       "severity": "P1",
       "title": "claraud-web Prisma sets SET LOCAL on tx but runs query on base client; $executeRawUnsafe interpolation, no UUID validation",
-      "status": "open",
+      "status": "verified",
       "rootCauseGroup": "B",
       "dependencies": [],
       "files": ["claraud-web/src/lib/prisma.ts"],
-      "verification": ["Run query on tx; parameterize; UUID guard; tenant-isolation test"],
+      "verification": [
+        "claraud-web: vitest run tests/prisma-tenant-scoping.test.ts -> 11/11 pass",
+        "claraud-web: npx tsc --noEmit -> 0 new errors (7 pre-existing implicit-any confirmed via before/after diff)",
+        "claraud-web: npx eslint src/lib/prisma.ts -> 0 issues",
+        "grep -rn executeRawUnsafe claraud-web/src -> none (only comments describing the prior defect)"
+      ],
       "wave": 1,
-      "notes": "NOT addressed in Wave 1 -- claraud-web is a separate subproject not explored/exercised this session. Carry to Wave 1 continuation or a dedicated wave; do not guess at a fix without reading the subproject own test setup first."
+      "notes": "VERIFIED (continuation session). claraud-web/src/lib/prisma.ts rewritten: createTenantScopingExtension() dispatches every model op onto the SAME tx the RLS GUC was just set on (fixes the base-client/tx mismatch); $executeRawUnsafe replaced with parameterized tagged-template $executeRaw; assertValidTenantId() UUID-validates before any query; missing context now fails closed (throws) instead of silently running unscoped -- setTenantContext()/withSystemBypass() are the only entry points, and were wired into all 6 real call sites (analytics, audits, dashboard/stats, proposals, settings routes; apiKeys.ts; auth.ts credentials authorize; register/route.ts). wrapTransaction() additionally makes app-opened prisma.$transaction() (self-registration) reuse the same connection for every nested op instead of splitting into separate nested transactions. 11 unit tests (tests/prisma-tenant-scoping.test.ts, claraud-web's own new vitest harness) prove: GUC set on same tx as dispatch; base client never invoked; malformed/injection-shaped tenant IDs rejected; missing context throws; explicit bypass sets app.bypass_rls and still dispatches on tx; app-opened transaction reuse. claraud-web's own tsc/eslint clean (0 new issues; 7 pre-existing implicit-any errors confirmed via before/after diff to predate this fix -- caused by no schema.prisma existing for claraud-web in this sandbox, so @prisma/client ships its ungenerated stub; `npx prisma generate` fails 'Could not find Prisma Schema'). New findings logged: P2-58 (claraud-web's own register route still writes role:'owner' literally, but confirmed INERT -- claraud-web has no RBAC/role-hierarchy code reading that field at all, unlike the root app's dangerous LEGACY_ROLE_VALUES mapping); P2-59 (NextAuth's PrismaAdapter is wired with the tenant-scoped client but no catch-all app/api/auth/[...nextauth]/route.ts exists to mount `handlers`, so Google OAuth cannot complete and the adapter's own Account/Session methods are currently unreachable -- if that route is added later, adapter calls must be wrapped in an auth-adapter-style bypass or they will fail closed, mirroring lib/auth/adapterContext.ts's pattern)."
     },
     {
       "id": "P1-08",
@@ -304,7 +309,7 @@
         "vitest run tests/security/wave0-env-api-key-tenant.test.ts (binds DEFAULT_TENANT_ID, ignores x-tenant-id, rejects when unset)"
       ],
       "wave": 0,
-      "notes": "Env key bound server-side to DEFAULT_TENANT_ID; x-tenant-id ignored; timingSafeEqual used. Retire-vs-keep decision (Pass 3 §15) deferred; containment applied now."
+      "notes": "Env key bound server-side to DEFAULT_TENANT_ID; x-tenant-id ignored; timingSafeEqual used. Retire-vs-keep decision (Pass 3 \u00a715) deferred; containment applied now."
     },
     {
       "id": "P1-17",
@@ -322,13 +327,18 @@
       "id": "P1-18",
       "severity": "P1",
       "title": "claraud-web tenant-scoping uses $executeRawUnsafe manual escaping; query runs on wrong connection (P1-07)",
-      "status": "open",
+      "status": "verified",
       "rootCauseGroup": "B",
       "dependencies": ["P1-07"],
       "files": ["claraud-web/src/lib/prisma.ts"],
-      "verification": ["Parameterize via Prisma.sql; fix connection; UUID validation"],
+      "verification": [
+        "claraud-web: vitest run tests/prisma-tenant-scoping.test.ts -> 11/11 pass",
+        "claraud-web: npx tsc --noEmit -> 0 new errors (7 pre-existing implicit-any confirmed via before/after diff)",
+        "claraud-web: npx eslint src/lib/prisma.ts -> 0 issues",
+        "grep -rn executeRawUnsafe claraud-web/src -> none (only comments describing the prior defect)"
+      ],
       "wave": 1,
-      "notes": "NOT addressed in Wave 1 -- same reason as P1-07 (separate subproject, not explored this session)."
+      "notes": "VERIFIED as part of the single coherent P1-07 fix (same file/commit) -- see P1-07 notes."
     },
     {
       "id": "P1-19",
@@ -419,7 +429,7 @@
     {
       "id": "P1-25",
       "severity": "P1",
-      "title": "createEvidence() defaults pointer to 'unknown' — fabricated placeholder pointer passes shape checks",
+      "title": "createEvidence() defaults pointer to 'unknown' \u2014 fabricated placeholder pointer passes shape checks",
       "status": "open",
       "rootCauseGroup": "D",
       "dependencies": [],
@@ -528,7 +538,7 @@
         "Add findings:Finding[] built from schemasMissing/recommendations; regression test non-empty findings"
       ],
       "wave": 5,
-      "notes": "Adapter/result-shape drift — output discarded."
+      "notes": "Adapter/result-shape drift \u2014 output discarded."
     },
     {
       "id": "P1-34",
@@ -559,7 +569,7 @@
     {
       "id": "P1-36",
       "severity": "P1",
-      "title": "accessibility asserts wcagLevel A/AA/AAA from axe-core score alone — unsupported certification claim",
+      "title": "accessibility asserts wcagLevel A/AA/AAA from axe-core score alone \u2014 unsupported certification claim",
       "status": "open",
       "rootCauseGroup": "F",
       "dependencies": [],
@@ -599,7 +609,7 @@
     {
       "id": "P1-39",
       "severity": "P1",
-      "title": "competitorStrategy/videoPresence read dependencyResults.competitor.results (nonexistent field; actual is topCompetitors) — never execute real logic",
+      "title": "competitorStrategy/videoPresence read dependencyResults.competitor.results (nonexistent field; actual is topCompetitors) \u2014 never execute real logic",
       "status": "open",
       "rootCauseGroup": "E",
       "dependencies": [],
@@ -655,7 +665,7 @@
     {
       "id": "P1-43",
       "severity": "P1",
-      "title": "vision registry entry can never execute — requires screenshot snapshot from websiteCrawler, which captures none",
+      "title": "vision registry entry can never execute \u2014 requires screenshot snapshot from websiteCrawler, which captures none",
       "status": "open",
       "rootCauseGroup": "E",
       "dependencies": [],
@@ -721,7 +731,7 @@
     {
       "id": "P1-47",
       "severity": "P1",
-      "title": "Circuit breaker never invoked with tenantId — one tenant's failures open shared circuit for all tenants",
+      "title": "Circuit breaker never invoked with tenantId \u2014 one tenant's failures open shared circuit for all tenants",
       "status": "open",
       "rootCauseGroup": "G",
       "dependencies": [],
@@ -931,7 +941,7 @@
     {
       "id": "P2-16",
       "severity": "P2",
-      "title": "Stale local proposalos_dev DB (0 RLS) — dev artifact",
+      "title": "Stale local proposalos_dev DB (0 RLS) \u2014 dev artifact",
       "status": "open",
       "rootCauseGroup": "P",
       "dependencies": [],
@@ -1019,13 +1029,18 @@
       "id": "P2-23",
       "severity": "P2",
       "title": "Registration distinguishes 'User already exists' (enumeration); audit-trail writes fire-and-forget",
-      "status": "open",
+      "status": "verified",
       "rootCauseGroup": "K",
       "dependencies": [],
       "files": ["app/api/auth/register/route.ts", "lib/auth.ts"],
-      "verification": ["Generic response; alert/retry on audit-trail write failure"],
+      "verification": [
+        "vitest run tests/security/register-bypass-isolation.test.ts -> 6/6 pass (updated to assert the new generic response + no cross-tenant leak + no duplicate created)",
+        "vitest run tests/security/wave1-audit-trail-criticality.test.ts -> 7/7 pass (destructive/role events rethrow; non-critical events log-and-swallow; success path silent)",
+        "vitest run tests/security/audit-trail-sensitive-actions.test.ts tests/security/auditTrail/hash-chain.test.ts -> 3/3, 5/5 pass (no regression)",
+        "tsc --noEmit -> exit 0; eslint on both changed source files -> 0 errors, only pre-existing any-warnings unrelated to the changed lines"
+      ],
       "wave": 1,
-      "notes": "NOT addressed in Wave 1 -- deprioritized given time budget; enumeration-response changes carry frontend-coupling risk that was not safe to make blind this session."
+      "notes": "VERIFIED (continuation session). Enumeration: app/api/auth/register/route.ts's existing-user branch no longer returns a distinct 'User already exists' 400 -- it responds with the same 2xx shape a fresh registration would (no duplicate account created either way; enforcement unchanged). Residual gap documented, not fully closed: the frontend's auto-login-then-redirect step still distinguishes existing (redirect /login on wrong password) from new (redirect /onboarding) accounts via behavior, not response text -- closing that fully requires a bigger product-flow change (e.g. email-verification-gated registration) out of this session's scope; logged as P2-60. Audit-trail: lib/observability/auditTrail.ts's recordAuditTrailEvent() already logged failures (logger.warn) and rethrew for stripe./session./apikey. events (pre-existing, re-verified) -- extended the critical-rethrow classification to also cover data.deletion_* (tenant deletion) and role.* (role/permission changes), so those destructive/security categories can no longer be silently swallowed by a call site's own .catch(() => {}). Single shared-boundary fix, not per-caller patches."
     },
     {
       "id": "P2-24",
@@ -1054,13 +1069,13 @@
     {
       "id": "P2-26",
       "severity": "P2",
-      "title": "[SUPERSEDED] websiteCrawlerModule.ts claimed orphan — retracted in-report (imported by runner.ts:52)",
+      "title": "[SUPERSEDED] websiteCrawlerModule.ts claimed orphan \u2014 retracted in-report (imported by runner.ts:52)",
       "status": "superseded",
       "rootCauseGroup": "C",
       "dependencies": [],
       "files": ["lib/modules/websiteCrawlerModule.ts"],
       "verification": [
-        "N/A — retracted by AUDIT_REPORT.md self-correction (line 1450); real issue is duplicate invocation P1-27"
+        "N/A \u2014 retracted by AUDIT_REPORT.md self-correction (line 1450); real issue is duplicate invocation P1-27"
       ],
       "wave": null,
       "notes": "Do not treat as an active defect. The file is used by the primary engine; the genuine concern is the double-crawl (P1-27)."
@@ -1386,7 +1401,7 @@
     {
       "id": "P2-52",
       "severity": "P2",
-      "title": "security.ts fetchWithRedirect (P0-24) confirmed reachable in BOTH engines — widened blast radius",
+      "title": "security.ts fetchWithRedirect (P0-24) confirmed reachable in BOTH engines \u2014 widened blast radius",
       "status": "verified",
       "rootCauseGroup": "G",
       "dependencies": ["P0-24"],
@@ -1395,7 +1410,7 @@
         "Closed by P0-24 fix (single shared fetchWithRedirect); no separate remediation"
       ],
       "wave": 0,
-      "notes": "Resolved together with P0-24 — the fix is in the shared module used by both engines."
+      "notes": "Resolved together with P0-24 \u2014 the fix is in the shared module used by both engines."
     },
     {
       "id": "P2-53",
@@ -1470,6 +1485,48 @@
       ],
       "wave": 7,
       "notes": "P2-22 fixed the two sites cited as evidence in the audit (rateLimit.ts) and shipped the shared helper; these 7 sites still duplicate the old, spoofable first-hop-trusting pattern and should be migrated to the shared helper."
+    },
+    {
+      "id": "P2-58",
+      "severity": "P2",
+      "title": "claraud-web register route writes role:'owner' literally (inert -- no RBAC reads it)",
+      "status": "open",
+      "rootCauseGroup": "K",
+      "dependencies": [],
+      "files": ["claraud-web/src/app/api/auth/register/route.ts"],
+      "verification": [
+        "Confirmed via grep: no ROLE_HIERARCHY/normalizeRole/withRole exists anywhere in claraud-web/src"
+      ],
+      "wave": 1,
+      "notes": "Discovered while fixing P1-07/P1-18. Same literal-string pattern as the root app's pre-Wave-1 bug, but claraud-web has no role-hierarchy/RBAC code reading the User.role field at all today, so this is inert/dead data rather than a live privilege-escalation path. Low priority; normalize for hygiene/future-proofing in a later wave if claraud-web ever grows real RBAC."
+    },
+    {
+      "id": "P2-59",
+      "severity": "P2",
+      "title": "claraud-web NextAuth adapter/OAuth wired but no catch-all route mounts `handlers` -- Google OAuth unreachable; PrismaAdapter calls would fail closed if ever reached",
+      "status": "open",
+      "rootCauseGroup": "K",
+      "dependencies": [],
+      "files": ["claraud-web/src/auth.ts"],
+      "verification": [
+        "Confirmed via file listing: no claraud-web/src/app/api/auth/[...nextauth]/route.ts exists"
+      ],
+      "wave": 1,
+      "notes": "Discovered while fixing P1-07/P1-18: PrismaAdapter(prisma) uses the tenant-scoped client; its internal Account/Session/User bookkeeping calls run with no tenant/bypass context. Currently inert because there is no HTTP route serving NextAuth's own endpoints (no [...nextauth]/route.ts), so Google OAuth cannot complete and the adapter is unreachable. If a future wave adds that route, adapter calls must be wrapped in an auth-adapter-style allowlisted bypass (mirroring the root app's lib/auth/adapterContext.ts) before OAuth is exercised, or they will throw 'Tenant context required' -- a safe failure, not a silent one, but still needs the missing route + bypass wiring to actually work."
+    },
+    {
+      "id": "P2-60",
+      "severity": "P2",
+      "title": "Registration enumeration only partially closed -- auto-login redirect target still distinguishes existing vs new accounts",
+      "status": "open",
+      "rootCauseGroup": "K",
+      "dependencies": [],
+      "files": ["app/(auth)/register/page.tsx", "app/api/auth/register/route.ts"],
+      "verification": [
+        "Manual trace of app/(auth)/register/page.tsx's handleSubmit: existing-email + guessed-password -> signIn fails -> redirect /login; new-email -> signIn always succeeds -> redirect /onboarding"
+      ],
+      "wave": 1,
+      "notes": "P2-23 closed the direct response-text/status oracle (no more distinct 'User already exists' 400). The frontend's immediate auto-login-then-redirect step is a residual, harder-to-close side channel: an existing email with a wrong guessed password still observably redirects to /login instead of /onboarding, unlike a genuinely new email (which always redirects to /onboarding, since the account was just created with that exact password). Fully closing this requires a bigger, product-level flow change (e.g. always show a generic 'check your email' step instead of auto-login) that was judged out of scope for a blind same-session change; flagged for a future wave/product decision."
     }
   ]
 }

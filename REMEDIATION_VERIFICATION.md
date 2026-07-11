@@ -369,3 +369,175 @@ This isolated, one-line-semantic baseline correction restores a **reproducible c
 TypeScript baseline** for the branch, independent of any Wave 2 WIP. It is not one of the 10 Wave
 1 findings (P1-05/06/07/15/17/18, P2-07/18/22/23) and is tracked/committed separately from Wave
 1's own fixes.
+
+---
+
+## Wave 1 continuation — completing P1-07 / P1-18 / P2-23 (2026-07-11)
+
+Resumed from the clean baseline established by the `fix(audit): persist budget-exceeded
+failure in valid schema` correction (commit `2f94df6`), with the unauthorized Wave 2 WIP
+isolated in `stash@{0}` (`proposalos-wave2-wip-before-wave1-completion-2026-07-11`) and left
+untouched throughout this section.
+
+### P1-07 / P1-18 — claraud-web tenant-scoping client (VERIFIED)
+
+Full audit of claraud-web's Prisma usage (all 14 `route.ts` files under
+`claraud-web/src/app/api/**`, plus `claraud-web/src/lib/auth/apiKeys.ts` and
+`claraud-web/src/auth.ts`): exactly one Prisma client (`claraud-web/src/lib/prisma.ts`, one
+`new PrismaClient()`), 6 files actually touch it (analytics, audits, dashboard/stats,
+proposals, settings routes; auth/register route), plus the two shared helpers.
+
+Root defect confirmed exactly as diagnosed: `SET LOCAL app.current_tenant_id` was set on a
+`tx` opened via `client.$transaction(...)`, but the real business query ran via
+`query(args)` — bound to the **base** (pooled) client, a different connection than the one
+carrying the GUC. Additionally: (a) the GUC value was built with `$executeRawUnsafe` string
+interpolation; (b) **`setTenantContext()` was never called anywhere in the app** — every one
+of the 6 real routes relied solely on manual `where: { tenantId }` filtering, meaning the
+GUC-setting branch never executed in production at all.
+
+Rewrote `claraud-web/src/lib/prisma.ts`:
+
+- `createTenantScopingExtension(client)` — every model operation now dispatches via
+  `tx[delegateKey][operation](args)` on the **same** `tx` the GUC was just set on via a
+  parameterized `tx.$executeRaw` tagged template (not `$executeRawUnsafe`).
+- `assertValidTenantId()` — UUID-validates before any query; `setTenantContext()` fails
+  closed (throws) on a malformed ID.
+- Missing tenant/bypass context now fails closed (throws `Tenant context required...`)
+  instead of silently falling through to an unscoped query — the defect's actual root cause.
+- `withSystemBypass(reason, fn)` — explicit, named escape hatch (mirrors the root app's
+  `withSystemDbBypass`/`runWithAuthAdapterContext`) for the handful of legitimately
+  pre-tenant operations (self-registration's email-uniqueness check + tenant/user creation
+  transaction; API-key lookup by hash; credentials sign-in lookup by email). Sets
+  `app.bypass_rls = 'true'` on the same tx, mirroring the root app's `tenant_bypass` RLS
+  policy convention (`prisma/migrations/20260501014500_rls_bypass_policies`), rather than
+  silently running on the base client with no GUC at all.
+- `wrapTransaction()` — registers any app-opened `prisma.$transaction(...)` (e.g.
+  self-registration's atomic tenant+user creation) as the active context's `currentTx`, so
+  every model op dispatched inside reuses that **same** connection instead of each opening
+  its own nested transaction (which would have silently split an atomic operation across
+  multiple transactions).
+
+Wired the fix into every real call site: `analytics/route.ts`, `audits/route.ts`,
+`dashboard/stats/route.ts`, `proposals/route.ts` (GET+PATCH), `settings/route.ts` (GET+POST)
+now wrap their bodies in `setTenantContext(tenantId, ...)`; `auth/register/route.ts` and
+`lib/auth/apiKeys.ts::validateApiKey` and `auth.ts`'s credentials `authorize()` now use
+`withSystemBypass(reason, ...)` with a specific reason string each.
+
+```
+$ cd claraud-web && npx vitest run tests/prisma-tenant-scoping.test.ts
+ ✓ assertValidTenantId (5 tests: accepts UUID, rejects 4 malformed/injection-shaped IDs)
+ ✓ sets the GUC and dispatches the business query on the SAME tx (not the base client)
+ ✓ parameterizes the tenant ID -- quote/injection-shaped input cannot alter the SQL
+ ✓ fails closed when no tenant/bypass context is established
+ ✓ rejects a malformed tenant ID before any query runs
+ ✓ explicit system bypass sets app.bypass_rls and still dispatches on tx, not the base client
+ ✓ reuses the SAME connection for every operation inside an app-opened $transaction
+ Test Files  1 passed (1)
+      Tests  11 passed (11)
+```
+
+`vitest`/`vitest.config.ts` added to claraud-web (pinned `4.1.9`, exactly matching the root
+app's installed version) — claraud-web had **no test infrastructure at all** before this;
+required to satisfy the mandatory regression-test acceptance criterion.
+
+```
+$ cd claraud-web && npx tsc --noEmit --pretty false
+(0 errors from any file touched by this fix; 7 pre-existing TS7006 implicit-any errors in
+5 files (audits/route.ts, dashboard/stats/route.ts, proposals/route.ts, settings/route.ts,
+auth/register/route.ts) confirmed via direct before/after diff against git HEAD to
+PRE-EXIST this fix -- caused by claraud-web having no schema.prisma in this sandbox, so
+@prisma/client ships its ungenerated `any`-stub (`npx prisma generate` fails "Could not find
+Prisma Schema"); 9 unrelated pre-existing errors in .next/dev/types/validator.ts, a stale
+generated-cache artifact, not source code)
+$ cd claraud-web && npx eslint src/lib/prisma.ts src/lib/auth/apiKeys.ts src/auth.ts \
+    src/app/api/auth/register/route.ts src/app/api/{analytics,audits,proposals,settings}/route.ts \
+    src/app/api/dashboard/stats/route.ts
+-> 0 errors on prisma.ts (the core fix file); remaining 3 errors + 5 warnings on the other
+   files are pre-existing (verified by line number against each file's pre-edit content)
+$ grep -rn "executeRawUnsafe" claraud-web/src -> none (only comments describing the fixed defect)
+$ grep -rn "setTenantContext\(" claraud-web/src | wc -l  -> 7 (5 routes + settings POST)
+$ grep -rn "withSystemBypass\(" claraud-web/src | wc -l  -> 3 (register, apiKeys, auth.ts)
+```
+
+Root app's own gates re-confirmed unaffected (claraud-web is a fully separate subproject
+with its own node_modules/tsconfig — none of this touched root files):
+
+```
+$ ./node_modules/.bin/tsc --noEmit --pretty false --incremental false -> exit 0
+```
+
+New findings discovered and logged (not fixed this wave, low priority / inert / out of
+scope): P2-58 (claraud-web register still writes `role:'owner'` literally, but confirmed
+inert -- no RBAC code anywhere in claraud-web reads `User.role`), P2-59 (NextAuth adapter
+wired but no catch-all route exists to mount it, so Google OAuth + the adapter's own
+Account/Session calls are currently unreachable; if wired up later, adapter calls need an
+auth-adapter-style bypass or they will fail closed).
+
+### P2-23 — enumeration + audit-trail reliability (VERIFIED)
+
+**Enumeration:** `app/api/auth/register/route.ts`'s existing-user branch no longer returns a
+distinct `400 { error: 'User already exists' }`. It now responds with the same 2xx shape a
+fresh registration produces (`{ user: { id: null, name: null, email } }`), without creating
+a duplicate account (enforcement unchanged — confirmed via test assertion that
+`prisma.$transaction` is never called on that path).
+
+```
+$ vitest run tests/security/register-bypass-isolation.test.ts
+ ✓ P2-23: does not reveal account existence -- responds like a fresh registration, no
+   cross-tenant data leaked, no duplicate created
+ ✓ (5 other pre-existing guarantees, re-verified, all still pass)
+ Test Files  1 passed (1)
+      Tests  6 passed (6)
+```
+
+Residual, explicitly-not-closed gap logged as **P2-60**: the frontend
+(`app/(auth)/register/page.tsx`) immediately attempts an auto-login after registration —
+for an existing email with a guessed-wrong password, that auto-login fails and redirects to
+`/login`, while a genuinely new email always succeeds and redirects to `/onboarding`. This
+is a residual behavioral side-channel that the response-text/status fix does not close;
+fully closing it needs a bigger product-flow decision (e.g. drop auto-login, gate on email
+verification) out of this session's scope.
+
+**Audit-trail reliability:** `lib/observability/auditTrail.ts`'s `recordAuditTrailEvent()`
+already logged write failures via `logger.warn` and rethrew for `stripe.*`/`session.*`/
+`apikey.*` events (pre-existing, re-verified below) — the gap was that `data.deletion_*`
+(tenant deletion) and `role.*` (role/permission changes) were **not** in the critical set,
+so a failed write for those destructive/security categories was only logged, never
+surfaced as a hard failure, and every call site additionally wraps the call in its own
+`.catch(() => {})`, discarding even that. Extended the single shared `isCritical` check
+(not a per-caller patch) to cover `data.deletion` and `role.` prefixes too.
+
+```
+$ vitest run tests/security/wave1-audit-trail-criticality.test.ts
+ ✓ rethrows on write failure for data.deletion_auth (tenant-deletion authorization)
+ ✓ rethrows on write failure for data.deletion_completed (tenant-deletion completion)
+ ✓ rethrows on write failure for data.deletion_failed (tenant-deletion failure record)
+ ✓ rethrows on write failure for apikey.created/revoked (pre-existing, re-verified)
+ ✓ rethrows on write failure for session.* events (pre-existing, re-verified)
+ ✓ does NOT rethrow for non-critical event categories -- logs and swallows
+ ✓ does not throw and does not log when the write succeeds
+ Test Files  1 passed (1)
+      Tests  7 passed (7)
+$ vitest run tests/security/audit-trail-sensitive-actions.test.ts tests/security/auditTrail/hash-chain.test.ts
+ -> 3/3, 5/5 pass (no regression to existing audit-trail behavior)
+```
+
+### Final gates (this continuation)
+
+```
+$ ./node_modules/.bin/tsc --noEmit --pretty false --incremental false -> exit 0
+$ eslint app/api/auth/register/route.ts lib/observability/auditTrail.ts \
+    tests/security/wave1-audit-trail-criticality.test.ts tests/security/register-bypass-isolation.test.ts
+  -> 0 errors, 8 pre-existing any-warnings (unrelated lines, verified)
+$ vitest run <19 files: this continuation's new/updated tests + all Wave 0/1 security +
+  architecture tests> -> 19 files / 102 tests, all pass
+$ git stash show --stat stash@{0} -> unchanged from the isolation record (16 files);
+  never applied, popped, or edited during this continuation
+```
+
+### Result
+
+Findings set to `verified`: P1-07, P1-18, P2-23. New findings logged: P2-58, P2-59, P2-60
+(all low-priority/inert/out-of-scope, not blocking). No production infra/DB/live accounts
+touched. All tests use mocks/fixtures; claraud-web's own vitest run is fully local (no DB
+connection attempted).
