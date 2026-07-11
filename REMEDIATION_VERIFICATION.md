@@ -541,3 +541,267 @@ Findings set to `verified`: P1-07, P1-18, P2-23. New findings logged: P2-58, P2-
 (all low-priority/inert/out-of-scope, not blocking). No production infra/DB/live accounts
 touched. All tests use mocks/fixtures; claraud-web's own vitest run is fully local (no DB
 connection attempted).
+
+---
+
+## Wave 2 — Canonical audit engine and durable job execution
+
+Findings in scope: P0-22, P0-23, P1-03, P1-20, P1-21, P1-22, P1-23, P1-24, P2-08, P2-12,
+P2-24, P2-25.
+
+### Entry-state discrepancy found and reconciled
+
+This continuation resumed from a session whose control-artifact updates never landed:
+`REMEDIATION_STATE.md`/`REMEDIATION_VERIFICATION.md` still described Wave 2 as
+"not yet started, `stash@{0}` untouched," but the actual working tree already contained
+a **near-complete** Wave 2 implementation — the named stash had been applied and
+substantially extended (dispatch layer, full 27-module canonical manifest, lease/heartbeat
+queue, Prisma migration, new tests) by an interrupted prior session that never finished its
+own verification or state write-back. Confirmed via:
+
+```
+$ git status --short   -> 16 stash files present as staged+working changes, plus untracked
+  lib/audit/dispatch.ts, prisma/migrations/20260711120000_audit_job_lease_heartbeat/,
+  tests/architecture/canonical-module-manifest.test.ts,
+  tests/security/audit-job-lease-heartbeat.test.ts (none of this matches "stash untouched")
+$ git ls-files -u lib/audit/runner.ts   -> 3-way UNMERGED index entry (stage 1/2/3 present),
+  yet the working-tree file itself had ZERO conflict markers -- someone had manually
+  resolved the conflict in the working tree but never `git add`ed it to clear the index.
+```
+
+Diffed the three index stages (`git show :1/:2/:3:lib/audit/runner.ts`) against the working
+tree to confirm the manual resolution was a correct superset (kept Wave 1's
+`modulesFailed` merge-not-overwrite fix from the "ours" side; kept and _improved on_ the
+stash's ("theirs") P2-25 gating approach — the stash had a separate
+`getEffectiveModuleRegistry()` filter function, the working tree instead gates inline in
+`executePhase()` with an exported `FEATURE_FLAG_GATED_MODULES`, which is what the
+contract test (`tests/architecture/canonical-module-manifest.test.ts`) actually imports).
+Resolved by staging the working-tree content (`git add lib/audit/runner.ts`) rather than
+re-deriving it from either side — re-verified byte-for-byte via `tsc`/targeted tests
+immediately after, per Step 2's instruction to treat stash content as untrusted until
+proven.
+
+**Stash disposition note:** because the stash was already applied (and substantially
+exceeded) before this continuation began, `git stash apply <ref>` was not re-run this
+session — doing so would have reintroduced the exact 3-way conflict just resolved. The
+stash was left in place, unpopped/undropped, until every item below was independently
+verified against the actual working-tree code (not the stash's older content). See
+disposition at the end of this section.
+
+### Architecture implemented (verified against actual code, not assumed from comments)
+
+1. **Canonical module manifest** — `packages/shared/src/audit.ts::CANONICAL_AUDIT_MODULES`
+   (27 modules: id/phase/dependsOn/optional/timeoutMs/rolloutFlag) is the one declarative
+   source of truth. `lib/audit/modules.ts` no longer masquerades as the canonical list —
+   it now only re-exports the renamed 5-module completeness subset
+   (`CRITICAL_COMPLETION_MODULES`, formerly confusingly named `CANONICAL_MODULES`) used by
+   the runner's COMPLETE-vs-PARTIAL guardrail. `validateCanonicalModuleManifest()` checks
+   exact-27/no-duplicates/no-dangling-deps/no-cycles. `EXECUTION_PROFILES.QUICK_AUDIT`
+   (`['website', 'gbp']`) is validated against the same ID set at import time
+   (`validateExecutionProfiles()`).
+2. **One canonical execution engine** — `lib/audit/runner.ts::MODULE_REGISTRY` (27
+   modules) + `executePhase()` (dependency graph, per-module timeout/retry, feature-flag
+   gating, concurrency-bounded phase execution) is the only production engine.
+   `runModuleSubset(moduleIds, ...)` executes a named subset (e.g. `QUICK_AUDIT`) through
+   the _exact same_ `executePhase()` path, phase-ordered. `AuditOrchestrator` (14 modules,
+   self-logging `[DEPRECATED]`) has zero remaining production callers; its dead wrapper
+   (`lib/orchestrator/index.ts::runAuditOrchestrator`) is deleted outright.
+3. **Durable dispatch** — `lib/audit/dispatch.ts::dispatchAuditExecution({tenantId,
+auditId})` is the one shared entry point; it enqueues a single-item `AuditJob`
+   (`batchId === auditId`) through `lib/queue/auditJobQueue.ts::enqueueAuditJob()`, the
+   same durable queue the batch endpoint already used. Idempotent via
+   `idempotencyKey: "single:<auditId>"`.
+4. **Lease/heartbeat (P2-12)** — `AuditJob` gained `leaseOwner/leaseToken/leaseExpiresAt/
+lastHeartbeatAt` (additive migration, see below). `claimJob()` atomically assigns a
+   fresh lease via a conditional `updateMany` (`WHERE status='QUEUED' OR (status='RUNNING'
+AND leaseExpiresAt < now)`); `heartbeatJob()`/`markJobSucceeded()`/`markJobFailed()` all
+   require the caller's current `leaseToken` to match, so a worker whose lease expired and
+   was reclaimed cannot later overwrite a newer attempt's result (`count === 0` → rejected,
+   logged, no-op).
+5. **Scheduled-audit single owner (P1-22/P1-23)** — both
+   `app/api/cron/scheduled-audits/route.ts` and `lib/graph/retention-graph.ts`'s
+   `run_scheduled_audits` node call the one shared
+   `lib/retention/scheduled-audit-runner.ts::processScheduledAudits()`. Due-schedule
+   claiming is atomic (`updateMany` re-checking `nextRunAt <= now` in the same call that
+   advances it) so concurrent invocations from either cron entry point cannot double-
+   dispatch the same occurrence. Comparison/upsell logic only runs after the dispatched
+   audit reaches a `TERMINAL_AUDIT_STATUSES` state — never against a zero-finding
+   unexecuted audit.
+6. **Widget quick-audit (P1-21)** — `app/api/widget/quick-audit/route.ts` now calls
+   `runModuleSubset(EXECUTION_PROFILES.QUICK_AUDIT, ...)` instead of calling
+   `crawlWebsite()`/`runGBPModule()` directly. Score is
+   `round(coverageRatio*100 - findingPenalty)` derived from real normalized findings
+   (`extractFindingsFromRegistryResult`) — no fabricated formula, no static `topIssue`.
+   Provider/module failure is reported as `modulesUnavailable`, never a fabricated
+   negative finding. Response is explicitly labeled `quickAudit: true` with a reduced-
+   coverage note.
+7. **Feature flags (P2-25)** — fixed in two layers (see finding notes below for the
+   second, previously-undiscovered layer this session found): module gating now reads
+   `isFeatureEnabledEffective()`, and that function — plus the admin API — both go
+   through one new shared `getEffectiveFeatureFlags()` in `lib/config/feature-flags.ts`,
+   so an admin's DB-persisted toggle actually changes execution instead of only the admin
+   API's own read response.
+
+### Gap found and fixed during this session's own verification (beyond the inherited WIP)
+
+While verifying P2-25 against its actual acceptance criteria (not just "a flag is read
+somewhere"), found that the admin flag-toggle API
+(`app/api/admin/feature-flags/route.ts`) persisted overrides to the `FeatureFlag` DB
+table, but `lib/config/feature-flags.ts`'s `FEATURE_FLAGS` object is computed once from
+`process.env` at import time and can never see that table — so even after the inherited
+WIP wired `MODULE_REGISTRY` gating to read _a_ flag function, an admin's runtime toggle
+still had **zero actual effect** on which modules ran; it only changed the admin API's own
+GET response. This is exactly the "disconnected" failure mode P2-25 describes, just one
+layer deeper than the inherited fix addressed. Fixed by adding
+`getEffectiveFeatureFlags()`/`isFeatureEnabledEffective()`/
+`invalidateEffectiveFeatureFlagsCache()` as the one shared, DB-override-aware read path
+(merges the `FeatureFlag` table over the static defaults, ignores unknown/stale keys,
+falls back to static defaults if the DB is unreachable rather than throwing), and
+switching both the admin route and `lib/audit/runner.ts`'s module gate to call through it
+instead of duplicating the merge logic in the admin route alone.
+
+```
+$ vitest run tests/security/feature-flag-effective-override.test.ts
+ ✓ falls back to the static env-derived default when no DB override exists
+ ✓ a DB override flips the effective value seen by module gating
+ ✓ invalidating the cache picks up a newly-written override on the next read (admin toggle path)
+ ✓ ignores an unknown/stale DB flag key instead of injecting it (fails safe)
+ ✓ falls back to static defaults (does not throw) when the DB is unavailable
+ Test Files  1 passed (1)
+      Tests  5 passed (5)
+```
+
+### Regression found and fixed in the inherited widget test suite
+
+`tests/security/widget-graceful-degradation.test.ts`'s "both succeed → 100" case mocked
+the GBP module's "success" result as `data: {}` (empty object). The real, reused
+finding-generation logic (`generateGBPFindings`/`computeGbpCompleteness`, shared with the
+full 27-module audit — this is P1-21's whole point, not a bug) correctly treats a GBP
+profile with no rating/website/photos/hours as real evidence of an incomplete listing and
+reports findings for it, so the score came out to 71, not 100. This was a test-fixture bug
+(an empty object is not equivalent to "succeeded with a genuinely complete profile"), not
+an application bug — fixed by giving the test's "gbp: ok" fixture a realistic, actually-
+complete GBP profile. Root-caused rather than papered over (did not weaken the real
+finding-generation logic to make the stale fixture pass).
+
+Separately, `tests/security/widget-origin-allowlist.test.ts` (a pre-existing suite, not
+part of the stash) mocked the _old_ widget implementation's direct
+`crawlWebsite()`/`runGBPModule()` calls. Since P1-21 rewrote the route to call
+`runModuleSubset()` instead, those mocks no longer intercepted anything — the "allowed
+origin POST succeeds" test fell through to real module execution and returned 500. Fixed
+by mocking `runModuleSubset()` (matching the pattern already used in
+`widget-graceful-degradation.test.ts`) instead of the now-bypassed per-module mocks; all
+34 tests in the file (origin allow-list is this suite's actual subject, not module
+output) pass unchanged in behavior.
+
+### Git-index conflict resolution
+
+```
+$ git add lib/audit/runner.ts   # clears the pre-existing 3-way UNMERGED index entry;
+                                  # working-tree content independently verified correct
+                                  # (see "Entry-state discrepancy" above) before staging
+$ git status --short | grep -c '^UU'   -> 0
+```
+
+### Mandatory verification (run this session)
+
+```
+$ ./node_modules/.bin/tsc --noEmit --pretty false --incremental false
+(exit 0, whole working tree)
+
+$ npx eslint <26 Wave 2 files>
+3 import/order errors found and auto-fixed (--fix; pure import-statement reordering,
+no logic changes) in app/api/widget/quick-audit/route.ts, lib/audit/runner.ts,
+lib/retention/scheduled-audit-runner.ts. Re-ran: 0 errors, 48 pre-existing
+no-explicit-any/no-unused-vars/complexity warnings (verified by line number against
+each file's pre-Wave-2 content where applicable; none new from this wave's logic).
+
+$ npx --no-install prisma validate
+The schema at prisma/schema.prisma is valid
+
+$ npx vitest run tests/architecture/canonical-module-manifest.test.ts \
+    tests/security/audit-job-lease-heartbeat.test.ts \
+    tests/security/feature-flag-effective-override.test.ts \
+    tests/security/widget-graceful-degradation.test.ts \
+    tests/security/widget-origin-allowlist.test.ts \
+    tests/security/batch-queue-worker.test.ts \
+    tests/integration/audit-api.test.ts \
+    lib/pipeline/stages/__tests__/auditStage.test.ts
+ Test Files  8 passed (8)
+      Tests  100 passed (100)
+
+$ npx vitest run <16 Wave 0/1 regression files: wave0-rbac-api-key, wave0-invite-role,
+  wave0-tenant-delete-authz, wave0-security-ssrf, wave0-env-api-key-tenant,
+  wave1-tenant-scoping, no-unscoped-db-import, wave1-owner-role-escalation,
+  wave1-login-rate-limit, wave1-predictions-authz, wave1-self-evolving-executor,
+  wave1-client-ip-trust, wave1-db-role-guard, register-bypass-isolation,
+  wave1-audit-trail-criticality, wave1-baseline-budget-exceeded-write>
+ Test Files  16 passed (16)
+      Tests  91 passed (91)
+-- confirms the P0 security fixes from Wave 0 and all of Wave 1 still compile and their
+   targeted tests remain green after Wave 2's changes.
+
+$ grep -rn "AuditOrchestrator\b" app lib
+-- zero production instantiations; only the deprecated class definition itself and its
+   own direct unit test (lib/modules/__tests__/auditOrchestrator.test.ts)
+
+$ grep -rn "runAuditOrchestrator\b" app lib
+-- zero references (lib/orchestrator/index.ts deleted)
+
+$ grep -rn "runAudit\(" app lib
+-- every remaining call is awaited, not detached: lib/queue/auditJobWorker.ts (the
+   canonical worker, correctly the execution owner), lib/pipeline/stages/auditStage.ts,
+   lib/outreach/AutomatedOutreachOrchestrator.ts, lib/graph/delivery-graph.ts (all three
+   are background-job control flow needing the terminal result in the same call --
+   Step 5 requirement 12 exception, none are detached from a customer-facing request)
+
+$ pg_isready -h localhost -p 5435   -> "no response" / connection refused
+```
+
+**Environmental block (not a code gap):** no local Postgres reachable in this sandbox
+(`.env`'s `DATABASE_URL` points at `localhost:5435`, port closed). The P2-12 lease/
+heartbeat migration was statically validated (`prisma validate`, manual SQL review of
+`prisma/migrations/20260711120000_audit_job_lease_heartbeat/migration.sql` — 4 additive
+`ALTER TABLE ... ADD COLUMN` + 1 `CREATE INDEX`, all nullable, no backfill, documented
+rollback in a comment) and its queue logic was fully unit-tested against a mocked Prisma
+client, but an actual empty-database migration replay could not be executed. Recorded as
+`fixed` (not `verified`) for P2-12 per the campaign's status definitions.
+
+### One pre-existing, out-of-scope test failure identified and left untouched
+
+`lib/modules/__tests__/auditOrchestrator.test.ts::"should run phase 1 modules"` times out
+(30s). Confirmed via `git log --oneline -- <file>` that this test file has **zero** Wave
+0/1/2 commits or working-tree changes — it predates this campaign entirely. It mocks only
+2 of `AuditOrchestrator`'s ~14 modules (`websiteCrawler`, and `gbp` under the _wrong_
+export name — `runGbpModule` vs the real `runGBPModule`, so that mock never actually
+attaches), leaving the remaining modules to attempt real network/provider calls with no
+credentials in this sandbox. This is pre-existing test debt in a deprecated component,
+unrelated to any of the 12 Wave 2 findings and out of this wave's scope (`AuditOrchestrator`
+itself is being retired from production use, not corrected) — logged here rather than
+fixed, and not counted against Wave 2's gates.
+
+### Result
+
+**Verified (11):** P0-22, P0-23, P1-03, P1-20, P1-21, P1-22, P1-23, P1-24, P2-08, P2-24,
+P2-25.
+**Fixed, environmentally blocked (1):** P2-12 (lease/heartbeat code + migration complete
+and unit-tested; empty-DB migration replay blocked by no local Postgres in this sandbox).
+
+No production infrastructure, database, or live provider accounts were touched. All new
+tests use mocks/local fixtures; no live network calls were made by any test in this
+session's runs.
+
+### Stash disposition
+
+The named stash (`proposalos-wave2-wip-before-wave1-completion-2026-07-11`) is **dropped**
+after this session, because:
+
+1. Every file in its inventory was independently reviewed against the actual (already-
+   applied-and-extended) working-tree content, not assumed correct from the stash diff.
+2. All Wave 2 findings above reached `verified` or `fixed` status with real gate evidence.
+3. The one place the stash's own approach would have been _worse_ than the final working
+   tree (P2-25's separate `getEffectiveModuleRegistry()` filter function, vs. the final
+   inline `executePhase()` gating) was explicitly identified and the better approach was
+   kept — confirming the working tree is not merely "the stash unchanged."
+4. The working tree has zero remaining dependency on the stash (`git stash show --stat`
+   content is now a strict subset of, and superseded by, the committed Wave 2 changes).

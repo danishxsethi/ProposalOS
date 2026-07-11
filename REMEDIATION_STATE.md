@@ -105,7 +105,7 @@ work**, tracked so a later wave can complete them; they are NOT confirmed defect
 | ---- | ---------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- | ------ | -------------------------------- |
 | 0    | Emergency security containment                 | P0-19, P0-20, P0-21, P0-24, P1-14, P1-16, P2-52                                                                       | A, G   | **VERIFIED / COMMITTED**         |
 | 1    | Tenant & auth foundation                       | P1-05, P1-06, P1-07, P1-15, P1-17, P1-18, P2-07, P2-18, P2-22, P2-23                                                  | B, K   | **COMPLETE — see Wave 1 result** |
-| 2    | Canonical engine + durable job execution       | P0-22, P0-23, P1-03, P1-20, P1-21, P1-22, P1-23, P1-24, P2-08, P2-12, P2-24, P2-25                                    | C      | open                             |
+| 2    | Canonical engine + durable job execution       | P0-22, P0-23, P1-03, P1-20, P1-21, P1-22, P1-23, P1-24, P2-08, P2-12, P2-24, P2-25                                    | C      | **COMPLETE — see Wave 2 result** |
 | 3    | Finding/Evidence enforcement layer             | P1-09, P1-25, P1-26, P1-31, P2-13, P2-36, P2-40                                                                       | D      | open                             |
 | 4    | Shared network/browser/provider safety         | P1-46, P1-47, P1-48, P2-53, P2-54                                                                                     | G      | open                             |
 | 5    | Module adapter & failure-state repair          | P1-28, P1-33, P1-34, P1-39, P1-43, P2-28, P2-47                                                                       | E, H   | open                             |
@@ -364,3 +364,95 @@ point in this Wave 1 work.** A fresh Wave 2 session must inspect it before apply
 ## Next wave
 
 **Wave 2 — Canonical audit engine and durable job execution.**
+
+## Wave 2 result summary (Canonical audit engine and durable job execution)
+
+Resumed from an entry state that contradicted its own control-artifact record just above
+("still isolated, untouched"): the actual working tree already contained a near-complete
+Wave 2 implementation from an interrupted prior session (stash applied and substantially
+extended: full 27-module canonical manifest, dispatch layer, lease/heartbeat queue, Prisma
+migration, new tests) plus an unresolved 3-way git-index conflict in `lib/audit/runner.ts`
+(the working-tree content itself had no conflict markers — a manual resolution had been
+made but never staged). Full reconciliation, review, and gap-fixing detail is in
+`REMEDIATION_VERIFICATION.md`'s "Wave 2" section.
+
+- **Verified (11):** P0-22, P0-23, P1-03, P1-20, P1-21, P1-22, P1-23, P1-24, P2-08, P2-24,
+  P2-25.
+- **Fixed, environmentally blocked (1):** P2-12 — lease/heartbeat code, schema migration,
+  and unit tests complete; empty-database migration replay blocked by no local Postgres in
+  this sandbox (`localhost:5435` connection refused — same class of environment limitation
+  recorded for P1-06 in Wave 1).
+
+### Canonical architecture after Wave 2
+
+1. **Module source of truth:** `packages/shared/src/audit.ts::CANONICAL_AUDIT_MODULES` (27
+   modules: id/phase/dependsOn/optional/timeoutMs/rolloutFlag). Enforced against
+   `lib/audit/runner.ts::MODULE_REGISTRY` by
+   `tests/architecture/canonical-module-manifest.test.ts`. The old 5-module
+   "CANONICAL_MODULES" was renamed `CRITICAL_COMPLETION_MODULES` with a doc comment; it is
+   a completeness-guardrail subset, not a competing full list. The 14-module
+   `AuditOrchestrator` list survives only inside the deprecated, non-production-reachable
+   class.
+2. **Execution engine:** `lib/audit/runner.ts`'s `executePhase()`/`MODULE_REGISTRY` is the
+   only production engine. `runModuleSubset()` runs a named subset through the identical
+   path. `AuditOrchestrator` has zero production callers; its dead wrapper
+   (`lib/orchestrator/index.ts`) is deleted.
+3. **Durable dispatch:** `lib/audit/dispatch.ts::dispatchAuditExecution()` is the one
+   shared enqueue entry point (idempotent, `batchId === auditId`), used by every
+   audit-creation surface: `/api/audit`, `/api/v1/audit`, `/api/public/audit`,
+   `/api/client/scan`, the outreach sniper worker, and scheduled/retention re-audits.
+4. **Scheduled-audit owner:** `lib/retention/scheduled-audit-runner.ts::processScheduledAudits()`,
+   called by both `app/api/cron/scheduled-audits/route.ts` and
+   `lib/graph/retention-graph.ts`'s `run_scheduled_audits` node; atomic claim via
+   conditional `updateMany` prevents double-dispatch of the same due occurrence.
+5. **Widget quick-audit:** `EXECUTION_PROFILES.QUICK_AUDIT` (`website`+`gbp`), executed via
+   `runModuleSubset()`; score/topIssue derive from real normalized findings, no
+   fabrication.
+6. **Feature flags:** `lib/config/feature-flags.ts::getEffectiveFeatureFlags()`/
+   `isFeatureEnabledEffective()` is the one DB-override-aware read path, used by both the
+   admin API and `MODULE_REGISTRY`'s gating — an admin toggle now has a real, tested effect
+   on execution (previously it only changed the admin API's own GET response; found and
+   fixed during this session's own verification, beyond the inherited WIP).
+7. **Job lease/heartbeat:** `AuditJob.leaseOwner/leaseToken/leaseExpiresAt/lastHeartbeatAt`
+   (additive migration); atomic claim, owner-bound heartbeat/complete/fail, stale-lease
+   reclaim, rejected late completions from a superseded worker.
+
+### Files changed (Wave 2, beyond the already-tracked Wave 0/1 unrelated groups)
+
+`app/api/audit/route.ts`, `app/api/v1/audit/route.ts`, `app/api/public/audit/route.ts`,
+`app/api/client/scan/route.ts`, `app/api/cron/scheduled-audits/route.ts`,
+`app/api/worker/audit-job/route.ts`, `app/api/widget/quick-audit/route.ts`,
+`app/api/admin/feature-flags/route.ts`, `lib/audit/dispatch.ts` (new),
+`lib/audit/modules.ts`, `lib/audit/runner.ts`, `lib/config/feature-flags.ts`,
+`lib/orchestrator/auditOrchestrator.ts`, `lib/orchestrator/index.ts` (deleted),
+`lib/outreach/sprint2/sniperWorker.ts`, `lib/pipeline/stages/auditStage.ts`,
+`lib/queue/auditJobQueue.ts`, `lib/queue/auditJobWorker.ts`,
+`lib/retention/scheduled-audit-runner.ts`, `packages/shared/src/audit.ts`, `cron.yaml`,
+`prisma/schema.prisma`, `prisma/migrations/20260711120000_audit_job_lease_heartbeat/` (new),
+`tests/architecture/canonical-module-manifest.test.ts` (new),
+`tests/security/audit-job-lease-heartbeat.test.ts` (new),
+`tests/security/feature-flag-effective-override.test.ts` (new),
+`tests/security/widget-graceful-degradation.test.ts`,
+`tests/security/widget-origin-allowlist.test.ts`, `tests/integration/audit-api.test.ts`,
+`tests/security/batch-queue-worker.test.ts`.
+
+### Stash disposition
+
+`stash@{0}` (`proposalos-wave2-wip-before-wave1-completion-2026-07-11`) — **dropped** this
+session after full review/verification (see `REMEDIATION_VERIFICATION.md` for the exact
+reasoning; the working tree had already superseded it and had zero remaining dependency on
+it).
+
+### Known out-of-scope pre-existing issue (not touched)
+
+`lib/modules/__tests__/auditOrchestrator.test.ts` times out (30s) — predates this campaign
+entirely (zero Wave 0/1/2 changes to that file), mocks the wrong GBP export name and only 2
+of ~14 modules, so the rest attempt real network calls with no credentials. Deprecated
+component, unrelated to any Wave 2 finding; left for whichever future wave addresses
+`AuditOrchestrator`'s eventual deletion.
+
+## Next wave
+
+**Wave 3 — Finding/Evidence contract enforcement.** See the exact continuation prompt at
+the end of `REMEDIATION_VERIFICATION.md`'s Wave 2 section / the final chat response of this
+session.

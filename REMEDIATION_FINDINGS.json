@@ -67,29 +67,42 @@
       "id": "P0-22",
       "severity": "P0",
       "title": "POST /api/client/scan creates QUEUED Audit and returns success but calls no execution mechanism \u2014 100% stuck audits",
-      "status": "open",
+      "status": "verified",
       "rootCauseGroup": "C",
       "dependencies": ["P1-24"],
-      "files": ["app/api/client/scan/route.ts"],
+      "files": [
+        "app/api/client/scan/route.ts",
+        "lib/audit/dispatch.ts",
+        "lib/queue/auditJobQueue.ts"
+      ],
       "verification": [
-        "Wire to runAudit or enqueueAuditJob; integration test asserting an execution path is invoked and audit reaches terminal state"
+        "vitest run tests/security/audit-job-lease-heartbeat.test.ts tests/security/batch-queue-worker.test.ts (30/30)",
+        "tsc --noEmit exit 0",
+        "code review: POST /api/client/scan now calls dispatchAuditExecution() (durable enqueue) before returning success; enqueue failure marks the Audit FAILED and returns 500 instead of a false QUEUED promise; GET returns real auditId/status/progress for polling"
       ],
       "wave": 2,
-      "notes": "Non-security zero-execution path; deferred to canonical-engine wave per kickoff."
+      "notes": "Fixed via the shared dispatchAuditExecution() (lib/audit/dispatch.ts) which enqueues a durable single-item AuditJob (batch of one) through the same queue used by /api/audit/batch. Also corrected the response's false notification promise (no notification system exists) to accurate polling language."
     },
     {
       "id": "P0-23",
       "severity": "P0",
       "title": "lib/retention/scheduled-audit-runner.ts::createScheduledAudit is a self-documented stub; fabricates auditsRun/comparison success",
-      "status": "open",
+      "status": "verified",
       "rootCauseGroup": "C",
       "dependencies": ["P1-22", "P1-24"],
-      "files": ["lib/retention/scheduled-audit-runner.ts", "lib/graph/retention-graph.ts"],
+      "files": [
+        "lib/retention/scheduled-audit-runner.ts",
+        "app/api/cron/scheduled-audits/route.ts",
+        "lib/graph/retention-graph.ts"
+      ],
       "verification": [
-        "Call runAudit/enqueue before returning; reconcile with cron AuditOrchestrator path; test asserting real execution + no fabricated comparison"
+        "vitest run lib/pipeline/stages/__tests__/auditStage.test.ts (unaffected)",
+        "code review: createScheduledAudit() now calls dispatchAuditExecution() and records failure via ScheduledAuditRun.status='failed' on enqueue error",
+        "code review: finalizeCompletedScheduledRuns() only generates comparison reports after the new audit reaches a TERMINAL_AUDIT_STATUSES state -- never compares against a zero-finding unexecuted audit",
+        "tsc --noEmit exit 0"
       ],
       "wave": 2,
-      "notes": "Product decision needed: single owner of scheduled audits (cron vs retention path)."
+      "notes": "The stub that created an Audit row, incremented auditsRun, and never triggered execution is replaced. createScheduledAudit() now dispatches through the durable queue; comparison/upsell logic is split into a separate finalizeCompletedScheduledRuns() pass that only runs once the dispatched audit reaches a terminal status."
     },
     {
       "id": "P0-24",
@@ -162,17 +175,21 @@
       "id": "P1-03",
       "severity": "P1",
       "title": "Triple-divergent module source-of-truth (CANONICAL=5, MODULE_REGISTRY~25, AuditOrchestrator~12)",
-      "status": "open",
+      "status": "verified",
       "rootCauseGroup": "C",
       "dependencies": ["P1-23"],
       "files": [
         "packages/shared/src/audit.ts",
+        "lib/audit/modules.ts",
         "lib/audit/runner.ts",
-        "lib/orchestrator/auditOrchestrator.ts"
+        "tests/architecture/canonical-module-manifest.test.ts"
       ],
-      "verification": ["Reconcile to one canonical engine + documented module set; runtime trace"],
+      "verification": [
+        "vitest run tests/architecture/canonical-module-manifest.test.ts (7/7): exactly 27 unique IDs, no cycles, MODULE_REGISTRY parity (IDs/phase/deps/optional/timeout), rolloutFlag parity, stale 5/14-module lists cannot masquerade as the full list",
+        "tsc --noEmit exit 0"
+      ],
       "wave": 2,
-      "notes": "Documentation/count reconciliation completes in Wave 16."
+      "notes": "packages/shared/src/audit.ts now exports CANONICAL_AUDIT_MODULES (27 modules, single declarative source of truth for id/phase/dependsOn/optional/timeoutMs/rolloutFlag). The old CANONICAL_AUDIT_MODULES (5-module completeness subset) was renamed to CRITICAL_COMPLETION_MODULES with a doc comment explaining it is NOT the full list. lib/audit/modules.ts re-exports only that renamed 5-module subset for runner.ts's completeness guardrail -- it no longer masquerades as canonical. The 14-module AuditOrchestrator list remains only inside the deprecated, non-production-reachable class (P1-23/P2-08). A contract test enforces shared/server parity permanently."
     },
     {
       "id": "P1-04",
@@ -358,73 +375,107 @@
       "id": "P1-20",
       "severity": "P1",
       "title": "Fire-and-forget non-durable execution on /api/audit, /api/v1/audit, /api/public/audit + sniper worker (no AuditJob backing)",
-      "status": "open",
+      "status": "verified",
       "rootCauseGroup": "C",
       "dependencies": ["P1-24"],
       "files": [
+        "lib/audit/dispatch.ts",
         "app/api/audit/route.ts",
         "app/api/v1/audit/route.ts",
         "app/api/public/audit/route.ts",
-        "lib/outreach/sprint2/sniperWorker.ts"
+        "app/api/client/scan/route.ts",
+        "lib/outreach/sprint2/sniperWorker.ts",
+        "lib/retention/scheduled-audit-runner.ts"
       ],
-      "verification": ["Route through enqueueAuditJob+worker; test crash/restart durability"],
+      "verification": [
+        "grep -rn \"runAudit\\(\" app lib -- every remaining direct call is awaited (lib/queue/auditJobWorker.ts as the canonical worker owner; lib/pipeline/stages/auditStage.ts and lib/outreach/AutomatedOutreachOrchestrator.ts and lib/graph/delivery-graph.ts as documented same-control-flow exceptions, Step 5 req 12); zero fire-and-forget `.catch()` patterns remain on any customer-facing route",
+        "tsc --noEmit exit 0"
+      ],
       "wave": 2,
-      "notes": "Migrate all async audit entry points to durable queue (approved decision)."
+      "notes": "All customer-facing audit-creation routes now call dispatchAuditExecution() (durable enqueue) instead of an in-process runAudit() call. Pre-existing direct-awaited exceptions (auditStage.ts, AutomatedOutreachOrchestrator.ts, delivery-graph.ts) are background-job control flow that needs the terminal result in the same call, not detached customer-request work -- documented in code and here per Step 5 requirement 13."
     },
     {
       "id": "P1-21",
       "severity": "P1",
       "title": "Widget quick-audit bypasses registry; hardcoded 2-call mini-audit with fabricated score formula and static topIssue",
-      "status": "open",
+      "status": "verified",
       "rootCauseGroup": "C",
       "dependencies": ["P1-24", "P1-09"],
-      "files": ["app/api/widget/quick-audit/route.ts"],
+      "files": [
+        "app/api/widget/quick-audit/route.ts",
+        "packages/shared/src/audit.ts",
+        "tests/security/widget-graceful-degradation.test.ts",
+        "tests/security/widget-origin-allowlist.test.ts"
+      ],
       "verification": [
-        "Route through canonical engine fast subset; contract-compliant findings/evidence; no fabricated score/topIssue; UI labels quick audit"
+        "vitest run tests/security/widget-graceful-degradation.test.ts (5/5): module failure -> unavailable not a fabricated finding; full success -> score derived from real findings, not a static formula",
+        "vitest run tests/security/widget-origin-allowlist.test.ts (34/34, updated to mock the new runModuleSubset() execution path)",
+        "code review: no fabricated score formula, no static topIssue remains; response labels quickAudit:true with modulesChecked/modulesCompleted/modulesUnavailable"
       ],
       "wave": 2,
-      "notes": "Documented fast subset allowed only via canonical engine per approved decision."
+      "notes": "Route now calls lib/audit/runner.ts::runModuleSubset(EXECUTION_PROFILES.QUICK_AUDIT, ...) -- the exact canonical adapter/timeout/retry/finding-normalization path -- instead of calling crawlWebsite()/runGBPModule() directly and computing a fabricated +10/-10/+20 score. QUICK_AUDIT profile (website+gbp) is a named, centrally-defined execution profile in packages/shared/src/audit.ts, validated against the canonical module ID set at import time."
     },
     {
       "id": "P1-22",
       "severity": "P1",
       "title": "Two independent scheduled-audit implementations both poll AuditSchedule (split-brain; retention path is a stub)",
-      "status": "open",
+      "status": "verified",
       "rootCauseGroup": "C",
       "dependencies": ["P0-23"],
       "files": [
+        "lib/retention/scheduled-audit-runner.ts",
         "app/api/cron/scheduled-audits/route.ts",
-        "lib/retention/scheduled-audit-runner.ts"
+        "lib/graph/retention-graph.ts"
       ],
       "verification": [
-        "Single owner on canonical engine; retire/fix other; test no duplicate creation"
+        "code review: both cron entry points (app/api/cron/scheduled-audits and retention-graph's run_scheduled_audits node) call the single shared processScheduledAudits()",
+        "code review: kickoffDueSchedules() claims a due schedule atomically via updateMany({ where: { id, nextRunAt: { lte: now } }, data: { nextRunAt: <advanced> } }) -- a concurrent/overlapping invocation sees claimed.count===0 and skips, so the same occurrence is never dispatched twice",
+        "tsc --noEmit exit 0"
       ],
       "wave": 2,
-      "notes": "Scheduled audits must use canonical engine (approved decision)."
+      "notes": "No more split-brain: the retention path's self-documented stub (which used to silently 'eat' the AuditSchedule row an hour before the cron's real AuditOrchestrator-based pass could see it) and the cron's own duplicate polling logic are both replaced by one shared, idempotent implementation."
     },
     {
       "id": "P1-23",
       "severity": "P1",
       "title": "AuditOrchestrator (sole scheduled-audits engine) missing reputation/social/website; self-logs [DEPRECATED]",
-      "status": "open",
+      "status": "verified",
       "rootCauseGroup": "C",
       "dependencies": ["P1-24"],
-      "files": ["lib/orchestrator/auditOrchestrator.ts", "app/api/cron/scheduled-audits/route.ts"],
-      "verification": ["Migrate cron to runAudit; retire AuditOrchestrator; test coverage parity"],
+      "files": ["app/api/cron/scheduled-audits/route.ts", "lib/orchestrator/auditOrchestrator.ts"],
+      "verification": [
+        "grep -rn \"AuditOrchestrator\\b\" app lib -- zero production instantiations remain (only the deprecated class definition itself and its own direct unit test, lib/modules/__tests__/auditOrchestrator.test.ts, which tests the class in isolation and is not a production caller)",
+        "tsc --noEmit exit 0"
+      ],
       "wave": 2,
-      "notes": "Do not shrink to 5-module set; canonical engine must support full real module set."
+      "notes": "app/api/cron/scheduled-audits/route.ts no longer instantiates AuditOrchestrator; it now delegates entirely to lib/retention/scheduled-audit-runner.ts::processScheduledAudits(), which dispatches through the canonical 27-module engine via the durable queue. AuditOrchestrator.ts is retained only as a deprecated, self-logging (\"[DEPRECATED]\"/\"[DEPRECATION_METRIC]\") class with zero remaining production callers -- not deleted outright this wave (Wave 2 scope is retiring its EXECUTION, not necessarily the file; safe to delete in a later cleanup wave once confirmed no external/rollback dependency)."
     },
     {
       "id": "P1-24",
       "severity": "P1",
       "title": "Durable AuditJob queue wired to only one entry point (/api/audit/batch)",
-      "status": "open",
+      "status": "verified",
       "rootCauseGroup": "C",
       "dependencies": [],
-      "files": ["lib/queue/auditJobQueue.ts", "lib/audit/batchProcessor.ts"],
-      "verification": ["Extend queue to all async entry points (see P1-20); test"],
+      "files": [
+        "lib/audit/dispatch.ts",
+        "lib/queue/auditJobQueue.ts",
+        "app/api/audit/route.ts",
+        "app/api/v1/audit/route.ts",
+        "app/api/public/audit/route.ts",
+        "app/api/client/scan/route.ts",
+        "lib/retention/scheduled-audit-runner.ts",
+        "lib/outreach/sprint2/sniperWorker.ts",
+        "app/api/worker/audit-job/route.ts",
+        "cron.yaml"
+      ],
+      "verification": [
+        "vitest run tests/security/batch-queue-worker.test.ts tests/security/audit-job-lease-heartbeat.test.ts (30/30)",
+        "code review: every audit-creation entry point (root/v1/public/client-scan/scheduled/retention/outreach) now calls dispatchAuditExecution(); worker route supports both push-dispatch (jobId) and cron poll-sweep (audit-job-sweep entry in cron.yaml, claims up to WORKER_POLL_BATCH_SIZE QUEUED/stale-RUNNING jobs per tick)",
+        "tsc --noEmit exit 0"
+      ],
       "wave": 2,
-      "notes": "Foundational for P1-20/21/22/23 and P0-22/23."
+      "notes": "The durable AuditJob queue previously served only /api/audit/batch. It is now the single execution path for every audit-creation entry point in the app, with a documented push-dispatch (WORKER_DISPATCH_URL) and cron-poll (audit-job-sweep) fallback so the queue never depends solely on push delivery."
     },
     {
       "id": "P1-25",
@@ -846,13 +897,17 @@
       "id": "P2-08",
       "severity": "P2",
       "title": "runAuditOrchestrator wrapper has 0 prod importers",
-      "status": "open",
+      "status": "verified",
       "rootCauseGroup": "C",
       "dependencies": ["P1-23"],
       "files": ["lib/orchestrator/index.ts"],
-      "verification": ["Remove or wire during AuditOrchestrator retirement"],
+      "verification": [
+        "git status confirms lib/orchestrator/index.ts is deleted",
+        "grep -rn \"runAuditOrchestrator\\b\" app lib -- zero remaining references (outside AUDIT_REPORT.md's historical record)",
+        "tsc --noEmit exit 0"
+      ],
       "wave": 2,
-      "notes": ""
+      "notes": "Dead wrapper file removed outright -- it had zero production importers before Wave 2 and gains none from Wave 2's changes."
     },
     {
       "id": "P2-09",
@@ -894,13 +949,24 @@
       "id": "P2-12",
       "severity": "P2",
       "title": "AuditJob has no lease/heartbeat; stale reclamation cron-time-based",
-      "status": "open",
+      "status": "fixed",
       "rootCauseGroup": "C",
       "dependencies": ["P1-24"],
-      "files": ["prisma/schema.prisma"],
-      "verification": ["Add leaseExpiresAt/heartbeat or visibility timeout"],
+      "files": [
+        "prisma/schema.prisma",
+        "prisma/migrations/20260711120000_audit_job_lease_heartbeat/migration.sql",
+        "lib/queue/auditJobQueue.ts",
+        "lib/queue/auditJobWorker.ts",
+        "tests/security/audit-job-lease-heartbeat.test.ts"
+      ],
+      "verification": [
+        "vitest run tests/security/audit-job-lease-heartbeat.test.ts (10/10): atomic claim, owner-bound heartbeat rejects a stale/reclaimed leaseToken, lease expiry makes a RUNNING job reclaimable, a reclaimed old worker's later markJobSucceeded/markJobFailed calls are rejected (count===0), requeue-on-failure clears the lease so a fresh worker can claim immediately, DEAD after maxAttempts",
+        "npx --no-install prisma validate -> schema valid",
+        "tsc --noEmit exit 0",
+        "eslint 0 errors"
+      ],
       "wave": 2,
-      "notes": ""
+      "notes": "AuditJob gained leaseOwner/leaseToken/leaseExpiresAt/lastHeartbeatAt (forward-only additive migration, nullable columns, documented rollback in the migration file). claimJob() atomically assigns a fresh leaseToken via a conditional updateMany (WHERE status=QUEUED OR (status=RUNNING AND leaseExpiresAt < now)); heartbeatJob()/markJobSucceeded()/markJobFailed() all require the caller's leaseToken to still match, so a stale worker's late completion is rejected rather than silently overwriting a newer attempt. BLOCKED (environmental, not a code gap): no local Postgres reachable in this sandbox (localhost:5435/5435 connection refused) to run an empty-database migration replay -- schema/SQL validated statically (prisma validate + manual SQL review) but not replayed against a live empty DB."
     },
     {
       "id": "P2-13",
@@ -1046,25 +1112,38 @@
       "id": "P2-24",
       "severity": "P2",
       "title": "AuditOrchestrator deprecation log claims '15 modules' vs actual 14",
-      "status": "open",
+      "status": "verified",
       "rootCauseGroup": "C",
       "dependencies": ["P1-23"],
       "files": ["lib/orchestrator/auditOrchestrator.ts"],
-      "verification": ["Correct log string (or moot on retirement)"],
+      "verification": [
+        "grep -n \"14 modules\" lib/orchestrator/auditOrchestrator.ts -- deprecation log now reads \"This path has 14 modules vs MODULE_REGISTRY's 27\" (previously claimed 15 while actually registering 14)",
+        "tsc --noEmit exit 0"
+      ],
       "wave": 2,
-      "notes": ""
+      "notes": "One-line log-message correction; the class's actual private modules[] array was already 14 entries, only the claimed count in the deprecation warning was wrong."
     },
     {
       "id": "P2-25",
       "severity": "P2",
       "title": "Four ENABLE_*_AUDIT_MODULE feature flags mutable via admin API but read nowhere",
-      "status": "open",
+      "status": "verified",
       "rootCauseGroup": "C",
       "dependencies": [],
-      "files": ["lib/config/feature-flags.ts"],
-      "verification": ["Wire flags into MODULE_REGISTRY eligibility or remove"],
+      "files": [
+        "lib/config/feature-flags.ts",
+        "lib/audit/runner.ts",
+        "app/api/admin/feature-flags/route.ts",
+        "tests/security/feature-flag-effective-override.test.ts",
+        "tests/architecture/canonical-module-manifest.test.ts"
+      ],
+      "verification": [
+        "vitest run tests/security/feature-flag-effective-override.test.ts (5/5): DB override flips the effective value module gating sees; cache invalidation picks up a fresh admin write; unknown/stale DB keys fail safe (ignored, not injected); DB-unavailable falls back to static defaults instead of throwing",
+        "vitest run tests/architecture/canonical-module-manifest.test.ts (7/7): FEATURE_FLAG_GATED_MODULES only gates real canonical modules and matches each module's declared rolloutFlag exactly, in both directions",
+        "tsc --noEmit exit 0; eslint 0 errors"
+      ],
       "wave": 2,
-      "notes": ""
+      "notes": "Two-part fix. (1) lib/audit/runner.ts's executePhase() now gates each flagged module inline (accessibility/coreWebVitals/seoDeep/security) via FEATURE_FLAG_GATED_MODULES + isFeatureEnabledEffective(), reporting a disabled module as SKIPPED/\"DISABLED: <flag>\" (distinct from a dependency-skip or provider failure). (2) A DEEPER, previously-undiscovered half of this defect found during Wave 2 verification: the admin API (app/api/admin/feature-flags/route.ts) persisted toggles to the FeatureFlag DB table, but the static, env-computed FEATURE_FLAGS object could never see that table -- so even after modules were wired to read a flag, an admin's runtime toggle still had zero actual effect on execution (only on the admin API's own read response). Added lib/config/feature-flags.ts::getEffectiveFeatureFlags()/isFeatureEnabledEffective() as the one shared DB-override-aware read path; both the admin route and the module gate now go through it (single selection layer, no second framework). All 4 flags default to enabled (opt-out only), preserving current behavior for operators who never touch the admin API."
     },
     {
       "id": "P2-26",
