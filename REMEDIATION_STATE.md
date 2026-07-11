@@ -106,7 +106,7 @@ work**, tracked so a later wave can complete them; they are NOT confirmed defect
 | 0    | Emergency security containment                 | P0-19, P0-20, P0-21, P0-24, P1-14, P1-16, P2-52                                                                       | A, G   | **VERIFIED / COMMITTED**         |
 | 1    | Tenant & auth foundation                       | P1-05, P1-06, P1-07, P1-15, P1-17, P1-18, P2-07, P2-18, P2-22, P2-23                                                  | B, K   | **COMPLETE — see Wave 1 result** |
 | 2    | Canonical engine + durable job execution       | P0-22, P0-23, P1-03, P1-20, P1-21, P1-22, P1-23, P1-24, P2-08, P2-12, P2-24, P2-25                                    | C      | **COMPLETE — see Wave 2 result** |
-| 3    | Finding/Evidence enforcement layer             | P1-09, P1-25, P1-26, P1-31, P2-13, P2-36, P2-40                                                                       | D      | open                             |
+| 3    | Finding/Evidence enforcement layer             | P1-09, P1-25, P1-26, P1-31, P2-13, P2-36, P2-40                                                                       | D      | **COMPLETE — see Wave 3 result** |
 | 4    | Shared network/browser/provider safety         | P1-46, P1-47, P1-48, P2-53, P2-54                                                                                     | G      | open                             |
 | 5    | Module adapter & failure-state repair          | P1-28, P1-33, P1-34, P1-39, P1-43, P2-28, P2-47                                                                       | E, H   | open                             |
 | 6    | Fully implement broken/missing modules         | P0-25, P1-30, P1-37, P1-41, P1-42, P2-30                                                                              | F      | open                             |
@@ -456,3 +456,284 @@ component, unrelated to any Wave 2 finding; left for whichever future wave addre
 **Wave 3 — Finding/Evidence contract enforcement.** See the exact continuation prompt at
 the end of `REMEDIATION_VERIFICATION.md`'s Wave 2 section / the final chat response of this
 session.
+
+## Wave 3 result summary (Finding/Evidence contract enforcement)
+
+### Entry-state verification (this session)
+
+- Branch `remediation/proposalos-e2e`; HEAD `a0fba244` = documented Wave 2 checkpoint
+  (`chore(remediation): checkpoint wave 2`), with `fix(audit-engine): consolidate
+canonical engine and durable job execution` directly beneath it. Confirmed via
+  `git log --oneline -12`.
+- `git stash list` — empty, matching the documented "Wave 2 stash dropped" disposition.
+- Dirty working tree exactly matched the documented baseline (AUDIT_REPORT.md,
+  logger-typing group, `prompt-performance.ts`, `metering-sweep/route.ts`,
+  untracked `scripts/show-leaks.js`) — none of it touched this session.
+- Baseline `tsc --noEmit --pretty false --incremental false` — exit 0 (clean) before any
+  Wave 3 edit.
+
+### Authoritative Wave 3 finding set (reconciled against REMEDIATION_FINDINGS.json)
+
+`P1-09, P1-25, P1-26, P1-31, P2-13, P2-36, P2-40` — confirmed by filtering
+`REMEDIATION_FINDINGS.json` for `wave === 3`. **P1-33 is `wave: 5`, not Wave 3** (schemaMarkup
+result-shape drift is root-cause group E — module adapter correctness — not group D; the
+campaign prompt's "if assigned to Wave 3 by the campaign ledger" condition is false for P1-33,
+so it was left untouched and still open, assigned to Wave 5).
+
+### Step 2 — finding-construction/persistence inventory (bounded)
+
+Every production path that can create, normalize, persist, or transform a Finding was
+enumerated via `grep -rn "prisma\.finding\.(create|createMany|update|upsert)"` plus a read of
+`lib/audit/runner.ts`'s aggregation loop and every module's `generate*Findings`/`AuditModuleResult`
+return sites:
+
+| Path                                                                                                     | Classification (before Wave 3)                                                                                                                                                        | Classification (after Wave 3)                                                                                                                                                                                                                                        |
+| -------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `lib/audit/runner.ts` `runAuditInternal` → `prisma.finding.createMany`                                   | DIRECT_UNVALIDATED                                                                                                                                                                    | CANONICAL_VALIDATED (routed through `persistFindings`)                                                                                                                                                                                                               |
+| `app/api/finding/[id]/route.ts` PATCH/DELETE → `prisma.finding.update`                                   | DIRECT_UNVALIDATED                                                                                                                                                                    | CANONICAL_VALIDATED (routed through `updateFindingFields`/`excludeFinding`)                                                                                                                                                                                          |
+| `lib/outreach/AutomatedOutreachOrchestrator.ts` simulate mode → `prisma.finding.createMany`              | DIRECT_UNVALIDATED, fabricated evidence                                                                                                                                               | CANONICAL_VALIDATED (routed through `persistFindings`; fabricated evidence now honestly labeled `sandbox://` and, where still contract-invalid, rejected — see P2-61)                                                                                                |
+| `lib/modules/*.ts` (`techStack`, `gbpDeep`, and 25 other module adapters) → `AuditModuleResult.findings` | mixed CANONICAL_VALIDATED / DIRECT_UNVALIDATED (many `evidence:[]`)                                                                                                                   | `techStack`/`gbpDeep` mechanically fixed at source (P1-26/P1-31); the other 25 modules' raw output is now uniformly forced through `normalizeAndValidateModuleFindings` at the aggregation boundary — LEGACY_SHAPE/invalid output is REJECTED, not silently accepted |
+| `gbpAdapter`/`competitorAdapter` (`lib/audit/runner.ts`) — legacy `LegacyAuditModuleResult.status` field | DIRECT_UNVALIDATED (status laundered to COMPLETE regardless — P1-28/P1-49)                                                                                                            | CANONICAL_VALIDATED (status propagated honestly)                                                                                                                                                                                                                     |
+| `lib/proposal/index.ts` `normalizeFindingsForProposal` (diagnosis/proposal input)                        | DIRECT_UNVALIDATED (fabricated a replacement Evidence item for 0-evidence findings)                                                                                                   | CANONICAL_VALIDATED (drops rather than repairs — P1-51)                                                                                                                                                                                                              |
+| `app/api/widget/quick-audit/route.ts` (QUICK_AUDIT profile)                                              | CANONICAL_VALIDATED (shares `MODULE_REGISTRY`/`extractFindingsFromRegistryResult` with the full engine; does not persist Findings to the DB at all, only computes an in-memory score) | unchanged — already canonical per Wave 2 (P1-21); no Wave 3 change needed                                                                                                                                                                                            |
+| `lib/tenant/__tests__/isolation*.test.ts`, `prisma/seed.ts`                                              | test fixtures / dev seed tooling                                                                                                                                                      | unchanged — allowlisted in the architecture guard, never request-serving production code                                                                                                                                                                             |
+
+No other `prisma.finding.*` mutating call site exists in `app/` or `lib/` outside the
+above (confirmed by the final grep in Mandatory Verification below and enforced going
+forward by `tests/architecture/finding-persistence-boundary.test.ts`).
+
+### Step 3/4 — canonical contract + createEvidence hardening
+
+- **New file `lib/modules/types.ts` additions**: `PLACEHOLDER_POINTER_VALUES`,
+  `isPlaceholderPointer()`, `containsSecretLike()`, `assertRealPointer()`.
+  `createEvidence()`'s `pointer` parameter is now required (removed the `?`) and the
+  `pointer: opts.pointer || 'unknown'` fallback is gone — a missing/blank/placeholder/
+  secret-like pointer throws instead of silently producing a fabricated value.
+- **Deliberate scope decision on domain-based placeholder detection**: an earlier
+  iteration additionally banned `example.com`/`example.org`/`example.net`/`test.com` as
+  pointer domains (operationalizing "reject fabricated pseudo-URLs"). This broke 3
+  pre-existing test suites (`lib/modules/__tests__/findingGenerator.test.ts`,
+  `tests/security/widget-origin-allowlist.test.ts`) that use `https://example.com` as a
+  deliberate, real, live-fetchable test domain — not a fabricated placeholder. A pointer
+  identifying a URL that was genuinely fetched is real evidence regardless of which
+  domain it happens to be; domain identity alone cannot prove fabrication. Narrowed the
+  banned-domain list to `localhost`/`127.0.0.1` only (a real customer site can never
+  legitimately be a loopback host) and rely on the exact-placeholder-word list +
+  module-name-only-pointer check + secret-scan for lexical fabrication detection. The
+  concrete fabrication case the campaign named (`AutomatedOutreachOrchestrator`'s
+  `{url:'https://example.com'}`) is still fixed — not because of the domain, but because
+  that object never had `pointer`/`source`/`collected_at` fields at all (shape
+  violation) and, separately, was honestly relabeled with a `sandbox://` provenance
+  scheme rather than impersonating a real external URL (see P2-61).
+- **New file `lib/audit/findingContract.ts`**: `EvidenceRuntimeSchema`,
+  `FindingRuntimeSchema` (Zod, mirroring the existing `Evidence`/`Finding` TS interfaces
+  — not a parallel contract), `normalizeAndValidateModuleFindings()` (the adapter/
+  aggregation boundary, Step 5), `validateFindingForPersistence()` (Step 6), plus
+  `hasContractValidEvidence()`/`validateEvidenceItem()`/`validateFinding()` helpers.
+  `FINDING_ELIGIBLE_STATES = {'COMPLETE', 'PARTIAL'}` — a finding from any other module
+  status is rejected outright, not merely filtered for negativity.
+- **Deliberate scope decision on module-status vocabulary (Step 5 requirement 2's
+  escape clause)**: did NOT introduce a new `VERIFIED_ABSENT`/`UNAVAILABLE` value on
+  `ModuleResult.status` (which would have touched all ~25 existing adapters). Root
+  cause investigation showed `lib/audit/runner.ts::extractFindingsFromRegistryResult`
+  already refuses to extract any finding from a module whose `ModuleResult.status !==
+'COMPLETE'` — the real, previously unguarded gap was exactly two adapters
+  (`gbpAdapter`, `competitorAdapter`) that reported `COMPLETE` unconditionally,
+  discarding the wrapped legacy module's own `status: 'failed'` signal (AUDIT_REPORT.md
+  Pass 4B, P1-28). Fixed both directly (P1-28, and the newly-discovered identical
+  `competitorAdapter` case, P1-49) instead of adding a new enum value with no real
+  producer. The Evidence contract (non-empty, non-placeholder, real pointer) is the
+  actual proof-of-observation mechanism regardless of which status label a module used.
+
+### Step 5 — adapter/aggregation boundary wiring
+
+`lib/audit/runner.ts::runAuditInternal`'s per-module aggregation loop now calls
+`normalizeAndValidateModuleFindings(modName, res.status, ext.findings)` immediately after
+`extractFindingsFromRegistryResult`, before pushing into `allFindings`. Rejected findings
+are accumulated and logged as one structured `audit.findings_rejected_at_aggregation`
+event (module, title, reason, issues) rather than silently dropped. Trusted `module`
+identity is now always the canonical dispatcher's `moduleName`, never `f.module` from
+module output (previously `f.module || moduleName` preferred the module's own claim).
+
+Removed the "GBP missing fallback" block that fabricated a "No Google Business Listing
+Detected" PAINKILLER Finding whenever `gbp` wasn't in `modulesCompleted` — this could not
+distinguish a genuine zero-result search from a provider outage, quota error, or missing
+API key (all three previously produced the identical fabricated finding). No finding is
+synthesized in its place; a trustworthy "verified no GBP listing" finding requires
+`gbp.ts` itself to return real evidence identifying the search that ran, which is module
+work for Wave 5/6 (root-cause group E/H), not a Wave 3 boundary fix.
+
+### Step 6 — persistence enforcement boundary
+
+**New file `lib/audit/findingPersistence.ts`** — the one module allowed to call
+`prisma.finding.create/createMany/update`:
+
+- `persistFindings(auditId, tenantId, findings)`: revalidates every finding
+  independently immediately before the Prisma call (`validateFindingForPersistence`);
+  `auditId`/`tenantId` always come from function parameters, never trusted off the
+  finding object (proven by test: an attacker-supplied `auditId`/`tenantId` on the
+  finding object is silently overwritten with the trusted value). Explicit partial-batch
+  policy: valid findings persist, invalid ones are dropped and returned in `rejected`
+  with structured reasons — a malformed finding never blocks its valid siblings, and
+  never silently vanishes (logged via `audit.findings_rejected_at_persistence`).
+- `updateFindingFields(id, fields)` / `excludeFinding(id)`: bounded human-review edits
+  (title/description/scores/effort/excluded) that never touch
+  evidence/module/auditId/tenantId — those are set once, at creation.
+- `lib/audit/runner.ts`'s `prisma.finding.createMany` call replaced with
+  `persistFindings(...)`. `app/api/finding/[id]/route.ts`'s two `prisma.finding.update`
+  calls replaced with the two bounded helpers.
+- `tests/architecture/finding-persistence-boundary.test.ts`: greps `app/`+`lib/` for any
+  mutating `prisma.finding.*` call outside `lib/audit/findingPersistence.ts` (allowlists
+  only `.test.ts` files and `prisma/seed.ts`, mirroring the existing
+  `no-unscoped-db-import.test.ts` pattern) — 4/4 pass.
+
+Prisma schema itself is unchanged (`Finding.evidence`/`metrics`/`recommendedFix` remain
+`Json`) — no migration was judged necessary this wave; the runtime boundary is the
+enforcement point per the campaign's "smallest robust boundary" guidance.
+
+### Step 7 — mechanical evidence repairs with real provenance
+
+- **`techStack.ts`** (P1-26): `generateTechFindings` now takes `(stack, url,
+collectedAt)`; every evidence item (including the two previously-`evidence:[]`
+  findings and the three hand-built-literal findings) routes through `createEvidence`
+  with the real analyzed URL as pointer. Fixed an incidental empty-evidence edge case
+  in "Modern Technology Stack" (triggered by hosting alone, with no matching framework —
+  the evidence filter now covers both signals that can trigger the finding).
+- **`gbpDeep.ts`** (P1-31): `generateGbpFindings` now takes `(analysis,
+placeRecordPointer, collectedAt)`; the 2 real evidence:[] findings (Description
+  Missing, Missing Attributes) plus 4 other hand-built-literal findings in the same
+  function now cite the real Places API record; the AI-photo-quality finding cites the
+  real photo URL. The catch-all "GBP Analysis Failed" fabricated finding is removed
+  (Step 7 "failure/fallback findings" — see Step 8 note below). The Gemini
+  photo-analysis fallback no longer fabricates a `{quality:5,...}` score on LLM failure
+  (changed `degrade:true`+fabricated `fallbackValue` to `degrade:false`, matching the
+  sibling photo-fetch call two lines above — the existing catch block already skips a
+  photo cleanly on failure).
+- **`lib/audit/runner.ts` `emailFinder` branch** (P2-36 mechanical instance): evidence
+  now routes through `createEvidence` with the real crawled URL, instead of a hand-built
+  `{type,value,label}` literal missing pointer/collected_at.
+- **`lib/modules/website.ts`** (new finding P1-50): the double-fallback failure branch
+  (crawler AND PageSpeed fallback both failed) fabricated a "Website Analysis Failed"
+  PAINKILLER Finding with `evidence: []` — exactly the zero-evidence Finding
+  AUDIT_REPORT.md's own module table proved. Removed; returns `findings: []` on total
+  failure (matching the established `techStack.ts` graceful-degradation pattern),
+  logging the real error instead.
+- **`schemaMarkup`** (P1-33): left untouched — confirmed `wave: 5`, not Wave 3.
+
+### Step 8 — provider-failure vs verified-absence
+
+- **P1-28 / P1-49** (new): `gbpAdapter` and `competitorAdapter` (`lib/audit/runner.ts`)
+  previously discarded the wrapped legacy module's `status: 'failed'`/`'error'` field via
+  `data: (data as any)?.data || data`, unconditionally returning `ModuleResult.status:
+'COMPLETE'`. Both now check the legacy status and return `FAILED` honestly, with the
+  real error message propagated. This was assigned to Wave 5 (P1-28) but is the exact
+  provider-failure-normalization defect Step 8 names for this wave's 27-module rollout
+  of the widget's Wave 2 guarantee, so it was fixed now rather than deferred; P1-49
+  (competitorAdapter — same 2-line pattern, no existing tracked ID) was discovered and
+  fixed in the same change.
+- **GBP missing-listing fallback removed** (see Step 5) — was the single highest-value
+  fix here: collapsed "provider outage", "missing API key", and "genuine zero-result
+  search" into one fabricated customer-negative finding.
+- **`website.ts` double-fallback** (P1-50) and **`gbpDeep.ts` catch-all failure finding**
+  (part of P1-31) — both technical-failure-as-Finding patterns removed per Step 7/8.
+- **`gbpDeep.ts` Gemini fallback** — fabricated numeric score on LLM failure, fixed (see
+  Step 7).
+- Explicitly **not** touched this wave (real module-logic defects, correctly deferred to
+  their existing Wave 5/6/7 slot): `socialDeep`'s stubbed provider always returning
+  `[]` presented as verified absence (P0-25, Wave 6); PageSpeed-missing-key/robots-
+  sitemap-failure/backlink-video-provider-failure patterns inside `keywordGap`,
+  `privacyCompliance`, `backlinks`, `citations`, `competitorStrategy`, `contentQuality`,
+  `mobileUX`, `paidSearch`, `seoDeep` — all still emit `evidence:[]` at the source and
+  are simply rejected (not repaired) by the new aggregation boundary until their own
+  module fix lands.
+
+### Step 9 — downstream consumer protections
+
+- **`lib/proposal/index.ts::normalizeFindingsForProposal`** (new finding P1-51): the
+  proposal-compiler input path previously "repaired" a 0-evidence finding by inventing a
+  replacement `createEvidence({pointer:'audit', value: f.title, ...})` citation —
+  exactly the "QA repairs missing evidence by inventing citations" anti-pattern Step 9
+  names. Now filters such findings out of the proposal input entirely instead of
+  fabricating evidence for them. In steady state (post-boundary, post-persistence
+  enforcement) this is a no-op; it protects against any pre-existing/legacy-persisted
+  finding that predates the contract.
+- Full proposal claim-to-Finding citation enforcement (matching a proposal claim
+  sentence back to a specific cited Finding) remains Wave 8 scope, per campaign
+  instruction — recorded, not expanded into.
+- Public/widget quick-audit path: unchanged this wave, already canonical (Wave 2,
+  P1-21) — does not persist Findings, computes score/topIssue from real
+  `extractFindingsFromRegistryResult` output in-memory.
+
+### Step 10 — architecture guards added
+
+1. `createEvidence` requires `pointer` (compile-time + runtime) —
+   `lib/modules/__tests__/createEvidence.test.ts`.
+2. Placeholder/secret-like pointers rejected — same file.
+3. Customer Finding schema requires non-empty Evidence —
+   `lib/audit/__tests__/findingContract.test.ts`.
+4. Every persisted Finding passes runtime validation —
+   `lib/audit/__tests__/findingPersistence.test.ts`.
+5. No unauthorized direct Prisma Finding writes —
+   `tests/architecture/finding-persistence-boundary.test.ts`.
+6. Provider failure cannot normalize to a false "success" —
+   `lib/audit/__tests__/adapterFailureMasking.test.ts` (P1-28/P1-49 regression).
+7. Invalid finding rejection is observable — structured `logger.warn` events at both the
+   aggregation and persistence boundaries (verified by code review + the persistence
+   test's rejection assertions; no dedicated log-capture test added, out of scope for the
+   test budget this wave).
+   8/9. Rejected findings cannot affect customer score/top issues — enforced structurally:
+   `normalizeAndValidateModuleFindings` runs before a finding ever enters `allFindings`,
+   which feeds both persistence and (for the widget) the score calculation.
+8. Canonical quick and full profiles use the same Finding validator — the widget path
+   already shares `extractFindingsFromRegistryResult` with the full engine (Wave 2);
+   Wave 3 adds no new divergent validator.
+9. Future modules cannot bypass validation via a legacy shape — the boundary function
+   validates the _finding_ shape after extraction, independent of which
+   `extractFindingsFromRegistryResult` branch (legacy vs new-modules-path) produced it.
+
+### Known out-of-scope / environment-blocked items
+
+- `lib/__tests__/outreachE2ESandbox.test.ts` and `lib/tenant/__tests__/isolation*.test.ts`
+  require a live local Postgres (`localhost:5444`/real DB) not reachable in this sandbox
+  — same class of limitation as P1-06/P2-12 in prior waves. P2-61's fix could not be
+  proven end-to-end for this reason (see its `fixed`, not `verified`, status).
+- `tests/security/public-routes-tenant-context.test.ts` — 3 pre-existing failures
+  (`POST /api/widget/quick-audit` returns 500 instead of 200) confirmed via `git stash`
+  to be **identical on the unmodified Wave 2 checkpoint** (this test does not mock
+  `runWebsiteModule`/attempts a real, environment-dependent network path) — pre-existing,
+  unrelated to any Wave 3 change, not touched or claimed fixed.
+- `lib/modules/__tests__/auditOrchestrator.test.ts` — pre-existing 30s timeout, documented
+  in Wave 2's own state notes as out-of-scope deprecated-component test debt; unchanged.
+
+### Result
+
+**Verified (10):** P1-09, P1-25, P1-26, P1-31, P2-13, P2-36, P2-40, P1-28 (pulled forward
+from Wave 5), P1-49 (new), P1-50 (new), P1-51 (new).
+**Fixed, environmentally blocked (1):** P2-61 (new) — code complete, tsc/eslint green, the
+one end-to-end test for this path needs a live DB unavailable in this sandbox.
+**Still open, correctly assigned to their existing later wave:** P1-33 (Wave 5),
+P0-25/P1-34/P1-39/P1-43/P2-28/P2-47 (Wave 5), and the 9 modules whose own `evidence:[]`
+Finding-generation logic is unfixed at the source but can no longer persist
+(keywordGap, privacyCompliance, backlinks, citations, competitorStrategy, contentQuality,
+mobileUX, paidSearch, seoDeep — Wave 5-7).
+
+### Files changed
+
+`lib/modules/types.ts`, `lib/audit/findingContract.ts` (new),
+`lib/audit/findingPersistence.ts` (new), `lib/audit/runner.ts`, `lib/modules/techStack.ts`,
+`lib/modules/gbpDeep.ts`, `lib/modules/website.ts`,
+`lib/outreach/AutomatedOutreachOrchestrator.ts`, `lib/proposal/index.ts`,
+`app/api/finding/[id]/route.ts`. New tests:
+`lib/modules/__tests__/createEvidence.test.ts`,
+`lib/audit/__tests__/findingContract.test.ts`,
+`lib/audit/__tests__/findingPersistence.test.ts`,
+`lib/audit/__tests__/adapterFailureMasking.test.ts`,
+`lib/modules/__tests__/techStackEvidence.test.ts`,
+`lib/modules/__tests__/gbpDeepEvidence.test.ts`,
+`tests/architecture/finding-persistence-boundary.test.ts`.
+
+## Next wave
+
+**Wave 4 — Shared network, browser, and provider safety.** See the exact continuation
+prompt in `REMEDIATION_VERIFICATION.md`'s Wave 3 section / the final chat response of
+this session.

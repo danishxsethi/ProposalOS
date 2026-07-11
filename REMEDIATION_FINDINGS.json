@@ -4,9 +4,9 @@
   "note": "107 finding rows normalized from AUDIT_REPORT.md (Phase 0 + Pass 1, 2, 3, 4A, 4B batches 1-6, 4C.1). IDs P0-01..P0-18 and P1-10..P1-13 are not rows in this report (prior/other numbering) and are intentionally absent. P2-26 is superseded by an in-report self-correction (line 1450). Wave assignments for findings beyond the current wave are provisional and refined at wave entry. Unfinished audit passes (4C.2, 4C.3, Passes 5-20) are tracked in REMEDIATION_STATE.md as open audit work, NOT as confirmed defects.",
   "severityTotals": {
     "P0": 8,
-    "P1": 44,
-    "P2": 60,
-    "total": 112
+    "P1": 47,
+    "P2": 61,
+    "total": 116
   },
   "openAuditPasses": [
     "Pass 4C.2 \u2014 cost controls, persistence, idempotency, result integrity",
@@ -277,15 +277,17 @@
       "id": "P1-09",
       "severity": "P1",
       "title": "Claim Policy not DB-enforceable: Finding.evidence Json default '[]'; citations are JSON strings not FKs",
-      "status": "open",
+      "status": "verified",
       "rootCauseGroup": "D",
       "dependencies": [],
       "files": ["prisma/schema.prisma"],
       "verification": [
-        "Enforce evidence at aggregation boundary; test rejecting 0-evidence findings"
+        "vitest run lib/audit/__tests__/findingContract.test.ts (empty-evidence Finding rejected at runtime boundary and at persistence)",
+        "vitest run lib/audit/__tests__/findingPersistence.test.ts (malformed finding rejected before Prisma call)",
+        "vitest run tests/architecture/finding-persistence-boundary.test.ts (no unauthorized direct prisma.finding writes)"
       ],
       "wave": 3,
-      "notes": "No customer-facing finding persists without real evidence."
+      "notes": "Runtime enforcement added at lib/audit/findingContract.ts (FindingRuntimeSchema) and lib/audit/findingPersistence.ts, since Finding.evidence remains a Json column (schema migration judged unnecessary this wave per campaign instruction \u2014 smallest robust boundary preferred). A 0-evidence Finding is now rejected at both the adapter/aggregation boundary and, independently, immediately before the Prisma write."
     },
     {
       "id": "P1-14",
@@ -481,27 +483,31 @@
       "id": "P1-25",
       "severity": "P1",
       "title": "createEvidence() defaults pointer to 'unknown' \u2014 fabricated placeholder pointer passes shape checks",
-      "status": "open",
+      "status": "verified",
       "rootCauseGroup": "D",
       "dependencies": [],
       "files": ["lib/modules/types.ts"],
-      "verification": ["Make pointer a required parameter (compile-time); test"],
+      "verification": [
+        "vitest run lib/modules/__tests__/createEvidence.test.ts (17/17: real pointer accepted; missing/empty/whitespace/'unknown'/'n/a'/'none'/'placeholder'/module-name-only/secret-like pointer all rejected; explicit collected_at not overwritten)",
+        "tsc --noEmit (pointer is now a required, non-optional parameter at the type level)"
+      ],
       "wave": 3,
-      "notes": "Shared evidence-construction defect."
+      "notes": "createEvidence()'s `pointer: opts.pointer || 'unknown'` fallback removed; pointer is required at both the type level and runtime (assertRealPointer throws a descriptive error). isPlaceholderPointer()/containsSecretLike() are the shared, reusable checks used by both createEvidence and the runtime Evidence schema."
     },
     {
       "id": "P1-26",
       "severity": "P1",
       "title": "techStack constructs Findings with evidence:[] and hand-built evidence omitting pointer/collected_at",
-      "status": "open",
+      "status": "verified",
       "rootCauseGroup": "D",
       "dependencies": ["P1-25"],
       "files": ["lib/modules/techStack.ts"],
       "verification": [
-        "Route all finding evidence through createEvidence with real pointer; test no evidence:[]"
+        "vitest run lib/modules/__tests__/techStackEvidence.test.ts (6/6: every generateTechFindings() finding, across an empty stack, a builder-CMS stack, a hosting-only-modern stack, and a full-tooling stack, passes FindingRuntimeSchema)",
+        "grep -n \"evidence: \\[\\]\" lib/modules/techStack.ts -> no matches"
       ],
       "wave": 3,
-      "notes": "First-hand Claim Policy violation."
+      "notes": "All 5 findings in generateTechFindings() (evidence:[] on 'No Analytics'/'No Email Marketing', and hand-built literals missing pointer/collected_at on 'Website Built on X'/'Modern Technology Stack'/'Comprehensive Digital Tooling') now route through createEvidence() with the real analyzed URL as pointer. Only reachable after a successful fetch+parse (the module's catch block already returned findings:[] on failure, unchanged)."
     },
     {
       "id": "P1-27",
@@ -557,13 +563,16 @@
       "id": "P1-31",
       "severity": "P1",
       "title": "gbpDeep: 3 evidence:[] findings, zero createEvidence usage",
-      "status": "open",
+      "status": "verified",
       "rootCauseGroup": "D",
       "dependencies": ["P1-25"],
       "files": ["lib/modules/gbpDeep.ts"],
-      "verification": ["Route through createEvidence with real pointer; test"],
+      "verification": [
+        "vitest run lib/modules/__tests__/gbpDeepEvidence.test.ts (4/4: Description-Missing and Missing-Attributes findings carry real Places API record pointers; every finding produced passes FindingRuntimeSchema; AI-photo-quality finding pointer is the real photo URL)",
+        "grep -n \"evidence: \\[\\]\" lib/modules/gbpDeep.ts -> no matches"
+      ],
       "wave": 3,
-      "notes": "Claim Policy violation."
+      "notes": "All 3 evidence:[] findings in generateGbpFindings() (Description Missing, Missing Attributes, and the catch-all 'GBP Analysis Failed' fabricated-failure finding) fixed: the first two now cite the real fetched Places API record (placeId-scoped pointer); the third is removed entirely per Step 7/8 (a technical failure must never become a customer Finding) rather than patched with fake evidence. The remaining hand-built evidence literals in the same function (Ghost Town, Owner Photos, Poor Photo Quality, Low Review Velocity) were also converted to createEvidence with real pointers while in the file. Additionally fixed the Gemini photo-analysis fallback (previously fabricated {quality:5,...} on LLM failure, driving a real negative finding) to degrade:false and skip the photo instead of inventing a score \u2014 a Step 7/8 'fallback numeric score' instance found and fixed in the same file."
     },
     {
       "id": "P1-32",
@@ -972,13 +981,15 @@
       "id": "P2-13",
       "severity": "P2",
       "title": "Non-FK string references (audit_jobs.auditId, Finding citations)",
-      "status": "open",
+      "status": "verified",
       "rootCauseGroup": "D",
       "dependencies": [],
       "files": ["prisma/schema.prisma"],
-      "verification": ["Consider FK or integrity checks"],
+      "verification": [
+        "vitest run lib/audit/__tests__/findingPersistence.test.ts (auditId/tenantId always injected from function parameters, never trusted from the finding object, even when the finding object explicitly carries attacker-supplied values)"
+      ],
       "wave": 3,
-      "notes": ""
+      "notes": "No Prisma schema FK migration performed (judged unnecessary this wave; Finding.evidence/metrics remain Json, and audit_jobs.auditId/Finding citations remain non-FK strings, unchanged). Runtime integrity enforcement added instead, which is the concrete mechanism the verification text ('Consider FK or integrity checks') calls for: persistFindings()/validateFindingForPersistence() always source auditId/tenantId from the trusted caller context and strip/ignore any auditId/tenantId/module the finding object itself carries, making cross-audit/cross-tenant attribution structurally impossible regardless of FK enforcement at the DB layer."
     },
     {
       "id": "P2-14",
@@ -1273,15 +1284,17 @@
       "id": "P2-36",
       "severity": "P2",
       "title": "Systemic evidence:[]/missing-evidence across 15/15 modules (Batches 1-3)",
-      "status": "open",
+      "status": "verified",
       "rootCauseGroup": "D",
       "dependencies": ["P1-25"],
       "files": ["lib/modules/*.ts", "lib/audit/runner.ts"],
       "verification": [
-        "Enforce evidence presence at shared aggregation boundary (runtime assertion + lint)"
+        "vitest run lib/audit/__tests__/findingContract.test.ts (normalizeAndValidateModuleFindings: a finding with evidence:[] from an otherwise-COMPLETE module is rejected, not repaired)",
+        "vitest run lib/audit/__tests__/findingPersistence.test.ts",
+        "code review: 11 modules (keywordGap, privacyCompliance, backlinks, citations, competitorStrategy, contentQuality, mobileUX, paidSearch, seoDeep, socialDeep, +techStack/gbpDeep mechanically fixed) confirmed to still construct evidence:[] findings at the source; the shared aggregation boundary (lib/audit/findingContract.ts::normalizeAndValidateModuleFindings, wired into lib/audit/runner.ts's per-module aggregation loop) now rejects every one of them before they can reach allFindings/persistence"
       ],
       "wave": 3,
-      "notes": "Platform-wide, not per-module."
+      "notes": "Central runtime enforcement shipped at the shared aggregation boundary, satisfying the verification text exactly ('Enforce evidence presence at shared aggregation boundary'). techStack and gbpDeep were mechanically fixed at the source (P1-26/P1-31) because real provenance was already available in those files; the other 9 modules' evidence:[] findings are left unfixed at the source (their module logic is out of Wave 3 scope) but can no longer reach a customer-facing Finding \u2014 they are rejected at the boundary and logged (event: audit.findings_rejected_at_aggregation). Also fixed 2 additional mechanical instances of the same systemic pattern found while wiring the boundary: lib/audit/runner.ts's emailFinder Finding (hand-built evidence missing pointer/collected_at, now createEvidence with the crawled URL) and lib/modules/website.ts's double-fallback failure Finding (evidence:[] AND a technical-failure-as-Finding violation \u2014 see notes on the new P1-50 below). Assigning the 9 untouched modules' real fixes to the wave already scheduled for each (Wave 5-7, root-cause groups E/H) \u2014 see REMEDIATION_STATE.md."
     },
     {
       "id": "P2-37",
@@ -1325,13 +1338,16 @@
       "id": "P2-40",
       "severity": "P2",
       "title": "coreWebVitals/mobileUX/conversion missing/absent evidence (18/19 modules)",
-      "status": "open",
+      "status": "verified",
       "rootCauseGroup": "D",
       "dependencies": ["P1-25"],
       "files": ["lib/audit/runner.ts", "lib/modules/mobileUX.ts", "lib/modules/conversion.ts"],
-      "verification": ["Same shared aggregation enforcement as P2-36"],
+      "verification": [
+        "vitest run lib/audit/__tests__/findingContract.test.ts",
+        "code review: coreWebVitals findings (findingGenerator.ts) already route through createEvidence with real pagespeed_v5 pointers (unaffected/compliant); mobileUX.ts and conversion.ts's own evidence:[] findings are rejected by the same shared aggregation boundary as P2-36's 9 modules"
+      ],
       "wave": 3,
-      "notes": ""
+      "notes": "Same shared aggregation enforcement as P2-36 (identical mechanism, identical file). mobileUX/conversion module-level fixes remain out of Wave 3 scope, assigned to their existing later-wave slot (Wave 5-7); their invalid findings cannot persist starting this wave."
     },
     {
       "id": "P2-41",
@@ -1606,6 +1622,66 @@
       ],
       "wave": 1,
       "notes": "P2-23 closed the direct response-text/status oracle (no more distinct 'User already exists' 400). The frontend's immediate auto-login-then-redirect step is a residual, harder-to-close side channel: an existing email with a wrong guessed password still observably redirects to /login instead of /onboarding, unlike a genuinely new email (which always redirects to /onboarding, since the account was just created with that exact password). Fully closing this requires a bigger, product-level flow change (e.g. always show a generic 'check your email' step instead of auto-login) that was judged out of scope for a blind same-session change; flagged for a future wave/product decision."
+    },
+    {
+      "id": "P1-49",
+      "severity": "P1",
+      "title": "competitorAdapter never inspects runCompetitorModule status; launders failure as COMPLETE (same defect class as P1-28)",
+      "status": "verified",
+      "rootCauseGroup": "H",
+      "dependencies": [],
+      "files": ["lib/audit/runner.ts", "lib/modules/competitor.ts"],
+      "verification": [
+        "vitest run lib/audit/__tests__/adapterFailureMasking.test.ts (competitorAdapter: legacy status:'failed' -> ModuleResult.status:'FAILED', not COMPLETE)"
+      ],
+      "wave": 3,
+      "notes": "Discovered while fixing P1-28 (gbpAdapter) \u2014 competitorAdapter had the identical pattern (`data: (data as any)?.data || data`, discarding the legacy LegacyAuditModuleResult.status field). Fixed in the same commit as P1-28 since both are the same 2-line pattern in the same file; not deferred to Wave 5."
+    },
+    {
+      "id": "P1-50",
+      "severity": "P1",
+      "title": "website.ts double-fallback failure fabricates a 'Website Analysis Failed' customer-facing PAINKILLER Finding with evidence:[]",
+      "status": "verified",
+      "rootCauseGroup": "D",
+      "dependencies": [],
+      "files": ["lib/modules/website.ts"],
+      "verification": [
+        "tsc --noEmit; grep -n \"Website Analysis Failed\" lib/modules/website.ts -> no matches",
+        "code review: catch block now returns findings: [] (matching the sibling techStack.ts pattern) instead of constructing a Finding"
+      ],
+      "wave": 3,
+      "notes": "AUDIT_REPORT.md's own Pass 4B module table (line ~1287) proved this exact zero-evidence Finding. A technical failure (crawler AND PageSpeed fallback both failed) must never become a customer-facing business deficiency (Step 7/8) \u2014 the fabricated Finding is removed rather than given fake evidence; the module returns no findings on total failure and logs the real error."
+    },
+    {
+      "id": "P1-51",
+      "severity": "P1",
+      "title": "lib/proposal/index.ts normalizeFindingsForProposal() 'repairs' a 0-evidence Finding by inventing a citation instead of dropping it",
+      "status": "verified",
+      "rootCauseGroup": "D",
+      "dependencies": [],
+      "files": ["lib/proposal/index.ts"],
+      "verification": [
+        "code review: the fabrication branch (createEvidence({pointer:'audit', value: f.title, ...})) removed; replaced with a filter that drops any finding lacking real evidence before it reaches proposal tier-mapping",
+        "tsc --noEmit"
+      ],
+      "wave": 3,
+      "notes": "Discovered while reviewing proposal/diagnosis-input consumers per Step 9 ('QA cannot repair missing evidence by inventing citations'). In steady state this is a no-op \u2014 findings reaching this function already passed the aggregation/persistence evidence contract \u2014 but it protected against legacy-persisted or otherwise-sourced findings predating the contract. Full proposal claim-to-Finding citation enforcement remains Wave 8 per campaign instruction; this was a small compatibility fix at the existing boundary, not an expansion into Wave 8's scope."
+    },
+    {
+      "id": "P2-61",
+      "severity": "P2",
+      "title": "AutomatedOutreachOrchestrator simulate mode fabricates Finding evidence ({url:'https://example.com'}, no pointer/source/collected_at, no real check) and writes directly to prisma.finding.createMany",
+      "status": "fixed",
+      "rootCauseGroup": "D",
+      "dependencies": [],
+      "files": ["lib/outreach/AutomatedOutreachOrchestrator.ts"],
+      "verification": [
+        "code review: migrated to persistFindings(); evidence now carries an honestly-labeled sandbox:// provenance pointer instead of a fabricated https:// pseudo-URL",
+        "tsc --noEmit; eslint 0 errors",
+        "NOT independently re-run against a live DB this session (lib/__tests__/outreachE2ESandbox.test.ts, the only test exercising this path end-to-end, requires a local Postgres unavailable in this sandbox -- same class of environment limitation as P2-12/P1-06)"
+      ],
+      "wave": 3,
+      "notes": "Discovered while inventorying every prisma.finding.create/createMany call site per Step 2. This is a sandboxed/offline test-fixture code path (opt-in `simulate: true`, not the default production audit flow), but it wrote to the same Finding table with no distinction from real customer findings and no real observation behind the evidence. Status is `fixed` not `verified`: the code change is complete and passed tsc/eslint, but the one test that exercises it end-to-end is DB-environment-blocked in this sandbox, so the fix has not been proven against a live run. Flag for a future session with DB access to confirm outreachE2ESandbox.test.ts still passes."
     }
   ]
 }

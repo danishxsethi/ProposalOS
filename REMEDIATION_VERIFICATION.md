@@ -805,3 +805,154 @@ after this session, because:
    kept — confirming the working tree is not merely "the stash unchanged."
 4. The working tree has zero remaining dependency on the stash (`git stash show --stat`
    content is now a strict subset of, and superseded by, the committed Wave 2 changes).
+
+## Wave 3 — Finding/Evidence contract enforcement
+
+### Mandatory verification (run this session, in order)
+
+```
+$ npx vitest run lib/modules/__tests__/createEvidence.test.ts
+ Test Files  1 passed (1)   Tests  17 passed (17)
+
+$ npx vitest run lib/audit/__tests__/findingContract.test.ts
+ Test Files  1 passed (1)   Tests  29 passed (29)
+
+$ npx vitest run lib/audit/__tests__/findingPersistence.test.ts
+ Test Files  1 passed (1)   Tests  8 passed (8)
+
+$ npx vitest run lib/audit/__tests__/adapterFailureMasking.test.ts
+ Test Files  1 passed (1)   Tests  3 passed (3)
+
+$ npx vitest run lib/modules/__tests__/techStackEvidence.test.ts
+ Test Files  1 passed (1)   Tests  6 passed (6)
+
+$ npx vitest run lib/modules/__tests__/gbpDeepEvidence.test.ts
+ Test Files  1 passed (1)   Tests  4 passed (4)
+
+$ npx vitest run tests/architecture/finding-persistence-boundary.test.ts
+ Test Files  1 passed (1)   Tests  4 passed (4)
+
+$ npx vitest run lib/modules/__tests__/findingGenerator.test.ts   # existing, unmodified
+ Test Files  1 passed (1)   Tests  3 passed (3)
+
+$ ./node_modules/.bin/tsc --noEmit --pretty false --incremental false
+(exit 0, whole working tree)
+
+$ npx eslint <11 changed production files + 7 new test files>
+0 errors, 76 pre-existing no-explicit-any/complexity warnings (verified none new by
+line-number diff against each file's pre-Wave-3 content); 4 import/order errors
+auto-fixed with --fix (pure import-statement reordering, no logic changes) in
+lib/audit/findingPersistence.ts, lib/outreach/AutomatedOutreachOrchestrator.ts,
+app/api/finding/[id]/route.ts, lib/audit/findingContract.ts.
+
+$ grep -rn "pointer: opts.pointer || 'unknown'" lib app
+-- zero matches in code (only in AUDIT_REPORT.md's immutable evidence text, describing
+   the pre-fix defect — not touched)
+
+$ grep -rn "evidence: \[\]" lib/modules/techStack.ts lib/modules/gbpDeep.ts
+-- zero matches (both files fully converted to createEvidence)
+
+$ grep -rlE "prisma\.finding\.(create|createMany|update|updateMany|upsert)\(" app lib \
+    | grep -v "\.test\." | grep -v "lib/audit/findingPersistence.ts"
+-- zero matches (enforced going forward by
+   tests/architecture/finding-persistence-boundary.test.ts)
+
+$ npx vitest run tests/architecture/canonical-module-manifest.test.ts \
+    tests/security/audit-job-lease-heartbeat.test.ts \
+    tests/security/feature-flag-effective-override.test.ts \
+    tests/security/widget-graceful-degradation.test.ts \
+    tests/security/widget-origin-allowlist.test.ts \
+    tests/security/batch-queue-worker.test.ts \
+    tests/integration/audit-api.test.ts \
+    lib/pipeline/stages/__tests__/auditStage.test.ts
+ Test Files  8 passed (8)   Tests  100 passed (100)
+-- Wave 2's own regression set, re-run unmodified and green after Wave 3's changes to
+   lib/audit/runner.ts (gbpAdapter/competitorAdapter fix, GBP-fallback removal,
+   aggregation-boundary wiring, persistFindings call site).
+
+$ npx vitest run tests/security/wave0-rbac-api-key.test.ts tests/security/wave0-invite-role.test.ts \
+    tests/security/wave0-tenant-delete-authz.test.ts tests/security/wave0-security-ssrf.test.ts \
+    tests/security/wave0-env-api-key-tenant.test.ts tests/security/wave1-tenant-scoping.test.ts \
+    tests/architecture/no-unscoped-db-import.test.ts tests/security/wave1-owner-role-escalation.test.ts \
+    tests/security/wave1-login-rate-limit.test.ts tests/security/wave1-predictions-authz.test.ts \
+    tests/security/wave1-self-evolving-executor.test.ts tests/security/wave1-client-ip-trust.test.ts \
+    tests/security/wave1-db-role-guard.test.ts tests/security/register-bypass-isolation.test.ts \
+    tests/security/wave1-audit-trail-criticality.test.ts \
+    tests/security/wave1-baseline-budget-exceeded-write.test.ts
+ Test Files  16 passed (16)   Tests  91 passed (91)
+-- Wave 0/1's full regression set, identical count to Wave 2's own re-run, confirming
+   Wave 3 did not regress any prior wave.
+```
+
+### Red-before/green-after evidence (representative)
+
+- `createEvidence({source:'pagespeed_v5'})` (no pointer): before Wave 3, returned
+  `{pointer:'unknown', ...}` silently; after, throws
+  `createEvidence: pointer 'undefined' for source 'pagespeed_v5' is missing, blank, or a
+known placeholder value...`.
+- `techStack.ts`'s "No Analytics Tools Detected" finding: before, `evidence: []`
+  (`validateFinding` → fails, evidence array empty); after, one `createEvidence`-built
+  item citing the analyzed URL (`validateFinding` → passes).
+- `gbpAdapter` given a mocked `runGBPModule` resolving `{status:'failed', error:'Business
+not found...'}`: before Wave 3, `gbpAdapter` returned `{status:'COMPLETE', data:
+undefined}` (silently "successful"); after, returns `{status:'FAILED', data:null,
+error:'Business not found...'}` — proven by
+  `lib/audit/__tests__/adapterFailureMasking.test.ts`.
+- `persistFindings` given a finding with `evidence: []`: before Wave 3 there was no such
+  function — the equivalent inline `prisma.finding.createMany` call in
+  `lib/audit/runner.ts` had no validation at all and would have written the row as-is;
+  after, `persisted: 0`, `rejected: [{...}]`, zero Prisma calls made for that item.
+
+### One real regression found and fixed during verification (not a logic bug)
+
+Two pre-existing test fixtures (`lib/modules/__tests__/findingGenerator.test.ts`,
+`tests/security/widget-origin-allowlist.test.ts`) used `https://example.com` as a
+deliberate "real, live, minimal" test domain. An early version of the
+placeholder-pointer guard additionally banned `example.com`/`example.org`/`example.net`/
+`test.com` as domains, which broke both fixtures (`createEvidence` threw). Root-caused
+rather than patched around: the domain ban was itself miscalibrated (a pointer
+identifying a URL that was genuinely fetched is real evidence regardless of domain), not
+a real defect in the fixtures — narrowed the guard to `localhost`/`127.0.0.1` only, and
+both fixtures now pass unmodified (confirmed via `git diff --stat` showing zero net
+change to either file after the narrower guard was applied).
+
+### One pre-existing, out-of-scope failure identified and left untouched
+
+`tests/security/public-routes-tenant-context.test.ts` — 3 of its 19 tests fail
+(`POST /api/widget/quick-audit` returns 500 instead of 200/400). Confirmed via
+`git stash` (isolating every Wave 3 file change) that this test fails **identically on
+the unmodified Wave 2 checkpoint** — it does not mock `@/lib/modules/website`'s
+`runWebsiteModule`, so it exercises a real, environment-dependent network path. Not a
+Wave 3 regression; not fixed (out of this wave's finding set); logged here per the
+campaign's "record but do not silently patch unrelated dirty/failing files" instruction.
+
+### Full-suite result
+
+Not run. Per the campaign's own ordering rule ("do not run the full suite more than
+once... run it only after targeted gates, TypeScript, and lint are green and the local
+test environment is available") and the demonstrated DB-environment limitation
+(`localhost:5444`/`5435` unreachable in this sandbox, affecting several unrelated
+existing suites), a full-suite run would report pre-existing, already-documented
+DB-environment blocks as new failures without adding verification value beyond the
+targeted gates above. Recording as: **environment-blocked for the DB-dependent subset**;
+all non-DB-dependent targeted gates for Wave 3 and all prior waves are green.
+
+### Result
+
+**Verified (10):** P1-09, P1-25, P1-26, P1-31, P2-13, P2-36, P2-40, P1-28, P1-49, P1-50,
+P1-51.
+**Fixed, environmentally blocked (1):** P2-61 — code complete and gate-green; the one
+end-to-end test for this path needs a live Postgres unavailable in this sandbox.
+
+No production infrastructure, database, or live provider accounts were touched. All new
+tests use mocks/fixtures; no live network calls were made by any test in this session's
+runs (the 3 pre-existing failures in `public-routes-tenant-context.test.ts` attempt a
+real network call as part of their own — unmodified — design, not something this
+session added).
+
+### Continuation prompt for Wave 4
+
+See the final chat response of this session for the exact Wave 4 continuation prompt
+(Shared network, browser, and provider safety — P1-46/P1-47/P1-48/P2-53/P2-54 and any
+other Wave-4-assigned finding), which must follow the same
+read → verify → execute → test → record → commit → emit → stop workflow used here.
