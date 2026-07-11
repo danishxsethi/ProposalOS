@@ -388,6 +388,31 @@ const ALLOWED_RAW_FETCH: AllowedRawFetch[] = [
     host: 'serpapi.com',
     reason: 'Fixed host; SerpAPI Yandex',
   },
+
+  // Wave 1 (P1-05): internal RLS-violation alert webhook, not user-influenced.
+  {
+    file: 'lib/db.ts',
+    line: 50,
+    host: 'operator-configured ALERT_WEBHOOK_URL (env)',
+    reason:
+      'Fire-and-forget internal alerting webhook on RLS-policy violation; host is an ' +
+      'operator env var, not derived from any request/user input; errors swallowed ' +
+      '(.catch), never surfaced to a caller.',
+  },
+
+  // Wave 0 (P0-24): security module's own fixed fetchWithRedirect — arbitrary host BY
+  // DESIGN (it audits arbitrary customer websites), but every hop (initial URL and each
+  // redirect) is validated via validateUrl() (the shared SSRF blocklist helper) before
+  // this fetch is ever called — this is the fix itself, not a bypass of it.
+  {
+    file: 'lib/modules/security.ts',
+    line: 114,
+    host: 'arbitrary (audit target) — validated via validateUrl() at every hop',
+    reason:
+      'P0-24 fix: fetchWithRedirect validates the URL (validateUrl, private/loopback/' +
+      'metadata/credentialed/scheme checks) immediately before every fetch call at this ' +
+      'line, on the initial URL and on every redirect hop, with a bounded hop count.',
+  },
 ];
 
 // ─── page.goto allowlist (raw — no validateForBrowserNavigation needed) ───────
