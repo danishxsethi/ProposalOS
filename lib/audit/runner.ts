@@ -1123,9 +1123,30 @@ async function runAuditInternal(auditId: string, signal?: AbortSignal) {
             { auditId: audit.id, tenantId: audit.tenantId },
             '[runAudit] Monthly budget exceeded — audit blocked'
           );
+          // P-baseline: `Audit` has no `error` scalar column — module failures are
+          // recorded in the `modulesFailed: Json` array (see all other writers/readers
+          // of this field, e.g. the per-module FAILED branch below and
+          // app/api/analytics/route.ts's reader). Merge into any failures already
+          // recorded on this row rather than overwriting them, matching the
+          // established read-modify-write pattern used elsewhere for this field.
+          const existingModulesFailed = Array.isArray(
+            (audit as { modulesFailed?: unknown }).modulesFailed
+          )
+            ? ((audit as { modulesFailed?: unknown }).modulesFailed as Array<{
+                module: string;
+                error: string;
+              }>)
+            : [];
           await prisma.audit.update({
             where: { id: audit.id },
-            data: { status: 'FAILED', error: 'BUDGET_EXCEEDED', completedAt: new Date() },
+            data: {
+              status: 'FAILED',
+              modulesFailed: [
+                ...existingModulesFailed,
+                { module: 'budget', error: 'BUDGET_EXCEEDED' },
+              ],
+              completedAt: new Date(),
+            },
           });
           return { success: false, auditId: audit.id, status: 'FAILED', error: 'BUDGET_EXCEEDED' };
         }
