@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 
 import { auth } from '@/auth';
-import { prisma } from '@/lib/prisma';
+import { prisma, setTenantContext } from '@/lib/prisma';
 
 export async function GET(req: Request) {
   try {
@@ -28,14 +28,16 @@ export async function GET(req: Request) {
       where.status = status;
     }
 
-    const proposals = await prisma.proposal.findMany({
-      where,
-      orderBy: { createdAt: 'desc' },
-      include: {
-        audit: { select: { businessName: true } },
-        _count: { select: { views: true } },
-      },
-    });
+    const proposals = await setTenantContext(session.user.tenantId, () =>
+      prisma.proposal.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        include: {
+          audit: { select: { businessName: true } },
+          _count: { select: { views: true } },
+        },
+      })
+    );
 
     return NextResponse.json({
       proposals: proposals.map((p) => ({
@@ -66,10 +68,12 @@ export async function PATCH(req: Request) {
     const body = await req.json();
     const { id, status } = body;
 
-    const proposal = await prisma.proposal.update({
-      where: { id, tenantId: session.user.tenantId },
-      data: { status },
-    });
+    const proposal = await setTenantContext(session.user.tenantId, () =>
+      prisma.proposal.update({
+        where: { id, tenantId: session.user.tenantId },
+        data: { status },
+      })
+    );
 
     return NextResponse.json({ success: true, proposal });
   } catch (error) {

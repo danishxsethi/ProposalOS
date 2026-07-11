@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 
 import { auth } from '@/auth';
 import { generateApiKey } from '@/lib/auth/apiKeys';
-import { prisma } from '@/lib/prisma';
+import { prisma, setTenantContext } from '@/lib/prisma';
 
 export async function GET(req: Request) {
   try {
@@ -11,15 +11,17 @@ export async function GET(req: Request) {
       return new NextResponse('Unauthorized', { status: 401 });
     }
 
-    const [user, tenant, apiKeys, team] = await Promise.all([
-      prisma.user.findUnique({ where: { id: session.user.id } }),
-      prisma.tenant.findUnique({ where: { id: session.user.tenantId } }),
-      prisma.apiKey.findMany({ where: { tenantId: session.user.tenantId } }),
-      prisma.user.findMany({
-        where: { tenantId: session.user.tenantId },
-        select: { id: true, name: true, email: true, role: true, createdAt: true },
-      }),
-    ]);
+    const [user, tenant, apiKeys, team] = await setTenantContext(session.user.tenantId, () =>
+      Promise.all([
+        prisma.user.findUnique({ where: { id: session.user.id } }),
+        prisma.tenant.findUnique({ where: { id: session.user.tenantId } }),
+        prisma.apiKey.findMany({ where: { tenantId: session.user.tenantId } }),
+        prisma.user.findMany({
+          where: { tenantId: session.user.tenantId },
+          select: { id: true, name: true, email: true, role: true, createdAt: true },
+        }),
+      ])
+    );
 
     return NextResponse.json({
       profile: { name: user?.name, email: user?.email },
@@ -50,15 +52,17 @@ export async function POST(req: Request) {
 
     if (action === 'create_api_key') {
       const { key, hash, prefix } = generateApiKey();
-      const apiKey = await prisma.apiKey.create({
-        data: {
-          tenantId: session.user.tenantId,
-          name: body.name || 'New API Key',
-          keyHash: hash,
-          keyPrefix: prefix,
-          scopes: ['*'],
-        },
-      });
+      const apiKey = await setTenantContext(session.user.tenantId, () =>
+        prisma.apiKey.create({
+          data: {
+            tenantId: session.user.tenantId,
+            name: body.name || 'New API Key',
+            keyHash: hash,
+            keyPrefix: prefix,
+            scopes: ['*'],
+          },
+        })
+      );
       // We return the raw key ONCE.
       return NextResponse.json({ success: true, key });
     }

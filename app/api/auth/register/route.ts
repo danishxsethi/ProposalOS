@@ -27,8 +27,17 @@ async function handleRegister(request: Request) {
       prisma.user.findUnique({ where: { email } })
     );
 
+    // P2-23: do not confirm account existence via a distinct error message/status -- an
+    // automated scanner could otherwise enumerate registered emails by mass-submitting
+    // this endpoint and checking for the "User already exists" response. Respond exactly
+    // like a fresh registration at the HTTP layer (2xx, no distinguishing message); no
+    // duplicate account is created either way, so enforcement is unchanged. The frontend's
+    // subsequent auto-login attempt fails for a guessed password and routes to /login --
+    // the same outcome any wrong-password login attempt produces, not a new oracle.
     if (existingUser) {
-      return NextResponse.json({ error: 'User already exists' }, { status: 400 });
+      return NextResponse.json({
+        user: { id: null, name: null, email },
+      });
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);

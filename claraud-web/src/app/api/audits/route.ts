@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 
 import { auth } from '@/auth';
-import { prisma } from '@/lib/prisma';
+import { prisma, setTenantContext } from '@/lib/prisma';
 
 export async function GET(req: Request) {
   try {
@@ -21,20 +21,22 @@ export async function GET(req: Request) {
       ...(search ? { businessName: { contains: search, mode: 'insensitive' as const } } : {}),
     };
 
-    const [audits, count] = await Promise.all([
-      prisma.audit.findMany({
-        where,
-        orderBy: { createdAt: 'desc' },
-        take: limit,
-        skip,
-        include: {
-          _count: {
-            select: { findings: true },
+    const [audits, count] = await setTenantContext(session.user.tenantId, () =>
+      Promise.all([
+        prisma.audit.findMany({
+          where,
+          orderBy: { createdAt: 'desc' },
+          take: limit,
+          skip,
+          include: {
+            _count: {
+              select: { findings: true },
+            },
           },
-        },
-      }),
-      prisma.audit.count({ where }),
-    ]);
+        }),
+        prisma.audit.count({ where }),
+      ])
+    );
 
     return NextResponse.json({
       audits: audits.map((a) => ({

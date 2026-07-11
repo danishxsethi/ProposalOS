@@ -113,7 +113,7 @@ afterEach(() => {
 // ─── A. Cross-tenant email collision ─────────────────────────────────────────
 
 describe('email uniqueness bypass — cross-tenant collision', () => {
-  it('returns 400 when email is taken, with no cross-tenant data in body', async () => {
+  it('P2-23: does not reveal account existence — responds like a fresh registration, no cross-tenant data leaked, no duplicate created', async () => {
     // Simulate a user record belonging to a DIFFERENT tenant
     const otherTenantUser = {
       id: 'other-user-id',
@@ -131,8 +131,10 @@ describe('email uniqueness bypass — cross-tenant collision', () => {
     const res = await POST(makeRequest(VALID_BODY));
     const body = await res.json();
 
-    expect(res.status).toBe(400);
-    expect(body).toEqual({ error: 'User already exists' });
+    // Same 2xx status as a successful registration -- no distinct
+    // "account already exists" status/error an automated scanner could detect.
+    expect(res.status).toBe(200);
+    expect(body).toEqual({ user: { id: null, name: null, email: VALID_BODY.email } });
 
     // No fields from the other-tenant user must appear in the response
     const bodyStr = JSON.stringify(body);
@@ -140,6 +142,9 @@ describe('email uniqueness bypass — cross-tenant collision', () => {
     expect(bodyStr).not.toContain('other-tenant-id');
     expect(bodyStr).not.toContain('otherhash');
     expect(bodyStr).not.toContain('Other User');
+
+    // No duplicate account was created -- enforcement is unchanged.
+    expect(mocks.transaction).not.toHaveBeenCalled();
   });
 });
 
