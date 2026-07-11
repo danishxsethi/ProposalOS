@@ -1,8 +1,13 @@
 {
-  "generatedAt": "2026-07-10T00:00:00Z",
+  "generatedAt": "2026-07-11T15:12:16.135Z",
   "auditSource": "AUDIT_REPORT.md",
   "note": "107 finding rows normalized from AUDIT_REPORT.md (Phase 0 + Pass 1, 2, 3, 4A, 4B batches 1-6, 4C.1). IDs P0-01..P0-18 and P1-10..P1-13 are not rows in this report (prior/other numbering) and are intentionally absent. P2-26 is superseded by an in-report self-correction (line 1450). Wave assignments for findings beyond the current wave are provisional and refined at wave entry. Unfinished audit passes (4C.2, 4C.3, Passes 5-20) are tracked in REMEDIATION_STATE.md as open audit work, NOT as confirmed defects.",
-  "severityTotals": { "P0": 8, "P1": 44, "P2": 55, "total": 107 },
+  "severityTotals": {
+    "P0": 8,
+    "P1": 44,
+    "P2": 57,
+    "total": 109
+  },
   "openAuditPasses": [
     "Pass 4C.2 — cost controls, persistence, idempotency, result integrity",
     "Pass 4C.3 — browser-navigation SSRF interception + timeout signal propagation (per P1-46/P1-48)",
@@ -129,7 +134,6 @@
       "wave": 8,
       "notes": "Product constraint: no customer-facing legal certification."
     },
-
     {
       "id": "P1-01",
       "severity": "P1",
@@ -188,27 +192,40 @@
       "id": "P1-05",
       "severity": "P1",
       "title": "Unscoped lib/db.ts Prisma client (never sets app.current_tenant_id) used by 8 prod paths",
-      "status": "open",
+      "status": "verified",
       "rootCauseGroup": "B",
       "dependencies": [],
-      "files": ["lib/db.ts", "lib/pipeline/*.ts", "app/api/cron/partner-matching/route.ts"],
+      "files": [
+        "lib/db.ts",
+        "lib/tenant/context.ts",
+        "lib/pipeline/tenantConfig.ts",
+        "lib/pipeline/signalDetector.ts",
+        "lib/pipeline/preWarming.ts",
+        "lib/pipeline/deliveryEngine.ts",
+        "lib/pipeline/crossTenantIntelligence.ts",
+        "lib/pipeline/partnerPortal.ts",
+        "app/api/cron/partner-matching/route.ts",
+        "app/api/cron/pipeline-delivery/route.ts"
+      ],
       "verification": [
-        "Route through scoped client or explicit bypass; confirm prod DB role; tenant-isolation test"
+        "vitest run tests/security/wave1-tenant-scoping.test.ts tests/architecture/no-unscoped-db-import.test.ts + 12 updated pipeline test files (158+ tests)",
+        "tsc --noEmit exit 0",
+        "grep confirms zero import { prisma } from @/lib/db in app/ lib/"
       ],
       "wave": 1,
-      "notes": "P0-escalation if prod role is superuser."
+      "notes": "lib/db.ts no longer exports a client; exports withSystemDbBypass(reason, fn) built on the same canonical scoped client. Tenant-scoped callers use runWithTenantAsync/runScopedToOwnerTenant with a real tenantId; genuinely global callers (crossTenantIntelligence, partnerPortal, both cron routes) use withSystemDbBypass with a specific reason. Architecture test blocks regression."
     },
     {
       "id": "P1-06",
       "severity": "P1",
       "title": "RLS grants full access to current_user='postgres' when GUC empty; superuser bypasses RLS",
-      "status": "open",
+      "status": "fixed",
       "rootCauseGroup": "B",
       "dependencies": [],
-      "files": ["prisma/migrations/20260429093000_enable_rls/migration.sql"],
-      "verification": ["Confirm prod DATABASE_URL role = app_user (non-superuser); document"],
+      "files": ["lib/config/dbRoleGuard.ts"],
+      "verification": ["vitest run tests/security/wave1-db-role-guard.test.ts (5/5 pass)"],
       "wave": 1,
-      "notes": "Operator input required."
+      "notes": "Repository-side fail-fast guard added (assertSafeDbRole throws in production on superuser/BYPASSRLS role). NOT yet wired into a startup/readiness probe (follow-up). BLOCKED fact: confirm live production DATABASE_URL connects as a restricted role (e.g. app_user), not postgres/superuser -- requires operator access to deploy config, not derivable from repo."
     },
     {
       "id": "P1-07",
@@ -220,7 +237,7 @@
       "files": ["claraud-web/src/lib/prisma.ts"],
       "verification": ["Run query on tx; parameterize; UUID guard; tenant-isolation test"],
       "wave": 1,
-      "notes": "P0 if same DB as root."
+      "notes": "NOT addressed in Wave 1 -- claraud-web is a separate subproject not explored/exercised this session. Carry to Wave 1 continuation or a dedicated wave; do not guess at a fix without reading the subproject own test setup first."
     },
     {
       "id": "P1-08",
@@ -257,22 +274,23 @@
       "dependencies": [],
       "files": ["lib/auth/rbac.ts", "app/api/auth/register/route.ts"],
       "verification": [
-        "Covered by wave0-rbac-api-key + wave0-invite-role tests; normalizeRole fails closed on unknown"
+        "Covered by wave0-rbac-api-key + wave0-invite-role tests; normalizeRole fails closed on unknown",
+        "vitest run tests/security/wave1-owner-role-escalation.test.ts (4/4 pass)"
       ],
       "wave": 0,
-      "notes": "Folded into Wave 0 rbac fix: normalizeRole applied at getCurrentRole, withRole, withPermission. hasRole/hasPermission guard undefined hierarchy. NOTE: register route writing role:'owner' should be re-checked in Wave 1 (owner not in ROLE_HIERARCHY -> normalizeRole now returns undefined for it)."
+      "notes": "Wave 0 folded in normalizeRole application. Wave 1 found and fixed a CRITICAL escalation this uncovered: LEGACY_ROLE_VALUES.owner mapped to 'super_admin' (not agency_admin), meaning every self-registered tenant admin normalized to PLATFORM-WIDE super_admin. Fixed; register route now writes role:'agency_admin' directly. See wave1-owner-role-escalation.test.ts."
     },
     {
       "id": "P1-15",
       "severity": "P1",
       "title": "No visible rate limiting on NextAuth Credentials login (brute-force)",
-      "status": "open",
+      "status": "verified",
       "rootCauseGroup": "K",
       "dependencies": [],
       "files": ["app/api/auth/[...nextauth]/route.ts"],
-      "verification": ["Add rate limiting to credentials callback; test"],
+      "verification": ["vitest run tests/security/wave1-login-rate-limit.test.ts (6/6 pass)"],
       "wave": 1,
-      "notes": "Registration is throttled; login is not."
+      "notes": "Credentials callback path rate-limited (per-IP + per-account via shared Redis-backed limiter) before password verification; OAuth callbacks unaffected; 429 body identical regardless of account existence."
     },
     {
       "id": "P1-16",
@@ -292,13 +310,13 @@
       "id": "P1-17",
       "severity": "P1",
       "title": "GET/POST /api/predictions unauthenticated; raw tenantId query param into where; only 500s due to DB-layer assertion",
-      "status": "open",
+      "status": "verified",
       "rootCauseGroup": "B",
       "dependencies": [],
-      "files": ["app/api/predictions/route.ts", "lib/tenant/context.ts", "lib/prisma.ts"],
-      "verification": ["Add withAuth + explicit tenant scoping; test"],
+      "files": ["app/api/predictions/route.ts"],
+      "verification": ["vitest run tests/security/wave1-predictions-authz.test.ts (7/7 pass)"],
       "wave": 1,
-      "notes": "Defense-in-depth only today."
+      "notes": "GET wrapped in withAuth, POST in withRole('agency_member'); tenant comes exclusively from getTenantId()/ALS context; client-supplied tenantId in query/body ignored; runtime input validation added; response no longer includes tenant relation."
     },
     {
       "id": "P1-18",
@@ -310,7 +328,7 @@
       "files": ["claraud-web/src/lib/prisma.ts"],
       "verification": ["Parameterize via Prisma.sql; fix connection; UUID validation"],
       "wave": 1,
-      "notes": "Re-confirmed reachable on every authenticated claraud-web request."
+      "notes": "NOT addressed in Wave 1 -- same reason as P1-07 (separate subproject, not explored this session)."
     },
     {
       "id": "P1-19",
@@ -728,7 +746,6 @@
       "wave": 4,
       "notes": "Cost continues after audit marked terminal."
     },
-
     {
       "id": "P2-01",
       "severity": "P2",
@@ -805,13 +822,15 @@
       "id": "P2-07",
       "severity": "P2",
       "title": "RBAC role read via (session.user as any).role",
-      "status": "open",
+      "status": "verified",
       "rootCauseGroup": "A",
       "dependencies": ["P0-19"],
       "files": ["lib/auth/rbac.ts"],
-      "verification": ["Type session.user.role"],
+      "verification": [
+        "Covered by wave0-rbac-api-key tests (normalizeRole typed extraction); wave1-owner-role-escalation.test.ts proves the downstream owner-role mapping bug is closed"
+      ],
       "wave": 1,
-      "notes": "Partially improved by Wave 0 (normalizeRole with typed cast); residual any-cast remains — finish typing in Wave 1."
+      "notes": "Type-unsafe (session.user as any).role extraction fixed in Wave 0 via normalizeRole with a typed cast. Reverified in Wave 1 -- no duplicate fix needed."
     },
     {
       "id": "P2-08",
@@ -937,13 +956,13 @@
       "id": "P2-18",
       "severity": "P2",
       "title": "Self-evolving raw executor default requireTenant=false",
-      "status": "open",
+      "status": "verified",
       "rootCauseGroup": "B",
       "dependencies": [],
       "files": ["lib/self-evolving-prompts/db.ts"],
-      "verification": ["Default requireTenant=true for tenant tables"],
+      "verification": ["vitest run tests/security/wave1-self-evolving-executor.test.ts (4/4 pass)"],
       "wave": 1,
-      "notes": ""
+      "notes": "requireTenant now defaults to true (was false). Every existing call site already passed it explicitly (true or false) -- zero behavior change at existing call sites, closes the omission-based fail-open gap for any future caller."
     },
     {
       "id": "P2-19",
@@ -988,13 +1007,13 @@
       "id": "P2-22",
       "severity": "P2",
       "title": "Rate-limit IP extraction trusts x-forwarded-for with no proxy-trust verification",
-      "status": "open",
+      "status": "verified",
       "rootCauseGroup": "B",
       "dependencies": [],
-      "files": ["lib/middleware/rateLimit.ts"],
-      "verification": ["Confirm ingress strips client values; trusted-proxy allowlist"],
+      "files": ["lib/security/getClientIp.ts", "lib/middleware/rateLimit.ts"],
+      "verification": ["vitest run tests/security/wave1-client-ip-trust.test.ts (8/8 pass)"],
       "wave": 1,
-      "notes": ""
+      "notes": "New shared getClientIp() trusts only the configured number of X-Forwarded-For hops (default 1, matching Cloud Run edge behavior) instead of the client-controlled first entry. Wired into both IP-extraction sites in rateLimit.ts. Other 5 duplicate-logic sites noted in the audit (case-study/generate, pipeline/chat, proposal/token/*, idempotency.ts, lib/auth.ts) NOT migrated this wave -- tracked as new finding P2-57."
     },
     {
       "id": "P2-23",
@@ -1006,7 +1025,7 @@
       "files": ["app/api/auth/register/route.ts", "lib/auth.ts"],
       "verification": ["Generic response; alert/retry on audit-trail write failure"],
       "wave": 1,
-      "notes": ""
+      "notes": "NOT addressed in Wave 1 -- deprioritized given time budget; enumeration-response changes carry frontend-coupling risk that was not safe to make blind this session."
     },
     {
       "id": "P2-24",
@@ -1415,6 +1434,42 @@
       ],
       "wave": 14,
       "notes": "Note: Wave 0 added tests/security/wave0-security-ssrf.test.ts covering security-module SSRF; broader shared-layer coverage still owed."
+    },
+    {
+      "id": "P2-56",
+      "severity": "P2",
+      "title": "Latent field/enum/type mismatches in lib/pipeline/signalDetector.ts and tenantConfig.ts masked by the old lib/db.ts prisma:any typing",
+      "status": "open",
+      "rootCauseGroup": "M",
+      "dependencies": ["P1-05"],
+      "files": ["lib/pipeline/signalDetector.ts", "lib/pipeline/tenantConfig.ts"],
+      "verification": [
+        "Fix status-enum casing (discovered/audited vs DISCOVERED/AUDITED), select-field names (gbpPlaceId/websiteUrl/industry), and Tenant include/pipelineConfig relation shape; add real types back"
+      ],
+      "wave": 7,
+      "notes": "Discovered during Wave 1 P1-05 migration off the unscoped any-typed client -- tsc surfaced real, pre-existing type errors that were always silently swallowed. Preserved exact prior runtime behavior via an explicit as-any cast (documented ponytail comment in both files) rather than blind-fixing business logic under time pressure. Needs its own investigation with tests before changing behavior."
+    },
+    {
+      "id": "P2-57",
+      "severity": "P2",
+      "title": "Duplicated, inconsistent X-Forwarded-For/X-Real-IP extraction logic outside lib/middleware/rateLimit.ts",
+      "status": "open",
+      "rootCauseGroup": "B",
+      "dependencies": ["P2-22"],
+      "files": [
+        "app/api/case-study/[auditId]/generate/route.ts",
+        "app/api/pipeline/chat/route.ts",
+        "app/api/proposal/token/[token]/route.ts",
+        "app/api/proposal/token/[token]/track/route.ts",
+        "app/api/proposal/token/[token]/accept/route.ts",
+        "lib/middleware/idempotency.ts",
+        "lib/auth.ts"
+      ],
+      "verification": [
+        "Migrate each site to the new shared lib/security/getClientIp.ts helper; remove duplicated first-hop-trusting logic"
+      ],
+      "wave": 7,
+      "notes": "P2-22 fixed the two sites cited as evidence in the audit (rateLimit.ts) and shipped the shared helper; these 7 sites still duplicate the old, spoofable first-hop-trusting pattern and should be migrated to the shared helper."
     }
   ]
 }
