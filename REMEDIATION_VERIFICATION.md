@@ -293,3 +293,79 @@ P2-07, P2-18, P2-22. Set to `fixed` (code changed, external fact still needed):
 P1-06. Left `open` (not attempted): P1-07, P1-18, P2-23. New findings logged: P2-56,
 P2-57. No production infra/DB/live accounts touched. All tests use mocks/fixtures or
 are honestly reported as environment-blocked (no live DB in this sandbox).
+
+---
+
+## Correction to the Wave 1 "final gates" tsc result (baseline repair, 2026-07-11)
+
+**This appends to, and does not erase or rewrite, the "Final gates (whole wave)" entry above.**
+
+The Wave 1 entry above records `tsc --noEmit ... -> exit 0` as the wave's final gate result.
+That result was reproduced from the _working tree at that moment_, which — unknown to that
+session — already silently contained an early, uncommitted copy of a fix for
+`lib/audit/runner.ts`'s `BUDGET_EXCEEDED` branch (the same line later re-authored, independently,
+by the unauthorized Wave 2 WIP excursion and isolated into `stash@{0}` in this continuation — see
+`REMEDIATION_STATE.md`). That uncommitted fix was never itself committed as part of Wave 1, and
+no regression test covered it.
+
+Re-running `tsc --noEmit --pretty false --incremental false` from a **clean checkout of the
+actual committed Wave 1 HEAD** (`dc6591a`, with the Wave 2 WIP correctly isolated into a stash and
+nothing else in the working tree) reproduced:
+
+```
+lib/audit/runner.ts(1128,39): error TS2353: Object literal may only specify known properties,
+and 'error' does not exist in type '(Without<AuditUpdateInput, AuditUncheckedUpdateInput> &
+AuditUncheckedUpdateInput) | (Without<...> & AuditUpdateInput)'.
+(exit 2)
+```
+
+Root cause: the `Audit` Prisma model (`prisma/schema.prisma`, unchanged since `63d40dc`,
+2026-05-30) has no `error` scalar column; module/budget failures are recorded via the
+`modulesFailed: Json` array, per the pattern already used by this same file's per-module `FAILED`
+branch and read by `app/api/analytics/route.ts`.
+
+### Baseline-repair fix (isolated commit, not a Wave 1 finding)
+
+`lib/audit/runner.ts`'s `BUDGET_EXCEEDED` branch now writes:
+
+```ts
+data: {
+  status: 'FAILED',
+  modulesFailed: [...existingModulesFailed, { module: 'budget', error: 'BUDGET_EXCEEDED' }],
+  completedAt: new Date(),
+},
+```
+
+merging into any `modulesFailed` already present on the row (read from the `audit` object already
+fetched at the top of `runAuditInternal`) rather than overwriting it, matching the established
+read-modify-write convention used elsewhere for this field. No new Prisma column was added.
+
+```
+$ vitest run tests/security/wave1-baseline-budget-exceeded-write.test.ts
+ ✓ writes only schema-valid Audit fields and stays observable/terminal
+ ✓ merges into pre-existing modulesFailed instead of discarding them
+ Test Files  1 passed (1)
+      Tests  2 passed (2)
+
+$ ./node_modules/.bin/tsc --noEmit --pretty false --incremental false
+(exit 0)
+
+$ npx eslint lib/audit/runner.ts tests/security/wave1-baseline-budget-exceeded-write.test.ts
+✖ 39 problems (0 errors, 39 warnings) — all 39 are pre-existing `no-explicit-any`/
+  `no-unused-vars` warnings unrelated to this change (verified by line number against the
+  pre-fix file); zero new warnings or errors introduced.
+
+$ vitest run <15 files: this new test + all Wave 0/1 security tests + both architecture tests>
+ Test Files  15 passed (15)
+      Tests  81 passed (81)
+
+$ git stash show --stat stash@{0}   -> unchanged (15 tracked + 1 untracked file, identical to the
+  isolation record in REMEDIATION_STATE.md); stash was not applied, popped, or edited.
+```
+
+### Result
+
+This isolated, one-line-semantic baseline correction restores a **reproducible clean-checkout
+TypeScript baseline** for the branch, independent of any Wave 2 WIP. It is not one of the 10 Wave
+1 findings (P1-05/06/07/15/17/18, P2-07/18/22/23) and is tracked/committed separately from Wave
+1's own fixes.

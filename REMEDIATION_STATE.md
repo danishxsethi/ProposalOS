@@ -206,3 +206,123 @@ acceptance criteria, exact verification commands, rollback strategy, and expecte
   — no fix needed there since the shared `LEGACY_ROLE_VALUES` mapping fix covers all
   read sites uniformly, but a future wave may want to normalize the write sites to
   write `'agency_admin'` directly for clarity.
+
+## Wave 1 completion continuation — Wave 2 WIP isolated via scoped stash (2026-07-11)
+
+Resumed from HEAD `dc6591a` (branch `remediation/proposalos-e2e`). Prior session had, after
+committing the Wave 1 checkpoint (`9c20648`) and a follow-up architecture-test fix (`dc6591a`),
+begun unauthorized Wave 2 work (canonical audit engine / durable `AuditJob` queue migration —
+explicitly commented `P1-22/P1-23`, `P1-24`, `P0-22/P0-23`, `P2-25` in the diffs) and was
+terminated mid-edit with a broken build.
+
+### Stash isolation
+
+- **Stash ref:** `stash@{0}`
+- **Stash name/message:** `proposalos-wave2-wip-before-wave1-completion-2026-07-11`
+- **Base HEAD at stash time:** `dc6591a8484019b61f2d4e02145190513ee68f28`
+- **Untracked files included:** yes — exactly one, `lib/audit/dispatch.ts` (new file, part of the
+  verified Wave 2 WIP set). `git stash push -u -- <pathspec>` was used so only untracked files
+  matching the explicit pathspec were swept in; the other untracked file present at the time,
+  `scripts/show-leaks.js` (unrelated prior gitleaks helper), was correctly excluded.
+- **Exact file list stashed (16 files):**
+  - `app/api/audit/route.ts`
+  - `app/api/client/scan/route.ts`
+  - `app/api/cron/scheduled-audits/route.ts`
+  - `app/api/public/audit/route.ts`
+  - `app/api/v1/audit/route.ts`
+  - `app/api/worker/audit-job/route.ts`
+  - `cron.yaml`
+  - `lib/audit/modules.ts`
+  - `lib/audit/runner.ts`
+  - `lib/config/feature-flags.ts`
+  - `lib/orchestrator/auditOrchestrator.ts`
+  - `lib/orchestrator/index.ts` (deleted in WIP)
+  - `lib/outreach/sprint2/sniperWorker.ts`
+  - `lib/retention/scheduled-audit-runner.ts`
+  - `packages/shared/src/audit.ts`
+  - `lib/audit/dispatch.ts` (untracked/new)
+- **`git stash show --stat stash@{0}`:**
+  ```
+   app/api/audit/route.ts                  |  41 ++--
+   app/api/client/scan/route.ts            |  24 +++
+   app/api/cron/scheduled-audits/route.ts  | 321 ++------------------------------
+   app/api/public/audit/route.ts           |  37 ++--
+   app/api/v1/audit/route.ts               |  35 ++--
+   app/api/worker/audit-job/route.ts       |  85 +++++++--
+   cron.yaml                               |  20 ++
+   lib/audit/modules.ts                    |  11 +-
+   lib/audit/runner.ts                     |  35 +++-
+   lib/config/feature-flags.ts             |  31 +--
+   lib/orchestrator/auditOrchestrator.ts   |   2 +-
+   lib/orchestrator/index.ts               | 113 -----------
+   lib/outreach/sprint2/sniperWorker.ts    |   6 +-
+   lib/retention/scheduled-audit-runner.ts | 281 +++++++++++++++++++++-------
+   packages/shared/src/audit.ts            |  32 +++-
+   15 files changed, 496 insertions(+), 578 deletions(-)
+  ```
+  (16th file, `lib/audit/dispatch.ts`, is untracked and not shown by `--stat` but is present in
+  the stash's untracked-files tree — confirmed via `git stash show -p` / `git show stash@{0}^3`.)
+- **Explicitly NOT stashed (preserved untouched in the working tree, per instruction):**
+  `AUDIT_REPORT.md`; the ~46 single-line `+import { logger } ...` route files; `lib/logger.ts`;
+  `lib/observability/auditTrail.ts`; `lib/self-evolving-prompts/data-access/prompt-performance.ts`
+  (pre-existing unrelated timestamp/parameterization fix, not Wave-2-themed);
+  `app/api/cron/metering-sweep/route.ts` (pre-existing unrelated `await` fix, not Wave-2-themed);
+  `scripts/show-leaks.js`; `REMEDIATION_STATE.md` / `REMEDIATION_FINDINGS.json` /
+  `REMEDIATION_VERIFICATION.md` (already committed/clean).
+- **Verification post-stash:** `git status --short` confirms none of the 16 files remain dirty;
+  `git diff HEAD -- lib/audit/runner.ts` (and each other stashed file) is empty, confirming exact
+  restoration to committed HEAD content.
+
+### Gate result after isolation — STOPPED, new pre-existing defect surfaced (not caused by the stash)
+
+```
+$ ./node_modules/.bin/tsc --noEmit --pretty false --incremental false
+lib/audit/runner.ts(1128,39): error TS2353: Object literal may only specify known properties,
+and 'error' does not exist in type '(Without<AuditUpdateInput, AuditUncheckedUpdateInput> &
+AuditUncheckedUpdateInput) | (Without<...> & AuditUpdateInput)'.
+(exit 2)
+```
+
+This is **not** part of the Wave 2 WIP just isolated (`git diff HEAD -- lib/audit/runner.ts` is
+empty — the file is byte-identical to the committed `dc6591a` blob). It is a latent, pre-existing
+type error in the code Wave 1 itself committed: `runAudit()`'s `BUDGET_EXCEEDED` branch writes
+`data: { status: 'FAILED', error: 'BUDGET_EXCEEDED', completedAt: new Date() }` to `prisma.audit.update`,
+but the `Audit` model (per `prisma/schema.prisma`, unchanged since `63d40dc`, 2026-05-30) has no
+`error` field — only `modulesFailed: Json`. Confirmed this is not a stale-Prisma-client artifact:
+`node_modules/.prisma/client` was generated 2026-05-30, matching the schema's last-change date;
+schema itself is clean (`git status --short prisma/schema.prisma` empty).
+
+This means `REMEDIATION_VERIFICATION.md`'s Wave 1 "final gates: tsc exit 0" claim was only true of
+the _working tree at that moment_, which already silently contained an early, uncommitted version
+of the now-stashed Wave 2 fix for this exact line (the Wave 2 WIP's `runner.ts` hunk replaces this
+same `error: 'BUDGET_EXCEEDED'` line with a schema-valid `modulesFailed: [...]` array) — the bug
+was masked by unrelated, uncommitted, unauthorized work at verification time and never actually
+fixed or covered by a committed regression test. **Per instruction, stopping here rather than
+patching `lib/audit/runner.ts` unilaterally** — this file is outside the Wave 1 finding set
+(P1-05/06/07/15/17/18, P2-07/18/22/23) and fixing it is a judgment call (either revert to the
+schema-correct field, or treat as a small pre-existing-defect fix) that should be confirmed before
+editing.
+
+### Status: Wave 1 remaining work (P1-07/P1-18, P2-23) NOT YET STARTED this continuation
+
+Blocked on resolving the above pre-existing `runner.ts:1128` type error first, since the
+mandatory whole-tree `tsc --noEmit` gate must be green before/after the remaining Wave 1 fixes.
+
+### Baseline-repair commit (2026-07-11, follow-up to the stash isolation above)
+
+- **Fix:** `lib/audit/runner.ts`'s `BUDGET_EXCEEDED` branch now writes
+  `modulesFailed: [...existing, { module: 'budget', error: 'BUDGET_EXCEEDED' }]` instead of the
+  schema-invalid `error: 'BUDGET_EXCEEDED'` scalar field; merges rather than overwrites any
+  pre-existing `modulesFailed` entries on the row. No Prisma schema change.
+- **New test:** `tests/security/wave1-baseline-budget-exceeded-write.test.ts` (2/2 pass).
+- **Gates:** `tsc --noEmit` exit 0; `eslint` on the 2 changed files — 0 errors, 39 pre-existing
+  warnings (0 new); 15-file/81-test targeted regression run — all green. Full detail in
+  `REMEDIATION_VERIFICATION.md`'s "Correction to the Wave 1 final gates tsc result" section.
+- **Stash status:** `stash@{0}`
+  (`proposalos-wave2-wip-before-wave1-completion-2026-07-11`) — **unchanged, not applied, not
+  popped, not dropped**. Re-verified via `git stash show --stat stash@{0}` immediately after this
+  fix; output identical to the isolation record above.
+- **Commit:** `fix(audit): persist budget-exceeded failure in valid schema` (code + test, isolated
+  from Wave 1's own tenant/auth commits and from the stashed Wave 2 WIP).
+- **Next:** resume and complete the two remaining Wave 1 findings (P1-07/P1-18, P2-23) from this
+  now-clean baseline.
