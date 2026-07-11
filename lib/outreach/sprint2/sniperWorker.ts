@@ -11,7 +11,7 @@ import {
 } from '@prisma/client';
 import { Resend } from 'resend';
 
-import { runAudit } from '@/lib/audit/runner';
+import { dispatchAuditExecution } from '@/lib/audit/dispatch';
 import { FeatureFlagService } from '@/lib/config/FeatureFlagService';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
@@ -138,8 +138,8 @@ async function ensureProposalUrlForLead(
       },
       select: { id: true },
     });
-    runAudit(created.id).catch((error) => {
-      logger.error({ auditId: created.id, error }, 'Bg audit failed');
+    dispatchAuditExecution({ tenantId: lead.tenantId, auditId: created.id }).catch((error) => {
+      logger.error({ auditId: created.id, error }, 'Failed to enqueue bg audit for execution');
     });
   }
 

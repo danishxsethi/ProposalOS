@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 
 import { generateTraceId, InternalError, ValidationError } from '@/lib/api/errors';
-import { runAudit } from '@/lib/audit/runner';
+import { dispatchAuditExecution } from '@/lib/audit/dispatch';
 import { trackUsage } from '@/lib/billing/metering';
 import { logError, logger } from '@/lib/logger';
 import { withAuth } from '@/lib/middleware/auth';
@@ -10,12 +10,11 @@ import { recordAuditTrailEvent } from '@/lib/observability/auditTrail';
 import {
   applyObservabilityHeaders,
   createObservabilityContextFromRequest,
-  getObservabilityContext,
   runWithObservabilityContext,
 } from '@/lib/observability/context';
 import { prisma } from '@/lib/prisma';
-import { getTenantId, runWithTenantAsync } from '@/lib/tenant/context';
-// P0-3: Use runner (Single source of truth)
+import { getTenantId } from '@/lib/tenant/context';
+// P0-3: Use runner (Single source of truth); P1-24: durable queue, not fire-and-forget
 
 /**
  * API v1 - Create Audit (with rate limiting)
@@ -100,27 +99,42 @@ async function handlePOST(req: Request) {
           },
         });
 
-        const currentContext = getObservabilityContext();
-        runWithObservabilityContext(
-          { ...currentContext, tenantId, auditId: audit.id, workflow: 'audit-runner' },
-          () => runWithTenantAsync(tenantId, () => runAudit(audit.id))
-        ).catch(async (error) => {
-          logError('Audit runner failed', error, { auditId: audit.id, tenantId });
+        try {
+          await dispatchAuditExecution({ tenantId, auditId: audit.id });
+        } catch (error) {
+          logError('Failed to enqueue v1 audit for execution', error, {
+            auditId: audit.id,
+            tenantId,
+          });
+          // Audit has no `error` scalar column — module/dispatch failures are recorded
+          // via the `modulesFailed: Json` array (same convention as lib/audit/runner.ts
+          // and app/api/cron/cleanup-stale-jobs/route.ts).
           await prisma.audit
             .update({
               where: { id: audit.id },
               data: {
                 status: 'FAILED',
                 completedAt: new Date(),
-                error: `AUDIT_KICKOFF_FAILED: ${String(error)}`,
-              } as any,
+                modulesFailed: [
+                  { module: 'dispatch', error: `AUDIT_ENQUEUE_FAILED: ${String(error)}` },
+                ],
+              },
             })
             .catch((updateError) => {
-              logError('Failed to persist kickoff failure status', updateError, {
+              logError('Failed to persist enqueue failure status', updateError, {
                 auditId: audit.id,
               });
             });
-        });
+
+          const internalError = new InternalError('Failed to queue audit for execution', {
+            originalError: error instanceof Error ? error.message : 'Unknown error',
+          });
+          const response = NextResponse.json(internalError.toEnvelope(req.url, traceId), {
+            status: 500,
+          });
+          applyObservabilityHeaders(response);
+          return response;
+        }
 
         const response = NextResponse.json(
           {

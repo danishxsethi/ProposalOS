@@ -102,31 +102,36 @@ export const FEATURE_FLAGS = {
   ENABLE_B2C_MODE: process.env.ENABLE_B2C_MODE === 'true',
 
   // ==========================================
-  // NEW AUDIT MODULES (Phase V - Release Management)
+  // AUDIT MODULES (Phase V - Release Management)
   // ==========================================
+  // P2-25: these flags are now wired into MODULE_REGISTRY eligibility
+  // (lib/audit/runner.ts). They default to enabled (opt-out via env var set to
+  // 'false') to preserve current behavior — these modules already run
+  // unconditionally today; disabling by default would silently remove a shipped
+  // capability, which the campaign rules forbid.
   /**
-   * Enable new accessibility audit module
-   * Includes WCAG 2.1 AA compliance checks, ARIA validation
+   * Enable the accessibility audit module (WCAG 2.1 AA checks, ARIA validation).
+   * Default: enabled. Set to 'false' to exclude it from MODULE_REGISTRY execution.
    */
-  ENABLE_ACCESSIBILITY_AUDIT_MODULE: process.env.ENABLE_ACCESSIBILITY_AUDIT_MODULE === 'true',
+  ENABLE_ACCESSIBILITY_AUDIT_MODULE: process.env.ENABLE_ACCESSIBILITY_AUDIT_MODULE !== 'false',
 
   /**
-   * Enable new performance audit module
-   * Includes Core Web Vitals, LCP, FID, CLS analysis
+   * Enable the performance/Core Web Vitals audit module.
+   * Default: enabled. Set to 'false' to exclude it from MODULE_REGISTRY execution.
    */
-  ENABLE_PERFORMANCE_AUDIT_MODULE: process.env.ENABLE_PERFORMANCE_AUDIT_MODULE === 'true',
+  ENABLE_PERFORMANCE_AUDIT_MODULE: process.env.ENABLE_PERFORMANCE_AUDIT_MODULE !== 'false',
 
   /**
-   * Enable new SEO audit module
-   * Includes meta tags, structured data, sitemap validation
+   * Enable the SEO audit module (meta tags, structured data, sitemap validation).
+   * Default: enabled. Set to 'false' to exclude it from MODULE_REGISTRY execution.
    */
-  ENABLE_SEO_AUDIT_MODULE: process.env.ENABLE_SEO_AUDIT_MODULE === 'true',
+  ENABLE_SEO_AUDIT_MODULE: process.env.ENABLE_SEO_AUDIT_MODULE !== 'false',
 
   /**
-   * Enable new security audit module
-   * Includes HTTPS, CSP, security headers validation
+   * Enable the security audit module (HTTPS, CSP, security headers validation).
+   * Default: enabled. Set to 'false' to exclude it from MODULE_REGISTRY execution.
    */
-  ENABLE_SECURITY_AUDIT_MODULE: process.env.ENABLE_SECURITY_AUDIT_MODULE === 'true',
+  ENABLE_SECURITY_AUDIT_MODULE: process.env.ENABLE_SECURITY_AUDIT_MODULE !== 'false',
 
   // ==========================================
   // PROPOSAL TEMPLATE FLAGS
@@ -250,4 +255,83 @@ export function isFeatureEnabled<K extends keyof typeof FEATURE_FLAGS>(flag: K):
  */
 export function getAllFeatureFlags(): Record<string, boolean | number> {
   return { ...FEATURE_FLAGS };
+}
+
+// =============================================================================
+// DB-backed runtime overrides (P2-25)
+// =============================================================================
+//
+// FEATURE_FLAGS above is computed once from process.env at module load — it can
+// never reflect an admin's runtime toggle (app/api/admin/feature-flags/route.ts
+// persists overrides to the `FeatureFlag` table). Before this fix, that admin API
+// wrote overrides that only its own GET response reflected; every real
+// flag-consumer (isFeatureEnabled, and therefore MODULE_REGISTRY's gating in
+// lib/audit/runner.ts) still only ever saw the env-derived default, so an admin
+// toggle had no actual effect on module selection — exactly the "disconnected"
+// defect this finding describes. getEffectiveFeatureFlags()/isFeatureEnabledEffective()
+// are now the ONE place that merges the DB override on top of the static default;
+// the admin route and the audit engine's module gate both call through here
+// (single selection layer, requirement 2 — no second framework, requirement 9).
+let effectiveFlagsCache: Record<string, boolean | number | string> | null = null;
+let effectiveFlagsCacheAt = 0;
+const EFFECTIVE_FLAGS_CACHE_TTL_MS = 60_000;
+
+/**
+ * Merge DB-persisted overrides on top of the static env-derived defaults.
+ * Unknown DB rows (a flag key that no longer corresponds to a real flag) are
+ * ignored rather than injected into the effective set — requirement 3
+ * ("unknown flags fail safely").
+ */
+export async function getEffectiveFeatureFlags(): Promise<
+  Record<string, boolean | number | string>
+> {
+  const now = Date.now();
+  if (effectiveFlagsCache && now - effectiveFlagsCacheAt < EFFECTIVE_FLAGS_CACHE_TTL_MS) {
+    return effectiveFlagsCache;
+  }
+
+  const merged: Record<string, boolean | number | string> = { ...FEATURE_FLAGS };
+  try {
+    // Lazy import: keeps this config module importable in contexts without a
+    // configured Prisma client (e.g. edge/test) when overrides are never queried.
+    const { prisma } = await import('@/lib/prisma');
+    const validKeys = new Set(Object.keys(FEATURE_FLAGS));
+    const dbFlags = await prisma.featureFlag.findMany();
+    for (const row of dbFlags) {
+      if (!validKeys.has(row.key)) continue; // fail safe: ignore unknown/stale keys
+      if (row.value === 'true' || row.value === 'false') {
+        merged[row.key] = row.value === 'true';
+      } else if (!Number.isNaN(Number(row.value)) && row.value.trim() !== '') {
+        merged[row.key] = Number(row.value);
+      } else {
+        merged[row.key] = row.value;
+      }
+    }
+  } catch {
+    // DB unavailable — fall back to env-derived defaults rather than throwing;
+    // module gating must not hard-fail because the override store is down.
+    return FEATURE_FLAGS;
+  }
+
+  effectiveFlagsCache = merged;
+  effectiveFlagsCacheAt = now;
+  return merged;
+}
+
+/** Invalidate the effective-flags cache immediately after a write (admin toggle). */
+export function invalidateEffectiveFeatureFlagsCache(): void {
+  effectiveFlagsCache = null;
+}
+
+/**
+ * Effective (DB-override-aware) version of isFeatureEnabled. Used by module
+ * gating so an admin's runtime toggle actually changes execution, not just the
+ * admin API's own read response.
+ */
+export async function isFeatureEnabledEffective<K extends keyof typeof FEATURE_FLAGS>(
+  flag: K
+): Promise<boolean> {
+  const flags = await getEffectiveFeatureFlags();
+  const value = flags[flag as string];
+  return typeof value === 'boolean' ? value : false;
 }

@@ -28,8 +28,10 @@ const mocks = vi.hoisted(() => ({
   tenantFindUnique: vi.fn(),
   tenantFindFirst: vi.fn(),
   auditCreate: vi.fn(),
+  auditUpdate: vi.fn(),
   crawlWebsite: vi.fn(),
   runGBPModule: vi.fn(),
+  runModuleSubset: vi.fn(),
   loggerInfo: vi.fn(),
   loggerWarn: vi.fn(),
   loggerError: vi.fn(),
@@ -48,6 +50,7 @@ vi.mock('@/lib/prisma', () => ({
     },
     audit: {
       create: mocks.auditCreate,
+      update: mocks.auditUpdate,
     },
   },
 }));
@@ -63,6 +66,21 @@ vi.mock('@/lib/middleware/idempotency', () => ({
 
 vi.mock('@/lib/modules/websiteCrawler', () => ({ crawlWebsite: mocks.crawlWebsite }));
 vi.mock('@/lib/modules/gbp', () => ({ runGBPModule: mocks.runGBPModule }));
+
+// P1-21: the route now dispatches through the canonical engine's runModuleSubset()
+// instead of calling crawlWebsite()/runGBPModule() directly (see
+// tests/security/widget-graceful-degradation.test.ts for the dedicated coverage of
+// that behavior). This suite is about origin allow-listing, not module execution, so
+// it stubs runModuleSubset to a fixed successful result — the crawlWebsite/gbp mocks
+// above are kept only because @/lib/modules/websiteCrawler and @/lib/modules/gbp are
+// still imported transitively by lib/audit/runner.ts.
+vi.mock('@/lib/audit/runner', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/audit/runner')>();
+  return {
+    ...actual,
+    runModuleSubset: mocks.runModuleSubset,
+  };
+});
 
 vi.mock('@/lib/logger', () => ({
   logger: {
@@ -321,9 +339,29 @@ describe('POST /api/widget/quick-audit — origin allow-list', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     setupPassthroughTenantHelpers();
-    mocks.crawlWebsite.mockResolvedValue({ pages: [] });
-    mocks.runGBPModule.mockResolvedValue({ status: 'success', data: {} });
     mocks.auditCreate.mockResolvedValue({ id: 'new-audit-id', businessName: 'Test Biz' });
+    mocks.auditUpdate.mockResolvedValue({});
+    // P1-21: route now runs through runModuleSubset() — stub a clean success so
+    // this suite (which tests origin allow-listing, not module output) doesn't
+    // depend on real module adapters/network calls.
+    mocks.runModuleSubset.mockResolvedValue(
+      new Map([
+        ['website', { status: 'COMPLETE', data: { findings: [] } }],
+        [
+          'gbp',
+          {
+            status: 'COMPLETE',
+            data: {
+              rating: 4.8,
+              reviewCount: 45,
+              website: 'https://example.com',
+              photoCount: 12,
+              openingHours: { periods: [{}] },
+            },
+          },
+        ],
+      ])
+    );
   });
 
   it('allowed origin POST succeeds with exact origin echoed', async () => {

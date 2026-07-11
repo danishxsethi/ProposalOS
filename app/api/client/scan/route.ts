@@ -21,6 +21,7 @@ import {
   RateLimitError,
   ValidationError,
 } from '@/lib/api/errors';
+import { dispatchAuditExecution } from '@/lib/audit/dispatch';
 import { logger } from '@/lib/logger';
 import { withRateLimit } from '@/lib/middleware/rateLimit';
 import { prisma } from '@/lib/prisma';
@@ -111,9 +112,12 @@ async function handlePostScan(req: Request): Promise<NextResponse> {
       });
 
       if (!audit) {
-        return NextResponse.json(new NotFoundError('Audit', auditId || 'unknown').toEnvelope(req.url, traceId), {
-          status: 404,
-        });
+        return NextResponse.json(
+          new NotFoundError('Audit', auditId || 'unknown').toEnvelope(req.url, traceId),
+          {
+            status: 404,
+          }
+        );
       }
 
       tenantId = audit.tenantId;
@@ -211,6 +215,29 @@ async function handlePostScan(req: Request): Promise<NextResponse> {
       },
     });
 
+    // P0-22: previously the audit record was created and left QUEUED forever — no
+    // execution mechanism was ever invoked. Enqueue via the durable job queue
+    // (canonical engine, same mechanism as /api/audit/batch).
+    try {
+      await dispatchAuditExecution({ tenantId, auditId: newAudit.id });
+    } catch (enqueueError) {
+      logger.error(
+        { error: enqueueError, auditId: newAudit.id },
+        'Failed to enqueue client scan audit for execution'
+      );
+      await prisma.audit
+        .update({
+          where: { id: newAudit.id },
+          data: { status: 'FAILED', completedAt: new Date() },
+        })
+        .catch(() => {});
+
+      const internalError = new InternalError('Failed to queue scan for execution', {
+        originalError: enqueueError instanceof Error ? enqueueError.message : String(enqueueError),
+      });
+      return NextResponse.json(internalError.toEnvelope(req.url, traceId), { status: 500 });
+    }
+
     logger.info(
       {
         newAuditId: newAudit.id,
@@ -224,7 +251,10 @@ async function handlePostScan(req: Request): Promise<NextResponse> {
       success: true,
       auditId: newAudit.id,
       status: newAudit.status,
-      message: 'Scan initiated. You will be notified when complete.',
+      // No completion notification is wired for this path — poll GET
+      // /api/client/scan?auditId=... for status instead of promising a push
+      // notification that does not exist (Wave 2 / P0-22 Step 6 requirement 6).
+      message: 'Scan queued. Poll status using auditId.',
       estimatedCompletion: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
     });
 
@@ -267,9 +297,12 @@ async function handleGetScanStatus(req: Request): Promise<NextResponse> {
     });
 
     if (!audit) {
-      return NextResponse.json(new NotFoundError('Audit', auditId || 'unknown').toEnvelope(req.url, traceId), {
-        status: 404,
-      });
+      return NextResponse.json(
+        new NotFoundError('Audit', auditId || 'unknown').toEnvelope(req.url, traceId),
+        {
+          status: 404,
+        }
+      );
     }
 
     // Get findings count separately

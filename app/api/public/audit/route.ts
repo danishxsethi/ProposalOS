@@ -13,7 +13,7 @@ import { NextResponse } from 'next/server';
 
 import { generateTraceId, InternalError, ValidationError } from '@/lib/api/errors';
 import { auditTriggerSchema } from '@/lib/api/schemas/audit';
-import { runAudit } from '@/lib/audit/runner';
+import { dispatchAuditExecution } from '@/lib/audit/dispatch';
 import { trackUsage } from '@/lib/billing/metering';
 import { logError, logger } from '@/lib/logger';
 import { withIdempotency } from '@/lib/middleware/idempotency';
@@ -22,7 +22,6 @@ import { recordAuditTrailEvent } from '@/lib/observability/auditTrail';
 import {
   applyObservabilityHeaders,
   createObservabilityContextFromRequest,
-  getObservabilityContext,
   runWithObservabilityContext,
 } from '@/lib/observability/context';
 import { prisma } from '@/lib/prisma';
@@ -86,9 +85,7 @@ async function handlePublicAudit(req: Request): Promise<NextResponse> {
           })
         );
 
-        // Trigger orchestrator (fire and forget)
-        const currentContext = getObservabilityContext();
-
+        // Trigger execution via the durable job queue (canonical engine, P1-24)
         // Record billable usage (fire-and-forget — never blocks the audit)
         trackUsage(systemTenant.id, 'audit.created').catch(() => {});
 
@@ -114,31 +111,42 @@ async function handlePublicAudit(req: Request): Promise<NextResponse> {
           },
         });
 
-        runWithObservabilityContext(
-          {
-            ...currentContext,
-            tenantId: systemTenant.id,
+        try {
+          await dispatchAuditExecution({ tenantId: systemTenant.id, auditId: audit.id });
+        } catch (e) {
+          logError('Failed to enqueue public audit for execution', e, {
             auditId: audit.id,
-            workflow: 'audit-runner',
-          },
-          () => runWithTenantAsync(systemTenant.id, () => runAudit(audit.id))
-        ).catch(async (e) => {
-          logError('Bg audit kickoff failed', e, { auditId: audit.id, tenantId: systemTenant.id });
+            tenantId: systemTenant.id,
+          });
+          // Audit has no `error` scalar column — module/dispatch failures are recorded
+          // via the `modulesFailed: Json` array (same convention as lib/audit/runner.ts
+          // and app/api/cron/cleanup-stale-jobs/route.ts).
           await runWithTenantAsync(systemTenant.id, () =>
             prisma.audit.update({
               where: { id: audit.id },
               data: {
                 status: 'FAILED',
                 completedAt: new Date(),
-                error: `AUDIT_KICKOFF_FAILED: ${String(e)}`,
-              } as any,
+                modulesFailed: [
+                  { module: 'dispatch', error: `AUDIT_ENQUEUE_FAILED: ${String(e)}` },
+                ],
+              },
             })
           ).catch((updateErr) => {
-            logError('Failed to persist kickoff failure on public audit record', updateErr, {
+            logError('Failed to persist enqueue failure on public audit record', updateErr, {
               auditId: audit.id,
             });
           });
-        });
+
+          const internalError = new InternalError('Failed to queue public audit for execution', {
+            originalError: e instanceof Error ? e.message : String(e),
+          });
+          const response = NextResponse.json(internalError.toEnvelope(req.url, traceId), {
+            status: 500,
+          });
+          applyObservabilityHeaders(response);
+          return response;
+        }
 
         const response = NextResponse.json({ id: audit.id });
         applyObservabilityHeaders(response);

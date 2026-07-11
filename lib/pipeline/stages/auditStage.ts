@@ -1,9 +1,16 @@
 /**
  * Audit Pipeline Stage
  *
- * Processes prospects in "discovered" status by queuing full audits via the
- * existing Audit Orchestrator, then transitioning to "audited" or "audit_failed"
- * based on the result. Records audit cost against the tenant.
+ * Processes prospects in "discovered" status by running full audits via the
+ * canonical engine (lib/audit/runner.ts::runAudit), then transitioning to
+ * "audited" or "audit_failed" based on the result. Records audit cost against
+ * the tenant.
+ *
+ * Direct awaited execution (not the durable AuditJob queue) is intentional here:
+ * this stage already runs inside its own bounded batch loop (via the pipeline-audit
+ * cron), needs the audit's terminal status in the same control flow to decide the
+ * prospect's next pipeline state, and is not a detached fire-and-forget call from a
+ * customer-facing request (Wave 2 / Step 5 requirement 12 exception).
  *
  * Requirements: 2.1, 2.2, 2.3, 2.4, 2.6
  */
@@ -21,7 +28,7 @@ import { PipelineStage, type StageResult } from '../types';
  *
  * For each prospect:
  * 1. Creates an Audit record in the database
- * 2. Runs the AuditOrchestrator
+ * 2. Runs the canonical audit engine (runAudit)
  * 3. On success (COMPLETE/PARTIAL): transitions to "audited", links auditId, stores findings
  * 4. On failure (FAILED): transitions to "audit_failed"
  * 5. Records audit cost against the tenant

@@ -14,7 +14,7 @@ import { NextResponse } from 'next/server';
 
 import { generateTraceId, InternalError, ValidationError } from '@/lib/api/errors';
 import { auditTriggerSchema } from '@/lib/api/schemas/audit';
-import { runAudit } from '@/lib/audit/runner';
+import { dispatchAuditExecution } from '@/lib/audit/dispatch';
 import { checkAndDecrementQuota, checkAuditLimit } from '@/lib/billing/limits';
 import { logError, logger } from '@/lib/logger';
 import { Metrics } from '@/lib/metrics';
@@ -26,11 +26,10 @@ import { recordAuditTrailEvent } from '@/lib/observability/auditTrail';
 import {
   applyObservabilityHeaders,
   createObservabilityContextFromRequest,
-  getObservabilityContext,
   runWithObservabilityContext,
 } from '@/lib/observability/context';
 import { prisma } from '@/lib/prisma';
-import { getTenantId, runWithTenantAsync } from '@/lib/tenant/context';
+import { getTenantId } from '@/lib/tenant/context';
 import { extractBusinessFromUrl } from '@/lib/utils/urlExtractor';
 
 /**
@@ -171,29 +170,33 @@ async function handleAuditCreation(req: Request): Promise<NextResponse> {
           },
         });
 
-        // Run audit via canonical runner (single source of truth)
-        // Ensure runner has tenant context for child graphs
-        // Fire and forget so we don't block the request timeout
-        const currentContext = getObservabilityContext();
-        runWithObservabilityContext(
-          { ...currentContext, tenantId, auditId: audit.id, workflow: 'audit-runner' },
-          () => runWithTenantAsync(tenantId, () => runAudit(audit.id))
-        ).catch((err) => {
-          logError('Error running audit asynchronously', err, { auditId: audit.id });
-          prisma.audit
+        // Run audit via the durable job queue (canonical engine, P1-24) — not a
+        // fire-and-forget in-process call. Enqueue is fast (a DB write); if it fails
+        // we can still return a clear error since nothing long-running has started yet.
+        try {
+          await dispatchAuditExecution({ tenantId, auditId: audit.id });
+        } catch (err) {
+          logError('Failed to enqueue audit for execution', err, { auditId: audit.id });
+          await prisma.audit
             .update({
               where: { id: audit.id },
-              data: {
-                status: 'FAILED',
-                completedAt: new Date(),
-              },
+              data: { status: 'FAILED', completedAt: new Date() },
             })
             .catch((updateErr) => {
-              logError('Failed to persist async kickoff failure on audit record', updateErr, {
+              logError('Failed to persist enqueue failure on audit record', updateErr, {
                 auditId: audit.id,
               });
             });
-        });
+
+          const internalError = new InternalError('Failed to queue audit for execution', {
+            originalError: err instanceof Error ? err.message : String(err),
+          });
+          const response = NextResponse.json(internalError.toEnvelope(req.url, traceId), {
+            status: 500,
+          });
+          applyObservabilityHeaders(response);
+          return response;
+        }
 
         const response = NextResponse.json({
           success: true,

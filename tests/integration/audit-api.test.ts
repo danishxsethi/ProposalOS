@@ -99,6 +99,11 @@ vi.mock('@/lib/billing/limits', () => ({
   checkAuditLimit: vi.fn(() => Promise.resolve({ allowed: true })),
   checkAndDecrementQuota: vi.fn(() => Promise.resolve()),
 }));
+// P1-24: /api/audit now dispatches durably via the AuditJob queue instead of
+// running the audit in-process — stub the dispatch boundary for this route test.
+vi.mock('@/lib/audit/dispatch', () => ({
+  dispatchAuditExecution: vi.fn(() => Promise.resolve({ id: 'job-123', status: 'QUEUED' })),
+}));
 
 describe('Integration: POST /api/audit', () => {
   beforeEach(() => {
@@ -153,5 +158,12 @@ describe('Integration: POST /api/audit', () => {
     expect(res.status).toBe(200);
     expect(data.success).toBe(true);
     expect(data.auditId).toBeDefined();
+
+    // P1-24 / P0-22: creation must go through the durable dispatch boundary, not a
+    // detached in-process runAudit() call.
+    const { dispatchAuditExecution } = await import('@/lib/audit/dispatch');
+    expect(dispatchAuditExecution).toHaveBeenCalledWith(
+      expect.objectContaining({ tenantId: 'tenant-123', auditId: 'audit-123' })
+    );
   });
 });

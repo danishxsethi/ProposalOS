@@ -4,6 +4,7 @@ import { RunTree } from 'langsmith';
 
 import { runWithConcurrency } from '@/lib/audit/concurrency';
 import { redisCache } from '@/lib/cache/redisCache';
+import { FEATURE_FLAGS, isFeatureEnabledEffective } from '@/lib/config/feature-flags';
 import { CostTracker } from '@/lib/costs/costTracker';
 import { logger } from '@/lib/logger';
 import { Metrics } from '@/lib/metrics';
@@ -22,7 +23,7 @@ import { prisma } from '@/lib/prisma';
 import { createParentTrace } from '@/lib/tracing';
 
 // --- Step 1: Import all modules ---
-import { CANONICAL_MODULES } from './modules';
+import { CANONICAL_MODULES as CRITICAL_COMPLETION_MODULES } from './modules';
 import { runAccessibilityModule } from '../modules/accessibility';
 import { runBacklinksModule } from '../modules/backlinks';
 import { runCitationsModule } from '../modules/citations';
@@ -692,9 +693,25 @@ export const MODULE_REGISTRY: ModuleConfig[] = [
 ];
 
 /**
+ * P2-25: modules gated by an ENABLE_*_AUDIT_MODULE feature flag. All 4 flags default
+ * to enabled (see lib/config/feature-flags.ts) so existing behavior is unchanged
+ * until an operator explicitly opts out. Checked inline in executePhase() below (not
+ * via a second filtered copy of MODULE_REGISTRY) so disabled modules still get an
+ * explicit SKIPPED/"DISABLED" result recorded — distinguishing "operator turned this
+ * off" from "this module failed" or "this module is missing" for dependents and for
+ * customer-facing status reporting.
+ */
+export const FEATURE_FLAG_GATED_MODULES: Partial<Record<string, keyof typeof FEATURE_FLAGS>> = {
+  accessibility: 'ENABLE_ACCESSIBILITY_AUDIT_MODULE',
+  coreWebVitals: 'ENABLE_PERFORMANCE_AUDIT_MODULE',
+  seoDeep: 'ENABLE_SEO_AUDIT_MODULE',
+  security: 'ENABLE_SECURITY_AUDIT_MODULE',
+};
+
+/**
  * Normalizes findings out of the custom module results and legacy modules
  */
-function extractFindingsFromRegistryResult(
+export function extractFindingsFromRegistryResult(
   moduleName: string,
   result: ModuleResult,
   input: ModuleInput
@@ -811,6 +828,20 @@ async function executePhase(
   );
 
   const tasks = phaseModules.map((mod) => async () => {
+    // P2-25: feature-flag-gated modules report as explicitly DISABLED, distinct from a
+    // dependency-skip or a provider failure — dependents treat a disabled optional
+    // dependency the same as a missing/failed one (fail-open on optionality), but the
+    // audit-level reporting must not conflate "disabled by operator" with "broke".
+    const gateFlag = FEATURE_FLAG_GATED_MODULES[mod.name];
+    if (gateFlag && !(await isFeatureEnabledEffective(gateFlag))) {
+      results.set(mod.name, {
+        status: 'SKIPPED',
+        data: null,
+        error: `DISABLED: ${gateFlag} is set to false`,
+      });
+      return;
+    }
+
     // Check dependencies
     if (mod.dependsOn) {
       const missingDeps = mod.dependsOn.filter(
@@ -894,6 +925,37 @@ async function executePhase(
     },
     `[Audit] Phase ${phase} complete in ${Date.now() - phaseStart}ms`
   );
+}
+
+/**
+ * Executes a named subset of MODULE_REGISTRY through the exact same canonical
+ * per-module execution path (adapter dispatch, retry, timeout, result shape) used by
+ * the full 27-module audit — grouped and run phase-by-phase so any dependsOn ordering
+ * within the subset is respected. Used by execution profiles that intentionally run
+ * fewer than all 27 canonical modules (e.g. the widget's QUICK_AUDIT profile,
+ * Wave 2 / P1-21) instead of duplicating adapter-call logic outside the engine.
+ *
+ * Any dependency NOT included in `moduleIds` is simply absent from `results` for
+ * modules in the subset, which the existing per-module dependency check already
+ * handles by marking the dependent SKIPPED ("Dependencies failed") — callers should
+ * pass a subset that is closed under its own dependencies to avoid that.
+ */
+export async function runModuleSubset(
+  moduleIds: readonly string[],
+  input: ModuleInput,
+  costTracker: CostTracker,
+  signal?: AbortSignal
+): Promise<Map<string, ModuleResult>> {
+  const results = new Map<string, ModuleResult>();
+  const idSet = new Set(moduleIds);
+  const selected = MODULE_REGISTRY.filter((m) => idSet.has(m.name));
+  const phases = Array.from(new Set(selected.map((m) => m.phase))).sort((a, b) => a - b);
+
+  for (const phase of phases) {
+    await executePhase(phase, selected, results, input, costTracker, undefined, signal);
+  }
+
+  return results;
 }
 
 // ─── P2-3: Finding deduplication ────────────────────────────────────────────
@@ -1311,7 +1373,7 @@ async function runAuditInternal(auditId: string, signal?: AbortSignal) {
                 ? 'DEGRADED'
                 : 'FAILED';
 
-        const failedCriticalModules = CANONICAL_MODULES.filter((moduleName: string) => {
+        const failedCriticalModules = CRITICAL_COMPLETION_MODULES.filter((moduleName: string) => {
           const moduleResult = results.get(moduleName);
           return !moduleResult || moduleResult.status !== 'COMPLETE';
         });

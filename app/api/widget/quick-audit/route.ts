@@ -28,10 +28,14 @@ import { NextResponse } from 'next/server';
 
 import { generateTraceId, InternalError, NotFoundError, ValidationError } from '@/lib/api/errors';
 import { quickAuditSchema } from '@/lib/api/schemas/audit';
+import {
+  extractFindingsFromRegistryResult,
+  type ModuleInput,
+  runModuleSubset,
+} from '@/lib/audit/runner';
+import { CostTracker } from '@/lib/costs/costTracker';
 import { withIdempotency } from '@/lib/middleware/idempotency';
 import { withRateLimit } from '@/lib/middleware/rateLimit';
-import { runGBPModule } from '@/lib/modules/gbp';
-import { crawlWebsite } from '@/lib/modules/websiteCrawler';
 import { prisma } from '@/lib/prisma';
 import { getAbusePolicy } from '@/lib/security/abuseDefense/policies';
 import { runWithTenantAsync, runWithTenantBypass } from '@/lib/tenant/context';
@@ -42,6 +46,8 @@ import {
   logOriginDenied,
   normalizeOrigin,
 } from '@/lib/widget/origin';
+
+import { EXECUTION_PROFILES } from '@shared/audit';
 
 const ROUTE_PATH = '/api/widget/quick-audit';
 
@@ -219,42 +225,116 @@ async function handleQuickAudit(req: Request): Promise<NextResponse> {
     }
 
     // Run all tenant-scoped Prisma work under the resolved tenant context.
+    // P1-21: the widget's reduced-scope QUICK_AUDIT profile (website + gbp) now runs
+    // through the exact same canonical MODULE_REGISTRY adapters, timeout/retry
+    // wrapper, and finding-normalization logic as the full 27-module audit
+    // (lib/audit/runner.ts::runModuleSubset), instead of calling
+    // crawlWebsite()/runGBPModule() directly and fabricating a score formula.
+    const QUICK_AUDIT_DEADLINE_MS = 20_000;
     const auditResult = await runWithTenantAsync(tenant.id, async () => {
       const audit = await prisma.audit.create({
         data: {
           tenantId: tenant.id,
           businessName: businessName || email?.split('@')[0] || 'Unknown',
           businessUrl: normalizedUrl!,
-          status: 'QUEUED',
+          status: 'RUNNING',
+          startedAt: new Date(),
         },
       });
 
-      const [crawlRes, gbpRes] = await Promise.all([
-        crawlWebsite({ url: normalizedUrl!, businessName: audit.businessName }).catch(() => null),
-        runGBPModule({ businessName: audit.businessName, city: 'Unknown' }).catch(() => ({
-          status: 'failed',
-        })),
-      ]);
+      const moduleInput: ModuleInput = {
+        auditId: audit.id,
+        url: normalizedUrl!,
+        businessName: audit.businessName,
+        city: 'Unknown', // widget does not collect a city; matches prior placeholder behavior
+        tenantId: tenant.id,
+      };
+      const costTracker = new CostTracker();
 
-      let score = 50;
-      if (crawlRes) score += 10;
-      const gbpVal = gbpRes as { status?: string };
-      if (gbpVal.status === 'failed') score -= 10;
-      else score += 20;
-      score = Math.min(score, 90);
+      const controller = new AbortController();
+      const deadline = setTimeout(() => controller.abort(), QUICK_AUDIT_DEADLINE_MS);
+      let moduleResults: Map<string, { status: string; data: any; error?: string }>;
+      try {
+        moduleResults = await runModuleSubset(
+          EXECUTION_PROFILES.QUICK_AUDIT,
+          moduleInput,
+          costTracker,
+          controller.signal
+        );
+      } finally {
+        clearTimeout(deadline);
+      }
 
-      return { audit, score };
+      // Real findings, derived from real module output — no fabricated score/topIssue.
+      const allFindings: any[] = [];
+      const unavailableModules: string[] = [];
+      const completedModules: string[] = [];
+
+      for (const [moduleName, res] of moduleResults.entries()) {
+        if (res.status === 'COMPLETE') {
+          completedModules.push(moduleName);
+          const { findings } = extractFindingsFromRegistryResult(
+            moduleName,
+            res as any,
+            moduleInput
+          );
+          allFindings.push(...findings);
+        } else {
+          // Provider/module failure or timeout is represented as unavailable/partial,
+          // never as a fabricated negative business finding (Step 8 requirement 9).
+          unavailableModules.push(moduleName);
+        }
+      }
+
+      const highImpact = [...allFindings].sort(
+        (a, b) => (b.impactScore ?? 0) - (a.impactScore ?? 0)
+      );
+      const topFinding = highImpact[0] ?? null;
+
+      // Score reflects real signal only: start from full coverage of the requested
+      // profile, deduct for modules that could not run, deduct per real finding
+      // weighted by its own impactScore (never a static/hardcoded adjustment).
+      const coverageRatio = completedModules.length / EXECUTION_PROFILES.QUICK_AUDIT.length;
+      const findingPenalty = allFindings.reduce(
+        (sum, f) => sum + Math.min(Number(f.impactScore) || 0, 10),
+        0
+      );
+      const score = Math.max(0, Math.min(100, Math.round(coverageRatio * 100 - findingPenalty)));
+
+      await prisma.audit.update({
+        where: { id: audit.id },
+        data: {
+          status: unavailableModules.length === 0 ? 'COMPLETE' : 'PARTIAL',
+          completedAt: new Date(),
+          overallScore: score,
+          modulesCompleted: completedModules,
+          apiCostCents: costTracker.getTotalCents(),
+        },
+      });
+
+      return { audit, score, topFinding, completedModules, unavailableModules };
     });
 
-    const { audit, score } = auditResult;
-    const topIssue = 'Website optimization needed';
+    const { audit, score, topFinding, completedModules, unavailableModules } = auditResult;
     const grade = score > 80 ? 'B' : score > 60 ? 'C' : 'D';
 
     const response = NextResponse.json({
       auditId: audit.id,
       score,
       grade,
-      topIssue,
+      topIssue: topFinding
+        ? { title: topFinding.title, description: topFinding.description }
+        : null,
+      // Step 8 requirement 10: explicit reduced-coverage labeling — this is NOT the
+      // full 27-module audit.
+      quickAudit: true,
+      coverage: {
+        profile: 'QUICK_AUDIT',
+        modulesChecked: EXECUTION_PROFILES.QUICK_AUDIT,
+        modulesCompleted: completedModules,
+        modulesUnavailable: unavailableModules,
+        note: 'This is a reduced quick check (website + Google Business Profile only), not the full audit.',
+      },
       redirectUrl: `/proposal/preview/${audit.id}`,
     });
 

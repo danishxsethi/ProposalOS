@@ -189,6 +189,10 @@ const mockJob = (overrides: Partial<any> = {}) => ({
   updatedAt: new Date(),
   startedAt: null,
   completedAt: null,
+  leaseOwner: null,
+  leaseToken: 'lease-token-1',
+  leaseExpiresAt: null,
+  lastHeartbeatAt: null,
   ...overrides,
 });
 
@@ -326,7 +330,6 @@ describe('Worker — processAuditJob', () => {
   it('succeeds: runs audit + proposal and marks job SUCCEEDED', async () => {
     mocks.auditJobFindUnique.mockResolvedValue(mockJob({ status: 'QUEUED' }));
     mocks.auditJobUpdateMany.mockResolvedValue({ count: 1 });
-    mocks.auditJobUpdate.mockResolvedValue(mockJob({ status: 'SUCCEEDED' }));
     mocks.runAudit.mockResolvedValue(undefined);
     mocks.auditFindUnique.mockResolvedValue({ status: 'COMPLETE' });
     mocks.generateProposal.mockResolvedValue(undefined);
@@ -336,9 +339,11 @@ describe('Worker — processAuditJob', () => {
     expect(result.outcome).toBe('SUCCEEDED');
     expect(mocks.runAudit).toHaveBeenCalledWith('audit-1');
     expect(mocks.generateProposal).toHaveBeenCalledWith('audit-1');
-    expect(mocks.auditJobUpdate).toHaveBeenCalledWith(
+    // markJobSucceeded uses a lease-scoped updateMany (P2-12), not a plain update,
+    // so a stale/reclaimed worker can never overwrite a newer attempt's outcome.
+    expect(mocks.auditJobUpdateMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: 'job-1' },
+        where: expect.objectContaining({ id: 'job-1', leaseToken: 'lease-token-1' }),
         data: expect.objectContaining({ status: 'SUCCEEDED' }),
       })
     );
@@ -347,7 +352,6 @@ describe('Worker — processAuditJob', () => {
   it('skips proposal when audit status is not COMPLETE/PARTIAL', async () => {
     mocks.auditJobFindUnique.mockResolvedValue(mockJob({ status: 'QUEUED' }));
     mocks.auditJobUpdateMany.mockResolvedValue({ count: 1 });
-    mocks.auditJobUpdate.mockResolvedValue(mockJob({ status: 'SUCCEEDED' }));
     mocks.runAudit.mockResolvedValue(undefined);
     mocks.auditFindUnique.mockResolvedValue({ status: 'FAILED' });
     mocks.generateProposal.mockResolvedValue(undefined);
@@ -361,17 +365,18 @@ describe('Worker — processAuditJob', () => {
   it('records failure and requeues when audit throws (attempts < maxAttempts)', async () => {
     mocks.auditJobFindUnique
       .mockResolvedValueOnce(mockJob({ status: 'QUEUED' }))
-      .mockResolvedValueOnce(mockJob({ status: 'RUNNING', attempts: 1 })); // re-read for isDead check
+      .mockResolvedValueOnce(mockJob({ status: 'RUNNING', attempts: 1 })) // claimJob post-update read
+      .mockResolvedValueOnce(mockJob({ status: 'RUNNING', attempts: 1 })); // markJobFailed re-read
     mocks.auditJobUpdateMany.mockResolvedValue({ count: 1 });
-    mocks.auditJobUpdate.mockResolvedValue(mockJob({ status: 'QUEUED', attempts: 1 }));
     mocks.auditUpdate.mockResolvedValue({});
     mocks.runAudit.mockRejectedValue(new Error('API timeout'));
 
     const result = await processAuditJob('job-1');
 
     expect(result.outcome).toBe('FAILED');
-    expect(mocks.auditJobUpdate).toHaveBeenCalledWith(
+    expect(mocks.auditJobUpdateMany).toHaveBeenCalledWith(
       expect.objectContaining({
+        where: expect.objectContaining({ id: 'job-1', leaseToken: 'lease-token-1' }),
         data: expect.objectContaining({ status: 'QUEUED', errorMessage: 'API timeout' }),
       })
     );
@@ -388,14 +393,13 @@ describe('Worker — processAuditJob', () => {
       .mockResolvedValueOnce({ ...deadJob, status: 'RUNNING', attempts: MAX_RETRIES }) // claimJob post-update
       .mockResolvedValueOnce({ ...deadJob, status: 'RUNNING', attempts: MAX_RETRIES }); // markJobFailed re-read
     mocks.auditJobUpdateMany.mockResolvedValue({ count: 1 });
-    mocks.auditJobUpdate.mockResolvedValue(mockJob({ status: 'DEAD' }));
     mocks.auditUpdate.mockResolvedValue({});
     mocks.runAudit.mockRejectedValue(new Error('Persistent failure'));
 
     const result = await processAuditJob('job-1');
 
     expect(result.outcome).toBe('DEAD');
-    expect(mocks.auditJobUpdate).toHaveBeenCalledWith(
+    expect(mocks.auditJobUpdateMany).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({ status: 'DEAD' }),
       })

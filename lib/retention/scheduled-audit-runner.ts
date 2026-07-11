@@ -3,87 +3,231 @@
  *
  * Executes scheduled re-audits based on AuditSchedule configuration
  * and generates comparison reports.
+ *
+ * SINGLE OWNER (P1-22 / P1-23 / P0-23): this is now the one implementation of
+ * scheduled-audit processing, used by BOTH cron entry points that used to duplicate
+ * (and race against) this work:
+ *   - app/api/cron/scheduled-audits/route.ts (registered in cron.yaml, daily 7am)
+ *   - lib/graph/retention-graph.ts's run_scheduled_audits node (via the `retention`
+ *     cron entry, daily 6am)
+ *
+ * Previously these were two independent implementations against the same
+ * AuditSchedule table: the retention-graph path used to run this function
+ * (createScheduledAudit) which was a self-documented STUB that created an Audit row
+ * and NEVER triggered execution — while also advancing AuditSchedule.nextRunAt an
+ * hour before the (better, but AuditOrchestrator-based) scheduled-audits cron got a
+ * chance to run, so the "real" implementation never actually saw a due schedule.
+ * 100% of scheduled/recurring audits were silently non-functional as a result.
+ *
+ * Fixed by making this the one shared implementation, always dispatching through the
+ * durable AuditJob queue (canonical 27-module engine, not AuditOrchestrator's ~15).
+ * Both cron entry points now call processScheduledAudits() — whichever fires first for
+ * a given tick does the (idempotent) work; the other finds nothing due. No split-brain,
+ * no stub, and scheduled re-audits get full canonical-engine coverage.
  */
 
+import { dispatchAuditExecution } from '@/lib/audit/dispatch';
 import { logger } from '@/lib/logger';
+import { sendWebhook } from '@/lib/notifications/webhook';
 import { prisma } from '@/lib/prisma';
+import { detectCompetitorImprovement, triggerUpsellProposal } from '@/lib/retention/upsellTrigger';
 
-// Import the audit runner when available
-// import { runAudit } from '@/lib/audit/runner';
+/** Max due schedules kicked off per invocation, to stay well inside cron timeouts. */
+const MAX_SCHEDULES_PER_RUN = 5;
 
 /**
- * Process all due scheduled audits
+ * Process all due scheduled audits: finalize any previously-kicked-off runs that have
+ * now reached a terminal state (comparison + upsell-trigger + webhook), then kick off
+ * newly-due schedules via the durable queue.
  */
 export async function processScheduledAudits(): Promise<{
   auditsRun: number;
   comparisonsGenerated: number;
   errors: string[];
 }> {
+  const finalized = await finalizeCompletedScheduledRuns();
+  const kickedOff = await kickoffDueSchedules();
+
+  return {
+    auditsRun: kickedOff.auditsRun,
+    comparisonsGenerated: finalized.comparisonsGenerated,
+    errors: [...finalized.errors, ...kickedOff.errors],
+  };
+}
+
+const TERMINAL_AUDIT_STATUSES = ['COMPLETE', 'PARTIAL', 'DEGRADED', 'FAILED'];
+
+/**
+ * Find ScheduledAuditRun rows still in 'queued' whose underlying Audit has reached a
+ * terminal state, and finalize them: generate the before/after comparison report,
+ * check for an upsell trigger, send the completion webhook, and mark the run
+ * 'completed'/'failed' so it is never reprocessed (idempotent).
+ */
+async function finalizeCompletedScheduledRuns(): Promise<{
+  comparisonsGenerated: number;
+  errors: string[];
+}> {
   const errors: string[] = [];
-  let auditsRun = 0;
   let comparisonsGenerated = 0;
 
+  const pendingRuns = await prisma.scheduledAuditRun.findMany({
+    where: { status: 'queued' },
+    take: MAX_SCHEDULES_PER_RUN * 2, // finalize pass is cheap; allow a bit more headroom
+    orderBy: { createdAt: 'asc' },
+  });
+
+  if (pendingRuns.length === 0) {
+    return { comparisonsGenerated: 0, errors: [] };
+  }
+
+  const auditIds = pendingRuns.map((r) => r.auditId);
+  const audits = await prisma.audit.findMany({
+    where: { id: { in: auditIds } },
+    select: { id: true, status: true, businessName: true, tenantId: true },
+  });
+  const auditById = new Map(audits.map((a) => [a.id, a]));
+
+  for (const run of pendingRuns) {
+    const audit = auditById.get(run.auditId);
+    if (!audit || !TERMINAL_AUDIT_STATUSES.includes(audit.status)) {
+      continue; // still QUEUED/RUNNING — check again next tick
+    }
+
+    const isSuccess = audit.status === 'COMPLETE' || audit.status === 'PARTIAL';
+
+    try {
+      if (isSuccess && run.previousAuditId) {
+        const comparison = await generateComparisonReport(
+          run.previousAuditId,
+          run.auditId,
+          run.tenantId
+        );
+
+        if (comparison) {
+          comparisonsGenerated++;
+
+          const matchingProposals = await prisma.proposal.findMany({
+            where: { auditId: run.previousAuditId },
+            select: { id: true },
+          });
+          const proposalIds = matchingProposals.map((p) => p.id);
+
+          if (proposalIds.length > 0) {
+            await prisma.deliveryTask.updateMany({
+              where: { proposalId: { in: proposalIds } },
+              data: { beforeAfterComparison: comparison as any },
+            });
+          }
+
+          try {
+            const { triggered, reason } = await detectCompetitorImprovement(
+              run.previousAuditId,
+              run.auditId
+            );
+            if (triggered) {
+              await triggerUpsellProposal(run.tenantId, run.auditId, reason);
+              logger.info(
+                {
+                  event: 'scheduled_audits.upsell_triggered',
+                  auditId: run.auditId,
+                  scheduleId: run.scheduleId,
+                  reason,
+                },
+                'Upsell proposal auto-generated from competitor improvement'
+              );
+            }
+          } catch (upsellErr) {
+            logger.error({ err: upsellErr, auditId: run.auditId }, 'Upsell trigger check failed');
+          }
+        }
+      }
+
+      // generateComparisonReport already marks the run 'completed' via its own
+      // updateMany when a comparison was generated; cover the remaining cases here
+      // (success-without-comparison, or terminal failure) so every run reaches a
+      // terminal ScheduledAuditRun status exactly once.
+      await prisma.scheduledAuditRun.updateMany({
+        where: { id: run.id, status: 'queued' },
+        data: {
+          status: isSuccess ? 'completed' : 'failed',
+          completedAt: new Date(),
+        },
+      });
+
+      await sendWebhook(isSuccess ? 'audit.completed' : 'audit.failed', {
+        auditId: run.auditId,
+        scheduleId: run.scheduleId,
+        status: audit.status,
+        businessName: audit.businessName,
+        source: 'scheduled',
+      });
+    } catch (error: any) {
+      errors.push(`Failed to finalize scheduled run ${run.id}: ${error.message}`);
+      logger.error({ err: error, runId: run.id }, 'Failed to finalize scheduled audit run');
+    }
+  }
+
+  return { comparisonsGenerated, errors };
+}
+
+/**
+ * Kick off newly-due AuditSchedule rows: create the Audit + ScheduledAuditRun records
+ * and enqueue durable execution via the canonical engine. Advances
+ * AuditSchedule.nextRunAt immediately (matching prior behavior) so a schedule is never
+ * claimed twice in the same tick, regardless of which cron entry point calls this.
+ */
+async function kickoffDueSchedules(): Promise<{ auditsRun: number; errors: string[] }> {
+  const errors: string[] = [];
+  let auditsRun = 0;
   const now = new Date();
 
-  // Get all due audit schedules
   const dueSchedules = await prisma.auditSchedule.findMany({
     where: {
       isActive: true,
       nextRunAt: { lte: now },
     },
-    include: {
-      tenant: true,
-    },
+    take: MAX_SCHEDULES_PER_RUN,
+    orderBy: { nextRunAt: 'asc' },
   });
 
   for (const schedule of dueSchedules) {
     try {
-      // Create/run the new audit
-      const newAudit = await createScheduledAudit(schedule);
+      if (!schedule.businessUrl || !schedule.businessName || !schedule.businessCity) {
+        logger.warn(
+          {
+            event: 'scheduled_audits.skip',
+            scheduleId: schedule.id,
+            reason: 'Missing required fields',
+          },
+          'Skipping schedule with incomplete data'
+        );
+        continue;
+      }
 
+      // Atomic claim (P1-22/P1-23 concurrency, Step 7 requirement 4/5): advance
+      // nextRunAt in the SAME conditional update that re-checks nextRunAt <= now.
+      // Both cron entry points (app/api/cron/scheduled-audits and the retention
+      // `run_scheduled_audits` graph node) call this same function — whichever
+      // invocation's tick reaches a given schedule first wins this updateMany
+      // (count === 1); a concurrent/overlapping invocation sees count === 0 and
+      // skips, so the same due occurrence is never dispatched twice.
+      const claimed = await prisma.auditSchedule.updateMany({
+        where: { id: schedule.id, nextRunAt: { lte: now } },
+        data: {
+          lastRunAt: now,
+          nextRunAt: calculateNextRunDate(schedule.frequency, now),
+        },
+      });
+      if (claimed.count === 0) {
+        continue; // Lost the race to a concurrent invocation of this same function
+      }
+
+      const newAudit = await createScheduledAudit(schedule);
       if (newAudit) {
         auditsRun++;
-
-        // If there's a previous audit, generate comparison
-        if (schedule.lastAuditId) {
-          const comparison = await generateComparisonReport(
-            schedule.lastAuditId,
-            newAudit.id,
-            schedule.tenantId
-          );
-
-          if (comparison) {
-            comparisonsGenerated++;
-
-            // Find proposals matching schedule.lastAuditId
-            const matchingProposals = await prisma.proposal.findMany({
-              where: { auditId: schedule.lastAuditId },
-              select: { id: true },
-            });
-            const proposalIds = matchingProposals.map((p) => p.id);
-
-            if (proposalIds.length > 0) {
-              // Update DeliveryTask with comparison if applicable
-              await prisma.deliveryTask.updateMany({
-                where: {
-                  proposalId: { in: proposalIds },
-                },
-                data: {
-                  beforeAfterComparison: comparison as any,
-                },
-              });
-            }
-          }
-        }
-
-        // Update schedule with new audit info
         await prisma.auditSchedule.update({
           where: { id: schedule.id },
-          data: {
-            lastAuditId: newAudit.id,
-            lastRunAt: now,
-            nextRunAt: calculateNextRunDate(schedule.frequency, now),
-          },
+          data: { lastAuditId: newAudit.id },
         });
       }
     } catch (error: any) {
@@ -92,20 +236,23 @@ export async function processScheduledAudits(): Promise<{
     }
   }
 
-  return {
-    auditsRun,
-    comparisonsGenerated,
-    errors,
-  };
+  return { auditsRun, errors };
 }
 
 /**
- * Create a new audit based on schedule configuration
+ * Create a new audit based on schedule configuration and enqueue it for durable
+ * execution via the canonical engine (P0-23 — this used to be a stub that created the
+ * Audit row and never triggered execution at all).
  */
-async function createScheduledAudit(schedule: any) {
-  // In a real implementation, this would call the audit runner
-  // For now, we'll create the audit record
-
+async function createScheduledAudit(schedule: {
+  id: string;
+  tenantId: string;
+  businessName: string;
+  businessCity: string | null;
+  businessUrl: string | null;
+  industry: string | null;
+  lastAuditId: string | null;
+}) {
   const audit = await prisma.audit.create({
     data: {
       businessName: schedule.businessName,
@@ -114,11 +261,10 @@ async function createScheduledAudit(schedule: any) {
       businessIndustry: schedule.industry,
       status: 'QUEUED',
       tenantId: schedule.tenantId,
-      // The actual audit execution would be triggered separately
+      batchId: `scheduled-${schedule.id}`,
     },
   });
 
-  // Log the scheduled audit run
   await prisma.scheduledAuditRun.create({
     data: {
       tenantId: schedule.tenantId,
@@ -129,6 +275,24 @@ async function createScheduledAudit(schedule: any) {
       startedAt: new Date(),
     },
   });
+
+  try {
+    await dispatchAuditExecution({ tenantId: schedule.tenantId, auditId: audit.id });
+  } catch (error) {
+    logger.error(
+      { err: error, auditId: audit.id, scheduleId: schedule.id },
+      'Failed to enqueue scheduled audit for execution'
+    );
+    await prisma.audit
+      .update({ where: { id: audit.id }, data: { status: 'FAILED', completedAt: new Date() } })
+      .catch(() => {});
+    await prisma.scheduledAuditRun
+      .updateMany({
+        where: { auditId: audit.id },
+        data: { status: 'failed', completedAt: new Date() },
+      })
+      .catch(() => {});
+  }
 
   return audit;
 }

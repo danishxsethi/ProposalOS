@@ -16,6 +16,8 @@
  * This file is infrastructure only — no business logic.
  */
 
+import { randomUUID } from 'crypto';
+
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 import { getSharedStore } from '@/lib/store/shared';
@@ -24,6 +26,21 @@ import { getSharedStore } from '@/lib/store/shared';
 
 export const MAX_RETRIES = 3;
 export const JOB_LOCK_TTL_SECONDS = 90; // Worker holds lock for max 90 s per job
+
+/**
+ * P2-12: lease/heartbeat protection. A claim binds a job to exactly one worker
+ * instance for one attempt via a fresh leaseToken. LEASE_DURATION_MS must exceed the
+ * longest a healthy worker can run without heartbeating (bounded by runner.ts's
+ * GLOBAL_AUDIT_TIMEOUT_MS, default 60s, documented worst case ~5 min) with headroom
+ * for proposal generation after the audit completes. HEARTBEAT_INTERVAL_MS is kept
+ * well under LEASE_DURATION_MS so a healthy worker renews the lease several times
+ * before it could expire.
+ */
+export const LEASE_DURATION_MS = 6 * 60 * 1000; // 6 minutes
+export const HEARTBEAT_INTERVAL_MS = 60 * 1000; // 1 minute (6x safety margin)
+
+/** Identity of this worker process/instance — stamped as AuditJob.leaseOwner. */
+export const WORKER_ID = process.env.WORKER_INSTANCE_ID || `worker-${randomUUID()}`;
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -43,6 +60,10 @@ export interface AuditJobRecord {
   updatedAt: Date;
   startedAt: Date | null;
   completedAt: Date | null;
+  leaseOwner?: string | null;
+  leaseToken?: string | null;
+  leaseExpiresAt?: Date | null;
+  lastHeartbeatAt?: Date | null;
 }
 
 export interface EnqueueJobInput {
@@ -150,10 +171,17 @@ export async function enqueueBatchJobs(
  * process the same job concurrently.
  */
 export async function claimNextJob(tenantId?: string): Promise<AuditJobRecord | null> {
+  const now = new Date();
   const where = {
-    status: 'QUEUED' as const,
     attempts: { lt: MAX_RETRIES },
     ...(tenantId ? { tenantId } : {}),
+    OR: [
+      { status: 'QUEUED' as const },
+      // P2-12: a RUNNING job whose lease expired is reclaimable — its previous
+      // worker is presumed dead/hung. Ordered after QUEUED by createdAt below so
+      // fresh work is preferred over reclaim, but reclaim is still found.
+      { status: 'RUNNING' as const, leaseExpiresAt: { lt: now } },
+    ],
   };
 
   const candidate = await prisma.auditJob.findFirst({
@@ -168,7 +196,13 @@ export async function claimNextJob(tenantId?: string): Promise<AuditJobRecord | 
 
 /**
  * Claim a specific job by ID.  Returns null if the job cannot be claimed
- * (already running/succeeded/failed, or lock already held).
+ * (already running under a live lease/succeeded/failed, or the distributed lock
+ * is already held).
+ *
+ * P2-12: claiming atomically assigns a fresh leaseToken/leaseOwner/leaseExpiresAt.
+ * The WHERE clause only matches QUEUED jobs or RUNNING jobs whose lease has expired,
+ * so concurrent claimJob calls for the same job serialize at the database row level —
+ * only one can ever win, whether the job was QUEUED or a stale RUNNING reclaim.
  */
 export async function claimJob(jobId: string): Promise<AuditJobRecord | null> {
   const store = await getSharedStore();
@@ -183,19 +217,30 @@ export async function claimJob(jobId: string): Promise<AuditJobRecord | null> {
     return null;
   }
 
-  // Atomically move QUEUED → RUNNING, increment attempts
+  const now = new Date();
+  const leaseToken = randomUUID();
+  const leaseExpiresAt = new Date(now.getTime() + LEASE_DURATION_MS);
+
   try {
     const updated = await prisma.auditJob.updateMany({
-      where: { id: jobId, status: 'QUEUED' },
+      where: {
+        id: jobId,
+        OR: [{ status: 'QUEUED' }, { status: 'RUNNING', leaseExpiresAt: { lt: now } }],
+      },
       data: {
         status: 'RUNNING',
         attempts: { increment: 1 },
-        startedAt: new Date(),
+        startedAt: now,
+        leaseOwner: WORKER_ID,
+        leaseToken,
+        leaseExpiresAt,
+        lastHeartbeatAt: now,
       },
     });
 
     if (updated.count === 0) {
-      // Already claimed by another worker between findFirst and update
+      // Already claimed by another worker between findFirst and update, or the
+      // job is in a terminal state.
       await store.del(lockKey);
       return null;
     }
@@ -209,6 +254,30 @@ export async function claimJob(jobId: string): Promise<AuditJobRecord | null> {
 }
 
 /**
+ * Renew the lease on a job the caller currently holds. Fails (returns false)
+ * if the caller's leaseToken no longer matches (lease expired and reclaimed by
+ * another worker) — the caller must stop processing immediately in that case.
+ */
+export async function heartbeatJob(jobId: string, leaseToken: string): Promise<boolean> {
+  const now = new Date();
+  const updated = await prisma.auditJob.updateMany({
+    where: { id: jobId, leaseToken },
+    data: {
+      lastHeartbeatAt: now,
+      leaseExpiresAt: new Date(now.getTime() + LEASE_DURATION_MS),
+    },
+  });
+  if (updated.count === 0) {
+    logger.warn(
+      { event: 'audit_job.heartbeat_stale_lease', jobId },
+      'AuditJob: heartbeat rejected — lease no longer owned (expired/reclaimed)'
+    );
+    return false;
+  }
+  return true;
+}
+
+/**
  * Release the distributed lock held on a job (called after job completes or
  * fails, so the lock slot is freed even before TTL expiry).
  */
@@ -219,34 +288,66 @@ export async function releaseJobLock(jobId: string): Promise<void> {
 
 // ─── Mark Outcome ─────────────────────────────────────────────────────────────
 
-export async function markJobSucceeded(jobId: string): Promise<void> {
-  await prisma.auditJob.update({
-    where: { id: jobId },
+/**
+ * Mark a job succeeded. Requires the caller's leaseToken to still match —
+ * a worker whose lease was reclaimed (stale/expired) cannot overwrite a newer
+ * attempt's outcome. Returns false (no-op, logged) if the lease no longer matches.
+ */
+export async function markJobSucceeded(jobId: string, leaseToken: string): Promise<boolean> {
+  const updated = await prisma.auditJob.updateMany({
+    where: { id: jobId, leaseToken },
     data: { status: 'SUCCEEDED', completedAt: new Date() },
   });
   await releaseJobLock(jobId);
+
+  if (updated.count === 0) {
+    logger.warn(
+      { event: 'audit_job.stale_lease_complete_rejected', jobId },
+      'AuditJob: stale/reclaimed worker attempted to mark job SUCCEEDED — rejected'
+    );
+    return false;
+  }
+  return true;
 }
 
+/**
+ * Mark a job failed (requeue or DEAD if retries exhausted). Requires the caller's
+ * leaseToken to still match, for the same reason as markJobSucceeded.
+ */
 export async function markJobFailed(
   jobId: string,
   errorMessage: string,
-  maxAttempts: number
-): Promise<void> {
+  maxAttempts: number,
+  leaseToken: string
+): Promise<boolean> {
   // Re-read current attempts to decide terminal state
   const job = await prisma.auditJob.findUnique({ where: { id: jobId } });
   const isDead = (job?.attempts ?? 0) >= maxAttempts;
 
-  await prisma.auditJob.update({
-    where: { id: jobId },
+  const updated = await prisma.auditJob.updateMany({
+    where: { id: jobId, leaseToken },
     data: {
       status: isDead ? 'DEAD' : 'QUEUED', // Re-queue unless exhausted
       errorMessage,
       completedAt: isDead ? new Date() : null,
       startedAt: null,
+      // Clear the lease on requeue so any worker (including a fresh reclaim) can
+      // pick this job up immediately rather than waiting out the old lease TTL.
+      leaseOwner: null,
+      leaseToken: null,
+      leaseExpiresAt: null,
     },
   });
 
   await releaseJobLock(jobId);
+
+  if (updated.count === 0) {
+    logger.warn(
+      { event: 'audit_job.stale_lease_failure_rejected', jobId },
+      'AuditJob: stale/reclaimed worker attempted to mark job failed — rejected'
+    );
+    return false;
+  }
 
   logger.warn(
     {
@@ -257,6 +358,7 @@ export async function markJobFailed(
     },
     isDead ? 'AuditJob: exhausted retries — moved to DEAD' : 'AuditJob: failed — requeued for retry'
   );
+  return true;
 }
 
 // ─── Batch Status ─────────────────────────────────────────────────────────────

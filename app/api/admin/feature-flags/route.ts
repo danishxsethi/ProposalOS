@@ -11,17 +11,16 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 
 import { generateTraceId, InternalError, ValidationError } from '@/lib/api/errors';
-import { FEATURE_FLAGS } from '@/lib/config/feature-flags';
+import {
+  FEATURE_FLAGS,
+  getEffectiveFeatureFlags,
+  invalidateEffectiveFeatureFlagsCache,
+} from '@/lib/config/feature-flags';
 import { logger } from '@/lib/logger';
 import { withRateLimit } from '@/lib/middleware/rateLimit';
 import { withRole } from '@/lib/middleware/withRole';
 import { prisma } from '@/lib/prisma';
 import { runWithTenantBypass } from '@/lib/tenant/context';
-
-// ─── Cache ────────────────────────────────────────────────────────────────────
-
-let flagsCache: Record<string, boolean | number | string> | null = null;
-let lastCacheUpdate = 0;
 
 const VALID_FLAG_KEYS = Object.keys(FEATURE_FLAGS);
 
@@ -37,39 +36,15 @@ const featureFlagSchema = z.object({
   value: z.union([z.string(), z.boolean(), z.number().int().min(0).max(100).optional()]),
 });
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-async function getMergedFlags() {
-  const now = Date.now();
-  if (flagsCache && now - lastCacheUpdate < 60000) return flagsCache;
-
-  try {
-    const dbFlags = await prisma.featureFlag.findMany();
-    const merged = { ...FEATURE_FLAGS } as Record<string, boolean | number | string>;
-    for (const flag of dbFlags) {
-      if (flag.value === 'true' || flag.value === 'false') {
-        merged[flag.key] = flag.value === 'true';
-      } else if (!isNaN(Number(flag.value))) {
-        merged[flag.key] = parseInt(flag.value, 10);
-      } else {
-        merged[flag.key] = flag.value;
-      }
-    }
-    flagsCache = merged;
-    lastCacheUpdate = now;
-    return merged;
-  } catch {
-    return FEATURE_FLAGS;
-  }
-}
-
 // ─── Handlers ─────────────────────────────────────────────────────────────────
 
 async function handleGetFlags(req: Request): Promise<NextResponse> {
   const traceId = generateTraceId();
   try {
     // Feature flags are cross-tenant system data: bypass RLS, gated by super_admin role above.
-    const flags = await runWithTenantBypass('admin-feature-flags-read', () => getMergedFlags());
+    const flags = await runWithTenantBypass('admin-feature-flags-read', () =>
+      getEffectiveFeatureFlags()
+    );
     const response = NextResponse.json({ success: true, flags });
     response.headers.set('X-Trace-Id', traceId);
     return response;
@@ -128,7 +103,7 @@ async function handlePostFlags(req: Request): Promise<NextResponse> {
       return updated;
     });
 
-    flagsCache = null;
+    invalidateEffectiveFeatureFlagsCache();
     const response = NextResponse.json({ success: true, flag });
     response.headers.set('X-Trace-Id', traceId);
     return response;

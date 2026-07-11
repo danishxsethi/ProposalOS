@@ -64,11 +64,23 @@ model AuditJob {
   startedAt       DateTime?
   completedAt     DateTime?
 
+  // P2-12: lease/heartbeat protection. A claim binds a job to exactly one worker
+  // instance (leaseOwner) for one attempt (leaseToken, regenerated on every claim).
+  // Only the current leaseToken holder may heartbeat/succeed/fail the job — a worker
+  // whose lease expired (leaseExpiresAt < now) is reclaimable by another worker, and
+  // that stale worker's later completion calls are rejected (leaseToken no longer
+  // matches) instead of silently overwriting a newer attempt's result.
+  leaseOwner      String?
+  leaseToken      String?
+  leaseExpiresAt  DateTime?
+  lastHeartbeatAt DateTime?
+
   tenant Tenant @relation(fields: [tenantId], references: [id])
 
   @@index([tenantId, batchId])
   @@index([status, createdAt])
   @@index([batchId])
+  @@index([status, leaseExpiresAt])
   @@map("audit_jobs")
 }
 

@@ -20,7 +20,13 @@ import { prisma } from '@/lib/prisma';
 import { generateProposal } from '@/lib/proposal/runner';
 import { runWithTenantAsync } from '@/lib/tenant/context';
 
-import { claimJob, markJobFailed, markJobSucceeded } from './auditJobQueue';
+import {
+  claimJob,
+  HEARTBEAT_INTERVAL_MS,
+  heartbeatJob,
+  markJobFailed,
+  markJobSucceeded,
+} from './auditJobQueue';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -71,7 +77,7 @@ export async function processAuditJob(jobId: string): Promise<WorkerResult> {
     return { outcome: 'LOCK_CONTENTION', jobId };
   }
 
-  const { tenantId, auditId, attempts, maxAttempts } = claimed;
+  const { tenantId, auditId, attempts, maxAttempts, leaseToken } = claimed;
 
   await recordAuditTrailEvent({
     eventType: 'worker.job_claimed',
@@ -97,32 +103,58 @@ export async function processAuditJob(jobId: string): Promise<WorkerResult> {
     'Worker: processing job'
   );
 
+  // P2-12: renew the lease periodically while this job runs, well inside
+  // LEASE_DURATION_MS, so a healthy long-running audit is never mistaken for a
+  // dead worker and reclaimed out from under it.
+  const heartbeat = leaseToken
+    ? setInterval(() => {
+        heartbeatJob(jobId, leaseToken).catch((err) =>
+          logger.warn({ event: 'worker.heartbeat_error', jobId, err }, 'Worker: heartbeat failed')
+        );
+      }, HEARTBEAT_INTERVAL_MS)
+    : null;
+
   // 4. Execute within tenant context
   try {
-    await runWithTenantAsync(tenantId, async () => {
-      // Import here to avoid top-level circular dependency issues
-      const { runAudit } = await import('@/lib/audit/runner');
+    try {
+      await runWithTenantAsync(tenantId, async () => {
+        // Import here to avoid top-level circular dependency issues
+        const { runAudit } = await import('@/lib/audit/runner');
 
-      // Step 1: Run Audit
-      await runAudit(auditId);
+        // Step 1: Run Audit
+        await runAudit(auditId);
 
-      // Step 2: Generate Proposal if audit succeeded
-      const audit = await prisma.audit.findUnique({
-        where: { id: auditId },
-        select: { status: true },
+        // Step 2: Generate Proposal if audit succeeded
+        const audit = await prisma.audit.findUnique({
+          where: { id: auditId },
+          select: { status: true },
+        });
+
+        if (audit?.status === 'COMPLETE' || audit?.status === 'PARTIAL') {
+          await generateProposal(auditId);
+        } else {
+          logger.warn(
+            { event: 'worker.skipping_proposal', jobId, auditId, auditStatus: audit?.status },
+            'Worker: skipping proposal generation — audit did not complete successfully'
+          );
+        }
       });
+    } finally {
+      if (heartbeat) clearInterval(heartbeat);
+    }
 
-      if (audit?.status === 'COMPLETE' || audit?.status === 'PARTIAL') {
-        await generateProposal(auditId);
-      } else {
-        logger.warn(
-          { event: 'worker.skipping_proposal', jobId, auditId, auditStatus: audit?.status },
-          'Worker: skipping proposal generation — audit did not complete successfully'
-        );
-      }
-    });
-
-    await markJobSucceeded(jobId);
+    const completed = leaseToken ? await markJobSucceeded(jobId, leaseToken) : false;
+    if (!completed) {
+      logger.warn(
+        { event: 'worker.job_succeeded_but_lease_lost', jobId, auditId, tenantId },
+        'Worker: audit succeeded but lease was reclaimed before completion could be recorded'
+      );
+      return {
+        outcome: 'SKIPPED',
+        jobId,
+        reason: 'Lease lost before completion could be recorded',
+      };
+    }
 
     logger.info(
       { event: 'worker.job_succeeded', jobId, auditId, tenantId },
@@ -157,7 +189,9 @@ export async function processAuditJob(jobId: string): Promise<WorkerResult> {
       'Worker: job failed'
     );
 
-    await markJobFailed(jobId, errorMessage, maxAttempts);
+    if (leaseToken) {
+      await markJobFailed(jobId, errorMessage, maxAttempts, leaseToken);
+    }
 
     // Also mark the underlying Audit record as FAILED so the batch status
     // route reflects the correct state without joining audit_jobs
