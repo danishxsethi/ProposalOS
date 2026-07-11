@@ -4,12 +4,13 @@ import puppeteer, { Browser, Page } from 'puppeteer-core';
 import sharp from 'sharp';
 
 import { logger } from '@/lib/logger';
-import { validateForBrowserNavigation } from '@/lib/security/safeFetch';
+import { safePageGoto } from '@/lib/security/safeBrowser';
 
 const storage = new Storage();
 const BUCKET_NAME = 'proposal-engine-assets';
 const SCREENSHOT_TIMEOUT = 20000; // 20 seconds total budget
 const MAX_PARALLEL = 3; // Capture 3 screenshots at a time max
+const MAX_SCREENSHOT_BYTES = 5 * 1024 * 1024;
 
 export interface ScreenshotOptions {
   url: string;
@@ -195,11 +196,7 @@ async function captureScreenshot(
 
     // Navigate to page
     logger.info({ url: options.url, device: options.device }, 'Capturing screenshot');
-    await validateForBrowserNavigation(options.url);
-    await page.goto(options.url, {
-      waitUntil: 'networkidle2',
-      timeout: 10000,
-    });
+    await safePageGoto(page, options.url, { waitUntil: 'networkidle2', timeout: 10000 });
 
     // Wait a moment for any animations
     await new Promise((r) => setTimeout(r, 1000));
@@ -212,6 +209,9 @@ async function captureScreenshot(
     const screenshotBuffer = Buffer.isBuffer(screenshotData)
       ? screenshotData
       : Buffer.from(screenshotData);
+    if (screenshotBuffer.length > MAX_SCREENSHOT_BYTES) {
+      throw new Error(`Screenshot exceeds ${MAX_SCREENSHOT_BYTES} byte limit`);
+    }
 
     // Upload to GCS
     const mainFileName = `screenshots/${auditId}/${options.name}.png`;
@@ -332,15 +332,13 @@ export async function captureComparisonScreenshot(
     await page.setViewport(viewport);
 
     // Capture left side
-    await validateForBrowserNavigation(leftUrl);
-    await page.goto(leftUrl, { waitUntil: 'networkidle2', timeout: 10000 });
+    await safePageGoto(page, leftUrl, { waitUntil: 'networkidle2', timeout: 10000 });
     await new Promise((r) => setTimeout(r, 500));
     const leftData = await page.screenshot({ type: 'png', fullPage: false });
     const leftBuffer = Buffer.isBuffer(leftData) ? leftData : Buffer.from(leftData);
 
     // Capture right side
-    await validateForBrowserNavigation(rightUrl);
-    await page.goto(rightUrl, { waitUntil: 'networkidle2', timeout: 10000 });
+    await safePageGoto(page, rightUrl, { waitUntil: 'networkidle2', timeout: 10000 });
     await new Promise((r) => setTimeout(r, 500));
     const rightData = await page.screenshot({ type: 'png', fullPage: false });
     const rightBuffer = Buffer.isBuffer(rightData) ? rightData : Buffer.from(rightData);
@@ -424,7 +422,7 @@ export async function captureGBPScreenshot(
 
     logger.info({ businessName, city, mapsUrl }, 'Capturing GBP screenshot');
 
-    await page.goto(mapsUrl, { waitUntil: 'networkidle2', timeout: 15000 });
+    await safePageGoto(page, mapsUrl, { waitUntil: 'networkidle2', timeout: 15000 });
 
     // Wait for map to load
     await new Promise((r) => setTimeout(r, 3000));

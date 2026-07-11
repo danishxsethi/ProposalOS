@@ -11,6 +11,7 @@ export interface TenantRuntimeContext {
   bypassRls: boolean;
   currentTx: Prisma.TransactionClient | null;
   isDispatching?: boolean;
+  auditSignal?: AbortSignal | null;
 }
 
 type Awaitable<T> = T | PromiseLike<T>;
@@ -32,6 +33,7 @@ function getDefaultTenantRuntimeContext(): TenantRuntimeContext {
     bypassRls: false,
     currentTx: null,
     isDispatching: false,
+    auditSignal: null,
   };
 }
 
@@ -154,6 +156,10 @@ export function getTenantIdFromStore(): string | null {
 
 export function getTenantRuntimeContextFromStore(): TenantRuntimeContext {
   return tenantStorage.getStore() ?? getDefaultTenantRuntimeContext();
+}
+
+export function getAuditSignalFromStore(): AbortSignal | undefined {
+  return tenantStorage.getStore()?.auditSignal ?? undefined;
 }
 
 export async function getTenantId(): Promise<string | null> {

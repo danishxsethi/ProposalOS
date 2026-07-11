@@ -8,12 +8,9 @@ import type { CostTracker } from '@/lib/costs/costTracker';
 import { logger } from '@/lib/logger';
 import { withProviderResilience } from '@/lib/resilience/withProviderResilience';
 import { safeFetch } from '@/lib/security/safeFetch';
-import { validateUrl } from '@/lib/security/urlValidator';
 
 import { LegacyAuditModuleResult } from './types';
 
-/** Match safeFetch redirect ceiling. */
-const MAX_SECURITY_REDIRECTS = 5;
 const FETCH_TIMEOUT_MS = 15_000;
 
 export interface SecurityResult {
@@ -41,6 +38,8 @@ export interface SecurityResult {
 
 export interface SecurityModuleInput {
   url: string;
+  tenantId?: string;
+  signal?: AbortSignal;
 }
 
 function parseUrl(url: string): { protocol: string; host: string; port: number; path: string } {
@@ -70,10 +69,6 @@ function getGrade(score: number): 'A' | 'B' | 'C' | 'D' | 'F' {
   return 'F';
 }
 
-function isRedirectStatus(status: number): boolean {
-  return [301, 302, 303, 307, 308].includes(status);
-}
-
 /**
  * Header/HTTPS probe with SSRF controls (P0-24).
  * Validates the initial URL and every redirect hop via validateUrl;
@@ -82,85 +77,31 @@ function isRedirectStatus(status: number): boolean {
  */
 export async function fetchWithRedirect(
   url: string,
-  followRedirects = true
+  followRedirects = true,
+  signal?: AbortSignal
 ): Promise<{ statusCode: number; headers: Record<string, string>; finalUrl: string }> {
-  let currentUrl = url;
-  let hop = 0;
-  const maxHops = followRedirects ? MAX_SECURITY_REDIRECTS : 0;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+  signal?.addEventListener('abort', () => controller.abort(signal.reason), { once: true });
 
-  while (true) {
-    const validation = await validateUrl(currentUrl, { allowHttp: true });
-    if (!validation.isValid) {
-      throw new Error(`SSRF blocked: ${validation.error ?? 'blocked by SSRF policy'}`);
-    }
-
-    let parsed: URL;
-    try {
-      parsed = new URL(currentUrl);
-    } catch {
-      throw new Error('Invalid URL');
-    }
-    if (parsed.username || parsed.password) {
-      throw new Error('SSRF blocked: credentialed URLs are not allowed');
-    }
-    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-      throw new Error(`SSRF blocked: blocked scheme ${parsed.protocol}`);
-    }
-
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
-
-    try {
-      const res = await fetch(currentUrl, {
+  try {
+    const res = await safeFetch(
+      url,
+      {
         method: 'GET',
-        redirect: 'manual',
         signal: controller.signal,
         headers: { 'User-Agent': 'ProposalOS-SecurityScan/1.0' },
-        // Intentionally do not forward cookies/auth across hops.
-      });
-
-      const headers: Record<string, string> = {};
-      res.headers.forEach((value, key) => {
-        headers[key.toLowerCase()] = value;
-      });
-
-      // Drain/cancel body — we only need status + headers for this module.
-      try {
-        await res.body?.cancel();
-      } catch {
-        /* ignore */
-      }
-
-      if (!followRedirects || !isRedirectStatus(res.status)) {
-        return {
-          statusCode: res.status,
-          headers,
-          finalUrl: currentUrl,
-        };
-      }
-
-      hop += 1;
-      if (hop > maxHops) {
-        throw new Error(`Exceeded maximum redirect limit (${MAX_SECURITY_REDIRECTS})`);
-      }
-
-      const location = res.headers.get('location');
-      if (!location) {
-        throw new Error('Redirect with no Location header');
-      }
-
-      let nextUrl: string;
-      try {
-        nextUrl = new URL(location, currentUrl).toString();
-      } catch {
-        throw new Error('Invalid redirect Location URL');
-      }
-
-      // Headers/credentials are not forwarded — each hop is a fresh GET.
-      currentUrl = nextUrl;
-    } finally {
-      clearTimeout(timer);
-    }
+      },
+      { allowHttp: true, followRedirects, maxResponseBytes: 0 }
+    );
+    const headers: Record<string, string> = {};
+    res.headers.forEach((value, key) => {
+      headers[key.toLowerCase()] = value;
+    });
+    await res.body?.cancel().catch(() => undefined);
+    return { statusCode: res.status, headers, finalUrl: res.url || url };
+  } finally {
+    clearTimeout(timer);
   }
 }
 
@@ -197,12 +138,18 @@ async function getSslCertificate(
   });
 }
 
-async function checkMixedContent(url: string): Promise<boolean> {
+async function checkMixedContent(
+  url: string,
+  tenantId?: string,
+  signal?: AbortSignal
+): Promise<boolean> {
   try {
     const html = await withProviderResilience<string>(
       {
         provider: 'generic',
         operation: 'security_check_mixed_content_fetch',
+        tenantId,
+        signal,
         policy: {
           timeoutMs: 10000,
           maxAttempts: 2,
@@ -268,21 +215,25 @@ export async function runSecurityModule(
     let redirects = false;
 
     if (parsed.protocol === 'http') {
-      const httpResult = await fetchWithRedirect(url, true);
+      const httpResult = await fetchWithRedirect(url, true, input.signal);
       if (httpResult.finalUrl.startsWith('https://')) {
         redirects = true;
         httpsEnabled = true;
       }
     } else {
       try {
-        const httpResult = await fetchWithRedirect(`http://${parsed.host}${parsed.path}`, true);
+        const httpResult = await fetchWithRedirect(
+          `http://${parsed.host}${parsed.path}`,
+          true,
+          input.signal
+        );
         redirects = httpResult.finalUrl.startsWith('https://');
       } catch {
         redirects = false;
       }
     }
 
-    const headerResult = await fetchWithRedirect(secureUrl, false);
+    const headerResult = await fetchWithRedirect(secureUrl, false, input.signal);
     const headers = headerResult.headers;
 
     const certificate =
@@ -494,7 +445,9 @@ export async function runSecurityModule(
         if (h.status === 'missing') recommendations.push(h.recommendation);
       });
 
-    const mixedContent = httpsEnabled ? await checkMixedContent(secureUrl) : false;
+    const mixedContent = httpsEnabled
+      ? await checkMixedContent(secureUrl, input.tenantId, input.signal)
+      : false;
     if (mixedContent) {
       recommendations.push(
         'Remove mixed content: some resources load over HTTP on your HTTPS page. Browsers may block them.'

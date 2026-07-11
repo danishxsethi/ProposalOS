@@ -36,6 +36,7 @@ export interface ResilienceOptions {
   provider: ProviderName;
   operation: string;
   tenantId?: string;
+  signal?: AbortSignal;
   policy?: Partial<ProviderPolicy>;
   degrade?: boolean;
 }

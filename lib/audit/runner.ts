@@ -26,6 +26,7 @@ import { withChildObservabilityContext } from '@/lib/observability/context';
 import { MetricsRecorder } from '@/lib/observability/MetricsRecorder';
 import { detectVertical } from '@/lib/playbooks';
 import { prisma } from '@/lib/prisma';
+import { withTenantRuntimeContext } from '@/lib/tenant/context';
 import { createParentTrace } from '@/lib/tracing';
 
 // --- Step 1: Import all modules ---
@@ -68,6 +69,7 @@ export interface ModuleInput {
   industry?: string;
   dependencyResults?: Record<string, any>;
   tenantId: string;
+  signal?: AbortSignal;
 }
 
 export interface ModuleResult {
@@ -88,12 +90,33 @@ interface ModuleConfig {
   timeoutMs?: number;
 }
 
-async function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
-  let timeoutId: NodeJS.Timeout;
-  const timeoutPromise = new Promise<T>((_, reject) => {
-    timeoutId = setTimeout(() => reject(new Error(`Timed out after ${timeoutMs}ms`)), timeoutMs);
+async function withTimeout<T>(
+  run: (signal: AbortSignal) => Promise<T>,
+  timeoutMs: number,
+  parentSignal?: AbortSignal
+): Promise<T> {
+  const controller = new AbortController();
+  const onAbort = () => controller.abort(parentSignal?.reason);
+  parentSignal?.addEventListener('abort', onAbort, { once: true });
+  const timeoutId = setTimeout(
+    () => controller.abort(new DOMException(`Timed out after ${timeoutMs}ms`, 'AbortError')),
+    timeoutMs
+  );
+
+  const aborted = new Promise<never>((_, reject) => {
+    controller.signal.addEventListener(
+      'abort',
+      () => reject(controller.signal.reason ?? new DOMException('Aborted', 'AbortError')),
+      { once: true }
+    );
   });
-  return Promise.race([promise, timeoutPromise]).finally(() => clearTimeout(timeoutId));
+
+  try {
+    return await Promise.race([run(controller.signal), aborted]);
+  } finally {
+    clearTimeout(timeoutId);
+    parentSignal?.removeEventListener('abort', onAbort);
+  }
 }
 
 // Adapters to normalize the diverse module inputs/outputs into the standard ModuleResult
@@ -159,7 +182,11 @@ const techStackAdapter = async (
 
 const securityAdapter = async (input: ModuleInput): Promise<ModuleResult> => {
   if (!input.url) throw new Error('url required');
-  const data = await runSecurityModule({ url: input.url });
+  const data = await runSecurityModule({
+    url: input.url,
+    tenantId: input.tenantId,
+    signal: input.signal,
+  });
   return { status: 'COMPLETE', data: (data as unknown as Record<string, any>)?.data || data };
 };
 
@@ -246,14 +273,14 @@ const accessibilityAdapter = async (
   tracker: CostTracker
 ): Promise<ModuleResult> => {
   if (!input.url) throw new Error('url required');
-  const data = await runAccessibilityModule({ url: input.url }, tracker);
+  const data = await runAccessibilityModule({ url: input.url, signal: input.signal }, tracker);
   return { status: 'COMPLETE', data };
 };
 
 const mobileUXAdapter = async (input: ModuleInput, tracker: CostTracker): Promise<ModuleResult> => {
   if (!input.url) throw new Error('url required');
   const data = await runMobileUXModule(
-    { url: input.url, businessName: input.businessName || 'Unknown' },
+    { url: input.url, businessName: input.businessName || 'Unknown', signal: input.signal },
     tracker
   );
   return { status: 'COMPLETE', data };
@@ -285,7 +312,12 @@ const conversionAdapter = async (
 ): Promise<ModuleResult> => {
   if (!input.url) throw new Error('url required');
   const data = await runConversionModule(
-    { url: input.url, businessName: input.businessName || 'Unknown', industry: input.industry },
+    {
+      url: input.url,
+      businessName: input.businessName || 'Unknown',
+      industry: input.industry,
+      signal: input.signal,
+    },
     tracker
   );
   return { status: 'COMPLETE', data };
@@ -338,7 +370,12 @@ const privacyComplianceAdapter = async (
 ): Promise<ModuleResult> => {
   if (!input.url) throw new Error('url required');
   const data = await runPrivacyComplianceModule(
-    { url: input.url, businessName: input.businessName || 'Unknown', city: input.city || '' },
+    {
+      url: input.url,
+      businessName: input.businessName || 'Unknown',
+      city: input.city || '',
+      signal: input.signal,
+    },
     tracker
   );
   return { status: 'COMPLETE', data };
@@ -902,6 +939,7 @@ async function executePhase(
 
       const moduleInput: ModuleInput = {
         ...input,
+        signal,
         dependencyResults: Object.fromEntries(
           (mod.dependsOn || [])
             .map((dep) => [dep, results.get(dep)?.data])
@@ -909,19 +947,14 @@ async function executePhase(
         ),
       };
 
-      const runPromise = async () => {
-        for (let attempt = 0; attempt < 2; attempt++) {
-          try {
-            if (signal?.aborted) throw new Error('AbortError');
-            return await mod.run(moduleInput, costTracker, parentTrace);
-          } catch (e) {
-            if (attempt === 1 || (e as any).name === 'AbortError') throw e;
-          }
+      const runPromise = async (moduleSignal: AbortSignal) => {
+        if (moduleSignal.aborted) {
+          throw moduleSignal.reason ?? new DOMException('Aborted', 'AbortError');
         }
-        throw new Error('Retries exceeded');
+        return mod.run({ ...moduleInput, signal: moduleSignal }, costTracker, parentTrace);
       };
 
-      const result = await withTimeout(runPromise(), mod.timeoutMs || 30000);
+      const result = await withTimeout(runPromise, mod.timeoutMs || 30000, signal);
 
       results.set(mod.name, result);
 
@@ -984,16 +1017,18 @@ export async function runModuleSubset(
   costTracker: CostTracker,
   signal?: AbortSignal
 ): Promise<Map<string, ModuleResult>> {
-  const results = new Map<string, ModuleResult>();
-  const idSet = new Set(moduleIds);
-  const selected = MODULE_REGISTRY.filter((m) => idSet.has(m.name));
-  const phases = Array.from(new Set(selected.map((m) => m.phase))).sort((a, b) => a - b);
+  return withTenantRuntimeContext({ auditSignal: signal ?? null }, async () => {
+    const results = new Map<string, ModuleResult>();
+    const idSet = new Set(moduleIds);
+    const selected = MODULE_REGISTRY.filter((m) => idSet.has(m.name));
+    const phases = Array.from(new Set(selected.map((m) => m.phase))).sort((a, b) => a - b);
 
-  for (const phase of phases) {
-    await executePhase(phase, selected, results, input, costTracker, undefined, signal);
-  }
+    for (const phase of phases) {
+      await executePhase(phase, selected, results, input, costTracker, undefined, signal);
+    }
 
-  return results;
+    return results;
+  });
 }
 
 // ─── P2-3: Finding deduplication ────────────────────────────────────────────
@@ -1104,26 +1139,31 @@ const auditTimer = new AuditPerformanceTimer();
  */
 export async function runAudit(auditId: string) {
   const controller = new AbortController();
-  const timeoutPromise = new Promise<never>((_, reject) =>
-    setTimeout(() => {
+  let timeoutId: NodeJS.Timeout | undefined;
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(() => {
       controller.abort();
       reject(new Error('AUDIT_TIMEOUT: Global 5-minute limit exceeded'));
-    }, GLOBAL_AUDIT_TIMEOUT_MS)
-  );
-  try {
-    return await Promise.race([runAuditInternal(auditId, controller.signal), timeoutPromise]);
-  } catch (error) {
-    if (error instanceof Error && error.message.startsWith('AUDIT_TIMEOUT')) {
-      // Best-effort status update — don't let this throw and mask the original error
-      await prisma.audit
-        .update({
-          where: { id: auditId },
-          data: { status: 'FAILED', completedAt: new Date() },
-        })
-        .catch(() => null);
+    }, GLOBAL_AUDIT_TIMEOUT_MS);
+  });
+  return withTenantRuntimeContext({ auditSignal: controller.signal }, async () => {
+    try {
+      return await Promise.race([runAuditInternal(auditId, controller.signal), timeoutPromise]);
+    } catch (error) {
+      if (error instanceof Error && error.message.startsWith('AUDIT_TIMEOUT')) {
+        // Best-effort status update — don't let this throw and mask the original error
+        await prisma.audit
+          .update({
+            where: { id: auditId },
+            data: { status: 'FAILED', completedAt: new Date() },
+          })
+          .catch(() => null);
+      }
+      throw error;
+    } finally {
+      if (timeoutId) clearTimeout(timeoutId);
     }
-    throw error;
-  }
+  });
 }
 
 /**
@@ -1289,6 +1329,7 @@ async function runAuditInternal(auditId: string, signal?: AbortSignal) {
           parentTrace,
           signal
         );
+        if (signal?.aborted) throw signal.reason ?? new DOMException('Aborted', 'AbortError');
 
         // Phase 2: Analysis (uses Phase 1 outputs)
         await executePhase(
@@ -1300,6 +1341,7 @@ async function runAuditInternal(auditId: string, signal?: AbortSignal) {
           parentTrace,
           signal
         );
+        if (signal?.aborted) throw signal.reason ?? new DOMException('Aborted', 'AbortError');
 
         // Phase 3: Synthesis (uses Phase 1 + 2 outputs)
         await executePhase(
@@ -1311,6 +1353,7 @@ async function runAuditInternal(auditId: string, signal?: AbortSignal) {
           parentTrace,
           signal
         );
+        if (signal?.aborted) throw signal.reason ?? new DOMException('Aborted', 'AbortError');
 
         const allFindings: any[] = [];
         const modulesCompleted: string[] = [];

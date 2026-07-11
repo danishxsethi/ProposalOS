@@ -3,6 +3,7 @@ import puppeteer from 'puppeteer-core';
 
 import { BRANDING, getBranding } from '@/lib/config/branding';
 import { logger } from '@/lib/logger';
+import { safePageGoto } from '@/lib/security/safeBrowser';
 
 export type PdfFormat = 'A4' | 'Letter';
 
@@ -72,7 +73,6 @@ export async function generatePdf(
       defaultViewport: { width: 1920, height: 1080, deviceScaleFactor: 1 },
       executablePath,
       headless: true,
-      ignoreHTTPSErrors: true,
     } as Parameters<typeof puppeteer.launch>[0]);
 
     const page = await browser.newPage();
@@ -82,7 +82,7 @@ export async function generatePdf(
     logger.info({ url: `${baseUrl}/proposal/[REDACTED_TOKEN]/pdf` }, 'Generating PDF');
 
     // Use 'load' instead of 'networkidle0' — networkidle0 often never fires on SPAs
-    await page.goto(url, {
+    await safePageGoto(page, url, {
       waitUntil: 'load',
       timeout: 45000,
     });

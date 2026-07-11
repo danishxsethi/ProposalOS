@@ -4,7 +4,7 @@ import puppeteer from 'puppeteer-core';
 import { CostTracker } from '@/lib/costs/costTracker';
 import { logger } from '@/lib/logger';
 import { withProviderResilience } from '@/lib/resilience/withProviderResilience';
-import { validateForBrowserNavigation } from '@/lib/security/safeFetch';
+import { safePageGoto } from '@/lib/security/safeBrowser';
 
 import { normalizeConfidence } from './findingGenerator';
 import { AuditModuleResult, Finding } from './types';
@@ -12,6 +12,7 @@ import { AuditModuleResult, Finding } from './types';
 export interface MobileUXModuleInput {
   url: string;
   businessName: string;
+  signal?: AbortSignal;
 }
 
 interface TouchTargetViolation {
@@ -63,7 +64,7 @@ export async function runMobileUXModule(
   logger.info({ url: input.url }, '[MobileUX] Starting mobile analysis');
 
   try {
-    const analysis = await analyzeMobileUX(input.url, tracker);
+    const analysis = await analyzeMobileUX(input.url, tracker, input.signal);
     const findings = generateMobileFindings(analysis, input.url, input.businessName);
 
     const evidenceSnapshot = {
@@ -114,7 +115,11 @@ export async function runMobileUXModule(
 /**
  * Analyze mobile UX using Puppeteer
  */
-async function analyzeMobileUX(url: string, tracker?: CostTracker): Promise<MobileAnalysis> {
+async function analyzeMobileUX(
+  url: string,
+  tracker?: CostTracker,
+  signal?: AbortSignal
+): Promise<MobileAnalysis> {
   const browser = await launchBrowser();
   const page = await browser.newPage();
 
@@ -129,8 +134,7 @@ async function analyzeMobileUX(url: string, tracker?: CostTracker): Promise<Mobi
     });
 
     // Navigate to page
-    await validateForBrowserNavigation(url);
-    await page.goto(url, { waitUntil: 'networkidle2', timeout: 15000 });
+    await safePageGoto(page, url, { waitUntil: 'networkidle2', timeout: 15000 }, signal);
 
     // Wait for any animations/transitions
     await new Promise((r) => setTimeout(r, 2000));

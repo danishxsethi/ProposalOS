@@ -66,7 +66,7 @@ function isIpBlocked(ip: ipaddr.IPv4 | ipaddr.IPv6): boolean {
  */
 async function validateHost(host: string): Promise<{ valid: boolean; error?: string }> {
   // Check against blocked hostnames
-  const lowerHost = host.toLowerCase();
+  const lowerHost = host.toLowerCase().replace(/\.$/, '');
   if (
     BLOCKED_HOSTNAMES.some((blocked) => lowerHost === blocked || lowerHost.endsWith(`.${blocked}`))
   ) {
@@ -237,7 +237,7 @@ export async function validateUrl(
   }
 
   // Return sanitized URL (rebuilt to ensure clean format)
-  const sanitizedUrl = `https://${parsedUrl.hostname}${parsedUrl.pathname}${parsedUrl.search}${parsedUrl.hash}`;
+  const sanitizedUrl = parsedUrl.toString();
 
   return {
     isValid: true,

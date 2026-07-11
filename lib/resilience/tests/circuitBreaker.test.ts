@@ -82,4 +82,26 @@ describe('Resilience - Circuit Breaker', () => {
 
     vi.useRealTimers();
   });
+
+  it('keeps tenant circuit state isolated', async () => {
+    const policy = {
+      circuitBreakerFailureThreshold: 1,
+      circuitBreakerCooldownMs: 5000,
+      timeoutMs: 1000,
+      maxAttempts: 1,
+      baseDelayMs: 100,
+      maxDelayMs: 1000,
+      jitter: false,
+      rateLimitWindowMs: 60000,
+      rateLimitMaxCalls: 10,
+    };
+
+    await recordCircuitFailure('generic', 'tenant-a', policy);
+    await expect(checkCircuitBreaker('generic', 'test', 'tenant-a', policy)).rejects.toThrow(
+      CircuitBreakerOpenError
+    );
+    await expect(
+      checkCircuitBreaker('generic', 'test', 'tenant-b', policy)
+    ).resolves.toBeUndefined();
+  });
 });

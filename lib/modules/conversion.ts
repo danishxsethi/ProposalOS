@@ -10,7 +10,7 @@ import rs from 'text-readability';
 
 import type { CostTracker } from '@/lib/costs/costTracker';
 import { logger } from '@/lib/logger';
-import { validateForBrowserNavigation } from '@/lib/security/safeFetch';
+import { safePageGoto } from '@/lib/security/safeBrowser';
 
 import { LegacyAuditModuleResult } from './types';
 
@@ -40,6 +40,7 @@ export interface ConversionResult {
 
 export interface ConversionModuleInput {
   url: string;
+  signal?: AbortSignal;
   businessName?: string;
   /** Industry/vertical for scoring weights (e.g. dental, medical, retail) */
   industry?: string;
@@ -337,17 +338,22 @@ export async function runConversionModule(
     const parsed = new URL(baseUrl);
     const contactUrl = `${parsed.origin}/contact`;
 
-    await validateForBrowserNavigation(baseUrl);
-    await page.goto(baseUrl, { waitUntil: 'domcontentloaded', timeout: 20000 });
+    await safePageGoto(
+      page,
+      baseUrl,
+      { waitUntil: 'domcontentloaded', timeout: 20000 },
+      input.signal
+    );
     const homeResult = await page.evaluate(analyzePage);
 
     let contactResult: PageAnalysis | null = null;
     try {
-      await validateForBrowserNavigation(contactUrl);
-      const contactRes = await page.goto(contactUrl, {
-        waitUntil: 'domcontentloaded',
-        timeout: 10000,
-      });
+      const contactRes = await safePageGoto(
+        page,
+        contactUrl,
+        { waitUntil: 'domcontentloaded', timeout: 10000 },
+        input.signal
+      );
       if (contactRes && contactRes.status() === 200) {
         contactResult = await page.evaluate(analyzePage);
       }

@@ -9,7 +9,7 @@ import puppeteer, { Browser } from 'puppeteer-core';
 
 import type { CostTracker } from '@/lib/costs/costTracker';
 import { logger } from '@/lib/logger';
-import { validateForBrowserNavigation } from '@/lib/security/safeFetch';
+import { safePageGoto } from '@/lib/security/safeBrowser';
 
 import { LegacyAuditModuleResult } from './types';
 
@@ -39,6 +39,7 @@ export interface AccessibilityResult {
 
 export interface AccessibilityModuleInput {
   url: string;
+  signal?: AbortSignal;
 }
 
 interface CustomCheckResult {
@@ -243,8 +244,7 @@ export async function runAccessibilityModule(
     browser = await launchBrowser();
     const page = await browser.newPage();
 
-    await validateForBrowserNavigation(url);
-    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 20000 });
+    await safePageGoto(page, url, { waitUntil: 'domcontentloaded', timeout: 20000 }, input.signal);
 
     const custom = await runCustomChecks(page);
 

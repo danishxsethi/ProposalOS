@@ -39,6 +39,7 @@ import { validateUrl } from '@/lib/security/urlValidator';
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const MAX_REDIRECTS = 5;
+const MAX_RESPONSE_BYTES = 2 * 1024 * 1024;
 
 /** Hosts explicitly allowed for response-derived URLs (e.g., Places API photo URLs) */
 const RESPONSE_DERIVED_URL_ALLOWLIST = [
@@ -74,6 +75,10 @@ export interface SafeFetchOptions {
   maxRedirects?: number;
   /** AbortSignal for timeout control. */
   signal?: AbortSignal;
+  /** Follow redirects after validating each hop (default: true). */
+  followRedirects?: boolean;
+  /** Maximum response bytes exposed to the caller (default: 2 MiB). */
+  maxResponseBytes?: number;
 }
 
 /**
@@ -95,10 +100,10 @@ export async function safeFetch(
   const allowHttp = options.allowHttp !== false; // default true for audit modules
   const maxRedirects = options.maxRedirects ?? MAX_REDIRECTS;
 
-  // Validate initial URL
-  await validateAndThrow(url, allowHttp);
+  const followRedirects = options.followRedirects !== false;
+  const maxResponseBytes = options.maxResponseBytes ?? MAX_RESPONSE_BYTES;
 
-  let currentUrl = url;
+  let currentUrl = await validateAndThrow(url, allowHttp);
   let redirectCount = 0;
 
   while (true) {
@@ -108,9 +113,8 @@ export async function safeFetch(
       signal: options.signal ?? init?.signal,
     });
 
-    // Not a redirect — return the response
-    if (!isRedirect(response.status)) {
-      return response;
+    if (!isRedirect(response.status) || !followRedirects) {
+      return limitResponseBody(response, maxResponseBytes);
     }
 
     // Redirect limit
@@ -125,6 +129,8 @@ export async function safeFetch(
       throw new SsrfBlockedError(currentUrl, 'Redirect with no Location header');
     }
 
+    await response.body?.cancel().catch(() => undefined);
+
     // Resolve relative redirect URLs against the current URL
     let nextUrl: string;
     try {
@@ -134,13 +140,14 @@ export async function safeFetch(
     }
 
     // Re-validate the redirect target
-    await validateAndThrow(nextUrl, allowHttp);
+    nextUrl = await validateAndThrow(nextUrl, allowHttp);
 
     logger.info(
       { event: 'ssrf.redirect_followed', from: currentUrl, to: nextUrl, hop: redirectCount },
       `Following validated redirect (hop ${redirectCount})`
     );
 
+    init = stripSensitiveRedirectHeaders(init, currentUrl, nextUrl);
     currentUrl = nextUrl;
   }
 }
@@ -192,7 +199,10 @@ export async function safeFetchResponseDerived(
   }
 
   // Use regular safeFetch for redirect protection
-  return safeFetch(url, init, options);
+  return safeFetch(url, init, {
+    ...options,
+    maxResponseBytes: options.maxResponseBytes ?? 5 * 1024 * 1024,
+  });
 }
 
 /**
@@ -219,7 +229,7 @@ function isRedirect(status: number): boolean {
   return [301, 302, 303, 307, 308].includes(status);
 }
 
-async function validateAndThrow(url: string, allowHttp: boolean): Promise<void> {
+async function validateAndThrow(url: string, allowHttp: boolean): Promise<string> {
   // Block dangerous schemes before even trying to parse
   const lowerUrl = url.toLowerCase().trim();
   if (
@@ -236,6 +246,16 @@ async function validateAndThrow(url: string, allowHttp: boolean): Promise<void> 
     throw new SsrfBlockedError(url, `Blocked scheme: ${lowerUrl.split(':')[0]}`);
   }
 
+  try {
+    const parsed = new URL(url);
+    if (parsed.username || parsed.password) {
+      throw new SsrfBlockedError(url, 'Credentialed URLs are not allowed');
+    }
+  } catch (error) {
+    if (error instanceof SsrfBlockedError) throw error;
+    throw new SsrfBlockedError(url, 'Invalid URL format');
+  }
+
   const validation = await validateUrl(url, { allowHttp, requireHttps: !allowHttp });
 
   if (!validation.isValid) {
@@ -245,4 +265,66 @@ async function validateAndThrow(url: string, allowHttp: boolean): Promise<void> 
     );
     throw new SsrfBlockedError(url, validation.error ?? 'blocked by SSRF policy');
   }
+
+  return validation.sanitizedUrl ?? url;
+}
+
+function stripSensitiveRedirectHeaders(
+  init: RequestInit | undefined,
+  from: string,
+  to: string
+): RequestInit | undefined {
+  if (!init || new URL(from).origin === new URL(to).origin) return init;
+
+  const headers = new Headers(init.headers);
+  for (const header of ['authorization', 'cookie', 'proxy-authorization', 'host']) {
+    headers.delete(header);
+  }
+  return { ...init, headers };
+}
+
+function limitResponseBody(response: Response, maxBytes: number): Response {
+  if (maxBytes <= 0) return response;
+  const contentLength = Number(response.headers.get('content-length'));
+  if (Number.isFinite(contentLength) && contentLength > maxBytes) {
+    void response.body?.cancel();
+    throw new SsrfBlockedError(
+      response.url || 'response',
+      `Response exceeds ${maxBytes} byte limit`
+    );
+  }
+  if (!response.body) return response;
+
+  let consumed = 0;
+  const reader = response.body.getReader();
+  const body = new ReadableStream<Uint8Array>({
+    async pull(controller) {
+      const chunk = await reader.read();
+      if (chunk.done) {
+        controller.close();
+        return;
+      }
+      consumed += chunk.value.byteLength;
+      if (consumed > maxBytes) {
+        await reader.cancel();
+        controller.error(
+          new SsrfBlockedError(
+            response.url || 'response',
+            `Response exceeds ${maxBytes} byte limit`
+          )
+        );
+        return;
+      }
+      controller.enqueue(chunk.value);
+    },
+    async cancel() {
+      await reader.cancel();
+    },
+  });
+
+  return new Response(body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers: response.headers,
+  });
 }

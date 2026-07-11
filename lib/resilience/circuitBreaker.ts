@@ -78,7 +78,7 @@ export async function checkCircuitBreaker(
     }
     logger.error(
       { err, provider, tenantId, operation },
-      'Error checking circuit breaker — failing closed (allowing request)'
+      'Error checking circuit breaker — failing open (allowing request)'
     );
   }
 }
