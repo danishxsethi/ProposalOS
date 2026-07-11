@@ -1039,3 +1039,118 @@ all remediation artifacts. Commit green code as
 `fix(module-adapters): repair result shapes and failure states`, then artifacts as
 `chore(remediation): checkpoint wave 5`. Emit a Wave 6 continuation prompt and stop without
 beginning Wave 6. Workflow: read -> verify -> execute -> test -> record -> commit -> emit -> stop.
+
+---
+
+## Wave 5 — Module adapter and failure-state repair
+
+Findings: **P1-28** (re-verified, already fixed Wave 3), **P1-33, P1-34, P1-39, P1-43, P2-28,
+P2-47** (fixed this wave).
+
+Full defect analysis, per-finding fix description, and the 27-module classification matrix are
+recorded in `REMEDIATION_STATE.md`'s "Wave 5 result summary" section (not duplicated here).
+
+### Targeted regression tests — GREEN (21/21 new, 104/105 total incl. pre-existing)
+
+```
+$ vitest run lib/audit/__tests__/wave5AdapterRepairs.test.ts \
+    lib/audit/__tests__/stubContainment.test.ts \
+    lib/modules/__tests__/schemaMarkupFindings.test.ts
+
+ ✓ lib/audit/__tests__/wave5AdapterRepairs.test.ts   (16 tests)
+ ✓ lib/audit/__tests__/stubContainment.test.ts        (2 tests)
+ ✓ lib/modules/__tests__/schemaMarkupFindings.test.ts  (3 tests)
+ Test Files  3 passed (3)
+      Tests  21 passed (21)
+```
+
+Coverage highlights:
+
+- **P1-28** (re-verification only, no code change): existing
+  `lib/audit/__tests__/adapterFailureMasking.test.ts` (Wave 3) still green — legacy `status:
+'failed'` maps to `ModuleResult.status: 'FAILED'`, never `COMPLETE`.
+- **P1-33**: `schemaMarkupAdapter` reports `COMPLETE` with a forwarded, non-empty `findings`
+  array from real analysis; reports `FAILED` (not `COMPLETE`) when the module itself reports a
+  real failure. Module-level unit tests (`schemaMarkupFindings.test.ts`) prove real HTML analysis
+  produces evidence-bearing findings citing the analyzed URL, a present schema is never reported
+  missing, and a real fetch failure reports the outer status as `'failed'`.
+- **P1-39**: `videoPresence` adapter forwards real `topCompetitors` names (not an empty list from
+  the nonexistent `.results` field) and handles a genuinely-empty competitor list without
+  crashing; `competitorStrategy` adapter receives a real competitor from `topCompetitors` instead
+  of being permanently `SKIPPED`.
+- **P2-47**: `competitorStrategy` self-exclusion correctly excludes a same-business entry under
+  different case/punctuation and still finds a real competitor; reports `SKIPPED` (not a false
+  self-match) when every candidate is the subject business itself.
+- **P2-28**: `emailFinder` adapter reports `COMPLETE` for emails-found and genuine verified-empty
+  results; reports `FAILED` for both real failure signals (`source: 'failed'` fetch-unavailable,
+  `source: 'error'` parser/execution exception) — the previously dead `status==='error'` branch
+  is gone.
+- **P1-43**: `vision` adapter reports `SKIPPED` when `websiteCrawler` produced no screenshot
+  evidence snapshot, and reports `COMPLETE` (real `runVisionModule` invocation with the forwarded
+  screenshot, including its `base64` payload) when a real screenshot snapshot is present —
+  proving the dependency path that was previously always empty in the canonical engine.
+- **P1-34**: `deduplicateFindings()` merges two findings sharing the same `schemaFingerprint` root
+  cause, keeping the higher-impact title and the union (not the intersection) of both findings'
+  evidence; keeps two distinct schema findings separate when their fingerprints differ; produces
+  a deterministic result across repeated runs on the same input.
+- **P0-25 containment** (`stubContainment.test.ts`, Step 13, no implementation change): the
+  `socialDeep` stub's fabricated zero-evidence "No Active Social Presence" finding is rejected by
+  the existing Wave 3 boundary before it can reach a customer; the same finding shape with real
+  evidence attached is correctly accepted, proving the boundary is a real contract rather than a
+  blanket ban on the module.
+
+### Pre-existing regression set re-run alongside — 104/105 pass
+
+```
+$ vitest run tests/architecture/ lib/audit/__tests__/ lib/modules/__tests__/
+ Test Files  1 failed | 21 passed (23)
+      Tests  1 failed | 128 passed (130)
+```
+
+(Includes the 3 new Wave 5 files.) The sole failure,
+`lib/modules/__tests__/auditOrchestrator.test.ts` ("should run phase 1 modules", 30s timeout), is
+the same pre-existing defect documented since Wave 2's own state notes (deprecated,
+non-production-reachable `AuditOrchestrator`; mocks the wrong GBP export and only 2 of ~14 legacy
+modules, the rest attempt real unmocked network calls). Confirmed unrelated to Wave 5:
+`git status --short` shows this test file and `lib/orchestrator/auditOrchestrator.ts` untouched
+by this session's diff.
+
+A separate run of `tests/architecture/ssrf-fetch-boundary.test.ts` also shows one pre-existing
+failure (`lib/queue/auditJobQueue.ts:433`, a raw `fetch()` not yet in the SSRF allowlist).
+Confirmed unrelated: `git status --short lib/queue/auditJobQueue.ts` is clean/untouched by this
+session. Not fixed here — outside the authoritative Wave 5 finding set.
+
+### TypeScript and lint
+
+```
+./node_modules/.bin/tsc --noEmit --pretty false --incremental false
+# exit 0
+
+eslint lib/audit/runner.ts lib/modules/schemaMarkup.ts lib/modules/websiteCrawlerModule.ts \
+  lib/audit/__tests__/wave5AdapterRepairs.test.ts lib/audit/__tests__/stubContainment.test.ts \
+  lib/modules/__tests__/schemaMarkupFindings.test.ts
+# 0 errors (1 import-order error auto-fixed in websiteCrawlerModule.ts); pre-existing
+# no-explicit-any warnings only, same count class as Wave 4's own report
+```
+
+### Architecture guard re-confirmed unchanged
+
+```
+vitest run tests/architecture/canonical-module-manifest.test.ts
+ ✓ 7/7 — still exactly 27 canonical module IDs, MODULE_REGISTRY still matches
+   packages/shared/src/audit.ts on phase/dependsOn/optional/timeoutMs for every module,
+   including the two touched this wave (websiteCrawler, vision — unchanged registration).
+```
+
+### Full suite
+
+Not run. Local Postgres-dependent suites remain unavailable at `localhost:5435`/`5444`, as
+documented in every prior wave. No live network, DNS, browser, provider, GCS, or LLM call
+occurred in any Wave 5 test — `captureScreenshots`, `runVisionModule`, `runSchemaMarkupModule`,
+`runCompetitorStrategyModule`, `runVideoModule`, `findEmails`, `runGBPModule`,
+`runCompetitorModule`, and `safeFetch` were all mocked.
+
+### Exact continuation prompt for Wave 6
+
+Recorded in this session's final chat response (not duplicated here) and in
+`REMEDIATION_STATE.md`'s "Next wave" line.

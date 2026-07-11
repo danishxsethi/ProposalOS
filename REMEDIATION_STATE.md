@@ -108,7 +108,7 @@ work**, tracked so a later wave can complete them; they are NOT confirmed defect
 | 2    | Canonical engine + durable job execution       | P0-22, P0-23, P1-03, P1-20, P1-21, P1-22, P1-23, P1-24, P2-08, P2-12, P2-24, P2-25                                    | C      | **COMPLETE — see Wave 2 result** |
 | 3    | Finding/Evidence enforcement layer             | P1-09, P1-25, P1-26, P1-31, P2-13, P2-36, P2-40                                                                       | D      | **COMPLETE — see Wave 3 result** |
 | 4    | Shared network/browser/provider safety         | P1-46, P1-47, P1-48, P2-53, P2-54                                                                                     | G      | **COMPLETE — see Wave 4 result** |
-| 5    | Module adapter & failure-state repair          | P1-28, P1-33, P1-34, P1-39, P1-43, P2-28, P2-47                                                                       | E, H   | open                             |
+| 5    | Module adapter & failure-state repair          | P1-28, P1-33, P1-34, P1-39, P1-43, P2-28, P2-47                                                                       | E, H   | **COMPLETE — see Wave 5 result** |
 | 6    | Fully implement broken/missing modules         | P0-25, P1-30, P1-37, P1-41, P1-42, P2-30                                                                              | F      | open                             |
 | 7    | Harden remaining partial modules               | P1-27, P1-29, P1-32, P1-35, P1-38, P2-27, P2-31, P2-32, P2-34, P2-35, P2-38, P2-41, P2-42, P2-43, P2-44, P2-46, P2-50 | I, H   | open                             |
 | 8    | Diagnosis + proposal claim-policy enforcement  | P0-26, P1-36, P1-40                                                                                                   | F      | open                             |
@@ -790,3 +790,195 @@ this session.
 
 **Wave 5 — Module adapter and failure-state repair.** Use the continuation prompt recorded in
 `REMEDIATION_VERIFICATION.md`; stop after its checkpoint without beginning Wave 6.
+
+## Wave 5 result summary (Module adapter and failure-state repair)
+
+### Entry state (this session)
+
+- Branch `remediation/proposalos-e2e`, HEAD `56c17b7` = `chore(remediation): checkpoint wave 4`,
+  directly above `c3b0a35` (`fix(network-safety): consolidate shared network browser and provider
+boundaries`). Wave 0-4 commits confirmed present in `git log --oneline -18`. `git stash list`
+  empty. Dirty tree matched the documented preserved baseline exactly (AUDIT_REPORT.md, ~46-file
+  logger-typing group, `prompt-performance.ts`, `metering-sweep/route.ts`, untracked
+  `scripts/show-leaks.js`) — none of it touched this wave.
+- Baseline `./node_modules/.bin/tsc --noEmit --pretty false --incremental false` — exit 0 before
+  any Wave 5 edit.
+
+### Authoritative Wave 5 finding set
+
+Confirmed by filtering `REMEDIATION_FINDINGS.json` for `wave === 5`: `P1-28, P1-33, P1-34, P1-39,
+P1-43, P2-28, P2-47` — exactly the 7 named in the campaign prompt, with `P2-47.dependencies =
+["P1-39"]`. All 7 reconciled and closed this wave; none re-scoped to Wave 6 (all were genuine
+adapter/integration-boundary defects, not missing/fake module implementations).
+
+### Per-finding classification and fix
+
+- **P1-28** (gbpAdapter status laundering) — **already fixed in Wave 3** (`gbpAdapter` checks
+  `legacy?.status === 'failed'/'error'` and maps to `FAILED`; regression test
+  `lib/audit/__tests__/adapterFailureMasking.test.ts` already existed and still passes). Wave 5
+  re-verified: confirmed the missing-`GOOGLE_PLACES_API_KEY` case throws before the module's own
+  try/catch, propagates as a rejected promise through `mod.run()`, and is caught by
+  `executePhase`'s outer try/catch as `FAILED` — never `COMPLETE`/`VERIFIED_ABSENT`. No code
+  change needed; classification: **already closed by Wave 3**, verified again in Wave 5's own
+  regression run.
+- **P1-33** (schemaMarkup output discarded) — **root cause confirmed exactly as described**:
+  `runSchemaMarkupModule` (`lib/modules/schemaMarkup.ts`) always performed real completeness/
+  vertical analysis (`schemasFound`/`schemasExpected`/`schemasMissing`/`score`/`recommendations`)
+  but never populated a `findings` array, the one field `extractFindingsFromRegistryResult`'s
+  `schemaMarkup` branch actually reads (`lib/audit/runner.ts`). Fixed: added
+  `buildSchemaMarkupFindings()`, which turns `schemasMissing` (per missing type) and incomplete
+  `schemasFound` entries (per missing property) into real, evidence-bearing Findings — evidence
+  cites the analyzed URL, a `schema_markup_analysis` source, and a real collection timestamp.
+  Also fixed a genuine status-laundering defect at the module's own outer boundary while in the
+  file: both the `!url` early return and the `catch` block previously always reported the outer
+  `LegacyAuditModuleResult.status` as `'success'` (with a separate, never-consumed nested
+  `status: 'error'`) even on a real fetch/parse failure; both now report `status: 'failed'`
+  honestly. `schemaMarkupAdapter` (`lib/audit/runner.ts`) updated to check that status the same
+  way `gbpAdapter`/`competitorAdapter` already do (Wave 3 pattern), returning `FAILED` rather than
+  `COMPLETE` on real failure.
+- **P1-34** (duplicate schema findings) — **confirmed as a latent, not-yet-materialized
+  duplicate**: `schemaAnalysis`'s 3 findings (Missing LocalBusiness/Organization, Missing
+  AggregateRating, No FAQPage) currently carry `evidence: []`, so Wave 3's
+  `normalizeAndValidateModuleFindings` already rejects all of them before aggregation — no actual
+  customer-visible duplicate exists today. That zero-evidence gap is itself a separate,
+  pre-existing module-implementation defect (out of Wave 5's adapter-repair scope; belongs with
+  the other 8 modules Wave 3 already identified as having the same gap, tracked for Wave 6/7).
+  Wave 5's in-scope fix: (1) `deduplicateFindings()` (`lib/audit/runner.ts`) now dedups by a
+  stable `metrics.schemaFingerprint`/`metrics.fingerprint` key when present (falling back to the
+  original `type:title` key otherwise), and merges the **union** of both findings' evidence
+  (deterministically ordered, survivor's evidence first) instead of discarding the loser's real
+  evidence; (2) `schemaAnalysis`'s 3 findings and `schemaMarkup`'s new missing-schema findings are
+  tagged with the same fingerprint scheme (`schema-missing:<Type>`) for the 2 root causes they
+  can genuinely share (LocalBusiness/Organization; the two modules do not currently overlap on
+  AggregateRating or FAQPage) — so once `schemaAnalysis`'s evidence gap is closed in a later wave,
+  the two modules will already deduplicate correctly instead of reintroducing a duplicate-finding
+  regression. Distinct schema findings (different fingerprint, or no fingerprint) are proven to
+  remain separate.
+- **P1-39** (competitor field-name drift) — **root cause confirmed exactly as described**:
+  `videoPresenceAdapter` and `competitorStrategyAdapter` (`lib/audit/runner.ts`) read
+  `dependencyResults.competitor.results`, a field that does not exist on the real module output
+  (`lib/modules/competitor.ts` returns `data.topCompetitors`); `findingGenerator.ts` already used
+  `topCompetitors` correctly, so the drift was isolated to these two `runner.ts` adapters. Fixed:
+  added one canonical `getCanonicalCompetitors()` helper (rejects any entry without a `name`,
+  never silently passes through `undefined`) as the single read path; both adapters updated to
+  use it. Real, already-collected competitor data (name/website/placeId/rating/reviews) now
+  reaches both dependents instead of silently becoming an empty list.
+- **P1-43** (vision unreachable) — **root cause confirmed exactly as described, and its intended
+  fix was already documented** in `packages/shared/src/audit.ts`'s own comment directly above
+  `CANONICAL_AUDIT_MODULE_IDS`: screenshot capture (`lib/evidence/screenshotCapture.ts`, built on
+  Wave 4's `safePageGoto`) is real, working shared infrastructure that only the deprecated
+  `AuditOrchestrator` ever called; the canonical `websiteCrawler` module never captured a
+  screenshot, so `visionAdapter`'s `dependsOn: ['websiteCrawler']` + its
+  `evidenceSnapshots.filter(type==='screenshot')` filter could never find anything. Fixed:
+  `lib/modules/websiteCrawlerModule.ts` now calls `captureScreenshots()` (Wave-4-safe) as a
+  best-effort step after its existing crawl work and attaches the result as a `type: 'screenshot'`
+  evidence snapshot (only when a real `auditId` is supplied — see the "not fabricated" note
+  below); a screenshot failure is caught and logged, never fails the crawl itself. `vision`
+  remains registered exactly as before (`dependsOn: ['websiteCrawler']`, phase 3, optional) — **no
+  change to the 27-module manifest**, confirmed by
+  `tests/architecture/canonical-module-manifest.test.ts` (still 27/27, still matching
+  `packages/shared/src/audit.ts` on phase/deps/optional/timeout). `WebsiteCrawlerModuleInput.auditId`
+  is optional and deliberately not defaulted to a fabricated value: the module is also called from
+  a second, non-canonical, pre-existing path (`lib/modules/website.ts`'s internal reuse of the
+  crawler — itself the P1-27 duplicate-crawl defect, Wave 7 scope, not touched here) that has no
+  real `auditId`; that caller now simply gets no screenshot (correct — its result never feeds
+  `vision`) rather than corrupting GCS screenshot storage paths with a placeholder ID.
+- **P2-28** (emailFinder dead branch) — **root cause confirmed exactly as described**:
+  `findEmails()` (`lib/modules/emailFinder.ts`) never returns a `status` field (its real result
+  shape is `{emails, source, confidence}`); `emailFinderAdapter`'s `data.status === 'error'` check
+  was unreachable dead code, so a total fetch failure (`source: 'failed'`, empty `emails`) reported
+  `COMPLETE` with an empty result — indistinguishable from a genuine "fetched successfully, no
+  public emails present" outcome. Fixed: the adapter now checks `data.source === 'failed' ||
+data.source === 'error'` (the module's real, already-present failure signal) and returns `FAILED`
+  in both cases; a genuine empty `emails` array with `source: 'website_scrape'` still correctly
+  reports `COMPLETE` (verified absence, not failure).
+- **P2-47** (competitorStrategy naive self-exclusion) — **root cause confirmed exactly as
+  described, resolved by the same edit as P1-39** (both live in
+  `getCanonicalCompetitors()`/`competitorStrategyAdapter`): self-exclusion previously compared
+  `r.title !== input.businessName` as an exact string, so any case/punctuation/whitespace
+  difference between a SERP listing's title and the subject business's own name let the business
+  select itself as its own "competitor." Fixed with a `normalizeBusinessName()` helper (mirrors
+  `lib/modules/gbp.ts`'s existing `normalize()` pattern for its own name-consistency check) applied
+  to both sides before comparison.
+
+### Canonical adapter/result contract (Wave 3, reused — not forked)
+
+No new result-state model introduced. `ModuleResult.status` remains `'COMPLETE' | 'PARTIAL' |
+'FAILED' | 'SKIPPED'` (`lib/audit/runner.ts`); the Wave 3 Finding/Evidence contract
+(`lib/audit/findingContract.ts`) remains the one runtime validation boundary. All Wave 5 fixes
+work within this existing contract: honest `FAILED` mapping on real module failure (P1-28
+re-verified, P1-33, P2-28), real dependency forwarding (P1-39/P2-47), real Finding population
+from real analysis (P1-33), and fingerprint-aware deduplication that preserves rather than drops
+evidence (P1-34).
+
+### Stub/missing-module containment (Step 13)
+
+`socialDeep`'s `analyzeProfile()` remains a stub (always `exists: true`, no real verification) and
+its "No Active Social Presence" fallback still fabricates a customer-negative PAINKILLER finding
+with `evidence: []` — a real module-implementation defect (P0-25), correctly assigned to Wave 6,
+**not implemented in Wave 5**. New regression test
+`lib/audit/__tests__/stubContainment.test.ts` proves the existing Wave 3 boundary
+(`normalizeAndValidateModuleFindings`) already rejects that exact fabricated finding shape today
+(zero evidence ⇒ schema validation failure ⇒ rejected, never reaches the customer), and that the
+boundary is a real contract (not a blanket per-module ban) by showing the identical finding shape
+would be accepted if `socialDeep` is ever fixed to attach real evidence.
+
+### Canonical 27-module adapter matrix — Wave 5 exceptions only
+
+All 27 canonical modules continue to map to exactly one adapter in `MODULE_REGISTRY`
+(`tests/architecture/canonical-module-manifest.test.ts`, 7/7 green, no manifest change). Modules
+touched this wave and their classification:
+
+| Module               | Pre-Wave-5 classification                                 | Post-Wave-5 classification                                       |
+| -------------------- | --------------------------------------------------------- | ---------------------------------------------------------------- |
+| `gbp`                | CONTRACT_VALID (fixed Wave 3)                             | CONTRACT_VALID (re-verified)                                     |
+| `schemaMarkup`       | OUTPUT_DISCARDED + STATUS_LAUNDERING                      | CONTRACT_VALID                                                   |
+| `schemaAnalysis`     | CONTRACT_VALID but latent-duplicate risk (no fingerprint) | CONTRACT_VALID (fingerprinted)                                   |
+| `videoPresence`      | FIELD_NAME_DRIFT (dependency never forwarded)             | CONTRACT_VALID                                                   |
+| `competitorStrategy` | FIELD_NAME_DRIFT + naive self-exclusion                   | CONTRACT_VALID                                                   |
+| `emailFinder`        | DEAD_BRANCH (unreachable failure check)                   | CONTRACT_VALID                                                   |
+| `vision`             | UNREACHABLE (dependency never produced)                   | CONTRACT_VALID (dependency now real)                             |
+| `websiteCrawler`     | CONTRACT_VALID, missing screenshot side-effect            | CONTRACT_VALID (+ screenshot evidence)                           |
+| `socialDeep`         | STUBBED_IMPLEMENTATION (P0-25)                            | STUBBED_IMPLEMENTATION (unchanged, correctly contained — Wave 6) |
+
+The remaining 19 canonical modules were not touched this wave (out of the authoritative Wave 5
+finding set); their existing classification from Waves 2-4 stands unchanged.
+
+### Files changed
+
+`lib/audit/runner.ts` (videoPresenceAdapter, competitorStrategyAdapter, emailFinderAdapter,
+schemaMarkupAdapter, schemaAnalysisAdapter, websiteCrawlerAdapter, `getCanonicalCompetitors()`
+new helper, `normalizeBusinessName()` new helper, `deduplicateFindings()`),
+`lib/modules/schemaMarkup.ts` (findings generation, honest outer status),
+`lib/modules/websiteCrawlerModule.ts` (screenshot capture side-effect). New tests:
+`lib/audit/__tests__/wave5AdapterRepairs.test.ts`, `lib/audit/__tests__/stubContainment.test.ts`,
+`lib/modules/__tests__/schemaMarkupFindings.test.ts`.
+
+### Tests and gates
+
+- New Wave 5 tests: 21/21 pass (`wave5AdapterRepairs.test.ts` 16, `stubContainment.test.ts` 2,
+  `schemaMarkupFindings.test.ts` 3).
+- Existing Wave 0-4 regression set re-run alongside (`tests/architecture/*`,
+  `lib/audit/__tests__/*`, `lib/modules/__tests__/*`): 104/105 pass. The one failure
+  (`lib/modules/__tests__/auditOrchestrator.test.ts`, 30s timeout) is the same pre-existing,
+  documented-since-Wave-2 defect in the deprecated, non-production-reachable
+  `AuditOrchestrator` test (mocks the wrong GBP export, only 2 of ~14 legacy modules, rest attempt
+  real network calls) — confirmed via `git status --short` that this file and its dependencies
+  were not touched this wave.
+- `tests/architecture/ssrf-fetch-boundary.test.ts` has one pre-existing failure
+  (`lib/queue/auditJobQueue.ts:433` raw `fetch()` not in the allowlist) — confirmed via
+  `git status --short lib/queue/auditJobQueue.ts` (clean, untouched) to be unrelated to any Wave 5
+  change; not fixed here (out of the Wave 5 finding set, belongs to whichever future wave audits
+  worker-dispatch network calls).
+- TypeScript: `./node_modules/.bin/tsc --noEmit --pretty false --incremental false` — exit 0.
+- ESLint on changed files: 0 errors (1 auto-fixed import-order error in
+  `websiteCrawlerModule.ts`), pre-existing `no-explicit-any` warnings only (same count class as
+  Wave 4's own report), no new warnings introduced.
+- Full suite not run this wave (per the mandatory-verification instruction: targeted + tsc + lint
+  green first; local Postgres-dependent suites remain unavailable at `localhost:5435`/`5444` as
+  documented in every prior wave).
+
+## Next wave
+
+**Wave 6 — Fully implement broken and missing modules.** See the exact continuation prompt at
+the end of this session's chat response.

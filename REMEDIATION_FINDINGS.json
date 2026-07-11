@@ -525,13 +525,13 @@
       "id": "P1-28",
       "severity": "P1",
       "title": "gbpAdapter never inspects runGBPModule status; launders failure as COMPLETE",
-      "status": "open",
+      "status": "verified",
       "rootCauseGroup": "H",
       "dependencies": [],
       "files": ["lib/audit/runner.ts", "lib/modules/gbp.ts"],
       "verification": ["Adapter checks data.status==='failed' -> FAILED; test"],
       "wave": 5,
-      "notes": "Provider-state laundering."
+      "notes": "Provider-state laundering. | Wave 5: Re-verified in Wave 5 (already fixed/verified in Wave 3): gbpAdapter checks legacy status and maps failure to FAILED, not COMPLETE. Regression: lib/audit/__tests__/adapterFailureMasking.test.ts (pre-existing, still green) + new wave5AdapterRepairs.test.ts coverage."
     },
     {
       "id": "P1-29",
@@ -590,7 +590,7 @@
       "id": "P1-33",
       "severity": "P1",
       "title": "schemaMarkup does real analysis but never populates findings array; aggregation silently discards output",
-      "status": "open",
+      "status": "verified",
       "rootCauseGroup": "E",
       "dependencies": [],
       "files": ["lib/modules/schemaMarkup.ts", "lib/audit/runner.ts"],
@@ -598,13 +598,13 @@
         "Add findings:Finding[] built from schemasMissing/recommendations; regression test non-empty findings"
       ],
       "wave": 5,
-      "notes": "Adapter/result-shape drift \u2014 output discarded."
+      "notes": "Adapter/result-shape drift \u2014 output discarded. | Wave 5: Fixed: runSchemaMarkupModule now builds a findings[] array from schemasMissing/schemasFound (real analysis, real evidence citing analyzed URL + timestamp). Adapter (schemaMarkupAdapter) also fixed to honor the module's own success/failure status (was previously always success). Outer LegacyAuditModuleResult.status now honestly reports failed on fetch/parse error instead of laundering through a nested status:\"error\". Tests: lib/modules/__tests__/schemaMarkupFindings.test.ts, lib/audit/__tests__/wave5AdapterRepairs.test.ts."
     },
     {
       "id": "P1-34",
       "severity": "P1",
       "title": "website + schemaAnalysis emit near-duplicate schema findings for same observations",
-      "status": "open",
+      "status": "verified",
       "rootCauseGroup": "E",
       "dependencies": [],
       "files": ["lib/modules/website.ts", "lib/audit/runner.ts"],
@@ -612,7 +612,7 @@
         "Consolidate schema-finding ownership into schemaAnalysis; test no duplicates"
       ],
       "wave": 5,
-      "notes": "Inflated issue count."
+      "notes": "Inflated issue count. | Wave 5: Fixed: deduplicateFindings() now merges by a stable metrics.schemaFingerprint/fingerprint key (falling back to type+title) instead of title-only matching, and merges the union of evidence rather than dropping the loser's evidence. schemaAnalysis findings tagged with matching schema-missing:<Type> fingerprints so they correctly collide with schemaMarkup's once schemaAnalysis's own zero-evidence gap is closed (Wave 6/7 \u2014 tracked separately, not fixed here since it is a module-implementation defect, not an adapter defect). Test: wave5AdapterRepairs.test.ts \"P1-34\" describe block."
     },
     {
       "id": "P1-35",
@@ -670,7 +670,7 @@
       "id": "P1-39",
       "severity": "P1",
       "title": "competitorStrategy/videoPresence read dependencyResults.competitor.results (nonexistent field; actual is topCompetitors) \u2014 never execute real logic",
-      "status": "open",
+      "status": "verified",
       "rootCauseGroup": "E",
       "dependencies": [],
       "files": ["lib/audit/runner.ts", "lib/modules/competitor.ts"],
@@ -678,7 +678,7 @@
         "Read compData.topCompetitors; regression test asserting non-SKIPPED/non-empty on real competitors"
       ],
       "wave": 5,
-      "notes": "Highest value/effort regression test in audit; single-line field mismatch."
+      "notes": "Highest value/effort regression test in audit; single-line field mismatch. | Wave 5: Fixed: root cause was runner.ts adapters reading a nonexistent dependencyResults.competitor.results field; the real module (lib/modules/competitor.ts) returns data.topCompetitors. Added getCanonicalCompetitors() helper as the one canonical read path; videoPresenceAdapter and competitorStrategyAdapter both updated to use it. Findings generator (findingGenerator.ts) already used topCompetitors correctly \u2014 drift was isolated to runner.ts. Tests: wave5AdapterRepairs.test.ts \"P1-39\" describe block proves real forwarded data reaches both dependents."
     },
     {
       "id": "P1-40",
@@ -726,7 +726,7 @@
       "id": "P1-43",
       "severity": "P1",
       "title": "vision registry entry can never execute \u2014 requires screenshot snapshot from websiteCrawler, which captures none",
-      "status": "open",
+      "status": "verified",
       "rootCauseGroup": "E",
       "dependencies": [],
       "files": [
@@ -738,7 +738,7 @@
         "Add screenshot-capture step to primary engine so vision prerequisite is met; test vision executes"
       ],
       "wave": 5,
-      "notes": "Flagship visual analysis dead in primary engine."
+      "notes": "Flagship visual analysis dead in primary engine. | Wave 5: Fixed: vision was unreachable because websiteCrawler (its sole canonical dependency) never captured a screenshot. Root cause and fix already anticipated in packages/shared/src/audit.ts's own comment above CANONICAL_AUDIT_MODULE_IDS: screenshot capture is shared input-acquisition infrastructure, not a 28th module. lib/modules/websiteCrawlerModule.ts now calls the existing Wave-4-safe captureScreenshots() (via safePageGoto) as a best-effort step and attaches a type:\"screenshot\" evidence snapshot when input.auditId is provided; visionAdapter's existing filter (evidenceSnapshots.filter(type===\"screenshot\")) now finds it. 27-module manifest unchanged (confirmed by tests/architecture/canonical-module-manifest.test.ts, still 27/27 green). No real browser/GCS calls in tests \u2014 captureScreenshots is not invoked (auditId omitted) in unit tests; reachability is proven via a mocked dependencyResults.websiteCrawler snapshot. Test: wave5AdapterRepairs.test.ts \"P1-43\" describe block."
     },
     {
       "id": "P1-44",
@@ -1186,13 +1186,13 @@
       "id": "P2-28",
       "severity": "P2",
       "title": "emailFinder adapter's status==='error' branch is unreachable dead code",
-      "status": "open",
+      "status": "verified",
       "rootCauseGroup": "E",
       "dependencies": [],
       "files": ["lib/audit/runner.ts", "lib/modules/emailFinder.ts"],
       "verification": ["Add status field to findEmails or remove dead check"],
       "wave": 5,
-      "notes": ""
+      "notes": "Wave 5: Fixed: emailFinderAdapter's dead `data.status==='error'` check (findEmails() never returns a status field) replaced with a check against findEmails()'s real signal, data.source ('failed'|'error' = real failure, distinct from a genuine empty result). Test: wave5AdapterRepairs.test.ts \"P2-28\" describe block covers all four states (found / verified-empty / fetch-unavailable / parser-error)."
     },
     {
       "id": "P2-29",
@@ -1435,13 +1435,13 @@
       "id": "P2-47",
       "severity": "P2",
       "title": "competitorStrategy adapter uses naive exact-string self-exclusion (latent after P1-39 fix)",
-      "status": "open",
+      "status": "verified",
       "rootCauseGroup": "E",
       "dependencies": ["P1-39"],
       "files": ["lib/audit/runner.ts"],
       "verification": ["Reuse competitor.ts excluded list; test"],
       "wave": 5,
-      "notes": ""
+      "notes": "Wave 5: Fixed: competitorStrategyAdapter's self-exclusion changed from an exact-string r.title!==businessName comparison to a normalized comparison (normalizeBusinessName, mirroring gbp.ts's existing normalize() pattern) so case/punctuation/whitespace differences no longer let the subject business match itself as its own competitor. Resolved as part of the same edit as P1-39 (shared getCanonicalCompetitors() read path). Test: wave5AdapterRepairs.test.ts \"P2-47\" describe block."
     },
     {
       "id": "P2-48",
