@@ -107,7 +107,7 @@ work**, tracked so a later wave can complete them; they are NOT confirmed defect
 | 1    | Tenant & auth foundation                       | P1-05, P1-06, P1-07, P1-15, P1-17, P1-18, P2-07, P2-18, P2-22, P2-23                                                  | B, K   | **COMPLETE — see Wave 1 result** |
 | 2    | Canonical engine + durable job execution       | P0-22, P0-23, P1-03, P1-20, P1-21, P1-22, P1-23, P1-24, P2-08, P2-12, P2-24, P2-25                                    | C      | **COMPLETE — see Wave 2 result** |
 | 3    | Finding/Evidence enforcement layer             | P1-09, P1-25, P1-26, P1-31, P2-13, P2-36, P2-40                                                                       | D      | **COMPLETE — see Wave 3 result** |
-| 4    | Shared network/browser/provider safety         | P1-46, P1-47, P1-48, P2-53, P2-54                                                                                     | G      | open                             |
+| 4    | Shared network/browser/provider safety         | P1-46, P1-47, P1-48, P2-53, P2-54                                                                                     | G      | **COMPLETE — see Wave 4 result** |
 | 5    | Module adapter & failure-state repair          | P1-28, P1-33, P1-34, P1-39, P1-43, P2-28, P2-47                                                                       | E, H   | open                             |
 | 6    | Fully implement broken/missing modules         | P0-25, P1-30, P1-37, P1-41, P1-42, P2-30                                                                              | F      | open                             |
 | 7    | Harden remaining partial modules               | P1-27, P1-29, P1-32, P1-35, P1-38, P2-27, P2-31, P2-32, P2-34, P2-35, P2-38, P2-41, P2-42, P2-43, P2-44, P2-46, P2-50 | I, H   | open                             |
@@ -737,3 +737,56 @@ mobileUX, paidSearch, seoDeep — Wave 5-7).
 **Wave 4 — Shared network, browser, and provider safety.** See the exact continuation
 prompt in `REMEDIATION_VERIFICATION.md`'s Wave 3 section / the final chat response of
 this session.
+
+## Wave 4 result summary (Shared network, browser, and provider safety)
+
+### Entry state and scope
+
+- Branch `remediation/proposalos-e2e`, HEAD `f843bbe` (`chore(remediation): checkpoint wave 3`);
+  Wave 0-3 fix/checkpoint commits present, no stash, and the documented 51-file dirty baseline
+  (immutable `AUDIT_REPORT.md`, logger-typing group, prompt-performance, metering sweep, and
+  `scripts/show-leaks.js`) was preserved exactly.
+- Baseline and post-change `./node_modules/.bin/tsc --noEmit --pretty false --incremental false`
+  exit 0. Authoritative Wave 4 set: P1-46, P1-47, P1-48, P2-53, P2-54. All are **verified**.
+
+### Shared contracts
+
+- `safeFetch` validates canonical HTTP(S) URLs at initial and every redirect hop, blocks
+  credentialed/dangerous URLs, cancels redirect bodies, strips sensitive headers on cross-origin
+  redirects, and applies a 2 MiB streaming response cap (5 MiB for approved response-derived media).
+  DNS is checked before connection against all answers; DNS rebinding remains a documented
+  runtime TOCTOU limit because Node fetch does not pin the validated IP to its socket.
+- `safePageGoto` is the one browser boundary: initial/final validation, request interception for
+  every interceptable subresource, unsafe-request aborts, popup closure, and abort-driven loading
+  stop. All production `page.goto` callers in `app/lib/packages/claraud-web` route through it.
+- Provider resilience derives `tenantId` and audit signal from trusted AsyncLocalStorage, links
+  caller/deadline signals to each provider attempt and backoff, bounds Retry-After, and does not
+  retry caller aborts. The breaker remains shared-store backed; state is tenant scoped, while
+  store-read failure intentionally fails open and now says so accurately.
+- The canonical runner gives each module a real signal, aborts it on module/global deadline,
+  prevents post-abort aggregation/persistence, and removes the unclassified outer retry loop.
+
+### Inventory decisions
+
+- User/discovered target and browser paths migrated to the shared boundaries: security probe,
+  accessibility, conversion, mobile UX, privacy, screenshot capture, and PDF navigation.
+- Remaining `fetch(url)` exceptions in citations/backlinks/keyword-gap/video are fixed
+  `yelp.com`/`bbb.org`/`yellowpages.com`/`serpapi.com` hosts with user data encoded only as
+  parameters. They remain provider-resilience calls, not user-controlled destination URLs.
+- Removed production `ignoreHTTPSErrors:true`; no `rejectUnauthorized:false` or
+  `NODE_TLS_REJECT_UNAUTHORIZED` production escape remains.
+
+### Verification
+
+- New local-only Wave 4 tests: 4 files / 15 tests for redirect header stripping/body cap,
+  browser subresource blocking, provider abort propagation, inherited audit signal, and
+  tenant circuit isolation.
+- Existing shared SSRF/Wave 0 test set: 37 tests; provider resilience set: 11 tests;
+  documented Wave 0-3 regression groups: 314 tests. All green.
+- ESLint: 0 errors (pre-existing warnings only). Full suite not run: local Postgres-dependent
+  suites remain unavailable at `localhost:5444`/`5435`, as already documented in Waves 1-3.
+
+## Next wave
+
+**Wave 5 — Module adapter and failure-state repair.** Use the continuation prompt recorded in
+`REMEDIATION_VERIFICATION.md`; stop after its checkpoint without beginning Wave 6.

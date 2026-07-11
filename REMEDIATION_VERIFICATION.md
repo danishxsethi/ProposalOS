@@ -956,3 +956,86 @@ See the final chat response of this session for the exact Wave 4 continuation pr
 (Shared network, browser, and provider safety — P1-46/P1-47/P1-48/P2-53/P2-54 and any
 other Wave-4-assigned finding), which must follow the same
 read → verify → execute → test → record → commit → emit → stop workflow used here.
+
+---
+
+## Wave 4 — Shared network, browser, and provider safety
+
+### Findings verified
+
+- **P1-46:** Added `lib/security/safeBrowser.ts`; it validates target/final URLs, intercepts
+  every interceptable request, blocks unsafe subresources, closes popups, and is used by every
+  production `page.goto` caller. Browser test uses only a mocked page and URL validator.
+- **P1-47:** `withProviderResilience` obtains tenant identity from trusted tenant runtime context
+  when not explicit. `runAudit` and `runModuleSubset` install the canonical audit signal in that
+  context. Circuit isolation test proves tenant A opening does not block tenant B.
+- **P1-48:** `ModuleInput.signal` now reaches module adapters; module timeout aborts the signal
+  and races completion; the audit signal reaches provider retries/backoff via runtime context,
+  browser navigations directly, and aggregation checks abort before persistence.
+- **P2-53:** Removed the unclassified outer `executePhase` retry. Provider-level classified retry
+  remains the sole retry layer.
+- **P2-54:** Corrected the breaker log to say fail-open when its shared-store read fails.
+
+### Network and TLS contract
+
+`safeFetch` now canonicalizes validated URLs, explicitly rejects credentialed URLs, validates
+every redirect, cancels redirect bodies, strips `Authorization`, `Cookie`, `Proxy-Authorization`,
+and `Host` on cross-origin redirects, and bounds streamed response bodies (2 MiB default; 5 MiB
+for allowlisted response-derived media). The security module now reuses this path rather than
+maintaining raw fetch redirect handling. DNS/IP validation is pre-connect only: Node fetch does
+not bind the validated address to the eventual connection, so DNS rebinding remains an explicit
+residual rather than an overstated guarantee. No production TLS-disable setting remains.
+
+### Tests and gates — GREEN
+
+```
+vitest run tests/security/wave4-network-boundaries.test.ts \
+  tests/security/wave4-browser-safety.test.ts \
+  tests/security/ssrf-safefetch.test.ts tests/security/wave0-security-ssrf.test.ts \
+  lib/resilience/tests/withProviderResilience.test.ts \
+  lib/resilience/tests/circuitBreaker.test.ts lib/resilience/tests/retry.test.ts
+# 7 files, 52 tests
+
+vitest run <documented Wave 0-3 regression groups>
+# 33 files, 314 tests
+
+./node_modules/.bin/tsc --noEmit --pretty false --incremental false
+# exit 0
+
+eslint <all Wave 4 changed files>
+# 0 errors; pre-existing warnings only
+```
+
+Bounded final searches found no production `rejectUnauthorized:false`,
+`ignoreHTTPSErrors:true`, or `NODE_TLS_REJECT_UNAUTHORIZED`; every production `page.goto`
+outside the shared helper is gone. Fixed-host `fetch(url)` exceptions are documented in
+`REMEDIATION_STATE.md`; no user/discovered destination bypass remains.
+
+### Full suite
+
+Not run. The documented local Postgres dependency remains unavailable at
+`localhost:5444`/`5435`; running the whole suite would only reproduce known environment blocks.
+No live DNS, network, browser, provider, storage, LLM, or production service was used by Wave 4
+tests.
+
+### Continuation prompt for Wave 5
+
+Continue the ProposalOS remediation campaign on `remediation/proposalos-e2e`. Execute **Wave 5
+only**, then checkpoint and stop. Read `AUDIT_REPORT.md` (immutable), `REMEDIATION_STATE.md`,
+`REMEDIATION_FINDINGS.json`, `REMEDIATION_VERIFICATION.md`, git history, and the exact Wave 5
+ledger rows before editing. Verify branch/HEAD, stash state, documented dirty baseline, and
+baseline TypeScript first. Derive Wave 5 IDs from `wave === 5`; reconcile items already fixed by
+Wave 3/4 without duplicating work. Preserve all 27 canonical capabilities and use the Wave 3
+Finding/Evidence validator plus Wave 4 safe network/provider/browser boundaries.
+
+At minimum inspect adapter/result-shape mismatches, COMPLETE masking internal failure, discarded
+real module output, missing dependency forwarding, provider failures converted to absence or
+deficiency, dead adapter branches, and upstream/downstream field-name mismatches. Start with
+P1-28, P1-33, P1-34, P1-39, P1-43, P2-28, and P2-47, but treat the ledger as authoritative.
+Add local red-before/green-after tests for every repaired adapter. Re-run Wave 0-4 targeted
+regressions, TypeScript, changed-file lint, and bounded production searches; run the full suite
+at most once only if the local environment is available. Record exact status/proof/residuals in
+all remediation artifacts. Commit green code as
+`fix(module-adapters): repair result shapes and failure states`, then artifacts as
+`chore(remediation): checkpoint wave 5`. Emit a Wave 6 continuation prompt and stop without
+beginning Wave 6. Workflow: read -> verify -> execute -> test -> record -> commit -> emit -> stop.

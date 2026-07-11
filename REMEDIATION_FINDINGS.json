@@ -772,7 +772,7 @@
       "id": "P1-46",
       "severity": "P1",
       "title": "Browser modules configure no Puppeteer request interception; navigation redirects + subresources not SSRF-revalidated",
-      "status": "open",
+      "status": "verified",
       "rootCauseGroup": "G",
       "dependencies": [],
       "files": [
@@ -786,13 +786,13 @@
         "setRequestInterception with per-request validateUrl mirroring safeFetch; test blocks metadata/private hops"
       ],
       "wave": 4,
-      "notes": "Browser-navigation SSRF gap (Pass 4C.2/4C.3)."
+      "notes": "Verified Wave 4: shared safePageGoto installs request interception for every interceptable subresource, validates the target before navigation and final URL after navigation, blocks unsafe requests/popups, and is used by all production page.goto callers."
     },
     {
       "id": "P1-47",
       "severity": "P1",
       "title": "Circuit breaker never invoked with tenantId \u2014 one tenant's failures open shared circuit for all tenants",
-      "status": "open",
+      "status": "verified",
       "rootCauseGroup": "G",
       "dependencies": [],
       "files": ["lib/resilience/circuitBreaker.ts", "lib/modules/*.ts"],
@@ -800,13 +800,13 @@
         "Pass tenantId into every withProviderResilience call OR document global decision; test tenant-scoped state"
       ],
       "wave": 4,
-      "notes": "Cross-tenant availability coupling."
+      "notes": "Verified Wave 4: withProviderResilience derives tenantId from trusted AsyncLocalStorage when callers do not explicitly pass it; audit and quick-audit execution install that context. Direct circuit-breaker tenant isolation test is green."
     },
     {
       "id": "P1-48",
       "severity": "P1",
       "title": "Global audit timeout is logical-only; AbortSignal never forwarded into ModuleInput/in-flight calls; dead MODULE_TIMEOUT_MS",
-      "status": "open",
+      "status": "verified",
       "rootCauseGroup": "G",
       "dependencies": [],
       "files": ["lib/audit/runner.ts"],
@@ -814,7 +814,7 @@
         "Thread canonical AbortSignal through ModuleInput into fetch/page.goto/withProviderResilience; reduce per-module timeouts; test cancellation"
       ],
       "wave": 4,
-      "notes": "Cost continues after audit marked terminal."
+      "notes": "Verified Wave 4: canonical signal is placed in ModuleInput and runtime context, module timeouts abort their signal and race completion, provider resilience links it to each attempt/backoff, browser navigation stops loading, and aggregation checks abort before persistence."
     },
     {
       "id": "P2-01",
@@ -1511,25 +1511,25 @@
       "id": "P2-53",
       "severity": "P2",
       "title": "executePhase retry loop retries any error (no classification, no delay)",
-      "status": "open",
+      "status": "verified",
       "rootCauseGroup": "G",
       "dependencies": [],
       "files": ["lib/audit/runner.ts"],
       "verification": ["Apply retryable-error classification or remove redundant outer retry"],
       "wave": 4,
-      "notes": ""
+      "notes": "Verified Wave 4: redundant executePhase retry loop removed; provider retry classification remains solely in withProviderResilience."
     },
     {
       "id": "P2-54",
       "severity": "P2",
       "title": "Circuit breaker logs 'failing closed' while behavior is fail-open",
-      "status": "open",
+      "status": "verified",
       "rootCauseGroup": "G",
       "dependencies": [],
       "files": ["lib/resilience/circuitBreaker.ts"],
       "verification": ["Correct log message or reconsider fail-closed"],
       "wave": 4,
-      "notes": ""
+      "notes": "Verified Wave 4: fail-open shared-store behavior is now logged accurately."
     },
     {
       "id": "P2-55",
