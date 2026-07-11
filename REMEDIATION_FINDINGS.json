@@ -1,0 +1,1420 @@
+{
+  "generatedAt": "2026-07-10T00:00:00Z",
+  "auditSource": "AUDIT_REPORT.md",
+  "note": "107 finding rows normalized from AUDIT_REPORT.md (Phase 0 + Pass 1, 2, 3, 4A, 4B batches 1-6, 4C.1). IDs P0-01..P0-18 and P1-10..P1-13 are not rows in this report (prior/other numbering) and are intentionally absent. P2-26 is superseded by an in-report self-correction (line 1450). Wave assignments for findings beyond the current wave are provisional and refined at wave entry. Unfinished audit passes (4C.2, 4C.3, Passes 5-20) are tracked in REMEDIATION_STATE.md as open audit work, NOT as confirmed defects.",
+  "severityTotals": { "P0": 8, "P1": 44, "P2": 55, "total": 107 },
+  "openAuditPasses": [
+    "Pass 4C.2 — cost controls, persistence, idempotency, result integrity",
+    "Pass 4C.3 — browser-navigation SSRF interception + timeout signal propagation (per P1-46/P1-48)",
+    "Passes 5-20 — proposal compiler/claim policy, diagnosis, delivery/outreach/closing/retention, billing/metering/webhooks, multi-tenancy/white-label/frontend, LLM/prompt security/cost governance, observability/infra/CI, adversarial QA, runtime certification, docs/marketing reconciliation, final GO/NO-GO (not yet performed by the audit)"
+  ],
+  "findings": [
+    {
+      "id": "P0-19",
+      "severity": "P0",
+      "title": "withRole()/withPermission() API-key branch ignores required role/permission; scope-allowlist gap at key creation",
+      "status": "verified",
+      "rootCauseGroup": "A",
+      "dependencies": [],
+      "files": ["lib/auth/rbac.ts", "lib/auth/apiKeys.ts", "app/api/settings/api-keys/route.ts"],
+      "verification": [
+        "vitest run tests/security/wave0-rbac-api-key.test.ts",
+        "grep confirms withRole no longer uses fixed audit:create/audit:*/* trio",
+        "tsx red-before proof: OLD predicate grants super_admin to audit:create key (true) vs apiKeySatisfiesRole=false"
+      ],
+      "wave": 0,
+      "notes": "Fixed by prior session, verified this session. apiKeySatisfiesRole/apiKeySatisfiesPermission check actual requirement; super_admin never satisfiable by tenant key; fail-closed 403. sanitizeApiKeyScopes enforces server allowlist."
+    },
+    {
+      "id": "P0-20",
+      "severity": "P0",
+      "title": "DELETE /api/tenants/[tenantId]/delete-data performed irreversible mass deletion with no authentication (user branch had TODO 'we allow the request')",
+      "status": "verified",
+      "rootCauseGroup": "A",
+      "dependencies": [],
+      "files": ["app/api/tenants/[tenantId]/delete-data/route.ts"],
+      "verification": [
+        "vitest run tests/security/wave0-tenant-delete-authz.test.ts",
+        "grep confirms TODO 'we allow the request' removed"
+      ],
+      "wave": 0,
+      "notes": "authHandler: anon->401; session super_admin(any) or agency_admin(own tenant); DELETE needs confirm===DELETE_TENANT_DATA; cron via Bearer CRON_SECRET; UUID validation; audit event emitted. P1-08 retention decision intentionally preserved for its later wave."
+    },
+    {
+      "id": "P0-21",
+      "severity": "P0",
+      "title": "Team-invite role is unchecked mass-assignment (no enum/ceiling); combined with P0-19 enables super_admin escalation",
+      "status": "verified",
+      "rootCauseGroup": "A",
+      "dependencies": ["P0-19"],
+      "files": [
+        "app/api/team/invite/route.ts",
+        "app/api/team/invite/[token]/accept/route.ts",
+        "lib/auth/rbac.ts"
+      ],
+      "verification": [
+        "vitest run tests/security/wave0-invite-role.test.ts (incl. API-key->invite->super_admin chain)"
+      ],
+      "wave": 0,
+      "notes": "assertAssignableInviteRole enforces enum + inviter ceiling; super_admin never invitable; accept revalidates stored role via normalizeRole and fails closed on legacy/invalid. Sibling [token]/route.ts is a read-only GET (returns role for display), not a write path."
+    },
+    {
+      "id": "P0-22",
+      "severity": "P0",
+      "title": "POST /api/client/scan creates QUEUED Audit and returns success but calls no execution mechanism — 100% stuck audits",
+      "status": "open",
+      "rootCauseGroup": "C",
+      "dependencies": ["P1-24"],
+      "files": ["app/api/client/scan/route.ts"],
+      "verification": [
+        "Wire to runAudit or enqueueAuditJob; integration test asserting an execution path is invoked and audit reaches terminal state"
+      ],
+      "wave": 2,
+      "notes": "Non-security zero-execution path; deferred to canonical-engine wave per kickoff."
+    },
+    {
+      "id": "P0-23",
+      "severity": "P0",
+      "title": "lib/retention/scheduled-audit-runner.ts::createScheduledAudit is a self-documented stub; fabricates auditsRun/comparison success",
+      "status": "open",
+      "rootCauseGroup": "C",
+      "dependencies": ["P1-22", "P1-24"],
+      "files": ["lib/retention/scheduled-audit-runner.ts", "lib/graph/retention-graph.ts"],
+      "verification": [
+        "Call runAudit/enqueue before returning; reconcile with cron AuditOrchestrator path; test asserting real execution + no fabricated comparison"
+      ],
+      "wave": 2,
+      "notes": "Product decision needed: single owner of scheduled audits (cron vs retention path)."
+    },
+    {
+      "id": "P0-24",
+      "severity": "P0",
+      "title": "security module fetchWithRedirect uses raw http/https with rejectUnauthorized:false and no SSRF/redirect validation",
+      "status": "verified",
+      "rootCauseGroup": "G",
+      "dependencies": [],
+      "files": ["lib/modules/security.ts"],
+      "verification": [
+        "vitest run tests/security/wave0-security-ssrf.test.ts",
+        "grep confirms no rejectUnauthorized:false in app/ lib/"
+      ],
+      "wave": 0,
+      "notes": "Rewritten with fetch+redirect:manual, per-hop validateUrl (shared helper), hop cap 5, AbortController timeout, credentialed/bad-scheme rejection, no header forwarding; tls.connect rejectUnauthorized:true. P2-52 widened blast radius (both engines) — no extra remediation beyond this fix."
+    },
+    {
+      "id": "P0-25",
+      "severity": "P0",
+      "title": "socialDeep analyzeProfile/findSocialProfiles are stubs; 'No Active Social Presence' PAINKILLER finding fabricated from non-functional fallback",
+      "status": "open",
+      "rootCauseGroup": "F",
+      "dependencies": [],
+      "files": ["lib/modules/socialDeep.ts"],
+      "verification": [
+        "Implement real profile verification OR disable PAINKILLER absence finding until real check exists; test asserting no fabricated absence finding"
+      ],
+      "wave": 6,
+      "notes": "MISSING module — fabricated customer-facing deficiency."
+    },
+    {
+      "id": "P0-26",
+      "severity": "P0",
+      "title": "privacyCompliance emits unhedged absolute legal-violation conclusions ('violates GDPR', 'illegal') with no jurisdiction check or 'not legal advice' disclosure",
+      "status": "open",
+      "rootCauseGroup": "F",
+      "dependencies": [],
+      "files": ["lib/modules/privacyCompliance.ts"],
+      "verification": [
+        "Rewrite finding language to scoped hedged technical observations + 'not legal advice' disclosure; test asserting no unhedged 'violates'/'illegal' string"
+      ],
+      "wave": 8,
+      "notes": "Product constraint: no customer-facing legal certification."
+    },
+
+    {
+      "id": "P1-01",
+      "severity": "P1",
+      "title": "claraud-web (live customer FE) excluded from GitHub CI gates governing proposal-engine",
+      "status": "open",
+      "rootCauseGroup": "K",
+      "dependencies": [],
+      "files": ["claraud-web/cloudbuild.yaml", ".github/workflows/ci-cd-pipeline.yml"],
+      "verification": ["Add claraud-web to a CI job (lint/tsc/coverage)"],
+      "wave": 11,
+      "notes": "Frontend parity."
+    },
+    {
+      "id": "P1-02",
+      "severity": "P1",
+      "title": "Field/audit-trail encryption keys referenced in code but absent from .env.example and validateEnv",
+      "status": "open",
+      "rootCauseGroup": "N",
+      "dependencies": [],
+      "files": ["lib/config/validateEnv.ts", ".env.example"],
+      "verification": ["Add keys to validateEnv + .env.example; boot-time presence check"],
+      "wave": 13,
+      "notes": "Latent boot/first-use failure."
+    },
+    {
+      "id": "P1-03",
+      "severity": "P1",
+      "title": "Triple-divergent module source-of-truth (CANONICAL=5, MODULE_REGISTRY~25, AuditOrchestrator~12)",
+      "status": "open",
+      "rootCauseGroup": "C",
+      "dependencies": ["P1-23"],
+      "files": [
+        "packages/shared/src/audit.ts",
+        "lib/audit/runner.ts",
+        "lib/orchestrator/auditOrchestrator.ts"
+      ],
+      "verification": ["Reconcile to one canonical engine + documented module set; runtime trace"],
+      "wave": 2,
+      "notes": "Documentation/count reconciliation completes in Wave 16."
+    },
+    {
+      "id": "P1-04",
+      "severity": "P1",
+      "title": "Contradictory customer-facing product claims across two frontends (latency/price/module count)",
+      "status": "open",
+      "rootCauseGroup": "O",
+      "dependencies": [],
+      "files": ["app/(marketing)/page.tsx", "claraud-web/.../pricing/page.tsx", "README.md"],
+      "verification": [
+        "Measure latency/cost full-flow (Wave 15); reconcile copy against measured evidence"
+      ],
+      "wave": 16,
+      "notes": "No marketing claim update until measured runtime evidence supports it."
+    },
+    {
+      "id": "P1-05",
+      "severity": "P1",
+      "title": "Unscoped lib/db.ts Prisma client (never sets app.current_tenant_id) used by 8 prod paths",
+      "status": "open",
+      "rootCauseGroup": "B",
+      "dependencies": [],
+      "files": ["lib/db.ts", "lib/pipeline/*.ts", "app/api/cron/partner-matching/route.ts"],
+      "verification": [
+        "Route through scoped client or explicit bypass; confirm prod DB role; tenant-isolation test"
+      ],
+      "wave": 1,
+      "notes": "P0-escalation if prod role is superuser."
+    },
+    {
+      "id": "P1-06",
+      "severity": "P1",
+      "title": "RLS grants full access to current_user='postgres' when GUC empty; superuser bypasses RLS",
+      "status": "open",
+      "rootCauseGroup": "B",
+      "dependencies": [],
+      "files": ["prisma/migrations/20260429093000_enable_rls/migration.sql"],
+      "verification": ["Confirm prod DATABASE_URL role = app_user (non-superuser); document"],
+      "wave": 1,
+      "notes": "Operator input required."
+    },
+    {
+      "id": "P1-07",
+      "severity": "P1",
+      "title": "claraud-web Prisma sets SET LOCAL on tx but runs query on base client; $executeRawUnsafe interpolation, no UUID validation",
+      "status": "open",
+      "rootCauseGroup": "B",
+      "dependencies": [],
+      "files": ["claraud-web/src/lib/prisma.ts"],
+      "verification": ["Run query on tx; parameterize; UUID guard; tenant-isolation test"],
+      "wave": 1,
+      "notes": "P0 if same DB as root."
+    },
+    {
+      "id": "P1-08",
+      "severity": "P1",
+      "title": "Tenant deletion cascades financial + audit/legal records with no retention/soft-delete",
+      "status": "open",
+      "rootCauseGroup": "B",
+      "dependencies": [],
+      "files": ["prisma/schema.prisma"],
+      "verification": ["Add retention/archival or restrict cascade; product/legal decision"],
+      "wave": 10,
+      "notes": "Explicitly preserved by Wave 0 P0-20 fix; retention policy owned by billing/records wave."
+    },
+    {
+      "id": "P1-09",
+      "severity": "P1",
+      "title": "Claim Policy not DB-enforceable: Finding.evidence Json default '[]'; citations are JSON strings not FKs",
+      "status": "open",
+      "rootCauseGroup": "D",
+      "dependencies": [],
+      "files": ["prisma/schema.prisma"],
+      "verification": [
+        "Enforce evidence at aggregation boundary; test rejecting 0-evidence findings"
+      ],
+      "wave": 3,
+      "notes": "No customer-facing finding persists without real evidence."
+    },
+    {
+      "id": "P1-14",
+      "severity": "P1",
+      "title": "Session-role extraction never normalizes legacy role strings; ROLE_HIERARCHY['owner'] undefined locks out self-registered owners",
+      "status": "verified",
+      "rootCauseGroup": "A",
+      "dependencies": [],
+      "files": ["lib/auth/rbac.ts", "app/api/auth/register/route.ts"],
+      "verification": [
+        "Covered by wave0-rbac-api-key + wave0-invite-role tests; normalizeRole fails closed on unknown"
+      ],
+      "wave": 0,
+      "notes": "Folded into Wave 0 rbac fix: normalizeRole applied at getCurrentRole, withRole, withPermission. hasRole/hasPermission guard undefined hierarchy. NOTE: register route writing role:'owner' should be re-checked in Wave 1 (owner not in ROLE_HIERARCHY -> normalizeRole now returns undefined for it)."
+    },
+    {
+      "id": "P1-15",
+      "severity": "P1",
+      "title": "No visible rate limiting on NextAuth Credentials login (brute-force)",
+      "status": "open",
+      "rootCauseGroup": "K",
+      "dependencies": [],
+      "files": ["app/api/auth/[...nextauth]/route.ts"],
+      "verification": ["Add rate limiting to credentials callback; test"],
+      "wave": 1,
+      "notes": "Registration is throttled; login is not."
+    },
+    {
+      "id": "P1-16",
+      "severity": "P1",
+      "title": "API_KEY env fallback lets caller choose tenant via x-tenant-id header; plain === compare",
+      "status": "verified",
+      "rootCauseGroup": "A",
+      "dependencies": [],
+      "files": ["lib/middleware/auth.ts", "lib/auth/rbac.ts"],
+      "verification": [
+        "vitest run tests/security/wave0-env-api-key-tenant.test.ts (binds DEFAULT_TENANT_ID, ignores x-tenant-id, rejects when unset)"
+      ],
+      "wave": 0,
+      "notes": "Env key bound server-side to DEFAULT_TENANT_ID; x-tenant-id ignored; timingSafeEqual used. Retire-vs-keep decision (Pass 3 §15) deferred; containment applied now."
+    },
+    {
+      "id": "P1-17",
+      "severity": "P1",
+      "title": "GET/POST /api/predictions unauthenticated; raw tenantId query param into where; only 500s due to DB-layer assertion",
+      "status": "open",
+      "rootCauseGroup": "B",
+      "dependencies": [],
+      "files": ["app/api/predictions/route.ts", "lib/tenant/context.ts", "lib/prisma.ts"],
+      "verification": ["Add withAuth + explicit tenant scoping; test"],
+      "wave": 1,
+      "notes": "Defense-in-depth only today."
+    },
+    {
+      "id": "P1-18",
+      "severity": "P1",
+      "title": "claraud-web tenant-scoping uses $executeRawUnsafe manual escaping; query runs on wrong connection (P1-07)",
+      "status": "open",
+      "rootCauseGroup": "B",
+      "dependencies": ["P1-07"],
+      "files": ["claraud-web/src/lib/prisma.ts"],
+      "verification": ["Parameterize via Prisma.sql; fix connection; UUID validation"],
+      "wave": 1,
+      "notes": "Re-confirmed reachable on every authenticated claraud-web request."
+    },
+    {
+      "id": "P1-19",
+      "severity": "P1",
+      "title": "Two independent NextAuth authorities over same User/Session tables with divergent security posture (no revocation, weaker password on claraud-web)",
+      "status": "open",
+      "rootCauseGroup": "K",
+      "dependencies": [],
+      "files": ["lib/auth.ts", "claraud-web/src/auth.ts"],
+      "verification": [
+        "Unify auth authority OR enforce equivalent session-integrity + password policy on both; test"
+      ],
+      "wave": 11,
+      "notes": "SSO-vs-separate is a product decision."
+    },
+    {
+      "id": "P1-20",
+      "severity": "P1",
+      "title": "Fire-and-forget non-durable execution on /api/audit, /api/v1/audit, /api/public/audit + sniper worker (no AuditJob backing)",
+      "status": "open",
+      "rootCauseGroup": "C",
+      "dependencies": ["P1-24"],
+      "files": [
+        "app/api/audit/route.ts",
+        "app/api/v1/audit/route.ts",
+        "app/api/public/audit/route.ts",
+        "lib/outreach/sprint2/sniperWorker.ts"
+      ],
+      "verification": ["Route through enqueueAuditJob+worker; test crash/restart durability"],
+      "wave": 2,
+      "notes": "Migrate all async audit entry points to durable queue (approved decision)."
+    },
+    {
+      "id": "P1-21",
+      "severity": "P1",
+      "title": "Widget quick-audit bypasses registry; hardcoded 2-call mini-audit with fabricated score formula and static topIssue",
+      "status": "open",
+      "rootCauseGroup": "C",
+      "dependencies": ["P1-24", "P1-09"],
+      "files": ["app/api/widget/quick-audit/route.ts"],
+      "verification": [
+        "Route through canonical engine fast subset; contract-compliant findings/evidence; no fabricated score/topIssue; UI labels quick audit"
+      ],
+      "wave": 2,
+      "notes": "Documented fast subset allowed only via canonical engine per approved decision."
+    },
+    {
+      "id": "P1-22",
+      "severity": "P1",
+      "title": "Two independent scheduled-audit implementations both poll AuditSchedule (split-brain; retention path is a stub)",
+      "status": "open",
+      "rootCauseGroup": "C",
+      "dependencies": ["P0-23"],
+      "files": [
+        "app/api/cron/scheduled-audits/route.ts",
+        "lib/retention/scheduled-audit-runner.ts"
+      ],
+      "verification": [
+        "Single owner on canonical engine; retire/fix other; test no duplicate creation"
+      ],
+      "wave": 2,
+      "notes": "Scheduled audits must use canonical engine (approved decision)."
+    },
+    {
+      "id": "P1-23",
+      "severity": "P1",
+      "title": "AuditOrchestrator (sole scheduled-audits engine) missing reputation/social/website; self-logs [DEPRECATED]",
+      "status": "open",
+      "rootCauseGroup": "C",
+      "dependencies": ["P1-24"],
+      "files": ["lib/orchestrator/auditOrchestrator.ts", "app/api/cron/scheduled-audits/route.ts"],
+      "verification": ["Migrate cron to runAudit; retire AuditOrchestrator; test coverage parity"],
+      "wave": 2,
+      "notes": "Do not shrink to 5-module set; canonical engine must support full real module set."
+    },
+    {
+      "id": "P1-24",
+      "severity": "P1",
+      "title": "Durable AuditJob queue wired to only one entry point (/api/audit/batch)",
+      "status": "open",
+      "rootCauseGroup": "C",
+      "dependencies": [],
+      "files": ["lib/queue/auditJobQueue.ts", "lib/audit/batchProcessor.ts"],
+      "verification": ["Extend queue to all async entry points (see P1-20); test"],
+      "wave": 2,
+      "notes": "Foundational for P1-20/21/22/23 and P0-22/23."
+    },
+    {
+      "id": "P1-25",
+      "severity": "P1",
+      "title": "createEvidence() defaults pointer to 'unknown' — fabricated placeholder pointer passes shape checks",
+      "status": "open",
+      "rootCauseGroup": "D",
+      "dependencies": [],
+      "files": ["lib/modules/types.ts"],
+      "verification": ["Make pointer a required parameter (compile-time); test"],
+      "wave": 3,
+      "notes": "Shared evidence-construction defect."
+    },
+    {
+      "id": "P1-26",
+      "severity": "P1",
+      "title": "techStack constructs Findings with evidence:[] and hand-built evidence omitting pointer/collected_at",
+      "status": "open",
+      "rootCauseGroup": "D",
+      "dependencies": ["P1-25"],
+      "files": ["lib/modules/techStack.ts"],
+      "verification": [
+        "Route all finding evidence through createEvidence with real pointer; test no evidence:[]"
+      ],
+      "wave": 3,
+      "notes": "First-hand Claim Policy violation."
+    },
+    {
+      "id": "P1-27",
+      "severity": "P1",
+      "title": "crawlWebsite invoked twice per audit (website internal + websiteCrawler standalone)",
+      "status": "open",
+      "rootCauseGroup": "I",
+      "dependencies": [],
+      "files": ["lib/modules/website.ts", "lib/audit/runner.ts"],
+      "verification": ["Reuse crawler result via dependencyResults; test single crawl"],
+      "wave": 7,
+      "notes": "Duplicate collection."
+    },
+    {
+      "id": "P1-28",
+      "severity": "P1",
+      "title": "gbpAdapter never inspects runGBPModule status; launders failure as COMPLETE",
+      "status": "open",
+      "rootCauseGroup": "H",
+      "dependencies": [],
+      "files": ["lib/audit/runner.ts", "lib/modules/gbp.ts"],
+      "verification": ["Adapter checks data.status==='failed' -> FAILED; test"],
+      "wave": 5,
+      "notes": "Provider-state laundering."
+    },
+    {
+      "id": "P1-29",
+      "severity": "P1",
+      "title": "gbp/gbpDeep resolve business via maxResultCount:1 with no disambiguation/confidence gate",
+      "status": "open",
+      "rootCauseGroup": "H",
+      "dependencies": [],
+      "files": ["lib/modules/gbp.ts", "lib/modules/gbpDeep.ts"],
+      "verification": ["Multi-candidate scoring vs website/phone/address; flag ambiguity; test"],
+      "wave": 7,
+      "notes": "Wrong-business risk for common names/franchises."
+    },
+    {
+      "id": "P1-30",
+      "severity": "P1",
+      "title": "gbpDeep photo-analysis degrade returns fabricated {5,5,5} score; isClaimed hardcoded true",
+      "status": "open",
+      "rootCauseGroup": "F",
+      "dependencies": [],
+      "files": ["lib/modules/gbpDeep.ts"],
+      "verification": [
+        "Return null/unavailable on degrade (excluded from scoring); label/remove isClaimed; test"
+      ],
+      "wave": 6,
+      "notes": "Fabricated data presented as measured."
+    },
+    {
+      "id": "P1-31",
+      "severity": "P1",
+      "title": "gbpDeep: 3 evidence:[] findings, zero createEvidence usage",
+      "status": "open",
+      "rootCauseGroup": "D",
+      "dependencies": ["P1-25"],
+      "files": ["lib/modules/gbpDeep.ts"],
+      "verification": ["Route through createEvidence with real pointer; test"],
+      "wave": 3,
+      "notes": "Claim Policy violation."
+    },
+    {
+      "id": "P1-32",
+      "severity": "P1",
+      "title": "gbp/gbpDeep duplicate Places Details fetch (separate caches never cross-serve)",
+      "status": "open",
+      "rootCauseGroup": "I",
+      "dependencies": [],
+      "files": ["lib/modules/gbp.ts", "lib/modules/gbpDeep.ts"],
+      "verification": ["Pass details via dependencyResults or unify cache key; test single fetch"],
+      "wave": 7,
+      "notes": "Duplicate real-money API cost."
+    },
+    {
+      "id": "P1-33",
+      "severity": "P1",
+      "title": "schemaMarkup does real analysis but never populates findings array; aggregation silently discards output",
+      "status": "open",
+      "rootCauseGroup": "E",
+      "dependencies": [],
+      "files": ["lib/modules/schemaMarkup.ts", "lib/audit/runner.ts"],
+      "verification": [
+        "Add findings:Finding[] built from schemasMissing/recommendations; regression test non-empty findings"
+      ],
+      "wave": 5,
+      "notes": "Adapter/result-shape drift — output discarded."
+    },
+    {
+      "id": "P1-34",
+      "severity": "P1",
+      "title": "website + schemaAnalysis emit near-duplicate schema findings for same observations",
+      "status": "open",
+      "rootCauseGroup": "E",
+      "dependencies": [],
+      "files": ["lib/modules/website.ts", "lib/audit/runner.ts"],
+      "verification": [
+        "Consolidate schema-finding ownership into schemaAnalysis; test no duplicates"
+      ],
+      "wave": 5,
+      "notes": "Inflated issue count."
+    },
+    {
+      "id": "P1-35",
+      "severity": "P1",
+      "title": "seoDeep/schemaMarkup declare websiteCrawler dependency but re-fetch homepage independently",
+      "status": "open",
+      "rootCauseGroup": "I",
+      "dependencies": [],
+      "files": ["lib/audit/runner.ts"],
+      "verification": ["Forward dependencyResults.websiteCrawler HTML; test no re-fetch"],
+      "wave": 7,
+      "notes": "Compounds P1-27 duplicate crawl."
+    },
+    {
+      "id": "P1-36",
+      "severity": "P1",
+      "title": "accessibility asserts wcagLevel A/AA/AAA from axe-core score alone — unsupported certification claim",
+      "status": "open",
+      "rootCauseGroup": "F",
+      "dependencies": [],
+      "files": ["lib/modules/accessibility.ts"],
+      "verification": [
+        "Relabel as automated-scan estimate + 'manual review required' disclosure; test never emits bare cert"
+      ],
+      "wave": 8,
+      "notes": "No customer-facing certification without support."
+    },
+    {
+      "id": "P1-37",
+      "severity": "P1",
+      "title": "mobileUX hardcodes CLS=0 (placeholder) and mislabels TBT from unrelated timing pair",
+      "status": "open",
+      "rootCauseGroup": "F",
+      "dependencies": [],
+      "files": ["lib/modules/mobileUX.ts"],
+      "verification": [
+        "Return null/omit or implement real CLS via PerformanceObserver; test no fabricated zeros"
+      ],
+      "wave": 6,
+      "notes": "Fabricated/mislabeled measurement."
+    },
+    {
+      "id": "P1-38",
+      "severity": "P1",
+      "title": "mobileUX makes separate PageSpeed call instead of reusing website's Lighthouse/PSI data",
+      "status": "open",
+      "rootCauseGroup": "I",
+      "dependencies": [],
+      "files": ["lib/modules/mobileUX.ts", "lib/audit/runner.ts"],
+      "verification": ["Forward website Lighthouse via dependencyResults; test single PSI call"],
+      "wave": 7,
+      "notes": "Duplicate billable API cost."
+    },
+    {
+      "id": "P1-39",
+      "severity": "P1",
+      "title": "competitorStrategy/videoPresence read dependencyResults.competitor.results (nonexistent field; actual is topCompetitors) — never execute real logic",
+      "status": "open",
+      "rootCauseGroup": "E",
+      "dependencies": [],
+      "files": ["lib/audit/runner.ts", "lib/modules/competitor.ts"],
+      "verification": [
+        "Read compData.topCompetitors; regression test asserting non-SKIPPED/non-empty on real competitors"
+      ],
+      "wave": 5,
+      "notes": "Highest value/effort regression test in audit; single-line field mismatch."
+    },
+    {
+      "id": "P1-40",
+      "severity": "P1",
+      "title": "paidSearch asserts businessIsAdvertising:false identically for missing-creds/failure/genuine-absence",
+      "status": "open",
+      "rootCauseGroup": "H",
+      "dependencies": [],
+      "files": ["lib/modules/paidSearch.ts"],
+      "verification": [
+        "Distinguish not-configured/failed from checked-found-nothing; disclose single-snapshot; test"
+      ],
+      "wave": 8,
+      "notes": "Provider-failure/absence conflation + claim scope."
+    },
+    {
+      "id": "P1-41",
+      "severity": "P1",
+      "title": "backlinks derives metrics from Google site:/link: search counts, presented as backlink profile without disclosure",
+      "status": "open",
+      "rootCauseGroup": "F",
+      "dependencies": [],
+      "files": ["lib/modules/backlinks.ts"],
+      "verification": [
+        "Integrate real backlink provider OR relabel as 'search-index footprint estimate'; test"
+      ],
+      "wave": 6,
+      "notes": "Misleading methodology."
+    },
+    {
+      "id": "P1-42",
+      "severity": "P1",
+      "title": "videoPresence hardcodes channel metrics to Unknown/empty; 'stale channel' finding fires for every discovered channel",
+      "status": "open",
+      "rootCauseGroup": "F",
+      "dependencies": [],
+      "files": ["lib/modules/videoPresence.ts"],
+      "verification": [
+        "Implement channel-page follow-up fetch OR suppress activity finding until real data; test"
+      ],
+      "wave": 6,
+      "notes": "MISSING metrics implementation."
+    },
+    {
+      "id": "P1-43",
+      "severity": "P1",
+      "title": "vision registry entry can never execute — requires screenshot snapshot from websiteCrawler, which captures none",
+      "status": "open",
+      "rootCauseGroup": "E",
+      "dependencies": [],
+      "files": [
+        "lib/audit/runner.ts",
+        "lib/modules/websiteCrawler.ts",
+        "lib/orchestrator/auditOrchestrator.ts"
+      ],
+      "verification": [
+        "Add screenshot-capture step to primary engine so vision prerequisite is met; test vision executes"
+      ],
+      "wave": 5,
+      "notes": "Flagship visual analysis dead in primary engine."
+    },
+    {
+      "id": "P1-44",
+      "severity": "P1",
+      "title": "Screenshots uploaded via file.makePublic() at predictable path, no signed URL/expiry/retention",
+      "status": "open",
+      "rootCauseGroup": "N",
+      "dependencies": [],
+      "files": ["lib/evidence/screenshotCapture.ts"],
+      "verification": [
+        "Time-limited signed URLs scoped to tenant/viewer; retention/deletion tied to lifecycle; test"
+      ],
+      "wave": 13,
+      "notes": "Public unauthenticated artifact exposure; also Wave 11 tenant-lifecycle deletion."
+    },
+    {
+      "id": "P1-45",
+      "severity": "P1",
+      "title": "vision sends all screenshots to Gemini with no internal cap; parses model JSON with no schema validation",
+      "status": "open",
+      "rootCauseGroup": "J",
+      "dependencies": [],
+      "files": ["lib/modules/vision.ts"],
+      "verification": [
+        "Internal image-count cap + Zod schema validation rejecting malformed output; test"
+      ],
+      "wave": 12,
+      "notes": "Unbounded multimodal cost / unvalidated output."
+    },
+    {
+      "id": "P1-46",
+      "severity": "P1",
+      "title": "Browser modules configure no Puppeteer request interception; navigation redirects + subresources not SSRF-revalidated",
+      "status": "open",
+      "rootCauseGroup": "G",
+      "dependencies": [],
+      "files": [
+        "lib/modules/mobileUX.ts",
+        "lib/modules/accessibility.ts",
+        "lib/modules/conversion.ts",
+        "lib/modules/privacyCompliance.ts",
+        "lib/evidence/screenshotCapture.ts"
+      ],
+      "verification": [
+        "setRequestInterception with per-request validateUrl mirroring safeFetch; test blocks metadata/private hops"
+      ],
+      "wave": 4,
+      "notes": "Browser-navigation SSRF gap (Pass 4C.2/4C.3)."
+    },
+    {
+      "id": "P1-47",
+      "severity": "P1",
+      "title": "Circuit breaker never invoked with tenantId — one tenant's failures open shared circuit for all tenants",
+      "status": "open",
+      "rootCauseGroup": "G",
+      "dependencies": [],
+      "files": ["lib/resilience/circuitBreaker.ts", "lib/modules/*.ts"],
+      "verification": [
+        "Pass tenantId into every withProviderResilience call OR document global decision; test tenant-scoped state"
+      ],
+      "wave": 4,
+      "notes": "Cross-tenant availability coupling."
+    },
+    {
+      "id": "P1-48",
+      "severity": "P1",
+      "title": "Global audit timeout is logical-only; AbortSignal never forwarded into ModuleInput/in-flight calls; dead MODULE_TIMEOUT_MS",
+      "status": "open",
+      "rootCauseGroup": "G",
+      "dependencies": [],
+      "files": ["lib/audit/runner.ts"],
+      "verification": [
+        "Thread canonical AbortSignal through ModuleInput into fetch/page.goto/withProviderResilience; reduce per-module timeouts; test cancellation"
+      ],
+      "wave": 4,
+      "notes": "Cost continues after audit marked terminal."
+    },
+
+    {
+      "id": "P2-01",
+      "severity": "P2",
+      "title": "Tracked stale route.ts.bak",
+      "status": "open",
+      "rootCauseGroup": "P",
+      "dependencies": [],
+      "files": [],
+      "verification": ["git rm"],
+      "wave": 17,
+      "notes": "Hygiene."
+    },
+    {
+      "id": "P2-02",
+      "severity": "P2",
+      "title": "Tracked claraud-web/dev.log",
+      "status": "open",
+      "rootCauseGroup": "P",
+      "dependencies": [],
+      "files": ["claraud-web/dev.log"],
+      "verification": ["git rm --cached; ignore *.log"],
+      "wave": 17,
+      "notes": "Hygiene."
+    },
+    {
+      "id": "P2-03",
+      "severity": "P2",
+      "title": "scratch/* tracked despite partial .gitignore",
+      "status": "open",
+      "rootCauseGroup": "P",
+      "dependencies": [],
+      "files": ["scratch/"],
+      "verification": ["git rm --cached"],
+      "wave": 17,
+      "notes": "Partly addressed by HEAD commit 3cd069f gitignore work; re-verify."
+    },
+    {
+      "id": "P2-04",
+      "severity": "P2",
+      "title": "tsc excludes tests/scripts/claraud-web; no secondary project checks them",
+      "status": "open",
+      "rootCauseGroup": "N",
+      "dependencies": [],
+      "files": ["tsconfig.json"],
+      "verification": ["Add test/script tsconfig or CI typecheck"],
+      "wave": 13,
+      "notes": ""
+    },
+    {
+      "id": "P2-05",
+      "severity": "P2",
+      "title": "Env DB port drift (5444 vs 5435)",
+      "status": "open",
+      "rootCauseGroup": "P",
+      "dependencies": [],
+      "files": [".env.local", ".env"],
+      "verification": ["Unify DB ports across env files"],
+      "wave": 17,
+      "notes": ""
+    },
+    {
+      "id": "P2-06",
+      "severity": "P2",
+      "title": "74 undocumented prod env keys",
+      "status": "open",
+      "rootCauseGroup": "N",
+      "dependencies": [],
+      "files": [".env.example"],
+      "verification": ["Extend .env.example"],
+      "wave": 16,
+      "notes": ""
+    },
+    {
+      "id": "P2-07",
+      "severity": "P2",
+      "title": "RBAC role read via (session.user as any).role",
+      "status": "open",
+      "rootCauseGroup": "A",
+      "dependencies": ["P0-19"],
+      "files": ["lib/auth/rbac.ts"],
+      "verification": ["Type session.user.role"],
+      "wave": 1,
+      "notes": "Partially improved by Wave 0 (normalizeRole with typed cast); residual any-cast remains — finish typing in Wave 1."
+    },
+    {
+      "id": "P2-08",
+      "severity": "P2",
+      "title": "runAuditOrchestrator wrapper has 0 prod importers",
+      "status": "open",
+      "rootCauseGroup": "C",
+      "dependencies": ["P1-23"],
+      "files": ["lib/orchestrator/index.ts"],
+      "verification": ["Remove or wire during AuditOrchestrator retirement"],
+      "wave": 2,
+      "notes": ""
+    },
+    {
+      "id": "P2-09",
+      "severity": "P2",
+      "title": ".dockerignore omits claraud-web/coverage/scratch",
+      "status": "open",
+      "rootCauseGroup": "N",
+      "dependencies": [],
+      "files": [".dockerignore"],
+      "verification": ["Extend ignore"],
+      "wave": 13,
+      "notes": ""
+    },
+    {
+      "id": "P2-10",
+      "severity": "P2",
+      "title": "Two frontends on divergent majors (React 19 vs 18, zod 4 vs 3)",
+      "status": "open",
+      "rootCauseGroup": "K",
+      "dependencies": [],
+      "files": ["claraud-web/package.json"],
+      "verification": ["Track as intentional or converge"],
+      "wave": 11,
+      "notes": ""
+    },
+    {
+      "id": "P2-11",
+      "severity": "P2",
+      "title": "claraud-web shares root schema but owns no migrations",
+      "status": "open",
+      "rootCauseGroup": "K",
+      "dependencies": [],
+      "files": ["claraud-web/Dockerfile"],
+      "verification": ["Document ownership; pin schema version"],
+      "wave": 11,
+      "notes": ""
+    },
+    {
+      "id": "P2-12",
+      "severity": "P2",
+      "title": "AuditJob has no lease/heartbeat; stale reclamation cron-time-based",
+      "status": "open",
+      "rootCauseGroup": "C",
+      "dependencies": ["P1-24"],
+      "files": ["prisma/schema.prisma"],
+      "verification": ["Add leaseExpiresAt/heartbeat or visibility timeout"],
+      "wave": 2,
+      "notes": ""
+    },
+    {
+      "id": "P2-13",
+      "severity": "P2",
+      "title": "Non-FK string references (audit_jobs.auditId, Finding citations)",
+      "status": "open",
+      "rootCauseGroup": "D",
+      "dependencies": [],
+      "files": ["prisma/schema.prisma"],
+      "verification": ["Consider FK or integrity checks"],
+      "wave": 3,
+      "notes": ""
+    },
+    {
+      "id": "P2-14",
+      "severity": "P2",
+      "title": "Metric stores tenantId inside labels Json; no tenantId column/RLS",
+      "status": "open",
+      "rootCauseGroup": "B",
+      "dependencies": [],
+      "files": ["prisma/schema.prisma"],
+      "verification": ["Add tenantId column+RLS if tenant-scoped"],
+      "wave": 13,
+      "notes": ""
+    },
+    {
+      "id": "P2-15",
+      "severity": "P2",
+      "title": "i18n raw pg pool = separate persistence model outside Prisma/RLS",
+      "status": "open",
+      "rootCauseGroup": "B",
+      "dependencies": [],
+      "files": ["lib/i18n/db/connection.ts"],
+      "verification": ["Keep test-scoped or bring under Prisma/RLS"],
+      "wave": 11,
+      "notes": ""
+    },
+    {
+      "id": "P2-16",
+      "severity": "P2",
+      "title": "Stale local proposalos_dev DB (0 RLS) — dev artifact",
+      "status": "open",
+      "rootCauseGroup": "P",
+      "dependencies": [],
+      "files": [],
+      "verification": ["Recreate local DB from migrations"],
+      "wave": 17,
+      "notes": "Not prod evidence."
+    },
+    {
+      "id": "P2-17",
+      "severity": "P2",
+      "title": "Finding lacks @@index([auditId, module]) compound",
+      "status": "open",
+      "rootCauseGroup": "P",
+      "dependencies": [],
+      "files": ["prisma/schema.prisma"],
+      "verification": ["Add compound index if hot"],
+      "wave": 17,
+      "notes": ""
+    },
+    {
+      "id": "P2-18",
+      "severity": "P2",
+      "title": "Self-evolving raw executor default requireTenant=false",
+      "status": "open",
+      "rootCauseGroup": "B",
+      "dependencies": [],
+      "files": ["lib/self-evolving-prompts/db.ts"],
+      "verification": ["Default requireTenant=true for tenant tables"],
+      "wave": 1,
+      "notes": ""
+    },
+    {
+      "id": "P2-19",
+      "severity": "P2",
+      "title": "GET /api/admin/model-metrics unauthenticated (returns mock data today)",
+      "status": "open",
+      "rootCauseGroup": "K",
+      "dependencies": [],
+      "files": ["app/api/admin/model-metrics/route.ts"],
+      "verification": ["Gate with withRole('super_admin') before wiring real data"],
+      "wave": 13,
+      "notes": ""
+    },
+    {
+      "id": "P2-20",
+      "severity": "P2",
+      "title": "Proposal webLinkToken has no expiry/rotation",
+      "status": "open",
+      "rootCauseGroup": "K",
+      "dependencies": [],
+      "files": ["prisma/schema.prisma"],
+      "verification": ["Add optional expiry; support rotation"],
+      "wave": 11,
+      "notes": ""
+    },
+    {
+      "id": "P2-21",
+      "severity": "P2",
+      "title": "claraud-web has two Stripe webhook route files; double-processing risk unverified",
+      "status": "open",
+      "rootCauseGroup": "L",
+      "dependencies": [],
+      "files": [
+        "claraud-web/src/app/api/stripe/webhook/route.ts",
+        "claraud-web/src/app/api/webhook/stripe/route.ts"
+      ],
+      "verification": ["Confirm only one registered; remove/alias other"],
+      "wave": 10,
+      "notes": ""
+    },
+    {
+      "id": "P2-22",
+      "severity": "P2",
+      "title": "Rate-limit IP extraction trusts x-forwarded-for with no proxy-trust verification",
+      "status": "open",
+      "rootCauseGroup": "B",
+      "dependencies": [],
+      "files": ["lib/middleware/rateLimit.ts"],
+      "verification": ["Confirm ingress strips client values; trusted-proxy allowlist"],
+      "wave": 1,
+      "notes": ""
+    },
+    {
+      "id": "P2-23",
+      "severity": "P2",
+      "title": "Registration distinguishes 'User already exists' (enumeration); audit-trail writes fire-and-forget",
+      "status": "open",
+      "rootCauseGroup": "K",
+      "dependencies": [],
+      "files": ["app/api/auth/register/route.ts", "lib/auth.ts"],
+      "verification": ["Generic response; alert/retry on audit-trail write failure"],
+      "wave": 1,
+      "notes": ""
+    },
+    {
+      "id": "P2-24",
+      "severity": "P2",
+      "title": "AuditOrchestrator deprecation log claims '15 modules' vs actual 14",
+      "status": "open",
+      "rootCauseGroup": "C",
+      "dependencies": ["P1-23"],
+      "files": ["lib/orchestrator/auditOrchestrator.ts"],
+      "verification": ["Correct log string (or moot on retirement)"],
+      "wave": 2,
+      "notes": ""
+    },
+    {
+      "id": "P2-25",
+      "severity": "P2",
+      "title": "Four ENABLE_*_AUDIT_MODULE feature flags mutable via admin API but read nowhere",
+      "status": "open",
+      "rootCauseGroup": "C",
+      "dependencies": [],
+      "files": ["lib/config/feature-flags.ts"],
+      "verification": ["Wire flags into MODULE_REGISTRY eligibility or remove"],
+      "wave": 2,
+      "notes": ""
+    },
+    {
+      "id": "P2-26",
+      "severity": "P2",
+      "title": "[SUPERSEDED] websiteCrawlerModule.ts claimed orphan — retracted in-report (imported by runner.ts:52)",
+      "status": "superseded",
+      "rootCauseGroup": "C",
+      "dependencies": [],
+      "files": ["lib/modules/websiteCrawlerModule.ts"],
+      "verification": [
+        "N/A — retracted by AUDIT_REPORT.md self-correction (line 1450); real issue is duplicate invocation P1-27"
+      ],
+      "wave": null,
+      "notes": "Do not treat as an active defect. The file is used by the primary engine; the genuine concern is the double-crawl (P1-27)."
+    },
+    {
+      "id": "P2-27",
+      "severity": "P2",
+      "title": "4/5 Batch 1 modules perform network calls invisible to CostTracker",
+      "status": "open",
+      "rootCauseGroup": "I",
+      "dependencies": [],
+      "files": ["lib/audit/runner.ts", "lib/modules/techStack.ts"],
+      "verification": ["Wire tracker.addApiCall at every fetch site"],
+      "wave": 7,
+      "notes": ""
+    },
+    {
+      "id": "P2-28",
+      "severity": "P2",
+      "title": "emailFinder adapter's status==='error' branch is unreachable dead code",
+      "status": "open",
+      "rootCauseGroup": "E",
+      "dependencies": [],
+      "files": ["lib/audit/runner.ts", "lib/modules/emailFinder.ts"],
+      "verification": ["Add status field to findEmails or remove dead check"],
+      "wave": 5,
+      "notes": ""
+    },
+    {
+      "id": "P2-29",
+      "severity": "P2",
+      "title": "Zero real tests for Batch 1 modules (all vi.mock'd away)",
+      "status": "open",
+      "rootCauseGroup": "M",
+      "dependencies": [],
+      "files": ["tests/"],
+      "verification": ["Fixture-based unit tests per module (success/failure/timeout/malformed)"],
+      "wave": 14,
+      "notes": ""
+    },
+    {
+      "id": "P2-30",
+      "severity": "P2",
+      "title": "socialDeep over-reports SERP tracker call for work that never happens",
+      "status": "open",
+      "rootCauseGroup": "F",
+      "dependencies": ["P0-25"],
+      "files": ["lib/modules/socialDeep.ts"],
+      "verification": ["Remove tracker call until SerpAPI integration is real"],
+      "wave": 6,
+      "notes": ""
+    },
+    {
+      "id": "P2-31",
+      "severity": "P2",
+      "title": "social (6 platforms) vs socialDeep (5, omits Twitter/X) platform mismatch",
+      "status": "open",
+      "rootCauseGroup": "H",
+      "dependencies": [],
+      "files": ["lib/modules/social.ts", "lib/modules/socialDeep.ts"],
+      "verification": ["Align platform lists"],
+      "wave": 7,
+      "notes": ""
+    },
+    {
+      "id": "P2-32",
+      "severity": "P2",
+      "title": "social takes first regex match with no share/embed/widget URL exclusion",
+      "status": "open",
+      "rootCauseGroup": "H",
+      "dependencies": [],
+      "files": ["lib/modules/social.ts"],
+      "verification": ["Denylist share/widget/embed URL patterns"],
+      "wave": 7,
+      "notes": ""
+    },
+    {
+      "id": "P2-33",
+      "severity": "P2",
+      "title": "Zero meaningful tests for reputation/gbp/gbpDeep/social/socialDeep",
+      "status": "open",
+      "rootCauseGroup": "M",
+      "dependencies": [],
+      "files": ["tests/"],
+      "verification": [
+        "Fixture-based unit tests (identity ambiguity, provider-failure-vs-absence, evidence contract)"
+      ],
+      "wave": 14,
+      "notes": ""
+    },
+    {
+      "id": "P2-34",
+      "severity": "P2",
+      "title": "reputation has leftover authoring/debugging comment in shipped source",
+      "status": "open",
+      "rootCauseGroup": "P",
+      "dependencies": [],
+      "files": ["lib/modules/reputation.ts"],
+      "verification": ["Clean up stray comment"],
+      "wave": 7,
+      "notes": ""
+    },
+    {
+      "id": "P2-35",
+      "severity": "P2",
+      "title": "seoDeep robots/sitemap/ranking fallbacks indistinguishable from verified absence",
+      "status": "open",
+      "rootCauseGroup": "H",
+      "dependencies": [],
+      "files": ["lib/modules/seoDeep.ts"],
+      "verification": ["Return UNAVAILABLE/null-with-reason marker"],
+      "wave": 7,
+      "notes": ""
+    },
+    {
+      "id": "P2-36",
+      "severity": "P2",
+      "title": "Systemic evidence:[]/missing-evidence across 15/15 modules (Batches 1-3)",
+      "status": "open",
+      "rootCauseGroup": "D",
+      "dependencies": ["P1-25"],
+      "files": ["lib/modules/*.ts", "lib/audit/runner.ts"],
+      "verification": [
+        "Enforce evidence presence at shared aggregation boundary (runtime assertion + lint)"
+      ],
+      "wave": 3,
+      "notes": "Platform-wide, not per-module."
+    },
+    {
+      "id": "P2-37",
+      "severity": "P2",
+      "title": "contentQuality interpolates page content into LLM prompt with no untrusted-content framing",
+      "status": "open",
+      "rootCauseGroup": "J",
+      "dependencies": [],
+      "files": ["lib/modules/contentQuality.ts"],
+      "verification": ["Add untrusted-evidence preamble + structural delimiters"],
+      "wave": 12,
+      "notes": ""
+    },
+    {
+      "id": "P2-38",
+      "severity": "P2",
+      "title": "contentQuality asserts Flesch-Kincaid with no language detection",
+      "status": "open",
+      "rootCauseGroup": "H",
+      "dependencies": [],
+      "files": ["lib/modules/contentQuality.ts"],
+      "verification": ["Detect language before applying readability finding"],
+      "wave": 7,
+      "notes": ""
+    },
+    {
+      "id": "P2-39",
+      "severity": "P2",
+      "title": "Zero meaningful tests for Batch 3 modules",
+      "status": "open",
+      "rootCauseGroup": "M",
+      "dependencies": [],
+      "files": ["tests/"],
+      "verification": [
+        "Fixture-based tests, prioritize schemaMarkup findings-array regression (P1-33)"
+      ],
+      "wave": 14,
+      "notes": ""
+    },
+    {
+      "id": "P2-40",
+      "severity": "P2",
+      "title": "coreWebVitals/mobileUX/conversion missing/absent evidence (18/19 modules)",
+      "status": "open",
+      "rootCauseGroup": "D",
+      "dependencies": ["P1-25"],
+      "files": ["lib/audit/runner.ts", "lib/modules/mobileUX.ts", "lib/modules/conversion.ts"],
+      "verification": ["Same shared aggregation enforcement as P2-36"],
+      "wave": 3,
+      "notes": ""
+    },
+    {
+      "id": "P2-41",
+      "severity": "P2",
+      "title": "mobileUX missing PAGESPEED key -> {mobileScore:0} indistinguishable from real 0",
+      "status": "open",
+      "rootCauseGroup": "H",
+      "dependencies": [],
+      "files": ["lib/modules/mobileUX.ts"],
+      "verification": ["Return null/'not measured' marker on missing credential"],
+      "wave": 7,
+      "notes": ""
+    },
+    {
+      "id": "P2-42",
+      "severity": "P2",
+      "title": "conversion CTA-detection doesn't check element visibility/dimensions",
+      "status": "open",
+      "rootCauseGroup": "H",
+      "dependencies": [],
+      "files": ["lib/modules/conversion.ts"],
+      "verification": ["Add visibility gate before counting CTA"],
+      "wave": 7,
+      "notes": ""
+    },
+    {
+      "id": "P2-43",
+      "severity": "P2",
+      "title": "Three separate Puppeteer launches per audit (mobileUX/accessibility/conversion)",
+      "status": "open",
+      "rootCauseGroup": "I",
+      "dependencies": [],
+      "files": [
+        "lib/modules/mobileUX.ts",
+        "lib/modules/accessibility.ts",
+        "lib/modules/conversion.ts"
+      ],
+      "verification": ["Share one browser/page or consolidate launcher; test"],
+      "wave": 7,
+      "notes": ""
+    },
+    {
+      "id": "P2-44",
+      "severity": "P2",
+      "title": "coreWebVitals extracts INP but never surfaces it as a finding",
+      "status": "open",
+      "rootCauseGroup": "E",
+      "dependencies": [],
+      "files": ["lib/audit/runner.ts"],
+      "verification": ["Add INP finding block mirroring LCP/CLS/TBT"],
+      "wave": 7,
+      "notes": ""
+    },
+    {
+      "id": "P2-45",
+      "severity": "P2",
+      "title": "Zero meaningful tests for Batch 4 modules",
+      "status": "open",
+      "rootCauseGroup": "M",
+      "dependencies": [],
+      "files": ["tests/"],
+      "verification": [
+        "Fixture-based tests; assert wcagLevel never bare, CLS/TBT never fabricated"
+      ],
+      "wave": 14,
+      "notes": ""
+    },
+    {
+      "id": "P2-46",
+      "severity": "P2",
+      "title": "competitor/backlinks/videoPresence missing SERP_API_KEY -> zero-value shape == genuine zero",
+      "status": "open",
+      "rootCauseGroup": "H",
+      "dependencies": [],
+      "files": [
+        "lib/modules/competitor.ts",
+        "lib/modules/backlinks.ts",
+        "lib/modules/videoPresence.ts"
+      ],
+      "verification": ["Add distinct 'not checked' state"],
+      "wave": 7,
+      "notes": ""
+    },
+    {
+      "id": "P2-47",
+      "severity": "P2",
+      "title": "competitorStrategy adapter uses naive exact-string self-exclusion (latent after P1-39 fix)",
+      "status": "open",
+      "rootCauseGroup": "E",
+      "dependencies": ["P1-39"],
+      "files": ["lib/audit/runner.ts"],
+      "verification": ["Reuse competitor.ts excluded list; test"],
+      "wave": 5,
+      "notes": ""
+    },
+    {
+      "id": "P2-48",
+      "severity": "P2",
+      "title": "Zero meaningful tests for Batch 5 modules",
+      "status": "open",
+      "rootCauseGroup": "M",
+      "dependencies": [],
+      "files": ["tests/"],
+      "verification": ["Regression test for P1-39 first, then per-module fixtures"],
+      "wave": 14,
+      "notes": ""
+    },
+    {
+      "id": "P2-49",
+      "severity": "P2",
+      "title": "vision prompt lacks untrusted-content framing for on-image text",
+      "status": "open",
+      "rootCauseGroup": "J",
+      "dependencies": [],
+      "files": ["lib/modules/vision.ts"],
+      "verification": ["Add untrusted visual/text framing to system prompt"],
+      "wave": 12,
+      "notes": ""
+    },
+    {
+      "id": "P2-50",
+      "severity": "P2",
+      "title": "privacyCompliance tracker detection uses narrow hardcoded pattern list",
+      "status": "open",
+      "rootCauseGroup": "H",
+      "dependencies": [],
+      "files": ["lib/modules/privacyCompliance.ts"],
+      "verification": ["Expand tracker-name patterns or integrate signature DB"],
+      "wave": 7,
+      "notes": ""
+    },
+    {
+      "id": "P2-51",
+      "severity": "P2",
+      "title": "Zero meaningful tests for Batch 6 capabilities",
+      "status": "open",
+      "rootCauseGroup": "M",
+      "dependencies": [],
+      "files": ["tests/"],
+      "verification": [
+        "Fixture tests; assert no unhedged legal string, screenshots never public without signed URL"
+      ],
+      "wave": 14,
+      "notes": ""
+    },
+    {
+      "id": "P2-52",
+      "severity": "P2",
+      "title": "security.ts fetchWithRedirect (P0-24) confirmed reachable in BOTH engines — widened blast radius",
+      "status": "verified",
+      "rootCauseGroup": "G",
+      "dependencies": ["P0-24"],
+      "files": ["lib/modules/security.ts", "lib/orchestrator/auditOrchestrator.ts"],
+      "verification": [
+        "Closed by P0-24 fix (single shared fetchWithRedirect); no separate remediation"
+      ],
+      "wave": 0,
+      "notes": "Resolved together with P0-24 — the fix is in the shared module used by both engines."
+    },
+    {
+      "id": "P2-53",
+      "severity": "P2",
+      "title": "executePhase retry loop retries any error (no classification, no delay)",
+      "status": "open",
+      "rootCauseGroup": "G",
+      "dependencies": [],
+      "files": ["lib/audit/runner.ts"],
+      "verification": ["Apply retryable-error classification or remove redundant outer retry"],
+      "wave": 4,
+      "notes": ""
+    },
+    {
+      "id": "P2-54",
+      "severity": "P2",
+      "title": "Circuit breaker logs 'failing closed' while behavior is fail-open",
+      "status": "open",
+      "rootCauseGroup": "G",
+      "dependencies": [],
+      "files": ["lib/resilience/circuitBreaker.ts"],
+      "verification": ["Correct log message or reconsider fail-closed"],
+      "wave": 4,
+      "notes": ""
+    },
+    {
+      "id": "P2-55",
+      "severity": "P2",
+      "title": "No test coverage for SSRF layer/timeout/retry/circuit-breaker/failure-normalization",
+      "status": "open",
+      "rootCauseGroup": "M",
+      "dependencies": [],
+      "files": ["lib/security/", "lib/resilience/"],
+      "verification": [
+        "Unit tests for safeFetch redirect-revalidation, urlValidator IP/DNS, withProviderResilience abort/backoff, circuit-breaker state machine"
+      ],
+      "wave": 14,
+      "notes": "Note: Wave 0 added tests/security/wave0-security-ssrf.test.ts covering security-module SSRF; broader shared-layer coverage still owed."
+    }
+  ]
+}
