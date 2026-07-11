@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 
+import { excludeFinding, updateFindingFields } from '@/lib/audit/findingPersistence';
+import { logger } from '@/lib/logger';
 import { withAuth } from '@/lib/middleware/auth';
 import { prisma } from '@/lib/prisma';
 import { getTenantId } from '@/lib/tenant/context';
@@ -56,50 +58,38 @@ export const PATCH = withAuth(async (request: Request, { params }: Params) => {
 
     const body = await request.json();
 
-    const allowedFields = [
-      'title',
-      'description',
-      'impactScore',
-      'confidenceScore',
-      'excluded',
-      'effortEstimate',
-    ];
-
-    const updateData: Record<string, unknown> = {};
-    for (const field of allowedFields) {
-      if (body[field] !== undefined) {
-        updateData[field] = body[field];
-      }
+    const updateData: import('@/lib/audit/findingPersistence').FindingEditableFields = {};
+    if (typeof body.title === 'string') updateData.title = body.title;
+    if (typeof body.description === 'string') updateData.description = body.description;
+    if (typeof body.impactScore === 'number') updateData.impactScore = body.impactScore;
+    if (typeof body.confidenceScore === 'number') updateData.confidenceScore = body.confidenceScore;
+    if (typeof body.excluded === 'boolean') updateData.excluded = body.excluded;
+    if (['LOW', 'MEDIUM', 'HIGH'].includes(body.effortEstimate)) {
+      updateData.effortEstimate = body.effortEstimate;
     }
 
-    // Validate scores
+    // Validate scores (Wave 3: bounds match the canonical Finding contract, 0-10)
     if (updateData.impactScore !== undefined) {
-      const score = updateData.impactScore as number;
-      if (score < 1 || score > 10) {
+      if (updateData.impactScore < 0 || updateData.impactScore > 10) {
         return NextResponse.json(
-          { error: 'impactScore must be between 1 and 10' },
+          { error: 'impactScore must be between 0 and 10' },
           { status: 400 }
         );
       }
     }
 
     if (updateData.confidenceScore !== undefined) {
-      const score = updateData.confidenceScore as number;
-      if (score < 1 || score > 10) {
+      if (updateData.confidenceScore < 0 || updateData.confidenceScore > 10) {
         return NextResponse.json(
-          { error: 'confidenceScore must be between 1 and 10' },
+          { error: 'confidenceScore must be between 0 and 10' },
           { status: 400 }
         );
       }
     }
 
-    // Mark as manually edited
-    updateData.manuallyEdited = true;
-
-    const finding = await prisma.finding.update({
-      where: { id },
-      data: updateData,
-    });
+    // Wave 3 (Step 6): routed through the one bounded-update helper in
+    // lib/audit/findingPersistence.ts — never touches evidence/module/auditId/tenantId.
+    const finding = await updateFindingFields(id, updateData);
 
     return NextResponse.json(finding);
   } catch (error) {
@@ -125,10 +115,7 @@ export const DELETE = withAuth(async (request: Request, { params }: Params) => {
 
     if (!existingFinding) return NextResponse.json({ error: 'Finding not found' }, { status: 404 });
 
-    const finding = await prisma.finding.update({
-      where: { id },
-      data: { excluded: true, manuallyEdited: true },
-    });
+    const finding = await excludeFinding(id);
 
     return NextResponse.json({
       id: finding.id,

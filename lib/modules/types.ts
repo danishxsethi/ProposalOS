@@ -68,19 +68,103 @@ export interface Evidence {
 }
 
 /**
+ * P1-25 (Wave 3): fabricated placeholder pointer values that pass shape checks but
+ * carry zero real provenance. Reject these — never fall back to them.
+ */
+export const PLACEHOLDER_POINTER_VALUES: ReadonlySet<string> = new Set([
+  '',
+  'unknown',
+  'n/a',
+  'na',
+  'none',
+  'placeholder',
+  'tbd',
+  'todo',
+  'null',
+  'undefined',
+  '-',
+  '--',
+]);
+
+/**
+ * Known non-production loopback host that can never be a real customer-facing source
+ * (unlike example.com/example.org, which are real, publicly resolvable domains that a
+ * genuine fetch can legitimately target — banning those would reject truthful evidence
+ * from an actual successful check, not just fabricated ones).
+ */
+const PLACEHOLDER_POINTER_DOMAINS = ['localhost', '127.0.0.1'];
+
+/**
+ * Returns true if `pointer` is empty, whitespace-only, a known placeholder string, a
+ * fabricated example domain, or nothing more than the module/source name itself
+ * (i.e. it doesn't identify a real observed source).
+ */
+export function isPlaceholderPointer(pointer: string | undefined | null, source?: string): boolean {
+  if (pointer == null) return true;
+  const trimmed = pointer.trim();
+  if (trimmed.length === 0) return true;
+  const lower = trimmed.toLowerCase();
+  if (PLACEHOLDER_POINTER_VALUES.has(lower)) return true;
+  if (PLACEHOLDER_POINTER_DOMAINS.some((d) => lower.includes(d))) return true;
+  if (source && lower === source.trim().toLowerCase()) return true;
+  return false;
+}
+
+/** Lightweight best-effort screen for obvious secret/credential material. */
+export function containsSecretLike(value: unknown): boolean {
+  if (typeof value !== 'string') return false;
+  const patterns = [
+    /AIza[0-9A-Za-z\-_]{35}/, // Google API key
+    /sk-[A-Za-z0-9]{20,}/, // OpenAI-style secret key
+    /Bearer\s+[A-Za-z0-9\-_.]{10,}/i,
+    /-----BEGIN [A-Z ]*PRIVATE KEY-----/,
+    /(?:api[_-]?key|secret|token|password)\s*[=:]\s*['"]?[A-Za-z0-9\-_./+]{12,}/i,
+  ];
+  return patterns.some((re) => re.test(value));
+}
+
+/**
+ * Validates and returns a real evidence pointer, throwing a descriptive error rather
+ * than silently coercing a malformed value into an apparently-valid one (P1-25).
+ */
+export function assertRealPointer(pointer: string, source: string): string {
+  if (isPlaceholderPointer(pointer, source)) {
+    throw new Error(
+      `createEvidence: pointer '${pointer}' for source '${source}' is missing, blank, or a ` +
+        `known placeholder value. Provide a real source pointer (URL, provider record ID, ` +
+        `DOM selector, header name, metric identifier, or similar) — never fabricate one.`
+    );
+  }
+  if (containsSecretLike(pointer)) {
+    throw new Error(
+      `createEvidence: pointer for source '${source}' looks like it contains secret or ` +
+        `credential material. Evidence must not carry secrets.`
+    );
+  }
+  return pointer.trim();
+}
+
+/**
  * Create standardized evidence with required pointer and collected_at.
  * This ensures every evidence item has proper provenance tracking.
  *
- * @param opts.pointer - URL, API endpoint, or data source reference (REQUIRED)
+ * P1-25 (Wave 3): `pointer` is required at both the type level and at runtime — there
+ * is no fallback to a placeholder value. Callers with no real source pointer must not
+ * call this helper at all; that is an upstream module defect, not something this
+ * function should paper over.
+ *
+ * @param opts.pointer - URL, API endpoint, or data source reference (REQUIRED, real)
  * @param opts.source - Module that collected this (e.g., 'pagespeed_v5', 'places_api_v1')
- * @param opts.collected_at - ISO 8601 timestamp (defaults to now if not provided)
+ * @param opts.collected_at - ISO 8601 timestamp. Defaults to now, which is truthful for
+ *   the common case where evidence is constructed synchronously right after collection;
+ *   pass an explicit value when representing a historical observation.
  * @param opts.type - Type of evidence: 'url' | 'metric' | 'text' | 'image' | 'link'
  * @param opts.value - The actual data point
  * @param opts.label - Human-readable label
  * @param opts.raw - Raw data for debugging
  */
 export function createEvidence(opts: {
-  pointer?: string;
+  pointer: string;
   source: string;
   collected_at?: string;
   type?: 'url' | 'metric' | 'text' | 'image' | 'link' | string;
@@ -93,11 +177,20 @@ export function createEvidence(opts: {
     opts.type && validTypes.includes(opts.type as EvidenceItem['type']) ? opts.type : 'metric';
   const type = (t === 'score' ? 'metric' : t) as EvidenceItem['type'];
 
+  const pointer = assertRealPointer(opts.pointer, opts.source);
+
+  if (typeof opts.value === 'string' && containsSecretLike(opts.value)) {
+    throw new Error(
+      `createEvidence: value for source '${opts.source}' looks like it contains secret or ` +
+        `credential material. Evidence must not carry secrets.`
+    );
+  }
+
   // Use provided collected_at or default to now
   const collectedAt = opts.collected_at || new Date().toISOString();
 
   const item: Evidence = {
-    pointer: opts.pointer || 'unknown',
+    pointer,
     collected_at: collectedAt,
     source: opts.source,
     type,

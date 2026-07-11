@@ -1,7 +1,6 @@
-import { randomUUID } from 'crypto';
-
 import { EffortLevel, FindingType, OutreachLeadStage, ProspectLeadStatus } from '@prisma/client';
 
+import { persistFindings } from '@/lib/audit/findingPersistence';
 import { runAudit } from '@/lib/audit/runner';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
@@ -99,41 +98,63 @@ export class AutomatedOutreachOrchestrator {
               data: { status: 'COMPLETE' },
             });
 
-            // Create mock audit findings so the LangChain proposal graph has input data
-            await prisma.finding.createMany({
-              data: [
-                {
-                  id: randomUUID(),
-                  auditId: audit.id,
-                  tenantId,
-                  module: 'SEO',
-                  category: 'SEO',
-                  type: FindingType.PAINKILLER,
-                  title: 'Missing Sitemap and Robot.txt',
-                  description:
-                    'The site has no robot.txt or sitemap configured, reducing indexation speed. Reduces search visibility and organic ranking significantly.',
-                  impactScore: 8,
-                  confidenceScore: 9,
-                  effortEstimate: EffortLevel.LOW,
-                  evidence: [{ url: 'https://example.com' }],
-                },
-                {
-                  id: randomUUID(),
-                  auditId: audit.id,
-                  tenantId,
-                  module: 'PERFORMANCE',
-                  category: 'PERFORMANCE',
-                  type: FindingType.PAINKILLER,
-                  title: 'Slow Largest Contentful Paint (LCP)',
-                  description:
-                    'Hero banner images do not use fetchpriority=high or modern avif compression. Leads to higher user bounce rate.',
-                  impactScore: 6,
-                  confidenceScore: 8,
-                  effortEstimate: EffortLevel.MEDIUM,
-                  evidence: [{ url: 'https://example.com' }],
-                },
-              ],
-            });
+            // Create mock audit findings so the LangChain proposal graph has input data.
+            // Wave 3 (Step 2/4): routed through the one validated persistence boundary
+            // instead of a direct prisma.finding.createMany, and the evidence pointer
+            // is now an honestly-labeled sandbox provenance URI
+            // (`sandbox://outreach-simulate/...`) rather than the fabricated pseudo-URL
+            // `https://example.com` this used to carry — that placeholder domain is
+            // rejected by the contract (P1-25/P2-36) as fabricated evidence. This mode
+            // is a sandboxed test fixture, not a real crawl; the sandbox:// scheme
+            // reflects that truthfully instead of impersonating a real observed source.
+            const { rejected } = await persistFindings(audit.id, tenantId, [
+              {
+                module: 'SEO',
+                category: 'SEO',
+                type: FindingType.PAINKILLER,
+                title: 'Missing Sitemap and Robot.txt',
+                description:
+                  'The site has no robot.txt or sitemap configured, reducing indexation speed. Reduces search visibility and organic ranking significantly.',
+                impactScore: 8,
+                confidenceScore: 9,
+                effortEstimate: EffortLevel.LOW,
+                evidence: [
+                  {
+                    pointer: `sandbox://outreach-simulate/${audit.id}#robots-sitemap`,
+                    source: 'outreach_simulate_sandbox',
+                    collected_at: new Date().toISOString(),
+                    type: 'text',
+                    value: 'simulated: robots.txt/sitemap absent',
+                  },
+                ],
+              },
+              {
+                module: 'PERFORMANCE',
+                category: 'PERFORMANCE',
+                type: FindingType.PAINKILLER,
+                title: 'Slow Largest Contentful Paint (LCP)',
+                description:
+                  'Hero banner images do not use fetchpriority=high or modern avif compression. Leads to higher user bounce rate.',
+                impactScore: 6,
+                confidenceScore: 8,
+                effortEstimate: EffortLevel.MEDIUM,
+                evidence: [
+                  {
+                    pointer: `sandbox://outreach-simulate/${audit.id}#lcp`,
+                    source: 'outreach_simulate_sandbox',
+                    collected_at: new Date().toISOString(),
+                    type: 'text',
+                    value: 'simulated: LCP hero image not optimized',
+                  },
+                ],
+              },
+            ]);
+            if (rejected.length > 0) {
+              logger.warn(
+                { auditId: audit.id, rejected },
+                '[AutomatedOutreachOrchestrator] Simulated findings rejected by contract'
+              );
+            }
 
             logger.info({ auditId: audit.id }, 'Simulated audit completed successfully');
           } else {

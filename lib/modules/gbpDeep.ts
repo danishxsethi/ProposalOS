@@ -7,7 +7,7 @@ import { withProviderResilience } from '@/lib/resilience/withProviderResilience'
 import { safeFetchResponseDerived } from '@/lib/security/safeFetch';
 
 import { normalizeConfidence } from './findingGenerator';
-import { AuditModuleResult, Finding, GBPModuleInput } from './types';
+import { AuditModuleResult, createEvidence, Finding, GBPModuleInput } from './types';
 
 const PLACES_API_BASE = 'https://places.googleapis.com/v1';
 
@@ -51,7 +51,7 @@ interface ProfileCompleteness {
   openingDatePresent: boolean;
 }
 
-interface GbpDeepAnalysis {
+export interface GbpDeepAnalysis {
   completeness: ProfileCompleteness;
   photos: PhotoAnalysis;
   reviews: ReviewAnalysis;
@@ -177,7 +177,9 @@ export async function runGbpDeepModule(
     const analysis = await analyzeGbpData(details, input.websiteUrl, tracker);
 
     // 4. Generate Findings
-    const findings = generateGbpFindings(analysis);
+    const collectedAt = new Date().toISOString();
+    const placeRecordPointer = `${PLACES_API_BASE}/places/${placeId}`;
+    const findings = generateGbpFindings(analysis, placeRecordPointer, collectedAt);
 
     const evidenceSnapshot = {
       module: 'gbp_deep',
@@ -212,21 +214,15 @@ export async function runGbpDeepModule(
     };
   } catch (error) {
     logger.error({ error, businessName: input.businessName }, '[GBPDeep] Analysis failed');
+    // Wave 3 (Step 7/8): a technical module failure must never become a customer-facing
+    // Finding (previously fabricated a "GBP Analysis Failed" Finding with evidence: []
+    // here, which the adapter then reported as a normal COMPLETE result — masking a
+    // real failure as a successful, if unflattering, observation). Return no findings;
+    // gbpDeepAdapter/executePhase's own catch marks the module FAILED honestly, which
+    // the aggregation boundary (lib/audit/findingContract.ts) already refuses to
+    // extract findings from.
     return {
-      findings: [
-        {
-          type: 'VITAMIN',
-          category: 'Visibility',
-          title: 'GBP Analysis Failed',
-          description: 'Could not perform deep analysis of Google Business Profile.',
-          impactScore: 1,
-          confidenceScore: normalizeConfidence(0, '1-10'),
-          evidence: [],
-          metrics: {},
-          effortEstimate: 'LOW',
-          recommendedFix: [],
-        },
-      ],
+      findings: [],
       evidenceSnapshots: [],
     };
   }
@@ -397,17 +393,15 @@ async function analyzePhotosWithGemini(
           {
             provider: 'gemini',
             operation: 'gbp_deep:photo_analysis_gemini',
-            degrade: true,
-            fallbackValue: {
-              response: {
-                text: () =>
-                  JSON.stringify({
-                    scores: { quality: 5, relevance: 5, professionalism: 5 },
-                    type: 'Other',
-                    flags: ['Photo analysis degraded'],
-                  }),
-              },
-            },
+            // Wave 3 (Step 7/8): previously `degrade: true` with a fabricated
+            // fallbackValue ({quality:5, relevance:5, professionalism:5,
+            // flags:['Photo analysis degraded']}) — an LLM failure producing a
+            // plausible-looking numeric score that then drove a real customer-negative
+            // "Low-Quality Profile Photos" Finding (flags.length > 0 always matched).
+            // A provider failure must never fabricate an observation; skip this photo
+            // instead (caught by the existing catch block below, matching the sibling
+            // photo-fetch call's degrade:false two lines up).
+            degrade: false,
           },
           async () => {
             return await model.generateContent([
@@ -439,9 +433,20 @@ async function analyzePhotosWithGemini(
 }
 
 /**
- * Generate Findings
+ * Generate Findings.
+ *
+ * P1-31 (Wave 3): every evidence item identifies the real Places API record that was
+ * fetched (`placeRecordPointer`) and the collection time, via `createEvidence`, instead
+ * of `evidence: []`. Only called after a successful Places API details fetch (we are
+ * past the try block's data-fetch stage by the time this runs), so "missing
+ * description"/"missing attributes" here means "checked the real profile and it was
+ * absent" — never a fetch failure silently becoming a deficiency finding.
  */
-function generateGbpFindings(analysis: GbpDeepAnalysis): Finding[] {
+export function generateGbpFindings(
+  analysis: GbpDeepAnalysis,
+  placeRecordPointer: string,
+  collectedAt: string
+): Finding[] {
   const findings: Finding[] = [];
   const { completeness, photos, reviews } = analysis;
 
@@ -455,7 +460,16 @@ function generateGbpFindings(analysis: GbpDeepAnalysis): Finding[] {
         'Your Google Business Profile has no description. This is a primary ranking factor and your main "elevator pitch" to searchers.',
       impactScore: 7,
       confidenceScore: normalizeConfidence(100, '0-100'),
-      evidence: [],
+      evidence: [
+        createEvidence({
+          pointer: `${placeRecordPointer}#editorialSummary`,
+          source: 'places_api_v1',
+          collected_at: collectedAt,
+          type: 'text',
+          value: 'editorialSummary field absent',
+          label: 'Business Description Field',
+        }),
+      ],
       metrics: {},
       effortEstimate: 'LOW',
       recommendedFix: [
@@ -475,7 +489,14 @@ function generateGbpFindings(analysis: GbpDeepAnalysis): Finding[] {
       impactScore: 7,
       confidenceScore: normalizeConfidence(100, '0-100'),
       evidence: [
-        { type: 'metric', value: reviews.daysSinceLastReview, label: 'Days Since Last Review' },
+        createEvidence({
+          pointer: `${placeRecordPointer}#reviews`,
+          source: 'places_api_v1',
+          collected_at: collectedAt,
+          type: 'metric',
+          value: reviews.daysSinceLastReview,
+          label: 'Days Since Last Review',
+        }),
       ],
       metrics: { daysSinceReview: reviews.daysSinceLastReview },
       effortEstimate: 'MEDIUM',
@@ -497,7 +518,16 @@ function generateGbpFindings(analysis: GbpDeepAnalysis): Finding[] {
         'Your profile has very few photos. Businesses with photos receive 42% more requests for directions and 35% more click-throughs.',
       impactScore: 6,
       confidenceScore: normalizeConfidence(90, '0-100'),
-      evidence: [{ type: 'metric', value: photos.totalCount, label: 'Total Photos' }],
+      evidence: [
+        createEvidence({
+          pointer: `${placeRecordPointer}#photos`,
+          source: 'places_api_v1',
+          collected_at: collectedAt,
+          type: 'metric',
+          value: photos.totalCount,
+          label: 'Total Photos',
+        }),
+      ],
       metrics: { photoCount: photos.totalCount },
       effortEstimate: 'MEDIUM',
       recommendedFix: [
@@ -518,11 +548,16 @@ function generateGbpFindings(analysis: GbpDeepAnalysis): Finding[] {
         'AI analysis detected blurry or unprofessional photos on your profile. This damages visible trust before a customer even calls.',
       impactScore: 4,
       confidenceScore: normalizeConfidence(85, '0-100'),
-      evidence: poorPhotos.map((p) => ({
-        type: 'text',
-        value: `Quality Score: ${p.scores.quality}/10 (${p.flags.join(', ')})`,
-        label: 'Photo Issue',
-      })),
+      evidence: poorPhotos.map((p) =>
+        createEvidence({
+          pointer: p.photoUrl,
+          source: 'gemini_photo_analysis',
+          collected_at: collectedAt,
+          type: 'text',
+          value: `Quality Score: ${p.scores.quality}/10 (${p.flags.join(', ')})`,
+          label: 'Photo Issue',
+        })
+      ),
       metrics: {},
       effortEstimate: 'LOW',
       recommendedFix: [
@@ -542,7 +577,16 @@ function generateGbpFindings(analysis: GbpDeepAnalysis): Finding[] {
         'You haven\'t added attributes (e.g., "Wheelchair Accessible", "Women-Led", payment methods). These serve as key filters in voice search.',
       impactScore: 5,
       confidenceScore: normalizeConfidence(100, '0-100'),
-      evidence: [],
+      evidence: [
+        createEvidence({
+          pointer: `${placeRecordPointer}#attributes`,
+          source: 'places_api_v1',
+          collected_at: collectedAt,
+          type: 'text',
+          value: 'paymentOptions/accessibilityOptions/amenities fields absent',
+          label: 'Business Attributes Fields',
+        }),
+      ],
       metrics: {},
       effortEstimate: 'LOW',
       recommendedFix: ['Log into GBP and fill out "Attributes" section completely'],
@@ -558,7 +602,16 @@ function generateGbpFindings(analysis: GbpDeepAnalysis): Finding[] {
       description: `You are averaging ${reviews.velocity.toFixed(1)} reviews/month. Consistent new reviews are a major ranking signal for the Local Pack.`,
       impactScore: 5,
       confidenceScore: normalizeConfidence(100, '0-100'),
-      evidence: [{ type: 'metric', value: reviews.velocity.toFixed(1), label: 'Reviews/Month' }],
+      evidence: [
+        createEvidence({
+          pointer: `${placeRecordPointer}#reviews`,
+          source: 'places_api_v1',
+          collected_at: collectedAt,
+          type: 'metric',
+          value: reviews.velocity.toFixed(1),
+          label: 'Reviews/Month',
+        }),
+      ],
       metrics: { velocity: reviews.velocity },
       effortEstimate: 'MEDIUM',
       recommendedFix: ['Build a review process into your sales flow'],

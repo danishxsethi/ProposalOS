@@ -118,21 +118,19 @@ export async function runWebsiteModule(
         },
       };
     } catch (fallbackError) {
+      // Wave 3 (Step 7/8): a technical module failure (crawler AND the PageSpeed
+      // fallback both failed) must never become a customer-facing Finding. This
+      // previously fabricated a "Website Analysis Failed" PAINKILLER Finding with
+      // `evidence: []`, which the runner's adapter then reported as a normal
+      // COMPLETE result — masking a real failure as an (unflattering) observation.
+      // Return no findings; the caller's own error handling / module status
+      // reflects the failure honestly instead.
+      logger.error(
+        { error: fallbackError, originalError: error, url: input.url },
+        '[WebsiteModule] PageSpeed fallback also failed — returning no findings'
+      );
       return {
-        findings: [
-          {
-            type: 'PAINKILLER',
-            category: 'Technical SEO',
-            title: 'Website Analysis Failed',
-            description: `Unable to analyze website: ${error instanceof Error ? error.message : 'Unknown error'}`,
-            impactScore: 3,
-            confidenceScore: normalizeConfidence(5, '1-10'),
-            evidence: [],
-            metrics: {},
-            effortEstimate: 'LOW',
-            recommendedFix: ['Verify website is accessible and not blocking automated tools'],
-          },
-        ],
+        findings: [],
         evidenceSnapshots: [],
         data: { scores: {}, coreWebVitals: {}, finalUrl: input.url },
       };

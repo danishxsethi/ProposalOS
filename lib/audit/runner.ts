@@ -3,6 +3,11 @@ import { createHash } from 'crypto';
 import { RunTree } from 'langsmith';
 
 import { runWithConcurrency } from '@/lib/audit/concurrency';
+import {
+  normalizeAndValidateModuleFindings,
+  type RejectedFinding,
+} from '@/lib/audit/findingContract';
+import { persistFindings } from '@/lib/audit/findingPersistence';
 import { redisCache } from '@/lib/cache/redisCache';
 import { FEATURE_FLAGS, isFeatureEnabledEffective } from '@/lib/config/feature-flags';
 import { CostTracker } from '@/lib/costs/costTracker';
@@ -15,6 +20,7 @@ import {
   generateSocialFindings,
   generateWebsiteFindings,
 } from '@/lib/modules/findingGenerator';
+import { createEvidence } from '@/lib/modules/types';
 import { recordAuditTrailEvent } from '@/lib/observability/auditTrail';
 import { withChildObservabilityContext } from '@/lib/observability/context';
 import { MetricsRecorder } from '@/lib/observability/MetricsRecorder';
@@ -105,11 +111,19 @@ const websiteCrawlerAdapter = async (input: ModuleInput): Promise<ModuleResult> 
 
 const gbpAdapter = async (input: ModuleInput, tracker: CostTracker): Promise<ModuleResult> => {
   if (!input.businessName || !input.city) throw new Error('businessName and city required');
-  const data = await runGbpModule(
+  const raw = await runGbpModule(
     { businessName: input.businessName, city: input.city, websiteUrl: input.url },
     tracker
   );
-  return { status: 'COMPLETE', data: (data as unknown as Record<string, any>)?.data || data };
+  const legacy = raw as unknown as Record<string, any>;
+  // P1-33-adjacent adapter defect (Wave 3, Step 8): the module's own success/failure
+  // signal (LegacyAuditModuleResult.status) must not be discarded — a "not found"/error
+  // result is a real module failure/absence, never a silent COMPLETE. Provider failure
+  // must never be masked into an apparently-successful module result.
+  if (legacy?.status === 'failed' || legacy?.status === 'error') {
+    return { status: 'FAILED', data: null, error: legacy.error || 'GBP module reported failure' };
+  }
+  return { status: 'COMPLETE', data: legacy?.data ?? legacy };
 };
 
 const competitorAdapter = async (
@@ -117,11 +131,21 @@ const competitorAdapter = async (
   tracker: CostTracker
 ): Promise<ModuleResult> => {
   if (!input.businessName || !input.city) throw new Error('keyword and location required');
-  const data = await runCompetitorModule(
+  const raw = await runCompetitorModule(
     { keyword: input.businessName, location: input.city },
     tracker
   );
-  return { status: 'COMPLETE', data: (data as unknown as Record<string, any>)?.data || data };
+  const legacy = raw as unknown as Record<string, any>;
+  // Same adapter defect as gbpAdapter above — the module's own failure status was being
+  // silently discarded, reporting COMPLETE regardless (Wave 3, Step 8).
+  if (legacy?.status === 'failed' || legacy?.status === 'error') {
+    return {
+      status: 'FAILED',
+      data: null,
+      error: legacy.error || 'Competitor module reported failure',
+    };
+  }
+  return { status: 'COMPLETE', data: legacy?.data ?? legacy };
 };
 
 const techStackAdapter = async (
@@ -756,13 +780,24 @@ export function extractFindingsFromRegistryResult(
     snapshots.push({ source: 'Module Data', rawResponse: rd });
   } else if (moduleName === 'emailFinder') {
     if (rd.emails && rd.emails.length > 0) {
+      // Wave 3 (P2-36): real pointer is the crawled URL the emails were extracted from.
+      const collectedAt = new Date().toISOString();
       findings.push({
         module: 'emailFinder',
         category: 'Contact & Outreach',
         type: 'VITAMIN',
         title: `${rd.emails.length} Emails Found`,
         description: `Discovered emails: ${rd.emails.join(', ')}`,
-        evidence: rd.emails.map((e: string) => ({ type: 'text', value: e, label: 'Email' })),
+        evidence: rd.emails.map((e: string) =>
+          createEvidence({
+            pointer: input.url as string,
+            source: 'email_finder',
+            collected_at: collectedAt,
+            type: 'text',
+            value: e,
+            label: 'Email',
+          })
+        ),
         metrics: { emailCount: rd.emails.length },
         impactScore: 3,
         confidenceScore: 90,
@@ -773,7 +808,10 @@ export function extractFindingsFromRegistryResult(
   } else {
     // new modules path
     if (Array.isArray(rd.findings)) {
-      findings.push(...rd.findings.map((f: any) => ({ ...f, module: f.module || moduleName })));
+      // Wave 3 (Step 3 requirement 4): trusted module identity always wins over
+      // whatever the module output itself claims — a module cannot mislabel its
+      // findings as belonging to a different module.
+      findings.push(...rd.findings.map((f: any) => ({ ...f, module: moduleName })));
       if (rd.evidenceSnapshots && Array.isArray(rd.evidenceSnapshots)) {
         rd.evidenceSnapshots.forEach((s: any) => snapshots.push(s));
       } else {
@@ -1277,6 +1315,7 @@ async function runAuditInternal(auditId: string, signal?: AbortSignal) {
         const allFindings: any[] = [];
         const modulesCompleted: string[] = [];
         const modulesFailed: any[] = [];
+        const rejectedFindings: RejectedFinding[] = [];
         let failedEvidenceWrites = 0;
 
         // Synthesize results into discoveries and evidence
@@ -1284,7 +1323,18 @@ async function runAuditInternal(auditId: string, signal?: AbortSignal) {
           if (res.status === 'COMPLETE') {
             modulesCompleted.push(modName);
             const ext = extractFindingsFromRegistryResult(modName, res, moduleInput);
-            allFindings.push(...ext.findings);
+
+            // Wave 3 (Step 5): the one shared adapter/aggregation boundary every
+            // module's raw finding output must pass through before it can become a
+            // customer-facing Finding. Rejects malformed/evidence-less findings
+            // outright rather than repairing them with fabricated evidence.
+            const { accepted, rejected } = normalizeAndValidateModuleFindings(
+              modName,
+              res.status,
+              ext.findings
+            );
+            allFindings.push(...accepted);
+            rejectedFindings.push(...rejected);
 
             for (const snap of ext.snapshots) {
               try {
@@ -1317,41 +1367,50 @@ async function runAuditInternal(auditId: string, signal?: AbortSignal) {
           }
         }
 
-        // GBP missing fallback (Preserves original behavior)
-        if (!modulesCompleted.includes('gbp') && name && city) {
-          allFindings.push({
-            module: 'gbp',
-            category: 'Local SEO',
-            type: 'PAINKILLER',
-            title: 'No Google Business Listing Detected',
-            description:
-              'No Google Business listing was found for this business. This is a major missed opportunity.',
-            evidence: [{ type: 'text', value: 'Places API returned no results', label: 'Search' }],
-            metrics: { businessName: name, city },
-            impactScore: 9,
-            confidenceScore: 90,
-            effortEstimate: 'MEDIUM',
-            recommendedFix: ['Create a Google Business Profile'],
-          });
+        if (rejectedFindings.length > 0) {
+          logger.warn(
+            {
+              event: 'audit.findings_rejected_at_aggregation',
+              auditId: audit.id,
+              tenantId: audit.tenantId,
+              rejectedCount: rejectedFindings.length,
+              rejected: rejectedFindings,
+            },
+            `[Audit] Rejected ${rejectedFindings.length} malformed/evidence-less finding(s) before aggregation`
+          );
         }
+
+        // NOTE (Wave 3, Step 8 — was: "GBP missing fallback (Preserves original
+        // behavior)"): removed. The prior fallback fabricated a customer-negative "No
+        // Google Business Listing Detected" Finding whenever the gbp module simply
+        // wasn't in `modulesCompleted` — collapsing "search ran, genuinely zero
+        // results", a provider outage, a quota error, and a missing API key into the
+        // same fabricated finding (AUDIT_REPORT.md Pass 4B). Provider/module failure
+        // must never become verified absence (Step 8). A trustworthy "no GBP listing"
+        // finding requires the gbp module itself to distinguish a genuine zero-result
+        // search from a failure and return real evidence identifying the search that
+        // was run — that is gbp.ts module work, assigned to a later module wave
+        // (root-cause group E/H), not a Wave 3 boundary-enforcement fix. Until then: no
+        // finding is fabricated here.
 
         // P2-3: Deduplicate findings before persisting
         const dedupedFindings = deduplicateFindings(allFindings);
 
-        // Create Finding records in DB
+        // Create Finding records in DB (Wave 3, Step 6: routed through the one
+        // validated persistence boundary — no direct prisma.finding.createMany here).
         if (dedupedFindings.length > 0) {
-          await prisma.finding.createMany({
-            data: dedupedFindings.map((f) => ({
-              ...f,
-              evidence: f.evidence ?? [],
-              metrics: f.metrics ?? {},
-              recommendedFix: f.recommendedFix ?? [],
-              auditId: audit.id,
-              tenantId: audit.tenantId,
-              manuallyEdited: false,
-              excluded: false,
-            })),
-          });
+          const persistResult = await persistFindings(audit.id, audit.tenantId, dedupedFindings);
+          if (persistResult.rejected.length > 0) {
+            logger.warn(
+              {
+                event: 'audit.findings_rejected_at_persistence',
+                auditId: audit.id,
+                tenantId: audit.tenantId,
+                rejectedCount: persistResult.rejected.length,
+              },
+              `[Audit] Persistence layer rejected ${persistResult.rejected.length} finding(s) that passed aggregation but failed final revalidation`
+            );
+          }
         }
 
         // Calculate total API cost

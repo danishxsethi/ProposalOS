@@ -3,7 +3,6 @@ import { RunTree } from 'langsmith';
 
 import { CostTracker } from '@/lib/costs/costTracker';
 import { logger } from '@/lib/logger';
-import { createEvidence } from '@/lib/modules/types';
 import type { VerticalPlaybook } from '@/lib/playbooks/types';
 
 import { generateExecutiveSummary } from './executiveSummary';
@@ -398,8 +397,17 @@ function hasValidEvidence(e: unknown): boolean {
 }
 
 /**
- * Agency-grade hardening: dedupe by (module, title), clamp impact 1–10,
- * ensure each finding has ≥1 valid evidence, ensure ≥1 PAINKILLER.
+ * Agency-grade hardening: dedupe by (module, title), clamp impact 1–10, drop any finding
+ * with no real evidence, ensure ≥1 PAINKILLER among the survivors.
+ *
+ * Wave 3 (Step 9): this previously "repaired" a finding with no valid evidence by
+ * fabricating a replacement evidence item (`pointer: 'audit', value: f.title`) — exactly
+ * the "QA repairs missing evidence by inventing citations" anti-pattern the campaign
+ * prohibits. A finding with no real evidence is dropped from the proposal input instead
+ * of persisting a fabricated citation into a customer-facing proposal. In steady state
+ * this should be a no-op: findings reaching this function already passed the
+ * aggregation/persistence evidence contract (lib/audit/findingContract.ts); this filter
+ * only protects against legacy-persisted or otherwise-sourced findings that predate it.
  */
 function normalizeFindingsForProposal(findings: Finding[]): Finding[] {
   const seen = new Set<string>();
@@ -410,31 +418,26 @@ function normalizeFindingsForProposal(findings: Finding[]): Finding[] {
     seen.add(key);
     deduped.push(f);
   }
-  for (const f of deduped) {
+
+  const withRealEvidence = deduped.filter((f) => {
+    const evidence = (f.evidence as unknown[]) ?? [];
+    return evidence.some(hasValidEvidence);
+  });
+
+  for (const f of withRealEvidence) {
     (f as { impactScore: number }).impactScore = Math.min(
       10,
       Math.max(1, Number(f.impactScore) || 5)
     );
-    const evidence = (f.evidence as unknown[]) ?? [];
-    if (!evidence.some(hasValidEvidence)) {
-      (f as { evidence: unknown }).evidence = [
-        ...evidence,
-        createEvidence({
-          pointer: 'audit',
-          source: 'proposal_normalize',
-          type: 'text',
-          value: f.title,
-          label: f.module,
-        }),
-      ];
-    }
   }
-  const painkillers = deduped.filter((f) => f.type === 'PAINKILLER');
-  if (painkillers.length === 0 && deduped.length > 0) {
-    const byImpact = [...deduped].sort((a, b) => (b.impactScore ?? 0) - (a.impactScore ?? 0));
+  const painkillers = withRealEvidence.filter((f) => f.type === 'PAINKILLER');
+  if (painkillers.length === 0 && withRealEvidence.length > 0) {
+    const byImpact = [...withRealEvidence].sort(
+      (a, b) => (b.impactScore ?? 0) - (a.impactScore ?? 0)
+    );
     (byImpact[0] as { type: string }).type = 'PAINKILLER';
   }
-  return deduped;
+  return withRealEvidence;
 }
 
 function timelineByEffort(effort?: string | null): string {
