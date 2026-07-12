@@ -1,7 +1,7 @@
 /**
  * Accessibility Quick Scan Module
- * Uses Puppeteer + axe-core for WCAG checks, supplemented with custom checks.
- * Frames findings as: legal risk (ADA), SEO benefit, UX improvement.
+ * Uses Puppeteer + axe-core for automated rule checks, supplemented with custom checks.
+ * It does not certify WCAG conformance or legal compliance.
  */
 import { AxePuppeteer } from '@axe-core/puppeteer';
 
@@ -17,10 +17,13 @@ import type { Browser } from 'puppeteer-core';
 export interface AccessibilityResult {
   status: 'success' | 'error';
   data: {
-    score: number;
-    wcagLevel: 'A' | 'AA' | 'AAA' | 'Fail';
-    totalIssues: number;
-    criticalIssues: number;
+    scanStatus: 'violations_detected' | 'no_automated_violations' | 'unavailable';
+    score: number | null;
+    totalIssues: number | null;
+    criticalIssues: number | null;
+    manualReviewRequired: true;
+    coverageLimitation: string;
+    scanTimestamp: string;
     issuesByCategory: {
       altText: { total: number; withAlt: number; percentage: number };
       headings: { h1Count: number; skipLevels: boolean; structure: string[] };
@@ -30,9 +33,13 @@ export interface AccessibilityResult {
     };
     topIssues: Array<{
       severity: string;
+      impact: string;
+      ruleId: string;
+      selector: string;
       description: string;
       element: string;
       recommendation: string;
+      scanTimestamp: string;
     }>;
     recommendations: string[];
   };
@@ -54,6 +61,18 @@ interface CustomCheckResult {
   hasLang: boolean;
   hasViewport: boolean;
   hasFocusStyles: boolean;
+}
+
+const AUTOMATION_LIMITATION =
+  'Automated accessibility checks cover only part of applicable accessibility requirements. Manual review by an accessibility expert is required to assess overall WCAG conformance or legal obligations.';
+
+function sanitizeElementSnippet(value: string): string {
+  return value
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/[\u0000-\u001f\u007f]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 160);
 }
 
 /**
@@ -179,17 +198,21 @@ export async function runAccessibilityModule(
   const { url } = input;
 
   if (!url) {
+    const scanTimestamp = new Date().toISOString();
     return {
       moduleId: 'accessibility',
-      status: 'success',
-      timestamp: new Date().toISOString(),
+      status: 'failed',
+      timestamp: scanTimestamp,
       data: {
         status: 'error',
         data: {
-          score: 0,
-          wcagLevel: 'Fail',
-          totalIssues: 0,
-          criticalIssues: 0,
+          scanStatus: 'unavailable',
+          score: null,
+          totalIssues: null,
+          criticalIssues: null,
+          manualReviewRequired: true,
+          coverageLimitation: AUTOMATION_LIMITATION,
+          scanTimestamp,
           issuesByCategory: {
             altText: { total: 0, withAlt: 0, percentage: 0 },
             headings: { h1Count: 0, skipLevels: false, structure: [] },
@@ -223,6 +246,7 @@ export async function runAccessibilityModule(
       .analyze();
 
     const violations = axeResults.violations || [];
+    const scanTimestamp = new Date().toISOString();
     let criticalCount = 0;
     let contrastFailCount = 0;
     let worstRatio = 0;
@@ -247,12 +271,17 @@ export async function runAccessibilityModule(
 
       if (topIssues.length < 8) {
         const node = v.nodes?.[0];
-        const el = node?.html?.slice(0, 80) ?? String(node?.target?.[0] || 'element');
+        const selector = String(node?.target?.[0] || 'unknown selector');
+        const el = sanitizeElementSnippet(node?.html || selector);
         topIssues.push({
           severity: v.impact || 'moderate',
+          impact: v.impact || 'moderate',
+          ruleId: v.id,
+          selector,
           description: v.description || v.help,
           element: el,
           recommendation: v.helpUrl ? `See ${v.helpUrl}` : v.help || 'Fix accessibility issue',
+          scanTimestamp,
         });
       }
     }
@@ -336,18 +365,16 @@ export async function runAccessibilityModule(
       (!custom.hasFocusStyles ? 3 : 0);
 
     const score = Math.max(0, Math.min(100, 100 - deduction));
-    let wcagLevel: 'A' | 'AA' | 'AAA' | 'Fail' = 'Fail';
-    if (score >= 90 && criticalCount === 0) wcagLevel = 'AA';
-    else if (score >= 80 && criticalCount === 0) wcagLevel = 'A';
-    else if (score >= 95) wcagLevel = 'AAA';
-
     const result: AccessibilityResult = {
       status: 'success',
       data: {
+        scanStatus: totalIssues > 0 ? 'violations_detected' : 'no_automated_violations',
         score,
-        wcagLevel,
         totalIssues,
         criticalIssues: criticalCount,
+        manualReviewRequired: true,
+        coverageLimitation: AUTOMATION_LIMITATION,
+        scanTimestamp,
         issuesByCategory: {
           altText: {
             total: custom.altText.total,
@@ -373,8 +400,8 @@ export async function runAccessibilityModule(
         topIssues,
         recommendations:
           recommendations.length > 0
-            ? recommendations
-            : ['No major issues found. Maintain current standards.'],
+            ? [...recommendations, AUTOMATION_LIMITATION]
+            : ['No automated violations were detected in this scan.', AUTOMATION_LIMITATION],
       },
     };
 
@@ -393,17 +420,21 @@ export async function runAccessibilityModule(
       { url, errorMessage: errMsg, errorStack: errStack },
       '[Accessibility] Scan failed'
     );
+    const scanTimestamp = new Date().toISOString();
     return {
       moduleId: 'accessibility',
-      status: 'success',
-      timestamp: new Date().toISOString(),
+      status: 'failed',
+      timestamp: scanTimestamp,
       data: {
         status: 'error',
         data: {
-          score: 0,
-          wcagLevel: 'Fail',
-          totalIssues: 0,
-          criticalIssues: 0,
+          scanStatus: 'unavailable',
+          score: null,
+          totalIssues: null,
+          criticalIssues: null,
+          manualReviewRequired: true,
+          coverageLimitation: AUTOMATION_LIMITATION,
+          scanTimestamp,
           issuesByCategory: {
             altText: { total: 0, withAlt: 0, percentage: 0 },
             headings: { h1Count: 0, skipLevels: false, structure: [] },
@@ -414,6 +445,7 @@ export async function runAccessibilityModule(
           topIssues: [],
           recommendations: [
             `Accessibility scan failed: ${error instanceof Error ? error.message : 'Unknown error'}. Ensure the URL is accessible.`,
+            AUTOMATION_LIMITATION,
           ],
         },
       },

@@ -1203,14 +1203,15 @@ export function generateSchemaMarkupFindings(
 
 /**
  * Generate findings from Accessibility Module result.
- * Frame as: legal risk (ADA lawsuits), SEO benefit, UX improvement.
+ * Frame as automated observations only; overall conformance requires manual review.
  */
 export function generateAccessibilityFindings(
   data:
     | AccessibilityResult['data']
     | {
-        score?: number;
-        criticalIssues?: number;
+        scanStatus?: 'violations_detected' | 'no_automated_violations' | 'unavailable';
+        score?: number | null;
+        criticalIssues?: number | null;
         issuesByCategory?: unknown;
         topIssues?: unknown[];
         recommendations?: string[];
@@ -1219,6 +1220,7 @@ export function generateAccessibilityFindings(
 ): Finding[] {
   const findings: Finding[] = [];
   if (!data || typeof data !== 'object') return findings;
+  if ((data as AccessibilityResult['data']).scanStatus === 'unavailable') return findings;
 
   const score = (data as AccessibilityResult['data']).score ?? 0;
   const criticalIssues = (data as AccessibilityResult['data']).criticalIssues ?? 0;
@@ -1226,15 +1228,14 @@ export function generateAccessibilityFindings(
   const recommendations = (data as AccessibilityResult['data']).recommendations ?? [];
 
   if (score < 70 || criticalIssues > 0) {
-    const isLegalRisk = criticalIssues > 0 || score < 50;
+    const isHighImpact = criticalIssues > 0 || score < 50;
     findings.push({
       module: 'accessibility',
       category: 'trust',
-      type: isLegalRisk ? 'PAINKILLER' : 'VITAMIN',
-      title: `Accessibility score: ${score}/100${criticalIssues > 0 ? ` (${criticalIssues} critical issues)` : ''}`,
-      description: isLegalRisk
-        ? 'Your website has accessibility barriers that create legal risk under ADA Title III. Businesses face lawsuits of $10,000–$75,000 for inaccessible sites. Fixing these issues also improves SEO (Google rewards accessible sites) and user experience for all visitors.'
-        : 'Accessibility issues hurt your SEO and user experience. Google rewards accessible sites. Improving accessibility reduces legal risk and helps users with disabilities.',
+      type: isHighImpact ? 'PAINKILLER' : 'VITAMIN',
+      title: `Automated accessibility score: ${score}/100${criticalIssues > 0 ? ` (${criticalIssues} critical rule failures)` : ''}`,
+      description:
+        'The automated scan detected accessibility barriers that may affect users with disabilities. Automated checks cover only part of WCAG; manual expert review is required to assess overall conformance or legal obligations.',
       evidence: [
         createEvidence({
           pointer,
@@ -1248,11 +1249,12 @@ export function generateAccessibilityFindings(
       metrics: {
         accessibilityScore: score,
         criticalIssues,
-        wcagLevel: (data as AccessibilityResult['data']).wcagLevel,
+        scanStatus: (data as AccessibilityResult['data']).scanStatus,
+        manualReviewRequired: true,
       },
-      impactScore: isLegalRisk ? 9 : 6,
+      impactScore: isHighImpact ? 9 : 6,
       confidenceScore: normalizeConfidence(95, '0-100'),
-      effortEstimate: isLegalRisk ? 'HIGH' : 'MEDIUM',
+      effortEstimate: isHighImpact ? 'HIGH' : 'MEDIUM',
       recommendedFix: recommendations.slice(0, 6),
     });
   }
@@ -1266,7 +1268,7 @@ export function generateAccessibilityFindings(
       type: alt.percentage < 50 ? 'PAINKILLER' : 'VITAMIN',
       title: `Only ${alt.percentage}% of images have alt text`,
       description:
-        'Screen readers cannot describe images without alt text. This creates an ADA compliance risk and hurts SEO (Google uses alt text for image search).',
+        'The automated scan observed images without alt text, which can prevent screen readers from conveying their purpose. Manual review is required for overall accessibility conformance.',
       evidence: [
         createEvidence({
           pointer,
@@ -1303,7 +1305,7 @@ export function generateAccessibilityFindings(
             ? `Heading structure issue: ${h.h1Count} H1${h.h1Count === 0 ? ' (missing)' : 's (should be exactly 1)'}`
             : 'Heading levels skip (e.g. H1 to H3 without H2)',
         description:
-          'Proper heading structure helps screen readers and improves SEO. Use one H1 per page and logical order (H1→H2→H3).',
+          'The automated scan observed a heading-structure issue that can make page navigation harder for screen-reader users. Manual review is required for overall accessibility conformance.',
         evidence: [
           createEvidence({
             pointer,
@@ -1336,7 +1338,7 @@ export function generateAccessibilityFindings(
       type: c.failCount > 5 ? 'PAINKILLER' : 'VITAMIN',
       title: `${c.failCount} color contrast violations`,
       description:
-        'Insufficient contrast makes text unreadable for users with visual impairments. WCAG AA requires 4.5:1 for normal text, 3:1 for large text.',
+        'The configured axe rules detected insufficient color contrast for the scanned elements. These automated results do not certify overall WCAG conformance; manual review is required.',
       evidence: [
         createEvidence({
           pointer,
@@ -1370,7 +1372,7 @@ export function generateAccessibilityFindings(
       type: 'VITAMIN',
       title: `${f.totalInputs - f.labeled} form inputs without labels`,
       description:
-        'Screen reader users need labels to know what to type. Use <label for="id"> or aria-label.',
+        'The automated scan observed form controls without accessible labels, which can prevent screen-reader users from understanding the requested input. Manual review is required for overall accessibility conformance.',
       evidence: [
         createEvidence({
           pointer,
@@ -1402,7 +1404,7 @@ export function generateAccessibilityFindings(
       type: 'VITAMIN',
       title: `${l.genericCount} links with generic text ("click here", "read more")`,
       description:
-        'Generic link text is unclear for screen reader users and hurts SEO. Use descriptive text that explains the destination.',
+        'The automated scan observed generic link text that may be unclear out of context for screen-reader users. Manual review is required for overall accessibility conformance.',
       evidence: [
         createEvidence({
           pointer,

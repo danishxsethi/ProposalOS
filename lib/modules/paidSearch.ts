@@ -1,3 +1,5 @@
+import { z } from 'zod';
+
 import { withModuleCache } from '@/lib/cache/moduleCache';
 import { CostTracker } from '@/lib/costs/costTracker';
 import { logger } from '@/lib/logger';
@@ -5,7 +7,7 @@ import { withProviderResilience } from '@/lib/resilience/withProviderResilience'
 import { safeFetch } from '@/lib/security/safeFetch';
 
 import { normalizeConfidence } from './findingGenerator';
-import { AuditModuleResult, Finding } from './types';
+import { AuditModuleResult, createEvidence, Finding } from './types';
 
 export interface PaidSearchModuleInput {
   url: string;
@@ -15,17 +17,34 @@ export interface PaidSearchModuleInput {
 }
 
 interface AdPresence {
+  status: 'observed' | 'not_observed' | 'unavailable';
   keyword: string;
-  businessIsAdvertising: boolean;
+  location: string;
+  language: 'en';
+  device: 'desktop';
+  provider: 'SerpAPI';
+  observedAt: string;
+  businessIsAdvertising: boolean | null;
+  businessAds: Array<{
+    title: string;
+    link: string;
+    displayLink?: string;
+    advertiserDomain: string;
+  }>;
   competitorAds: Array<{
     title: string;
     link: string;
     displayLink?: string;
+    advertiserDomain: string;
   }>;
   totalAds: number;
+  reason?: string;
 }
 
 interface TrackingPixels {
+  status: 'observed' | 'unavailable';
+  observedAt: string;
+  sourceUrl: string;
   hasGoogleAds: boolean;
   hasGA4: boolean;
   hasUniversalAnalytics: boolean;
@@ -41,6 +60,50 @@ interface PaidSearchAnalysis {
   trackingPixels: TrackingPixels;
 }
 
+const SerpResponseSchema = z.object({
+  ads: z
+    .array(
+      z.object({
+        title: z.string().optional(),
+        link: z.string().optional(),
+        displayed_link: z.string().optional(),
+      })
+    )
+    .default([]),
+});
+
+type SerpAd = z.infer<typeof SerpResponseSchema>['ads'][number];
+
+function advertiserDomain(ad: SerpAd): string | null {
+  if (!ad.link) return null;
+  try {
+    return new URL(ad.link).hostname.toLowerCase().replace(/^www\./, '');
+  } catch {
+    return null;
+  }
+}
+
+function domainMatches(candidate: string, businessDomain: string): boolean {
+  return candidate === businessDomain || candidate.endsWith(`.${businessDomain}`);
+}
+
+function unavailableObservation(keyword: string, location: string, reason: string): AdPresence {
+  return {
+    status: 'unavailable',
+    keyword,
+    location,
+    language: 'en',
+    device: 'desktop',
+    provider: 'SerpAPI',
+    observedAt: new Date().toISOString(),
+    businessIsAdvertising: null,
+    businessAds: [],
+    competitorAds: [],
+    totalAds: 0,
+    reason,
+  };
+}
+
 /**
  * Run paid search analysis module
  */
@@ -51,21 +114,18 @@ export async function runPaidSearchModule(
   logger.info({ businessName: input.businessName }, '[PaidSearch] Starting paid search analysis');
 
   try {
-    // Check primary keyword ads
-    tracker?.addApiCall('SERP');
-    const primaryKeywordAds = await checkPrimaryKeywordAds(input);
-
-    // Check business name ads (competitor bidding)
-    tracker?.addApiCall('SERP');
-    const businessNameAds = await checkBusinessNameAds(input);
-
-    // Detect tracking pixels
+    const configured = Boolean(process.env.SERP_API_KEY);
+    if (configured) tracker?.addApiCall('SERP');
+    const primaryKeywordAds = await checkAds(input, `${input.businessType} ${input.city}`);
+    if (configured) tracker?.addApiCall('SERP');
+    const businessNameAds = await checkAds(input, input.businessName);
     const trackingPixels = await detectTrackingPixels(input.url);
 
     const analysis: PaidSearchAnalysis = {
       primaryKeywordAds,
       businessNameAds,
-      competitorsBiddingOnName: businessNameAds.totalAds > 0,
+      competitorsBiddingOnName:
+        businessNameAds.status !== 'unavailable' && businessNameAds.competitorAds.length > 0,
       trackingPixels,
     };
 
@@ -92,72 +152,66 @@ export async function runPaidSearchModule(
     return {
       findings,
       evidenceSnapshots: [evidenceSnapshot],
+      execution: {
+        state:
+          primaryKeywordAds.status === 'unavailable' &&
+          businessNameAds.status === 'unavailable' &&
+          trackingPixels.status === 'unavailable'
+            ? 'unavailable'
+            : primaryKeywordAds.status === 'unavailable' ||
+                businessNameAds.status === 'unavailable' ||
+                trackingPixels.status === 'unavailable'
+              ? 'partial'
+              : 'complete',
+        reason:
+          primaryKeywordAds.reason ||
+          businessNameAds.reason ||
+          (trackingPixels.status === 'unavailable' ? 'Tracking-pixel scan unavailable' : undefined),
+      },
     };
   } catch (error) {
     logger.error({ error, businessName: input.businessName }, '[PaidSearch] Analysis failed');
 
     return {
-      findings: [
-        {
-          type: 'VITAMIN',
-          category: 'Visibility',
-          title: 'Paid Search Analysis Unavailable',
-          description:
-            'Unable to complete paid search analysis. This may indicate API issues or network problems.',
-          impactScore: 1,
-          confidenceScore: normalizeConfidence(50, '0-100'),
-          evidence: [],
-          metrics: {},
-          effortEstimate: 'LOW',
-          recommendedFix: ['Try running paid search analysis again later'],
-        },
-      ],
+      findings: [],
       evidenceSnapshots: [],
+      execution: {
+        state: 'unavailable',
+        reason: error instanceof Error ? error.message : String(error),
+      },
     };
   }
 }
 
-/**
- * Check if business is advertising on primary keywords
- */
-async function checkPrimaryKeywordAds(input: PaidSearchModuleInput): Promise<AdPresence> {
-  const query = `${input.businessType} ${input.city}`;
-
-  logger.info({ query }, '[PaidSearch] Checking primary keyword ads');
-
+async function checkAds(input: PaidSearchModuleInput, query: string): Promise<AdPresence> {
   const serpApiKey = process.env.SERP_API_KEY;
   if (!serpApiKey) {
-    logger.warn('[PaidSearch] No SerpAPI key, skipping ad detection');
-    return {
-      keyword: query,
-      businessIsAdvertising: false,
-      competitorAds: [],
-      totalAds: 0,
-    };
+    logger.warn({ query }, '[PaidSearch] No SerpAPI key, observation unavailable');
+    return unavailableObservation(query, input.city, 'SerpAPI is not configured');
   }
 
   try {
     const serpUrl = `https://serpapi.com/search.json?q=${encodeURIComponent(query)}&location=${encodeURIComponent(input.city)}&hl=en&gl=us&google_domain=google.com&api_key=${serpApiKey}`;
 
-    const data = await withModuleCache<any>(
+    const data = await withModuleCache<unknown>(
       {
         module: 'paid_search',
-        version: 1,
-        input: { type: 'paid_search_primary', query, city: input.city },
+        version: 2,
+        input: { type: 'paid_search_snapshot', query, city: input.city },
       },
-      { ttlSeconds: 24 * 60 * 60 },
+      { ttlSeconds: 6 * 60 * 60 },
       async () => {
-        return withProviderResilience<any>(
+        return withProviderResilience<unknown>(
           {
             provider: 'serpapi',
-            operation: 'paidSearch:checkPrimaryKeywordAds',
-            degrade: true,
-            fallbackValue: { ads: [] },
+            operation: 'paidSearch:checkAds',
           },
           async () => {
-            const res = await fetch(serpUrl);
+            const res = await safeFetch(serpUrl);
             if (!res.ok) {
-              throw new Error(`HTTP error ${res.status}: ${res.statusText}`);
+              const error = new Error(`HTTP error ${res.status}: ${res.statusText}`);
+              (error as Error & { status: number }).status = res.status;
+              throw error;
             }
             return await res.json();
           }
@@ -165,113 +219,52 @@ async function checkPrimaryKeywordAds(input: PaidSearchModuleInput): Promise<AdP
       }
     );
 
-    // Extract ads from response
-    const ads = data.ads || [];
-    const competitorAds = ads.map((ad: any) => ({
-      title: ad.title,
-      link: ad.link,
-      displayLink: ad.displayed_link,
-    }));
-
-    // Check if audited business is advertising
-    const businessDomain = new URL(input.url).hostname.replace('www.', '');
-    const businessIsAdvertising = ads.some(
-      (ad: any) => ad.link?.includes(businessDomain) || ad.displayed_link?.includes(businessDomain)
+    const parsed = SerpResponseSchema.parse(data);
+    const businessDomain = new URL(input.url).hostname.toLowerCase().replace(/^www\./, '');
+    const attributedAds = parsed.ads.flatMap((ad) => {
+      const domain = advertiserDomain(ad);
+      return domain && ad.link
+        ? [
+            {
+              title: ad.title || domain,
+              link: ad.link,
+              displayLink: ad.displayed_link,
+              advertiserDomain: domain,
+            },
+          ]
+        : [];
+    });
+    const businessIsAdvertising = attributedAds.some((ad) =>
+      domainMatches(ad.advertiserDomain, businessDomain)
     );
+    const businessAds = attributedAds.filter((ad) =>
+      domainMatches(ad.advertiserDomain, businessDomain)
+    );
+    const competitorAds = attributedAds.filter(
+      (ad) => !domainMatches(ad.advertiserDomain, businessDomain)
+    );
+    const observedAt = new Date().toISOString();
 
     return {
+      status: businessIsAdvertising ? 'observed' : 'not_observed',
       keyword: query,
+      location: input.city,
+      language: 'en',
+      device: 'desktop',
+      provider: 'SerpAPI',
+      observedAt,
       businessIsAdvertising,
+      businessAds,
       competitorAds,
-      totalAds: ads.length,
+      totalAds: parsed.ads.length,
     };
   } catch (error) {
-    logger.warn({ error, query }, '[PaidSearch] Primary keyword check failed');
-    return {
-      keyword: query,
-      businessIsAdvertising: false,
-      competitorAds: [],
-      totalAds: 0,
-    };
-  }
-}
-
-/**
- * Check if competitors are bidding on business name
- */
-async function checkBusinessNameAds(input: PaidSearchModuleInput): Promise<AdPresence> {
-  const query = input.businessName;
-
-  logger.info({ query }, '[PaidSearch] Checking business name ads');
-
-  const serpApiKey = process.env.SERP_API_KEY;
-  if (!serpApiKey) {
-    return {
-      keyword: query,
-      businessIsAdvertising: false,
-      competitorAds: [],
-      totalAds: 0,
-    };
-  }
-
-  try {
-    const serpUrl = `https://serpapi.com/search.json?q=${encodeURIComponent(query)}&location=${encodeURIComponent(input.city)}&hl=en&gl=us&google_domain=google.com&api_key=${serpApiKey}`;
-
-    const data = await withModuleCache<any>(
-      {
-        module: 'paid_search',
-        version: 1,
-        input: { type: 'paid_search_name', businessName: input.businessName, city: input.city },
-      },
-      { ttlSeconds: 24 * 60 * 60 },
-      async () => {
-        return withProviderResilience<any>(
-          {
-            provider: 'serpapi',
-            operation: 'paidSearch:checkBusinessNameAds',
-            degrade: true,
-            fallbackValue: { ads: [] },
-          },
-          async () => {
-            const res = await fetch(serpUrl);
-            if (!res.ok) {
-              throw new Error(`HTTP error ${res.status}: ${res.statusText}`);
-            }
-            return await res.json();
-          }
-        );
-      }
+    logger.warn({ error, query }, '[PaidSearch] Search snapshot unavailable');
+    return unavailableObservation(
+      query,
+      input.city,
+      error instanceof Error ? error.message : String(error)
     );
-
-    const ads = data.ads || [];
-
-    // Filter out the business's own ads (if any)
-    const businessDomain = new URL(input.url).hostname.replace('www.', '');
-    const competitorAds = ads
-      .filter(
-        (ad: any) =>
-          !ad.link?.includes(businessDomain) && !ad.displayed_link?.includes(businessDomain)
-      )
-      .map((ad: any) => ({
-        title: ad.title,
-        link: ad.link,
-        displayLink: ad.displayed_link,
-      }));
-
-    return {
-      keyword: query,
-      businessIsAdvertising: ads.length > competitorAds.length, // Has own ads
-      competitorAds,
-      totalAds: ads.length,
-    };
-  } catch (error) {
-    logger.warn({ error, query }, '[PaidSearch] Business name check failed');
-    return {
-      keyword: query,
-      businessIsAdvertising: false,
-      competitorAds: [],
-      totalAds: 0,
-    };
   }
 }
 
@@ -279,6 +272,7 @@ async function checkBusinessNameAds(input: PaidSearchModuleInput): Promise<AdPre
  * Detect tracking pixels on website
  */
 async function detectTrackingPixels(url: string): Promise<TrackingPixels> {
+  const observedAt = new Date().toISOString();
   try {
     logger.info({ url }, '[PaidSearch] Detecting tracking pixels');
 
@@ -286,8 +280,6 @@ async function detectTrackingPixels(url: string): Promise<TrackingPixels> {
       {
         provider: 'crawler',
         operation: 'paidSearch:detectTrackingPixels',
-        degrade: true,
-        fallbackValue: '',
       },
       async () => {
         const response = await safeFetch(url, {
@@ -341,6 +333,9 @@ async function detectTrackingPixels(url: string): Promise<TrackingPixels> {
     }
 
     return {
+      status: 'observed',
+      observedAt,
+      sourceUrl: url,
       hasGoogleAds,
       hasGA4,
       hasUniversalAnalytics,
@@ -351,6 +346,9 @@ async function detectTrackingPixels(url: string): Promise<TrackingPixels> {
   } catch (error) {
     logger.warn({ error, url }, '[PaidSearch] Pixel detection failed');
     return {
+      status: 'unavailable',
+      observedAt,
+      sourceUrl: url,
       hasGoogleAds: false,
       hasGA4: false,
       hasUniversalAnalytics: false,
@@ -369,55 +367,73 @@ function generatePaidSearchFindings(
   input: PaidSearchModuleInput
 ): Finding[] {
   const findings: Finding[] = [];
+  const observationEvidence = (
+    observation: AdPresence,
+    value: string | number,
+    label: string,
+    pointer = 'https://serpapi.com/search.json'
+  ) =>
+    createEvidence({
+      pointer,
+      source: 'serpapi_paid_search',
+      collected_at: observation.observedAt,
+      type: typeof value === 'number' ? 'metric' : 'text',
+      value,
+      label,
+      raw: {
+        query: observation.keyword,
+        location: observation.location,
+        language: observation.language,
+        device: observation.device,
+        provider: observation.provider,
+        resultScope: 'single bounded search snapshot',
+      },
+    });
 
-  // PAINKILLER: Competitors bidding on business name
   if (analysis.competitorsBiddingOnName && analysis.businessNameAds.competitorAds.length > 0) {
     const topCompetitors = analysis.businessNameAds.competitorAds.slice(0, 3);
 
     findings.push({
       type: 'PAINKILLER',
       category: 'Visibility',
-      title: 'Competitors Bidding on Your Business Name',
-      description: `${analysis.businessNameAds.competitorAds.length} competitor(s) are running Google Ads when people search for "${input.businessName}". This means potential customers looking specifically for YOU are seeing competitor ads first and potentially choosing them instead.`,
-      impactScore: 8,
+      title: 'Competitor Ads Observed in Business-Name Search Sample',
+      description: `${analysis.businessNameAds.competitorAds.length} ad(s) from validated non-business domains were observed in the bounded SerpAPI snapshot for "${input.businessName}" in ${input.city}. This sample does not establish continuous bidding, campaign scope, or impression share.`,
+      impactScore: 6,
       confidenceScore: normalizeConfidence(85, '0-100'),
-      evidence: topCompetitors.map((ad) => ({
-        type: 'text',
-        value: `${ad.title} - ${ad.displayLink || ad.link}`,
-        label: 'Competitor Ad',
-      })),
+      evidence: topCompetitors.map((ad) =>
+        observationEvidence(
+          analysis.businessNameAds,
+          `${ad.title} - ${ad.advertiserDomain}`,
+          'Observed advertiser',
+          ad.link
+        )
+      ),
       metrics: {
         competitorAdsOnName: analysis.businessNameAds.competitorAds.length,
         competitorAds: topCompetitors,
       },
       effortEstimate: 'MEDIUM',
       recommendedFix: [
-        `Run Google Ads for your own business name "${input.businessName}"`,
-        'Protect your brand by appearing in ads when people search for you',
-        'Typically costs $1-3 per click (defensive advertising)',
-        'Consider trademark protection if competitors persist',
+        'Review a broader set of time-, device-, and location-bounded samples before changing campaign strategy',
+        'Consider whether brand-search coverage fits the approved marketing plan',
       ],
     });
   }
 
-  // VITAMIN: Not running Google Ads for primary keywords
-  if (
-    !analysis.primaryKeywordAds.businessIsAdvertising &&
-    analysis.primaryKeywordAds.totalAds > 0
-  ) {
+  if (analysis.primaryKeywordAds.status === 'not_observed') {
     findings.push({
       type: 'VITAMIN',
       category: 'Visibility',
-      title: 'Not Running Paid Search Ads',
-      description: `You're not running any Google Ads for "${analysis.primaryKeywordAds.keyword}". ${analysis.primaryKeywordAds.totalAds} competitor(s) are appearing above you in search results.`,
-      impactScore: 5,
+      title: 'No Business Ad Observed in Paid Search Sample',
+      description: `No ad attributable to ${input.businessName}'s validated domain was observed in the bounded SerpAPI snapshot for "${analysis.primaryKeywordAds.keyword}" in ${input.city}. This does not prove the business runs no search, Local Services, shopping, maps, display, social, or remarketing campaigns.`,
+      impactScore: analysis.primaryKeywordAds.totalAds > 0 ? 4 : 1,
       confidenceScore: normalizeConfidence(80, '0-100'),
       evidence: [
-        {
-          type: 'metric',
-          value: analysis.primaryKeywordAds.totalAds,
-          label: 'Competitor Ads Detected',
-        },
+        observationEvidence(
+          analysis.primaryKeywordAds,
+          analysis.primaryKeywordAds.totalAds,
+          'Ads in bounded snapshot'
+        ),
       ],
       metrics: {
         keyword: analysis.primaryKeywordAds.keyword,
@@ -425,31 +441,34 @@ function generatePaidSearchFindings(
       },
       effortEstimate: 'HIGH',
       recommendedFix: [
-        'Start Google Ads campaign for primary keywords',
-        `Target: "${input.businessType} ${input.city}"`,
-        'Set monthly budget starting at $500-1000',
-        'Focus on high-intent keywords (emergency, near me, etc.)',
-        'Use call extensions and location extensions',
+        'Confirm current campaign activity in the business advertising accounts',
+        'Use additional bounded queries and times before making a paid-search recommendation',
       ],
     });
   }
 
-  // VITAMIN: No Google Analytics
-  if (!analysis.trackingPixels.hasGA4 && !analysis.trackingPixels.hasUniversalAnalytics) {
+  if (
+    analysis.trackingPixels.status === 'observed' &&
+    !analysis.trackingPixels.hasGA4 &&
+    !analysis.trackingPixels.hasUniversalAnalytics
+  ) {
     findings.push({
       type: 'VITAMIN',
       category: 'Visibility',
-      title: 'No Analytics Tracking Installed',
+      title: 'Google Analytics Tag Not Observed in HTML Sample',
       description:
-        'Your website has no Google Analytics. You have zero visibility into who visits your site, where they come from, or what they do. Flying blind.',
-      impactScore: 6,
+        'No GA4 or Universal Analytics tag pattern was observed in the fetched HTML sample. Tags loaded later, through a consent flow, or through an unrecognized container may not appear in this check.',
+      impactScore: 4,
       confidenceScore: normalizeConfidence(95, '0-100'),
       evidence: [
-        {
+        createEvidence({
+          pointer: analysis.trackingPixels.sourceUrl,
+          source: 'paid_search_pixel_scan',
+          collected_at: analysis.trackingPixels.observedAt,
           type: 'text',
-          value: 'No GA4 or Universal Analytics detected',
-          label: 'Analytics Status',
-        },
+          value: 'No GA4 or Universal Analytics tag pattern observed',
+          label: 'HTML tag scan',
+        }),
       ],
       metrics: {
         hasGA4: false,
@@ -457,61 +476,57 @@ function generatePaidSearchFindings(
       },
       effortEstimate: 'LOW',
       recommendedFix: [
-        'Install Google Analytics 4 (GA4)',
-        'Set up conversion tracking for form submissions and calls',
-        'Configure goals for key actions',
-        'Link to Google Search Console',
-        'Takes 30 minutes to set up',
+        'Confirm analytics configuration in the site tag manager and analytics account',
+        'Install or repair analytics only if account-level review confirms it is absent',
       ],
     });
   }
 
-  // VITAMIN: No Facebook Pixel
-  if (!analysis.trackingPixels.hasFacebookPixel) {
+  if (analysis.trackingPixels.status === 'observed' && !analysis.trackingPixels.hasFacebookPixel) {
     findings.push({
       type: 'VITAMIN',
       category: 'Visibility',
-      title: 'No Facebook Pixel Installed',
+      title: 'Meta Pixel Tag Not Observed in HTML Sample',
       description:
-        "No Facebook Pixel detected. Can't run retargeting ads or build custom audiences from website visitors.",
-      impactScore: 4,
+        'No Meta Pixel tag pattern was observed in the fetched HTML sample. A tag loaded later, through consent, or through an unrecognized container may not appear in this check.',
+      impactScore: 2,
       confidenceScore: normalizeConfidence(95, '0-100'),
       evidence: [
-        {
+        createEvidence({
+          pointer: analysis.trackingPixels.sourceUrl,
+          source: 'paid_search_pixel_scan',
+          collected_at: analysis.trackingPixels.observedAt,
           type: 'text',
-          value: 'No Facebook Pixel detected',
-          label: 'Facebook Pixel',
-        },
+          value: 'No Meta Pixel tag pattern observed',
+          label: 'HTML tag scan',
+        }),
       ],
       metrics: {
         hasFacebookPixel: false,
       },
       effortEstimate: 'LOW',
       recommendedFix: [
-        'Install Facebook Pixel on all pages',
-        'Enables retargeting ads to people who visited your site',
-        'Build lookalike audiences for better targeting',
-        'Track conversions from Facebook ads',
+        'Confirm Meta advertising and tag-manager configuration before deciding whether a pixel is needed',
       ],
     });
   }
 
-  // POSITIVE: Business IS running ads
-  if (analysis.primaryKeywordAds.businessIsAdvertising) {
+  if (analysis.primaryKeywordAds.status === 'observed') {
     findings.push({
       type: 'VITAMIN',
       category: 'Visibility',
-      title: 'Active Paid Search Campaign Detected',
-      description: `Business is running Google Ads for "${analysis.primaryKeywordAds.keyword}". This shows marketing investment and intent.`,
+      title: 'Paid Search Ad Observed in Bounded Sample',
+      description: `An ad attributable to ${input.businessName}'s validated domain was observed in the bounded SerpAPI snapshot for "${analysis.primaryKeywordAds.keyword}" in ${input.city}. This observation does not establish campaign duration, spend, or full channel coverage.`,
       impactScore: 2,
       confidenceScore: normalizeConfidence(85, '0-100'),
-      evidence: [
-        {
-          type: 'text',
-          value: 'Business detected in Google Ads for primary keywords',
-          label: 'Paid Search Status',
-        },
-      ],
+      evidence: analysis.primaryKeywordAds.businessAds.map((ad) =>
+        observationEvidence(
+          analysis.primaryKeywordAds,
+          `${ad.title} - ${ad.advertiserDomain}`,
+          'Observed business ad',
+          ad.link
+        )
+      ),
       metrics: {
         isAdvertising: true,
         keyword: analysis.primaryKeywordAds.keyword,
@@ -527,21 +542,24 @@ function generatePaidSearchFindings(
     });
   }
 
-  // POSITIVE: GA4 installed
-  if (analysis.trackingPixels.hasGA4) {
+  if (analysis.trackingPixels.status === 'observed' && analysis.trackingPixels.hasGA4) {
     findings.push({
       type: 'VITAMIN',
       category: 'Visibility',
       title: 'Google Analytics 4 Installed',
-      description: 'GA4 is properly installed. Website traffic and conversions are being tracked.',
+      description:
+        'A GA4 tag pattern was observed in the fetched HTML sample. This scan does not verify account ownership, event configuration, consent behavior, or successful data collection.',
       impactScore: 2,
       confidenceScore: normalizeConfidence(95, '0-100'),
       evidence: [
-        {
+        createEvidence({
+          pointer: analysis.trackingPixels.sourceUrl,
+          source: 'paid_search_pixel_scan',
+          collected_at: analysis.trackingPixels.observedAt,
           type: 'text',
-          value: 'GA4 tracking code detected',
-          label: 'Analytics Status',
-        },
+          value: 'GA4 tag pattern observed',
+          label: 'HTML tag scan',
+        }),
       ],
       metrics: {
         hasGA4: true,

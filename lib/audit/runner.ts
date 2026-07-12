@@ -368,6 +368,14 @@ const accessibilityAdapter = async (
     { url: input.url, signal: input.signal, auditId: input.auditId },
     tracker
   );
+  if (data.status === 'failed' || data.data?.status === 'error') {
+    return {
+      status: 'FAILED',
+      data: null,
+      error:
+        data.error || data.data?.data?.recommendations?.[0] || 'Accessibility scan unavailable',
+    };
+  }
   return { status: 'COMPLETE', data };
 };
 
@@ -461,7 +469,7 @@ const paidSearchAdapter = async (
     },
     tracker
   );
-  return { status: 'COMPLETE', data };
+  return adaptAuditModuleResult(data);
 };
 
 const backlinksAdapter = async (
@@ -495,7 +503,7 @@ const privacyComplianceAdapter = async (
     },
     tracker
   );
-  return { status: 'COMPLETE', data };
+  return adaptAuditModuleResult(data);
 };
 
 const schemaMarkupAdapter = async (input: ModuleInput): Promise<ModuleResult> => {
