@@ -1623,3 +1623,50 @@ citations, Claim Policy enforcement, QA/autoQA rejection of unsupported claims, 
 `wave === 8` finding — then stop without beginning Wave 8. Workflow:
 `read -> verify -> classify -> test red -> implement -> test green -> record -> commit ->
 emit -> stop`.
+
+## Wave 7B verification result (2026-07-12)
+
+Verified: P2-27, P2-38, P2-42, P2-43, P2-44, P2-46, P2-50. P2-27 now forwards the canonical
+tracker through all four immutable-audit paths: `techStack`, `websiteCrawler`, `security`, and
+`emailFinder`. Completed safe-fetch operations emit zero-cost `WEBSITE_FETCH`; cache/reuse and
+pre-abort emit no phantom event. Provider-resilience retries retain the established
+per-completed-attempt behavior. TLS socket work remains unpriced because the tracker has no TLS
+resource class.
+
+Tests: focused Wave 7B 46/46 plus 4 P2-27 tracker tests; affected module/adapter regression
+batches 39/39, 64/64, and 62/62; TypeScript exit 0; changed-file ESLint has 0 errors (existing
+warnings only). The canonical-manifest assertions passed with 19/19 tests, but Vitest reports
+the documented local Prisma darwin-arm64 query-engine/Gatekeeper block. SSRF guard remains at
+seven out-of-scope pre-existing raw-fetch violations; no new violation was introduced. Full
+suite not attempted because PostgreSQL 5435/5444 and the Prisma engine remain unavailable.
+
+### Exact continuation prompt for Wave 8 (do not execute yet)
+
+Continue on `remediation/proposalos-e2e` after Wave 7B code checkpoint `146251e`
+(`fix(audit-modules): harden wave 7b module batch`) and the immediately following remediation
+artifact checkpoint, execute **Wave 8 only**, and stop after emitting Wave 9. Read
+`AUDIT_REPORT.md` (immutable),
+`REMEDIATION_STATE.md`, `REMEDIATION_FINDINGS.json`, and this file; verify branch, HEAD,
+preserved dirty baseline, and TypeScript first. Derive scope by filtering
+`REMEDIATION_FINDINGS.json` for `wave === 8`, including P0-26, P1-36, P1-40, and any later
+re-scopes. Preserve all Wave 0-7 invariants and the canonical 27 modules.
+
+Workflow: read -> verify -> classify -> test red -> implement -> test green -> record -> commit
+-> emit -> stop. Do not begin Wave 9. Do not touch production infrastructure, databases,
+customer data, or provider accounts. Tests must invoke real modules/adapters with fixture-mocked
+provider/LLM/browser lower boundaries.
+
+Wave 8 themes: privacyCompliance technical/legal claim boundary; diagnosis graph correctness;
+proposal compiler Finding-ID citation enforcement; Claim Policy through diagnosis/proposal/QA;
+deterministic severity/tier/pricing where product rules require it; strict runtime schemas for
+LLM outputs; untrusted source-content handling; and every wave-8 ledger row. Privacy output is
+technical observation only, jurisdiction-qualified where necessary, explicitly not legal advice,
+and never an automated legal certification. Every proposal claim must cite a validated Finding
+ID from the same audit and tenant; diagnosis/proposals/QA must reject unsupported claims, prices,
+ROI inputs, and invented findings. Preserve unavailable/failed versus verified absence.
+
+Re-run relevant Wave 0-7 regression gates, Finding/Evidence contract tests, network/browser/
+provider safety tests, canonical-module guard, TypeScript, changed-file ESLint, and bounded
+searches. Keep the local PostgreSQL/Prisma environment blocks and out-of-scope SSRF guard
+violations recorded separately. Commit code and campaign artifacts separately only when the
+applicable gates are green, emit a full-context Wave 9 prompt, then stop.

@@ -1182,13 +1182,22 @@
       "id": "P2-27",
       "severity": "P2",
       "title": "4/5 Batch 1 modules perform network calls invisible to CostTracker",
-      "status": "open",
+      "status": "verified",
       "rootCauseGroup": "I",
       "dependencies": [],
-      "files": ["lib/audit/runner.ts", "lib/modules/techStack.ts"],
-      "verification": ["Wire tracker.addApiCall at every fetch site"],
+      "files": [
+        "lib/audit/runner.ts",
+        "lib/modules/techStack.ts",
+        "lib/modules/websiteCrawler.ts",
+        "lib/modules/security.ts",
+        "lib/modules/emailFinder.ts"
+      ],
+      "verification": [
+        "Wire tracker.addApiCall at every fetch site",
+        "Verify real module tracker behavior for completed fetches, retry/failure, cache/reuse, and abort"
+      ],
       "wave": 7,
-      "notes": ""
+      "notes": "Wave 7B verified all four immutable-audit paths. techStack, websiteCrawler, security, and emailFinder forward the canonical CostTracker from the adapter and record each completed safe-fetch operation as zero-cost WEBSITE_FETCH. Cache/single-flight reuse and abort-before-fetch emit no phantom event; retries follow the existing provider-resilience attempt behavior. TLS socket work remains unpriced because the canonical tracker has no TLS resource class."
     },
     {
       "id": "P2-28",
@@ -1323,13 +1332,13 @@
       "id": "P2-38",
       "severity": "P2",
       "title": "contentQuality asserts Flesch-Kincaid with no language detection",
-      "status": "open",
+      "status": "verified",
       "rootCauseGroup": "H",
       "dependencies": [],
       "files": ["lib/modules/contentQuality.ts"],
       "verification": ["Detect language before applying readability finding"],
       "wave": 7,
-      "notes": ""
+      "notes": "Wave 7B: detects declared HTML/meta language before a bounded English heuristic; Flesch-Kincaid finding is emitted only for detected English and records language provenance."
     },
     {
       "id": "P2-39",
@@ -1376,19 +1385,19 @@
       "id": "P2-42",
       "severity": "P2",
       "title": "conversion CTA-detection doesn't check element visibility/dimensions",
-      "status": "open",
+      "status": "verified",
       "rootCauseGroup": "H",
       "dependencies": [],
       "files": ["lib/modules/conversion.ts"],
       "verification": ["Add visibility gate before counting CTA"],
       "wave": 7,
-      "notes": ""
+      "notes": "Wave 7B: CTA counting now requires rendered visibility, non-zero geometry, enabled interaction, and above-fold geometry where claimed."
     },
     {
       "id": "P2-43",
       "severity": "P2",
       "title": "Three separate Puppeteer launches per audit (mobileUX/accessibility/conversion)",
-      "status": "open",
+      "status": "verified",
       "rootCauseGroup": "I",
       "dependencies": [],
       "files": [
@@ -1398,19 +1407,19 @@
       ],
       "verification": ["Share one browser/page or consolidate launcher; test"],
       "wave": 7,
-      "notes": ""
+      "notes": "Wave 7B: conversion, mobileUX, and accessibility share a reference-counted browser process per audit while retaining isolated Pages, viewport setup, and cleanup."
     },
     {
       "id": "P2-44",
       "severity": "P2",
       "title": "coreWebVitals extracts INP but never surfaces it as a finding",
-      "status": "open",
+      "status": "verified",
       "rootCauseGroup": "E",
       "dependencies": [],
       "files": ["lib/audit/runner.ts"],
       "verification": ["Add INP finding block mirroring LCP/CLS/TBT"],
       "wave": 7,
-      "notes": ""
+      "notes": "Wave 7B: coreWebVitals emits contract-valid INP findings only for observed Lighthouse INP, labeled as a single-run lab measurement with milliseconds and provenance."
     },
     {
       "id": "P2-45",
@@ -1430,7 +1439,7 @@
       "id": "P2-46",
       "severity": "P2",
       "title": "competitor/backlinks/videoPresence missing SERP_API_KEY -> zero-value shape == genuine zero",
-      "status": "open",
+      "status": "verified",
       "rootCauseGroup": "H",
       "dependencies": [],
       "files": [
@@ -1440,7 +1449,7 @@
       ],
       "verification": ["Add distinct 'not checked' state"],
       "wave": 7,
-      "notes": ""
+      "notes": "Wave 7B: competitor configuration failure is unavailable/not_configured, backlinks remain unavailable without an approved provider, and video discovery preserves unavailable versus verified absence."
     },
     {
       "id": "P2-47",
@@ -1482,13 +1491,13 @@
       "id": "P2-50",
       "severity": "P2",
       "title": "privacyCompliance tracker detection uses narrow hardcoded pattern list",
-      "status": "open",
+      "status": "verified",
       "rootCauseGroup": "H",
       "dependencies": [],
       "files": ["lib/modules/privacyCompliance.ts"],
       "verification": ["Expand tracker-name patterns or integrate signature DB"],
       "wave": 7,
-      "notes": ""
+      "notes": "Wave 7B: expanded only tracker-cookie patterns (including Hotjar, LinkedIn, TikTok, Microsoft Clarity, HubSpot, and common analytics identifiers). No Wave 8 legal/compliance claim behavior changed."
     },
     {
       "id": "P2-51",

@@ -1423,3 +1423,32 @@ narrow technical widening only, no legal/technical claim-boundary work, which re
 **Wave 7B — harden the remaining Wave 7 module clusters.** See the exact continuation prompt
 in `REMEDIATION_VERIFICATION.md`'s Wave 7A section. Do not begin Wave 8 until Wave 7B is
 committed and checkpointed.
+
+## Wave 7B result (2026-07-12)
+
+Entry checkpoint was `3d7a1e2` on `remediation/proposalos-e2e`; TypeScript passed before and
+after the Wave 7B work. Preserved unrelated dirty files remain unstaged, including
+`AUDIT_REPORT.md`, logger-typing route work, prompt-performance, metering-sweep, and
+`scripts/show-leaks.js`.
+
+| Finding | Status   | Result                                                                                                                                                                                                                                                                                                                   |
+| ------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| P2-27   | verified | All four immutable-audit paths now forward the canonical tracker. `techStack`, `websiteCrawler`, `security`, and `emailFinder` record completed safe-fetch operations as zero-cost `WEBSITE_FETCH`; cache/reuse and pre-abort emit no phantom event. TLS socket work is not falsely represented as a paid provider call. |
+| P2-38   | verified | Language priority is HTML `lang`, content-language metadata, then a bounded English heuristic; non-English/unknown content cannot emit Flesch-Kincaid deficiency findings.                                                                                                                                               |
+| P2-42   | verified | CTA counting requires rendered visibility, geometry, enabled interaction, and fold position where claimed.                                                                                                                                                                                                               |
+| P2-43   | verified | Browser-backed modules share one reference-counted Browser per audit, with isolated Pages and page/browser cleanup.                                                                                                                                                                                                      |
+| P2-44   | verified | INP is emitted only from observed Lighthouse INP, in milliseconds, with contract-valid evidence labeled as a single-run lab measurement.                                                                                                                                                                                 |
+| P2-46   | verified | Competitor configuration is unavailable/not_configured, backlinks are unavailable without an approved provider, and video discovery preserves unavailable versus verified absence.                                                                                                                                       |
+| P2-50   | verified | Tracker-cookie patterns expanded only; Wave 8 legal/compliance language remains untouched.                                                                                                                                                                                                                               |
+
+Focused Wave 7B tests: 46/46 pass. Affected module/adapter regressions: 58/58 pass.
+TypeScript passes. Changed-file ESLint has 0 errors (existing warnings only). The SSRF
+architecture guard still has seven pre-existing violations outside this wave
+(`gbp`, `gbpDeep`, `mobileUX`, `socialDeep`, and `auditJobQueue`); competitor allowlist line
+references were updated only because this wave shifted those existing approved fetches.
+The canonical manifest test passes but emits the existing local Prisma-engine/Gatekeeper
+failure. Full suite was not run because PostgreSQL and the Prisma engine remain unavailable.
+
+Wave 7 is complete at code checkpoint `146251e` (`fix(audit-modules): harden wave 7b module
+batch`). Wave 8 must include P0-26 plus P1-36/P1-40 and any `wave === 8` ledger rows. P1-41
+remains fixed-and-externally-blocked pending approved backlink-provider selection.
