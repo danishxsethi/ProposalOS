@@ -1,11 +1,45 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { z } from 'zod';
 
 import { CostTracker } from '@/lib/costs/costTracker';
 import { logger } from '@/lib/logger';
-import { traceLlmCall } from '@/lib/tracing';
+import { withProviderResilience } from '@/lib/resilience/withProviderResilience';
+import { safeFetch } from '@/lib/security/safeFetch';
 
 import { normalizeConfidence } from './findingGenerator';
-import { AuditModuleResult, Finding } from './types';
+import { AuditModuleResult, createEvidence, Finding } from './types';
+
+const SOCIAL_PLATFORMS = ['facebook', 'instagram', 'linkedin', 'youtube', 'tiktok'] as const;
+type SocialPlatform = (typeof SOCIAL_PLATFORMS)[number];
+type ProfileStatus = 'verified' | 'likely' | 'ambiguous' | 'absent' | 'inaccessible' | 'failed';
+
+const PLATFORM_HOSTS: Record<SocialPlatform, string[]> = {
+  facebook: ['facebook.com', 'fb.com'],
+  instagram: ['instagram.com'],
+  linkedin: ['linkedin.com'],
+  youtube: ['youtube.com'],
+  tiktok: ['tiktok.com'],
+};
+
+const REJECTED_PATH_PARTS: Record<SocialPlatform, string[]> = {
+  facebook: ['/share', '/sharer', '/dialog/', '/plugins/', '/watch', '/reel/'],
+  instagram: ['/p/', '/reel/', '/tv/', '/stories/'],
+  linkedin: ['/sharing/', '/sharearticle', '/feed/update/', '/posts/', '/pulse/'],
+  youtube: ['/watch', '/shorts/', '/embed/', '/results', '/playlist'],
+  tiktok: ['/video/', '/embed/', '/share/'],
+};
+
+const SerpResponseSchema = z.object({
+  organic_results: z
+    .array(
+      z.object({
+        link: z.string().url(),
+        title: z.string().optional().default(''),
+        snippet: z.string().optional().default(''),
+      })
+    )
+    .optional()
+    .default([]),
+});
 
 export interface SocialDeepModuleInput {
   websiteUrl: string;
@@ -13,294 +47,416 @@ export interface SocialDeepModuleInput {
   city: string;
   industry: string;
   discoveredUrls?: { platform: string; url: string }[];
+  websiteDiscoverySucceeded?: boolean;
+  signal?: AbortSignal;
 }
 
-interface SocialProfile {
-  platform: 'facebook' | 'instagram' | 'linkedin' | 'youtube' | 'tiktok';
+export interface SocialProfileObservation {
+  platform: SocialPlatform;
   url: string;
-  exists: boolean;
-  followers?: number;
-  lastPostDate?: string;
-  isPrivate?: boolean; // IG
+  status: ProfileStatus;
+  confidence: number;
+  source: 'website' | 'serpapi';
   hasWebsiteLink?: boolean;
-  posts?: string[]; // Captions for analysis
+  reason?: string;
 }
 
-interface ContentAnalysis {
-  score: number; // 1-10
-  strengths: string[];
-  weaknesses: string[];
-  bestPost?: string;
-  professionalism: number;
-  engagementPotential: number;
+interface DiscoveryResult {
+  profiles: Array<{
+    platform: SocialPlatform;
+    url: string;
+    source: 'website' | 'serpapi';
+    confidence: number;
+  }>;
+  checkedPlatforms: SocialPlatform[];
+  absentPlatforms: SocialPlatform[];
+  unavailablePlatforms: SocialPlatform[];
+  evidencePointers: Partial<Record<SocialPlatform, string>>;
 }
 
-/**
- * Deep Social Analysis Module
- * Checks profile health, consistency, and content quality.
- */
+export function validateSocialProfileUrl(
+  platform: string,
+  candidate: string
+): { ok: true; platform: SocialPlatform; url: string } | { ok: false; reason: string } {
+  if (!SOCIAL_PLATFORMS.includes(platform as SocialPlatform)) {
+    return { ok: false, reason: 'unsupported platform' };
+  }
+
+  try {
+    const parsed = new URL(candidate);
+    const normalizedPlatform = platform as SocialPlatform;
+    const host = parsed.hostname.toLowerCase().replace(/^www\./, '');
+    const hostMatches = PLATFORM_HOSTS[normalizedPlatform].some(
+      (allowed) => host === allowed || host.endsWith(`.${allowed}`)
+    );
+    if (!hostMatches) return { ok: false, reason: 'platform host mismatch' };
+
+    const path = parsed.pathname.toLowerCase();
+    if (
+      path === '/' ||
+      REJECTED_PATH_PARTS[normalizedPlatform].some((part) => path.includes(part))
+    ) {
+      return { ok: false, reason: 'not a business profile URL' };
+    }
+
+    parsed.hash = '';
+    parsed.search = '';
+    return { ok: true, platform: normalizedPlatform, url: parsed.toString() };
+  } catch {
+    return { ok: false, reason: 'invalid URL' };
+  }
+}
+
 export async function runSocialDeepModule(
   input: SocialDeepModuleInput,
   tracker?: CostTracker
 ): Promise<AuditModuleResult> {
   logger.info({ business: input.businessName }, '[SocialDeep] Starting deep social analysis');
 
-  const findings: Finding[] = [];
-  const profiles: SocialProfile[] = [];
+  try {
+    const discovery = await discoverProfiles(input, tracker);
+    const observations: SocialProfileObservation[] = [];
 
-  // 1. Identify Profiles to Analyze
-  // If not provided, we could try to find them or just skip.
-  // For now, we assume basic 'social' module ran first or we have URLs.
-  // If not, we do a quick SerpAPI search for them.
-  let targetUrls = input.discoveredUrls || [];
-
-  if (targetUrls.length === 0) {
-    // Fallback: Try to find them via Google Search
-    tracker?.addApiCall('SERP');
-    targetUrls = await findSocialProfiles(input.businessName, input.city);
-  }
-
-  // 2. Analyze Each Platform
-  // We'll process commonly requested platforms
-  const platforms = ['facebook', 'instagram', 'linkedin', 'youtube', 'tiktok'];
-
-  for (const pName of platforms) {
-    const target = targetUrls.find((t) => t.platform === pName);
-    if (target) {
-      const profile = await analyzeProfile(target.platform as any, target.url, tracker);
-      profiles.push(profile);
-    } else {
-      // Missing platform?
-      // Only flag as "Missing" if it's high relevance for the industry
-      const impact = getMissingPlatformImpact(pName, input.industry);
-      if (impact > 0) {
-        findings.push({
-          type: impact >= 7 ? 'PAINKILLER' : 'VITAMIN',
-          category: 'Visibility',
-          title: `Missing ${capitalize(pName)} Profile`,
-          description: `No ${capitalize(pName)} profile found. For ${input.industry}, this is a key channel.`,
-          impactScore: impact,
-          confidenceScore: normalizeConfidence(90, '0-100'),
-          evidence: [{ type: 'text', value: 'Profile not found', label: 'Missing' }],
-          metrics: { platform: pName, status: 'missing' },
-          effortEstimate: 'LOW',
-          recommendedFix: [
-            `Create a ${capitalize(pName)} page`,
-            'Optimise bio and link to website',
-          ],
-        });
-      }
+    for (const profile of discovery.profiles.slice(0, SOCIAL_PLATFORMS.length)) {
+      observations.push(await analyzeProfile(profile, input, tracker));
     }
-  }
 
-  // 3. Cross-Platform Consistency
-  const activeProfiles = profiles.filter((p) => p.exists);
-  if (activeProfiles.length > 0) {
-    // Check branding logic here if we had images data
-    // For MVP, just checking if they link back to website
-    const unlinked = activeProfiles.filter((p) => p.hasWebsiteLink === false);
-    if (unlinked.length > 0) {
-      findings.push({
-        type: 'VITAMIN',
-        category: 'Visibility',
-        title: 'Social Profiles Not Linking to Website',
-        description: `${unlinked.length} profiles are missing a link back to your website. You are losing traffic.`,
-        impactScore: 4,
-        confidenceScore: normalizeConfidence(95, '0-100'),
-        evidence: unlinked.map((p) => ({
-          type: 'url' as const,
-          value: p.url,
-          label: capitalize(p.platform),
-        })),
-        metrics: { unlinkedCount: unlinked.length },
-        effortEstimate: 'LOW',
-        recommendedFix: ['Add website URL to all social bios'],
-      });
-    }
-  } else {
-    // Abandoned / Ghost Town
-    findings.push({
-      type: 'PAINKILLER',
-      category: 'Visibility',
-      title: 'No Active Social Presence',
-      description:
-        'We could not find any active social media profiles. In 2026, social proof is critical for trust.',
-      impactScore: 8,
-      confidenceScore: normalizeConfidence(95, '0-100'),
-      evidence: [],
-      metrics: { activeCount: 0 },
-      effortEstimate: 'MEDIUM',
-      recommendedFix: ['Claim operational profiles', 'Post at least once a week'],
-    });
-  }
+    const findings = generateFindings(input, discovery, observations);
+    const hasVerified = observations.some((profile) => profile.status === 'verified');
+    const hasIncomplete =
+      discovery.unavailablePlatforms.length > 0 ||
+      observations.some((profile) =>
+        ['likely', 'ambiguous', 'inaccessible', 'failed'].includes(profile.status)
+      );
+    const noProviderAndNoProfiles =
+      discovery.profiles.length === 0 &&
+      discovery.checkedPlatforms.length === 0 &&
+      discovery.absentPlatforms.length === 0;
 
-  // 4. AI Content Analysis (Gemini)
-  // Gather all posts text
-  const allPosts = profiles.flatMap((p) => p.posts || []);
-  if (allPosts.length > 0) {
-    const analysis = await analyzeContentQuality(allPosts, input.industry, input.city, tracker);
-
-    if (analysis) {
-      if (analysis.score < 5) {
-        findings.push({
-          type: 'VITAMIN',
-          category: 'Content',
-          title: 'Low Quality Social Content',
-          description: 'AI analysis suggests your posts lack engagement or professionalism.',
-          impactScore: 5,
-          confidenceScore: normalizeConfidence(80, '0-100'),
-          evidence: analysis.weaknesses.map((w) => ({ type: 'text', value: w, label: 'Weakness' })),
-          metrics: { contentScore: analysis.score },
-          effortEstimate: 'MEDIUM',
-          recommendedFix: ['Use higher quality images', 'Include clear CTAs', 'Post consistently'],
-        });
-      }
-    }
-  }
-
-  // 5. Abandoned Profiles
-  const abandoned = profiles.filter(
-    (p) => p.exists && p.lastPostDate && isOlderThan(p.lastPostDate, 90)
-  );
-  if (abandoned.length > 0) {
-    findings.push({
-      type: 'PAINKILLER',
-      category: 'Visibility',
-      title: 'Abandoned Social Profiles',
-      description: `${abandoned.length} profiles haven't posted in 3 months. This looks worse than having no profile.`,
-      impactScore: 7,
-      confidenceScore: normalizeConfidence(90, '0-100'),
-      evidence: abandoned.map((p) => ({
-        type: 'text',
-        value: `Last post: ${p.lastPostDate}`,
-        label: capitalize(p.platform),
-      })),
-      metrics: { abandonedCount: abandoned.length },
-      effortEstimate: 'LOW',
-      recommendedFix: ['Resume posting or archive the page', 'Pin a "We are still active" post'],
-    });
-  }
-
-  return {
-    findings,
-    evidenceSnapshots: [
-      {
-        module: 'social_deep',
-        source: 'serp_api',
-        rawResponse: profiles,
-        collectedAt: new Date(),
+    return {
+      findings,
+      evidenceSnapshots: [
+        {
+          module: 'social_deep',
+          source: 'website_and_social_profile_checks',
+          rawResponse: { discovery, observations },
+          collectedAt: new Date(),
+        },
+      ],
+      execution: noProviderAndNoProfiles
+        ? {
+            state: 'unavailable',
+            reason: 'No validated website profiles and SERP_API_KEY is not configured',
+          }
+        : hasIncomplete ||
+            (!hasVerified && discovery.absentPlatforms.length < SOCIAL_PLATFORMS.length)
+          ? { state: 'partial', reason: 'Some platform checks or profile metrics were unavailable' }
+          : { state: 'complete' },
+    };
+  } catch (error) {
+    if (input.signal?.aborted) throw input.signal.reason ?? error;
+    logger.error({ error, business: input.businessName }, '[SocialDeep] Analysis failed');
+    return {
+      findings: [],
+      evidenceSnapshots: [],
+      execution: {
+        state: 'failed',
+        reason: error instanceof Error ? error.message : 'Social profile analysis failed',
       },
-    ],
-  };
+    };
+  }
 }
 
-// HELPERS
+async function discoverProfiles(
+  input: SocialDeepModuleInput,
+  tracker?: CostTracker
+): Promise<DiscoveryResult> {
+  const profiles: DiscoveryResult['profiles'] = [];
+  const checkedPlatforms: SocialPlatform[] = [];
+  const absentPlatforms: SocialPlatform[] = [];
+  const unavailablePlatforms: SocialPlatform[] = [];
+  const evidencePointers: DiscoveryResult['evidencePointers'] = {};
+  const seen = new Set<SocialPlatform>();
 
-async function findSocialProfiles(
-  name: string,
-  city: string
-): Promise<{ platform: string; url: string }[]> {
-  // Quick SERP search logic to be implemented or rely on existing module
-  // For now returning empty to rely on input
-  return [];
+  for (const candidate of input.discoveredUrls || []) {
+    const validated = validateSocialProfileUrl(candidate.platform, candidate.url);
+    if (!validated.ok || seen.has(validated.platform)) continue;
+    seen.add(validated.platform);
+    profiles.push({
+      platform: validated.platform,
+      url: validated.url,
+      source: 'website',
+      confidence: 1,
+    });
+  }
+
+  const apiKey = process.env.SERP_API_KEY;
+  if (!apiKey) {
+    unavailablePlatforms.push(...SOCIAL_PLATFORMS.filter((platform) => !seen.has(platform)));
+    return { profiles, checkedPlatforms, absentPlatforms, unavailablePlatforms, evidencePointers };
+  }
+
+  for (const platform of SOCIAL_PLATFORMS.filter((item) => !seen.has(item))) {
+    const query = `site:${PLATFORM_HOSTS[platform][0]} "${input.businessName}" "${input.city}"`;
+    const pointer = `https://serpapi.com/search.json?engine=google&q=${encodeURIComponent(query)}&num=5`;
+    evidencePointers[platform] = pointer;
+
+    try {
+      const raw = await withProviderResilience<unknown>(
+        {
+          provider: 'serpapi',
+          operation: `social_deep:discover:${platform}`,
+          signal: input.signal,
+          degrade: false,
+          policy: { timeoutMs: 8000, maxAttempts: 2 },
+        },
+        async ({ signal }) => {
+          tracker?.addApiCall('SERP');
+          const response = await fetch(`${pointer}&api_key=${apiKey}`, { signal });
+          if (!response.ok) throw new Error(`SerpAPI HTTP ${response.status}`);
+          return response.json();
+        }
+      );
+      const parsed = SerpResponseSchema.parse(raw);
+      checkedPlatforms.push(platform);
+      const candidate = parsed.organic_results
+        .map((result) => {
+          const validated = validateSocialProfileUrl(platform, result.link);
+          if (!validated.ok) return null;
+          const confidence = identityConfidence(
+            `${result.title} ${result.snippet}`,
+            input.businessName,
+            input.city
+          );
+          return { validated, confidence };
+        })
+        .filter(
+          (
+            item
+          ): item is {
+            validated: { ok: true; platform: SocialPlatform; url: string };
+            confidence: number;
+          } => item !== null
+        )
+        .sort((a, b) => b.confidence - a.confidence)[0];
+
+      if (!candidate) {
+        absentPlatforms.push(platform);
+      } else {
+        profiles.push({
+          platform,
+          url: candidate.validated.url,
+          source: 'serpapi',
+          confidence: candidate.confidence,
+        });
+      }
+    } catch (error) {
+      if (input.signal?.aborted) throw input.signal.reason ?? error;
+      unavailablePlatforms.push(platform);
+      logger.warn({ platform, error }, '[SocialDeep] Platform discovery unavailable');
+    }
+  }
+
+  return { profiles, checkedPlatforms, absentPlatforms, unavailablePlatforms, evidencePointers };
 }
 
 async function analyzeProfile(
-  platform: string,
-  url: string,
-  tracker?: CostTracker
-): Promise<SocialProfile> {
-  const profile: SocialProfile = {
-    platform: platform as any,
-    url,
-    exists: true, // assume exists if URL provided, verify below
-    posts: [],
-  };
-
+  profile: DiscoveryResult['profiles'][number],
+  input: SocialDeepModuleInput,
+  _tracker?: CostTracker
+): Promise<SocialProfileObservation> {
   try {
-    // Use SerpAPI "site:" search to get index info + snippet
-    // This is cheaper and more reliable than scraping profile directly
-    const query = `site:${getDomain(platform)} "${extractHandle(url)}" `;
-    // Or just search for the profile URL to see google's cache info
+    const response = await withProviderResilience<Response>(
+      {
+        provider: 'crawler',
+        operation: `social_deep:profile:${profile.platform}`,
+        signal: input.signal,
+        degrade: false,
+        policy: { timeoutMs: 8000, maxAttempts: 2 },
+      },
+      ({ signal }) =>
+        safeFetch(
+          profile.url,
+          { signal, headers: { 'User-Agent': 'Mozilla/5.0 (compatible; ProposalOS/1.0)' } },
+          { maxRedirects: 3, maxResponseBytes: 512 * 1024 }
+        )
+    );
 
-    // For MVP, we'll implement a Mock/Heuristic or simple fetch if public
-    // Real implementation would use SerpAPI /google_search
+    if (response.status === 404 || response.status === 410) {
+      return { ...profile, status: 'absent', confidence: 1, reason: `HTTP ${response.status}` };
+    }
+    if ([401, 403, 429].includes(response.status)) {
+      return {
+        ...profile,
+        status: 'inaccessible',
+        confidence: profile.confidence,
+        reason: `HTTP ${response.status}`,
+      };
+    }
+    if (!response.ok) {
+      return {
+        ...profile,
+        status: 'failed',
+        confidence: profile.confidence,
+        reason: `HTTP ${response.status}`,
+      };
+    }
 
-    // Mocking extraction for demo speed, assuming valid URL
-    // In prod, we would call a resilient fetcher or use social APIs.
-  } catch (e) {
-    logger.error({ platform, error: e }, 'Failed to analyze social profile');
-    profile.exists = false;
+    const html = await response.text();
+    const pageConfidence = identityConfidence(
+      html.slice(0, 100_000),
+      input.businessName,
+      input.city
+    );
+    const confidence = Math.max(profile.confidence, pageConfidence);
+    const websiteHost = new URL(input.websiteUrl).hostname.replace(/^www\./, '').toLowerCase();
+    const hasWebsiteLink = html.toLowerCase().includes(websiteHost);
+    const status: ProfileStatus =
+      profile.source === 'website' ? 'verified' : confidence >= 0.75 ? 'likely' : 'ambiguous';
+
+    return { ...profile, status, confidence, hasWebsiteLink };
+  } catch (error) {
+    if (input.signal?.aborted) throw input.signal.reason ?? error;
+    return {
+      ...profile,
+      status: 'failed',
+      confidence: profile.confidence,
+      reason: error instanceof Error ? error.message : 'Profile fetch failed',
+    };
   }
-
-  return profile;
 }
 
-async function analyzeContentQuality(
-  posts: string[],
-  industry: string,
-  city: string,
-  tracker?: CostTracker
-): Promise<ContentAnalysis | null> {
-  const apiKey = process.env.GOOGLE_AI_API_KEY;
-  if (!apiKey || posts.length === 0) return null;
+function generateFindings(
+  input: SocialDeepModuleInput,
+  discovery: DiscoveryResult,
+  observations: SocialProfileObservation[]
+): Finding[] {
+  const collectedAt = new Date().toISOString();
+  const findings: Finding[] = [];
 
-  try {
-    tracker?.addLlmCall('GEMINI_FLASH', 300, 100);
-    const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({
-      model: 'gemini-1.5-flash',
-      generationConfig: { responseMimeType: 'application/json' },
+  for (const platform of discovery.absentPlatforms) {
+    const impact = getMissingPlatformImpact(platform, input.industry);
+    const pointer = discovery.evidencePointers[platform];
+    if (impact === 0 || !pointer) continue;
+    findings.push({
+      type: impact >= 7 ? 'PAINKILLER' : 'VITAMIN',
+      category: 'Visibility',
+      title: `No ${capitalize(platform)} Business Profile Found`,
+      description: `A bounded search did not find a matching ${capitalize(platform)} business profile. This is a search observation, not proof that no private or unindexed profile exists.`,
+      impactScore: impact,
+      confidenceScore: normalizeConfidence(80, '0-100'),
+      evidence: [
+        createEvidence({
+          pointer,
+          source: 'serpapi_social_discovery',
+          collected_at: collectedAt,
+          type: 'text',
+          value: 'No validated profile in the first 5 results',
+          label: `${capitalize(platform)} Search`,
+        }),
+      ],
+      metrics: { platform, searchResultLimit: 5, status: 'verified_absent_in_bounded_search' },
+      effortEstimate: 'LOW',
+      recommendedFix: [
+        `Review whether a ${capitalize(platform)} profile fits the channel strategy`,
+      ],
     });
-
-    const prompt = `
-            Analyze these social media captions for a ${industry} business in ${city}:
-            ${JSON.stringify(posts)}
-            
-            Rate 1-10 on professionalism and engagement.
-            Return JSON: { "score": number, "strengths": string[], "weaknesses": string[] }
-        `;
-
-    const result = await model.generateContent(prompt);
-    return JSON.parse(result.response.text());
-  } catch (e) {
-    return null;
   }
+
+  const unlinked = observations.filter(
+    (profile) => profile.status === 'verified' && profile.hasWebsiteLink === false
+  );
+  if (unlinked.length > 0) {
+    findings.push({
+      type: 'VITAMIN',
+      category: 'Visibility',
+      title: 'Verified Social Profiles Do Not Link to the Website',
+      description: `${unlinked.length} accessible profile page(s) did not expose the audited website domain in the checked public HTML.`,
+      impactScore: 4,
+      confidenceScore: normalizeConfidence(75, '0-100'),
+      evidence: unlinked.map((profile) =>
+        createEvidence({
+          pointer: profile.url,
+          source: 'social_profile_fetch',
+          collected_at: collectedAt,
+          type: 'url',
+          value: profile.url,
+          label: capitalize(profile.platform),
+        })
+      ),
+      metrics: { unlinkedCount: unlinked.length },
+      effortEstimate: 'LOW',
+      recommendedFix: ['Add the canonical website URL to each business profile where supported'],
+    });
+  }
+
+  if (discovery.absentPlatforms.length === SOCIAL_PLATFORMS.length && observations.length === 0) {
+    findings.push({
+      type: 'PAINKILLER',
+      category: 'Visibility',
+      title: 'No Public Social Business Profile Found in Bounded Checks',
+      description:
+        'Five platform-specific searches completed without a validated business profile. Private or unindexed profiles may still exist.',
+      impactScore: 7,
+      confidenceScore: normalizeConfidence(80, '0-100'),
+      evidence: SOCIAL_PLATFORMS.map((platform) =>
+        createEvidence({
+          pointer: discovery.evidencePointers[platform]!,
+          source: 'serpapi_social_discovery',
+          collected_at: collectedAt,
+          type: 'text',
+          value: 'No validated profile in the first 5 results',
+          label: capitalize(platform),
+        })
+      ),
+      metrics: { checkedPlatforms: SOCIAL_PLATFORMS.length, resultLimitPerPlatform: 5 },
+      effortEstimate: 'MEDIUM',
+      recommendedFix: [
+        'Confirm the intended social channels and create or claim business profiles',
+      ],
+    });
+  }
+
+  return findings;
 }
 
-function getMissingPlatformImpact(platform: string, industry: string): number {
-  const i = industry.toLowerCase();
+function identityConfidence(text: string, businessName: string, city: string): number {
+  const haystack = normalize(text);
+  const nameTokens = normalize(businessName)
+    .split(' ')
+    .filter((token) => token.length > 2);
+  if (nameTokens.length === 0) return 0;
+  const nameMatches = nameTokens.filter((token) => haystack.includes(token)).length;
+  const nameScore = nameMatches / nameTokens.length;
+  const cityScore = city && haystack.includes(normalize(city)) ? 0.15 : 0;
+  return Math.min(1, nameScore * 0.85 + cityScore);
+}
 
+function normalize(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
+function getMissingPlatformImpact(platform: SocialPlatform, industry: string): number {
+  const normalizedIndustry = industry.toLowerCase();
   if (
     platform === 'instagram' &&
-    (i.includes('food') || i.includes('beauty') || i.includes('retail'))
-  )
+    ['food', 'beauty', 'retail'].some((term) => normalizedIndustry.includes(term))
+  ) {
     return 7;
+  }
   if (
     platform === 'linkedin' &&
-    (i.includes('law') || i.includes('consulting') || i.includes('b2b'))
-  )
+    ['law', 'consulting', 'b2b'].some((term) => normalizedIndustry.includes(term))
+  ) {
     return 6;
-  if (platform === 'facebook') return 4; // Expected for everyone
-
-  return 0; // Not critical
+  }
+  if (platform === 'facebook') return 4;
+  return 0;
 }
 
-function capitalize(s: string) {
-  return s.charAt(0).toUpperCase() + s.slice(1);
-}
-function isOlderThan(dateStr: string, days: number) {
-  const d = new Date(dateStr);
-  const now = new Date();
-  const diff = (now.getTime() - d.getTime()) / (1000 * 3600 * 24);
-  return diff > days;
-}
-function getDomain(p: string) {
-  if (p === 'linkedin') return 'linkedin.com';
-  if (p === 'instagram') return 'instagram.com';
-  return `${p}.com`;
-}
-function extractHandle(url: string) {
-  const parts = url.split('/').filter((x) => x);
-  return parts[parts.length - 1];
+function capitalize(value: string): string {
+  return value.charAt(0).toUpperCase() + value.slice(1);
 }

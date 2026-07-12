@@ -32,7 +32,7 @@ const baseAnalysis: GbpDeepAnalysis = {
     avgResponseLength: 0,
     sentiment: { positiveKeywords: [], negativeKeywords: [] },
   },
-  isClaimed: true,
+  claimedStatus: { value: null, basis: 'unavailable' },
   primaryCategory: 'Dental clinic',
   secondaryCategories: [],
 };

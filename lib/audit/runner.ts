@@ -90,6 +90,28 @@ interface ModuleConfig {
   timeoutMs?: number;
 }
 
+function adaptAuditModuleResult(data: {
+  execution?: {
+    state: 'complete' | 'partial' | 'unavailable' | 'failed';
+    reason?: string;
+  };
+}): ModuleResult {
+  switch (data.execution?.state) {
+    case 'partial':
+      return { status: 'PARTIAL', data, error: data.execution.reason };
+    case 'unavailable':
+      return {
+        status: 'SKIPPED',
+        data,
+        error: `UNAVAILABLE: ${data.execution.reason || 'provider unavailable'}`,
+      };
+    case 'failed':
+      return { status: 'FAILED', data: null, error: data.execution.reason || 'Module failed' };
+    default:
+      return { status: 'COMPLETE', data };
+  }
+}
+
 async function withTimeout<T>(
   run: (signal: AbortSignal) => Promise<T>,
   timeoutMs: number,
@@ -254,10 +276,12 @@ const socialDeepAdapter = async (
       city: input.city,
       industry: input.industry || 'Generic',
       discoveredUrls,
+      websiteDiscoverySucceeded: socialData?.skipped !== true,
+      signal: input.signal,
     },
     tracker
   );
-  return { status: 'COMPLETE', data };
+  return adaptAuditModuleResult(data);
 };
 
 const gbpDeepAdapter = async (input: ModuleInput, tracker: CostTracker): Promise<ModuleResult> => {
@@ -270,10 +294,12 @@ const gbpDeepAdapter = async (input: ModuleInput, tracker: CostTracker): Promise
       websiteUrl: input.url,
       businessName: input.businessName || 'Unknown',
       city: input.city || 'Unknown',
+      placeData: gbpData,
+      signal: input.signal,
     },
     tracker
   );
-  return { status: 'COMPLETE', data };
+  return adaptAuditModuleResult(data);
 };
 
 const seoDeepAdapter = async (input: ModuleInput, tracker: CostTracker): Promise<ModuleResult> => {
@@ -300,7 +326,7 @@ const mobileUXAdapter = async (input: ModuleInput, tracker: CostTracker): Promis
     { url: input.url, businessName: input.businessName || 'Unknown', signal: input.signal },
     tracker
   );
-  return { status: 'COMPLETE', data };
+  return adaptAuditModuleResult(data);
 };
 
 const contentQualityAdapter = async (
@@ -375,10 +401,15 @@ const backlinksAdapter = async (
 ): Promise<ModuleResult> => {
   if (!input.url || !input.businessName || !input.city) throw new Error('url, name, city required');
   const data = await runBacklinksModule(
-    { websiteUrl: input.url, businessName: input.businessName, city: input.city },
+    {
+      websiteUrl: input.url,
+      businessName: input.businessName,
+      city: input.city,
+      signal: input.signal,
+    },
     tracker
   );
-  return { status: 'COMPLETE', data };
+  return adaptAuditModuleResult(data);
 };
 
 const privacyComplianceAdapter = async (
@@ -483,10 +514,11 @@ const videoPresenceAdapter = async (
       industry: input.industry || 'Generic',
       websiteUrl: input.url || '',
       competitors,
+      signal: input.signal,
     },
     tracker
   );
-  return { status: 'COMPLETE', data };
+  return adaptAuditModuleResult(data);
 };
 
 /** Normalize for self-exclusion comparison: lowercase, strip punctuation, collapse spaces. */
@@ -1485,8 +1517,8 @@ async function runAuditInternal(auditId: string, signal?: AbortSignal) {
 
         // Synthesize results into discoveries and evidence
         for (const [modName, res] of Array.from(results.entries())) {
-          if (res.status === 'COMPLETE') {
-            modulesCompleted.push(modName);
+          if (res.status === 'COMPLETE' || res.status === 'PARTIAL') {
+            if (res.status === 'COMPLETE') modulesCompleted.push(modName);
             const ext = extractFindingsFromRegistryResult(modName, res, moduleInput);
 
             // Wave 3 (Step 5): the one shared adapter/aggregation boundary every

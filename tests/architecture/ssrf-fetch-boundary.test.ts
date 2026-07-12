@@ -47,24 +47,6 @@ const ALLOWED_RAW_FETCH: AllowedRawFetch[] = [
     reason: 'Fixed host; user data only in query param (businessName/city)',
   },
   {
-    file: 'lib/modules/backlinks.ts',
-    line: 147,
-    host: 'serpapi.com',
-    reason: 'Fixed host; user domain only in q= param',
-  },
-  {
-    file: 'lib/modules/backlinks.ts',
-    line: 184,
-    host: 'serpapi.com',
-    reason: 'Fixed host; user domain in query param',
-  },
-  {
-    file: 'lib/modules/backlinks.ts',
-    line: 243,
-    host: 'serpapi.com',
-    reason: 'Fixed host; user businessName in query param',
-  },
-  {
     file: 'lib/modules/competitor.ts',
     line: 62,
     host: 'serpapi.com',
@@ -102,7 +84,13 @@ const ALLOWED_RAW_FETCH: AllowedRawFetch[] = [
   },
   {
     file: 'lib/modules/videoPresence.ts',
-    line: 261,
+    line: 427,
+    host: 'serpapi.com',
+    reason: 'Fixed host; businessName/city in query',
+  },
+  {
+    file: 'lib/modules/socialDeep.ts',
+    line: 220,
     host: 'serpapi.com',
     reason: 'Fixed host; businessName/city in query',
   },
@@ -140,13 +128,13 @@ const ALLOWED_RAW_FETCH: AllowedRawFetch[] = [
   },
   {
     file: 'lib/modules/gbpDeep.ts',
-    line: 98,
+    line: 120,
     host: 'places.googleapis.com',
     reason: 'Fixed host; businessName in POST body',
   },
   {
     file: 'lib/modules/gbpDeep.ts',
-    line: 162,
+    line: 186,
     host: 'places.googleapis.com',
     reason: 'Fixed host; placeId from Google response (template literal path)',
   },
@@ -172,13 +160,13 @@ const ALLOWED_RAW_FETCH: AllowedRawFetch[] = [
   },
   {
     file: 'lib/modules/mobileUX.ts',
-    line: 403,
+    line: 456,
     host: 'googleapis.com',
     reason: 'Fixed host; user URL in ?url= param',
   },
   {
     file: 'lib/modules/mobileUX.ts',
-    line: 426,
+    line: 481,
     host: 'googleapis.com',
     reason: 'Fixed host; user URL in ?url= param',
   },

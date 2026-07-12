@@ -2,6 +2,10 @@
 export interface AuditModuleResult {
   findings: Finding[];
   evidenceSnapshots: any[];
+  execution?: {
+    state: 'complete' | 'partial' | 'unavailable' | 'failed';
+    reason?: string;
+  };
   /** Legacy: modules may include moduleId for runner compatibility */
   moduleId?: string;
   /** Normalized data for finding generator compatibility (scores, coreWebVitals, finalUrl, schemaAnalysis, conversionAnalysis) */

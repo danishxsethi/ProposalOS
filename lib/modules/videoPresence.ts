@@ -1,5 +1,5 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
 import * as cheerio from 'cheerio';
+import { z } from 'zod';
 
 import { withModuleCache } from '@/lib/cache/moduleCache';
 import { CostTracker } from '@/lib/costs/costTracker';
@@ -8,41 +8,59 @@ import { withProviderResilience } from '@/lib/resilience/withProviderResilience'
 import { safeFetch } from '@/lib/security/safeFetch';
 
 import { normalizeConfidence } from './findingGenerator';
-import { AuditModuleResult, Finding } from './types';
+import { AuditModuleResult, createEvidence, Finding } from './types';
 
-const genAI = new GoogleGenerativeAI(process.env.GOOGLE_AI_API_KEY!);
+const SerpResponseSchema = z.object({
+  organic_results: z
+    .array(
+      z.object({
+        link: z.string().url(),
+        title: z.string().optional().default(''),
+        snippet: z.string().optional().default(''),
+      })
+    )
+    .optional()
+    .default([]),
+});
 
 export interface VideoModuleInput {
   businessName: string;
   city: string;
   industry: string;
   websiteUrl: string;
-  competitors: string[]; // Competitor names
-}
-
-interface YouTubeChannel {
-  title: string;
-  url: string;
-  subscribers: string;
-  videoCount: string;
-  lastUpload?: string;
-  description: string;
-  thumbnail: string;
-  recentVideos: Array<{ title: string; link: string; date: string }>;
+  competitors: string[];
+  signal?: AbortSignal;
 }
 
 interface WebsiteVideoAnalysis {
+  checked: boolean;
   hasVideo: boolean;
   embeds: { youtube: number; vimeo: number; other: number };
   hasHeroVideo: boolean;
   hasVideoSchema: boolean;
+  channelLinks: string[];
+  reason?: string;
 }
 
-interface VideoContentAnalysis {
-  score: number; // 1-10
-  seoOptimization: number;
-  localRelevance: number;
-  suggestedTopics: string[];
+interface YouTubeChannelObservation {
+  title: string;
+  url: string;
+  status: 'verified' | 'likely' | 'ambiguous' | 'inaccessible' | 'failed';
+  confidence: number;
+  source: 'website' | 'serpapi';
+  channelId?: string;
+  description?: string;
+  recentVideos?: Array<{ title: string; link: string; publishedAt: string }>;
+  metricsStatus: 'available' | 'unavailable';
+  reason?: string;
+}
+
+interface ChannelDiscovery {
+  channel: YouTubeChannelObservation | null;
+  checked: boolean;
+  verifiedAbsent: boolean;
+  unavailable: boolean;
+  evidencePointer?: string;
 }
 
 export async function runVideoModule(
@@ -52,345 +70,604 @@ export async function runVideoModule(
   logger.info({ business: input.businessName }, '[Video] Starting video presence analysis');
 
   try {
-    // 1. YouTube Channel Discovery & Analysis
-    const channel = await findYouTubeChannel(input.businessName, input.city, tracker);
+    const website = await analyzeWebsiteVideo(input.websiteUrl, input.signal);
+    const discovery = await discoverBusinessChannel(input, website.channelLinks, tracker);
+    const channel = discovery.channel
+      ? await inspectChannel(discovery.channel, input, input.signal)
+      : null;
+    const competitorChannels = await checkCompetitorYouTube(
+      input.competitors,
+      input.city,
+      tracker,
+      input.signal
+    );
+    const findings = generateVideoFindings(input, website, discovery, channel, competitorChannels);
 
-    // 2. Website Video Analysis
-    const websiteAnalysis = await analyzeWebsiteVideo(input.websiteUrl);
-
-    // 3. Content Analysis (if channel exists)
-    let contentAnalysis: VideoContentAnalysis | null = null;
-    if (channel && channel.recentVideos.length > 0) {
-      contentAnalysis = await analyzeVideoContent(
-        channel.recentVideos.map((v) => v.title),
-        input.industry,
-        input.city,
-        tracker
-      );
-    }
-
-    // 4. Competitor Analysis (Basic Check)
-    const competitorChannels = await checkCompetitorYouTube(input.competitors, input.city, tracker);
-
-    // 5. Generate Findings
-    const findings: Finding[] = [];
-
-    // VITAMIN: No YouTube Channel
-    if (!channel) {
-      findings.push({
-        type: 'VITAMIN',
-        category: 'Visibility',
-        title: 'No YouTube Channel Found',
-        description: `We couldn't find a YouTube channel for ${input.businessName}. YouTube is the #2 search engine in the world and a massive opportunity for ${input.industry} businesses.`,
-        impactScore: 6,
-        confidenceScore: normalizeConfidence(90, '0-100'),
-        evidence: [
-          {
-            type: 'text',
-            value: 'No channel found in Top 20 search results',
-            label: 'YouTube Search',
-          },
-        ],
-        metrics: { hasChannel: false },
-        effortEstimate: 'MEDIUM',
-        recommendedFix: [
-          'Create a branded YouTube channel',
-          'Upload simple "Welcome" or "Service Overview" videos',
-          'Optimize channel with business info and website link',
-        ],
-      });
-    }
-    // VITAMIN: Inactive Channel
-    else if (channel.recentVideos.length === 0 || isInactive(channel.lastUpload)) {
-      findings.push({
-        type: 'VITAMIN',
-        category: 'Visibility',
-        title: 'YouTube Channel Inactive',
-        description: `Your YouTube channel exists but hasn't been updated recently. Consistent video content builds trust and authority.`,
-        impactScore: 5,
-        confidenceScore: normalizeConfidence(90, '0-100'),
-        evidence: [
-          {
-            type: 'text',
-            value: `Last upload: ${channel.lastUpload || 'Unknown'}`,
-            label: 'Activity',
-          },
-        ],
-        metrics: { lastUpload: channel.lastUpload },
-        effortEstimate: 'MEDIUM',
-        recommendedFix: [
-          'Post at least one new video per month',
-          'Share customer testimonials',
-          'Showcase completed projects',
-        ],
-      });
-    }
-
-    // VITAMIN: No Website Video
-    if (!websiteAnalysis.hasVideo) {
-      findings.push({
-        type: 'VITAMIN',
-        category: 'Engagement',
-        title: 'No Video Content on Website',
-        description:
-          'Websites with video convert 80% better. You have no video content embedded on your main pages.',
-        impactScore: 5,
-        confidenceScore: normalizeConfidence(100, '0-100'),
-        evidence: [{ type: 'text', value: '0 iframes or video tags found', label: 'Website Scan' }],
-        metrics: { videoCount: 0 },
-        effortEstimate: 'MEDIUM',
-        recommendedFix: ['Embed a welcome video on the homepage', 'Add video testimonials'],
-      });
-    }
-
-    // VITAMIN: Poor Video SEO (if analyzed)
-    if (contentAnalysis && contentAnalysis.score < 5) {
-      findings.push({
-        type: 'VITAMIN',
-        category: 'Visibility',
-        title: 'Video Content Not Optimized',
-        description: `Your video titles lack local keywords. AI analysis scored your video SEO ${contentAnalysis.seoOptimization}/10.`,
-        impactScore: 4,
-        confidenceScore: normalizeConfidence(85, '0-100'),
-        evidence: [
-          { type: 'text', value: channel?.recentVideos[0]?.title || '', label: 'Example Title' },
-        ],
-        metrics: { seoScore: contentAnalysis.seoOptimization },
-        effortEstimate: 'LOW',
-        recommendedFix: [
-          'Add city name to video titles',
-          'Use service keywords in descriptions',
-          'Add links to your website',
-        ],
-      });
-    }
-
-    // VITAMIN: Competitor Gap
-    const activeCompetitors = competitorChannels.filter((c) => c.hasChannel);
-    if (!channel && activeCompetitors.length > 0) {
-      findings.push({
-        type: 'VITAMIN',
-        category: 'Competitive',
-        title: 'Competitors Are Winning on Video',
-        description: `${activeCompetitors.length} of your top competitors have YouTube channels. You are missing out on this audience.`,
-        impactScore: 5,
-        confidenceScore: normalizeConfidence(90, '0-100'),
-        evidence: activeCompetitors.map((c) => ({
-          type: 'text',
-          value: `${c.name}: ${c.subscribers} subs`,
-          label: 'Competitor',
-        })),
-        metrics: { competitorCount: activeCompetitors.length },
-        effortEstimate: 'MEDIUM',
-        recommendedFix: ['Start a channel to compete', 'Analyze competitor top videos for ideas'],
-      });
-    }
-
-    // Opportunity: Suggested Topics (Positive/Info)
-    if (contentAnalysis && contentAnalysis.suggestedTopics.length > 0) {
-      findings.push({
-        type: 'VITAMIN', // Could be INFO type if we had it, using Vitamin as opportunity
-        category: 'Strategy',
-        title: '5 Video Content Opportunities',
-        description:
-          'Based on your industry and local market, here are 5 video topics that would perform well:',
-        impactScore: 3,
-        confidenceScore: normalizeConfidence(80, '0-100'),
-        evidence: contentAnalysis.suggestedTopics.map((t) => ({
-          type: 'text',
-          value: t,
-          label: 'Idea',
-        })),
-        metrics: {},
-        effortEstimate: 'MEDIUM',
-        recommendedFix: [
-          'Create 60-second shorts on these topics',
-          'Post to YouTube, Instagram, and TikTok',
-        ],
-      });
-    }
+    const hasSubstantiveWork = website.checked || discovery.checked || channel !== null;
+    const isPartial =
+      !website.checked ||
+      discovery.unavailable ||
+      channel?.metricsStatus === 'unavailable' ||
+      channel?.status === 'ambiguous' ||
+      competitorChannels.some((competitor) => competitor.status === 'unavailable');
 
     return {
       findings,
       evidenceSnapshots: [
         {
           module: 'video',
-          source: 'serp_api',
-          rawResponse: { channel, websiteAnalysis, contentAnalysis, competitorChannels },
+          source: 'website_serpapi_youtube_public_feed',
+          rawResponse: { website, discovery, channel, competitorChannels },
           collectedAt: new Date(),
         },
       ],
+      execution: !hasSubstantiveWork
+        ? { state: 'unavailable', reason: 'Website and channel providers were unavailable' }
+        : isPartial
+          ? { state: 'partial', reason: 'Some channel identity or public metrics were unavailable' }
+          : { state: 'complete' },
     };
   } catch (error) {
+    if (input.signal?.aborted) throw input.signal.reason ?? error;
     logger.error({ error }, '[Video] Module failed');
-    return { findings: [], evidenceSnapshots: [] };
+    return {
+      findings: [],
+      evidenceSnapshots: [],
+      execution: {
+        state: 'failed',
+        reason: error instanceof Error ? error.message : 'Video presence analysis failed',
+      },
+    };
   }
 }
 
-// --- Helpers ---
-
-async function findYouTubeChannel(
-  name: string,
-  city: string,
-  tracker?: CostTracker
-): Promise<YouTubeChannel | null> {
-  tracker?.addApiCall('SERP_API'); // Cost tracking
-
-  // We strive to use SerpAPI to find the channel
-  const query = `site:youtube.com "${name}" "${city}"`;
-  const results = await withModuleCache<any>(
-    {
-      module: 'video',
-      version: 1,
-      input: { type: 'youtube_search', name, city, query },
-    },
-    { ttlSeconds: 7 * 24 * 60 * 60 },
-    async () => {
-      const apiKey = process.env.SERP_API_KEY;
-      if (!apiKey) return null;
-
-      const url = `https://serpapi.com/search.json?engine=google&q=${encodeURIComponent(query)}&api_key=${apiKey}&num=5`;
-      return withProviderResilience<any>(
-        {
-          provider: 'serpapi',
-          operation: 'video:youtube_search',
-          degrade: true,
-          fallbackValue: { organic_results: [] },
-        },
-        async () => {
-          const res = await fetch(url);
-          if (!res.ok) {
-            throw new Error(`HTTP error ${res.status}: ${res.statusText}`);
-          }
-          return await res.json();
-        }
-      );
-    }
-  );
-
-  if (!results || !results.organic_results || results.organic_results.length === 0) return null;
-
-  // Look for a channel result (usually has 'channel' or 'user' in URL)
-  const channelResult = results.organic_results.find(
-    (r: any) => r.link.includes('/channel/') || r.link.includes('/c/') || r.link.includes('/@')
-  );
-
-  if (channelResult) {
-    // In a real optimized version, we'd fetch the channel page specifically to get sub count if not in snippet
-    // For now, we extract what we can from the snippet or mock a second call if necessary.
-    // Let's assume we can get basic info or do a lightweight page fetch.
-
+async function analyzeWebsiteVideo(
+  url: string,
+  signal?: AbortSignal
+): Promise<WebsiteVideoAnalysis> {
+  if (!url) {
     return {
-      title: channelResult.title,
-      url: channelResult.link,
-      subscribers: 'Unknown', // Would need channel API or page scrape
-      videoCount: 'Unknown',
-      description: channelResult.snippet || '',
-      thumbnail: '', // Placeholder
-      recentVideos: [], // Would need to fetch channel page
+      checked: false,
+      hasVideo: false,
+      embeds: { youtube: 0, vimeo: 0, other: 0 },
+      hasHeroVideo: false,
+      hasVideoSchema: false,
+      channelLinks: [],
+      reason: 'No website URL',
     };
   }
 
-  return null;
-}
-
-async function analyzeWebsiteVideo(url: string): Promise<WebsiteVideoAnalysis> {
   try {
     const html = await withProviderResilience<string>(
       {
         provider: 'crawler',
         operation: 'video:website_fetch',
-        degrade: true,
-        fallbackValue: '',
+        signal,
+        degrade: false,
+        policy: { timeoutMs: 8000, maxAttempts: 2 },
       },
-      async () => {
-        const res = await safeFetch(url);
-        if (!res.ok) {
-          throw new Error(`HTTP error ${res.status}: ${res.statusText}`);
-        }
-        return await res.text();
+      async ({ signal: providerSignal }) => {
+        const response = await safeFetch(
+          url,
+          { signal: providerSignal },
+          { maxResponseBytes: 1024 * 1024 }
+        );
+        if (!response.ok) throw new Error(`Website HTTP ${response.status}`);
+        return response.text();
       }
     );
     const $ = cheerio.load(html);
-
     const youtube = $('iframe[src*="youtube.com"], iframe[src*="youtu.be"]').length;
     const vimeo = $('iframe[src*="vimeo.com"]').length;
-    const tags = $('video').length;
-
-    const hasHeroVideo = $('section:first-of-type video, header video, .hero video').length > 0;
-    const hasVideoSchema = $('script[type="application/ld+json"]')
-      .text()
-      .includes('"@type":"VideoObject"');
+    const other = $('video').length;
+    const channelLinks = [
+      ...new Set(
+        $('a[href*="youtube.com"]')
+          .map((_, element) => $(element).attr('href') || '')
+          .get()
+          .map(validateYouTubeChannelUrl)
+          .filter((value): value is string => value !== null)
+      ),
+    ].slice(0, 3);
 
     return {
-      hasVideo: youtube + vimeo + tags > 0,
-      embeds: { youtube, vimeo, other: tags },
-      hasHeroVideo,
-      hasVideoSchema,
+      checked: true,
+      hasVideo: youtube + vimeo + other > 0,
+      embeds: { youtube, vimeo, other },
+      hasHeroVideo: $('section:first-of-type video, header video, .hero video').length > 0,
+      hasVideoSchema: $('script[type="application/ld+json"]').text().includes('VideoObject'),
+      channelLinks,
     };
-  } catch {
+  } catch (error) {
+    if (signal?.aborted) throw signal.reason ?? error;
     return {
+      checked: false,
       hasVideo: false,
       embeds: { youtube: 0, vimeo: 0, other: 0 },
       hasHeroVideo: false,
       hasVideoSchema: false,
+      channelLinks: [],
+      reason: error instanceof Error ? error.message : 'Website fetch failed',
     };
   }
 }
 
-async function analyzeVideoContent(
-  titles: string[],
-  industry: string,
-  city: string,
+async function discoverBusinessChannel(
+  input: VideoModuleInput,
+  websiteLinks: string[],
   tracker?: CostTracker
-): Promise<VideoContentAnalysis> {
-  tracker?.addApiCall('GEMINI_FLASH');
-
-  const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
-  const prompt = `Analyze these YouTube video titles for a ${industry} business in ${city}:
-    ${JSON.stringify(titles)}
-    
-    Score 1-10 on:
-    - SEO optimization (keywords in titles)
-    - Local relevance (mentions ${city} or local terms)
-    
-    Suggest 5 viral/useful video topics this business SHOULD create.
-    
-    Return JSON: { score, seoOptimization, localRelevance, suggestedTopics: [] }`;
-
-  try {
-    const result = await model.generateContent(prompt);
-    const text = result.response.text();
-    const jsonMatch = text.match(/\\{.*\\}/s);
-    if (jsonMatch) return JSON.parse(jsonMatch[0]);
-  } catch (e) {
-    logger.error({ error: e }, 'Gemini video analysis failed');
+): Promise<ChannelDiscovery> {
+  if (websiteLinks[0]) {
+    return {
+      channel: {
+        title: input.businessName,
+        url: websiteLinks[0],
+        status: 'verified',
+        confidence: 1,
+        source: 'website',
+        metricsStatus: 'unavailable',
+      },
+      checked: true,
+      verifiedAbsent: false,
+      unavailable: false,
+      evidencePointer: input.websiteUrl,
+    };
   }
 
-  return { score: 5, seoOptimization: 5, localRelevance: 5, suggestedTopics: [] };
+  const search = await searchYouTube(input.businessName, input.city, tracker, input.signal);
+  if (search.status === 'unavailable') {
+    return { channel: null, checked: false, verifiedAbsent: false, unavailable: true };
+  }
+  if (!search.candidate) {
+    return {
+      channel: null,
+      checked: true,
+      verifiedAbsent: true,
+      unavailable: false,
+      evidencePointer: search.pointer,
+    };
+  }
+
+  return {
+    channel: {
+      title: search.candidate.title,
+      url: search.candidate.url,
+      status: search.candidate.confidence >= 0.75 ? 'likely' : 'ambiguous',
+      confidence: search.candidate.confidence,
+      source: 'serpapi',
+      description: search.candidate.snippet,
+      metricsStatus: 'unavailable',
+    },
+    checked: true,
+    verifiedAbsent: false,
+    unavailable: false,
+    evidencePointer: search.pointer,
+  };
+}
+
+async function inspectChannel(
+  channel: YouTubeChannelObservation,
+  input: VideoModuleInput,
+  signal?: AbortSignal
+): Promise<YouTubeChannelObservation> {
+  try {
+    const response = await withProviderResilience<Response>(
+      {
+        provider: 'crawler',
+        operation: 'video:youtube_channel_page',
+        signal,
+        degrade: false,
+        policy: { timeoutMs: 8000, maxAttempts: 2 },
+      },
+      ({ signal: providerSignal }) =>
+        safeFetch(
+          channel.url,
+          {
+            signal: providerSignal,
+            headers: { 'User-Agent': 'Mozilla/5.0 (compatible; ProposalOS/1.0)' },
+          },
+          { maxRedirects: 3, maxResponseBytes: 1024 * 1024 }
+        )
+    );
+
+    if ([401, 403, 429].includes(response.status)) {
+      return {
+        ...channel,
+        status: 'inaccessible',
+        metricsStatus: 'unavailable',
+        reason: `HTTP ${response.status}`,
+      };
+    }
+    if (!response.ok) {
+      return {
+        ...channel,
+        status: 'failed',
+        metricsStatus: 'unavailable',
+        reason: `HTTP ${response.status}`,
+      };
+    }
+
+    const html = await response.text();
+    const $ = cheerio.load(html);
+    const title =
+      $('meta[property="og:title"]').attr('content')?.trim() ||
+      $('title')
+        .text()
+        .replace(/- YouTube$/, '')
+        .trim() ||
+      channel.title;
+    const description =
+      $('meta[property="og:description"]').attr('content')?.trim() || channel.description;
+    const canonical = validateYouTubeChannelUrl($('link[rel="canonical"]').attr('href') || '');
+    const channelId =
+      $('meta[itemprop="channelId"]').attr('content') ||
+      canonical?.match(/\/channel\/([A-Za-z0-9_-]+)/)?.[1];
+    const confidence = Math.max(
+      channel.confidence,
+      identityConfidence(`${title} ${description || ''}`, input.businessName, input.city)
+    );
+    const identityStatus =
+      channel.source === 'website'
+        ? 'verified'
+        : confidence >= 0.8
+          ? 'likely'
+          : ('ambiguous' as const);
+
+    if (!channelId) {
+      return {
+        ...channel,
+        title,
+        description,
+        url: canonical || channel.url,
+        status: identityStatus,
+        confidence,
+        metricsStatus: 'unavailable',
+        reason: 'Public channel ID was not exposed',
+      };
+    }
+
+    const recentVideos = await fetchYouTubeFeed(channelId, signal);
+    return {
+      ...channel,
+      title,
+      description,
+      url: canonical || channel.url,
+      status: identityStatus,
+      confidence,
+      channelId,
+      recentVideos,
+      metricsStatus: 'available',
+    };
+  } catch (error) {
+    if (signal?.aborted) throw signal.reason ?? error;
+    return {
+      ...channel,
+      status: channel.status === 'verified' ? 'verified' : 'failed',
+      metricsStatus: 'unavailable',
+      reason: error instanceof Error ? error.message : 'Channel inspection failed',
+    };
+  }
+}
+
+async function fetchYouTubeFeed(
+  channelId: string,
+  signal?: AbortSignal
+): Promise<Array<{ title: string; link: string; publishedAt: string }>> {
+  const feedUrl = `https://www.youtube.com/feeds/videos.xml?channel_id=${encodeURIComponent(channelId)}`;
+  const xml = await withProviderResilience<string>(
+    {
+      provider: 'crawler',
+      operation: 'video:youtube_public_feed',
+      signal,
+      degrade: false,
+      policy: { timeoutMs: 8000, maxAttempts: 2 },
+    },
+    async ({ signal: providerSignal }) => {
+      const response = await safeFetch(
+        feedUrl,
+        { signal: providerSignal },
+        { maxRedirects: 2, maxResponseBytes: 512 * 1024 }
+      );
+      if (!response.ok) throw new Error(`YouTube feed HTTP ${response.status}`);
+      return response.text();
+    }
+  );
+  const $ = cheerio.load(xml, { xmlMode: true });
+  return $('entry')
+    .slice(0, 10)
+    .map((_, entry) => {
+      const element = $(entry);
+      return {
+        title: element.find('title').first().text().trim(),
+        link: element.find('link').first().attr('href') || '',
+        publishedAt: element.find('published').first().text().trim(),
+      };
+    })
+    .get()
+    .filter(
+      (entry) =>
+        entry.title.length > 0 &&
+        isHttpUrl(entry.link) &&
+        !Number.isNaN(Date.parse(entry.publishedAt))
+    );
+}
+
+async function searchYouTube(
+  name: string,
+  city: string,
+  tracker?: CostTracker,
+  signal?: AbortSignal
+): Promise<{
+  status: 'complete' | 'unavailable';
+  pointer?: string;
+  candidate?: { title: string; url: string; snippet: string; confidence: number };
+}> {
+  const apiKey = process.env.SERP_API_KEY;
+  if (!apiKey) return { status: 'unavailable' };
+
+  const query = `site:youtube.com "${name}" "${city}"`;
+  const pointer = `https://serpapi.com/search.json?engine=google&q=${encodeURIComponent(query)}&num=5`;
+
+  try {
+    const raw = await withModuleCache<unknown>(
+      {
+        module: 'video',
+        version: 2,
+        input: { type: 'youtube_channel_search', name, city },
+      },
+      { ttlSeconds: 7 * 24 * 60 * 60 },
+      () =>
+        withProviderResilience<unknown>(
+          {
+            provider: 'serpapi',
+            operation: 'video:youtube_search',
+            signal,
+            degrade: false,
+            policy: { timeoutMs: 8000, maxAttempts: 2 },
+          },
+          async ({ signal: providerSignal }) => {
+            tracker?.addApiCall('SERP_API');
+            const response = await fetch(`${pointer}&api_key=${apiKey}`, {
+              signal: providerSignal,
+            });
+            if (!response.ok) throw new Error(`SerpAPI HTTP ${response.status}`);
+            return response.json();
+          }
+        )
+    );
+    const parsed = SerpResponseSchema.parse(raw);
+    const candidate = parsed.organic_results
+      .map((result) => {
+        const url = validateYouTubeChannelUrl(result.link);
+        if (!url) return null;
+        return {
+          title: result.title,
+          url,
+          snippet: result.snippet,
+          confidence: identityConfidence(`${result.title} ${result.snippet}`, name, city),
+        };
+      })
+      .filter((item): item is NonNullable<typeof item> => item !== null)
+      .sort((a, b) => b.confidence - a.confidence)[0];
+    return { status: 'complete', pointer, candidate };
+  } catch (error) {
+    if (signal?.aborted) throw signal.reason ?? error;
+    logger.warn({ name, error }, '[Video] Channel search unavailable');
+    return { status: 'unavailable' };
+  }
 }
 
 async function checkCompetitorYouTube(
   competitors: string[],
   city: string,
-  tracker?: CostTracker
-): Promise<Array<{ name: string; hasChannel: boolean; subscribers: string }>> {
-  // Simplified: parallel search for each
-  const results = await Promise.all(
-    competitors.slice(0, 3).map(async (name) => {
-      const channel = await findYouTubeChannel(name, city, tracker);
-      return {
+  tracker?: CostTracker,
+  signal?: AbortSignal
+): Promise<
+  Array<{
+    name: string;
+    status: 'found' | 'absent' | 'ambiguous' | 'unavailable';
+    url?: string;
+    evidencePointer?: string;
+  }>
+> {
+  const results = [];
+  for (const name of competitors.slice(0, 3)) {
+    const search = await searchYouTube(name, city, tracker, signal);
+    if (search.status === 'unavailable') {
+      results.push({ name, status: 'unavailable' as const });
+    } else if (!search.candidate) {
+      results.push({
         name,
-        hasChannel: !!channel,
-        subscribers: channel?.subscribers || '0',
-      };
-    })
-  );
+        status: 'absent' as const,
+        evidencePointer: search.pointer,
+      });
+    } else if (search.candidate.confidence < 0.75) {
+      results.push({
+        name,
+        status: 'ambiguous' as const,
+        url: search.candidate.url,
+        evidencePointer: search.pointer,
+      });
+    } else {
+      results.push({
+        name,
+        status: 'found' as const,
+        url: search.candidate.url,
+        evidencePointer: search.pointer,
+      });
+    }
+  }
   return results;
 }
 
-function isInactive(lastUpload?: string): boolean {
-  if (!lastUpload) return true; // Assume inactive if parsing failed
-  // Need flexible date parsing, skipping for MVP logic
-  return false;
+function generateVideoFindings(
+  input: VideoModuleInput,
+  website: WebsiteVideoAnalysis,
+  discovery: ChannelDiscovery,
+  channel: YouTubeChannelObservation | null,
+  competitorChannels: Awaited<ReturnType<typeof checkCompetitorYouTube>>
+): Finding[] {
+  const findings: Finding[] = [];
+  const collectedAt = new Date().toISOString();
+
+  if (discovery.verifiedAbsent && discovery.evidencePointer) {
+    findings.push({
+      type: 'VITAMIN',
+      category: 'Visibility',
+      title: 'No Matching YouTube Business Channel Found',
+      description: `A bounded search did not find a YouTube channel confidently matching ${input.businessName}. Private or unindexed channels may still exist.`,
+      impactScore: 6,
+      confidenceScore: normalizeConfidence(80, '0-100'),
+      evidence: [
+        createEvidence({
+          pointer: discovery.evidencePointer,
+          source: 'serpapi_youtube_discovery',
+          collected_at: collectedAt,
+          type: 'text',
+          value: 'No validated channel in the first 5 results',
+          label: 'YouTube Channel Search',
+        }),
+      ],
+      metrics: { hasChannel: false, searchResultLimit: 5 },
+      effortEstimate: 'MEDIUM',
+      recommendedFix: ['Review whether a branded YouTube channel fits the content strategy'],
+    });
+  }
+
+  const latestVideo = channel?.recentVideos?.[0];
+  if (
+    channel &&
+    ['verified', 'likely'].includes(channel.status) &&
+    latestVideo &&
+    isOlderThan(latestVideo.publishedAt, 180)
+  ) {
+    findings.push({
+      type: 'VITAMIN',
+      category: 'Visibility',
+      title: 'YouTube Channel Has Not Published Recently',
+      description: `The newest public feed item was published on ${latestVideo.publishedAt.slice(0, 10)}.`,
+      impactScore: 5,
+      confidenceScore: normalizeConfidence(95, '0-100'),
+      evidence: [
+        createEvidence({
+          pointer: latestVideo.link,
+          source: 'youtube_public_feed',
+          collected_at: collectedAt,
+          type: 'text',
+          value: latestVideo.publishedAt,
+          label: 'Latest Public Video',
+        }),
+      ],
+      metrics: {
+        latestPublishedAt: latestVideo.publishedAt,
+        observedFeedItems: channel.recentVideos?.length || 0,
+      },
+      effortEstimate: 'MEDIUM',
+      recommendedFix: ['Publish a new useful video if YouTube remains an active channel'],
+    });
+  }
+
+  if (website.checked && !website.hasVideo) {
+    findings.push({
+      type: 'VITAMIN',
+      category: 'Engagement',
+      title: 'No Video Embed Detected on the Audited Page',
+      description:
+        'The audited page contained no YouTube/Vimeo iframe or HTML video element. This observation applies only to the checked page.',
+      impactScore: 4,
+      confidenceScore: normalizeConfidence(95, '0-100'),
+      evidence: [
+        createEvidence({
+          pointer: input.websiteUrl,
+          source: 'website_video_scan',
+          collected_at: collectedAt,
+          type: 'metric',
+          value: 0,
+          label: 'Video Elements on Audited Page',
+        }),
+      ],
+      metrics: { youtubeEmbeds: 0, vimeoEmbeds: 0, htmlVideoElements: 0 },
+      effortEstimate: 'MEDIUM',
+      recommendedFix: ['Consider adding a relevant video where it supports the page goal'],
+    });
+  }
+
+  const verifiedCompetitors = competitorChannels.filter(
+    (competitor) => competitor.status === 'found' && competitor.url
+  );
+  if (discovery.verifiedAbsent && verifiedCompetitors.length > 0) {
+    findings.push({
+      type: 'VITAMIN',
+      category: 'Competitive',
+      title: 'Competitors Have Discoverable YouTube Channels',
+      description: `${verifiedCompetitors.length} canonical competitor(s) had a confidently matched channel while the subject business did not.`,
+      impactScore: 5,
+      confidenceScore: normalizeConfidence(80, '0-100'),
+      evidence: verifiedCompetitors.map((competitor) =>
+        createEvidence({
+          pointer: competitor.url!,
+          source: 'serpapi_youtube_discovery',
+          collected_at: collectedAt,
+          type: 'url',
+          value: competitor.name,
+          label: 'Competitor Channel',
+        })
+      ),
+      metrics: { competitorChannelCount: verifiedCompetitors.length },
+      effortEstimate: 'MEDIUM',
+      recommendedFix: [
+        'Review competitor formats before deciding whether to invest in the channel',
+      ],
+    });
+  }
+
+  return findings;
+}
+
+export function validateYouTubeChannelUrl(candidate: string): string | null {
+  try {
+    const parsed = new URL(candidate);
+    const host = parsed.hostname.toLowerCase().replace(/^www\./, '');
+    if (host !== 'youtube.com' && host !== 'm.youtube.com') return null;
+    const path = parsed.pathname;
+    if (!/^\/(?:channel\/[A-Za-z0-9_-]+|@[A-Za-z0-9._-]+|c\/[^/]+|user\/[^/]+)\/?$/.test(path)) {
+      return null;
+    }
+    parsed.search = '';
+    parsed.hash = '';
+    return parsed.toString();
+  } catch {
+    return null;
+  }
+}
+
+function identityConfidence(text: string, businessName: string, city: string): number {
+  const haystack = normalize(text);
+  const tokens = normalize(businessName)
+    .split(' ')
+    .filter((token) => token.length > 2);
+  if (tokens.length === 0) return 0;
+  const nameScore = tokens.filter((token) => haystack.includes(token)).length / tokens.length;
+  const cityScore = city && haystack.includes(normalize(city)) ? 0.15 : 0;
+  return Math.min(1, nameScore * 0.85 + cityScore);
+}
+
+function normalize(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
+function isOlderThan(value: string, days: number): boolean {
+  const timestamp = Date.parse(value);
+  return !Number.isNaN(timestamp) && Date.now() - timestamp > days * 24 * 60 * 60 * 1000;
+}
+
+function isHttpUrl(value: string): boolean {
+  try {
+    return ['http:', 'https:'].includes(new URL(value).protocol);
+  } catch {
+    return false;
+  }
 }
