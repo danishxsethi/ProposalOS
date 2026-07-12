@@ -13,6 +13,7 @@
 
 import { v4 as uuidv4 } from 'uuid';
 
+import { validateCustomerClaim } from '@/lib/claims/claimContract';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 
@@ -23,14 +24,13 @@ import {
   updatePendingFollowUps,
 } from './followUpSequence';
 import { sendWithRotation as sendEmailWithRotation } from './inboxRotation';
+import { claimFollowUpSchedule, releaseFollowUpSchedule } from '../outreach/outboundSafety';
 
 import type {
   EmailQAConfig,
-  EmailQAResult,
   GeneratedEmail,
   OutreachContext,
   OutreachEventType,
-  PainScoreBreakdown,
   SendResult,
 } from './types';
 
@@ -39,95 +39,16 @@ import type {
 // ============================================================================
 
 /**
- * Maps technical finding types to vertical-specific business pain language.
- * Each vertical has its own set of translations that resonate with the business owner.
+ * Returns the observed finding text. Outreach must not infer customer outcomes from an
+ * industry label or a technical signal.
  */
-const VERTICAL_PAIN_MAP: Record<string, Record<string, string>> = {
-  dentist: {
-    page_speed: 'patients bouncing before they book',
-    mobile_responsiveness: "patients can't schedule from their phone",
-    ssl_missing: 'patients see a "Not Secure" warning before your site loads',
-    gbp_neglected: 'your Google listing is losing patients to nearby practices',
-    review_response: 'unanswered reviews are turning away new patients',
-    social_media: "patients can't find you on social media",
-    competitor_gap: 'nearby practices are showing up above you in search',
-    accessibility: "some patients can't navigate your website at all",
-  },
-  hvac: {
-    page_speed: 'homeowners leave before requesting a quote',
-    mobile_responsiveness: "homeowners can't request a quote from their phone",
-    ssl_missing: 'homeowners see a security warning on your site',
-    gbp_neglected: "your Google listing isn't bringing in service calls",
-    review_response: 'unanswered reviews are costing you repeat customers',
-    social_media: "homeowners can't find your latest work online",
-    competitor_gap: 'competing HVAC companies rank higher in your area',
-    accessibility: "some customers can't use your website to book service",
-  },
-  restaurant: {
-    page_speed: 'diners leave before seeing your menu',
-    mobile_responsiveness: "customers can't view your menu on their phone",
-    ssl_missing: 'guests see a security warning when visiting your site',
-    gbp_neglected: "your Google listing isn't filling tables",
-    review_response: 'unanswered reviews are keeping diners away',
-    social_media: "foodies can't find your latest dishes online",
-    competitor_gap: 'nearby restaurants are getting more visibility than you',
-    accessibility: "some guests can't navigate your website to make a reservation",
-  },
-  default: {
-    page_speed: 'visitors leave before your site loads',
-    mobile_responsiveness: "customers can't use your site on their phone",
-    ssl_missing: 'visitors see a "Not Secure" warning on your site',
-    gbp_neglected: "your Google listing isn't working for you",
-    review_response: 'unanswered reviews are hurting your reputation',
-    social_media: "customers can't find you on social media",
-    competitor_gap: 'your competitors are showing up above you online',
-    accessibility: "some customers can't use your website",
-  },
-};
-
-// ============================================================================
-// Finding-to-Category Mapping
-// ============================================================================
-
-/**
- * Maps finding module names to pain categories for vertical translation.
- */
-function findingToCategory(finding: any): string {
-  const moduleName = (finding.module || finding.type || '').toLowerCase();
-  if (
-    moduleName.includes('speed') ||
-    moduleName.includes('performance') ||
-    moduleName.includes('pagespeed')
-  )
-    return 'page_speed';
-  if (moduleName.includes('mobile') || moduleName.includes('responsive'))
-    return 'mobile_responsiveness';
-  if (moduleName.includes('ssl') || moduleName.includes('security') || moduleName.includes('https'))
-    return 'ssl_missing';
-  if (moduleName.includes('gbp') || moduleName.includes('google_business')) return 'gbp_neglected';
-  if (moduleName.includes('review')) return 'review_response';
-  if (moduleName.includes('social')) return 'social_media';
-  if (moduleName.includes('competitor')) return 'competitor_gap';
-  if (moduleName.includes('accessibility') || moduleName.includes('a11y')) return 'accessibility';
-  return 'page_speed'; // fallback
-}
-
-// ============================================================================
-// Pain Language Translation
-// ============================================================================
-
-/**
- * Translates a technical finding into vertical-specific pain language.
- */
-export function translateFinding(finding: any, vertical: string): string {
-  const category = findingToCategory(finding);
-  const verticalMap = VERTICAL_PAIN_MAP[vertical.toLowerCase()] || VERTICAL_PAIN_MAP['default'];
-  const fallbackMap = VERTICAL_PAIN_MAP['default'];
-  return (
-    (verticalMap && verticalMap[category]) ||
-    (fallbackMap && fallbackMap[category]) ||
-    "an issue that's costing you customers"
-  );
+export function translateFinding(
+  finding: { title?: unknown; description?: unknown },
+  _vertical: string
+): string {
+  const title = typeof finding.title === 'string' ? finding.title.trim() : '';
+  const description = typeof finding.description === 'string' ? finding.description.trim() : '';
+  return [title, description].filter(Boolean).join(': ') || 'Observed audit finding';
 }
 
 /**
@@ -158,7 +79,7 @@ const DEFAULT_FOLLOWUP_DAYS = [3, 7, 14];
 
 /** Maps behavior events to follow-up email types */
 const BEHAVIOR_BRANCH_MAP: Record<string, { type: string; description: string }> = {
-  open: { type: 'FOLLOWUP_COMPETITOR', description: 'competitor comparison angle' },
+  open: { type: 'FOLLOWUP_COMPETITOR', description: 'observed-data review' },
   click: { type: 'FOLLOWUP_PROPOSAL', description: 'full proposal delivery' },
   reply: { type: 'FOLLOWUP_PROPOSAL', description: 'pause sequence - reply received' },
   bounce: { type: 'FOLLOWUP_RETRY', description: 'different subject/time' },
@@ -179,99 +100,90 @@ const BEHAVIOR_BRANCH_MAP: Record<string, { type: string; description: string }>
  * Requirements: 4.1, 4.2, 4.3
  */
 export async function generateEmail(context: OutreachContext): Promise<GeneratedEmail> {
-  const { prospect, proposal, findings, painBreakdown, vertical, tenantBranding } = context;
+  const { prospect, proposal, findings, tenantBranding } = context;
+  const auditId = context.audit?.id;
+  const tenantId = prospect?.tenantId;
+  if (!auditId || !tenantId || proposal?.auditId !== auditId || proposal?.tenantId !== tenantId) {
+    throw new Error('outreach generation requires a proposal and audit from the prospect tenant');
+  }
+  if (!tenantBranding?.footerText) {
+    throw new Error('outreach generation requires configured tenant footer text');
+  }
 
-  // Select top findings (at least 2)
   const topFindings = selectTopFindings(findings, Math.max(2, Math.min(findings.length, 3)));
+  if (topFindings.length === 0) {
+    throw new Error('outreach generation requires validated Findings');
+  }
 
-  // Translate findings to pain language
-  const painPoints = topFindings.map((f) => translateFinding(f, vertical));
+  const findingReferences = topFindings.map((finding) => {
+    const text = [finding.title, finding.description].filter(Boolean).join(': ');
+    const validation = validateCustomerClaim(
+      {
+        claimId: `outreach:${proposal.id}:${finding.id}`,
+        text,
+        claimType: 'DETERMINISTIC_OBSERVATION',
+        sourceFindingIds: [finding.id],
+        configurationRefs: [],
+        classification: 'deterministic',
+        confidence: Math.max(0, Math.min(1, Number(finding.confidenceScore) / 10)),
+        assumptions: [],
+        metricInputs: [],
+        estimate: false,
+        recommendation: false,
+        provenance: {
+          producer: 'pipeline.outreach.generateEmail',
+        },
+      },
+      { auditId, tenantId, findings }
+    );
+    if (!validation.success) {
+      throw new Error(`outreach claim validation failed: ${validation.issues.join('; ')}`);
+    }
+    return text;
+  });
 
-  // Build scorecard URL
   const scorecardToken = proposal.webLinkToken || proposal.id;
   const scorecardUrl = `/preview/${scorecardToken}`;
-
-  // Build finding references (titles or descriptions)
-  const findingReferences = topFindings.map(
-    (f) => f.title || f.description || f.module || 'audit finding'
-  );
-
-  // Get business name and brand name
   const businessName = prospect.businessName || prospect.name || 'your business';
   const brandName = tenantBranding?.brandName || 'Our Team';
-
-  // Build the email subject
-  const subject = buildSubject(
-    businessName,
-    painPoints[0] || "an issue that's costing you customers",
-    vertical
-  );
-
+  const subject = `Question about ${businessName}`;
   const emailId = uuidv4();
-
-  // Add tracking to scorecard URL if we have an app URL configured
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
-
-  // Create open tracking pixel URL
-  // We assume step 1 and variant A for initial emails for now
   const trackingPixelUrl = `${appUrl}/api/email/tracking?proposalId=${proposal.id}&step=1&variant=A&eventType=open`;
-
-  // Create click tracking URL for the scorecard
   const trackingScorecardUrl = `${appUrl}/api/email/tracking?proposalId=${proposal.id}&step=1&variant=A&eventType=click&url=${encodeURIComponent(scorecardUrl)}`;
-
-  // Create unsubscribe URL
   const unsubscribeUrl = `${appUrl}/api/email/unsubscribe?email=${encodeURIComponent(prospect.decisionMakerEmail || '')}`;
-
-  // Build the email body
   const body = buildEmailBody({
     businessName,
     brandName,
-    painPoints,
     findingReferences,
     scorecardUrl: trackingScorecardUrl,
-    vertical,
-    painBreakdown,
     trackingPixelUrl,
     unsubscribeUrl,
-    tenantAddress: tenantBranding?.settings?.physicalAddress || '123 Business Rd, City, State ZIP', // Fallback address if not configured
+    tenantFooter: tenantBranding.footerText,
   });
 
   return {
     id: emailId,
+    auditId,
     subject,
     body,
     prospectId: prospect.id,
     proposalId: proposal.id,
+    findingIds: topFindings.map((finding) => finding.id),
     findingReferences,
     scorecardUrl: trackingScorecardUrl,
     generatedAt: new Date(),
   };
 }
 
-/**
- * Builds a compelling subject line using pain language.
- */
-function buildSubject(businessName: string, primaryPain: string, vertical: string): string {
-  const templates = [
-    `${businessName} — ${primaryPain}`,
-    `Quick question about ${businessName}`,
-    `Found something about ${businessName}`,
-  ];
-  // Use first template for consistency in testing; in production this could be randomized
-  return templates[0] || '';
-}
-
 interface EmailBodyParams {
   businessName: string;
   brandName: string;
-  painPoints: string[];
   findingReferences: string[];
   scorecardUrl: string;
-  vertical: string;
-  painBreakdown: PainScoreBreakdown;
   trackingPixelUrl?: string;
   unsubscribeUrl?: string;
-  tenantAddress?: string;
+  tenantFooter: string;
 }
 
 /**
@@ -282,47 +194,51 @@ function buildEmailBody(params: EmailBodyParams): string {
   const {
     businessName,
     brandName,
-    painPoints,
     findingReferences,
     scorecardUrl,
     trackingPixelUrl,
     unsubscribeUrl,
-    tenantAddress,
+    tenantFooter,
   } = params;
 
-  // Build finding bullets — each references a specific finding with pain language
-  const findingLines = painPoints
-    .slice(0, 3)
-    .map((pain, i) => `• ${findingReferences[i]}: ${pain}`)
-    .join('\n');
-
-  // Build the email body as HTML to support tracking pixel and hidden footer
-  // Since we're moving to HTML, we replace newlines with <br> and format properly
   const bodyHtml = `
 <div style="font-family: sans-serif; font-size: 14px; line-height: 1.5; color: #333;">
   <p>Hi,</p>
-  <p>We looked at ${businessName} online and found a few things:</p>
+  <p>We reviewed publicly available pages for ${escapeHtml(businessName)} and noted:</p>
   <ul style="padding-left: 20px; margin: 10px 0;">
-    ${painPoints
+    ${findingReferences
       .slice(0, 3)
-      .map((pain, i) => `<li style="margin-bottom: 5px;">${findingReferences[i]}: ${pain}</li>`)
+      .map((reference) => `<li style="margin-bottom: 5px;">${escapeHtml(reference)}</li>`)
       .join('')}
   </ul>
-  <p>We put together a free scorecard showing how you compare to your top local competitor: <a href="${scorecardUrl}">View your scorecard here</a></p>
+  <p>We prepared a scorecard with the supporting observations: <a href="${escapeHtml(scorecardUrl)}">View the scorecard</a></p>
   <p>Happy to walk you through it.</p>
-  <p>${brandName}</p>
+  <p>${escapeHtml(brandName)}</p>
   
   <br><br>
   
   <div style="font-size: 10px; color: #999; margin-top: 30px; border-top: 1px solid #eee; padding-top: 10px;">
-    <p>${tenantAddress || ''}</p>
-    <p>Don't want to receive these emails? <a href="${unsubscribeUrl || '#'}" style="color: #999; text-decoration: underline;">Unsubscribe here</a></p>
+    <p>${escapeHtml(tenantFooter)}</p>
+    <p>Don't want to receive these emails? <a href="${escapeHtml(unsubscribeUrl || '#')}" style="color: #999; text-decoration: underline;">Unsubscribe here</a></p>
   </div>
   ${trackingPixelUrl ? `<img src="${trackingPixelUrl}" width="1" height="1" style="display:none;" alt="" />` : ''}
 </div>
 `;
 
   return bodyHtml;
+}
+
+function escapeHtml(value: string): string {
+  return value.replace(/[&<>"']/g, (character) => {
+    const entities: Record<string, string> = {
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      '"': '&quot;',
+      "'": '&#39;',
+    };
+    return entities[character] || character;
+  });
 }
 
 // ============================================================================
@@ -402,18 +318,28 @@ export async function scheduleFollowUps(
     const scheduledDate = new Date(baseDate);
     scheduledDate.setDate(scheduledDate.getDate() + days);
 
-    await prisma.outreachEmail.create({
-      data: {
-        tenantId,
-        leadId,
-        type: followUpTypes[i] || 'FOLLOWUP_RETRY',
-        status: 'PENDING',
-        subject: `Follow-up ${i + 1}`, // Placeholder — will be personalized at send time
-        body: '', // Placeholder — will be generated at send time based on behavior
-        qualityScore: 0,
-        scorecardUrl: null,
-      },
-    });
+    const sequencePosition = i + 1;
+    if (!(await claimFollowUpSchedule(tenantId, initialEmailId, sequencePosition))) continue;
+
+    try {
+      await prisma.outreachEmail.create({
+        data: {
+          tenantId,
+          leadId,
+          type: followUpTypes[i] || 'FOLLOWUP_RETRY',
+          status: 'PENDING',
+          subject: `Follow-up ${sequencePosition}`,
+          body: '',
+          qualityScore: 0,
+          scorecardUrl: null,
+          scheduledAt: scheduledDate,
+          sequencePosition,
+        },
+      });
+    } catch (error) {
+      await releaseFollowUpSchedule(tenantId, initialEmailId, sequencePosition);
+      throw error;
+    }
   }
 }
 
@@ -425,7 +351,7 @@ export async function scheduleFollowUps(
  * Processes a behavior event and adjusts the follow-up sequence accordingly.
  *
  * Branching logic:
- * - opened → competitor comparison angle
+ * - opened → observed-data review
  * - clicked → full proposal delivery within 2 hours
  * - viewed 2+ min → hot lead escalation
  * - no reply after 3 → subject variation
@@ -439,7 +365,7 @@ export async function processBehaviorBranch(
 ): Promise<void> {
   switch (event) {
     case 'open': {
-      // Opened but did not click → competitor comparison angle
+      // Opened but did not click → observed-data review
       await updatePendingFollowUps(leadId, 'FOLLOWUP_COMPETITOR');
       break;
     }

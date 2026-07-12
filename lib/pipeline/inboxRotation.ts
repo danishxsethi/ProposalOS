@@ -10,10 +10,17 @@
  * Requirements: 4.6, 4.9
  */
 
+import { validateFinding } from '@/lib/audit/findingContract';
 import { prisma } from '@/lib/prisma';
 
 import { pauseFollowUpSequence } from './followUpSequence';
 import { sendEmail } from '../outreach/emailSender';
+import {
+  claimOutboundSend,
+  completeOutboundSend,
+  markOutboundSendUnknown,
+  releaseOutboundSend,
+} from '../outreach/outboundSafety';
 
 import type { GeneratedEmail, SendResult } from './types';
 
@@ -172,6 +179,35 @@ export async function sendWithRotation(
   email: GeneratedEmail,
   tenantId: string
 ): Promise<SendResult> {
+  if (!email.auditId || email.findingIds.length === 0) {
+    return {
+      emailId: email.id,
+      status: 'failed',
+      sendingDomain: '',
+      error: 'Grounded audit and Finding IDs are required before outbound delivery',
+    };
+  }
+
+  const citedFindings = await prisma.finding.findMany({
+    where: {
+      id: { in: email.findingIds },
+      auditId: email.auditId,
+      tenantId,
+      excluded: false,
+    },
+  });
+  if (
+    citedFindings.length !== email.findingIds.length ||
+    citedFindings.some((finding) => !validateFinding(finding).success)
+  ) {
+    return {
+      emailId: email.id,
+      status: 'failed',
+      sendingDomain: '',
+      error: 'Outbound Finding citations are missing, cross-tenant, or invalid',
+    };
+  }
+
   // Select the best sending domain
   const domainId = await selectSendingDomain(tenantId);
 
@@ -192,6 +228,7 @@ export async function sendWithRotation(
       domain: true,
       fromEmail: true,
       fromName: true,
+      dailyLimit: true,
     },
   });
 
@@ -207,7 +244,7 @@ export async function sendWithRotation(
   // Get recipient email
   const lead = await prisma.prospectLead.findUnique({
     where: { id: email.prospectId },
-    select: { decisionMakerEmail: true, businessName: true },
+    select: { decisionMakerEmail: true, businessName: true, tenantId: true },
   });
 
   if (!lead?.decisionMakerEmail) {
@@ -219,8 +256,119 @@ export async function sendWithRotation(
     };
   }
 
+  if (lead.tenantId !== tenantId) {
+    return {
+      emailId: email.id,
+      status: 'failed',
+      sendingDomain: domain.fromEmail,
+      error: 'Prospect belongs to another tenant',
+    };
+  }
+
+  const blocked = await prisma.emailBlocklist.findUnique({
+    where: { email: lead.decisionMakerEmail },
+    select: { id: true },
+  });
+  if (blocked) {
+    return {
+      emailId: email.id,
+      status: 'failed',
+      sendingDomain: domain.fromEmail,
+      error: 'Recipient is suppressed',
+    };
+  }
+
+  const existing = await prisma.outreachEmail.findUnique({
+    where: { id: email.id },
+    select: { id: true, status: true, providerMessageId: true, sentAt: true },
+  });
+  if (existing?.status === 'SENT') {
+    return {
+      emailId: existing.id,
+      status: 'sent',
+      sendingDomain: domain.fromEmail,
+      sentAt: existing.sentAt ?? new Date(),
+    };
+  }
+  if (existing) {
+    return {
+      emailId: existing.id,
+      status: 'queued',
+      sendingDomain: domain.fromEmail,
+      error: 'Previous provider outcome requires reconciliation',
+    };
+  }
+
+  const priorInitial = await prisma.outreachEmail.findFirst({
+    where: {
+      tenantId,
+      leadId: email.prospectId,
+      type: 'INITIAL',
+    },
+    orderBy: { createdAt: 'desc' },
+    select: { id: true, status: true, sentAt: true },
+  });
+  if (priorInitial?.status === 'SENT') {
+    return {
+      emailId: priorInitial.id,
+      status: 'sent',
+      sendingDomain: domain.fromEmail,
+      sentAt: priorInitial.sentAt ?? new Date(),
+    };
+  }
+  if (priorInitial) {
+    return {
+      emailId: priorInitial.id,
+      status: 'queued',
+      sendingDomain: domain.fromEmail,
+      error: 'Previous outreach send requires reconciliation',
+    };
+  }
+
+  const sentToday = await getDomainSentCount(domainId);
+  const idempotencyKey = `initial:${email.prospectId}:${email.proposalId}`;
+  const claim = await claimOutboundSend({
+    tenantId,
+    idempotencyKey,
+    dailyCap: domain.dailyLimit,
+    capScope: `domain:${domainId}`,
+    alreadySent: sentToday,
+  });
+  if (claim.status !== 'claimed') {
+    return {
+      emailId: email.id,
+      status:
+        claim.status === 'cap_reached' ||
+        claim.status === 'duplicate' ||
+        claim.status === 'reconciliation_required' ||
+        claim.status === 'in_progress'
+          ? 'queued'
+          : 'failed',
+      sendingDomain: domain.fromEmail,
+      error: claim.status === 'unavailable' ? claim.reason : claim.status,
+    };
+  }
+
+  let providerDispatchStarted = false;
   try {
+    await prisma.outreachEmail.create({
+      data: {
+        id: email.id,
+        tenantId,
+        leadId: email.prospectId,
+        domainId,
+        type: 'INITIAL',
+        status: 'PENDING',
+        subject: email.subject,
+        body: email.body,
+        qualityScore: 100,
+        findingsUsed: email.findingIds,
+        scorecardUrl: email.scorecardUrl,
+      },
+    });
+
     // Actually send the email via Resend
+    providerDispatchStarted = true;
     const resendResult = await sendEmail({
       to: lead.decisionMakerEmail,
       subject: email.subject,
@@ -233,21 +381,21 @@ export async function sendWithRotation(
       throw new Error(`Resend API Error: ${resendResult.error || 'Unknown'}`);
     }
 
-    // Create the outreach email record
-    const outreachEmail = await prisma.outreachEmail.create({
+    const sentAt = new Date();
+    const outreachEmail = await prisma.outreachEmail.update({
+      where: { id: email.id },
       data: {
-        tenantId,
-        leadId: email.prospectId,
-        domainId,
-        type: 'INITIAL',
         status: 'SENT',
-        subject: email.subject,
-        body: email.body,
-        qualityScore: 100, // Passed QA gate
-        scorecardUrl: email.scorecardUrl,
-        sentAt: new Date(),
+        sentAt,
         providerMessageId: resendResult.messageId,
+        errorMessage: null,
       },
+    });
+    await completeOutboundSend({
+      tenantId,
+      idempotencyKey,
+      dailyCap: domain.dailyLimit,
+      capScope: `domain:${domainId}`,
     });
 
     // Increment the domain's daily sent count
@@ -267,14 +415,32 @@ export async function sendWithRotation(
       emailId: outreachEmail.id,
       status: 'sent',
       sendingDomain: domain.fromEmail,
-      sentAt: new Date(),
+      sentAt,
     };
   } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    const claimInput = {
+      tenantId,
+      idempotencyKey,
+      dailyCap: domain.dailyLimit,
+      capScope: `domain:${domainId}`,
+    };
+    if (providerDispatchStarted) {
+      await markOutboundSendUnknown(claimInput, message);
+    } else {
+      await releaseOutboundSend(claimInput);
+    }
+    await prisma.outreachEmail
+      .update({
+        where: { id: email.id },
+        data: { errorMessage: `Reconciliation required: ${message}` },
+      })
+      .catch(() => undefined);
     return {
       emailId: email.id,
       status: 'failed',
       sendingDomain: domain.fromEmail,
-      error: error instanceof Error ? error.message : 'Unknown error',
+      error: message,
     };
   }
 }

@@ -14,6 +14,7 @@ import * as outreach from '@/lib/pipeline/outreach';
 import * as stateMachine from '@/lib/pipeline/stateMachine';
 import { PipelineStage } from '@/lib/pipeline/types';
 import { prisma } from '@/lib/prisma';
+import { runWithTenantAsync, runWithTenantBypass } from '@/lib/tenant/context';
 
 import { GET } from '../route';
 
@@ -30,6 +31,9 @@ vi.mock('@/lib/prisma', () => ({
       findMany: vi.fn(),
     },
     tenant: {
+      findUnique: vi.fn(),
+    },
+    tenantBranding: {
       findUnique: vi.fn(),
     },
     pipelineErrorLog: {
@@ -63,6 +67,11 @@ vi.mock('@/lib/pipeline/inboxRotation', () => ({
 
 vi.mock('@/lib/pipeline/stateMachine', () => ({
   transition: vi.fn(),
+}));
+
+vi.mock('@/lib/tenant/context', () => ({
+  runWithTenantAsync: vi.fn(async (_tenantId: string, fn: () => Promise<unknown>) => fn()),
+  runWithTenantBypass: vi.fn(async (_reason: string, fn: () => Promise<unknown>) => fn()),
 }));
 
 // ============================================================================
@@ -177,7 +186,14 @@ describe('Pipeline Outreach Cron Endpoint', () => {
 
     vi.mocked(prisma.proposal.findFirst).mockResolvedValue({
       id: 'proposal-1',
+      auditId: 'audit-1',
+      tenantId: 'tenant-1',
       webLinkToken: 'abc123',
+    } as any);
+    vi.mocked(prisma.tenantBranding.findUnique).mockResolvedValue({
+      brandName: 'Test Agency',
+      contactEmail: 'hello@testagency.com',
+      footerText: '123 Test St, Test City, ST 12345',
     } as any);
   });
 
@@ -362,6 +378,11 @@ describe('Pipeline Outreach Cron Endpoint', () => {
         'outreach_sent',
         PipelineStage.OUTREACH
       );
+      expect(runWithTenantBypass).toHaveBeenCalledWith(
+        'cron-pipeline-outreach-config-enumeration',
+        expect.any(Function)
+      );
+      expect(runWithTenantAsync).toHaveBeenCalledWith('tenant-1', expect.any(Function));
     });
 
     it('should process multiple prospects in batch', async () => {

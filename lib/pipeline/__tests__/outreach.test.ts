@@ -7,7 +7,7 @@
  * Requirements: 4.1, 4.2, 4.3, 4.4, 4.5, 4.8
  */
 
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import {
   generateAndQualifyEmail,
@@ -16,14 +16,16 @@ import {
   translateFinding,
 } from '../outreach';
 
-import type { OutreachContext, PainScoreBreakdown } from '../types';
+import type { OutreachContext } from '../types';
+
+vi.mock('@/lib/prisma', () => ({ prisma: {} }));
 
 // ============================================================================
 // Test Fixtures
 // ============================================================================
 
 function createMockContext(overrides: Partial<OutreachContext> = {}): OutreachContext {
-  return {
+  const base: OutreachContext = {
     prospect: {
       id: 'prospect-1',
       businessName: 'Bright Smile Dental',
@@ -32,10 +34,13 @@ function createMockContext(overrides: Partial<OutreachContext> = {}): OutreachCo
     },
     audit: {
       id: 'audit-1',
+      tenantId: 'tenant-1',
       status: 'COMPLETE',
     },
     proposal: {
       id: 'proposal-1',
+      auditId: 'audit-1',
+      tenantId: 'tenant-1',
       webLinkToken: 'abc123',
     },
     findings: [
@@ -43,25 +48,64 @@ function createMockContext(overrides: Partial<OutreachContext> = {}): OutreachCo
         id: 'f1',
         title: 'Slow Page Speed',
         module: 'pagespeed',
+        category: 'performance',
+        type: 'PAINKILLER',
         severity: 'high',
-        impactScore: 85,
+        impactScore: 8,
+        confidenceScore: 9,
         description: 'Page loads in 8.2 seconds',
+        auditId: 'audit-1',
+        tenantId: 'tenant-1',
+        evidence: [
+          {
+            pointer: 'https://bright-smile.example/',
+            source: 'pagespeed',
+            collected_at: '2026-07-01T00:00:00.000Z',
+          },
+        ],
+        metrics: {},
       },
       {
         id: 'f2',
         title: 'Mobile Not Responsive',
         module: 'mobile',
+        category: 'mobile',
+        type: 'PAINKILLER',
         severity: 'high',
-        impactScore: 80,
+        impactScore: 8,
+        confidenceScore: 9,
         description: 'Site not mobile-friendly',
+        auditId: 'audit-1',
+        tenantId: 'tenant-1',
+        evidence: [
+          {
+            pointer: 'https://bright-smile.example/',
+            source: 'mobile-test',
+            collected_at: '2026-07-01T00:00:00.000Z',
+          },
+        ],
+        metrics: {},
       },
       {
         id: 'f3',
         title: 'Missing SSL',
         module: 'ssl',
+        category: 'security',
+        type: 'PAINKILLER',
         severity: 'medium',
-        impactScore: 60,
+        impactScore: 6,
+        confidenceScore: 9,
         description: 'No HTTPS configured',
+        auditId: 'audit-1',
+        tenantId: 'tenant-1',
+        evidence: [
+          {
+            pointer: 'https://bright-smile.example/',
+            source: 'security',
+            collected_at: '2026-07-01T00:00:00.000Z',
+          },
+        ],
+        metrics: {},
       },
     ],
     painBreakdown: {
@@ -78,8 +122,16 @@ function createMockContext(overrides: Partial<OutreachContext> = {}): OutreachCo
     tenantBranding: {
       brandName: 'Digital Growth Co',
       contactEmail: 'hello@digitalgrowth.co',
+      footerText: '123 Business Rd, City, ST 12345',
     },
+  };
+  return {
+    ...base,
     ...overrides,
+    prospect: { ...base.prospect, ...overrides.prospect },
+    audit: { ...base.audit, ...overrides.audit },
+    proposal: { ...base.proposal, ...overrides.proposal },
+    tenantBranding: { ...base.tenantBranding, ...overrides.tenantBranding },
   };
 }
 
@@ -88,34 +140,38 @@ function createMockContext(overrides: Partial<OutreachContext> = {}): OutreachCo
 // ============================================================================
 
 describe('translateFinding', () => {
-  it('should translate page speed finding for dentist vertical', () => {
+  it('returns the observed finding text for dentist vertical', () => {
     const finding = { module: 'pagespeed', title: 'Slow Page Speed' };
     const result = translateFinding(finding, 'dentist');
-    expect(result).toBe('patients bouncing before they book');
+    expect(result).toBe('Slow Page Speed');
   });
 
-  it('should translate mobile finding for HVAC vertical', () => {
+  it('does not infer an outcome for HVAC vertical', () => {
     const finding = { module: 'mobile', title: 'Mobile Not Responsive' };
     const result = translateFinding(finding, 'hvac');
-    expect(result).toBe("homeowners can't request a quote from their phone");
+    expect(result).toBe('Mobile Not Responsive');
   });
 
-  it('should use default vertical for unknown verticals', () => {
+  it('preserves a technical description for unknown verticals', () => {
     const finding = { module: 'ssl', title: 'Missing SSL' };
     const result = translateFinding(finding, 'unknown_vertical');
-    expect(result).toBe('visitors see a "Not Secure" warning on your site');
+    expect(result).toBe('Missing SSL');
   });
 
-  it('should translate GBP finding for restaurant vertical', () => {
+  it('preserves a technical observation for restaurant vertical', () => {
     const finding = { module: 'google_business', title: 'GBP Issues' };
     const result = translateFinding(finding, 'restaurant');
-    expect(result).toBe("your Google listing isn't filling tables");
+    expect(result).toBe('GBP Issues');
   });
 
-  it('should handle findings with type instead of module', () => {
-    const finding = { type: 'competitor_analysis', title: 'Competitor Gap' };
+  it('includes an available finding description', () => {
+    const finding = {
+      type: 'competitor_analysis',
+      title: 'Competitor Gap',
+      description: 'Observed data.',
+    };
     const result = translateFinding(finding, 'dentist');
-    expect(result).toBe('nearby practices are showing up above you in search');
+    expect(result).toBe('Competitor Gap: Observed data.');
   });
 });
 
@@ -188,12 +244,12 @@ describe('generateEmail', () => {
     expect(email.body).toContain(encodeURIComponent('/preview/abc123'));
   });
 
-  it('should use vertical-specific pain language in the body', async () => {
+  it('should use only observed technical finding language in the body', async () => {
     const context = createMockContext({ vertical: 'dentist' });
     const email = await generateEmail(context);
 
-    // Should contain dentist-specific language
-    expect(email.body).toContain('patients');
+    expect(email.body).toContain('Page loads in 8.2 seconds');
+    expect(email.body).not.toContain('top local competitor');
   });
 
   it('should include the business name in subject and body', async () => {
@@ -217,6 +273,8 @@ describe('generateEmail', () => {
 
     expect(email.prospectId).toBe('prospect-1');
     expect(email.proposalId).toBe('proposal-1');
+    expect(email.auditId).toBe('audit-1');
+    expect(email.findingIds).toEqual(['f1', 'f2', 'f3']);
   });
 
   it('should generate a unique email ID', async () => {
@@ -236,23 +294,43 @@ describe('generateEmail', () => {
     expect(email.scorecardUrl).toContain(encodeURIComponent('/preview/proposal-fallback'));
   });
 
-  it('should handle HVAC vertical pain language', async () => {
+  it('should not alter observed finding language for a different vertical', async () => {
     const context = createMockContext({ vertical: 'hvac' });
     const email = await generateEmail(context);
 
-    expect(email.body).toContain('homeowners');
+    expect(email.body).toContain('Page loads in 8.2 seconds');
   });
 
   it('should handle findings with only 2 available', async () => {
     const context = createMockContext({
-      findings: [
-        { id: 'f1', title: 'Issue A', module: 'pagespeed', severity: 'high', impactScore: 80 },
-        { id: 'f2', title: 'Issue B', module: 'mobile', severity: 'high', impactScore: 75 },
-      ],
+      findings: [createMockContext().findings[0], createMockContext().findings[1]],
     });
     const email = await generateEmail(context);
 
     expect(email.findingReferences).toHaveLength(2);
+  });
+
+  it('rejects a cross-tenant Finding instead of sending an uncited observation', async () => {
+    const context = createMockContext({
+      findings: [
+        {
+          ...createMockContext().findings[0],
+          tenantId: 'tenant-2',
+        },
+      ],
+    });
+
+    await expect(generateEmail(context)).rejects.toThrow('outreach claim validation failed');
+  });
+
+  it('fails closed when outbound footer configuration is missing', async () => {
+    const context = createMockContext({
+      tenantBranding: { footerText: undefined },
+    });
+
+    await expect(generateEmail(context)).rejects.toThrow(
+      'outreach generation requires configured tenant footer text'
+    );
   });
 });
 
