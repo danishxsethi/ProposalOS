@@ -515,13 +515,13 @@
       "id": "P1-27",
       "severity": "P1",
       "title": "crawlWebsite invoked twice per audit (website internal + websiteCrawler standalone)",
-      "status": "open",
+      "status": "verified",
       "rootCauseGroup": "I",
       "dependencies": [],
       "files": ["lib/modules/website.ts", "lib/audit/runner.ts"],
       "verification": ["Reuse crawler result via dependencyResults; test single crawl"],
       "wave": 7,
-      "notes": "Duplicate collection."
+      "notes": "Duplicate collection. Wave 7A: fixed. lib/modules/websiteCrawlerModule.ts's runWebsiteCrawlerModule now single-flight-coalesces concurrent (auditId,url) calls; website.ts and the canonical websiteCrawler adapter both thread the real auditId. Verified: lib/modules/__tests__/websiteCrawlerDedup.test.ts (3/3)."
     },
     {
       "id": "P1-28",
@@ -539,13 +539,13 @@
       "id": "P1-29",
       "severity": "P1",
       "title": "gbp/gbpDeep resolve business via maxResultCount:1 with no disambiguation/confidence gate",
-      "status": "open",
+      "status": "verified",
       "rootCauseGroup": "H",
       "dependencies": [],
       "files": ["lib/modules/gbp.ts", "lib/modules/gbpDeep.ts"],
       "verification": ["Multi-candidate scoring vs website/phone/address; flag ambiguity; test"],
       "wave": 7,
-      "notes": "Wrong-business risk for common names/franchises."
+      "notes": "Wrong-business risk for common names/franchises. Wave 7A: fixed. gbp.ts's runGBPModule now requests up to 5 Text Search candidates and scores them by name+address signal (scorePlaceCandidate, exported and reused by gbpDeep.ts's own independent fallback resolution); ambiguous/weak matches are flagged identityConfidence:'ambiguous' and the aggregation layer (runner.ts extractFindingsFromRegistryResult) + gbpDeepAdapter withhold definitive customer-negative findings for those cases. Verified: lib/modules/__tests__/gbpIdentityMatch.test.ts (3/3), lib/audit/__tests__/wave7aAdapterRepairs.test.ts (4 of 9)."
     },
     {
       "id": "P1-30",
@@ -582,13 +582,13 @@
       "id": "P1-32",
       "severity": "P1",
       "title": "gbp/gbpDeep duplicate Places Details fetch (separate caches never cross-serve)",
-      "status": "open",
+      "status": "verified",
       "rootCauseGroup": "I",
       "dependencies": [],
       "files": ["lib/modules/gbp.ts", "lib/modules/gbpDeep.ts"],
       "verification": ["Pass details via dependencyResults or unify cache key; test single fetch"],
       "wave": 7,
-      "notes": "Duplicate real-money API cost."
+      "notes": "Duplicate real-money API cost. Wave 7A: re-verified, already fixed in Wave 6. gbpDeepAdapter forwards placeData from the canonical gbp dependency; runGbpDeepModule's dependencyPlaceToApiShape() consumes it and skips both the Text Search and Places Details calls. Existing regression lib/modules/__tests__/gbpDeepImplementation.test.ts already asserted tracker.calls excludes PLACES_DETAILS_DEEP/PLACES_TEXT_SEARCH when placeData is present -- no code change required. Ledger was stale (still wave:7/open); status corrected to verified."
     },
     {
       "id": "P1-33",
@@ -622,13 +622,13 @@
       "id": "P1-35",
       "severity": "P1",
       "title": "seoDeep/schemaMarkup declare websiteCrawler dependency but re-fetch homepage independently",
-      "status": "open",
+      "status": "verified",
       "rootCauseGroup": "I",
       "dependencies": [],
       "files": ["lib/audit/runner.ts"],
       "verification": ["Forward dependencyResults.websiteCrawler HTML; test no re-fetch"],
       "wave": 7,
-      "notes": "Compounds P1-27 duplicate crawl."
+      "notes": "Compounds P1-27 duplicate crawl. Wave 7A: fixed. lib/modules/websiteCrawler.ts's crawlWebsite() now captures the homepage's real raw HTML (CrawlResult.homepageHtml) and a hasViewportMeta flag per page as free byproducts of the parse it already performs; runner.ts's seoDeepAdapter/schemaMarkupAdapter forward this websiteCrawler dependency data instead of leaving seoDeep.ts/schemaMarkup.ts to independently re-fetch the same homepage. Verified: lib/audit/__tests__/wave7aAdapterRepairs.test.ts (3 of 9), lib/modules/__tests__/seoDeepDependencyReuse.test.ts (2 of 5)."
     },
     {
       "id": "P1-36",
@@ -663,13 +663,13 @@
       "id": "P1-38",
       "severity": "P1",
       "title": "mobileUX makes separate PageSpeed call instead of reusing website's Lighthouse/PSI data",
-      "status": "open",
+      "status": "verified",
       "rootCauseGroup": "I",
       "dependencies": [],
       "files": ["lib/modules/mobileUX.ts", "lib/audit/runner.ts"],
       "verification": ["Forward website Lighthouse via dependencyResults; test single PSI call"],
       "wave": 7,
-      "notes": "Duplicate billable API cost."
+      "notes": "Duplicate billable API cost. Wave 7A: fixed. mobileUXAdapter (runner.ts) forwards website's already-computed mobile PageSpeed score (gated on coreWebVitals.full being genuinely present, never the missing-key/failure fallback shape) as reusedMobileScore; mobileUX.ts's fetchPageSpeedMobile skips its own duplicate mobile-strategy call when supplied, while the desktop comparison call (genuinely new data) is unaffected. Verified: lib/modules/__tests__/mobileUXDependencyReuse.test.ts (2/2), lib/audit/__tests__/wave7aAdapterRepairs.test.ts (2 of 9)."
     },
     {
       "id": "P1-39",
@@ -1233,25 +1233,25 @@
       "id": "P2-31",
       "severity": "P2",
       "title": "social (6 platforms) vs socialDeep (5, omits Twitter/X) platform mismatch",
-      "status": "open",
+      "status": "verified",
       "rootCauseGroup": "H",
       "dependencies": [],
       "files": ["lib/modules/social.ts", "lib/modules/socialDeep.ts"],
       "verification": ["Align platform lists"],
       "wave": 7,
-      "notes": ""
+      "notes": "Wave 7A: fixed. social.ts's platform vocabulary reduced from 6 to the same 5 platforms socialDeep.ts recognizes (dropped twitter, which socialDeep could never validate and therefore always silently discarded downstream). socialDeep.ts's SOCIAL_PLATFORMS exported as SOCIAL_DEEP_PLATFORMS for cross-file test verification (no runtime coupling introduced). Verified: lib/modules/__tests__/socialShareExclusion.test.ts (1 of 4)."
     },
     {
       "id": "P2-32",
       "severity": "P2",
       "title": "social takes first regex match with no share/embed/widget URL exclusion",
-      "status": "open",
+      "status": "verified",
       "rootCauseGroup": "H",
       "dependencies": [],
       "files": ["lib/modules/social.ts"],
       "verification": ["Denylist share/widget/embed URL patterns"],
       "wave": 7,
-      "notes": ""
+      "notes": "Wave 7A: fixed. social.ts's regex-based scan now rejects generic share/embed/widget/watch path shapes (REJECTED_PATH_PARTS, mirroring the exclusion socialDeep.ts already enforced) before accepting a matched URL as a real profile link. Verified: lib/modules/__tests__/socialShareExclusion.test.ts (3 of 4)."
     },
     {
       "id": "P2-33",
@@ -1271,25 +1271,25 @@
       "id": "P2-34",
       "severity": "P2",
       "title": "reputation has leftover authoring/debugging comment in shipped source",
-      "status": "open",
+      "status": "verified",
       "rootCauseGroup": "P",
       "dependencies": [],
       "files": ["lib/modules/reputation.ts"],
       "verification": ["Clean up stray comment"],
       "wave": 7,
-      "notes": ""
+      "notes": "Wave 7A: fixed (trivial, no test needed). lib/modules/reputation.ts's traceLlmCall token-usage callback had a stream-of-consciousness authoring note ('Wait, I removed the tracker logic... but here I should keep it? Yes...') shipped in production source; replaced with a concise, accurate comment. No behavior change."
     },
     {
       "id": "P2-35",
       "severity": "P2",
       "title": "seoDeep robots/sitemap/ranking fallbacks indistinguishable from verified absence",
-      "status": "open",
+      "status": "verified",
       "rootCauseGroup": "H",
       "dependencies": [],
       "files": ["lib/modules/seoDeep.ts"],
       "verification": ["Return UNAVAILABLE/null-with-reason marker"],
       "wave": 7,
-      "notes": ""
+      "notes": "Wave 7A: fixed. seoDeep.ts's checkEndpoint() now returns {status,checked} distinguishing a real HTTP response (checked:true) from a network/provider failure (checked:false, fallbackValue -1) instead of collapsing both into an assumed 404; fetchOrganicRanking() now returns rankCheckStatus: 'not_configured'|'checked'|'unavailable' instead of an identical null/false shape for 'no key' vs 'checked, not found' vs 'provider error'. All three real distinctions are recorded in evidenceSnapshots[0].rawResponse.seoChecks. Verified: lib/modules/__tests__/seoDeepDependencyReuse.test.ts (3 of 5)."
     },
     {
       "id": "P2-36",
@@ -1364,13 +1364,13 @@
       "id": "P2-41",
       "severity": "P2",
       "title": "mobileUX missing PAGESPEED key -> {mobileScore:0} indistinguishable from real 0",
-      "status": "open",
+      "status": "verified",
       "rootCauseGroup": "H",
       "dependencies": [],
       "files": ["lib/modules/mobileUX.ts"],
       "verification": ["Return null/'not measured' marker on missing credential"],
       "wave": 7,
-      "notes": ""
+      "notes": "Wave 7A: re-verified, already fixed in Wave 6. mobileUX.ts's fetchPageSpeedMobile returns {status:'unavailable'} with mobileScore left undefined (never 0) when GOOGLE_PAGESPEED_API_KEY is missing; analyzeMobileUX maps this to mobilePerformanceScore: pagespeedData.mobileScore ?? null (explicit null, not a fabricated zero), and generateMobileFindings' 'Critical Mobile Performance Issues' check explicitly guards `!== null` before comparing < 30. Existing regression lib/modules/__tests__/mobileUXImplementation.test.ts already asserts mobilePerformanceScore toBeNull() when the key is missing -- no code change required. Ledger was stale (still wave:7/open); status corrected to verified."
     },
     {
       "id": "P2-42",
@@ -1560,21 +1560,21 @@
       "id": "P2-56",
       "severity": "P2",
       "title": "Latent field/enum/type mismatches in lib/pipeline/signalDetector.ts and tenantConfig.ts masked by the old lib/db.ts prisma:any typing",
-      "status": "open",
+      "status": "re-scoped",
       "rootCauseGroup": "M",
       "dependencies": ["P1-05"],
       "files": ["lib/pipeline/signalDetector.ts", "lib/pipeline/tenantConfig.ts"],
       "verification": [
         "Fix status-enum casing (discovered/audited vs DISCOVERED/AUDITED), select-field names (gbpPlaceId/websiteUrl/industry), and Tenant include/pipelineConfig relation shape; add real types back"
       ],
-      "wave": 7,
-      "notes": "Discovered during Wave 1 P1-05 migration off the unscoped any-typed client -- tsc surfaced real, pre-existing type errors that were always silently swallowed. Preserved exact prior runtime behavior via an explicit as-any cast (documented ponytail comment in both files) rather than blind-fixing business logic under time pressure. Needs its own investigation with tests before changing behavior."
+      "wave": 14,
+      "notes": "Discovered during Wave 1 P1-05 migration off the unscoped any-typed client -- tsc surfaced real, pre-existing type errors that were always silently swallowed. Preserved exact prior runtime behavior via an explicit as-any cast (documented ponytail comment in both files) rather than blind-fixing business logic under time pressure. Needs its own investigation with tests before changing behavior. Re-scoped from wave 7 to wave 14 (group M -- 'Complete tests, adversarial fixtures, coverage' -- matches this finding's own rootCauseGroup M exactly). Not an audit-module PARTIAL-hardening item (it's latent type/enum debt in lib/pipeline/signalDetector.ts and lib/pipeline/tenantConfig.ts uncovered by the Wave 1 unscoped-Prisma-client fix), so it does not belong in Wave 7's 'harden remaining PARTIAL audit modules' theme. Not touched this wave."
     },
     {
       "id": "P2-57",
       "severity": "P2",
       "title": "Duplicated, inconsistent X-Forwarded-For/X-Real-IP extraction logic outside lib/middleware/rateLimit.ts",
-      "status": "open",
+      "status": "re-scoped",
       "rootCauseGroup": "B",
       "dependencies": ["P2-22"],
       "files": [
@@ -1589,8 +1589,8 @@
       "verification": [
         "Migrate each site to the new shared lib/security/getClientIp.ts helper; remove duplicated first-hop-trusting logic"
       ],
-      "wave": 7,
-      "notes": "P2-22 fixed the two sites cited as evidence in the audit (rateLimit.ts) and shipped the shared helper; these 7 sites still duplicate the old, spoofable first-hop-trusting pattern and should be migrated to the shared helper."
+      "wave": 13,
+      "notes": "P2-22 fixed the two sites cited as evidence in the audit (rateLimit.ts) and shipped the shared helper; these 7 sites still duplicate the old, spoofable first-hop-trusting pattern and should be migrated to the shared helper. Re-scoped from wave 7 to wave 13 (group N -- 'Observability, infrastructure, CI' -- closest available bucket for cross-cutting security/infra hygiene; rootCauseGroup B has no dedicated wave after Wave 1 closed). Not an audit-module PARTIAL-hardening item (it's duplicated client-IP-extraction logic in non-audit routes: case-study generation, pipeline chat, proposal tokens, idempotency middleware, lib/auth.ts). Not touched this wave."
     },
     {
       "id": "P2-58",

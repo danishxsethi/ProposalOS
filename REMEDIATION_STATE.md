@@ -110,7 +110,7 @@ work**, tracked so a later wave can complete them; they are NOT confirmed defect
 | 4    | Shared network/browser/provider safety         | P1-46, P1-47, P1-48, P2-53, P2-54                                                                                     | G      | **COMPLETE — see Wave 4 result** |
 | 5    | Module adapter & failure-state repair          | P1-28, P1-33, P1-34, P1-39, P1-43, P2-28, P2-47                                                                       | E, H   | **COMPLETE — see Wave 5 result** |
 | 6    | Fully implement broken/missing modules         | P0-25, P1-30, P1-37, P1-41, P1-42, P2-30                                                                              | F      | **COMPLETE - see Wave 6 result** |
-| 7    | Harden remaining partial modules               | P1-27, P1-29, P1-32, P1-35, P1-38, P2-27, P2-31, P2-32, P2-34, P2-35, P2-38, P2-41, P2-42, P2-43, P2-44, P2-46, P2-50 | I, H   | open                             |
+| 7    | Harden remaining partial modules               | P1-27, P1-29, P1-32, P1-35, P1-38, P2-27, P2-31, P2-32, P2-34, P2-35, P2-38, P2-41, P2-42, P2-43, P2-44, P2-46, P2-50 | I, H   | **7A COMPLETE — 7B pending**     |
 | 8    | Diagnosis + proposal claim-policy enforcement  | P0-26, P1-36, P1-40                                                                                                   | F      | open                             |
 | 9    | Delivery/outreach/closing/retention pipelines  | (Passes 9-12 audit work)                                                                                              | —      | open                             |
 | 10   | Billing, metering, webhook, unit economics     | P1-08, P2-21                                                                                                          | L      | open                             |
@@ -1158,3 +1158,268 @@ Tests/guards: `lib/audit/__tests__/wave6AdapterStates.test.ts`,
   remains honest and PARTIAL where those fields are absent.
 - Wave 7 retains its own duplicate collection and partial-quality findings, including P1-32
   and P1-38; Wave 6 did not incorrectly close them.
+
+## Wave 7 entry and authoritative module table (2026-07-12)
+
+### Entry state
+
+- Branch: `remediation/proposalos-e2e`. Entry HEAD: `ad70444631a2a53ab6d0b663b1eaaafb5bc01144`
+  (`chore(remediation): checkpoint wave 6`), directly above `91dd5ca`
+  (`fix(audit-modules): implement broken and missing capabilities`). `git log --oneline -22`
+  confirmed Wave 0-6 fix/checkpoint commits present in order; `git stash list` empty.
+- Dirty tree matched the documented preserved baseline exactly: `AUDIT_REPORT.md`, the
+  ~46-file logger-typing route group + `lib/logger.ts`,
+  `lib/self-evolving-prompts/data-access/prompt-performance.ts`,
+  `app/api/cron/metering-sweep/route.ts`, untracked `scripts/show-leaks.js`. None of it
+  touched this wave.
+- Entry `./node_modules/.bin/tsc --noEmit --pretty false --incremental false` -> exit 0.
+
+### Authoritative Wave 7 finding/module set
+
+`REMEDIATION_FINDINGS.json | select(.wave == 7)` returned 19 rows at entry: the 17 named in
+this file's own wave table (P1-27, P1-29, P1-32, P1-35, P1-38, P2-27, P2-31, P2-32, P2-34,
+P2-35, P2-38, P2-41, P2-42, P2-43, P2-44, P2-46, P2-50) plus two ledger rows tagged
+`wave: 7` that do not match the wave table row or Wave 7's own theme:
+
+- **P2-56** (rootCauseGroup `M`) — latent type/enum debt in
+  `lib/pipeline/signalDetector.ts`/`lib/pipeline/tenantConfig.ts`, discovered during Wave 1's
+  unscoped-Prisma-client migration. Not an audit module. Re-scoped to **Wave 14** (group M
+  matches exactly).
+- **P2-57** (rootCauseGroup `B`) — duplicated client-IP-extraction logic across 7 non-audit
+  routes/middleware. Not an audit module. Re-scoped to **Wave 13** (closest available
+  cross-cutting infra bucket; group B has no dedicated wave after Wave 1 closed).
+
+Neither is included in Wave 7 execution. This leaves **17 authoritative Wave 7 findings**
+across audit modules, matching this file's own wave-table row exactly.
+
+During classification, two of the 17 were found already resolved by Wave 6 as an
+incidental side effect of that wave's own module hardening (ledger was stale — still
+`wave:7`/`open` — but the code and an existing regression test already prove the fix):
+
+- **P1-32** (gbp/gbpDeep duplicate Places Details fetch) — `gbpDeepAdapter` already forwards
+  `placeData`; `runGbpDeepModule`'s `dependencyPlaceToApiShape()` already skips both the
+  Text Search and Details calls when it's present. Proven by the pre-existing
+  `lib/modules/__tests__/gbpDeepImplementation.test.ts` assertion
+  `expect(tracker.calls).not.toContain('PLACES_DETAILS_DEEP')`. **Re-verified, not
+  re-implemented.**
+- **P2-41** (mobileUX missing-key `{mobileScore:0}` ambiguity) — `fetchPageSpeedMobile`
+  already returns `{status:'unavailable'}` with `mobileScore` left `undefined` (mapped to
+  explicit `null`, never `0`) on a missing key; `generateMobileFindings` already guards
+  `!== null` before its `< 30` comparison. Proven by the pre-existing
+  `lib/modules/__tests__/mobileUXImplementation.test.ts` assertion
+  `mobilePerformanceScore.toBeNull()`. **Re-verified, not re-implemented.**
+
+### Authoritative Wave 7 module table
+
+| Module cluster                           | Findings     | Status at entry                          | Intended capability                                                        | Exact PARTIAL gap                                                                                                                                                                                   | Dependencies        | Wave 7 batch                |
+| ---------------------------------------- | ------------ | ---------------------------------------- | -------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------- | --------------------------- |
+| `website`/`websiteCrawler`               | P1-27        | open                                     | Crawl a site once per audit and reuse the result                           | `runWebsiteModule` calls `runWebsiteCrawlerModule` internally AND the canonical `websiteCrawler` registry module calls it again — two full (<=20-page) real crawls per audit                        | none (both phase 1) | **7A**                      |
+| `seoDeep`/`schemaMarkup`                 | P1-35, P2-35 | open                                     | Reuse the already-crawled homepage; distinguish unchecked from absent      | Both declare `dependsOn: ['websiteCrawler']` but re-fetch the homepage independently; robots.txt/sitemap.xml/brand-rank checks collapse "could not check" into the same shape as "confirmed absent" | `websiteCrawler`    | **7A**                      |
+| `gbp`/`gbpDeep`                          | P1-29, P1-32 | P1-29 open, P1-32 already-fixed (Wave 6) | Resolve the correct business with confidence; avoid duplicate Places calls | Text Search requested exactly 1 candidate and always trusted it — real wrong-business risk for common names/franchises                                                                              | none                | **7A**                      |
+| `mobileUX`                               | P1-38, P2-41 | P1-38 open, P2-41 already-fixed (Wave 6) | Measure mobile UX without duplicate billable calls                         | Independent mobile-strategy PageSpeed call duplicates `website`'s own mobile-strategy PageSpeed call                                                                                                | `website`           | **7A**                      |
+| `social`/`socialDeep`                    | P2-31, P2-32 | open                                     | Detect real owned profile links, not generic widgets                       | No share/embed/widget URL exclusion; platform vocabulary (6) exceeds what `socialDeep` (5) can validate, silently dropping a free, already-found candidate                                          | none                | **7A**                      |
+| `reputation`                             | P2-34        | open                                     | — (hygiene only)                                                           | Leftover stream-of-consciousness authoring comment in shipped source                                                                                                                                | none                | **7A** (trivial, zero-risk) |
+| `techStack` + others                     | P2-27        | open                                     | Cost tracker reflects every real network call                              | 4/5 Batch-1 modules perform calls invisible to `CostTracker`                                                                                                                                        | none                | 7B                          |
+| `contentQuality`                         | P2-38        | open                                     | Apply readability formulas only to supported languages                     | Asserts Flesch-Kincaid with no language detection                                                                                                                                                   | none                | 7B                          |
+| `conversion`/`mobileUX`/`accessibility`  | P2-42, P2-43 | open                                     | Bound browser resource use; gate CTA detection on visibility               | 3 separate Puppeteer launches per audit; CTA detection doesn't check element visibility/dimensions                                                                                                  | none                | 7B                          |
+| `coreWebVitals` (runner.ts)              | P2-44        | open                                     | Surface every extracted metric as a finding                                | INP is extracted but never surfaced as a finding                                                                                                                                                    | `website`           | 7B                          |
+| `competitor`/`backlinks`/`videoPresence` | P2-46        | open                                     | Distinguish "not checked" from "genuine zero"                              | Missing `SERP_API_KEY` collapses into the same zero-value shape as a genuine zero result                                                                                                            | none                | 7B                          |
+| `privacyCompliance`                      | P2-50        | open                                     | Broaden tracker-name detection                                             | Narrow hardcoded pattern list                                                                                                                                                                       | none                | 7B                          |
+
+17 substantial-or-trivial units at entry, 6 assigned to Wave 7A (website/crawler dedup,
+seoDeep/schemaMarkup reuse, gbp/gbpDeep identity+dedup, mobileUX reuse, social/socialDeep
+heuristics, reputation cleanup), 7 findings across 6 module clusters deferred to **Wave 7B**
+per the adaptive-batching rule (more than five substantial modules remain). No Wave 8 scope
+was started.
+
+## Wave 7A result summary (website/crawler, seoDeep/schemaMarkup, gbp/gbpDeep, mobileUX,
+
+social/socialDeep, reputation)
+
+### Findings verified
+
+- **P1-27** — `lib/modules/websiteCrawlerModule.ts::runWebsiteCrawlerModule` now
+  single-flight-coalesces concurrent calls sharing the same `(auditId, url)` key into one
+  real crawl; `website.ts` and the canonical `websiteCrawler` adapter both now thread the
+  real `auditId` so the two call sites actually coalesce instead of crawling twice.
+- **P1-29** — `gbp.ts::runGBPModule` requests up to 5 Text Search candidates (field mask now
+  includes `displayName`) and scores each by normalized name + city-in-address match
+  (`scorePlaceCandidate`, exported); the best match is selected instead of index 0, and a
+  weak/tied match is flagged `identityConfidence: 'ambiguous'` with real alternate-candidate
+  names recorded. `gbpDeep.ts`'s own independent fallback resolution (used only when the
+  canonical `gbp` dependency is unavailable) now calls the same exported scorer instead of a
+  second, divergent one-candidate implementation.
+- **P1-32** — re-verified (already fixed in Wave 6); no code change.
+- **P1-35** — `websiteCrawler.ts::crawlWebsite` now captures the homepage's real raw HTML
+  (`CrawlResult.homepageHtml`) and a `hasViewportMeta` flag per page as free byproducts of
+  the parse it already performs; `seoDeepAdapter`/`schemaMarkupAdapter` (runner.ts) forward
+  this dependency data so `seoDeep.ts`/`schemaMarkup.ts` reuse it instead of independently
+  re-fetching the same homepage. Both modules fall back to their own fetch when the
+  dependency didn't capture the homepage (crawler unavailable/failed/blocked).
+- **P1-38** — `mobileUXAdapter` forwards `website`'s already-computed mobile PageSpeed score
+  as `reusedMobileScore`, gated on `coreWebVitals.full` being genuinely present (never the
+  missing-key/failure fallback shape); `mobileUX.ts::fetchPageSpeedMobile` skips its own
+  duplicate mobile-strategy call when supplied — the desktop comparison call (genuinely new
+  data `website` never fetches) is unaffected.
+- **P2-31** — `social.ts`'s platform vocabulary reduced from 6 to the same 5 platforms
+  `socialDeep.ts` recognizes (dropped `twitter`, which `socialDeep` could never validate and
+  therefore always silently discarded downstream with no record).
+- **P2-32** — `social.ts`'s regex-based scan now rejects generic share/embed/widget/watch
+  path shapes (`REJECTED_PATH_PARTS`) before accepting a matched URL as a real profile link
+  — mirrors the identical exclusion `socialDeep.ts` already enforced.
+- **P2-34** — leftover authoring comment in `reputation.ts` replaced with an accurate one;
+  no behavior change.
+- **P2-35** — `seoDeep.ts::checkEndpoint` now returns `{status, checked}`; a real HTTP
+  response (`checked:true`) is distinguished from a network/provider failure
+  (`checked:false`). `fetchOrganicRanking` now returns `rankCheckStatus:
+'not_configured'|'checked'|'unavailable'` instead of an identical null/false shape for "no
+  key" vs "checked, not found" vs "provider error". Recorded in
+  `evidenceSnapshots[0].rawResponse.seoChecks`.
+- **P2-41** — re-verified (already fixed in Wave 6); no code change.
+
+### Findings re-scoped
+
+- **P2-56** -> Wave 14 (not an audit module; test-harness/type-debt theme matches exactly).
+- **P2-57** -> Wave 13 (not an audit module; cross-cutting infra hygiene).
+
+### Correctness and identity hardening
+
+`gbp`'s Text Search now scores every returned candidate by normalized business name
+(exact/substring/token-overlap) plus city-in-formatted-address, selecting the highest-scoring
+candidate instead of index 0. A weak best match (`score < 40`) or a near-tie with the runner-up
+(`diff < 20`) is flagged `identityConfidence: 'ambiguous'`, with the real alternate candidate
+names and search-response counts recorded on the module's own data — never fabricated. Two
+downstream consumers respect this signal without weakening the Wave 3 Finding/Evidence
+contract: `extractFindingsFromRegistryResult`'s `gbp` branch replaces the normal finding set
+with one advisory, non-customer-negative disclosure citing the real alternates; `gbpDeepAdapter`
+withholds gbpDeep's own reviews/photos/completeness findings (which could describe an entirely
+different business) rather than presenting them as definitive. A high-confidence match is
+unaffected and produces the normal finding set exactly as before.
+
+### Provider failure vs verified absence
+
+`seoDeep.ts`'s robots.txt/sitemap.xml HEAD checks and brand-rank SerpAPI check now distinguish
+a genuine HTTP response (real presence/absence) from a network/provider failure (`unavailable`)
+and from "not configured" (`not_configured`) — three previously-identical shapes now three
+honest, evidence-recorded states.
+
+### Metric scope and provenance
+
+`mobileUX`'s reused mobile PageSpeed score is only trusted when `website`'s own
+`coreWebVitals.full` is genuinely present (the one field only populated on `website.ts`'s real
+PageSpeed-success path, never its missing-key/failure fallback) — a missing/failed dependency
+score correctly falls through to `mobileUX`'s own independent fetch rather than silently
+reusing a `0` that would be indistinguishable from a real 0.
+
+### Dependency reuse and duplicate-call removal
+
+- One real crawl per audit instead of two (P1-27).
+- `seoDeep`/`schemaMarkup` reuse the already-crawled homepage instead of re-fetching it
+  (P1-35); this also incidentally supplies `schemaAnalysisAdapter`'s pre-existing
+  `evidenceSnapshots[0].rawResponse.html` fallback lookup, which previously had no producer.
+- `mobileUX` reuses `website`'s mobile PageSpeed score instead of a second billable mobile
+  call; the desktop comparison call is preserved (genuinely new data) (P1-38).
+- `gbpDeep` continues to reuse `gbp`'s already-fetched Places Details (P1-32, re-verified).
+
+### Finding/Evidence quality
+
+The new GBP ambiguity-disclosure finding cites the real Places record pointer (or the audited
+URL if no placeId), the real match-confidence score, and the real candidate count — never a
+generic homepage URL standing in for a specific-record claim. `seoDeep`'s three new tri-state
+fields are recorded as real evidence (`seoChecks`) rather than silently discarded.
+
+### Implementation-level test coverage
+
+New tests (35 total): `lib/modules/__tests__/websiteCrawlerDedup.test.ts` (3),
+`lib/modules/__tests__/gbpIdentityMatch.test.ts` (3),
+`lib/modules/__tests__/seoDeepDependencyReuse.test.ts` (5),
+`lib/modules/__tests__/mobileUXDependencyReuse.test.ts` (2),
+`lib/modules/__tests__/socialShareExclusion.test.ts` (4),
+`lib/audit/__tests__/wave7aAdapterRepairs.test.ts` (9), all invoking the real
+module/adapter with only lower-level provider/browser/cache/resilience boundaries mocked.
+
+### Canonical 27-module guard
+
+`tests/architecture/canonical-module-manifest.test.ts` — 7/7 pass; still exactly 27 canonical
+modules, no manifest change.
+
+### Files changed
+
+Production: `lib/audit/runner.ts`, `lib/modules/types.ts`, `lib/modules/website.ts`,
+`lib/modules/websiteCrawler.ts`, `lib/modules/websiteCrawlerModule.ts`,
+`lib/modules/seoDeep.ts`, `lib/modules/schemaMarkup.ts`, `lib/modules/gbp.ts`,
+`lib/modules/gbpDeep.ts`, `lib/modules/mobileUX.ts`, `lib/modules/social.ts`,
+`lib/modules/socialDeep.ts` (added `SOCIAL_DEEP_PLATFORMS` export only),
+`lib/modules/reputation.ts` (comment only).
+
+Tests: the 6 new files listed above.
+
+Architecture: `tests/architecture/ssrf-fetch-boundary.test.ts` — updated 5 stale line-number
+references (`lib/modules/gbp.ts`, `lib/modules/mobileUX.ts`, `lib/modules/seoDeep.ts`) that
+shifted because of edits above the already-allowlisted raw-`fetch()` lines; no allowlist
+entry added or removed, same fixed hosts.
+
+### Tests and gates
+
+- New Wave 7A tests: 26 tests across 6 new files, all pass (see file list above; total 35
+  test cases across `it()` blocks once sub-cases are counted individually).
+- `lib/modules/__tests__/` + `lib/audit/__tests__/` + `tests/architecture/`: 191/193 pass.
+  The 2 failures are both pre-existing and undisturbed by this wave:
+  `tests/architecture/ssrf-fetch-boundary.test.ts`'s one remaining violation is the
+  documented `lib/queue/auditJobQueue.ts:433` raw fetch (file untouched,
+  `git status --short` clean) — preserved, not fixed, per instruction;
+  `lib/modules/__tests__/auditOrchestrator.test.ts` is the documented-since-Wave-2 30s
+  timeout in the deprecated `AuditOrchestrator` test (unrelated file, untouched).
+- Wave 0-2 sample regression set (`tests/security/wave0-rbac-api-key.test.ts`,
+  `wave1-owner-role-escalation.test.ts`, `audit-job-lease-heartbeat.test.ts`,
+  `feature-flag-effective-override.test.ts`, `widget-graceful-degradation.test.ts`,
+  `widget-origin-allowlist.test.ts`, `tests/integration/audit-api.test.ts`,
+  `batch-queue-worker.test.ts`): 89/89 pass.
+- Wave 3-6 Finding/Evidence/adapter regression set (`findingContract.test.ts`,
+  `findingPersistence.test.ts`, `adapterFailureMasking.test.ts`, `stubContainment.test.ts`,
+  `wave5AdapterRepairs.test.ts`, `wave6AdapterStates.test.ts`,
+  `finding-persistence-boundary.test.ts`): 65/65 pass.
+- TypeScript: `./node_modules/.bin/tsc --noEmit --pretty false --incremental false` -> exit 0.
+- ESLint on all changed production/test files: 0 errors; pre-existing `no-explicit-any` /
+  complexity warning-class instances only (verified against `git diff` that no new-warning
+  line was introduced by this wave, apart from one self-inflicted test warning fixed before
+  the final run).
+- Bounded production search: no `maxResultCount: 1`-with-zero-disambiguation pattern remains
+  in `gbp.ts`'s primary path; `social.ts` no longer contains `twitter`; no hardcoded
+  `exists:true`/production-stub pattern reintroduced in `socialDeep.ts`.
+
+### Full-suite result / environment block
+
+Full suite not run. Two independent environment blocks are present in this sandbox, both
+pre-existing and unrelated to any Wave 7A change (confirmed by reproducing the identical
+failures on the unmodified Wave 6 checkpoint via a scoped `git stash`):
+
+1. Local PostgreSQL is unavailable — `nc -z localhost 5435` / `5444` both fail (documented
+   since Wave 1).
+2. The local Prisma query engine binary
+   (`node_modules/.prisma/client/libquery_engine-darwin-arm64.dylib.node`) cannot be loaded
+   on this machine — macOS code-signing/Gatekeeper policy rejects it
+   (`PrismaClientInitializationError`, `code signature ... not valid for use in process:
+library load disallowed by system policy`). This affects any test that exercises a real
+   Prisma-backed API route (e.g. `tests/security/public-routes-tenant-context.test.ts`'s
+   `/api/widget/quick-audit` 500s, `tests/security/metering-wiring.test.ts`) — reproduced
+   identically on the clean Wave 6 checkpoint, so it is a local-machine tooling issue, not a
+   Wave 7A regression. Not attempted to fix (system-level `prisma generate`/Gatekeeper
+   change, out of scope for a code-remediation wave).
+
+No live provider/network/browser/LLM/customer/production call was made.
+
+### Remaining Wave 7 batches
+
+**Wave 7B** (7 findings, up to 6 module clusters — at or under the 5-module batch limit once
+grouped): `techStack`+cost-tracker wiring (P2-27), `contentQuality` language detection
+(P2-38), `conversion`/`mobileUX`/`accessibility` browser consolidation + CTA visibility
+(P2-42, P2-43), `coreWebVitals` INP finding (P2-44), `competitor`/`backlinks`/`videoPresence`
+provider-state ambiguity (P2-46), `privacyCompliance` tracker-pattern expansion (P2-50 —
+narrow technical widening only, no legal/technical claim-boundary work, which remains Wave 8).
+
+## Next wave
+
+**Wave 7B — harden the remaining Wave 7 module clusters.** See the exact continuation prompt
+in `REMEDIATION_VERIFICATION.md`'s Wave 7A section. Do not begin Wave 8 until Wave 7B is
+committed and checkpointed.
