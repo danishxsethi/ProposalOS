@@ -2,6 +2,9 @@
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { createEvidence } from '@/lib/modules/types';
+import { buildProposalGrounding } from '@/lib/proposal/grounding';
+
 const mocks = vi.hoisted(() => ({
   auth: vi.fn(),
   validateApiKey: vi.fn(),
@@ -30,6 +33,7 @@ vi.mock('@/lib/logger', () => ({
     info: vi.fn(),
     warn: vi.fn(),
     debug: vi.fn(),
+    error: vi.fn(),
   },
   logError: vi.fn(),
 }));
@@ -101,6 +105,92 @@ vi.mock('@/lib/proposal/ProposalQAService', () => ({
 
 import { POST } from '@/app/api/audit/[id]/regenerate/route';
 
+function finding() {
+  return {
+    id: 'finding-1',
+    auditId: 'audit-1',
+    tenantId: 'tenant-a',
+    module: 'performance',
+    category: 'Performance',
+    type: 'PAINKILLER',
+    title: 'Slow site',
+    description: 'Slow site delivery was measured.',
+    impactScore: 8,
+    confidenceScore: 9,
+    evidence: [
+      createEvidence({
+        pointer: 'https://acme.test/',
+        source: 'pagespeed_v5',
+        value: 4200,
+        label: 'LCP',
+      }),
+    ],
+    metrics: { lcpMs: 4200 },
+    effortEstimate: 'MEDIUM',
+    recommendedFix: ['Address Slow site'],
+  } as any;
+}
+
+function proposalResult() {
+  const findings = [finding()];
+  const proposal: any = {
+    executiveSummary: 'Acme Dental: Validated audit finding: Slow site.',
+    painClusters: [
+      {
+        id: 'cluster-1',
+        rootCause: 'Slow site',
+        severity: 'high',
+        findingIds: ['finding-1'],
+      },
+    ],
+    topActions: [
+      {
+        findingId: 'finding-1',
+        title: 'Slow site',
+        impact: 8,
+        effort: 'MEDIUM',
+        timeline: '14-21 days',
+      },
+    ],
+    tiers: {
+      essentials: {
+        name: 'Essentials',
+        description: 'Addresses: Slow site',
+        findingIds: ['finding-1'],
+        deliveryTime: '5 business days',
+        price: 100,
+        features: ['Address Slow site'],
+      },
+      growth: {
+        name: 'Growth',
+        description: 'Addresses: Slow site',
+        findingIds: ['finding-1'],
+        deliveryTime: '10 business days',
+        price: 200,
+        features: ['Address Slow site'],
+      },
+      premium: {
+        name: 'Premium',
+        description: 'Addresses: Slow site',
+        findingIds: ['finding-1'],
+        deliveryTime: '15 business days',
+        price: 300,
+        features: ['Address Slow site'],
+      },
+    },
+    pricing: { essentials: 100, growth: 200, premium: 300, currency: 'USD' },
+    assumptions: ['Scope requires confirmation'],
+    disclaimers: ['Automated findings require review'],
+    nextSteps: ['Review and approve a tier'],
+  };
+  proposal.grounding = buildProposalGrounding(
+    proposal,
+    { auditId: 'audit-1', tenantId: 'tenant-a', findings },
+    ['finding-1']
+  );
+  return proposal;
+}
+
 describe('audit regenerate authorization', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -114,18 +204,7 @@ describe('audit regenerate authorization', () => {
     mocks.invokeDiagnosisGraphWithTimeout.mockResolvedValue({
       clusters: [{ findingIds: ['finding-1'] }],
     });
-    mocks.runProposalPipeline.mockResolvedValue({
-      executiveSummary: 'Updated summary',
-      tiers: {
-        essentials: { name: 'Essentials', findingIds: ['finding-1'], deliveryTime: '5 days' },
-        growth: { name: 'Growth', findingIds: ['finding-1'], deliveryTime: '10 days' },
-        premium: { name: 'Premium', findingIds: ['finding-1'], deliveryTime: '15 days' },
-      },
-      pricing: { essentials: 100, growth: 200, premium: 300, currency: 'USD' },
-      assumptions: ['Access required'],
-      disclaimers: ['Results may vary'],
-      nextSteps: ['Reply to schedule'],
-    });
+    mocks.runProposalPipeline.mockResolvedValue(proposalResult());
     mocks.runAutoQA.mockReturnValue({
       score: 75,
       passedChecks: 10,
@@ -233,7 +312,8 @@ describe('audit regenerate authorization', () => {
       businessName: 'Acme Dental',
       businessIndustry: 'Dental',
       businessCity: 'Regina',
-      findings: [{ id: 'finding-1', impactScore: 8, type: 'PAINKILLER', evidence: [] }],
+      businessUrl: null,
+      findings: [finding()],
       proposals: [],
     });
 

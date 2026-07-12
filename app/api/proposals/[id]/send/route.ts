@@ -26,6 +26,7 @@ import {
 } from '@/lib/observability/context';
 import { MetricsRecorder } from '@/lib/observability/MetricsRecorder';
 import { prisma } from '@/lib/prisma';
+import { assertProposalPublishable } from '@/lib/proposal/publication';
 import { getTenantId } from '@/lib/tenant/context';
 
 const sendSchema = z.object({
@@ -91,6 +92,7 @@ async function handleSendProposal(
           applyObservabilityHeaders(notFound);
           return notFound;
         }
+        assertProposalPublishable(existingProposal);
 
         // Update Proposal
         const proposal = await prisma.proposal.update({

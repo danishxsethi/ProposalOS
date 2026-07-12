@@ -1,5 +1,7 @@
 import { Finding as PrismaFinding } from '@prisma/client';
 
+import type { ValidatedCustomerClaim } from '@/lib/claims/claimContract';
+
 export interface Finding extends PrismaFinding {
   // Extends Prisma Finding with any additional runtime fields if needed
 }
@@ -15,6 +17,8 @@ export interface PainCluster {
   severity: 'critical' | 'high' | 'medium' | 'low';
   findingIds: string[];
   narrative?: string; // Human-readable explanation
+  rootCauseClaim?: ValidatedCustomerClaim;
+  narrativeClaim?: ValidatedCustomerClaim;
 }
 
 export interface DiagnosisResult {

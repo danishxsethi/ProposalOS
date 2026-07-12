@@ -14,6 +14,7 @@ import { generateTraceId, InternalError, NotFoundError, ValidationError } from '
 import { proposalShareSchema } from '@/lib/api/schemas/proposal';
 import { RateLimitPresets, withRateLimit } from '@/lib/middleware/rateLimit';
 import { prisma } from '@/lib/prisma';
+import { assertProposalPublishable } from '@/lib/proposal/publication';
 
 interface RouteContext {
   params: Promise<{ token: string }>;
@@ -54,6 +55,7 @@ async function handleShare(req: Request, context: RouteContext): Promise<NextRes
         status: 404,
       });
     }
+    assertProposalPublishable(proposal);
 
     // Track share event by incrementing counter
     await prisma.proposal.update({

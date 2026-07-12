@@ -3,7 +3,9 @@ import { NextResponse } from 'next/server';
 import pptxgen from 'pptxgenjs';
 
 import { getBranding } from '@/lib/config/branding';
+import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
+import { assertProposalPublishable } from '@/lib/proposal/publication';
 
 interface Params {
   params: Promise<{ token: string }>;
@@ -30,6 +32,7 @@ export async function GET(request: Request, { params }: Params) {
     if (!proposal) {
       return NextResponse.json({ error: 'Proposal not found' }, { status: 404 });
     }
+    assertProposalPublishable(proposal);
 
     // Create PowerPoint presentation
     const pres = new pptxgen();
@@ -73,54 +76,39 @@ export async function GET(request: Request, { params }: Params) {
     });
 
     // Overall Score Slide
-    const healthScore = proposal.audit.findings.length
-      ? Math.max(
-          0,
-          Math.min(
-            100,
-            Math.round(
-              100 -
-                (proposal.audit.findings.reduce((sum: number, f: any) => sum + f.impactScore, 0) /
-                  proposal.audit.findings.length) *
-                  8
-            )
-          )
-        )
-      : 85;
-
-    const scoreSlide = pres.addSlide();
-    scoreSlide.background = { color: 'F8F9FA' };
-
-    scoreSlide.addText('Overall Digital Health Score', {
-      x: 0.5,
-      y: 0.5,
-      w: '90%',
-      h: 0.8,
-      fontSize: 32,
-      bold: true,
-      color: '1A1A2E',
-      align: 'center',
-    });
-
-    scoreSlide.addText(healthScore.toString(), {
-      x: 2,
-      y: 2,
-      w: 3,
-      h: 3,
-      fontSize: 72,
-      bold: true,
-      color: healthScore >= 80 ? '22C55E' : healthScore >= 60 ? 'F59E0B' : 'EF4444',
-      align: 'center',
-    });
-
-    scoreSlide.addText(' / 100', {
-      x: 5.2,
-      y: 3,
-      w: 1,
-      h: 1,
-      fontSize: 24,
-      color: '666666',
-    });
+    const healthScore = proposal.audit.overallScore;
+    if (healthScore != null) {
+      const scoreSlide = pres.addSlide();
+      scoreSlide.background = { color: 'F8F9FA' };
+      scoreSlide.addText('Overall Digital Health Score', {
+        x: 0.5,
+        y: 0.5,
+        w: '90%',
+        h: 0.8,
+        fontSize: 32,
+        bold: true,
+        color: '1A1A2E',
+        align: 'center',
+      });
+      scoreSlide.addText(healthScore.toString(), {
+        x: 2,
+        y: 2,
+        w: 3,
+        h: 3,
+        fontSize: 72,
+        bold: true,
+        color: healthScore >= 80 ? '22C55E' : healthScore >= 60 ? 'F59E0B' : 'EF4444',
+        align: 'center',
+      });
+      scoreSlide.addText(' / 100', {
+        x: 5.2,
+        y: 3,
+        w: 1,
+        h: 1,
+        fontSize: 24,
+        color: '666666',
+      });
+    }
 
     // Categories Slide
     const categoriesSlide = pres.addSlide();
@@ -181,12 +169,12 @@ export async function GET(request: Request, { params }: Params) {
       }
 
       return {
-        performance: pCount ? Math.round(performance / pCount) : 0,
-        seo: sCount ? Math.round(seo / sCount) : 0,
-        accessibility: aCount ? Math.round(accessibility / aCount) : 0,
-        security: secCount ? Math.round(security / secCount) : 0,
-        trust: tCount ? Math.round(trust / tCount) : 0,
-        conversion: cCount ? Math.round(conversion / cCount) : 0,
+        performance: pCount ? Math.round(performance / pCount) : null,
+        seo: sCount ? Math.round(seo / sCount) : null,
+        accessibility: aCount ? Math.round(accessibility / aCount) : null,
+        security: secCount ? Math.round(security / secCount) : null,
+        trust: tCount ? Math.round(trust / tCount) : null,
+        conversion: cCount ? Math.round(conversion / cCount) : null,
       };
     };
 
@@ -199,7 +187,7 @@ export async function GET(request: Request, { params }: Params) {
       { name: 'Security', score: scores.security },
       { name: 'Trust', score: scores.trust },
       { name: 'Conversion', score: scores.conversion },
-    ];
+    ].filter((category): category is { name: string; score: number } => category.score != null);
 
     // Add category bars
     categories.forEach((cat, index) => {
@@ -288,7 +276,7 @@ export async function GET(request: Request, { params }: Params) {
         wrap: true,
       });
 
-      findingSlide.addText('Business Impact:', {
+      findingSlide.addText('Deterministic Priority:', {
         x: 0.5,
         y: 4.2,
         w: '90%',
@@ -307,11 +295,19 @@ export async function GET(request: Request, { params }: Params) {
         color: 'DC2626',
         bold: true,
       });
+      findingSlide.addText(`Source Finding: ${finding.id}`, {
+        x: 0.5,
+        y: 5.05,
+        w: '90%',
+        h: 0.25,
+        fontSize: 10,
+        color: '6B7280',
+      });
 
       if (finding.recommendedFix?.[0]) {
         findingSlide.addText('Recommended Fix:', {
           x: 0.5,
-          y: 5.2,
+          y: 5.4,
           w: '90%',
           h: 0.3,
           fontSize: 16,
@@ -321,7 +317,7 @@ export async function GET(request: Request, { params }: Params) {
 
         findingSlide.addText(finding.recommendedFix[0], {
           x: 0.5,
-          y: 5.7,
+          y: 5.9,
           w: '90%',
           h: 1.5,
           fontSize: 14,
@@ -335,7 +331,7 @@ export async function GET(request: Request, { params }: Params) {
     const actionSlide = pres.addSlide();
     actionSlide.background = { color: 'F8F9FA' };
 
-    actionSlide.addText('Your 90-Day Roadmap', {
+    actionSlide.addText('Configured Packages', {
       x: 0.5,
       y: 0.5,
       w: '90%',
@@ -348,19 +344,19 @@ export async function GET(request: Request, { params }: Params) {
 
     const phases = [
       {
-        title: 'Phase 1: Quick Wins',
-        weeks: 'Weeks 1-2',
-        items: ['Fix Google Business Profile', 'Respond to Reviews', 'Site Speed Tuning'],
+        title: (proposal.tierEssentials as any).name,
+        weeks: (proposal.tierEssentials as any).deliveryTime,
+        items: (proposal.tierEssentials as any).features || [],
       },
       {
-        title: 'Phase 2: Foundations',
-        weeks: 'Weeks 3-6',
-        items: ['Landing Page Optimization', 'Content Expansion', 'Citation Building'],
+        title: (proposal.tierGrowth as any).name,
+        weeks: (proposal.tierGrowth as any).deliveryTime,
+        items: (proposal.tierGrowth as any).features || [],
       },
       {
-        title: 'Phase 3: Growth',
-        weeks: 'Weeks 7-12',
-        items: ['SEO Campaign Launch', 'Review Generation System', 'Social Ads'],
+        title: (proposal.tierPremium as any).name,
+        weeks: (proposal.tierPremium as any).deliveryTime,
+        items: (proposal.tierPremium as any).features || [],
       },
     ];
 
@@ -386,7 +382,7 @@ export async function GET(request: Request, { params }: Params) {
         color: '6B7280',
       });
 
-      phase.items.forEach((item, itemIndex) => {
+      phase.items.forEach((item: string, itemIndex: number) => {
         actionSlide.addText(`• ${item}`, {
           x: x,
           y: 3.1 + itemIndex * 0.4,

@@ -35,6 +35,8 @@ export interface EvidenceVerification {
 export function scoreCluster(
   findings: (Finding & { stale?: boolean })[]
 ): 'critical' | 'high' | 'medium' | 'low' {
+  if (findings.length === 0) return 'low';
+
   const impacts = findings.map((f) => {
     let impact = f.impactScore;
     if (f.stale) {

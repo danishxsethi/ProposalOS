@@ -1,7 +1,7 @@
-import { FindingType, Finding as PrismaFinding } from '@prisma/client';
+import { FindingType } from '@prisma/client';
 import { z } from 'zod';
 
-import { PainCluster } from '../diagnosis/types';
+import { ProposalGroundingSchema, validateProposalGrounding } from './grounding';
 
 // Runtime Finding type - extends Prisma Finding with relaxed types for runtime flexibility
 // The metrics field uses Record<string, unknown> instead of JsonValue for easier runtime access
@@ -191,6 +191,7 @@ export const ProposalResultSchema = z.object({
   assumptions: z.array(z.string()).min(1),
   disclaimers: z.array(z.string()).min(1),
   nextSteps: z.array(z.string()).min(1),
+  grounding: ProposalGroundingSchema.optional(),
 });
 
 // Validation result schema
@@ -274,52 +275,21 @@ export function validateCitations(
   proposal: ProposalResult,
   findings: FindingRuntime[]
 ): CitationValidation {
-  const errors: string[] = [];
-  const missingCitations: string[] = [];
-  const orphanedCitations: string[] = [];
-
-  const findingIds = new Set(findings.map((f) => f.id));
-
-  // Check tier citations
-  for (const [tierName, tier] of Object.entries(proposal.tiers)) {
-    for (const id of tier.findingIds) {
-      if (!findingIds.has(id)) {
-        missingCitations.push(`${tierName} tier references non-existent finding: ${id}`);
-      }
-    }
-  }
-
-  // Check pain clusters
-  for (const cluster of proposal.painClusters) {
-    for (const id of cluster.findingIds) {
-      if (!findingIds.has(id)) {
-        missingCitations.push(
-          `Cluster "${cluster.rootCause}" references non-existent finding: ${id}`
-        );
-      }
-    }
-  }
-
-  // Find orphaned findings (findings not referenced anywhere)
-  const referencedIds = new Set<string>();
-  Object.values(proposal.tiers).forEach((tier) => {
-    tier.findingIds.forEach((id: string) => referencedIds.add(id));
-  });
-  proposal.painClusters.forEach((cluster) => {
-    cluster.findingIds.forEach((id: string) => referencedIds.add(id));
-  });
-
-  findings.forEach((f) => {
-    if (!referencedIds.has(f.id)) {
-      orphanedCitations.push(`Finding "${f.title}" is not referenced in proposal`);
-    }
-  });
+  const first = findings[0];
+  const validation = first
+    ? validateProposalGrounding(proposal as unknown as import('./types').ProposalResult, {
+        auditId: first.auditId,
+        tenantId: first.tenantId,
+        findings: findings as unknown as import('@prisma/client').Finding[],
+      })
+    : { valid: false, errors: ['Proposal requires at least one validated Finding'] };
+  const missingCitations = validation.errors;
 
   return {
-    valid: missingCitations.length === 0,
-    errors: [...missingCitations, ...orphanedCitations],
+    valid: validation.valid,
+    errors: validation.errors,
     missingCitations,
-    orphanedCitations,
+    orphanedCitations: [],
   };
 }
 
@@ -352,7 +322,6 @@ export function detectHallucinations(
 
   // Check executive summary for supported claims
   const summary = proposal.executiveSummary;
-  const summaryLower = summary.toLowerCase();
 
   // P1-1 FIX: Enhanced keyword matching with phrase extraction
   const keyPhrases = extractKeyPhrases(summary);

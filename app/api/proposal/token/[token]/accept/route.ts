@@ -21,6 +21,7 @@ import {
 import { acceptProposalSchema } from '@/lib/api/schemas/proposal';
 import { FollowUpScheduler } from '@/lib/followup/scheduler';
 import { prisma } from '@/lib/prisma';
+import { assertProposalPublishable } from '@/lib/proposal/publication';
 
 export async function POST(req: Request, { params }: { params: Promise<{ token: string }> }) {
   const traceId = generateTraceId();
@@ -56,6 +57,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
         status: 404,
       });
     }
+    assertProposalPublishable(proposal);
 
     // Check if already accepted (idempotency)
     if (proposal.status === 'ACCEPTED') {

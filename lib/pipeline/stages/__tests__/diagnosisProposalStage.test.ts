@@ -9,6 +9,9 @@
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { createEvidence } from '@/lib/modules/types';
+import { buildProposalGrounding } from '@/lib/proposal/grounding';
+
 import type { StageResult } from '../../types';
 
 // --- Mocks ---
@@ -115,8 +118,52 @@ function makeAudit(overrides: Record<string, any> = {}) {
     businessIndustry: 'dentist',
     status: 'COMPLETE',
     findings: [
-      { id: 'f1', title: 'Slow page speed', auditId: 'audit-1' },
-      { id: 'f2', title: 'Missing meta tags', auditId: 'audit-1' },
+      {
+        id: 'f1',
+        auditId: 'audit-1',
+        tenantId: 'tenant-1',
+        module: 'website',
+        category: 'Performance',
+        type: 'PAINKILLER',
+        title: 'Slow page speed',
+        description: 'Slow page speed was measured.',
+        impactScore: 9,
+        confidenceScore: 9,
+        evidence: [
+          createEvidence({
+            pointer: 'https://testdental.com/',
+            source: 'pagespeed_v5',
+            value: 4200,
+            label: 'LCP',
+          }),
+        ],
+        metrics: { lcpMs: 4200 },
+        effortEstimate: 'MEDIUM',
+        recommendedFix: ['Address Slow page speed'],
+      },
+      {
+        id: 'f2',
+        auditId: 'audit-1',
+        tenantId: 'tenant-1',
+        module: 'website',
+        category: 'SEO',
+        type: 'VITAMIN',
+        title: 'Missing meta tags',
+        description: 'Missing meta tags were observed.',
+        impactScore: 7,
+        confidenceScore: 9,
+        evidence: [
+          createEvidence({
+            pointer: 'https://testdental.com/head',
+            source: 'website_crawler',
+            value: 'missing title',
+            label: 'Head scan',
+          }),
+        ],
+        metrics: {},
+        effortEstimate: 'LOW',
+        recommendedFix: ['Address Missing meta tags'],
+      },
     ],
     ...overrides,
   };
@@ -140,23 +187,71 @@ function makeDiagnosisResult(clusterCount = 2) {
 }
 
 function makeProposalResult() {
-  return {
-    executiveSummary: 'Your dental practice needs help.',
-    clusters: [{ id: 'cluster-1', rootCause: 'Speed', severity: 'high', findingIds: ['f1'] }],
+  const audit = makeAudit();
+  const completeProposal: any = {
+    executiveSummary:
+      'Test Dental: Validated audit findings include Slow page speed and Missing meta tags.',
+    painClusters: [
+      {
+        id: 'cluster-1',
+        rootCause: 'Slow page speed; Missing meta tags',
+        severity: 'critical',
+        findingIds: ['f1', 'f2'],
+      },
+    ],
+    topActions: [
+      {
+        findingId: 'f1',
+        title: 'Slow page speed',
+        impact: 9,
+        effort: 'MEDIUM',
+        timeline: '14-21 days',
+      },
+      {
+        findingId: 'f2',
+        title: 'Missing meta tags',
+        impact: 7,
+        effort: 'LOW',
+        timeline: '7 days',
+      },
+    ],
     tiers: {
-      essentials: { name: 'Starter', findingIds: ['f1'], price: 500 },
-      growth: { name: 'Growth', findingIds: ['f1', 'f2'], price: 1000 },
-      premium: { name: 'Premium', findingIds: ['f1', 'f2'], price: 2000 },
+      essentials: {
+        name: 'Starter',
+        description: 'Addresses: Slow page speed; Missing meta tags',
+        findingIds: ['f1', 'f2'],
+        deliveryTime: '5 business days',
+        price: 500,
+        features: ['Address Slow page speed', 'Address Missing meta tags'],
+      },
+      growth: {
+        name: 'Growth',
+        description: 'Addresses: Slow page speed; Missing meta tags',
+        findingIds: ['f1', 'f2'],
+        deliveryTime: '10 business days',
+        price: 1000,
+        features: ['Address Slow page speed', 'Address Missing meta tags'],
+      },
+      premium: {
+        name: 'Premium',
+        description: 'Addresses: Slow page speed; Missing meta tags',
+        findingIds: ['f1', 'f2'],
+        deliveryTime: '15 business days',
+        price: 2000,
+        features: ['Address Slow page speed', 'Address Missing meta tags'],
+      },
     },
     pricing: { essentials: 500, growth: 1000, premium: 2000, currency: 'USD' },
-    proposalDef: {
-      assumptions: ['Assumption 1'],
-      disclaimers: ['Disclaimer 1'],
-      nextSteps: ['Step 1'],
-      comparisonReport: undefined,
-    },
-    normalizedFindings: [],
+    assumptions: ['Scope requires confirmation', 'ROI inputs are unavailable'],
+    disclaimers: ['Automated findings require review'],
+    nextSteps: ['Review and approve a tier'],
   };
+  completeProposal.grounding = buildProposalGrounding(
+    completeProposal,
+    { auditId: audit.id, tenantId: audit.tenantId, findings: audit.findings as any },
+    audit.findings.map((finding: any) => finding.id)
+  );
+  return { completeProposal };
 }
 
 // --- Tests ---
@@ -232,6 +327,7 @@ describe('Diagnosis & Proposal Stage', () => {
       expect(mockRunDiagnosisPipeline).toHaveBeenCalledWith({
         findings: audit.findings,
         tenantId: 'tenant-1',
+        auditId: 'audit-1',
         mode: expect.any(String),
         aggregatedContext: expect.any(Object),
       });

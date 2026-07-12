@@ -1,6 +1,8 @@
 import { Finding } from '@prisma/client';
 
+import { validateFinding } from '@/lib/audit/findingContract';
 import { inferOrganizationSegment, ProposalResult } from '@/lib/proposal';
+import { validateProposalGrounding } from '@/lib/proposal/grounding';
 import { ComparisonReport } from '@/lib/proposal/types';
 
 export interface QAResult {
@@ -32,7 +34,10 @@ export interface ClientPerfectStatus {
       | 'WRONG_BUSINESS_OR_CITY'
       | 'UNCITED_CRITICAL_CLAIMS'
       | 'GENERIC_SUMMARY_NO_IMPACT'
-      | 'TIER_MAPPING_INVALID';
+      | 'TIER_MAPPING_INVALID'
+      | 'GROUNDING_INVALID'
+      | 'CLAIM_POLICY_VIOLATION'
+      | 'COMMERCIAL_LOGIC_INVALID';
     details: string;
   }>;
   gates: {
@@ -68,20 +73,13 @@ export interface QAContext {
 
 const METRIC_PATTERN =
   /\d+(\.\d+)?(%|\/100|\s*(?:seconds?|ms|scores?|rating|reviews?|\$|points?|findings?|issues?|critical|painkillers?|load|speed|LCP|FCP|CLS|index|MB|kb|stars?|hours?|days?|minutes?|of|out\s+of|visitors?|customers?|bounce|traffic|conversion|percent|percentage))/gi;
-const IMPACT_LANGUAGE_PATTERN =
-  /(revenue|conversion|lead|booking|pipeline|deal|loss|increase|decrease|roi|close rate|reply rate|meeting)/i;
 const CTA_PATTERN = /(reply|schedule|book|call|start|get started|send it|approve|accept)/i;
 
-/** Evidence has valid identifying data. Accepts formats our modules actually produce. */
-function hasValidEvidence(e: unknown): boolean {
-  if (!e) return false;
-  if (typeof e === 'string') return e.trim().length > 0;
-  if (typeof e !== 'object') return false;
-  const obj = e as Record<string, unknown>;
-  if (typeof obj.pointer === 'string' && obj.pointer.length > 0 && obj.collected_at) return true;
-  if (obj.type && (obj.value !== undefined || obj.label)) return true;
-  return !!(obj.url || obj.source || obj.raw);
-}
+const CLAIM_POLICY_PATTERNS = [
+  /\b(?:illegal|violates?\s+(?:gdpr|ccpa)|fully\s+compliant|will\s+lead\s+to\s+fines?)\b/i,
+  /\b(?:wcag|ada)\s+(?:aa\s+)?(?:compliant|certified|certification)\b/i,
+  /\b(?:not|isn['’]t|is\s+not)\s+advertising\b/i,
+];
 
 function computeGate(weight: number, checks: QAResult[]): ClientPerfectGate {
   const passedChecks = checks.filter((c) => c.passed).length;
@@ -138,22 +136,25 @@ export function runAutoQA(
   ];
   const invalidTierIds = allTierIds.filter((id) => !allFindingIds.has(id));
 
-  const findingsWithEvidence = findings.filter((f) => {
-    const evidence = (f.evidence as unknown[]) || [];
-    return evidence.some(hasValidEvidence);
-  });
+  const findingsWithEvidence = findings.filter((finding) => validateFinding(finding).success);
   const criticalFindings = findings.filter((f) => f.impactScore >= 8 || f.type === 'PAINKILLER');
-  const uncitedCritical = criticalFindings.filter((f) => {
-    const evidence = (f.evidence as unknown[]) || [];
-    return !evidence.some(hasValidEvidence);
-  });
+  const uncitedCritical = criticalFindings.filter((finding) => !validateFinding(finding).success);
+  const firstFinding = findings[0];
+  const groundingValidation = firstFinding
+    ? validateProposalGrounding(proposal, {
+        auditId: firstFinding.auditId,
+        tenantId: firstFinding.tenantId,
+        findings,
+      })
+    : { valid: false, errors: ['Proposal requires at least one validated Finding'] };
+  const fullProposalText = JSON.stringify(proposal);
+  const policyViolations = CLAIM_POLICY_PATTERNS.filter((pattern) =>
+    pattern.test(fullProposalText)
+  );
 
   const metricMatches = summary.match(METRIC_PATTERN) || [];
-  const hasQuantifiedImpactLanguage =
-    metricMatches.length >= 3 && IMPACT_LANGUAGE_PATTERN.test(summary);
-
   const summaryMentionsBusiness = summaryLower.includes(businessName.toLowerCase());
-  const summaryMentionsCity = city ? summaryLower.includes(city.toLowerCase()) : true;
+  const summaryMentionsCity = true;
 
   const dedupeKeyCount = new Set(findings.map((f) => `${f.module}:${f.title}`)).size;
   const impactScoreRangeValid = findings.every((f) => f.impactScore >= 1 && f.impactScore <= 10);
@@ -182,24 +183,40 @@ export function runAutoQA(
   const mentionsIndustry =
     industryTokens.length > 0 ? industryTokens.some((token) => summaryLower.includes(token)) : true;
 
-  const topActionRows = (proposal.nextSteps || []).filter(
-    (s) => /impact:/i.test(s) && /effort:/i.test(s) && /timeline:/i.test(s)
-  );
-  const hasTop3ActionPlan = topActionRows.length >= 3;
+  const topActionRows = proposal.topActions ?? [];
+  const hasTop3ActionPlan =
+    topActionRows.length === Math.min(3, findings.length) &&
+    topActionRows.every((action) => allFindingIds.has(action.findingId));
 
   const tiersWithRoi = [proposal.tiers.essentials, proposal.tiers.growth, proposal.tiers.premium];
-  const hasRoiScenarios = tiersWithRoi.every((tier) => {
-    const s = tier.roi?.scenarios;
-    return !!(
-      s &&
-      typeof s.best === 'number' &&
-      typeof s.base === 'number' &&
-      typeof s.worst === 'number' &&
-      s.best >= s.base &&
-      s.base >= s.worst &&
-      Array.isArray(s.assumptions) &&
-      s.assumptions.length >= 2
-    );
+  const hasAnyRoi = tiersWithRoi.some((tier) => !!tier.roi);
+  const hasRoiScenarios =
+    !hasAnyRoi ||
+    tiersWithRoi.every((tier) => {
+      const s = tier.roi?.scenarios;
+      return !!(
+        s &&
+        typeof s.best === 'number' &&
+        typeof s.base === 'number' &&
+        typeof s.worst === 'number' &&
+        s.best >= s.base &&
+        s.base >= s.worst &&
+        Array.isArray(s.assumptions) &&
+        s.assumptions.length >= 2
+      );
+    });
+  const roiErrors = Object.entries(proposal.tiers).flatMap(([tierName, tier]) => {
+    if (!tier.roi) return [];
+    const price = proposal.pricing[tierName as 'essentials' | 'growth' | 'premium'];
+    const expectedRatio = Number((tier.roi.monthlyValue / price).toFixed(1));
+    const errors: string[] = [];
+    if (!Number.isFinite(expectedRatio) || expectedRatio !== tier.roi.ratio) {
+      errors.push(`${tierName}: ROI ratio does not match deterministic arithmetic`);
+    }
+    if (!tier.roi.scenarios?.assumptions?.length) {
+      errors.push(`${tierName}: ROI assumptions are missing`);
+    }
+    return errors;
   });
   const hasRoiAssumptions = (proposal.assumptions || []).length >= 2;
   const clearCta = (proposal.nextSteps || []).some((line) => CTA_PATTERN.test(line));
@@ -251,7 +268,7 @@ export function runAutoQA(
 
   const segment = inferOrganizationSegment(context?.businessUrl, businessName, context?.industry);
   const isNonSmb = segment !== 'smb_local' && segment !== 'baseline_unknown';
-  const fullProposalText = JSON.stringify(proposal).toLowerCase();
+  const fullProposalTextLower = fullProposalText.toLowerCase();
   const prohibitedLocalTerms = [
     'google business profile',
     'gbp',
@@ -261,7 +278,7 @@ export function runAutoQA(
     'local seo',
   ];
   const foundLocalTerms = isNonSmb
-    ? prohibitedLocalTerms.filter((term) => fullProposalText.includes(term))
+    ? prohibitedLocalTerms.filter((term) => fullProposalTextLower.includes(term))
     : [];
   const passedLocalSEOCheck = !isNonSmb || foundLocalTerms.length === 0;
 
@@ -313,15 +330,17 @@ export function runAutoQA(
   const decisionChecks: QAResult[] = [
     {
       category: 'Decision',
-      check: 'Summary Cites Specific Metrics (≥3)',
-      passed: metricMatches.length >= 3,
-      details: `Found ${metricMatches.length} quantified metrics`,
+      check: 'Summary Claims Are Grounded',
+      passed: groundingValidation.valid,
+      details: groundingValidation.valid
+        ? `Grounding valid; ${metricMatches.length} numeric claims checked`
+        : groundingValidation.errors.join('; '),
     },
     {
       category: 'Decision',
       check: 'Top 3 Actions With Impact/Effort/Timeline',
       passed: hasTop3ActionPlan,
-      details: `Found ${topActionRows.length} structured action lines`,
+      details: `Found ${topActionRows.length} Finding-backed actions`,
     },
     {
       category: 'Decision',
@@ -358,7 +377,27 @@ export function runAutoQA(
 
   // Hard-fail conditions
   const hardFails: ClientPerfectStatus['hardFails'] = [];
-  if (!summaryMentionsBusiness || !summaryMentionsCity) {
+  if (!groundingValidation.valid) {
+    hardFails.push({
+      code: 'GROUNDING_INVALID',
+      details: groundingValidation.errors.join('; '),
+    });
+  }
+  if (policyViolations.length > 0) {
+    hardFails.push({
+      code: 'CLAIM_POLICY_VIOLATION',
+      details: 'Prohibited legal, accessibility, or paid-search overclaim language detected',
+    });
+  }
+  if (!pricingLogic || roiErrors.length > 0) {
+    hardFails.push({
+      code: 'COMMERCIAL_LOGIC_INVALID',
+      details: [...(!pricingLogic ? ['Tier pricing order is invalid'] : []), ...roiErrors].join(
+        '; '
+      ),
+    });
+  }
+  if (!summaryMentionsBusiness) {
     hardFails.push({
       code: 'WRONG_BUSINESS_OR_CITY',
       details: `Business mention: ${summaryMentionsBusiness}, city mention: ${summaryMentionsCity}`,
@@ -368,12 +407,6 @@ export function runAutoQA(
     hardFails.push({
       code: 'UNCITED_CRITICAL_CLAIMS',
       details: `${uncitedCritical.length} critical findings have no valid evidence`,
-    });
-  }
-  if (!hasQuantifiedImpactLanguage) {
-    hardFails.push({
-      code: 'GENERIC_SUMMARY_NO_IMPACT',
-      details: `Requires >=3 metrics plus impact language. Metrics found: ${metricMatches.length}`,
     });
   }
   if (invalidTierIds.length > 0 || tierCounts.some((c) => c < 2)) {

@@ -11,6 +11,7 @@ import { withRateLimit } from '@/lib/middleware/rateLimit';
 import { detectVertical, getPlaybook } from '@/lib/playbooks';
 import { prisma } from '@/lib/prisma';
 import { ProposalQAService } from '@/lib/proposal/ProposalQAService';
+import { buildPersistedQaResults } from '@/lib/proposal/publication';
 import { determineProposalStatus } from '@/lib/proposal/status';
 import { runAutoQA } from '@/lib/qa/autoQA';
 import { getTenantId } from '@/lib/tenant/context';
@@ -254,11 +255,10 @@ async function handleProposal(req: Request, { params }: Params): Promise<NextRes
         auditId: audit.id,
       });
 
-      const proposalResult = proposalGraphState.proposalDef;
-      const normalizedFindings = audit.findings;
-
-      // Use complete proposal if available, otherwise fall back to old format
-      finalProposal = proposalGraphState.completeProposal || proposalResult;
+      if (!proposalGraphState.completeProposal) {
+        throw new Error('Proposal graph did not produce a grounded complete proposal');
+      }
+      finalProposal = proposalGraphState.completeProposal;
 
       // Step 2.5: Run Automated QA evaluation via ProposalQAService
       const evaluation = ProposalQAService.evaluateProposal(
@@ -311,18 +311,7 @@ async function handleProposal(req: Request, { params }: Params): Promise<NextRes
           // QA Results
           qaScore: evaluation.autoQAStatus.score,
           clientScore: evaluation.autoQAStatus.clientPerfect.score,
-          qaResults: JSON.parse(
-            JSON.stringify({
-              ...evaluation.autoQAStatus,
-              evaluation: {
-                dimensions: evaluation.dimensions,
-                overallScore: evaluation.overallScore,
-                feedbackLogs: evaluation.feedbackLogs,
-                passed: evaluation.passed,
-                metadataStatus: evaluation.passed ? 'ready' : 'in_review',
-              },
-            })
-          ),
+          qaResults: JSON.parse(JSON.stringify(buildPersistedQaResults(evaluation, finalProposal))),
           clientScoreResults: JSON.parse(JSON.stringify(evaluation.autoQAStatus.clientPerfect)),
         },
       });

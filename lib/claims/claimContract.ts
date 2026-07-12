@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 import { validateFinding } from '@/lib/audit/findingContract';
 
-const CustomerClaimInputSchema = z
+export const CustomerClaimInputSchema = z
   .object({
     claimId: z.string().trim().min(1),
     text: z.string().trim().min(1),
@@ -12,8 +12,10 @@ const CustomerClaimInputSchema = z
       'LLM_SYNTHESIS_WITH_CITATIONS',
       'RECOMMENDATION',
       'ESTIMATE_WITH_ASSUMPTIONS',
+      'COMMERCIAL_CONFIGURATION',
     ]),
     sourceFindingIds: z.array(z.string().trim().min(1)),
+    configurationRefs: z.array(z.string().trim().min(1)).default([]),
     classification: z.enum(['deterministic', 'derived', 'llm']),
     confidence: z.number().finite().min(0).max(1),
     assumptions: z.array(z.string().trim().min(1)),
@@ -39,13 +41,21 @@ const CustomerClaimInputSchema = z
   })
   .strict()
   .superRefine((claim, ctx) => {
+    const commercial = claim.claimType === 'COMMERCIAL_CONFIGURATION';
     const recommendationOnly =
       claim.claimType === 'RECOMMENDATION' && claim.recommendation && !claim.estimate;
-    if (!recommendationOnly && claim.sourceFindingIds.length === 0) {
+    if (!recommendationOnly && !commercial && claim.sourceFindingIds.length === 0) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ['sourceFindingIds'],
         message: 'factual customer claims require at least one Finding citation',
+      });
+    }
+    if (commercial && claim.configurationRefs.length === 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['configurationRefs'],
+        message: 'commercial claims require a deterministic configuration reference',
       });
     }
     if (claim.claimType === 'ESTIMATE_WITH_ASSUMPTIONS') {
@@ -96,12 +106,105 @@ export type CustomerClaimValidation =
   | { success: false; issues: string[] };
 
 const INELIGIBLE_STATES = new Set(['failed', 'unavailable', 'skipped', 'disabled']);
+const SUPPORT_STOP_WORDS = new Set([
+  'about',
+  'after',
+  'also',
+  'and',
+  'are',
+  'based',
+  'because',
+  'been',
+  'before',
+  'business',
+  'can',
+  'could',
+  'customer',
+  'customers',
+  'for',
+  'from',
+  'has',
+  'have',
+  'into',
+  'may',
+  'more',
+  'not',
+  'our',
+  'page',
+  'recommend',
+  'should',
+  'site',
+  'than',
+  'that',
+  'the',
+  'their',
+  'this',
+  'through',
+  'was',
+  'website',
+  'were',
+  'will',
+  'with',
+  'your',
+]);
 
 function findingState(finding: ClaimFinding): string | undefined {
   if (!finding.metrics || typeof finding.metrics !== 'object') return undefined;
   const metrics = finding.metrics as Record<string, unknown>;
   const state = metrics.executionState ?? metrics.observationState ?? metrics.state;
   return typeof state === 'string' ? state.toLowerCase() : undefined;
+}
+
+function comparableText(value: unknown): string {
+  return JSON.stringify(value)
+    .toLowerCase()
+    .replace(/[^a-z0-9.%$]+/g, ' ');
+}
+
+function numericTokens(value: string): string[] {
+  return value.match(/[$]?\d+(?:\.\d+)?%?/g) ?? [];
+}
+
+function supportTokens(value: string): string[] {
+  return [
+    ...new Set(
+      value
+        .toLowerCase()
+        .match(/[a-z][a-z0-9-]{3,}/g)
+        ?.filter((token) => !SUPPORT_STOP_WORDS.has(token)) ?? []
+    ),
+  ];
+}
+
+export function validateClaimSupport(
+  claim: CustomerClaimInput,
+  citedFindings: ClaimFinding[]
+): string[] {
+  if (
+    claim.claimType === 'COMMERCIAL_CONFIGURATION' ||
+    (claim.claimType === 'RECOMMENDATION' && citedFindings.length === 0)
+  ) {
+    return [];
+  }
+
+  const source = comparableText(citedFindings);
+  const declaredMetrics = comparableText(claim.metricInputs.map((input) => input.value));
+  const issues: string[] = [];
+
+  for (const token of numericTokens(claim.text)) {
+    if (!source.includes(token.toLowerCase()) && !declaredMetrics.includes(token.toLowerCase())) {
+      issues.push(
+        `text: numeric claim '${token}' is not present in cited Findings or metric inputs`
+      );
+    }
+  }
+
+  const terms = supportTokens(claim.text);
+  if (terms.length > 0 && !terms.some((term) => source.includes(term))) {
+    issues.push('text: claim has no substantive term overlap with cited Findings');
+  }
+
+  return issues;
 }
 
 export function validateCustomerClaim(
@@ -118,6 +221,7 @@ export function validateCustomerClaim(
 
   const issues: string[] = [];
   const findingsById = new Map(context.findings.map((finding) => [finding.id, finding]));
+  const citedFindings: ClaimFinding[] = [];
 
   for (const findingId of parsed.data.sourceFindingIds) {
     const finding = findingsById.get(findingId);
@@ -125,6 +229,7 @@ export function validateCustomerClaim(
       issues.push(`sourceFindingIds: unknown Finding '${findingId}'`);
       continue;
     }
+    citedFindings.push(finding);
     if (finding.auditId !== context.auditId) {
       issues.push(`sourceFindingIds: Finding '${findingId}' belongs to another audit`);
     }
@@ -142,6 +247,8 @@ export function validateCustomerClaim(
       issues.push(`sourceFindingIds: Finding '${findingId}' has ineligible state '${state}'`);
     }
   }
+
+  issues.push(...validateClaimSupport(parsed.data, citedFindings));
 
   for (const input of parsed.data.metricInputs) {
     if (input.sourceFindingId && !parsed.data.sourceFindingIds.includes(input.sourceFindingId)) {

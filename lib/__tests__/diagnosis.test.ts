@@ -19,6 +19,14 @@ vi.mock('@/lib/graph/diagnosis-graph', () => ({
   }),
 }));
 
+vi.mock('@/lib/prisma', () => ({
+  prisma: {
+    evidenceSnapshot: {
+      findMany: vi.fn().mockResolvedValue([]),
+    },
+  },
+}));
+
 describe('Diagnosis Pipeline', () => {
   it('should process findings and return clusters', async () => {
     const mockFindings: any[] = [

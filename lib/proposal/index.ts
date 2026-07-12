@@ -1,13 +1,14 @@
 import { Finding } from '@prisma/client';
 import { RunTree } from 'langsmith';
+import { z } from 'zod';
 
+import { validateFinding } from '@/lib/audit/findingContract';
 import { CostTracker } from '@/lib/costs/costTracker';
 import { logger } from '@/lib/logger';
 import type { VerticalPlaybook } from '@/lib/playbooks/types';
 
-import { generateExecutiveSummary } from './executiveSummary';
+import { buildProposalGrounding } from './grounding';
 import { getPricing } from './pricing';
-import { calculateTierROI } from './roiCalculator';
 import { mapToTiers } from './tierMapping';
 import { OrganizationSegment, ProposalResult, TierConfig, TierMapping } from './types';
 import {
@@ -154,260 +155,78 @@ export function getCustomizedTiers(
   segment: OrganizationSegment,
   pricing: { essentials: number; growth: number; premium: number },
   recommendedTier: 'starter' | 'growth' | 'premium',
-  tierMapping: TierMapping
+  tierMapping: TierMapping,
+  findings: Finding[] = []
 ): { essentials: TierConfig; growth: TierConfig; premium: TierConfig } {
-  const defaultTiers = {
-    essentials: {
-      name: 'Starter',
+  void segment;
+  const byId = new Map(findings.map((finding) => [finding.id, finding]));
+  const featureFor = (id: string) => {
+    const finding = byId.get(id);
+    if (!finding) return null;
+    const recommended = Array.isArray(finding.recommendedFix)
+      ? finding.recommendedFix.find(
+          (item): item is string => typeof item === 'string' && item.trim().length > 0
+        )
+      : typeof finding.recommendedFix === 'string'
+        ? finding.recommendedFix
+        : null;
+    return recommended || `Address: ${finding.title}`;
+  };
+  const makeTier = (
+    name: string,
+    ids: string[],
+    price: number,
+    deliveryTime: string,
+    recommended: boolean,
+    badge?: string
+  ): TierConfig => {
+    const uniqueIds = [...new Set(ids)].sort();
+    const features = uniqueIds.map(featureFor).filter((feature): feature is string => !!feature);
+    const titles = uniqueIds
+      .map((id) => byId.get(id)?.title)
+      .filter((title): title is string => !!title);
+    return {
+      name,
       description:
-        'Entry point — quick wins only. Speed optimization, basic SEO, and essential fixes. Limited scope, clear constraints.',
-      findingIds: tierMapping.essentials,
-      deliveryTime: '5 business days',
-      price: pricing.essentials,
-      recommended: recommendedTier === 'starter',
-      features: [
-        'Speed optimization (image compression, lazy loading, caching)',
-        'Basic SEO fixes (meta tags, sitemap, schema markup)',
-        '1 round of revisions',
-      ],
-    },
-    growth: {
-      name: 'Growth',
-      description:
-        'The full transformation — best value. Everything in Starter plus competitive edge. Everything you need to overtake competitors.',
-      findingIds: tierMapping.growth,
-      deliveryTime: '10 business days',
-      price: pricing.growth,
-      recommended: recommendedTier === 'growth',
-      badge: 'BEST VALUE',
-      features: [
-        'Everything in Starter',
-        'Full SEO overhaul (content optimization, internal linking, local SEO)',
-        'Google Business Profile optimization',
-        'Conversion optimization (CTAs, forms, click-to-call)',
-        'Accessibility fixes (WCAG 2.1 Level A)',
-        'Competitor gap analysis report',
-        '3 rounds of revisions',
-      ],
-    },
-    premium: {
-      name: 'Premium',
-      description:
-        'Full-service — ongoing partnership. Everything in Growth plus content and monitoring. Premium positioning, custom work.',
-      findingIds: tierMapping.premium,
-      deliveryTime: '15 business days',
-      price: pricing.premium,
-      recommended: recommendedTier === 'premium',
-      features: [
-        'Everything in Growth',
-        'Content creation (3 new pages/blog posts, optimized for local SEO)',
-        'Monthly performance monitoring (3 months)',
-        'Priority support',
-        'Quarterly re-audit and progress report',
-        'Unlimited revisions',
-      ],
-    },
+        titles.length > 0 ? `Addresses: ${titles.join('; ')}` : 'No validated findings assigned.',
+      findingIds: uniqueIds,
+      deliveryTime,
+      price,
+      recommended,
+      features,
+      badge,
+    };
   };
 
-  if (segment === 'nonprofit') {
-    return {
-      essentials: {
-        ...defaultTiers.essentials,
-        description:
-          'Entry point — simple foundation. Optimization, security, and donation-flow accessibility fixes.',
-        features: [
-          'Donation page speed optimization (image compression, lazy loading)',
-          'Basic accessibility fixes (contrast, readable headings)',
-          'Secure page-load enhancements for trust and safety',
-          '1 round of revisions',
-        ],
-      },
-      growth: {
-        ...defaultTiers.growth,
-        description:
-          'Full community engagement. Donation-rate optimization, sitemap, and outreach mechanics.',
-        features: [
-          'Everything in Starter',
-          'Donation funnel optimization (CTAs, clear contribution paths)',
-          'Outreach sitemap & organic donor SEO',
-          'Accessibility audit & WCAG 2.1 Level AA compliance check',
-          'Integrations setup (donation widgets, newsletter subscriptions)',
-          'Community engagement report',
-          '3 rounds of revisions',
-        ],
-      },
-      premium: {
-        ...defaultTiers.premium,
-        description:
-          'Full community overhaul & partnership. Campaign trackers, and deep accessibility compliance.',
-        features: [
-          'Everything in Growth',
-          'Comprehensive community campaign setup',
-          'Advanced accessible landing pages for fundraising',
-          'Ongoing community feedback tracking and reporting (3 months)',
-          'Priority technical and campaign support',
-          'Quarterly community re-audit and progress report',
-          'Unlimited revisions',
-        ],
-      },
-    };
-  }
-
-  if (segment === 'technical_community') {
-    return {
-      essentials: {
-        ...defaultTiers.essentials,
-        description:
-          'Entry point — developer foundation. Speed, performance, and API reference sitemaps.',
-        features: [
-          'LCP and PageSpeed optimization (caching, fast assets)',
-          'Sitemap and schema tags for developer documentation',
-          'Core Web Vitals health score setup',
-          '1 round of revisions',
-        ],
-      },
-      growth: {
-        ...defaultTiers.growth,
-        description:
-          'Overtake competing projects. Deep developer SEO, docs accessibility, and open-source compliance.',
-        features: [
-          'Everything in Starter',
-          'Developer-focused SEO overhaul (doc search optimization, organic discovery)',
-          'Documentation search integration & navigation improvement',
-          'Comprehensive WCAG Level AA accessibility auditing',
-          'Community contribution funnel optimizations (Contributor guide visibility)',
-          'Technical sitemap gap analysis report',
-          '3 rounds of revisions',
-        ],
-      },
-      premium: {
-        ...defaultTiers.premium,
-        description:
-          'Global tech-community scale. Content creation, deep developer advocacy, and performance monitoring.',
-        features: [
-          'Everything in Growth',
-          'Technical content pipeline strategy (3 new developer guides)',
-          'Custom visual reporting and monthly performance insights (3 months)',
-          'Priority developer-focused support',
-          'Documentation contribution tracking',
-          'Quarterly documentation sitemap re-audit',
-          'Unlimited revisions',
-        ],
-      },
-    };
-  }
-
-  if (segment === 'healthcare') {
-    return {
-      essentials: {
-        ...defaultTiers.essentials,
-        description:
-          'Compliance & basic speed. Patient data privacy, simple accessibility, and quick performance fixes.',
-        features: [
-          'Basic privacy-first page optimization',
-          'Basic sitemap and medical schema tags',
-          'Core accessibility repairs for patient portals',
-          '1 round of revisions',
-        ],
-      },
-      growth: {
-        ...defaultTiers.growth,
-        description:
-          'Patient enrollment & trusted search. Conversion paths, accessibility WCAG compliance, and practice findability.',
-        features: [
-          'Everything in Starter',
-          'High-converting patient appointment CTAs',
-          'Complete ADA/WCAG 2.1 Level AA compliance audit',
-          'HIPAA-compliant form routing advice',
-          'Patient-first navigation and layout improvements',
-          'Practice discoverability gap analysis',
-          '3 rounds of revisions',
-        ],
-      },
-      premium: {
-        ...defaultTiers.premium,
-        description:
-          'Elite healthcare trust. Multi-channel visibility, specialized page setups, and compliance assurance.',
-        features: [
-          'Everything in Growth',
-          'Patient journey mapping and advanced conversion funnels',
-          'Ongoing accessibility monitoring & reports (3 months)',
-          'Priority compliance-aligned technical support',
-          'Comprehensive practice discovery report',
-          'Quarterly healthcare-specific re-audit',
-          'Unlimited revisions',
-        ],
-      },
-    };
-  }
-
-  if (segment === 'enterprise') {
-    return {
-      essentials: {
-        ...defaultTiers.essentials,
-        description:
-          'Enterprise-grade basics. Multi-region latency speed-ups, basic security headers, and compliance schema.',
-        features: [
-          'Multi-region speed and latency analysis',
-          'Security headers and basic technical vulnerability fixes',
-          'Enterprise search engine schema setup',
-          '1 round of revisions',
-        ],
-      },
-      growth: {
-        ...defaultTiers.growth,
-        description:
-          'Scalable lead-gen and B2B growth. High-throughput performance, strict accessibility, and B2B funnel fixes.',
-        features: [
-          'Everything in Starter',
-          'High-throughput load time and PageSpeed optimization',
-          'Advanced accessibility compliance (WCAG 2.1 Level AA)',
-          'B2B/Enterprise conversion funnel mapping',
-          'SEO keyword and competitive landscape report',
-          '3 rounds of revisions',
-        ],
-      },
-      premium: {
-        ...defaultTiers.premium,
-        description:
-          'Ultimate partnership. Dedicated support, high-availability monitoring, custom features, and continuous auditing.',
-        features: [
-          'Everything in Growth',
-          'Custom high-availability and architecture review',
-          'Dedicated technical account manager',
-          'Monthly SEO, performance, and accessibility re-auditing',
-          'Unlimited premium revisions and custom work support',
-          'Quarterly full architecture sitemap re-audit',
-          'Unlimited revisions',
-        ],
-      },
-    };
-  }
-
-  return defaultTiers;
-}
-
-/** QA-aligned: has pointer+collected_at or type+(value|label) or url/source/raw/string */
-function hasValidEvidence(e: unknown): boolean {
-  if (!e || typeof e !== 'object') return false;
-  const o = e as Record<string, unknown>;
-  if (typeof o.pointer === 'string' && o.pointer.length > 0 && o.collected_at) return true;
-  if (o.type && (o.value !== undefined || o.label)) return true;
-  return !!(o.url || o.source || o.raw || (typeof e === 'string' && (e as string).length > 0));
+  return {
+    essentials: makeTier(
+      'Starter',
+      tierMapping.essentials,
+      pricing.essentials,
+      '5 business days',
+      recommendedTier === 'starter'
+    ),
+    growth: makeTier(
+      'Growth',
+      tierMapping.growth,
+      pricing.growth,
+      '10 business days',
+      recommendedTier === 'growth',
+      'BEST VALUE'
+    ),
+    premium: makeTier(
+      'Premium',
+      tierMapping.premium,
+      pricing.premium,
+      '15 business days',
+      recommendedTier === 'premium'
+    ),
+  };
 }
 
 /**
- * Agency-grade hardening: dedupe by (module, title), clamp impact 1–10, drop any finding
- * with no real evidence, ensure ≥1 PAINKILLER among the survivors.
- *
- * Wave 3 (Step 9): this previously "repaired" a finding with no valid evidence by
- * fabricating a replacement evidence item (`pointer: 'audit', value: f.title`) — exactly
- * the "QA repairs missing evidence by inventing citations" anti-pattern the campaign
- * prohibits. A finding with no real evidence is dropped from the proposal input instead
- * of persisting a fabricated citation into a customer-facing proposal. In steady state
- * this should be a no-op: findings reaching this function already passed the
- * aggregation/persistence evidence contract (lib/audit/findingContract.ts); this filter
- * only protects against legacy-persisted or otherwise-sourced findings that predate it.
+ * Deduplicate proposal inputs and retain only Findings that pass the canonical Wave 3
+ * contract. This boundary never repairs Evidence, severity, or Finding type.
  */
 function normalizeFindingsForProposal(findings: Finding[]): Finding[] {
   const seen = new Set<string>();
@@ -419,28 +238,10 @@ function normalizeFindingsForProposal(findings: Finding[]): Finding[] {
     deduped.push(f);
   }
 
-  const withRealEvidence = deduped.filter((f) => {
-    const evidence = (f.evidence as unknown[]) ?? [];
-    return evidence.some(hasValidEvidence);
-  });
-
-  for (const f of withRealEvidence) {
-    (f as { impactScore: number }).impactScore = Math.min(
-      10,
-      Math.max(1, Number(f.impactScore) || 5)
-    );
-  }
-  const painkillers = withRealEvidence.filter((f) => f.type === 'PAINKILLER');
-  if (painkillers.length === 0 && withRealEvidence.length > 0) {
-    const byImpact = [...withRealEvidence].sort(
-      (a, b) => (b.impactScore ?? 0) - (a.impactScore ?? 0)
-    );
-    (byImpact[0] as { type: string }).type = 'PAINKILLER';
-  }
-  return withRealEvidence;
+  return deduped.filter((finding) => validateFinding(finding).success);
 }
 
-function timelineByEffort(effort?: string | null): string {
+export function timelineByEffort(effort?: string | null): string {
   const e = (effort || 'MEDIUM').toUpperCase();
   if (e === 'LOW') return '7 days';
   if (e === 'HIGH') return '30-45 days';
@@ -542,7 +343,12 @@ export async function runProposalPipeline(
     segment,
   } as any);
 
-  const multiplier = playbook?.pricingMultiplier ?? 1.0;
+  const multiplier = z
+    .number()
+    .finite()
+    .min(0.5)
+    .max(2)
+    .parse(playbook?.pricingMultiplier ?? 1);
   const pricing = {
     essentials: Math.round(industryPricing.essentials * multiplier),
     growth: Math.round(industryPricing.growth * multiplier),
@@ -567,78 +373,13 @@ export async function runProposalPipeline(
     | 'growth'
     | 'premium';
 
-  const tiers = getCustomizedTiers(segment, pricing, recommendedTier, tierMapping);
-
-  // Calculate ROI for each tier
-  // We need to resolve finding objects for the IDs in each tier
-  const findingsMap = new Map(normalizedFindings.map((f) => [f.id, f]));
-
-  // Helper to get findings for a tier
-  const getTierFindings = (ids: string[]) =>
-    ids.map((id) => findingsMap.get(id)).filter((f): f is Finding => !!f);
-
-  const essentialsRoi = calculateTierROI(
-    getTierFindings(tiers.essentials.findingIds),
-    tiers.essentials.price || 0,
-    businessIndustry,
+  const tiers = getCustomizedTiers(
+    segment,
+    pricing,
+    recommendedTier,
+    tierMapping,
     normalizedFindings
   );
-  tiers.essentials.roi = {
-    monthlyValue: essentialsRoi.totalMonthlyValue,
-    ratio: essentialsRoi.ratio,
-    scenarios: {
-      best: Math.round(essentialsRoi.totalMonthlyValue * 1.25),
-      base: essentialsRoi.totalMonthlyValue,
-      worst: Math.round(essentialsRoi.totalMonthlyValue * 0.6),
-      assumptions: [
-        'Implementation completed as scoped within the tier',
-        'Traffic and conversion rates remain within current benchmark range',
-        'Performance gains materialize after deployment and indexing cycle',
-      ],
-    },
-  };
-
-  const growthRoi = calculateTierROI(
-    getTierFindings(tiers.growth.findingIds),
-    tiers.growth.price || 0,
-    businessIndustry,
-    normalizedFindings
-  );
-  tiers.growth.roi = {
-    monthlyValue: growthRoi.totalMonthlyValue,
-    ratio: growthRoi.ratio,
-    scenarios: {
-      best: Math.round(growthRoi.totalMonthlyValue * 1.25),
-      base: growthRoi.totalMonthlyValue,
-      worst: Math.round(growthRoi.totalMonthlyValue * 0.6),
-      assumptions: [
-        'Growth-tier fixes are shipped and measured against baseline',
-        'Local search demand remains stable over the quarter',
-        'Offer and conversion paths stay consistent during implementation',
-      ],
-    },
-  };
-
-  const premiumRoi = calculateTierROI(
-    getTierFindings(tiers.premium.findingIds),
-    tiers.premium.price || 0,
-    businessIndustry,
-    normalizedFindings
-  );
-  tiers.premium.roi = {
-    monthlyValue: premiumRoi.totalMonthlyValue,
-    ratio: premiumRoi.ratio,
-    scenarios: {
-      best: Math.round(premiumRoi.totalMonthlyValue * 1.25),
-      base: premiumRoi.totalMonthlyValue,
-      worst: Math.round(premiumRoi.totalMonthlyValue * 0.6),
-      assumptions: [
-        'Premium scope is executed end-to-end with monitoring',
-        'Content and technical work are approved without major delays',
-        'Competitive dynamics remain similar to current benchmark snapshot',
-      ],
-    },
-  };
 
   // Top 3 decision-driving actions (impact + effort + timeline)
   const topActions = [...normalizedFindings]
@@ -651,23 +392,10 @@ export async function runProposalPipeline(
       effort: (f.effortEstimate || 'MEDIUM').toUpperCase(),
       timeline: timelineByEffort(f.effortEstimate),
     }));
-  const topActionLines = topActions.map(
-    (a, i) =>
-      `Top Action ${i + 1}: ${a.title} | Impact: ${a.impact}/10 | Effort: ${a.effort} | Timeline: ${a.timeline}`
-  );
-
-  // Step 4: Generate executive summary (playbook + comparison influence language)
-  const executiveSummary = await generateExecutiveSummary(
-    businessName,
-    clusters,
-    normalizedFindings,
-    tracker,
-    parentTrace,
-    playbook ?? undefined,
-    city ?? undefined,
-    comparisonReport ?? undefined
-  );
-  logger.info('[ProposalPipeline] Generated executive summary');
+  const executiveSummary = `${businessName}: Validated audit findings include: ${normalizedFindings
+    .slice(0, 5)
+    .map((finding) => finding.title)
+    .join('; ')}. Review the cited Finding evidence before selecting implementation scope.`;
 
   // Step 5: Build proposal
   const proposal: ProposalResult = {
@@ -679,8 +407,17 @@ export async function runProposalPipeline(
     pricing,
     assumptions: generateAssumptions(businessName),
     disclaimers: generateDisclaimers(),
-    nextSteps: generateNextSteps(topActionLines),
+    nextSteps: generateNextSteps([]),
   };
+  proposal.grounding = buildProposalGrounding(
+    proposal,
+    {
+      auditId: normalizedFindings[0]!.auditId,
+      tenantId: normalizedFindings[0]!.tenantId,
+      findings: normalizedFindings,
+    },
+    normalizedFindings.map((finding) => finding.id)
+  );
 
   // Step 6: Validate citations
   const validation = validateCitations(proposal, normalizedFindings);

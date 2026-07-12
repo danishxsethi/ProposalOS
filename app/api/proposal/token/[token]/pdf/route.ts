@@ -16,6 +16,7 @@ import { RateLimitPresets, withRateLimit } from '@/lib/middleware/rateLimit';
 import { generatePdf } from '@/lib/pdf/generatePdf';
 import { uploadPdfToGCS } from '@/lib/pdf/uploadPdf';
 import { prisma } from '@/lib/prisma';
+import { assertProposalPublishable } from '@/lib/proposal/publication';
 
 interface Params {
   params: Promise<{ token: string }>;
@@ -40,6 +41,7 @@ async function handlePdf(req: Request, { params }: Params): Promise<NextResponse
         status: 404,
       });
     }
+    assertProposalPublishable(proposal);
 
     // Check if PDF already cached
     if (proposal.pdfUrl) {

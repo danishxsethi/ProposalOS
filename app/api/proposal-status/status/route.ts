@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 
 import { withAuth } from '@/lib/middleware/auth';
 import { prisma } from '@/lib/prisma';
+import { assertProposalPublishable } from '@/lib/proposal/publication';
 import { getTenantId } from '@/lib/tenant/context';
 
 /**
@@ -45,6 +46,7 @@ async function handleUpdateStatus(request: Request): Promise<NextResponse> {
     if (!proposal) {
       return NextResponse.json({ error: 'Proposal not found' }, { status: 404 });
     }
+    if (status === 'ready' || status === 'sent') assertProposalPublishable(proposal);
 
     // Update status and set timestamp if transitioning to 'sent'
     const updateData: Record<string, unknown> = { status };

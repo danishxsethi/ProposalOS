@@ -14,6 +14,9 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { createEvidence } from '@/lib/modules/types';
+import { buildProposalGrounding } from '@/lib/proposal/grounding';
+
 // ---------------------------------------------------------------------------
 // Shared mocks
 // ---------------------------------------------------------------------------
@@ -44,6 +47,7 @@ const mocks = vi.hoisted(() => ({
   loggerInfo: vi.fn(),
   loggerWarn: vi.fn(),
   loggerDebug: vi.fn(),
+  loggerError: vi.fn(),
   logError: vi.fn(),
 
   // tenant context
@@ -54,7 +58,12 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@/lib/auth', () => ({ auth: mocks.auth }));
 vi.mock('@/lib/auth/apiKeys', () => ({ validateApiKey: mocks.validateApiKey }));
 vi.mock('@/lib/logger', () => ({
-  logger: { info: mocks.loggerInfo, warn: mocks.loggerWarn, debug: mocks.loggerDebug },
+  logger: {
+    info: mocks.loggerInfo,
+    warn: mocks.loggerWarn,
+    debug: mocks.loggerDebug,
+    error: mocks.loggerError,
+  },
   logError: mocks.logError,
 }));
 vi.mock('@/lib/prisma', () => ({
@@ -185,40 +194,97 @@ function makeAudit(overrides = {}) {
     businessCity: 'Regina',
     businessUrl: null,
     verticalPlaybookId: null,
-    findings: [
-      {
-        id: 'finding-1',
-        title: 'Slow site',
-        category: 'Performance',
-        module: 'performance',
-        type: 'PAINKILLER',
-        impactScore: 8,
-        confidenceScore: 90,
-        evidence: [{ pointer: 'https://example.com', collected_at: '2026-01-01' }],
-      },
-    ],
+    findings: [finding()],
     proposals: [],
     evidence: [],
     ...overrides,
   };
 }
 
-/** Minimal proposal graph result. */
-const proposalGraphResult = {
-  proposalDef: {
-    executiveSummary: 'Acme Dental in Regina is losing patients due to slow site.',
+function finding() {
+  return {
+    id: 'finding-1',
+    auditId: 'audit-1',
+    tenantId: 'tenant-a',
+    title: 'Slow site',
+    description: 'Slow site delivery was measured.',
+    category: 'Performance',
+    module: 'performance',
+    type: 'PAINKILLER',
+    impactScore: 8,
+    confidenceScore: 9,
+    evidence: [
+      createEvidence({
+        pointer: 'https://acme.test/',
+        source: 'pagespeed_v5',
+        value: 4200,
+        label: 'LCP',
+      }),
+    ],
+    metrics: { lcpMs: 4200 },
+    effortEstimate: 'MEDIUM',
+    recommendedFix: ['Address Slow site'],
+  } as any;
+}
+
+function proposalGraphResult() {
+  const proposal: any = {
+    executiveSummary: 'Acme Dental in Regina: Validated audit finding: Slow site.',
+    painClusters: [
+      {
+        id: 'cluster-1',
+        rootCause: 'Slow site',
+        severity: 'high',
+        findingIds: ['finding-1'],
+      },
+    ],
+    topActions: [
+      {
+        findingId: 'finding-1',
+        title: 'Slow site',
+        impact: 8,
+        effort: 'MEDIUM',
+        timeline: '14-21 days',
+      },
+    ],
     tiers: {
-      essentials: { name: 'Essentials', findingIds: ['finding-1'], deliveryTime: '5 days' },
-      growth: { name: 'Growth', findingIds: ['finding-1'], deliveryTime: '10 days' },
-      premium: { name: 'Premium', findingIds: ['finding-1'], deliveryTime: '15 days' },
+      essentials: {
+        name: 'Essentials',
+        description: 'Addresses: Slow site',
+        findingIds: ['finding-1'],
+        deliveryTime: '5 business days',
+        price: 1000,
+        features: ['Address Slow site'],
+      },
+      growth: {
+        name: 'Growth',
+        description: 'Addresses: Slow site',
+        findingIds: ['finding-1'],
+        deliveryTime: '10 business days',
+        price: 2000,
+        features: ['Address Slow site'],
+      },
+      premium: {
+        name: 'Premium',
+        description: 'Addresses: Slow site',
+        findingIds: ['finding-1'],
+        deliveryTime: '15 business days',
+        price: 3000,
+        features: ['Address Slow site'],
+      },
     },
     pricing: { essentials: 1000, growth: 2000, premium: 3000, currency: 'USD' },
-    assumptions: ['Access to GBP required'],
-    disclaimers: ['Results may vary'],
+    assumptions: ['Scope requires confirmation'],
+    disclaimers: ['Automated findings require review'],
     nextSteps: ['Reply to schedule a call'],
-    painClusters: [],
-  },
-};
+  };
+  proposal.grounding = buildProposalGrounding(
+    proposal,
+    { auditId: 'audit-1', tenantId: 'tenant-a', findings: [finding()] },
+    ['finding-1']
+  );
+  return { completeProposal: proposal };
+}
 
 const diagnosisResult = {
   clusters: [{ findingIds: ['finding-1'], rootCause: 'Performance', severity: 'high' }],
@@ -276,7 +342,7 @@ describe('POST /api/audit/[id]/propose — proposal status promotion', () => {
     mocks.proposalTemplateFindFirst.mockResolvedValue(null);
     mocks.evidenceFindMany.mockResolvedValue([]);
     mocks.invokeDiagnosisGraphWithTimeout.mockResolvedValue(diagnosisResult);
-    mocks.invokeProposalGraphWithTimeout.mockResolvedValue(proposalGraphResult);
+    mocks.invokeProposalGraphWithTimeout.mockResolvedValue(proposalGraphResult());
     mocks.createParentTrace.mockResolvedValue(undefined);
     mocks.auditUpdate.mockResolvedValue({});
     mocks.proposalCreate.mockImplementation(async (args: any) => {

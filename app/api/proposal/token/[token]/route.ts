@@ -5,7 +5,9 @@ import { withAuth } from '@/lib/middleware/auth';
 import { checkRateLimit } from '@/lib/middleware/rateLimit';
 import { recordAuditTrailEvent } from '@/lib/observability/auditTrail';
 import { prisma } from '@/lib/prisma';
+import { assertProposalPublishable, publicProposalCitations } from '@/lib/proposal/publication';
 import { hashSensitive } from '@/lib/security/abuseDefense/policies';
+import { getTenantId } from '@/lib/tenant/context';
 
 interface Params {
   params: Promise<{ token: string }>;
@@ -70,6 +72,7 @@ export async function GET(request: Request, { params }: Params) {
 
       return NextResponse.json({ error: 'Proposal not found' }, { status: 404 });
     }
+    assertProposalPublishable(proposal);
 
     // 2. Valid Token Usage: Token-hash-scoped scraping limit (100 requests per hour)
 
@@ -113,6 +116,16 @@ export async function GET(request: Request, { params }: Params) {
       businessName: proposal.audit.businessName,
       businessCity: proposal.audit.businessCity,
       businessIndustry: proposal.audit.businessIndustry,
+      audit: {
+        id: proposal.audit.id,
+        businessName: proposal.audit.businessName,
+        businessCity: proposal.audit.businessCity,
+        businessIndustry: proposal.audit.businessIndustry,
+        overallScore: proposal.audit.overallScore,
+        startedAt: proposal.audit.startedAt,
+        completedAt: proposal.audit.completedAt,
+        findings: proposal.audit.findings,
+      },
       executiveSummary: proposal.executiveSummary,
       painClusters: proposal.painClusters,
       findings: proposal.audit.findings,
@@ -137,6 +150,7 @@ export async function GET(request: Request, { params }: Params) {
       tierChosen: proposal.tierChosen,
       viewedAt: proposal.viewedAt,
       createdAt: proposal.createdAt,
+      citations: publicProposalCitations(proposal.qaResults),
     });
   } catch (error) {
     logger.error('[API] Error fetching proposal:', error);
@@ -151,6 +165,8 @@ export async function GET(request: Request, { params }: Params) {
 export const PATCH = withAuth(async (request: Request, { params }: Params) => {
   try {
     const { token } = await params;
+    const tenantId = await getTenantId();
+    if (!tenantId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     const body = await request.json();
     const { status } = body;
 
@@ -163,6 +179,10 @@ export const PATCH = withAuth(async (request: Request, { params }: Params) => {
       );
     }
 
+    const existing = await prisma.proposal.findFirst({ where: { webLinkToken: token, tenantId } });
+    if (!existing) return NextResponse.json({ error: 'Proposal not found' }, { status: 404 });
+    if (status === 'READY' || status === 'SENT') assertProposalPublishable(existing);
+
     const updateData: Record<string, unknown> = {};
     if (status) {
       updateData.status = status;
@@ -172,7 +192,7 @@ export const PATCH = withAuth(async (request: Request, { params }: Params) => {
     }
 
     const proposal = await prisma.proposal.update({
-      where: { webLinkToken: token },
+      where: { id: existing.id },
       data: updateData,
     });
 

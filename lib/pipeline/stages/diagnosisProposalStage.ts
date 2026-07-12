@@ -11,13 +11,15 @@
 
 import crypto from 'crypto';
 
+import { z } from 'zod';
+
 import { FEATURE_FLAGS } from '@/lib/config/feature-flags';
 import { aggregateContext } from '@/lib/context/aggregator';
 import { CostTracker } from '@/lib/costs/costTracker';
 import { invokeDiagnosisGraphWithTimeout } from '@/lib/graph/diagnosis-graph';
 import { invokeProposalGraphWithTimeout } from '@/lib/graph/proposal-graph';
-import { detectVertical, getPlaybook } from '@/lib/playbooks/registry';
 import { prisma } from '@/lib/prisma';
+import { buildProposalGrounding, groundingForPersistence } from '@/lib/proposal/grounding';
 
 import { logStageFailure } from '../metrics';
 import { transition } from '../stateMachine';
@@ -110,14 +112,6 @@ export async function processOneDiagnosisProposal(prospectId: string): Promise<S
 
   const costTracker = new CostTracker();
 
-  // Detect vertical and get playbook
-  const vertical = detectVertical({
-    businessIndustry: audit.businessIndustry,
-    businessName: audit.businessName,
-    businessCity: audit.businessCity,
-  });
-  const playbook = getPlaybook(vertical);
-
   // 2. Run diagnosis pipeline via LangGraph
   // Build context if Single-Pass is enabled
   let aggregatedContext;
@@ -128,6 +122,7 @@ export async function processOneDiagnosisProposal(prospectId: string): Promise<S
   const diagnosisResult = await invokeDiagnosisGraphWithTimeout({
     findings: audit.findings,
     tenantId,
+    auditId: audit.id,
     mode: FEATURE_FLAGS.SINGLE_PASS_DIAGNOSIS ? 'SINGLE_PASS' : 'MULTI_STEP',
     aggregatedContext,
   });
@@ -172,15 +167,46 @@ export async function processOneDiagnosisProposal(prospectId: string): Promise<S
   const pipelineConfig = await prisma.pipelineConfig.findUnique({
     where: { tenantId },
   });
-  const pricingMultiplier = pipelineConfig?.pricingMultiplier ?? 1.0;
+  const pricingMultiplier = z
+    .number()
+    .finite()
+    .min(0.5)
+    .max(2)
+    .parse(pipelineConfig?.pricingMultiplier ?? 1);
+  if (!proposalResult.completeProposal) {
+    throw new Error('Proposal graph did not produce a grounded complete proposal');
+  }
 
   // Apply pricing multiplier to tier prices
   const adjustedPricing = {
-    essentials: Math.round((proposalResult.pricing.essentials ?? 0) * pricingMultiplier),
-    growth: Math.round((proposalResult.pricing.growth ?? 0) * pricingMultiplier),
-    premium: Math.round((proposalResult.pricing.premium ?? 0) * pricingMultiplier),
-    currency: proposalResult.pricing.currency ?? 'USD',
+    essentials: Math.round(proposalResult.completeProposal.pricing.essentials * pricingMultiplier),
+    growth: Math.round(proposalResult.completeProposal.pricing.growth * pricingMultiplier),
+    premium: Math.round(proposalResult.completeProposal.pricing.premium * pricingMultiplier),
+    currency: proposalResult.completeProposal.pricing.currency,
   };
+  const finalProposal = {
+    ...proposalResult.completeProposal,
+    pricing: adjustedPricing,
+    tiers: {
+      essentials: {
+        ...proposalResult.completeProposal.tiers.essentials,
+        price: adjustedPricing.essentials,
+      },
+      growth: {
+        ...proposalResult.completeProposal.tiers.growth,
+        price: adjustedPricing.growth,
+      },
+      premium: {
+        ...proposalResult.completeProposal.tiers.premium,
+        price: adjustedPricing.premium,
+      },
+    },
+  };
+  finalProposal.grounding = buildProposalGrounding(
+    finalProposal,
+    { auditId: audit.id, tenantId, findings: audit.findings },
+    audit.findings.map((finding) => finding.id)
+  );
 
   // 6. Create Proposal record with unique web link token
   const webLinkToken = crypto.randomUUID();
@@ -190,18 +216,25 @@ export async function processOneDiagnosisProposal(prospectId: string): Promise<S
       auditId: audit.id,
       tenantId,
       status: 'DRAFT',
-      executiveSummary: proposalResult.executiveSummary,
-      painClusters: JSON.parse(JSON.stringify(proposalResult.clusters)),
-      tierEssentials: JSON.parse(JSON.stringify(proposalResult.tiers.essentials)),
-      tierGrowth: JSON.parse(JSON.stringify(proposalResult.tiers.growth)),
-      tierPremium: JSON.parse(JSON.stringify(proposalResult.tiers.premium)),
+      executiveSummary: finalProposal.executiveSummary,
+      painClusters: JSON.parse(JSON.stringify(finalProposal.painClusters)),
+      tierEssentials: JSON.parse(JSON.stringify(finalProposal.tiers.essentials)),
+      tierGrowth: JSON.parse(JSON.stringify(finalProposal.tiers.growth)),
+      tierPremium: JSON.parse(JSON.stringify(finalProposal.tiers.premium)),
       pricing: JSON.parse(JSON.stringify(adjustedPricing)),
-      assumptions: proposalResult.proposalDef.assumptions,
-      disclaimers: proposalResult.proposalDef.disclaimers,
-      nextSteps: proposalResult.proposalDef.nextSteps,
-      comparisonReport: proposalResult.proposalDef.comparisonReport
-        ? JSON.parse(JSON.stringify(proposalResult.proposalDef.comparisonReport))
+      assumptions: finalProposal.assumptions,
+      disclaimers: finalProposal.disclaimers,
+      nextSteps: finalProposal.nextSteps,
+      comparisonReport: finalProposal.comparisonReport
+        ? JSON.parse(JSON.stringify(finalProposal.comparisonReport))
         : undefined,
+      qaResults: JSON.parse(
+        JSON.stringify({
+          evaluation: { passed: false, metadataStatus: 'in_review' },
+          claimPolicy: { version: 1, valid: true, reasons: [] },
+          grounding: groundingForPersistence(finalProposal),
+        })
+      ),
       webLinkToken,
     },
   });

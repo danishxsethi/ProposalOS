@@ -52,6 +52,8 @@ interface Tier {
   deliveryTime?: string;
   features?: string[];
   badge?: string;
+  price?: number;
+  recommended?: boolean;
   visualEvidence?: {
     screenshotUrl: string;
     annotationText: string;
@@ -68,9 +70,9 @@ function formatScore(score: number | undefined | null): string {
 }
 
 function extractScores(findings: { metrics?: Record<string, number> | null }[]): {
-  performance: number;
-  seo: number;
-  accessibility: number;
+  performance: number | null;
+  seo: number | null;
+  accessibility: number | null;
 } {
   let p = 0,
     s = 0,
@@ -94,9 +96,9 @@ function extractScores(findings: { metrics?: Record<string, number> | null }[]):
     }
   }
   return {
-    performance: pC ? Math.round(p / pC) : 0,
-    seo: sC ? Math.round(s / sC) : 0,
-    accessibility: aC ? Math.round(a / aC) : 0,
+    performance: pC ? Math.round(p / pC) : null,
+    seo: sC ? Math.round(s / sC) : null,
+    accessibility: aC ? Math.round(a / aC) : null,
   };
 }
 
@@ -239,41 +241,41 @@ export default function ProposalPage({ proposal, branding }: ProposalProps) {
 
   const { trackCta, trackExpand } = useProposalViewTracking(proposal.webLinkToken);
 
-  const pricing = (proposal.pricing || { essentials: 497, growth: 1497, premium: 2997 }) as Pricing;
-  const tierEssentials = (proposal.tierEssentials || {}) as Tier;
-  const tierGrowth = (proposal.tierGrowth || {}) as Tier;
-  const tierPremium = (proposal.tierPremium || {}) as Tier;
+  const pricing = proposal.pricing as Pricing;
+  const tierEssentials = proposal.tierEssentials as Tier;
+  const tierGrowth = proposal.tierGrowth as Tier;
+  const tierPremium = proposal.tierPremium as Tier;
 
   const tiers = [
     {
       id: 'essentials',
-      name: tierEssentials?.name || 'Starter',
-      price: pricing?.essentials || 497,
-      description: tierEssentials?.description || 'Quick wins only.',
-      deliveryTime: tierEssentials?.deliveryTime || '5 business days',
-      features: (tierEssentials as Tier)?.features || [],
-      recommended: false,
-      badge: (tierEssentials as Tier)?.badge,
+      name: tierEssentials.name,
+      price: pricing.essentials,
+      description: tierEssentials.description,
+      deliveryTime: tierEssentials.deliveryTime,
+      features: tierEssentials.features || [],
+      recommended: tierEssentials.recommended,
+      badge: tierEssentials.badge,
     },
     {
       id: 'growth',
-      name: tierGrowth?.name || 'Growth',
-      price: pricing?.growth || 1497,
-      description: tierGrowth?.description || 'The full transformation — best value.',
-      deliveryTime: tierGrowth?.deliveryTime || '10 business days',
-      features: (tierGrowth as Tier)?.features || [],
-      recommended: true,
-      badge: (tierGrowth as Tier)?.badge || 'BEST VALUE',
+      name: tierGrowth.name,
+      price: pricing.growth,
+      description: tierGrowth.description,
+      deliveryTime: tierGrowth.deliveryTime,
+      features: tierGrowth.features || [],
+      recommended: tierGrowth.recommended,
+      badge: tierGrowth.badge,
     },
     {
       id: 'premium',
-      name: tierPremium?.name || 'Premium',
-      price: pricing?.premium || 2997,
-      description: tierPremium?.description || 'Ongoing partnership.',
-      deliveryTime: tierPremium?.deliveryTime || '15 business days',
-      features: (tierPremium as Tier)?.features || [],
-      recommended: false,
-      badge: (tierPremium as Tier)?.badge,
+      name: tierPremium.name,
+      price: pricing.premium,
+      description: tierPremium.description,
+      deliveryTime: tierPremium.deliveryTime,
+      features: tierPremium.features || [],
+      recommended: tierPremium.recommended,
+      badge: tierPremium.badge,
     },
   ];
 
@@ -292,20 +294,8 @@ export default function ProposalPage({ proposal, branding }: ProposalProps) {
 
   const findings = proposal?.audit?.findings ?? [];
   const scores = extractScores(findings);
-  const healthScore = findings.length
-    ? Math.max(
-        0,
-        Math.min(
-          100,
-          Math.round(
-            100 -
-              (findings.reduce((s: number, f: { impactScore: number }) => s + f.impactScore, 0) /
-                findings.length) *
-                8
-          )
-        )
-      )
-    : 85;
+  const healthScore =
+    typeof proposal.audit?.overallScore === 'number' ? proposal.audit.overallScore : null;
 
   const comparisonReport = proposal.comparisonReport as {
     prospect: {
@@ -392,7 +382,7 @@ export default function ProposalPage({ proposal, branding }: ProposalProps) {
         (new Date(a.completedAt).getTime() - new Date(a.startedAt).getTime()) / 1000
       );
     }
-    return 45; // fallback
+    return null;
   })();
 
   const formatDate = (d: Date) =>
@@ -769,7 +759,11 @@ export default function ProposalPage({ proposal, branding }: ProposalProps) {
             <div
               className="relative w-48 h-48 sm:w-56 sm:h-56"
               role="img"
-              aria-label={`Overall Health Score is ${Math.round(healthScore)} out of 100`}
+              aria-label={
+                healthScore == null
+                  ? 'Overall Health Score unavailable'
+                  : `Overall Health Score is ${Math.round(healthScore)} out of 100`
+              }
             >
               <svg className="w-full h-full -rotate-90" viewBox="0 0 100 100" aria-hidden="true">
                 <circle
@@ -789,13 +783,17 @@ export default function ProposalPage({ proposal, branding }: ProposalProps) {
                   strokeWidth="8"
                   strokeLinecap="round"
                   strokeDasharray={2 * Math.PI * 45}
-                  strokeDashoffset={2 * Math.PI * 45 * (1 - healthScore / 100)}
+                  strokeDashoffset={
+                    healthScore == null
+                      ? 2 * Math.PI * 45
+                      : 2 * Math.PI * 45 * (1 - healthScore / 100)
+                  }
                   style={{ transition: 'stroke-dashoffset 1.2s ease-out' }}
                 />
               </svg>
               <div className="absolute inset-0 flex flex-col items-center justify-center">
                 <span className="text-5xl sm:text-6xl font-bold" style={{ color: BLUE }}>
-                  {healthScore}
+                  {healthScore ?? '—'}
                 </span>
                 <span className="text-sm text-white/60 mt-1">Overall Score</span>
               </div>
@@ -819,6 +817,16 @@ export default function ProposalPage({ proposal, branding }: ProposalProps) {
               Executive Summary
             </h2>
             <p className="text-white/80 text-lg leading-relaxed">{proposal.executiveSummary}</p>
+            {proposal.citations?.status === 'verified' && (
+              <p className="mt-4 text-xs text-white/50">
+                Sources:{' '}
+                {proposal.citations.claims
+                  .find(
+                    (claim: { claimId: string }) => claim.claimId === 'proposal-executive-summary'
+                  )
+                  ?.sourceFindingIds.join(', ')}
+              </p>
+            )}
           </div>
         </section>
       )}
@@ -828,10 +836,14 @@ export default function ProposalPage({ proposal, branding }: ProposalProps) {
         <div className="max-w-5xl mx-auto">
           <h2 className="text-2xl sm:text-3xl font-bold mb-8 text-center">Performance Scores</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8 sm:gap-6">
-            <AnimatedGauge score={healthScore} label="Health" delay={0} />
-            <AnimatedGauge score={scores.performance || 0} label="Performance" delay={100} />
-            <AnimatedGauge score={scores.seo || 0} label="SEO" delay={200} />
-            <AnimatedGauge score={scores.accessibility || 0} label="Accessibility" delay={300} />
+            {healthScore != null && <AnimatedGauge score={healthScore} label="Health" delay={0} />}
+            {scores.performance != null && (
+              <AnimatedGauge score={scores.performance} label="Performance" delay={100} />
+            )}
+            {scores.seo != null && <AnimatedGauge score={scores.seo} label="SEO" delay={200} />}
+            {scores.accessibility != null && (
+              <AnimatedGauge score={scores.accessibility} label="Accessibility" delay={300} />
+            )}
           </div>
         </div>
       </section>
@@ -1351,9 +1363,11 @@ export default function ProposalPage({ proposal, branding }: ProposalProps) {
             This audit was performed on {formatDate(proposal.createdAt)}. Website conditions may
             have changed since then.
           </p>
-          <p className="text-white/40 text-xs">
-            This audit was generated in {auditDurationSeconds} seconds using AI-powered analysis.
-          </p>
+          {auditDurationSeconds != null && (
+            <p className="text-white/40 text-xs">
+              This audit was generated in {auditDurationSeconds} seconds using AI-powered analysis.
+            </p>
+          )}
           {Array.isArray(proposal.disclaimers) && proposal.disclaimers.length > 0 && (
             <p className="text-white/40 text-xs">{proposal.disclaimers.join(' ')}</p>
           )}

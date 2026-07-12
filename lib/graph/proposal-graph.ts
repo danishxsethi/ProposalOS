@@ -1,24 +1,18 @@
 import { Annotation, StateGraph } from '@langchain/langgraph';
 
+import { validateFinding } from '@/lib/audit/findingContract';
 import { Finding } from '@/lib/diagnosis/types';
 import { adversarialQAGraph } from '@/lib/graph/adversarial-qa-graph';
 import { runPredictiveAgent } from '@/lib/graph/predictive-graph';
 import { logger } from '@/lib/logger';
 import { inferOrganizationSegment, OrganizationSegment } from '@/lib/proposal';
 import { proposalCache } from '@/lib/proposal/caching';
-import { generateExecutiveSummary } from '@/lib/proposal/executiveSummary';
 import { ProposalLLMOrchestrator } from '@/lib/proposal/llm-orchestrator';
 import { getPricing } from '@/lib/proposal/pricing';
-import { calculateTierROI } from '@/lib/proposal/roiCalculator';
 import { FindingRuntime, validateCompleteProposal } from '@/lib/proposal/schemas';
 import { mapToTiers } from '@/lib/proposal/tierMapping';
-import { ProposalResult, TierConfig } from '@/lib/proposal/types';
-import {
-  generateAssumptions,
-  generateDisclaimers,
-  generateNextSteps,
-  validateCitations,
-} from '@/lib/proposal/validation';
+import { ProposalResult } from '@/lib/proposal/types';
+import { validateCitations } from '@/lib/proposal/validation';
 import { computeHallucinationScore, logQATelemetry } from '@/lib/qa/telemetry';
 
 const MAX_QA_RETRIES = 2;
@@ -72,6 +66,23 @@ interface NodeError {
 
 function nodeError(node: string, error: unknown): NodeError {
   return { node, error: String(error), timestamp: new Date().toISOString() };
+}
+
+function validateProposalInput(state: Pick<State, 'findings' | 'auditId' | 'tenantId'>): string[] {
+  const errors: string[] = [];
+  if (!state.auditId) errors.push('trusted auditId is required');
+  if (!state.tenantId) errors.push('trusted tenantId is required');
+  if (state.findings.length === 0) errors.push('at least one validated Finding is required');
+  for (const finding of state.findings) {
+    if (finding.auditId !== state.auditId)
+      errors.push(`Finding ${finding.id} belongs to another audit`);
+    if (finding.tenantId !== state.tenantId)
+      errors.push(`Finding ${finding.id} belongs to another tenant`);
+    if (finding.excluded) errors.push(`Finding ${finding.id} is excluded`);
+    if (!validateFinding(finding).success)
+      errors.push(`Finding ${finding.id} failed the Wave 3 contract`);
+  }
+  return errors;
 }
 
 async function map_to_tiers(state: typeof ProposalState.State) {
@@ -161,37 +172,7 @@ async function generate_complete_proposal(state: typeof ProposalState.State) {
   } catch (error) {
     logger.error({ error }, '[ProposalGraph] generate_complete_proposal failed');
     return {
-      completeProposal: {
-        executiveSummary: `Failed to generate complete proposal: ${String(error)}`,
-        painClusters: state.clusters,
-        tiers: {
-          essentials: {
-            name: 'Starter',
-            findingIds: [],
-            deliveryTime: '5 business days',
-            price: 0,
-            badge: 'FAILED',
-          },
-          growth: {
-            name: 'Growth',
-            findingIds: [],
-            deliveryTime: '10 business days',
-            price: 0,
-            recommended: true,
-          },
-          premium: {
-            name: 'Premium',
-            findingIds: [],
-            deliveryTime: '15 business days',
-            price: 0,
-            badge: 'FAILED',
-          },
-        },
-        pricing: { essentials: 0, growth: 0, premium: 0, currency: 'USD' },
-        assumptions: [`Error occurred during proposal generation: ${String(error)}`],
-        disclaimers: ['Proposal generation failed - please review manually'],
-        nextSteps: ['Contact support to regenerate proposal'],
-      },
+      validation: { valid: false, errors: [`Proposal generation failed: ${String(error)}`] },
       errors: [nodeError('generate_complete_proposal', error)],
     };
   }
@@ -199,97 +180,27 @@ async function generate_complete_proposal(state: typeof ProposalState.State) {
 
 async function draft_proposal(state: typeof ProposalState.State) {
   try {
-    // Use cached complete proposal if available, otherwise fall back to old method
     if (state.completeProposal?.executiveSummary) {
       return { executiveSummary: state.completeProposal.executiveSummary };
     }
-
-    const executiveSummary = await generateExecutiveSummary(
-      state.businessName,
-      state.clusters,
-      state.findings,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined
-    );
-    return { executiveSummary };
+    throw new Error('No validated complete proposal is available');
   } catch (error) {
     logger.error({ error }, '[ProposalGraph] draft_proposal failed');
     return {
-      executiveSummary: `Failed to generate executive summary: ${String(error)}`,
+      executiveSummary: '',
       errors: [nodeError('draft_proposal', error)],
-    };
-  }
-}
-
-async function generate_roi_model(state: typeof ProposalState.State) {
-  try {
-    const findingsMap = new Map(state.findings.map((f: any) => [f.id, f]));
-    const getTierFindings = (ids: string[]) =>
-      ids.map((id) => findingsMap.get(id)).filter((f): f is Finding => !!f);
-
-    const essentialsRoi = calculateTierROI(
-      getTierFindings(state.tierMapping.essentials),
-      state.pricing.essentials,
-      state.businessIndustry,
-      state.findings
-    );
-    const growthRoi = calculateTierROI(
-      getTierFindings(state.tierMapping.growth),
-      state.pricing.growth,
-      state.businessIndustry,
-      state.findings
-    );
-    const premiumRoi = calculateTierROI(
-      getTierFindings(state.tierMapping.premium),
-      state.pricing.premium,
-      state.businessIndustry,
-      state.findings
-    );
-
-    const tiers = {
-      essentials: {
-        name: 'Starter',
-        price: state.pricing.essentials,
-        roi: { monthlyValue: essentialsRoi.totalMonthlyValue, ratio: essentialsRoi.ratio },
-      },
-      growth: {
-        name: 'Growth',
-        price: state.pricing.growth,
-        roi: { monthlyValue: growthRoi.totalMonthlyValue, ratio: growthRoi.ratio },
-      },
-      premium: {
-        name: 'Premium',
-        price: state.pricing.premium,
-        roi: { monthlyValue: premiumRoi.totalMonthlyValue, ratio: premiumRoi.ratio },
-      },
-    };
-    return { tiers };
-  } catch (error) {
-    logger.error({ error }, '[ProposalGraph] generate_roi_model failed');
-    return {
-      tiers: {
-        essentials: { name: 'Starter', price: 0, roi: { monthlyValue: 0, ratio: 0 } },
-        growth: { name: 'Growth', price: 0, roi: { monthlyValue: 0, ratio: 0 } },
-        premium: { name: 'Premium', price: 0, roi: { monthlyValue: 0, ratio: 0 } },
-      },
-      errors: [nodeError('generate_roi_model', error)],
     };
   }
 }
 
 async function validate_claims(state: typeof ProposalState.State) {
   try {
-    const proposalToValidate = state.completeProposal || {
-      executiveSummary: state.executiveSummary,
-      painClusters: state.clusters,
-      tiers: state.tiers,
-      pricing: state.pricing,
-    };
-
-    const validation = validateCitations(proposalToValidate, state.findings);
+    if (!state.completeProposal) {
+      return {
+        validation: { valid: false, errors: ['No grounded complete proposal is available'] },
+      };
+    }
+    const validation = validateCitations(state.completeProposal, state.findings);
     return { validation };
   } catch (error) {
     logger.error({ error }, '[ProposalGraph] validate_claims failed');
@@ -312,6 +223,14 @@ async function apply_tone(state: typeof ProposalState.State) {
 }
 
 async function adversarial_qa(state: State) {
+  if (!state.validation?.valid || !state.completeProposal) {
+    return {
+      qaRetryCount: MAX_QA_RETRIES,
+      lastQaScore: 1,
+      errors: [nodeError('adversarial_qa', 'Deterministic grounding validation failed')],
+    };
+  }
+
   // Validate all proposal claims are backed by findings + ROI math is consistent
   const content = [
     state.completeProposal?.executiveSummary || state.executiveSummary,
@@ -361,7 +280,7 @@ async function adversarial_qa(state: State) {
   }
 
   return {
-    executiveSummary: result.hardenedContent || state.executiveSummary,
+    executiveSummary: state.executiveSummary,
     qaRetryCount: retryTriggered ? state.qaRetryCount + 1 : state.qaRetryCount,
     lastQaScore: qaScore,
   };
@@ -377,7 +296,7 @@ function route_qa(state: State): string {
     if ((state.qaRetryCount ?? 0) >= MAX_QA_RETRIES) {
       logger.warn(
         { maxRetries: MAX_QA_RETRIES },
-        '[ProposalGraph] QA retry cap reached; routing to format_output'
+        '[ProposalGraph] QA retry cap reached; preserving failed validation'
       );
       return 'format_output';
     }
@@ -390,30 +309,10 @@ function route_qa(state: State): string {
 
 async function format_output(state: typeof ProposalState.State) {
   try {
-    const proposalDef = state.completeProposal || {
-      executiveSummary: state.executiveSummary,
-      painClusters: state.clusters,
-      tiers: state.tiers,
-      pricing: state.pricing,
-      assumptions: generateAssumptions(state.businessName),
-      disclaimers: generateDisclaimers(),
-      nextSteps: generateNextSteps([]),
-    };
-    return { proposalDef };
+    return { proposalDef: state.completeProposal ?? null };
   } catch (error) {
     logger.error({ error }, '[ProposalGraph] format_output failed');
-    return {
-      proposalDef: {
-        executiveSummary: state.executiveSummary || '',
-        painClusters: state.clusters || [],
-        tiers: state.tiers || {},
-        pricing: state.pricing || {},
-        assumptions: [],
-        disclaimers: [],
-        nextSteps: [],
-      },
-      errors: [nodeError('format_output', error)],
-    };
+    return { proposalDef: null, errors: [nodeError('format_output', error)] };
   }
 }
 
@@ -465,10 +364,6 @@ async function visual_annotation(state: typeof ProposalState.State) {
           tier.visualEvidence = topVisuals.filter(
             (v) => tier.findingIds?.includes(v.findingRef) || tier.findings?.includes(v.findingRef)
           );
-          // If filtering by mapped findingIds returns empty but we have visuals, fallback to globally showing top ones
-          if (tier.visualEvidence.length === 0) {
-            tier.visualEvidence = topVisuals;
-          }
         }
       };
 
@@ -517,7 +412,6 @@ export const proposalGraph = new StateGraph(ProposalState)
   .addNode('generate_complete_proposal', generate_complete_proposal)
   .addNode('visual_annotation', visual_annotation)
   .addNode('draft_proposal', draft_proposal)
-  .addNode('generate_roi_model', generate_roi_model)
   .addNode('validate_claims', validate_claims)
   .addNode('apply_tone', apply_tone)
   .addNode('adversarial_qa', adversarial_qa)
@@ -527,8 +421,7 @@ export const proposalGraph = new StateGraph(ProposalState)
   .addEdge('map_to_tiers', 'calculate_pricing')
   .addEdge('calculate_pricing', 'generate_complete_proposal')
   .addEdge('generate_complete_proposal', 'draft_proposal')
-  .addEdge('draft_proposal', 'generate_roi_model')
-  .addEdge('generate_roi_model', 'visual_annotation')
+  .addEdge('draft_proposal', 'visual_annotation')
   .addEdge('visual_annotation', 'validate_claims')
   .addEdge('validate_claims', 'apply_tone')
   .addEdge('apply_tone', 'adversarial_qa')
@@ -548,6 +441,15 @@ export async function invokeProposalGraphWithTimeout(
   initialState: Partial<State>,
   timeoutMs: number = PROPOSAL_GRAPH_TIMEOUT_MS
 ): Promise<State> {
+  const inputErrors = validateProposalInput({
+    findings: initialState.findings ?? [],
+    auditId: initialState.auditId,
+    tenantId: initialState.tenantId,
+  });
+  if (inputErrors.length > 0) {
+    throw new Error(`PROPOSAL_INPUT_INVALID: ${inputErrors.join('; ')}`);
+  }
+
   const controller = new AbortController();
 
   let timeoutId: NodeJS.Timeout | undefined;
@@ -565,69 +467,7 @@ export async function invokeProposalGraphWithTimeout(
     ]);
   } catch (error) {
     if (error instanceof Error && error.message.startsWith('PROPOSAL_GRAPH_TIMEOUT')) {
-      logger.error(
-        { timeoutMs, error },
-        '[ProposalGraph] Timed out — returning fallback proposal state'
-      );
-
-      const fallbackPricing = initialState.pricing ?? {
-        essentials: 0,
-        growth: 0,
-        premium: 0,
-        currency: 'USD',
-      };
-
-      const fallbackTiers = initialState.tiers ?? {
-        essentials: {
-          name: 'Starter',
-          price: fallbackPricing.essentials,
-          roi: { monthlyValue: 0, ratio: 0 },
-        },
-        growth: {
-          name: 'Growth',
-          price: fallbackPricing.growth,
-          roi: { monthlyValue: 0, ratio: 0 },
-        },
-        premium: {
-          name: 'Premium',
-          price: fallbackPricing.premium,
-          roi: { monthlyValue: 0, ratio: 0 },
-        },
-      };
-
-      return {
-        businessName: initialState.businessName ?? 'Unknown Business',
-        businessIndustry: initialState.businessIndustry,
-        clusters: initialState.clusters ?? [],
-        findings: initialState.findings ?? [],
-        tierMapping: initialState.tierMapping ?? { essentials: [], growth: [], premium: [] },
-        pricing: fallbackPricing,
-        tiers: fallbackTiers,
-        executiveSummary:
-          initialState.executiveSummary ??
-          'Proposal generation timed out before completion. Please review manually.',
-        proposalDef: initialState.proposalDef ?? {
-          executiveSummary:
-            initialState.executiveSummary ??
-            'Proposal generation timed out before completion. Please review manually.',
-          painClusters: initialState.clusters ?? [],
-          tiers: fallbackTiers,
-          pricing: fallbackPricing,
-          assumptions: generateAssumptions(initialState.businessName ?? 'Unknown Business'),
-          disclaimers: generateDisclaimers(),
-          nextSteps: generateNextSteps([]),
-          timeout: true,
-        },
-        validation: initialState.validation,
-        tenantId: initialState.tenantId,
-        auditId: initialState.auditId,
-        proposalId: initialState.proposalId,
-        qaRetryCount: initialState.qaRetryCount ?? 0,
-        lastQaScore: initialState.lastQaScore ?? 0,
-        predictiveOutlookMarkdown: initialState.predictiveOutlookMarkdown ?? '',
-        completeProposal: initialState.completeProposal,
-        sectionGenerationStatus: initialState.sectionGenerationStatus ?? {},
-      } as State;
+      logger.error({ timeoutMs, error }, '[ProposalGraph] Timed out; proposal generation failed');
     }
 
     throw error;

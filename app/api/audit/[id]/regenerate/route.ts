@@ -10,6 +10,7 @@ import { recordAuditTrailEvent } from '@/lib/observability/auditTrail';
 import { prisma } from '@/lib/prisma';
 import { runProposalPipeline } from '@/lib/proposal';
 import { ProposalQAService } from '@/lib/proposal/ProposalQAService';
+import { buildPersistedQaResults } from '@/lib/proposal/publication';
 import { determineProposalStatus } from '@/lib/proposal/status';
 import { runAutoQA } from '@/lib/qa/autoQA';
 import { getTenantId } from '@/lib/tenant/context';
@@ -183,18 +184,7 @@ async function handleRegeneration(request: Request, { params }: Params): Promise
         status: proposalStatus,
         qaScore: evaluation.autoQAStatus.score,
         clientScore: evaluation.autoQAStatus.clientPerfect.score,
-        qaResults: JSON.parse(
-          JSON.stringify({
-            ...evaluation.autoQAStatus,
-            evaluation: {
-              dimensions: evaluation.dimensions,
-              overallScore: evaluation.overallScore,
-              feedbackLogs: evaluation.feedbackLogs,
-              passed: evaluation.passed,
-              metadataStatus: evaluation.passed ? 'ready' : 'in_review',
-            },
-          })
-        ),
+        qaResults: JSON.parse(JSON.stringify(buildPersistedQaResults(evaluation, proposalResult))),
         clientScoreResults: JSON.parse(JSON.stringify(evaluation.autoQAStatus.clientPerfect)),
       },
     });

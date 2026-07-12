@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { runAutoQA } from '../qa/autoQA';
 
 describe('AutoQA System', () => {
-  it('should pass a rubric-compliant proposal without hard-fails', () => {
+  it('should reject a legacy proposal that has no persisted claim grounding', () => {
     const mockProposal: any = {
       executiveSummary:
         'Test Biz in Test City is underperforming at 34/100 performance, 4.2 seconds load time, and only 17 reviews, which is reducing leads and conversion; Rival Dental is ahead on local visibility.',
@@ -73,12 +73,12 @@ describe('AutoQA System', () => {
       },
     });
 
-    expect(result.score).toBeGreaterThan(0);
-    expect(result.clientPerfect.hardFails).toHaveLength(0);
+    expect(result.score).toBe(0);
+    expect(result.clientPerfect.hardFails.some((f) => f.code === 'GROUNDING_INVALID')).toBe(true);
     expect(result.warnings).toBeInstanceOf(Array);
   });
 
-  it('should hard-fail a generic summary with no quantified impact', () => {
+  it('should fail closed before accepting an ungrounded generic summary', () => {
     const mockProposal: any = {
       executiveSummary: 'This business has some issues and should improve.',
       tiers: {
@@ -112,9 +112,7 @@ describe('AutoQA System', () => {
 
     const result = runAutoQA(mockProposal, mockFindings, 'Test Biz', 'Test City');
     expect(result.score).toBe(0);
-    expect(result.clientPerfect.hardFails.some((f) => f.code === 'GENERIC_SUMMARY_NO_IMPACT')).toBe(
-      true
-    );
+    expect(result.clientPerfect.hardFails.some((f) => f.code === 'GROUNDING_INVALID')).toBe(true);
   });
 
   it('should flag local SEO copy for non-SMB targets in Non-SMB Local Copy Suppression check', () => {

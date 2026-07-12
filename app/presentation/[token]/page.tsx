@@ -4,6 +4,7 @@ import { Metadata } from 'next';
 
 import { getBranding } from '@/lib/config/branding';
 import { prisma } from '@/lib/prisma';
+import { assertProposalPublishable } from '@/lib/proposal/publication';
 import { runWithTenantAsync, runWithTenantBypass } from '@/lib/tenant/context';
 
 import PresentationClient from './PresentationClient';
@@ -55,6 +56,7 @@ export default async function Page({ params }: Props) {
   if (!proposal) {
     notFound();
   }
+  assertProposalPublishable(proposal);
 
   const branding = await runWithTenantAsync(proposal.tenantId, () =>
     getBranding(proposal.tenantId)

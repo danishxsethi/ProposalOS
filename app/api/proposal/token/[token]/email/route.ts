@@ -15,6 +15,7 @@ import { proposalEmailSchema } from '@/lib/api/schemas/proposal';
 import { sendProposalEmail } from '@/lib/email/sender';
 import { RateLimitPresets, withRateLimit } from '@/lib/middleware/rateLimit';
 import { prisma } from '@/lib/prisma';
+import { assertProposalPublishable } from '@/lib/proposal/publication';
 
 interface Params {
   params: Promise<{ token: string }>;
@@ -56,6 +57,7 @@ async function handleEmail(req: Request, { params }: Params): Promise<NextRespon
         status: 404,
       });
     }
+    assertProposalPublishable(proposal);
 
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
     const proposalUrl = `${baseUrl}/proposal/${token}`;

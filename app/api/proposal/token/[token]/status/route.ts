@@ -17,6 +17,7 @@ import { withIdempotency } from '@/lib/middleware/idempotency';
 import { withRateLimit } from '@/lib/middleware/rateLimit';
 import { recordAuditTrailEvent } from '@/lib/observability/auditTrail';
 import { prisma } from '@/lib/prisma';
+import { assertProposalPublishable } from '@/lib/proposal/publication';
 
 interface Params {
   params: Promise<{ token: string }>;
@@ -58,6 +59,7 @@ async function handleStatusUpdate(req: Request, { params }: Params): Promise<Nex
         status: 404,
       });
     }
+    assertProposalPublishable(proposal);
 
     // Update status and set timestamp if transitioning to 'SENT'
     const updateData: Record<string, unknown> = { status: normalizedStatus };

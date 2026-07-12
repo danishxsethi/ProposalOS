@@ -1,19 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { CostTracker } from '../costs/costTracker';
+import { createEvidence } from '../modules/types';
 import { runProposalPipeline } from '../proposal';
-
-// Mock dependencies
-vi.mock('../proposal/executiveSummary', () => ({
-  generateExecutiveSummary: vi.fn().mockResolvedValue('Exec Summary'),
-}));
-
-vi.mock('../proposal/validation', () => ({
-  generateAssumptions: vi.fn().mockReturnValue(['Assumption 1']),
-  generateDisclaimers: vi.fn().mockReturnValue(['Disclaimer 1']),
-  generateNextSteps: vi.fn().mockReturnValue(['Step 1']),
-  validateCitations: vi.fn().mockReturnValue({ valid: true, errors: [] }),
-}));
 
 describe('Proposal Pipeline', () => {
   it('should generate proposal structure', async () => {
@@ -21,17 +10,36 @@ describe('Proposal Pipeline', () => {
       {
         id: '1',
         title: 'SEO Issues',
-        findings: [{ id: '1', title: 'Slow LCP', impactScore: 90 }],
+        findings: [{ id: '1', title: 'Slow LCP', impactScore: 9 }],
         findingIds: ['1'],
-        painPoint: 'Low Visibility',
-        whyItMatters: 'Lost Revenue',
-        urgency: 'HIGH',
-        severity: 'high',
-        narrative: 'Severe SEO issues',
+        severity: 'critical',
+        rootCause: 'Slow LCP',
       },
     ];
     const mockFindings: any[] = [
-      { id: '1', title: 'Slow LCP', impactScore: 90, type: 'PAINKILLER' },
+      {
+        id: '1',
+        auditId: 'audit-1',
+        tenantId: 'tenant-1',
+        module: 'website',
+        category: 'Performance',
+        title: 'Slow LCP',
+        description: 'Measured LCP was 4200 ms.',
+        impactScore: 9,
+        confidenceScore: 9,
+        type: 'PAINKILLER',
+        evidence: [
+          createEvidence({
+            pointer: 'https://acme.test/',
+            source: 'pagespeed_v5',
+            value: 4200,
+            label: 'LCP',
+          }),
+        ],
+        metrics: { lcpMs: 4200 },
+        effortEstimate: 'MEDIUM',
+        recommendedFix: ['Improve page delivery'],
+      },
     ];
 
     const tracker = new CostTracker();
@@ -43,8 +51,9 @@ describe('Proposal Pipeline', () => {
       tracker
     );
 
-    expect(result.executiveSummary).toBe('Exec Summary');
+    expect(result.executiveSummary).toContain('Slow LCP');
     expect(result.pricing).toBeDefined();
     expect(result.tiers.essentials).toBeDefined();
+    expect(result.grounding).toBeDefined();
   });
 });
