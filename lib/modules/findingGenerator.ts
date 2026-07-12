@@ -1909,7 +1909,7 @@ export function generateGBPFindings(
  */
 export function generateCompetitorFindings(data: any, businessName: string): Finding[] {
   const findings: Finding[] = [];
-  const { topCompetitors, keyword, location, comparisonMatrix } = data;
+  const { topCompetitors, keyword, location, comparisonMatrix, competitorSearchStatus } = data;
 
   const serpQuery = [keyword, location].filter(Boolean).join(' ');
   const serpPointer = serpQuery
@@ -1917,6 +1917,15 @@ export function generateCompetitorFindings(data: any, businessName: string): Fin
     : SERPAPI_POINTER;
 
   if (!topCompetitors || topCompetitors.length === 0) {
+    // P2-46: an empty competitor list means one of two very different things —
+    // either the SERP search genuinely ran and found nobody (a real, negative
+    // finding worth surfacing) or the search call itself failed/degraded and was
+    // never actually checked (a provider outage, not a customer deficiency).
+    // `competitorSearchStatus` disambiguates them; only emit the customer-negative
+    // finding when the search was actually checked.
+    if (competitorSearchStatus === 'not_checked') {
+      return findings;
+    }
     // No local pack results - this itself is a finding
     findings.push({
       module: 'competitor',

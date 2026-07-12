@@ -284,6 +284,7 @@ describe('P2-28: emailFinder adapter distinguishes real failure states', () => {
 
     expect(result.status).toBe('COMPLETE');
     expect((result.data as { emails: string[] }).emails).toEqual(['contact@acme.com']);
+    expect(findEmails).toHaveBeenCalledWith('https://acme.com', expect.anything(), undefined);
   });
 
   it('reports COMPLETE with zero emails on a genuine verified-empty scan (real fetch succeeded, no emails present)', async () => {

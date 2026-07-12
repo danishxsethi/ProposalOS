@@ -151,13 +151,20 @@ const websiteAdapter = async (input: ModuleInput, tracker: CostTracker): Promise
   return { status: 'COMPLETE', data };
 };
 
-const websiteCrawlerAdapter = async (input: ModuleInput): Promise<ModuleResult> => {
+const websiteCrawlerAdapter = async (
+  input: ModuleInput,
+  tracker: CostTracker
+): Promise<ModuleResult> => {
   if (!input.url || !input.businessName) throw new Error('url and businessName required');
-  const data = await runWebsiteCrawlerModule({
-    url: input.url,
-    businessName: input.businessName,
-    auditId: input.auditId,
-  });
+  const data = await runWebsiteCrawlerModule(
+    {
+      url: input.url,
+      businessName: input.businessName,
+      auditId: input.auditId,
+      signal: input.signal,
+    },
+    tracker
+  );
   return { status: 'COMPLETE', data };
 };
 
@@ -197,6 +204,13 @@ const competitorAdapter = async (
       error: legacy.error || 'Competitor module reported failure',
     };
   }
+  if (legacy?.data?.execution?.state === 'unavailable') {
+    return {
+      status: 'SKIPPED',
+      data: legacy.data,
+      error: `UNAVAILABLE: ${legacy.data.execution.reason || 'Competitor providers unavailable'}`,
+    };
+  }
   return { status: 'COMPLETE', data: legacy?.data ?? legacy };
 };
 
@@ -205,23 +219,29 @@ const techStackAdapter = async (
   tracker: CostTracker
 ): Promise<ModuleResult> => {
   if (!input.url) throw new Error('url required');
-  const data = await runTechStackModule({ url: input.url }, tracker);
+  const data = await runTechStackModule({ url: input.url, signal: input.signal }, tracker);
   return { status: 'COMPLETE', data };
 };
 
-const securityAdapter = async (input: ModuleInput): Promise<ModuleResult> => {
+const securityAdapter = async (input: ModuleInput, tracker: CostTracker): Promise<ModuleResult> => {
   if (!input.url) throw new Error('url required');
-  const data = await runSecurityModule({
-    url: input.url,
-    tenantId: input.tenantId,
-    signal: input.signal,
-  });
+  const data = await runSecurityModule(
+    {
+      url: input.url,
+      tenantId: input.tenantId,
+      signal: input.signal,
+    },
+    tracker
+  );
   return { status: 'COMPLETE', data: (data as unknown as Record<string, any>)?.data || data };
 };
 
-const emailFinderAdapter = async (input: ModuleInput): Promise<ModuleResult> => {
+const emailFinderAdapter = async (
+  input: ModuleInput,
+  tracker: CostTracker
+): Promise<ModuleResult> => {
   if (!input.url) throw new Error('url required');
-  const data = await runEmailFinderModule(input.url);
+  const data = await runEmailFinderModule(input.url, tracker, input.signal);
   // P2-28 (Wave 5): `findEmails()` (lib/modules/emailFinder.ts) never returns a
   // `status` field — the previous `data.status === 'error'` check was dead code that
   // could never fire, letting a total fetch failure (source: 'failed'/'error', empty
@@ -344,7 +364,10 @@ const accessibilityAdapter = async (
   tracker: CostTracker
 ): Promise<ModuleResult> => {
   if (!input.url) throw new Error('url required');
-  const data = await runAccessibilityModule({ url: input.url, signal: input.signal }, tracker);
+  const data = await runAccessibilityModule(
+    { url: input.url, signal: input.signal, auditId: input.auditId },
+    tracker
+  );
   return { status: 'COMPLETE', data };
 };
 
@@ -367,6 +390,7 @@ const mobileUXAdapter = async (input: ModuleInput, tracker: CostTracker): Promis
       businessName: input.businessName || 'Unknown',
       signal: input.signal,
       reusedMobileScore,
+      auditId: input.auditId,
     },
     tracker
   );
@@ -404,6 +428,7 @@ const conversionAdapter = async (
       businessName: input.businessName || 'Unknown',
       industry: input.industry,
       signal: input.signal,
+      auditId: input.auditId,
     },
     tracker
   );
@@ -699,6 +724,54 @@ const coreWebVitalsAdapter = async (input: ModuleInput): Promise<ModuleResult> =
         'Break up long tasks',
         'Defer non-critical JavaScript',
         'Reduce third-party scripts',
+      ],
+    });
+  }
+  // P2-44: extractCoreWebVitalsFromAudits already computes cwv.inp from the same
+  // Lighthouse run as lcp/cls/tbt above, but no finding was ever emitted for it —
+  // INP (Interaction to Next Paint) replaced FID as the Core Web Vital for
+  // responsiveness in 2024, so a missing INP finding under-reports real UX issues.
+  if (cwv.inp && cwv.inp.rating !== 'good') {
+    const collectedAt = new Date().toISOString();
+    findings.push({
+      module: 'coreWebVitals',
+      category: 'Performance',
+      type: cwv.inp.rating === 'poor' ? 'PAINKILLER' : 'VITAMIN',
+      title: `Interaction to Next Paint: ${Math.round(cwv.inp.value)}ms`,
+      // Labeled as a single-run Lighthouse lab measurement (not CrUX real-user field
+      // data) — this module has no field-data source, so it must not be presented
+      // as observed real-user responsiveness.
+      description: `INP (lab, single Lighthouse run) is ${cwv.inp.rating} (threshold: good < ${cwv.inp.thresholdGood}ms). Slow INP means clicks and taps feel sluggish to users.`,
+      impactScore: cwv.inp.rating === 'poor' ? 6 : 4,
+      confidenceScore: 8.5,
+      evidence: [
+        createEvidence({
+          pointer: input.url || 'https://pagespeed.web.dev/',
+          source: 'lighthouse_lab',
+          collected_at: collectedAt,
+          type: 'metric',
+          value: cwv.inp.value,
+          label: 'Interaction to Next Paint (single Lighthouse lab run)',
+          raw: {
+            formFactor: 'unknown',
+            provenance: 'lab',
+            unit: cwv.inp.unit,
+            thresholdGood: cwv.inp.thresholdGood,
+            thresholdPoor: cwv.inp.thresholdPoor,
+          },
+        }),
+      ],
+      metrics: {
+        metric: 'INP',
+        value: cwv.inp.value,
+        unit: cwv.inp.unit,
+        provenance: 'lighthouse_lab_single_run',
+      },
+      effortEstimate: 'HIGH',
+      recommendedFix: [
+        'Break up long JavaScript tasks',
+        'Reduce/defer third-party scripts',
+        'Optimize event handlers',
       ],
     });
   }

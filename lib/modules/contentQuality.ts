@@ -39,6 +39,108 @@ interface ReadabilityMetrics {
   totalWordCount: number;
 }
 
+/**
+ * P2-38: Flesch-Kincaid is an English-specific formula. Applying it to non-English
+ * content produces a meaningless (often wildly wrong) grade level and must not
+ * drive a customer-negative Finding. `code` is the detected ISO-639-1 primary
+ * subtag ('en', 'fr', ...) or 'unknown' when no signal was confidently found.
+ */
+export interface DetectedLanguage {
+  code: string;
+  source: 'html_lang' | 'content_language_meta' | 'heuristic_en_stopwords' | 'unknown';
+  confidence: number; // 0-100
+}
+
+/** Small bounded set used only for the last-resort English heuristic below. */
+const ENGLISH_STOPWORDS = new Set([
+  'the',
+  'and',
+  'is',
+  'are',
+  'was',
+  'were',
+  'for',
+  'with',
+  'that',
+  'this',
+  'you',
+  'your',
+  'our',
+  'we',
+  'have',
+  'has',
+  'from',
+  'about',
+  'services',
+  'service',
+  'business',
+  'contact',
+  'call',
+  'today',
+  'located',
+  'been',
+  'will',
+  'can',
+  'not',
+  'all',
+]);
+
+/**
+ * P2-38: detect the dominant content language before any language-specific
+ * readability formula runs. Priority order (documented per Wave 7B Step 4):
+ * 1. `<html lang>` on any crawled page — the page's own declared language.
+ * 2. `content-language`/`language` `<meta>` tag.
+ * 3. A bounded English-stopword-ratio heuristic over the combined text, only
+ *    when there is enough text to be meaningful (>=50 words).
+ * Returns `code: 'unknown'` (not a guess) when no signal clears its threshold —
+ * ambiguous/short content must not silently become "English".
+ */
+export function detectContentLanguage(
+  crawledPages: Array<{ url: string; html: string }>,
+  combinedText: string
+): DetectedLanguage {
+  for (const page of crawledPages) {
+    if (!page?.html || typeof page.html !== 'string') continue;
+    try {
+      const $ = cheerio.load(page.html);
+      const htmlLang = $('html').attr('lang');
+      if (htmlLang && htmlLang.trim()) {
+        const primary = htmlLang.trim().toLowerCase().split(/[-_]/)[0];
+        if (primary) return { code: primary, source: 'html_lang', confidence: 95 };
+      }
+    } catch {
+      // Malformed HTML on this page — try the next signal/page.
+    }
+  }
+
+  for (const page of crawledPages) {
+    if (!page?.html || typeof page.html !== 'string') continue;
+    try {
+      const $ = cheerio.load(page.html);
+      const metaLang =
+        $('meta[http-equiv="content-language" i]').attr('content') ||
+        $('meta[name="language" i]').attr('content');
+      if (metaLang && metaLang.trim()) {
+        const primary = metaLang.trim().toLowerCase().split(/[-_,]/)[0];
+        if (primary) return { code: primary, source: 'content_language_meta', confidence: 80 };
+      }
+    } catch {
+      // Malformed HTML on this page — try the next page.
+    }
+  }
+
+  const words = combinedText.toLowerCase().match(/\b[a-z']+\b/g) || [];
+  if (words.length < 50) {
+    return { code: 'unknown', source: 'unknown', confidence: 0 };
+  }
+  const stopwordHits = words.filter((w) => ENGLISH_STOPWORDS.has(w)).length;
+  const ratio = stopwordHits / words.length;
+  if (ratio >= 0.12) {
+    return { code: 'en', source: 'heuristic_en_stopwords', confidence: 60 };
+  }
+  return { code: 'unknown', source: 'unknown', confidence: 0 };
+}
+
 interface ContentAnalysis {
   pages: PageContentAnalysis[];
   primaryValueProp: string;
@@ -47,6 +149,7 @@ interface ContentAnalysis {
   weakestPage: string;
   topRecommendations: string[];
   readabilityMetrics: ReadabilityMetrics;
+  detectedLanguage: DetectedLanguage;
 }
 
 /**
@@ -73,10 +176,19 @@ export async function runContentQualityModule(
     // Calculate readability metrics
     const readabilityMetrics = calculateReadabilityMetrics(pageTexts);
 
+    // P2-38: detect language before the (English-specific) Flesch-Kincaid formula
+    // is allowed to drive a Finding. Must run on the same crawled pages used for
+    // analysis, not a guess.
+    const detectedLanguage = detectContentLanguage(
+      input.crawledPages || [],
+      pageTexts.map((p) => p.text).join(' ')
+    );
+
     // Combine analyses
     const fullAnalysis: ContentAnalysis = {
       ...aiAnalysis,
       readabilityMetrics,
+      detectedLanguage,
     };
 
     // Generate findings
@@ -306,7 +418,7 @@ function calculateReadabilityMetrics(
 /**
  * Generate findings from content analysis
  */
-function generateContentFindings(
+export function generateContentFindings(
   analysis: ContentAnalysis,
   input: ContentQualityModuleInput,
   pageTexts: Array<{ url: string; text: string; title: string }>
@@ -410,7 +522,13 @@ function generateContentFindings(
   }
 
   // VITAMIN: Reading level too high (>grade 10)
-  if (analysis.readabilityMetrics.fleschKincaidGrade > 10) {
+  // P2-38: Flesch-Kincaid is English-specific. Only evaluate it when the content
+  // was confidently detected as English — otherwise the grade-level number is
+  // meaningless and must not become a customer-negative Finding.
+  if (
+    analysis.detectedLanguage.code === 'en' &&
+    analysis.readabilityMetrics.fleschKincaidGrade > 10
+  ) {
     findings.push({
       type: 'VITAMIN',
       category: 'Conversion',
@@ -429,10 +547,17 @@ function generateContentFindings(
           value: analysis.readabilityMetrics.avgSentenceLength,
           label: 'Avg Sentence Length',
         },
+        {
+          type: 'text',
+          value: `${analysis.detectedLanguage.code} (source: ${analysis.detectedLanguage.source})`,
+          label: 'Detected Content Language',
+        },
       ],
       metrics: {
         readingGrade: analysis.readabilityMetrics.fleschKincaidGrade,
         avgSentenceLength: analysis.readabilityMetrics.avgSentenceLength,
+        detectedLanguage: analysis.detectedLanguage.code,
+        languageSource: analysis.detectedLanguage.source,
       },
       effortEstimate: 'MEDIUM',
       recommendedFix: [

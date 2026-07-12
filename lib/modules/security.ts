@@ -78,7 +78,8 @@ function getGrade(score: number): 'A' | 'B' | 'C' | 'D' | 'F' {
 export async function fetchWithRedirect(
   url: string,
   followRedirects = true,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  tracker?: CostTracker
 ): Promise<{ statusCode: number; headers: Record<string, string>; finalUrl: string }> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
@@ -94,6 +95,7 @@ export async function fetchWithRedirect(
       },
       { allowHttp: true, followRedirects, maxResponseBytes: 0 }
     );
+    tracker?.addApiCall('WEBSITE_FETCH');
     const headers: Record<string, string> = {};
     res.headers.forEach((value, key) => {
       headers[key.toLowerCase()] = value;
@@ -141,7 +143,8 @@ async function getSslCertificate(
 async function checkMixedContent(
   url: string,
   tenantId?: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  tracker?: CostTracker
 ): Promise<boolean> {
   try {
     const html = await withProviderResilience<string>(
@@ -160,6 +163,7 @@ async function checkMixedContent(
           headers: { 'User-Agent': 'ProposalOS-SecurityScan/1.0' },
           signal,
         });
+        tracker?.addApiCall('WEBSITE_FETCH');
         if (!res.ok) throw new Error(`HTTP error ${res.status}`);
         return await res.text();
       }
@@ -179,7 +183,7 @@ async function checkMixedContent(
  */
 export async function runSecurityModule(
   input: SecurityModuleInput,
-  _tracker?: CostTracker
+  tracker?: CostTracker
 ): Promise<LegacyAuditModuleResult> {
   const { url } = input;
 
@@ -215,7 +219,7 @@ export async function runSecurityModule(
     let redirects = false;
 
     if (parsed.protocol === 'http') {
-      const httpResult = await fetchWithRedirect(url, true, input.signal);
+      const httpResult = await fetchWithRedirect(url, true, input.signal, tracker);
       if (httpResult.finalUrl.startsWith('https://')) {
         redirects = true;
         httpsEnabled = true;
@@ -225,7 +229,8 @@ export async function runSecurityModule(
         const httpResult = await fetchWithRedirect(
           `http://${parsed.host}${parsed.path}`,
           true,
-          input.signal
+          input.signal,
+          tracker
         );
         redirects = httpResult.finalUrl.startsWith('https://');
       } catch {
@@ -233,7 +238,7 @@ export async function runSecurityModule(
       }
     }
 
-    const headerResult = await fetchWithRedirect(secureUrl, false, input.signal);
+    const headerResult = await fetchWithRedirect(secureUrl, false, input.signal, tracker);
     const headers = headerResult.headers;
 
     const certificate =
@@ -446,7 +451,7 @@ export async function runSecurityModule(
       });
 
     const mixedContent = httpsEnabled
-      ? await checkMixedContent(secureUrl, input.tenantId, input.signal)
+      ? await checkMixedContent(secureUrl, input.tenantId, input.signal, tracker)
       : false;
     if (mixedContent) {
       recommendations.push(

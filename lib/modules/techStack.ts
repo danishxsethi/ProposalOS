@@ -14,6 +14,7 @@ import { AuditModuleResult, createEvidence, Finding } from './types';
 export interface TechStackModuleInput {
   url: string;
   html?: string; // Optional: reuse HTML from crawler
+  signal?: AbortSignal;
 }
 
 export interface TechStack {
@@ -45,10 +46,14 @@ export async function runTechStackModule(
 
     // Fetch if HTML not provided
     if (!html) {
+      if (input.signal?.aborted) {
+        throw input.signal.reason ?? new DOMException('Aborted', 'AbortError');
+      }
       const fetchResult = await withProviderResilience<{ text: string; headers: Headers }>(
         {
           provider: 'generic',
           operation: 'tech_stack_fetch_website',
+          signal: input.signal,
           policy: {
             timeoutMs: 10000,
             maxAttempts: 2,
@@ -61,6 +66,11 @@ export async function runTechStackModule(
               'User-Agent': 'Mozilla/5.0 (compatible; ProposalOS/1.0; +http://proposalos.com)',
             },
           });
+          // P2-27: record the real network call (0-cost, but must be visible to
+          // CostTracker's bounds/usage reporting) as soon as a response is
+          // actually received — never before the fetch resolves, and never for
+          // the reused-HTML branch above which makes no network call at all.
+          tracker?.addApiCall('WEBSITE_FETCH');
           if (!response.ok) throw new Error(`HTTP error ${response.status}`);
           const text = await response.text();
           return { text, headers: response.headers };

@@ -1,5 +1,6 @@
 import * as cheerio from 'cheerio';
 
+import type { CostTracker } from '@/lib/costs/costTracker';
 import { logger } from '@/lib/logger';
 import { withProviderResilience } from '@/lib/resilience/withProviderResilience';
 import { safeFetch } from '@/lib/security/safeFetch';
@@ -10,7 +11,11 @@ interface EmailDiscoveryResult {
   confidence: number;
 }
 
-export async function findEmails(url: string): Promise<EmailDiscoveryResult> {
+export async function findEmails(
+  url: string,
+  tracker?: CostTracker,
+  signal?: AbortSignal
+): Promise<EmailDiscoveryResult> {
   try {
     // Ensure URL has protocol
     const targetUrl = url.startsWith('http') ? url : `https://${url}`;
@@ -22,16 +27,19 @@ export async function findEmails(url: string): Promise<EmailDiscoveryResult> {
       {
         provider: 'crawler',
         operation: 'emailFinder:scan',
+        signal,
         degrade: true,
         fallbackValue: null,
       },
-      async () => {
+      async ({ signal: providerSignal }) => {
         const res = await safeFetch(targetUrl, {
+          signal: providerSignal,
           headers: {
             'User-Agent':
               'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
           },
         });
+        tracker?.addApiCall('WEBSITE_FETCH');
         if (!res.ok) {
           throw new Error(`HTTP error ${res.status}: ${res.statusText}`);
         }

@@ -18,6 +18,7 @@ vi.mock('@/lib/logger', () => ({
 }));
 
 import { fetchWithRedirect } from '@/lib/modules/security';
+import { CostTracker } from '@/lib/costs/costTracker';
 
 const realFetch = globalThis.fetch;
 const mockFetch = vi.fn();
@@ -87,6 +88,21 @@ describe('P0-24: security module fetchWithRedirect SSRF controls', () => {
     expect(result.statusCode).toBe(302);
     expect(result.finalUrl).toBe('https://example.com/');
     expect(mockFetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('records a completed safe fetch as a zero-cost resource call', async () => {
+    mockFetch.mockResolvedValueOnce({
+      status: 200,
+      url: 'https://example.com/',
+      headers: new Headers(),
+      body: { cancel: async () => undefined },
+    });
+    const tracker = new CostTracker();
+
+    await fetchWithRedirect('https://example.com/', false, undefined, tracker);
+
+    expect(tracker.getReport().usage.WEBSITE_FETCH).toBe(1);
+    expect(tracker.getTotalCents()).toBe(0);
   });
 
   it('rejects credentialed URLs', async () => {

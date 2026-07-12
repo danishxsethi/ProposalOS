@@ -26,7 +26,18 @@ export async function runCompetitorModule(
     !process.env.GOOGLE_PLACES_API_KEY ||
     !process.env.GOOGLE_PAGESPEED_API_KEY
   ) {
-    throw new Error('Missing API keys for Competitor Module (SERP, PLACES, or PAGESPEED)');
+    return {
+      moduleId: 'competitor-audit',
+      status: 'success',
+      timestamp: new Date().toISOString(),
+      data: {
+        competitorSearchStatus: 'not_configured',
+        execution: {
+          state: 'unavailable',
+          reason: 'Competitor providers are not fully configured (SERP, Places, or PageSpeed)',
+        },
+      },
+    };
   }
 
   try {
@@ -277,6 +288,11 @@ export async function runCompetitorModule(
 
     // 2. Find COMPETITORS (if category found) - SECOND PASS
     let competitors: MatchedBusinessData[] = [];
+    // P2-46: distinguishes "the competitor SERP search actually ran and found zero
+    // local competitors" from "the SERP call failed/degraded and we never really
+    // checked" — collapsing these let a provider failure masquerade as the
+    // customer-negative "not appearing in local search" finding below.
+    let competitorSearchStatus: 'checked' | 'not_checked' = 'not_checked';
     if (category) {
       tracker?.addApiCall('SERP_API');
       const compParams: Record<string, string> = {
@@ -286,32 +302,44 @@ export async function runCompetitorModule(
         api_key: process.env.SERP_API_KEY,
       };
 
-      const compData = await withModuleCache<any>(
-        {
-          module: 'competitor',
-          version: 1,
-          input: { type: 'local_competitors_search', category, location: input.location },
-        },
-        { ttlSeconds: 24 * 3600 },
-        async () => {
-          const p = new URLSearchParams(compParams);
-          return withProviderResilience<any>(
-            {
-              provider: 'serpapi',
-              operation: 'competitor:local_competitors_search',
-              degrade: true,
-              fallbackValue: { local_results: [] },
-            },
-            async () => {
-              const res = await fetch(`${SERP_API_BASE}?${p.toString()}`);
-              if (!res.ok) {
-                throw new Error(`HTTP error ${res.status}: ${res.statusText}`);
+      let compData: any;
+      try {
+        compData = await withModuleCache<any>(
+          {
+            module: 'competitor',
+            version: 1,
+            input: { type: 'local_competitors_search', category, location: input.location },
+          },
+          { ttlSeconds: 24 * 3600 },
+          async () => {
+            const p = new URLSearchParams(compParams);
+            // No `degrade`/`fallbackValue` here: a real failure must surface as a
+            // caught error below (competitorSearchStatus stays 'not_checked'),
+            // never silently become `{ local_results: [] }` — which would be
+            // indistinguishable from a genuine zero-competitor SERP result.
+            return withProviderResilience<any>(
+              {
+                provider: 'serpapi',
+                operation: 'competitor:local_competitors_search',
+              },
+              async () => {
+                const res = await fetch(`${SERP_API_BASE}?${p.toString()}`);
+                if (!res.ok) {
+                  throw new Error(`HTTP error ${res.status}: ${res.statusText}`);
+                }
+                return await res.json();
               }
-              return await res.json();
-            }
-          );
-        }
-      );
+            );
+          }
+        );
+        competitorSearchStatus = 'checked';
+      } catch (searchError) {
+        logger.warn(
+          { error: searchError, category, location: input.location },
+          '[CompetitorModule] Competitor SERP search failed — reporting as not_checked, not zero'
+        );
+        compData = { local_results: [] };
+      }
 
       // Filter out self
       const rawCompetitors = (compData.local_results || [])
@@ -411,6 +439,10 @@ export async function runCompetitorModule(
         keyword: input.keyword,
         location: input.location,
         totalResults: competitors.length, // approximation
+        // P2-46: 'not_checked' means the SERP call for competitors failed/degraded
+        // — downstream Finding generation must not treat this the same as a real
+        // zero-result search.
+        competitorSearchStatus,
         topCompetitors: competitors.map((c) => ({
           name: c.name,
           rating: c.rating,

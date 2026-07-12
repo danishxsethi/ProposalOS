@@ -48,19 +48,19 @@ const ALLOWED_RAW_FETCH: AllowedRawFetch[] = [
   },
   {
     file: 'lib/modules/competitor.ts',
-    line: 62,
+    line: 73,
     host: 'serpapi.com',
     reason: 'Fixed host; keyword/location in query params',
   },
   {
     file: 'lib/modules/competitor.ts',
-    line: 233,
+    line: 244,
     host: 'serpapi.com',
     reason: 'Fixed host; keyword in query params',
   },
   {
     file: 'lib/modules/competitor.ts',
-    line: 306,
+    line: 326,
     host: 'serpapi.com',
     reason: 'Fixed host; category/location in params',
   },
@@ -140,7 +140,7 @@ const ALLOWED_RAW_FETCH: AllowedRawFetch[] = [
   },
   {
     file: 'lib/modules/competitor.ts',
-    line: 101,
+    line: 112,
     host: 'places.googleapis.com',
     reason: 'Fixed host; placeId from SerpAPI response (template literal path)',
   },
@@ -154,7 +154,7 @@ const ALLOWED_RAW_FETCH: AllowedRawFetch[] = [
   },
   {
     file: 'lib/modules/competitor.ts',
-    line: 174,
+    line: 185,
     host: 'googleapis.com',
     reason: 'Fixed host; competitor URL from Places response in ?url= param',
   },

@@ -13,6 +13,10 @@ import { CostCapExceededError, TenantBudgetExceededError } from './errors';
 
 export const COSTS = {
   PAGESPEED_COST_CENTS: 0,
+  // P2-27: raw same-origin HTML fetches (e.g. techStack's homepage fetch) carry no
+  // per-call provider fee, but the call itself must still be visible to CostTracker
+  // so usage/bounds reporting reflects every real network call an audit made.
+  WEBSITE_FETCH_COST_CENTS: 0,
   PLACES_TEXT_SEARCH_CENTS: 3, // $0.032 -> 3 cents
   PLACES_DETAILS_CENTS: 2, // $0.017 -> 2 cents
   SERP_API_CENTS: 1, // $0.01 -> 1 cent
@@ -31,6 +35,7 @@ export const COSTS = {
 
 export type ApiType =
   | 'PAGESPEED'
+  | 'WEBSITE_FETCH'
   | 'PLACES_TEXT_SEARCH'
   | 'PLACES_DETAILS'
   | 'SERP_API'
@@ -306,6 +311,9 @@ export class CostTracker {
     switch (api) {
       case 'PAGESPEED':
         costPerCall = COSTS.PAGESPEED_COST_CENTS;
+        break;
+      case 'WEBSITE_FETCH':
+        costPerCall = COSTS.WEBSITE_FETCH_COST_CENTS;
         break;
       case 'PLACES_TEXT_SEARCH':
         costPerCall = COSTS.PLACES_TEXT_SEARCH_CENTS;

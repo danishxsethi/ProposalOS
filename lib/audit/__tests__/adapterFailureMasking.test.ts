@@ -102,4 +102,25 @@ describe('competitorAdapter (Step 8 regression)', () => {
     expect(result.status).toBe('FAILED');
     expect(result.error).toMatch(/quota/);
   });
+
+  it('reports SKIPPED when the real module says its providers are not configured', async () => {
+    vi.mocked(runCompetitorModule).mockResolvedValue({
+      moduleId: 'competitor-audit',
+      status: 'success',
+      timestamp: new Date().toISOString(),
+      data: {
+        competitorSearchStatus: 'not_configured',
+        execution: { state: 'unavailable', reason: 'Missing SerpAPI configuration' },
+      },
+    } as never);
+
+    const result = await competitorAdapter(
+      { auditId: 'a1', tenantId: 't1', businessName: 'Acme Dental', city: 'Springfield' },
+      new FakeCostTracker() as never,
+      undefined
+    );
+
+    expect(result.status).toBe('SKIPPED');
+    expect(result.error).toMatch(/UNAVAILABLE/);
+  });
 });

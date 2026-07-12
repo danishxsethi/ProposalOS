@@ -4,14 +4,15 @@
  * Frames findings as: legal risk (ADA), SEO benefit, UX improvement.
  */
 import { AxePuppeteer } from '@axe-core/puppeteer';
-import chromium from '@sparticuz/chromium';
-import puppeteer, { Browser } from 'puppeteer-core';
 
 import type { CostTracker } from '@/lib/costs/costTracker';
 import { logger } from '@/lib/logger';
+import { acquireSharedBrowser, releaseSharedBrowser } from '@/lib/security/browserLauncher';
 import { safePageGoto } from '@/lib/security/safeBrowser';
 
 import { LegacyAuditModuleResult } from './types';
+
+import type { Browser } from 'puppeteer-core';
 
 export interface AccessibilityResult {
   status: 'success' | 'error';
@@ -40,6 +41,9 @@ export interface AccessibilityResult {
 export interface AccessibilityModuleInput {
   url: string;
   signal?: AbortSignal;
+  /** P2-43: audit identity used to share one Puppeteer Browser process across
+   * accessibility/mobileUX/conversion instead of each launching its own. */
+  auditId?: string;
 }
 
 interface CustomCheckResult {
@@ -50,44 +54,6 @@ interface CustomCheckResult {
   hasLang: boolean;
   hasViewport: boolean;
   hasFocusStyles: boolean;
-}
-
-async function launchBrowser(): Promise<Browser> {
-  const fs = require('fs');
-  const localPaths = [
-    process.env.CHROME_EXECUTABLE_PATH,
-    '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-    '/Applications/Chromium.app/Contents/MacOS/Chromium',
-    '/usr/bin/google-chrome',
-    '/usr/bin/chromium-browser',
-  ].filter(Boolean) as string[];
-
-  let executablePath: string | undefined;
-  for (const p of localPaths) {
-    if (p && fs.existsSync(p)) {
-      executablePath = p;
-      break;
-    }
-  }
-
-  if (!executablePath) {
-    try {
-      executablePath = await chromium.executablePath();
-    } catch {
-      // Ignore
-    }
-  }
-
-  if (!executablePath) {
-    throw new Error('Chromium not found. Install Chrome or set CHROME_EXECUTABLE_PATH.');
-  }
-
-  return puppeteer.launch({
-    args: ['--no-sandbox', '--disable-setuid-sandbox'],
-    defaultViewport: { width: 1920, height: 1080, deviceScaleFactor: 1 },
-    executablePath,
-    headless: true,
-  });
 }
 
 /**
@@ -239,10 +205,14 @@ export async function runAccessibilityModule(
   }
 
   let browser: Browser | null = null;
+  let browserKey: string | null = null;
+  let page: Awaited<ReturnType<Browser['newPage']>> | null = null;
 
   try {
-    browser = await launchBrowser();
-    const page = await browser.newPage();
+    const acquired = await acquireSharedBrowser(input.auditId);
+    browser = acquired.browser;
+    browserKey = acquired.key;
+    page = await browser.newPage();
 
     await safePageGoto(page, url, { waitUntil: 'domcontentloaded', timeout: 20000 }, input.signal);
 
@@ -449,6 +419,7 @@ export async function runAccessibilityModule(
       },
     };
   } finally {
-    if (browser) await browser.close();
+    await page?.close().catch(() => undefined);
+    if (browserKey) await releaseSharedBrowser(browserKey);
   }
 }

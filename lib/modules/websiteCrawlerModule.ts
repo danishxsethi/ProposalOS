@@ -1,3 +1,4 @@
+import type { CostTracker } from '@/lib/costs/costTracker';
 import { logger } from '@/lib/logger';
 
 import { normalizeConfidence } from './findingGenerator';
@@ -18,6 +19,7 @@ interface WebsiteCrawlerModuleInput {
    * simply gets no screenshot, which is correct (its result never feeds `vision`).
    */
   auditId?: string;
+  signal?: AbortSignal;
 }
 
 /**
@@ -406,7 +408,8 @@ function crawlCoalesceKey(input: WebsiteCrawlerModuleInput): string {
  * Run website crawler module
  */
 export async function runWebsiteCrawlerModule(
-  input: WebsiteCrawlerModuleInput
+  input: WebsiteCrawlerModuleInput,
+  tracker?: CostTracker
 ): Promise<AuditModuleResult> {
   const key = crawlCoalesceKey(input);
   const existing = inFlightCrawls.get(key);
@@ -418,14 +421,17 @@ export async function runWebsiteCrawlerModule(
     return existing;
   }
 
-  const promise = executeCrawl(input).finally(() => {
+  const promise = executeCrawl(input, tracker).finally(() => {
     inFlightCrawls.delete(key);
   });
   inFlightCrawls.set(key, promise);
   return promise;
 }
 
-async function executeCrawl(input: WebsiteCrawlerModuleInput): Promise<AuditModuleResult> {
+async function executeCrawl(
+  input: WebsiteCrawlerModuleInput,
+  tracker?: CostTracker
+): Promise<AuditModuleResult> {
   logger.info(
     { businessName: input.businessName, url: input.url },
     '[WebsiteCrawler] Starting crawl'
@@ -433,7 +439,7 @@ async function executeCrawl(input: WebsiteCrawlerModuleInput): Promise<AuditModu
 
   try {
     // Run the crawl
-    const crawlResult = await crawlWebsite(input);
+    const crawlResult = await crawlWebsite({ ...input, tracker });
 
     // Generate findings
     const findings = generateFindingsFromCrawl(crawlResult, input.url);

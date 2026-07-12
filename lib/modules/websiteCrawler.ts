@@ -2,6 +2,7 @@ import * as cheerio from 'cheerio';
 import robotsParser from 'robots-parser';
 
 import { withModuleCache } from '@/lib/cache/moduleCache';
+import type { CostTracker } from '@/lib/costs/costTracker';
 import { logger } from '@/lib/logger';
 import { withProviderResilience } from '@/lib/resilience/withProviderResilience';
 import { safeFetch } from '@/lib/security/safeFetch';
@@ -55,6 +56,8 @@ export interface CrawlResult {
 interface WebsiteCrawlerInput {
   url: string;
   businessName: string;
+  tracker?: CostTracker;
+  signal?: AbortSignal;
 }
 
 const MAX_PAGES = 20;
@@ -103,7 +106,12 @@ function isInternalUrl(url: string, baseDomain: string): boolean {
 /**
  * Fetch robots.txt and check if URL is allowed
  */
-async function isAllowedByRobots(url: string, baseUrl: URL): Promise<boolean> {
+async function isAllowedByRobots(
+  url: string,
+  baseUrl: URL,
+  tracker?: CostTracker,
+  signal?: AbortSignal
+): Promise<boolean> {
   try {
     const robotsUrl = `${baseUrl.protocol}//${baseUrl.hostname}/robots.txt`;
     const robotsTxt = await withModuleCache<string>(
@@ -118,11 +126,13 @@ async function isAllowedByRobots(url: string, baseUrl: URL): Promise<boolean> {
           {
             provider: 'crawler',
             operation: 'websiteCrawler:robots_txt',
+            signal,
             degrade: true,
             fallbackValue: '',
           },
           async ({ signal }) => {
             const res = await safeFetch(robotsUrl, { signal });
+            tracker?.addApiCall('WEBSITE_FETCH');
             if (!res.ok) return '';
             return await res.text();
           }
@@ -210,7 +220,11 @@ export function classifyFailure(
 /**
  * Fetch and analyze a single page
  */
-async function analyzePage(url: string): Promise<{ metrics: PageMetrics; html: string | null }> {
+async function analyzePage(
+  url: string,
+  tracker?: CostTracker,
+  signal?: AbortSignal
+): Promise<{ metrics: PageMetrics; html: string | null }> {
   const startTime = Date.now();
 
   try {
@@ -218,6 +232,7 @@ async function analyzePage(url: string): Promise<{ metrics: PageMetrics; html: s
       {
         provider: 'crawler',
         operation: 'websiteCrawler:analyzePage',
+        signal,
         degrade: false,
       },
       async ({ signal }) => {
@@ -230,6 +245,7 @@ async function analyzePage(url: string): Promise<{ metrics: PageMetrics; html: s
             'Accept-Language': 'en-US,en;q=0.9',
           },
         });
+        tracker?.addApiCall('WEBSITE_FETCH');
         if (!res.ok && res.status !== 404) {
           throw new Error(`HTTP error ${res.status}: ${res.statusText}`);
         }
@@ -423,6 +439,10 @@ export async function crawlWebsite(input: WebsiteCrawlerInput): Promise<CrawlRes
   logger.info({ businessName: input.businessName, url: input.url }, 'Starting website crawl');
 
   while (queue.length > 0 && crawledPages.length < MAX_PAGES) {
+    if (input.signal?.aborted) {
+      throw input.signal.reason ?? new DOMException('Website crawl aborted', 'AbortError');
+    }
+
     // Check total timeout
     if (Date.now() - startTime > TOTAL_TIMEOUT_MS) {
       logger.warn('Website crawl timeout reached, stopping');
@@ -438,7 +458,7 @@ export async function crawlWebsite(input: WebsiteCrawlerInput): Promise<CrawlRes
     }
 
     // Check robots.txt
-    const allowed = await isAllowedByRobots(url, baseUrl);
+    const allowed = await isAllowedByRobots(url, baseUrl, input.tracker, input.signal);
     if (!allowed) {
       logger.info({ url }, 'URL disallowed by robots.txt, skipping');
       visited.add(url);
@@ -447,7 +467,7 @@ export async function crawlWebsite(input: WebsiteCrawlerInput): Promise<CrawlRes
 
     // Crawl the page
     visited.add(url);
-    const { metrics, html: pageHtml } = await analyzePage(url);
+    const { metrics, html: pageHtml } = await analyzePage(url, input.tracker, input.signal);
     crawledPages.push(metrics);
     if (url === input.url) {
       homepageHtml = pageHtml;
@@ -470,6 +490,7 @@ export async function crawlWebsite(input: WebsiteCrawlerInput): Promise<CrawlRes
           {
             provider: 'crawler',
             operation: 'websiteCrawler:extractLinks',
+            signal: input.signal,
             degrade: true,
             fallbackValue: '',
           },
@@ -481,6 +502,7 @@ export async function crawlWebsite(input: WebsiteCrawlerInput): Promise<CrawlRes
                   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
               },
             });
+            input.tracker?.addApiCall('WEBSITE_FETCH');
             if (!response.ok) {
               throw new Error(`HTTP error ${response.status}: ${response.statusText}`);
             }

@@ -1,12 +1,9 @@
-import fs from 'node:fs';
-
-import chromium from '@sparticuz/chromium';
-import puppeteer from 'puppeteer-core';
 import { z } from 'zod';
 
 import { CostTracker } from '@/lib/costs/costTracker';
 import { logger } from '@/lib/logger';
 import { withProviderResilience } from '@/lib/resilience/withProviderResilience';
+import { acquireSharedBrowser, releaseSharedBrowser } from '@/lib/security/browserLauncher';
 import { safePageGoto } from '@/lib/security/safeBrowser';
 
 import { normalizeConfidence } from './findingGenerator';
@@ -24,6 +21,9 @@ export interface MobileUXModuleInput {
    * (genuinely new data `website` never fetches) is unaffected.
    */
   reusedMobileScore?: number | null;
+  /** P2-43: audit identity used to share one Puppeteer Browser process across
+   * accessibility/mobileUX/conversion instead of each launching its own. */
+  auditId?: string;
 }
 
 interface TouchTargetViolation {
@@ -88,7 +88,8 @@ export async function runMobileUXModule(
       input.url,
       tracker,
       input.signal,
-      input.reusedMobileScore
+      input.reusedMobileScore,
+      input.auditId
     );
     const findings = generateMobileFindings(analysis, input.url);
 
@@ -139,9 +140,10 @@ async function analyzeMobileUX(
   url: string,
   tracker?: CostTracker,
   signal?: AbortSignal,
-  reusedMobileScore?: number | null
+  reusedMobileScore?: number | null,
+  auditId?: string
 ): Promise<MobileAnalysis> {
-  const browser = await launchBrowser();
+  const { browser, key: browserKey } = await acquireSharedBrowser(auditId);
   const page = await browser.newPage();
 
   try {
@@ -381,45 +383,8 @@ async function analyzeMobileUX(
     throw error;
   } finally {
     await page.close().catch(() => undefined);
-    await browser.close();
+    await releaseSharedBrowser(browserKey);
   }
-}
-
-async function launchBrowser() {
-  const localPaths = [
-    process.env.CHROME_EXECUTABLE_PATH,
-    '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-    '/Applications/Chromium.app/Contents/MacOS/Chromium',
-    '/usr/bin/google-chrome',
-    '/usr/bin/chromium-browser',
-  ].filter(Boolean) as string[];
-
-  let executablePath: string | undefined;
-  for (const p of localPaths) {
-    if (p && fs.existsSync(p)) {
-      executablePath = p;
-      break;
-    }
-  }
-
-  if (!executablePath) {
-    try {
-      executablePath = await chromium.executablePath();
-    } catch {
-      // Ignore
-    }
-  }
-
-  if (!executablePath) {
-    throw new Error('Chromium not found. Install Chrome or set CHROME_EXECUTABLE_PATH.');
-  }
-
-  return puppeteer.launch({
-    args: ['--no-sandbox', '--disable-setuid-sandbox'],
-    defaultViewport: { width: 1920, height: 1080, deviceScaleFactor: 1 },
-    executablePath,
-    headless: true,
-  });
 }
 
 function waitForDelay(ms: number, signal?: AbortSignal): Promise<void> {

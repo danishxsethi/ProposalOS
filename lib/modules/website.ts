@@ -25,11 +25,14 @@ export async function runWebsiteModule(
     // exact same function for this exact same audit — passing `auditId` through
     // lets `runWebsiteCrawlerModule`'s single-flight coalescing recognize the two
     // calls as one logical crawl instead of performing the real 20-page crawl twice.
-    const crawlerResult = await runWebsiteCrawlerModule({
-      url: input.url,
-      businessName: input.businessName || 'Website',
-      auditId: input.auditId,
-    });
+    const crawlerResult = await runWebsiteCrawlerModule(
+      {
+        url: input.url,
+        businessName: input.businessName || 'Website',
+        auditId: input.auditId,
+      },
+      tracker
+    );
 
     // Run PageSpeed on homepage for Core Web Vitals
     tracker?.addApiCall('PAGESPEED');

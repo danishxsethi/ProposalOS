@@ -45,11 +45,15 @@ describe('runWebsiteCrawlerModule single-flight coalescing (P1-27)', () => {
   });
 
   it('performs exactly one real crawl when website.ts and the canonical adapter call concurrently for the same audit', async () => {
-    const callA = runWebsiteCrawlerModule({
-      url: 'https://acme.test',
-      businessName: 'Acme',
-      auditId: 'audit-1',
-    });
+    const tracker = { addApiCall: vi.fn() };
+    const callA = runWebsiteCrawlerModule(
+      {
+        url: 'https://acme.test',
+        businessName: 'Acme',
+        auditId: 'audit-1',
+      },
+      tracker as never
+    );
     const callB = runWebsiteCrawlerModule({
       url: 'https://acme.test',
       businessName: 'Acme',
@@ -59,6 +63,7 @@ describe('runWebsiteCrawlerModule single-flight coalescing (P1-27)', () => {
     const [resultA, resultB] = await Promise.all([callA, callB]);
 
     expect(crawlWebsiteMock).toHaveBeenCalledTimes(1);
+    expect(crawlWebsiteMock).toHaveBeenCalledWith(expect.objectContaining({ tracker }));
     expect(resultA).toBe(resultB);
   });
 

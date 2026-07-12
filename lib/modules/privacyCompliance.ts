@@ -44,6 +44,71 @@ interface PolicyAnalysis {
   missingElements: string[];
 }
 
+/**
+ * P2-50: known tracking-cookie name patterns, expanded from the original
+ * `_ga`/`_fbp`/`ads` substring-only list to cover the analytics/ad/session-replay
+ * vendors most commonly found on small-business sites. Matching is substring-based
+ * against the cookie name (case-sensitive prefixes as vendors define them).
+ *
+ * This is a hand-maintained list, not a signature database, so it may miss
+ * trackers outside this set.
+ */
+const KNOWN_TRACKING_COOKIE_PATTERNS: string[] = [
+  // Google Analytics / Ads / Tag Manager
+  '_ga',
+  '_gid',
+  '_gat',
+  '_gcl_au',
+  '_gcl_aw',
+  '_dc_gtm_',
+  'NID',
+  'IDE',
+  'DSID',
+  '1P_JAR',
+  'ANID',
+  // Meta / Facebook
+  '_fbp',
+  '_fbc',
+  'fr',
+  // Microsoft / Bing / Clarity
+  '_uetsid',
+  '_uetvid',
+  'MUID',
+  'MUIDB',
+  '_clck',
+  '_clsk',
+  // TikTok
+  '_ttp',
+  // Pinterest
+  '_pin_unauth',
+  '_pinterest_ct',
+  // LinkedIn
+  'li_sugr',
+  'bcookie',
+  'bscookie',
+  'UserMatchHistory',
+  'AnalyticsSyncHistory',
+  // Snapchat
+  '_scid',
+  'sc_at',
+  // Hotjar / session replay
+  '_hjSession',
+  '_hjid',
+  '_hjIncludedInSessionSample',
+  // Mixpanel / Amplitude / Segment / Optimizely
+  'mp_',
+  'amplitude_id',
+  'ajs_user_id',
+  'ajs_anonymous_id',
+  'optimizelyEndUserId',
+  'hubspotutk',
+  'ads',
+];
+
+export function isKnownTrackingCookie(cookieName: string): boolean {
+  return KNOWN_TRACKING_COOKIE_PATTERNS.some((pattern) => cookieName.includes(pattern));
+}
+
 export async function runPrivacyModule(
   input: PrivacyModuleInput,
   tracker?: CostTracker
@@ -82,7 +147,7 @@ export async function runPrivacyModule(
       const cookies = await page.cookies();
       cookieAnalysis.initialCookies = cookies.length;
       cookieAnalysis.trackingCookiesFound = cookies
-        .filter((c) => c.name.includes('_ga') || c.name.includes('_fbp') || c.name.includes('ads'))
+        .filter((c) => isKnownTrackingCookie(c.name))
         .map((c) => c.name);
 
       // Check for CMPs / Banners
@@ -98,7 +163,6 @@ export async function runPrivacyModule(
       for (const sel of bannerSelectors) {
         if (await page.$(sel)) {
           cookieAnalysis.hasBanner = true;
-          // Try to identify CMP
           if (sel.includes('onetrust')) cookieAnalysis.cmpName = 'OneTrust';
           else if (sel.includes('cky')) cookieAnalysis.cmpName = 'CookieYes';
           else if (sel.includes('cookie-law')) cookieAnalysis.cmpName = 'CookieLaw';
