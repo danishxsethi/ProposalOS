@@ -1948,6 +1948,43 @@ diagnosis grounding, proposal citations, deterministic rules, QA enforcement, LL
 tests, exact environment blocks, canonical guard, commits, risks/decisions, and an exact
 full-context Wave 9 prompt. Stop without beginning Wave 9.
 
+## Wave 9A verification result (2026-07-12)
+
+Wave 9 entered from `e04243a` with zero ledger rows assigned to Wave 9. The executable worklist
+proved and added only P1-52: the initial pipeline-outreach path performed RLS-enforced Prisma work
+outside a tenant context and could send before durable intent, without stable business idempotency
+or a suppression recheck.
+
+P1-52 is verified for the initial pipeline-outreach path:
+
+- `pipeline-outreach` enumerates configurations only through
+  `runWithTenantBypass('cron-pipeline-outreach-config-enumeration', ...)` and performs all
+  tenant-specific reads, writes, and state transitions through `runWithTenantAsync`.
+- Initial customer copy uses only ClaimContract-validated, same-audit/same-tenant Findings; it
+  persists Finding IDs rather than display labels and removes industry-outcome/competitor copy.
+- `inboxRotation` requires the explicit `OUTBOUND_DELIVERY_ENABLED=true` flag, revalidates cited
+  Findings, rechecks `EmailBlocklist`, creates a PENDING record before provider dispatch, uses
+  `initial:<leadId>:<proposalId>` as the replay key, scopes caps to the sending domain, records
+  provider IDs only after success, and routes ambiguous outcomes to reconciliation.
+- Follow-up creation now persists `scheduledAt` and `sequencePosition`; shared atomic claims avoid
+  duplicate scheduling on replay.
+
+Verification:
+
+- `vitest run lib/outreach/__tests__/wave9aOutboundSafety.test.ts
+lib/pipeline/__tests__/wave9aFollowup.test.ts lib/pipeline/__tests__/outreach.test.ts
+lib/pipeline/__tests__/inboxRotation.test.ts app/api/cron/pipeline-outreach/__tests__/route.test.ts
+lib/claims/__tests__/claimContract.test.ts`: 80/80.
+- TypeScript: exit 0.
+- Changed-file ESLint: zero errors, existing warnings only.
+- Canonical manifest assertions: 7/7 passed; the Vitest process then reported the known local
+  Prisma `darwin-arm64` engine load failure. PostgreSQL ports `5435/5444` remain unavailable, so
+  no full suite was attempted.
+
+Wave 9 remains split. Wave 9B must cover ProposalFollowUp/manual direct send and follow-up cron,
+closing/chat/tool authority, scheduling/handoff, and delivery. Wave 9C covers re-audit,
+retention, and cross-pipeline recovery. No Wave 10 work has begun.
+
 ## Wave 8B verification result (2026-07-12)
 
 Wave 8B started from `5d894cd` after code commit `574608b`. P0-26, P1-36, and P1-40 remain

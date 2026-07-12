@@ -1748,3 +1748,120 @@ smallest shared fix is to validate structured claims at diagnosis/proposal/QA bo
 commercial values originate only from validated deterministic rules, persist grounding metadata
 in existing proposal JSON/QA fields, and block approval/public preparation when that metadata is
 missing or invalid. No parallel Evidence system or production data backfill will be added.
+
+## Wave 9 entry and verification worklist (2026-07-12)
+
+### Entry verification
+
+- Branch: `remediation/proposalos-e2e`.
+- HEAD: `e04243a999fac94d34afdf59890768dee1028220`
+  (`chore(remediation): checkpoint wave 8 complete`); `4587703`, `5d894cd`, and `574608b`
+  are present in history.
+- `git stash list` is empty. The dirty tree is exactly the preserved baseline: `AUDIT_REPORT.md`,
+  logger-typing route work and `lib/logger.ts`, `app/api/cron/metering-sweep/route.ts`,
+  `lib/self-evolving-prompts/data-access/prompt-performance.ts`, and untracked
+  `scripts/show-leaks.js`.
+- `REMEDIATION_FINDINGS.json` has zero `wave === 9` rows.
+- Entry TypeScript:
+  `./node_modules/.bin/tsc --noEmit --pretty false --incremental false` -> exit 0.
+
+### Batch split
+
+Wave 9 is split before implementation because the executable inventory contains more than five
+substantial systems.
+
+- **Wave 9A:** pipeline transition/action boundary; outreach generation/send; and follow-up
+  sequencing. These systems share the durable outbound side-effect boundary.
+- **Wave 9B:** closing chat/tool authority, scheduling availability/booking boundary, durable human
+  handoff, and delivery task/artifact/bundle execution.
+- **Wave 9C:** re-audit/comparison, retention/NPS/upsell/re-engagement, and cross-pipeline recovery
+  and lifecycle certification.
+
+### Wave 9 Verification Worklist
+
+| ID     | Requirement / executable entry point                                                                                 | State, provider, authorization, durability, idempotency                                                                                                 | Existing / required verification                                                                          | Status                  |
+| ------ | -------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- | ----------------------- |
+| W9-V01 | Prospect lifecycle: `lib/pipeline/stateMachine.ts`, orchestrator, pipeline crons                                     | `ProspectLead.pipelineStatus` / `ProspectStateTransition`; tenant-scoped system cron then tenant work; transition record; no transition idempotency key | Existing state-machine tests; add stale/replay/tenant-context tests                                       | Wave 9A                 |
+| W9-V02 | Discovery/enrichment: `app/api/outreach/worker`, `lib/outreach/sprint2/*`                                            | `ProspectDiscoveryJob` / `ProspectEnrichmentRun`; provider boundaries; authenticated tenant worker                                                      | Existing sandbox tests; fixture provider-failure/dedup tests                                              | Wave 9A regression only |
+| W9-V03 | Outbound generation: `lib/pipeline/outreach.ts`, email templates/generators                                          | `OutreachEmail`; Finding/proposal context; Wave 8 claim contract; no LLM authority                                                                      | Existing outreach tests; add invalid Finding/unsupported copy tests                                       | Wave 9A                 |
+| W9-V04 | Outbound send/follow-up: `lib/pipeline/inboxRotation.ts`, cron routes, send routes                                   | `OutreachEmail`, `ProposalFollowUp`, `FollowUpEmailSend`; Resend; tenant/auth; durable send record and provider ID                                      | Existing inbox/outreach tests; add suppression, cap, replay, timeout, ambiguous-result tests              | Wave 9A                 |
+| W9-V05 | Follow-up state/cancellation: `lib/pipeline/followUpSequence.ts`, `lib/followup/scheduler.ts`                        | Pending/suppressed/cancelled follow-ups; proposal events; cron owner                                                                                    | Existing scheduler tests; add reply/view/accept/unsubscribe/concurrent-cron tests                         | Wave 9A                 |
+| W9-V06 | Closing chat: `app/api/pipeline/chat`, `app/api/proposal/[id]/chat`, `lib/pipeline/aiSalesChat`, `lib/closing/agent` | Proposal/token-scoped conversation; Gemini; public-token authorization; structured history                                                              | Existing chat/closing tests; add grounding, injection, cross-proposal, malformed output tests             | Wave 9B                 |
+| W9-V07 | Agent tools: `lib/closing/agent.ts`                                                                                  | Tier/discount/customization candidates; server authorization, confirmation, limits, audit event                                                         | Existing closing-agent tests; add forged ID, discount cap, replay, failure tests                          | Wave 9B                 |
+| W9-V08 | Scheduling: `app/api/schedule/*` and proposal chat scheduling references                                             | Existing API is audit re-scheduling, not meeting booking; no calendar provider/model exists                                                             | Static inventory; represent scheduling as unavailable/handoff until a configured provider contract exists | Wave 9B                 |
+| W9-V09 | Human handoff: `lib/pipeline/humanReview.ts`, closing crons/chat escalation                                          | Review queue/error log/webhook; tenant/proposal context; stop automation; durable notification                                                          | Existing human-review tests; add duplicate, notification failure, resume, cross-tenant tests              | Wave 9B                 |
+| W9-V10 | Delivery: `lib/pipeline/deliveryEngine.ts`, `lib/delivery/*`, delivery routes                                        | `DeliveryTask`, `GeneratedArtifact`, `DeliveryBundle`; provider/storage boundary                                                                        | Existing delivery tests; execution-gated evidence tests                                                   | Wave 9B                 |
+| W9-V11 | Artifact packaging: bundle/export routes                                                                             | `DeliveryBundle`; access control, validation, packaging                                                                                                 | Existing bundle tests; local artifact round-trip tests                                                    | Wave 9B                 |
+| W9-V12 | Re-audit: scheduled runner/retention graph                                                                           | Canonical `AuditJob`; audit comparison and Finding fingerprints                                                                                         | Existing scheduled-audit tests; valid terminal comparison tests                                           | Wave 9B                 |
+| W9-V13 | Retention: NPS, upsell, re-engagement, win-back                                                                      | `Project`, `NPSSurvey`, retention records; provider/send boundary                                                                                       | Existing retention tests; fake-time cancellation/idempotency tests                                        | Wave 9B                 |
+| W9-V14 | Cron/worker recovery                                                                                                 | Pipeline/outreach/closing/delivery/retention cron routes; retry state and manual recovery                                                               | Add duplicate-cron/recovery tests for active batch                                                        | Wave 9A/9B              |
+| W9-V15 | Tenant isolation                                                                                                     | All above tenant-scoped models and public-token boundaries                                                                                              | Existing tenant tests; targeted cross-tenant tests                                                        | Wave 9A/9B              |
+| W9-V16 | Pipeline observability                                                                                               | Structured events, provider IDs, status, errors, idempotency data                                                                                       | Add active-batch failure/audit-event tests                                                                | Wave 9A/9B              |
+
+### Proven red-before evidence
+
+- `app/api/cron/pipeline-outreach/route.ts:37` and
+  `app/api/cron/pipeline-closing/route.ts:31` call the RLS-enforced Prisma client outside any
+  tenant or explicit system-bypass context. The Wave 1 client fails closed on this condition, so
+  the cron cannot safely enumerate tenants.
+- `lib/pipeline/inboxRotation.ts:223-264` calls Resend before creating an `OutreachEmail`, has no
+  stable idempotency key, and never re-checks `EmailBlocklist`; an ambiguous provider outcome can
+  be retried as a second send.
+- `app/api/email/send-followup/route.ts:88-142` constructs unsupported metric/competitor language
+  and sends directly through Resend without an idempotency or suppression gate.
+- `lib/pipeline/aiSalesChat.ts:72-102` and `app/api/pipeline/chat/route.ts:189-207` contain
+  invented conversion/ROI, tier, and benchmark claims outside the Wave 8 claim-policy boundary.
+- `lib/closing/agent.ts:442-460` permits model-selected customization tools and returns arbitrary
+  model text; `escalationHandler` calls a non-durable webhook with no tenant context.
+
+No P0/P1/P2 finding is assigned until the corresponding red test/static trace is preserved with
+exact remediation evidence. Candidate IDs, if severity is proven: `P0-27`, `P1-52`, and `P2-62`.
+
+## Wave 9A implementation result (2026-07-12)
+
+### Evidence-backed finding
+
+- **P1-52 (verified):** initial pipeline outreach was unscoped under the Wave 1 RLS boundary and
+  could issue a provider call before durable intent, without a stable business idempotency key or
+  suppression recheck. The scope is deliberately limited to
+  `app/api/cron/pipeline-outreach` and `lib/pipeline/inboxRotation`, not every legacy email path.
+
+### Work-item status
+
+| Work item             | Wave 9A result                                                                                                                                                                                                                                                                       |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| W9-V01                | Verified for the outreach cron boundary: tenant enumeration uses a named bypass; all tenant reads/writes and state transition run in `runWithTenantAsync`. Broader lifecycle transition/recovery remains 9B/9C.                                                                      |
+| W9-V03                | Verified for initial outreach: customer text is assembled only from ClaimContract-validated, same-audit/same-tenant Findings; Finding IDs are retained internally.                                                                                                                   |
+| W9-V04                | Verified for initial pipeline send: explicit live-delivery flag, suppression, tenant/domain cap, durable pending intent, stable prospect/proposal idempotency, provider ID persistence, and ambiguous-result reconciliation. ProposalFollowUp/manual send routes remain open for 9B. |
+| W9-V05                | Verified for initial follow-up creation: due timestamps and sequence positions persist; shared atomic claims prevent duplicate schedule creation. Reply/view/accept and ProposalFollowUp cancellation remain 9B.                                                                     |
+| W9-V02, W9-V06–W9-V16 | Deferred exactly as recorded in the batch split; no implementation started.                                                                                                                                                                                                          |
+
+### State/action contract implemented
+
+| Current state   | Authorized trigger                                      | Preconditions                                                                                      | Side effect                                          | Next state                                            | Idempotency / failure                                                                                                          |
+| --------------- | ------------------------------------------------------- | -------------------------------------------------------------------------------------------------- | ---------------------------------------------------- | ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `QUALIFIED`     | Authenticated cron with named system config enumeration | Same-tenant audit, proposal, valid Findings, outbound footer, selected domain                      | Persist `OutreachEmail(PENDING)`, then provider call | `outreach_sent` only after confirmed provider success | `initial:<leadId>:<proposalId>` plus persisted prior initial record; timeout/provider error remains pending for reconciliation |
+| `QUALIFIED`     | Same cron                                               | Feature flag disabled, suppressed recipient, invalid citations, cap reached, missing configuration | No provider call                                     | `QUALIFIED`                                           | Structured failed/queued result; no false sent state                                                                           |
+| `outreach_sent` | Confirmed initial send                                  | Initial `OutreachEmail` has provider success                                                       | Persist sequence positions 1–3 with `scheduledAt`    | `outreach_sent`                                       | Atomic follow-up claim per tenant/initial email/position; replay does not create another sequence                              |
+
+### Files and verification
+
+- Added `lib/outreach/outboundSafety.ts` and fixture-backed tests for disabled delivery, duplicate
+  success, ambiguous provider outcomes, caps, and duplicate scheduling.
+- Hardened `lib/pipeline/inboxRotation.ts`, `lib/pipeline/outreach.ts`, and the pipeline outreach
+  cron; updated their direct tests.
+- Focused Wave 9A + Wave 8 claim regression: 80/80.
+- TypeScript: exit 0.
+- Changed-file ESLint: zero errors; existing warnings only.
+- Canonical manifest: assertions 7/7 passed, then the test process hit the documented
+  darwin-arm64 Prisma engine block. No full suite run; PostgreSQL `5435/5444` and Prisma remain
+  unavailable.
+- Bounded static checks confirm the pipeline-outreach route has explicit tenant boundaries, the
+  only provider send in that path is behind `claimOutboundSend`, and retired business-outcome
+  templates are absent from `lib/pipeline/outreach.ts`.
+
+### Wave 9B carry-forward
+
+Wave 9B begins with the remaining outbound surfaces (`ProposalFollowUp`, manual follow-up send,
+and follow-up cron) before closing chat/tool authority, scheduling/handoff, and delivery. It must
+not treat P1-52 as covering those paths. Wave 9C remains re-audit/retention/recovery.

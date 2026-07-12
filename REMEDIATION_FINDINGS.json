@@ -4,9 +4,9 @@
   "note": "107 finding rows normalized from AUDIT_REPORT.md (Phase 0 + Pass 1, 2, 3, 4A, 4B batches 1-6, 4C.1). IDs P0-01..P0-18 and P1-10..P1-13 are not rows in this report (prior/other numbering) and are intentionally absent. P2-26 is superseded by an in-report self-correction (line 1450). Wave assignments for findings beyond the current wave are provisional and refined at wave entry. Unfinished audit passes (4C.2, 4C.3, Passes 5-20) are tracked in REMEDIATION_STATE.md as open audit work, NOT as confirmed defects.",
   "severityTotals": {
     "P0": 8,
-    "P1": 47,
+    "P1": 48,
     "P2": 61,
-    "total": 116
+    "total": 117
   },
   "openAuditPasses": [
     "Pass 4C.2 \u2014 cost controls, persistence, idempotency, result integrity",
@@ -1686,6 +1686,27 @@
       ],
       "wave": 3,
       "notes": "Discovered while reviewing proposal/diagnosis-input consumers per Step 9 ('QA cannot repair missing evidence by inventing citations'). In steady state this is a no-op \u2014 findings reaching this function already passed the aggregation/persistence evidence contract \u2014 but it protected against legacy-persisted or otherwise-sourced findings predating the contract. Full proposal claim-to-Finding citation enforcement remains Wave 8 per campaign instruction; this was a small compatibility fix at the existing boundary, not an expansion into Wave 8's scope."
+    },
+    {
+      "id": "P1-52",
+      "severity": "P1",
+      "title": "Pipeline outreach can bypass tenant execution and duplicate or misrepresent outbound delivery",
+      "status": "verified",
+      "rootCauseGroup": "C",
+      "dependencies": ["Wave 1 tenant context", "Wave 8 claim contract"],
+      "files": [
+        "app/api/cron/pipeline-outreach/route.ts",
+        "lib/pipeline/inboxRotation.ts",
+        "lib/pipeline/outreach.ts"
+      ],
+      "verification": [
+        "red-before static trace: app/api/cron/pipeline-outreach/route.ts queried RLS-enforced Prisma with no runWithTenantAsync/runWithTenantBypass boundary",
+        "red-before static trace: lib/pipeline/inboxRotation.ts called sendEmail before persisting an OutreachEmail, used a generated email ID as its only identity, and did not query EmailBlocklist",
+        "green-after: vitest run app/api/cron/pipeline-outreach/__tests__/route.test.ts lib/pipeline/__tests__/outreach.test.ts lib/pipeline/__tests__/inboxRotation.test.ts lib/pipeline/__tests__/wave9aFollowup.test.ts lib/outreach/__tests__/wave9aOutboundSafety.test.ts",
+        "green-after: tsc --noEmit --pretty false --incremental false"
+      ],
+      "wave": 9,
+      "notes": "Created only after executable/static evidence and verified with the listed fixture-backed tests. Scope is the pipeline-outreach initial-send path, not all historical email routes. The repair enumerates configured tenants through a named bypass, executes every tenant operation in context, validates/persists Finding IDs, writes PENDING intent before dispatch, enforces an explicit live-delivery flag, suppression, stable prospect/proposal idempotency, domain-scoped shared caps, reconciliation on ambiguous results, and idempotent follow-up scheduling. ProposalFollowUp/manual send routes remain separate W9-V04/W9-V05 work and are not represented as fixed by this finding. The canonical manifest assertions passed 7/7, though that Vitest process later hit the documented local Prisma engine block."
     },
     {
       "id": "P2-61",
