@@ -1670,3 +1670,280 @@ provider safety tests, canonical-module guard, TypeScript, changed-file ESLint, 
 searches. Keep the local PostgreSQL/Prisma environment blocks and out-of-scope SSRF guard
 violations recorded separately. Commit code and campaign artifacts separately only when the
 applicable gates are green, emit a full-context Wave 9 prompt, then stop.
+
+## Wave 8A verification result (2026-07-12)
+
+Code commit: `574608b` (`fix(claim-policy): complete wave 8a claim-safety batch`).
+
+Verified findings: P0-26, P1-36, P1-40. No Wave 8A finding is fixed-and-blocked, re-scoped, or
+open. Wave 8 remains incomplete pending Wave 8B diagnosis/proposal/QA integration.
+
+Wave 8A added `lib/claims/claimContract.ts`, which strictly validates customer claims against
+Wave-3-valid Findings, rejects missing/unknown/cross-audit/cross-tenant/excluded/ineligible
+citations, requires assumptions and unit-bearing inputs for estimates, rejects model-supplied
+identity fields, and injects trusted audit/tenant identity only after validation.
+
+privacyCompliance now produces bounded technical observations, strict technical-only policy
+analysis, untrusted-content prompt framing, honest unavailable/partial states, real Evidence, and
+not-legal-advice/jurisdiction limitations. Accessibility now reports automated violations,
+no-automated-violations, or unavailable, removes WCAG level certification, preserves rule/selector/
+impact/timestamp, sanitizes snippets, and requires manual review. Paid search now has
+observed/not_observed/unavailable states, hostname-validated attribution, bounded query/location/
+language/device/provider/timestamp Evidence, and no invented CPC/budget/campaign-absence claim.
+
+Verification:
+
+```text
+Wave 8A focused:
+Test Files  4 passed (4)
+Tests      24 passed (24)
+
+Wave 8A + affected Finding/generator/adapter:
+Test Files  13 passed (13)
+Tests      106 passed (106)
+
+Wave 4 + Wave 6/7 module regressions:
+Test Files  18 passed (18)
+Tests       84 passed (84)
+
+Additional affected Wave 3-7:
+Test Files  9 passed (9)
+Tests      82 passed (82)
+
+Identified Wave 0-2 sample:
+Test Files  8 passed (8)
+Tests      89 passed (89)
+Errors      2 documented Prisma engine unhandled rejections
+
+Canonical module manifest:
+Test Files  1 passed (1)
+Tests       7 passed (7)
+Errors      1 documented Prisma engine unhandled rejection
+
+TypeScript: exit 0
+ESLint: zero errors; existing warnings only
+PostgreSQL localhost:5435 and :5444: unavailable
+Full suite: not run
+```
+
+Bounded production searches found no old privacy legal-verdict phrases, no `wcagLevel`, no
+paid-search `businessIsAdvertising:false` fallback, no `{ads:[]}` provider degradation, no direct
+`fetch(serpUrl)`, and no GDPR/CCPA certification fields in Wave 8A paths. The remaining
+`WCAG AA compliant` production string is in
+`lib/pipeline/agents/accessibilityAgent.ts`, a simulated delivery agent explicitly reserved for
+Wave 9; it was not changed out of order.
+
+### Exact continuation prompt for Wave 8B
+
+Continue the ProposalOS REMEDIATION CAMPAIGN on branch `remediation/proposalos-e2e`.
+Execute **Wave 8B only**, checkpoint it, emit Wave 9's full-context prompt, and stop. Do not begin
+Wave 9.
+
+Ponytail full mode is active, but campaign constraints override generic minimalism:
+
+1. Ship every legitimate ProposalOS capability fully functional.
+2. Preserve all 27 canonical audit modules.
+3. Do not delete, disable, hide, or downgrade capabilities to make tests pass.
+4. Never fabricate observations, Evidence, citations, metrics, prices, ROI, legal conclusions,
+   scores, success states, customer deficiencies, or delivery results.
+5. Every customer-facing factual claim must be grounded in validated same-tenant, same-audit
+   Findings.
+6. Preserve every Wave 0-8A security, tenancy, execution, Evidence, network, adapter, module, and
+   claim-safety invariant.
+7. LLM output remains untrusted even when it is valid JSON.
+8. Objective severity, tiering, pricing, and arithmetic remain deterministic where product rules
+   define them.
+9. Do not touch production infrastructure, production databases, live customer data, or live
+   provider/model accounts.
+10. Tests use local fixtures and mocked lower-level boundaries.
+11. Never mark a finding verified without executing its verification gate.
+12. Do not use `--no-verify`; do not skip hooks.
+
+Source of truth, in order:
+
+- `AUDIT_REPORT.md` (immutable working-tree evidence; never stage/format/commit it)
+- `REMEDIATION_STATE.md`
+- `REMEDIATION_FINDINGS.json`
+- `REMEDIATION_VERIFICATION.md`
+- git history and committed source
+
+Entry state:
+
+- Expected branch: `remediation/proposalos-e2e`.
+- Expected Wave 8A code commit: `574608b`
+  (`fix(claim-policy): complete wave 8a claim-safety batch`), followed immediately by the Wave 8A
+  artifact checkpoint.
+- Stash must be empty.
+- Dirty tree must match the preserved unrelated baseline recorded in `REMEDIATION_STATE.md`:
+  `AUDIT_REPORT.md`, logger-typing route work and `lib/logger.ts`,
+  `lib/self-evolving-prompts/data-access/prompt-performance.ts`,
+  `app/api/cron/metering-sweep/route.ts`, and untracked `scripts/show-leaks.js`.
+- Run `./node_modules/.bin/tsc --noEmit --pretty false --incremental false`; stop if the checkpoint
+  cannot reproduce the recorded green baseline.
+
+Read before editing:
+
+1. Campaign objective, product decisions, Wave 0-8A records, and the Wave 8A authoritative claim
+   producer inventory in `REMEDIATION_STATE.md`.
+2. `lib/audit/findingContract.ts`, `lib/audit/findingPersistence.ts`, and
+   `lib/claims/claimContract.ts`.
+3. `lib/diagnosis/types.ts`, `preCluster.ts`, `llmCluster.ts`, `validation.ts`,
+   `lib/graph/diagnosis-graph.ts`, diagnosis helpers/tests, and diagnosis API/pipeline callers.
+4. `lib/proposal/schemas.ts`, `validation.ts`, `llm-orchestrator.ts`, `runner.ts`,
+   `executiveSummary.ts`, `tierMapping.ts`, `pricing.ts`, `roiCalculator.ts`,
+   `ProposalQAService.ts`, `executiveSummaryQa.ts`, `lib/qa/autoQA.ts`,
+   `proposal-quality-scorer.ts`, `lib/graph/proposal-graph.ts`, proposal persistence, presentation,
+   report, and PDF preparation.
+5. Every LLM prompt/schema/parser used by diagnosis, proposal, and QA.
+6. Existing tests and exact Wave 8A verification commands.
+
+Wave 8B scope is exactly:
+
+1. Diagnosis input and cluster/narrative grounding.
+2. Proposal claim/citation enforcement through persistence and render/PDF preparation.
+3. Deterministic severity, tier mapping, package inclusion, pricing, timelines/discounts only where
+   current product configuration defines them, and ROI arithmetic/input disclosure.
+4. QA/autoQA deterministic rejection and structured review reasons.
+5. Strict diagnosis/proposal/QA LLM runtime schemas, untrusted-content framing, bounded retries,
+   and fail-closed/review behavior.
+
+Do not begin delivery, outreach, closing, scheduling/handoff, retention/re-audit/upsell, pipeline
+state-transition, or communication-send work. In particular, do not repair
+`lib/pipeline/agents/accessibilityAgent.ts` in Wave 8B; its fabricated simulated delivery success
+is recorded for Wave 9.
+
+Required diagnosis outcomes:
+
+- Accept only Wave-3-valid, non-excluded Findings belonging to the trusted audit and tenant.
+- Empty valid Finding sets produce an honest insufficient-data state.
+- Clusters preserve exact source Finding IDs.
+- Every factual root-cause/narrative claim passes `validateCustomerClaim`.
+- Unknown, duplicate, cross-audit, cross-tenant, unavailable/failed, or malformed citations fail.
+- LLMs cannot create Findings, replace trusted Finding IDs, or override deterministic severity.
+- Severity is computed from validated Finding inputs only.
+- Remove fabricated ranking placeholders such as constant ROI/effort values; use unavailable or
+  deterministic supported values.
+- Strict schemas reject unknown keys/enums and malformed output.
+- Source Finding/Evidence text is bounded and explicitly delimited as untrusted data.
+- Invalid model output follows the existing bounded retry/review/failure policy, never a permissive
+  invented fallback.
+- Tests: valid cluster, invented ID, cross-audit, cross-tenant, invalid Evidence, unsupported
+  narrative, severity override, malformed JSON/schema, empty set, and prompt injection.
+
+Required proposal outcomes:
+
+- Every factual proposal claim is represented by the Wave 8A customer-claim contract and cites at
+  least one validated Finding ID.
+- Citations resolve to the same audit and tenant and cannot cite invalid/excluded/unavailable
+  Findings.
+- Executive summary, pain-cluster narrative, comparison statements, tier/package rationale,
+  recommendations with factual rationale, assumptions, metrics, and presentation/report copy all
+  preserve claim IDs and Finding IDs.
+- Citation metadata survives persistence and render/PDF preparation.
+- LLMs cannot invent Findings, metrics, competitor facts, prices, timelines, conversion lifts,
+  savings, ROI inputs, or citations.
+- Recommendations remain recommendations and identify observed rationale when they assert one.
+- Missing citations or unsupported metrics fail proposal validation and prevent QA approval/send/
+  publish state.
+- Do not silently filter invalid Finding IDs and approve the changed proposal. Record a structured
+  validation failure.
+- Strict proposal schemas reject unknown fields and model-supplied identity.
+- Tests: valid cited proposal, missing/unknown/cross-scope citation, invalid Evidence, unsupported
+  metric, fabricated ROI input, price override, deterministic tier mapping, assumptions, and
+  citation persistence/render preparation.
+
+Required deterministic-rule outcomes:
+
+- Keep objective severity, tier mapping, package inclusion, and configured prices outside LLM
+  ownership.
+- Runtime-validate configuration, currency, bounds, and units.
+- LLM output cannot replace approved tier/price/numeric decisions.
+- ROI is deterministic arithmetic over explicit named inputs and units.
+- Every estimate exposes assumptions and methodology.
+- Missing inputs produce unavailable/confirmation-required assumptions, not default invented
+  traffic, conversion, revenue, savings, or lift values.
+- Remove or quarantine unsupported hardcoded benchmark claims unless their provenance and approved
+  product use are explicitly established by repository artifacts.
+- Tests cover boundaries, rounding, invalid inputs, missing inputs, and attempted overrides.
+- Do not expand into Stripe/billing; that is a later wave.
+
+Required QA/autoQA outcomes:
+
+- Run deterministic validation before any LLM adversarial review.
+- Reject unsupported factual claims, unresolved citations, cross-audit/cross-tenant citations,
+  invalid Finding Evidence, metric/unit mismatch, recommendation/observation confusion,
+  privacy legal verdicts, accessibility certification, definitive paid-search absence, invalid ROI
+  arithmetic, hidden assumptions, and price/tier overrides.
+- Never invent citations or facts to repair output.
+- Never silently delete unsupported text and approve the remainder without a recorded correction.
+- Failed QA blocks ready/sent/published state.
+- Persist structured QA reasons for human review and observability.
+- Existing scoring heuristics may remain secondary, but cannot override a hard grounding failure.
+- Tests cover every rejection class and state-transition block.
+
+LLM/runtime safety:
+
+- Use strict Zod/runtime schemas for every diagnosis/proposal/QA model response.
+- Markdown-fence cleanup is allowed; permissive defaults are not.
+- Reject unknown IDs and unknown enum values.
+- Do not trust model-supplied auditId, tenantId, Finding identity, price, tier, severity, or ROI
+  inputs.
+- Bound record count and content size.
+- Delimit source Findings/Evidence/page/provider text as untrusted data and state that embedded
+  instructions must not be followed.
+- No tool call may be induced by source content unless explicitly required and constrained.
+- Use mocked LLM responses only.
+
+Red-before/green-after tests must execute real graphs/validators/compiler/QA code with mocked
+LLM, persistence, and provider boundaries. Do not use a live DB, browser, network, provider,
+customer record, or model.
+
+Verification order:
+
+1. New shared claim integration tests.
+2. New diagnosis grounding tests.
+3. New proposal citation/persistence/render tests.
+4. New deterministic pricing/tiering/ROI tests.
+5. New QA/autoQA rejection and send/publish-block tests.
+6. Wave 8A focused tests.
+7. Existing Wave 3 Finding/Evidence tests.
+8. Existing diagnosis/proposal/QA tests affected by changes.
+9. Existing Wave 4 network/provider tests used by changed paths.
+10. Wave 5 adapter/result tests.
+11. Wave 6 implementation tests.
+12. Wave 7 tests.
+13. Identified Wave 0-8A regressions from `REMEDIATION_VERIFICATION.md`.
+14. Canonical 27-module guard.
+15. TypeScript.
+16. ESLint on changed files.
+17. Bounded searches proving no uncited factual proposal path, cross-scope citation path, LLM
+    price/severity/ROI override, QA citation invention, permissive JSON fallback, or Wave 3-8A
+    boundary bypass.
+18. Run the full suite no more than once and only if PostgreSQL 5435/5444 and the Prisma
+    darwin-arm64 engine are available. Do not retry unchanged environment failures.
+
+Known environment blocks:
+
+- PostgreSQL ports 5435 and 5444 unavailable.
+- Prisma darwin-arm64 query engine cannot load in this workspace because of the documented local
+  Gatekeeper/code-signing/tooling state.
+
+Known unrelated failures:
+
+- Seven existing SSRF architecture-guard violations outside Wave 8.
+- Deprecated AuditOrchestrator timeout.
+
+Update `REMEDIATION_FINDINGS.json`, `REMEDIATION_STATE.md`, and
+`REMEDIATION_VERIFICATION.md`. Do not stage/format/commit `AUDIT_REPORT.md` or unrelated dirty
+files. If all Wave 8B repository gates pass, commit code:
+
+`fix(claim-policy): enforce grounded diagnosis proposal and qa`
+
+Commit campaign artifacts separately:
+
+`chore(remediation): checkpoint wave 8 complete`
+
+Then emit the required **Wave 8 Result** with entry state, findings/statuses, claim contract,
+diagnosis grounding, proposal citations, deterministic rules, QA enforcement, LLM safety, files,
+tests, exact environment blocks, canonical guard, commits, risks/decisions, and an exact
+full-context Wave 9 prompt. Stop without beginning Wave 9.

@@ -139,7 +139,7 @@
       "id": "P0-26",
       "severity": "P0",
       "title": "privacyCompliance emits unhedged absolute legal-violation conclusions ('violates GDPR', 'illegal') with no jurisdiction check or 'not legal advice' disclosure",
-      "status": "open",
+      "status": "verified",
       "rootCauseGroup": "F",
       "dependencies": [],
       "files": ["lib/modules/privacyCompliance.ts"],
@@ -147,7 +147,7 @@
         "Rewrite finding language to scoped hedged technical observations + 'not legal advice' disclosure; test asserting no unhedged 'violates'/'illegal' string"
       ],
       "wave": 8,
-      "notes": "Product constraint: no customer-facing legal certification."
+      "notes": "Wave 8A verified. privacyCompliance now reports bounded technical observations only; successful absence is distinct from unavailable browser/policy analysis; policy text is framed as untrusted and parsed through a strict technical-only schema; every emitted Finding has Wave 3-valid Evidence and an explicit not-legal-advice/jurisdiction limitation. Tests: wave8aPrivacyClaims.test.ts."
     },
     {
       "id": "P1-01",
@@ -634,7 +634,7 @@
       "id": "P1-36",
       "severity": "P1",
       "title": "accessibility asserts wcagLevel A/AA/AAA from axe-core score alone \u2014 unsupported certification claim",
-      "status": "open",
+      "status": "verified",
       "rootCauseGroup": "F",
       "dependencies": [],
       "files": ["lib/modules/accessibility.ts"],
@@ -642,7 +642,7 @@
         "Relabel as automated-scan estimate + 'manual review required' disclosure; test never emits bare cert"
       ],
       "wave": 8,
-      "notes": "No customer-facing certification without support."
+      "notes": "Wave 8A verified. Removed wcagLevel A/AA/AAA certification output; successful scans report automated violations or no automated violations, failures report unavailable, DOM snippets are sanitized, rule/selector/impact/timestamp are preserved, and all customer-facing accessibility Findings require manual review for overall conformance. Tests: wave8aAccessibilityClaims.test.ts plus findingGenerator regressions."
     },
     {
       "id": "P1-37",
@@ -689,7 +689,7 @@
       "id": "P1-40",
       "severity": "P1",
       "title": "paidSearch asserts businessIsAdvertising:false identically for missing-creds/failure/genuine-absence",
-      "status": "open",
+      "status": "verified",
       "rootCauseGroup": "H",
       "dependencies": [],
       "files": ["lib/modules/paidSearch.ts"],
@@ -697,7 +697,7 @@
         "Distinguish not-configured/failed from checked-found-nothing; disclose single-snapshot; test"
       ],
       "wave": 8,
-      "notes": "Provider-failure/absence conflation + claim scope."
+      "notes": "Wave 8A verified. Paid-search checks now use observed/not_observed/unavailable states; missing key, quota, and provider failure cannot become absence; successful empty results are explicitly bounded snapshots; advertiser attribution uses validated hostnames; Evidence records query/location/language/device/provider/timestamp; ungrounded CPC/budget claims were removed. Tests: wave8aPaidSearchClaims.test.ts."
     },
     {
       "id": "P1-41",

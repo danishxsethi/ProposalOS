@@ -111,7 +111,7 @@ work**, tracked so a later wave can complete them; they are NOT confirmed defect
 | 5    | Module adapter & failure-state repair          | P1-28, P1-33, P1-34, P1-39, P1-43, P2-28, P2-47                                                                       | E, H   | **COMPLETE — see Wave 5 result** |
 | 6    | Fully implement broken/missing modules         | P0-25, P1-30, P1-37, P1-41, P1-42, P2-30                                                                              | F      | **COMPLETE - see Wave 6 result** |
 | 7    | Harden remaining partial modules               | P1-27, P1-29, P1-32, P1-35, P1-38, P2-27, P2-31, P2-32, P2-34, P2-35, P2-38, P2-41, P2-42, P2-43, P2-44, P2-46, P2-50 | I, H   | **7A COMPLETE — 7B pending**     |
-| 8    | Diagnosis + proposal claim-policy enforcement  | P0-26, P1-36, P1-40                                                                                                   | F      | open                             |
+| 8    | Diagnosis + proposal claim-policy enforcement  | P0-26, P1-36, P1-40                                                                                                   | F      | **8A COMPLETE — 8B pending**     |
 | 9    | Delivery/outreach/closing/retention pipelines  | (Passes 9-12 audit work)                                                                                              | —      | open                             |
 | 10   | Billing, metering, webhook, unit economics     | P1-08, P2-21                                                                                                          | L      | open                             |
 | 11   | Multi-tenancy/white-label/frontend convergence | P1-01, P1-19, P2-10, P2-11, P2-15, P2-20                                                                              | K      | open                             |
@@ -1452,3 +1452,167 @@ failure. Full suite was not run because PostgreSQL and the Prisma engine remain 
 Wave 7 is complete at code checkpoint `146251e` (`fix(audit-modules): harden wave 7b module
 batch`). Wave 8 must include P0-26 plus P1-36/P1-40 and any `wave === 8` ledger rows. P1-41
 remains fixed-and-externally-blocked pending approved backlink-provider selection.
+
+## Wave 8 entry and authoritative scope (2026-07-12)
+
+Entry verification:
+
+- Branch: `remediation/proposalos-e2e`.
+- HEAD: `90c53c06916c40de6b136dbb1b938b35bf806846`
+  (`chore(remediation): checkpoint wave 7 complete`), immediately preceded by `146251e`
+  (`fix(audit-modules): harden wave 7b module batch`).
+- Wave 0-7 fix/checkpoint commits are present and `git stash list` is empty.
+- Dirty tree matches the documented preserved baseline exactly: `AUDIT_REPORT.md`, the
+  logger-typing route group and `lib/logger.ts`, `prompt-performance.ts`,
+  `app/api/cron/metering-sweep/route.ts`, and untracked `scripts/show-leaks.js`.
+- No unrecorded Wave 8 work was present.
+- Entry TypeScript baseline:
+  `./node_modules/.bin/tsc --noEmit --pretty false --incremental false` -> exit 0.
+
+Authoritative ledger scope is exactly P0-26, P1-36, and P1-40. No Wave 7 item was re-scoped to
+Wave 8 beyond the already-recorded P2-50 boundary: tracker-pattern expansion is complete, while
+privacy legal/technical claim language remains P0-26.
+
+### Adaptive batching decision
+
+Wave 8 has seven substantial implementation areas: shared claim/provenance validation,
+privacyCompliance, accessibility, paidSearch, diagnosis, proposal compiler/pricing/ROI, and
+QA/autoQA. Per the campaign batching rule it is split:
+
+- **Wave 8A:** shared claim/provenance contract plus P0-26, P1-36, and P1-40 module producers.
+- **Wave 8B:** diagnosis grounding; proposal citations/persistence/render preparation;
+  deterministic pricing/tiering/ROI enforcement; QA/autoQA rejection; and shared LLM prompt/schema
+  enforcement using the Wave 8A contract.
+
+Only Wave 8A is executed in this checkpoint. Wave 9 must not be emitted or begun until Wave 8B is
+complete.
+
+### Authoritative Wave 8 finding table
+
+| Finding | Source              | Current claim producer                                            | Unsupported/overstated behavior                                                                                                                                                                                         | Current Evidence source                                                                                            | Current runtime schema                                                                                      | Downstream impact                                                                                          | Red-before test                                                                                                                             | Wave 8 code fix                                                                                                                                                    | Green-after test                                                                                              | External/product/legal decision                                                            | Expected status                 |
+| ------- | ------------------- | ----------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ | ------------------------------- |
+| P0-26   | `privacyCompliance` | `runPrivacyModule` Finding generation and Gemini policy analysis  | Technical cookie/banner/policy observations become absolute GDPR/illegality/fines/compliance verdicts; policy text is trusted into permissive JSON; browser/policy failures can be indistinguishable from absence       | Puppeteer cookie/DOM observations and policy URL/text; several Findings currently use legacy or empty Evidence     | Wave 3 `FindingRuntimeSchema` at aggregation; no strict policy-analysis schema and no customer-claim schema | Invalid Findings are rejected by Wave 3, but accepted wording could feed diagnosis/proposals as legal fact | Fixture module tests for successful absence, failure, banner/tracker combinations, prohibited phrases, limitation text, and valid Evidence  | Technical-signal states, strict bounded policy analysis, untrusted-content prompt framing, qualified language, real Evidence, honest unavailable/partial execution | Same fixtures pass; every emitted Finding validates; no prohibited verdict phrases                            | Automated output is not legal advice; jurisdiction/applicability requires qualified review | verified after repository gates |
+| P1-36   | `accessibility`     | `runAccessibilityModule` result consumed by the canonical adapter | Axe/custom score is mapped to bare `wcagLevel` A/AA/AAA; successful output lacks automated-coverage/manual-review limitation; raw DOM snippets are only truncated                                                       | Real axe rule/node data and rendered custom checks, but legacy result currently has no Finding Evidence of its own | Legacy result shape plus Wave 3 only if Findings are later emitted; no strict accessibility-claim status    | Bare conformance label can be reused in proposal/report copy as certification                              | Fixture tests for violations, zero automated violations, scanner failure, disclosure, sanitized snippets, prohibited certification language | Replace certification field with automated scan outcome/coverage limitation; preserve real axe checks and failure state                                            | Tests prove no certification, honest unavailable, sanitized evidence details, and required manual-review text | Full WCAG/legal conformance requires manual expert review                                  | verified after repository gates |
+| P1-40   | `paidSearch`        | SerpAPI checks and `generatePaidSearchFindings`                   | Missing key, provider failure, quota, and one successful empty snapshot all collapse to `businessIsAdvertising:false`; one query becomes definitive absence; weak substring attribution; ungrounded CPC/budget language | SerpAPI ad rows plus page-source pixel scan; legacy Evidence omits query/provider/location/device/timestamp scope  | Wave 3 Finding schema at aggregation; no strict provider observation union                                  | Definitive absence, competitor attribution, and invented budget/CPC language can feed diagnosis/proposals  | Fixture tests for observed ad, bounded empty sample, missing key, failure/429, multiple queries, wrong domain, estimate language            | Discriminated observation states, validated hostname identity, bounded scope metadata/Evidence, honest unavailable/partial execution, no invented estimates        | Tests distinguish all states and reject definitive “not advertising” output                                   | Live campaign scope cannot be inferred from bounded SERP samples                           | verified after repository gates |
+
+### Customer-facing claim-producer inventory
+
+| Producer                                    | Current classification                                                                                                             | Wave 8 disposition                                                                              |
+| ------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| Module Findings                             | `DETERMINISTIC_OBSERVATION` or `DERIVED_FROM_FINDINGS`; the three scoped producers contain `UNSUPPORTED` wording/state conflation  | Wave 8A repairs P0-26/P1-36/P1-40 and keeps Wave 3 Finding/Evidence as the observation contract |
+| Diagnosis clusters and root-cause text      | `LLM_SYNTHESIS_WITH_CITATIONS` in intent, currently incompletely validated                                                         | Wave 8B                                                                                         |
+| Diagnosis severity                          | `DETERMINISTIC_OBSERVATION` from Finding impact scores, with unsafe fallback/placeholder paths elsewhere                           | Wave 8B preserves deterministic ownership                                                       |
+| Diagnosis narratives                        | `LLM_SYNTHESIS_WITH_CITATIONS`, currently narrative strings have no claim-level schema                                             | Wave 8B                                                                                         |
+| Proposal executive summary                  | `LLM_SYNTHESIS_WITH_CITATIONS`, currently a plain string                                                                           | Wave 8B                                                                                         |
+| Proposal pain clusters                      | `DERIVED_FROM_FINDINGS` plus LLM narrative                                                                                         | Wave 8B                                                                                         |
+| Package/tier finding inclusion              | `DERIVED_FROM_FINDINGS` and deterministic mapping                                                                                  | Wave 8B                                                                                         |
+| Package descriptions/features/timelines     | `RECOMMENDATION` or `LLM_SYNTHESIS_WITH_CITATIONS`; unsupported values are possible                                                | Wave 8B                                                                                         |
+| Pricing                                     | `DETERMINISTIC_OBSERVATION` from product configuration; LLM-returned prices are currently schema-valid values                      | Wave 8B                                                                                         |
+| ROI model                                   | `ESTIMATE_WITH_ASSUMPTIONS`; arithmetic is deterministic but benchmark/input provenance and fallback invention require enforcement | Wave 8B                                                                                         |
+| Proposal assumptions/disclaimers/next steps | `ESTIMATE_WITH_ASSUMPTIONS` / `RECOMMENDATION`; currently free-form strings                                                        | Wave 8B                                                                                         |
+| Comparison/presentation/report copy         | `DERIVED_FROM_FINDINGS` or `LLM_SYNTHESIS_WITH_CITATIONS`; citations are not uniformly preserved at claim level                    | Wave 8B                                                                                         |
+| QA/autoQA output                            | `INTERNAL_DIAGNOSTIC`; current heuristics can accept unsupported text and permissive legacy Evidence                               | Wave 8B                                                                                         |
+| Privacy compliance language                 | `UNSUPPORTED` where it asserts legal verdicts                                                                                      | Wave 8A                                                                                         |
+| Accessibility compliance language           | `UNSUPPORTED` where it asserts WCAG conformance                                                                                    | Wave 8A                                                                                         |
+| Paid-search absence language                | `UNSUPPORTED` where a bounded or unavailable sample asserts campaign absence                                                       | Wave 8A                                                                                         |
+
+### Shared claim/provenance contract decision
+
+Wave 8A will add one runtime customer-claim validator that resolves source Finding IDs against
+already Wave-3-valid Findings. Trusted `auditId` and `tenantId` are supplied by the caller and
+must match every cited Finding; model-supplied identity is never trusted. Factual claims require
+citations, estimates require assumptions and explicit inputs/units, recommendations cannot embed
+uncited factual rationale, unknown fields/IDs fail closed, and no citation is invented. This is a
+claim layer over the existing Finding/Evidence contract, not a parallel Evidence system.
+
+## Wave 8A result (2026-07-12)
+
+Code checkpoint: `574608b` (`fix(claim-policy): complete wave 8a claim-safety batch`).
+
+### Findings
+
+| Finding | Status   | Result                                                                                                                                                                                                                                                                                     |
+| ------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| P0-26   | verified | privacyCompliance now emits technical observations only, distinguishes successful absence from unavailable collection/analysis, uses strict technical-only policy JSON, treats policy text as untrusted, preserves real Evidence, and includes a not-legal-advice/jurisdiction limitation. |
+| P1-36   | verified | Accessibility output now reports automated violations, no automated violations, or unavailable; removes A/AA/AAA certification; preserves rule/selector/impact/timestamp; sanitizes DOM snippets; and requires manual review for overall conformance.                                      |
+| P1-40   | verified | Paid search now distinguishes observed/not-observed/unavailable snapshots; missing key, quota, and provider failure cannot become absence; domain attribution is hostname-validated; scope metadata is preserved in Evidence; and unsupported CPC/budget claims are removed.               |
+
+No Wave 8A finding is fixed-and-blocked, re-scoped, or still open. Wave 8 itself remains open
+because diagnosis/proposal/QA integration is Wave 8B.
+
+### Claim/provenance contract
+
+`lib/claims/claimContract.ts` is the single Wave 8 customer-claim runtime boundary. It:
+
+- accepts only deterministic observations, Finding-derived claims, cited LLM synthesis,
+  recommendations, and estimates with assumptions;
+- requires factual claims to cite source Finding IDs;
+- resolves every citation against the supplied Finding set;
+- reuses the Wave 3 Finding runtime validator;
+- rejects excluded, malformed, unavailable/failed/skipped/disabled, unknown, cross-audit, and
+  cross-tenant Findings;
+- requires estimate assumptions and metric inputs with explicit units;
+- rejects model-supplied `auditId`/`tenantId` fields through a strict input schema;
+- injects trusted audit/tenant identity only after validation;
+- never invents a citation.
+
+Wave 8B must use this contract at diagnosis, proposal, persistence/render preparation, and QA
+boundaries rather than creating another claim schema.
+
+### Files changed
+
+- `lib/claims/claimContract.ts`
+- `lib/claims/__tests__/claimContract.test.ts`
+- `lib/modules/privacyCompliance.ts`
+- `lib/modules/accessibility.ts`
+- `lib/modules/paidSearch.ts`
+- `lib/modules/findingGenerator.ts`
+- `lib/audit/runner.ts`
+- `lib/modules/__tests__/wave8aPrivacyClaims.test.ts`
+- `lib/modules/__tests__/wave8aAccessibilityClaims.test.ts`
+- `lib/modules/__tests__/wave8aPaidSearchClaims.test.ts`
+
+### Verification
+
+- Wave 8A focused tests: 24/24.
+- Focused Wave 8A plus affected Finding/generator/adapter regressions: 106/106.
+- Wave 4 network/browser plus Wave 6/7 module regressions: 84/84.
+- Additional affected Wave 3-7 regression batch: 82/82.
+- Identified Wave 0-2 sample assertions: 89/89; Vitest still exits nonzero only because the
+  documented Prisma darwin-arm64 query engine cannot load.
+- Canonical module manifest: 7/7 assertions pass; same documented Prisma engine unhandled
+  rejection makes the command exit nonzero.
+- TypeScript: exit 0.
+- Changed-file ESLint: zero errors; existing warning-class findings only.
+- Bounded production searches: no P0-26 legal-verdict phrases, no `wcagLevel`, no paid-search
+  false fallback/empty-provider fallback, no direct `fetch(serpUrl)`, and no old GDPR/CCPA
+  certification fields in the Wave 8A production paths.
+- PostgreSQL ports 5435 and 5444 remain unavailable. The full suite was not run.
+
+### Known unrelated/later-pipeline items
+
+- The canonical manifest and selected Wave 0-2 tests retain the documented Prisma
+  darwin-arm64 query-engine/Gatekeeper failure.
+- The seven previously documented SSRF architecture-guard violations remain outside Wave 8A.
+- `lib/pipeline/agents/accessibilityAgent.ts` still contains simulated delivery-success metrics
+  and a `WCAG AA compliant` string. That file is a Wave 9 delivery-pipeline capability, not the
+  Wave 8 audit-module/diagnosis/proposal/QA path. It was not touched; Wave 9 must replace the
+  simulation with execution-gated, evidenced delivery output.
+- The deprecated AuditOrchestrator timeout remains unchanged.
+
+### Remaining Wave 8B scope
+
+1. Enforce same-audit/same-tenant validated Finding inputs at diagnosis entry.
+2. Strictly validate LLM cluster/narrative output; reject invented IDs, unsupported narratives,
+   prompt injection, and deterministic severity overrides.
+3. Represent proposal factual text as validated claims with Finding-ID citations and preserve
+   citations through persistence and render/PDF preparation.
+4. Keep severity, tier mapping, package inclusion, pricing, and ROI arithmetic deterministic;
+   expose assumptions/inputs/units and reject LLM overrides.
+5. Make QA/autoQA deterministically reject unsupported claims, unresolved citations, invalid
+   Evidence, metric/unit mismatch, privacy/accessibility/paid-search overclaims, and arithmetic
+   errors without inventing or silently deleting content.
+6. Add strict diagnosis/proposal/QA runtime schemas, untrusted-content framing, bounded retries,
+   structured review reasons, and fixture-mocked tests.
+
+Wave 9 must not begin until Wave 8B is complete and checkpointed.
