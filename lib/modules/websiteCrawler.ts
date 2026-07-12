@@ -19,6 +19,10 @@ interface PageMetrics {
   internalLinks: number;
   externalLinks: number;
   hasStructuredData: boolean;
+  /** P1-35 (Wave 7): real, already-parsed mobile-viewport-meta presence, so
+   * downstream modules (seoDeep) can reuse this instead of re-fetching/re-parsing
+   * the same page. */
+  hasViewportMeta: boolean;
   loadTimeMs: number;
   pageSizeKB: number;
   error?: string;
@@ -37,6 +41,15 @@ export interface CrawlResult {
   schemaOrgCoverage: number;
   duplicateTitles: Map<string, string[]>;
   failureClassification: 'ANTI_BOT' | 'TIMEOUT' | 'HTTP_ERROR' | 'NONE';
+  /**
+   * P1-35 (Wave 7): the homepage's real raw HTML, captured once during the crawl
+   * that already fetched and parsed it, so `schemaMarkup`/`seoDeep`/`schemaAnalysis`
+   * (all `dependsOn: ['websiteCrawler']`) can reuse it instead of independently
+   * re-fetching the same homepage. Deliberately homepage-only (not every crawled
+   * page) to avoid bloating the stored crawl-evidence snapshot with up to 20 pages
+   * of raw HTML.
+   */
+  homepageHtml: string | null;
 }
 
 interface WebsiteCrawlerInput {
@@ -197,7 +210,7 @@ export function classifyFailure(
 /**
  * Fetch and analyze a single page
  */
-async function analyzePage(url: string): Promise<PageMetrics> {
+async function analyzePage(url: string): Promise<{ metrics: PageMetrics; html: string | null }> {
   const startTime = Date.now();
 
   try {
@@ -237,22 +250,26 @@ async function analyzePage(url: string): Promise<PageMetrics> {
 
     if (classification !== 'NONE') {
       return {
-        url,
-        status: response.status,
-        title: null,
-        metaDescription: null,
-        h1Count: 0,
-        h1Contents: [],
-        wordCount: 0,
-        imageCount: 0,
-        imagesWithAlt: 0,
-        internalLinks: 0,
-        externalLinks: 0,
-        hasStructuredData: false,
-        loadTimeMs,
-        pageSizeKB,
-        failureClassification: classification,
-        error: classification === 'ANTI_BOT' ? 'WAF challenge/block page detected' : undefined,
+        metrics: {
+          url,
+          status: response.status,
+          title: null,
+          metaDescription: null,
+          h1Count: 0,
+          h1Contents: [],
+          wordCount: 0,
+          imageCount: 0,
+          imagesWithAlt: 0,
+          internalLinks: 0,
+          externalLinks: 0,
+          hasStructuredData: false,
+          hasViewportMeta: false,
+          loadTimeMs,
+          pageSizeKB,
+          failureClassification: classification,
+          error: classification === 'ANTI_BOT' ? 'WAF challenge/block page detected' : undefined,
+        },
+        html: null,
       };
     }
 
@@ -299,22 +316,31 @@ async function analyzePage(url: string): Promise<PageMetrics> {
     const hasStructuredData =
       $('script[type="application/ld+json"]').length > 0 || $('[itemscope]').length > 0;
 
+    // Mobile viewport meta — P1-35 (Wave 7): computed here as a free byproduct of
+    // the parse this page already does, so seoDeep can reuse it via
+    // dependencyResults instead of re-fetching the page to check for it.
+    const hasViewportMeta = !!$('meta[name="viewport"]').attr('content');
+
     return {
-      url,
-      status: response.status,
-      title,
-      metaDescription,
-      h1Count,
-      h1Contents,
-      wordCount,
-      imageCount,
-      imagesWithAlt,
-      internalLinks,
-      externalLinks,
-      hasStructuredData,
-      loadTimeMs,
-      pageSizeKB,
-      failureClassification: 'NONE',
+      metrics: {
+        url,
+        status: response.status,
+        title,
+        metaDescription,
+        h1Count,
+        h1Contents,
+        wordCount,
+        imageCount,
+        imagesWithAlt,
+        internalLinks,
+        externalLinks,
+        hasStructuredData,
+        hasViewportMeta,
+        loadTimeMs,
+        pageSizeKB,
+        failureClassification: 'NONE',
+      },
+      html,
     };
   } catch (error) {
     const loadTimeMs = Date.now() - startTime;
@@ -337,22 +363,26 @@ async function analyzePage(url: string): Promise<PageMetrics> {
     const classification = classifyFailure(status, '', {}, errorMsg, errorName);
 
     return {
-      url,
-      status,
-      title: null,
-      metaDescription: null,
-      h1Count: 0,
-      h1Contents: [],
-      wordCount: 0,
-      imageCount: 0,
-      imagesWithAlt: 0,
-      internalLinks: 0,
-      externalLinks: 0,
-      hasStructuredData: false,
-      loadTimeMs,
-      pageSizeKB: 0,
-      error: errorMsg,
-      failureClassification: classification,
+      metrics: {
+        url,
+        status,
+        title: null,
+        metaDescription: null,
+        h1Count: 0,
+        h1Contents: [],
+        wordCount: 0,
+        imageCount: 0,
+        imagesWithAlt: 0,
+        internalLinks: 0,
+        externalLinks: 0,
+        hasStructuredData: false,
+        hasViewportMeta: false,
+        loadTimeMs,
+        pageSizeKB: 0,
+        error: errorMsg,
+        failureClassification: classification,
+      },
+      html: null,
     };
   }
 }
@@ -388,6 +418,7 @@ export async function crawlWebsite(input: WebsiteCrawlerInput): Promise<CrawlRes
   const queue: { url: string; depth: number }[] = [{ url: input.url, depth: 0 }];
   const crawledPages: PageMetrics[] = [];
   const allFoundUrls = new Set<string>([input.url]);
+  let homepageHtml: string | null = null;
 
   logger.info({ businessName: input.businessName, url: input.url }, 'Starting website crawl');
 
@@ -416,8 +447,11 @@ export async function crawlWebsite(input: WebsiteCrawlerInput): Promise<CrawlRes
 
     // Crawl the page
     visited.add(url);
-    const metrics = await analyzePage(url);
+    const { metrics, html: pageHtml } = await analyzePage(url);
     crawledPages.push(metrics);
+    if (url === input.url) {
+      homepageHtml = pageHtml;
+    }
 
     logger.info(
       {
@@ -555,5 +589,6 @@ export async function crawlWebsite(input: WebsiteCrawlerInput): Promise<CrawlRes
     schemaOrgCoverage,
     duplicateTitles,
     failureClassification: overallClassification,
+    homepageHtml,
   };
 }

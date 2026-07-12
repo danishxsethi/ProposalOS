@@ -20,10 +20,15 @@ export async function runWebsiteModule(
   logger.info({ url: input.url }, '[WebsiteModule] Starting comprehensive website analysis');
 
   try {
-    // Run comprehensive website crawler (up to 20 pages)
+    // Run comprehensive website crawler (up to 20 pages). P1-27 (Wave 7): the
+    // canonical `websiteCrawler` registry module (lib/audit/runner.ts) calls this
+    // exact same function for this exact same audit — passing `auditId` through
+    // lets `runWebsiteCrawlerModule`'s single-flight coalescing recognize the two
+    // calls as one logical crawl instead of performing the real 20-page crawl twice.
     const crawlerResult = await runWebsiteCrawlerModule({
       url: input.url,
       businessName: input.businessName || 'Website',
+      auditId: input.auditId,
     });
 
     // Run PageSpeed on homepage for Core Web Vitals

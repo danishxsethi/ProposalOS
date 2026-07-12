@@ -386,11 +386,46 @@ function generateFindingsFromCrawl(crawlResult: CrawlResult, businessUrl: string
 }
 
 /**
+ * P1-27 (Wave 7): `lib/modules/website.ts`'s own internal crawl call and the
+ * canonical `websiteCrawler` registry module (lib/audit/runner.ts) both call this
+ * exact function for the exact same audit/URL, previously performing two full
+ * (up to 20-page) real crawls of the same site per audit. This in-flight,
+ * per-process map coalesces concurrent calls with the same (auditId, url) into a
+ * single real crawl — the second caller awaits the first caller's in-flight
+ * promise instead of starting a duplicate crawl. Entries are removed once the
+ * crawl settles, so a later, non-concurrent call (e.g. a genuine re-audit) still
+ * performs a fresh crawl rather than being permanently cached.
+ */
+const inFlightCrawls = new Map<string, Promise<AuditModuleResult>>();
+
+function crawlCoalesceKey(input: WebsiteCrawlerModuleInput): string {
+  return `${input.auditId ?? 'no-audit'}::${input.url}`;
+}
+
+/**
  * Run website crawler module
  */
 export async function runWebsiteCrawlerModule(
   input: WebsiteCrawlerModuleInput
 ): Promise<AuditModuleResult> {
+  const key = crawlCoalesceKey(input);
+  const existing = inFlightCrawls.get(key);
+  if (existing) {
+    logger.info(
+      { businessName: input.businessName, url: input.url },
+      '[WebsiteCrawler] Reusing in-flight crawl for this audit (P1-27 dedup)'
+    );
+    return existing;
+  }
+
+  const promise = executeCrawl(input).finally(() => {
+    inFlightCrawls.delete(key);
+  });
+  inFlightCrawls.set(key, promise);
+  return promise;
+}
+
+async function executeCrawl(input: WebsiteCrawlerModuleInput): Promise<AuditModuleResult> {
   logger.info(
     { businessName: input.businessName, url: input.url },
     '[WebsiteCrawler] Starting crawl'
@@ -420,6 +455,12 @@ export async function runWebsiteCrawlerModule(
         duplicateTitles: Array.from(crawlResult.duplicateTitles.entries()),
         pagesMissingTitles: crawlResult.pagesMissingTitles,
         pagesMissingDescriptions: crawlResult.pagesMissingDescriptions,
+        // P1-35 (Wave 7): the homepage's real raw HTML, already fetched/parsed by
+        // this crawl, so `schemaMarkup`/`seoDeep`/`schemaAnalysis` (all
+        // dependsOn: ['websiteCrawler']) can reuse it instead of re-fetching the
+        // same homepage independently. `schemaAnalysisAdapter` (lib/audit/runner.ts)
+        // already reads this exact `evidenceSnapshots[0].rawResponse.html` path.
+        html: crawlResult.homepageHtml,
       },
       collectedAt: new Date(),
     };

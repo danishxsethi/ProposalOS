@@ -109,6 +109,13 @@ export interface SchemaMarkupModuleInput {
   businessName?: string;
   /** GBP types/categories for vertical detection */
   gbpTypes?: string[];
+  /**
+   * P1-35 (Wave 7): the homepage's real, already-fetched HTML from the canonical
+   * `websiteCrawler` dependency (lib/audit/runner.ts's schemaMarkupAdapter). When
+   * present, this module parses it directly instead of independently re-fetching
+   * the same homepage `websiteCrawler` already crawled.
+   */
+  homepageHtml?: string | null;
 }
 
 type SchemaSource = 'json-ld' | 'microdata' | 'rdfa';
@@ -354,7 +361,7 @@ export async function runSchemaMarkupModule(
   input: SchemaMarkupModuleInput,
   _tracker?: CostTracker
 ): Promise<LegacyAuditModuleResult> {
-  const { url, gbpTypes } = input;
+  const { url, gbpTypes, homepageHtml } = input;
 
   if (!url) {
     // No URL is a missing-input/configuration problem (the adapter itself already
@@ -371,28 +378,36 @@ export async function runSchemaMarkupModule(
   }
 
   try {
-    const html = await withProviderResilience<string>(
-      {
-        provider: 'generic',
-        operation: 'schema_markup_fetch',
-        policy: {
-          timeoutMs: 15000,
-          maxAttempts: 2,
-        },
-      },
-      async ({ signal }) => {
-        const response = await safeFetch(url, {
-          signal,
-          headers: {
-            'User-Agent': 'Mozilla/5.0 (compatible; ProposalOS-SchemaBot/1.0)',
-          },
-        });
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}`);
-        }
-        return await response.text();
-      }
-    );
+    // P1-35 (Wave 7): reuse the homepage HTML the canonical `websiteCrawler`
+    // dependency already fetched instead of independently re-fetching the same
+    // page. Only trusted when non-empty; a missing/empty dependency value falls
+    // back to this module's own independent fetch (e.g. crawler unavailable,
+    // failed, or blocked by robots.txt) so the module keeps working standalone.
+    const html =
+      homepageHtml && homepageHtml.length > 0
+        ? homepageHtml
+        : await withProviderResilience<string>(
+            {
+              provider: 'generic',
+              operation: 'schema_markup_fetch',
+              policy: {
+                timeoutMs: 15000,
+                maxAttempts: 2,
+              },
+            },
+            async ({ signal }) => {
+              const response = await safeFetch(url, {
+                signal,
+                headers: {
+                  'User-Agent': 'Mozilla/5.0 (compatible; ProposalOS-SchemaBot/1.0)',
+                },
+              });
+              if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+              }
+              return await response.text();
+            }
+          );
 
     const jsonLdItems = parseJsonLd(html);
     const microdataItems = parseMicrodata(html);

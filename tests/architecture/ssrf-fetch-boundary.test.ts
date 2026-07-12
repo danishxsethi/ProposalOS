@@ -42,9 +42,9 @@ const ALLOWED_RAW_FETCH: AllowedRawFetch[] = [
   // SerpAPI (fixed host: serpapi.com)
   {
     file: 'lib/modules/seoDeep.ts',
-    line: 230,
+    line: 297,
     host: 'serpapi.com',
-    reason: 'Fixed host; user data only in query param (businessName/city)',
+    reason: 'Fixed host; businessName/city in query params',
   },
   {
     file: 'lib/modules/competitor.ts',
@@ -116,13 +116,13 @@ const ALLOWED_RAW_FETCH: AllowedRawFetch[] = [
   // Google Places API (fixed host: places.googleapis.com)
   {
     file: 'lib/modules/gbp.ts',
-    line: 68,
+    line: 103,
     host: 'places.googleapis.com',
     reason: 'Fixed host; businessName in POST body, not URL',
   },
   {
     file: 'lib/modules/gbp.ts',
-    line: 139,
+    line: 203,
     host: 'places.googleapis.com',
     reason: 'Fixed host; placeId from prior Google response (template literal path)',
   },
@@ -160,13 +160,13 @@ const ALLOWED_RAW_FETCH: AllowedRawFetch[] = [
   },
   {
     file: 'lib/modules/mobileUX.ts',
-    line: 456,
+    line: 473,
     host: 'googleapis.com',
     reason: 'Fixed host; user URL in ?url= param',
   },
   {
     file: 'lib/modules/mobileUX.ts',
-    line: 481,
+    line: 497,
     host: 'googleapis.com',
     reason: 'Fixed host; user URL in ?url= param',
   },

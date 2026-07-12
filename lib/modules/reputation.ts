@@ -177,13 +177,10 @@ Return JSON in this exact format:
         };
       },
       (result) => {
-        // Callback for token usage if we could get it, but we need the raw response object
-        // which is internal to the closure.
-        // For now, simple return 0s or we'd need to change return type of wrapper.
-        // But we can just rely on the side-effect tracker we already have!
-        // Wait, I removed the tracker logic in previous file, but here I should keep it?
-        // Yes, I should keep the tracker logic inside the wrapper.
-        // And tracing logic handles the rest.
+        // Token usage isn't available here — it requires the raw model response,
+        // which is internal to the `traceLlmCall` closure above. Cost is already
+        // tracked via `tracker?.addLlmCall(...)` (fixed estimate) at call start;
+        // this callback only supplies the tracing metadata `traceLlmCall` expects.
         return { prompt: 0, completion: 0, model: 'gemini-2.0-flash' };
       }
     );

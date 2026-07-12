@@ -8,7 +8,22 @@ import { safeFetch } from '@/lib/security/safeFetch';
 import { normalizeConfidence } from './findingGenerator';
 import { AuditModuleResult, createEvidence, Finding } from './types';
 
-const SOCIAL_PLATFORMS = ['facebook', 'instagram', 'linkedin', 'youtube', 'tiktok'] as const;
+/**
+ * Wave 7 (P2-31): the platform vocabulary `social.ts`'s free discovery scan
+ * produces must be a subset of what this module can validate — otherwise a real,
+ * already-found (zero-cost) profile candidate is silently discarded when this
+ * module reads it from `dependencyResults.social`. Exported so `social.ts` and its
+ * tests can assert against the same single source of truth instead of maintaining
+ * a second, independently-drifting list.
+ */
+export const SOCIAL_DEEP_PLATFORMS = [
+  'facebook',
+  'instagram',
+  'linkedin',
+  'youtube',
+  'tiktok',
+] as const;
+const SOCIAL_PLATFORMS = SOCIAL_DEEP_PLATFORMS;
 type SocialPlatform = (typeof SOCIAL_PLATFORMS)[number];
 type ProfileStatus = 'verified' | 'likely' | 'ambiguous' | 'absent' | 'inaccessible' | 'failed';
 

@@ -144,7 +144,10 @@ async function withTimeout<T>(
 // Adapters to normalize the diverse module inputs/outputs into the standard ModuleResult
 const websiteAdapter = async (input: ModuleInput, tracker: CostTracker): Promise<ModuleResult> => {
   if (!input.url) throw new Error('url required');
-  const data = await runWebsiteModule({ url: input.url }, tracker);
+  // P1-27 (Wave 7): forward auditId so runWebsiteModule's internal crawl call and
+  // the sibling `websiteCrawler` module's own call coalesce into one real crawl
+  // (see lib/modules/websiteCrawlerModule.ts's single-flight cache).
+  const data = await runWebsiteModule({ url: input.url, auditId: input.auditId }, tracker);
   return { status: 'COMPLETE', data };
 };
 
@@ -299,13 +302,38 @@ const gbpDeepAdapter = async (input: ModuleInput, tracker: CostTracker): Promise
     },
     tracker
   );
-  return adaptAuditModuleResult(data);
+  const result = adaptAuditModuleResult(data);
+  // P1-29 (Wave 7): if the canonical GBP dependency could not confirm the business
+  // identity with confidence, gbpDeep's own reviews/photos/completeness analysis
+  // may describe the wrong business entirely. The `gbp` module's own advisory
+  // finding (extractFindingsFromRegistryResult) already discloses this to the
+  // customer — gbpDeep's deep-analysis findings are withheld here rather than
+  // duplicated or presented as definitive.
+  if (gbpData?.identityConfidence === 'ambiguous' && result.status === 'COMPLETE') {
+    return {
+      status: 'PARTIAL',
+      data: { ...result.data, findings: [] },
+      error: 'GBP identity match ambiguous — deep-analysis findings withheld',
+    };
+  }
+  return result;
 };
 
 const seoDeepAdapter = async (input: ModuleInput, tracker: CostTracker): Promise<ModuleResult> => {
   if (!input.url) throw new Error('url required');
+  // P1-35 (Wave 7): reuse the websiteCrawler dependency's already-crawled homepage
+  // page metrics instead of independently re-fetching the same homepage.
+  const crawlerData = input.dependencyResults?.websiteCrawler;
+  const homepageCrawlPage = crawlerData?.evidenceSnapshots?.[0]?.rawResponse?.crawledPages?.find(
+    (p: { url?: string }) => p.url === input.url
+  );
   const data = await runSeoDeepModule(
-    { url: input.url, businessName: input.businessName || 'Unknown', city: input.city },
+    {
+      url: input.url,
+      businessName: input.businessName || 'Unknown',
+      city: input.city,
+      homepageCrawlData: homepageCrawlPage ?? null,
+    },
     tracker
   );
   return { status: 'COMPLETE', data };
@@ -322,8 +350,24 @@ const accessibilityAdapter = async (
 
 const mobileUXAdapter = async (input: ModuleInput, tracker: CostTracker): Promise<ModuleResult> => {
   if (!input.url) throw new Error('url required');
+  // P1-38 (Wave 7): reuse `website`'s already-fetched mobile PageSpeed score
+  // instead of making a second, duplicate billable mobile PageSpeed call. Only
+  // trusted when `website`'s own PageSpeed call genuinely succeeded — `coreWebVitals.full`
+  // is only populated on the real success path (lib/modules/website.ts), never on
+  // a missing-key or fetch-failure fallback — so a missing/failed website PageSpeed
+  // check correctly falls through to mobileUX's own independent fetch attempt.
+  const websiteData = input.dependencyResults?.website;
+  const reusedMobileScore =
+    websiteData?.coreWebVitals?.full && typeof websiteData?.scores?.performance === 'number'
+      ? Math.round(websiteData.scores.performance * 100)
+      : null;
   const data = await runMobileUXModule(
-    { url: input.url, businessName: input.businessName || 'Unknown', signal: input.signal },
+    {
+      url: input.url,
+      businessName: input.businessName || 'Unknown',
+      signal: input.signal,
+      reusedMobileScore,
+    },
     tracker
   );
   return adaptAuditModuleResult(data);
@@ -432,10 +476,15 @@ const privacyComplianceAdapter = async (
 const schemaMarkupAdapter = async (input: ModuleInput): Promise<ModuleResult> => {
   if (!input.url) throw new Error('url required');
   const gbpData = input.dependencyResults?.gbp;
+  // P1-35 (Wave 7): reuse the homepage HTML the canonical `websiteCrawler`
+  // dependency already fetched instead of independently re-fetching the same page.
+  const crawlerData = input.dependencyResults?.websiteCrawler;
+  const homepageHtml = crawlerData?.evidenceSnapshots?.[0]?.rawResponse?.html ?? null;
   const raw = await runSchemaMarkupModule({
     url: input.url,
     businessName: input.businessName,
     gbpTypes: gbpData?.types,
+    homepageHtml,
   });
   const legacy = raw as unknown as Record<string, any>;
   // P1-33 (Wave 5): `runSchemaMarkupModule` now reports its own outer status
@@ -916,13 +965,57 @@ export function extractFindingsFromRegistryResult(
     }
     snapshots.push({ source: 'PageSpeed', rawResponse });
   } else if (moduleName === 'gbp') {
-    findings.push(
-      ...generateGBPFindings(
-        rd,
-        input.businessName || 'Unknown',
-        input.dependencyResults?.competitor
-      )
-    );
+    // P1-29 (Wave 7): an ambiguous business match (common name, franchise, or a
+    // weak candidate) must never produce definitive customer-negative findings
+    // about a business we could not confirm is actually the customer's listing.
+    if (rd?.identityConfidence === 'ambiguous') {
+      const alternates: string[] = Array.isArray(rd.alternateCandidateNames)
+        ? rd.alternateCandidateNames
+        : [];
+      findings.push({
+        module: 'gbp',
+        category: 'Visibility',
+        type: 'VITAMIN',
+        title: 'Google Business Profile Match Needs Manual Confirmation',
+        description:
+          `We found a Google Business Profile that may match "${input.businessName || 'this business'}", ` +
+          `but could not confirm it with confidence` +
+          (alternates.length > 0
+            ? ` — similarly named results include: ${alternates.join(', ')}.`
+            : '.') +
+          ' Specific profile findings are withheld until the correct listing is confirmed.',
+        impactScore: 0,
+        confidenceScore: 40,
+        evidence: [
+          createEvidence({
+            pointer: rd.placeId
+              ? `https://places.googleapis.com/v1/places/${rd.placeId}`
+              : input.url || 'https://www.google.com/maps',
+            source: 'places_api_v1',
+            type: 'text',
+            value: `matchConfidenceScore=${rd.matchConfidenceScore ?? 'unknown'}, candidatesConsidered=${rd.candidatesConsidered ?? 'unknown'}`,
+            label: 'GBP Identity Match',
+          }),
+        ],
+        metrics: {
+          identityConfidence: 'ambiguous',
+          candidatesConsidered: rd.candidatesConsidered ?? null,
+        },
+        effortEstimate: 'LOW',
+        recommendedFix: [
+          'Confirm which Google Business Profile listing is actually yours',
+          'Provide the exact Place ID or Google Maps link to improve match accuracy',
+        ],
+      });
+    } else {
+      findings.push(
+        ...generateGBPFindings(
+          rd,
+          input.businessName || 'Unknown',
+          input.dependencyResults?.competitor
+        )
+      );
+    }
     snapshots.push({ source: 'Places API', rawResponse: rd });
   } else if (moduleName === 'competitor') {
     findings.push(...generateCompetitorFindings(rd, input.businessName || 'Unknown'));

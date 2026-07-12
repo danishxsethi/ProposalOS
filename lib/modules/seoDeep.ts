@@ -15,6 +15,25 @@ interface SeoDeepInput {
   url: string;
   businessName: string;
   city?: string;
+  /**
+   * P1-35 (Wave 7): the homepage's real, already-crawled page metrics from the
+   * canonical `websiteCrawler` dependency (lib/audit/runner.ts's seoDeepAdapter).
+   * When present and the homepage was crawled successfully, this module reuses it
+   * instead of independently re-fetching/re-parsing the same homepage.
+   */
+  homepageCrawlData?: {
+    status: number;
+    title: string | null;
+    metaDescription: string | null;
+    h1Count: number;
+    h1Contents: string[];
+    hasStructuredData: boolean;
+    hasViewportMeta: boolean;
+    internalLinks: number;
+    externalLinks: number;
+    imageCount: number;
+    imagesWithAlt: number;
+  } | null;
 }
 
 export async function runSeoDeepModule(
@@ -32,18 +51,24 @@ export async function runSeoDeepModule(
 
   try {
     // Parallel Data Collection
-    const [htmlData, serpData, robotsStatus, sitemapStatus] = await Promise.all([
-      fetchHtmlAnalysis(input.url),
+    const [htmlData, serpData, robotsCheck, sitemapCheck] = await Promise.all([
+      fetchHtmlAnalysis(input.url, input.homepageCrawlData),
       fetchOrganicRanking(input.businessName, input.city, input.url, tracker),
       checkEndpoint(input.url, '/robots.txt'),
       checkEndpoint(input.url, '/sitemap.xml'),
     ]);
 
+    // P2-35 (Wave 7): a real HTTP 200/404 response is a genuine present/absent
+    // observation; a network error, timeout, or provider degrade is "we could not
+    // check" and must never be presented as the same "absent" signal.
+    const hasRobotsTxt = !robotsCheck.checked ? 'unavailable' : robotsCheck.status === 200;
+    const hasSitemap = !sitemapCheck.checked ? 'unavailable' : sitemapCheck.status === 200;
+
     const findings = generateSEOFindings({
       ...htmlData,
       ...serpData,
-      hasRobotsTxt: robotsStatus === 200,
-      hasSitemap: sitemapStatus === 200,
+      hasRobotsTxt,
+      hasSitemap,
       url: input.url,
     }) as Finding[];
 
@@ -54,7 +79,17 @@ export async function runSeoDeepModule(
         auditId: 'current', // will be overwritten
         module: 'seo-deep',
         source: 'html-analysis',
-        rawResponse: htmlData,
+        rawResponse: {
+          ...htmlData,
+          // P2-35 (Wave 7): the real checked/unavailable distinction for
+          // robots.txt/sitemap.xml/brand-ranking, now recorded honestly rather than
+          // collapsed into a single ambiguous boolean/null shape.
+          seoChecks: {
+            robotsTxt: hasRobotsTxt,
+            sitemap: hasSitemap,
+            rankCheck: serpData.rankCheckStatus,
+          },
+        },
         collectedAt: new Date(),
       },
     ];
@@ -86,7 +121,31 @@ export async function runSeoDeepModule(
 }
 
 // Helper: Fetch and Analyze HTML
-async function fetchHtmlAnalysis(url: string) {
+async function fetchHtmlAnalysis(
+  url: string,
+  homepageCrawlData?: SeoDeepInput['homepageCrawlData']
+) {
+  // P1-35 (Wave 7): reuse the websiteCrawler dependency's already-fetched/parsed
+  // homepage instead of independently re-fetching the same page. Only trusted when
+  // the crawler itself successfully retrieved the homepage (status 200); otherwise
+  // fall back to this module's own independent fetch so it keeps working standalone
+  // (e.g. crawler dependency unavailable, failed, or blocked by robots.txt).
+  if (homepageCrawlData && homepageCrawlData.status === 200) {
+    return {
+      metaTitle: homepageCrawlData.title || '',
+      metaDesc: homepageCrawlData.metaDescription || '',
+      h1Count: homepageCrawlData.h1Count,
+      h1Text: homepageCrawlData.h1Contents[0] || '',
+      hasSchema: homepageCrawlData.hasStructuredData,
+      hasMobileViewport: homepageCrawlData.hasViewportMeta,
+      internalLinks: homepageCrawlData.internalLinks,
+      externalLinks: homepageCrawlData.externalLinks,
+      imagesChecked: homepageCrawlData.imageCount,
+      imagesMissingAlt: homepageCrawlData.imageCount - homepageCrawlData.imagesWithAlt,
+      isHttps: url.startsWith('https'),
+    };
+  }
+
   try {
     const html = await withProviderResilience<string>(
       {
@@ -165,24 +224,32 @@ async function fetchHtmlAnalysis(url: string) {
 }
 
 // Helper: Check Robots/Sitemap
-async function checkEndpoint(baseUrl: string, path: string) {
+async function checkEndpoint(
+  baseUrl: string,
+  path: string
+): Promise<{ status: number; checked: boolean }> {
   try {
     const u = new URL(path, baseUrl).toString();
+    let checked = true;
     const status = await withProviderResilience<number>(
       {
         provider: 'crawler',
         operation: 'seoDeep:checkEndpoint',
         degrade: true,
-        fallbackValue: 404,
+        // P2-35 (Wave 7): the degrade fallback is a real network/provider failure,
+        // never a confirmed 404 — `checked` stays false so the caller does not
+        // treat "could not check" the same as "genuinely absent".
+        fallbackValue: -1,
       },
       async () => {
         const res = await safeFetch(u, { method: 'HEAD' });
         return res.status;
       }
     );
-    return status;
+    if (status === -1) checked = false;
+    return { status, checked };
   } catch {
-    return 404;
+    return { status: -1, checked: false };
   }
 }
 
@@ -192,8 +259,9 @@ async function fetchOrganicRanking(
   city: string = '',
   url: string,
   tracker?: CostTracker
-) {
-  if (!process.env.SERP_API_KEY) return { organicRank: null, inTop10: false };
+): Promise<{ organicRank: number | null; inTop10: boolean; rankCheckStatus: string }> {
+  if (!process.env.SERP_API_KEY)
+    return { organicRank: null, inTop10: false, rankCheckStatus: 'not_configured' };
 
   const query = `${businessName} ${city}`.trim();
 
@@ -219,12 +287,14 @@ async function fetchOrganicRanking(
       async () => {
         const p = new URLSearchParams(params as any);
         const serpUrl = `${SERP_API_BASE}?${p.toString()}`;
+        // P2-35 (Wave 7): no silent degrade/fallback here — a provider failure must
+        // surface to the outer catch and report `rankCheckStatus: 'unavailable'`,
+        // never collapse into the identical shape as "checked, not found".
         return withProviderResilience<any>(
           {
             provider: 'serpapi',
             operation: 'seoDeep:fetchOrganicRanking',
-            degrade: true,
-            fallbackValue: { organic_results: [] },
+            degrade: false,
           },
           async () => {
             const res = await fetch(serpUrl);
@@ -246,14 +316,20 @@ async function fetchOrganicRanking(
       const match = data.organic_results.find((r: any) => normalize(r.link).includes(target));
 
       if (match) {
-        return { organicRank: match.position, inTop10: match.position <= 10 };
+        return {
+          organicRank: match.position,
+          inTop10: match.position <= 10,
+          rankCheckStatus: 'checked',
+        };
       }
     }
 
-    return { organicRank: null, inTop10: false };
+    // Genuinely checked, real results returned, site not found in them — a real
+    // (if inconclusive) observation, distinct from "could not check".
+    return { organicRank: null, inTop10: false, rankCheckStatus: 'checked' };
   } catch (e) {
     logger.error({ error: e }, 'SerpAPI Organic failed');
-    return { organicRank: null, inTop10: false };
+    return { organicRank: null, inTop10: false, rankCheckStatus: 'unavailable' };
   }
 }
 

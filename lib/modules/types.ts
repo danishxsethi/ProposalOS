@@ -31,6 +31,13 @@ export interface LegacyAuditModuleResult {
 export interface WebsiteModuleInput {
   url: string;
   businessName?: string;
+  /**
+   * When provided, threaded through to the shared `websiteCrawler` module so its
+   * single-flight coalescing (P1-27, Wave 7) can recognize this call as the same
+   * logical crawl as the canonical `websiteCrawler` registry module's own call for
+   * the same audit, avoiding a second real 20-page crawl of the same site.
+   */
+  auditId?: string;
 }
 
 // Finding types

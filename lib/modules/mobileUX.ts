@@ -16,6 +16,14 @@ export interface MobileUXModuleInput {
   url: string;
   businessName: string;
   signal?: AbortSignal;
+  /**
+   * P1-38 (Wave 7): the `website` module (dependsOn: ['website']) already runs a
+   * real mobile-strategy PageSpeed check for this same URL. When that succeeded,
+   * its score is forwarded here so this module reuses it instead of making a
+   * second, duplicate billable mobile PageSpeed call — the desktop comparison call
+   * (genuinely new data `website` never fetches) is unaffected.
+   */
+  reusedMobileScore?: number | null;
 }
 
 interface TouchTargetViolation {
@@ -76,7 +84,12 @@ export async function runMobileUXModule(
   logger.info({ url: input.url }, '[MobileUX] Starting mobile analysis');
 
   try {
-    const analysis = await analyzeMobileUX(input.url, tracker, input.signal);
+    const analysis = await analyzeMobileUX(
+      input.url,
+      tracker,
+      input.signal,
+      input.reusedMobileScore
+    );
     const findings = generateMobileFindings(analysis, input.url);
 
     const evidenceSnapshot = {
@@ -125,7 +138,8 @@ export async function runMobileUXModule(
 async function analyzeMobileUX(
   url: string,
   tracker?: CostTracker,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  reusedMobileScore?: number | null
 ): Promise<MobileAnalysis> {
   const browser = await launchBrowser();
   const page = await browser.newPage();
@@ -350,7 +364,7 @@ async function analyzeMobileUX(
     });
 
     // Get PageSpeed mobile score
-    const pagespeedData = await fetchPageSpeedMobile(url, tracker, signal);
+    const pagespeedData = await fetchPageSpeedMobile(url, tracker, signal, reusedMobileScore);
 
     return {
       ...layoutMetrics,
@@ -432,7 +446,8 @@ function waitForDelay(ms: number, signal?: AbortSignal): Promise<void> {
 async function fetchPageSpeedMobile(
   url: string,
   tracker?: CostTracker,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  reusedMobileScore?: number | null
 ): Promise<{ status: 'available' | 'unavailable'; mobileScore?: number; desktopScore?: number }> {
   try {
     const apiKey = process.env.GOOGLE_PAGESPEED_API_KEY;
@@ -441,28 +456,34 @@ async function fetchPageSpeedMobile(
       return { status: 'unavailable' };
     }
 
-    // Mobile strategy
-    const mobileUrl = `https://www.googleapis.com/pagespeedonline/v5/runPagespeed?url=${encodeURIComponent(url)}&strategy=mobile&key=${apiKey}`;
-    const mobileData = await withProviderResilience<unknown>(
-      {
-        provider: 'pagespeed',
-        operation: 'mobileUX:fetchPageSpeedMobile:mobile',
-        signal,
-        degrade: false,
-        policy: { timeoutMs: 10000, maxAttempts: 2 },
-      },
-      async ({ signal: providerSignal }) => {
-        tracker?.addApiCall('PAGESPEED');
-        const mobileRes = await fetch(mobileUrl, { signal: providerSignal });
-        if (!mobileRes.ok)
-          throw new Error(`HTTP error ${mobileRes.status}: ${mobileRes.statusText}`);
-        return await mobileRes.json();
-      }
-    );
-    const mobileParsed = PageSpeedResponseSchema.parse(mobileData);
-    const mobileScore = Math.round(
-      mobileParsed.lighthouseResult.categories.performance.score * 100
-    );
+    // P1-38 (Wave 7): `website` (dependsOn: ['website']) already performed a real
+    // mobile-strategy PageSpeed call for this same URL. Reuse its score instead of
+    // making a second duplicate billable mobile call.
+    let mobileScore: number;
+    if (typeof reusedMobileScore === 'number') {
+      mobileScore = reusedMobileScore;
+    } else {
+      // Mobile strategy
+      const mobileUrl = `https://www.googleapis.com/pagespeedonline/v5/runPagespeed?url=${encodeURIComponent(url)}&strategy=mobile&key=${apiKey}`;
+      const mobileData = await withProviderResilience<unknown>(
+        {
+          provider: 'pagespeed',
+          operation: 'mobileUX:fetchPageSpeedMobile:mobile',
+          signal,
+          degrade: false,
+          policy: { timeoutMs: 10000, maxAttempts: 2 },
+        },
+        async ({ signal: providerSignal }) => {
+          tracker?.addApiCall('PAGESPEED');
+          const mobileRes = await fetch(mobileUrl, { signal: providerSignal });
+          if (!mobileRes.ok)
+            throw new Error(`HTTP error ${mobileRes.status}: ${mobileRes.statusText}`);
+          return await mobileRes.json();
+        }
+      );
+      const mobileParsed = PageSpeedResponseSchema.parse(mobileData);
+      mobileScore = Math.round(mobileParsed.lighthouseResult.categories.performance.score * 100);
+    }
 
     // Try to get desktop score for comparison
     let desktopScore: number | undefined;

@@ -8,6 +8,7 @@ import { withProviderResilience } from '@/lib/resilience/withProviderResilience'
 import { safeFetchResponseDerived } from '@/lib/security/safeFetch';
 
 import { normalizeConfidence } from './findingGenerator';
+import { scorePlaceCandidate } from './gbp';
 import { AuditModuleResult, createEvidence, Finding, GBPModuleInput } from './types';
 
 const PLACES_API_BASE = 'https://places.googleapis.com/v1';
@@ -105,7 +106,7 @@ export async function runGbpDeepModule(
       const searchRes = await withModuleCache<any>(
         {
           module: 'gbp_deep',
-          version: 1,
+          version: 2,
           input: { type: 'places_text_search', businessName: input.businessName, city: input.city },
         },
         { ttlSeconds: 24 * 60 * 60 },
@@ -124,11 +125,14 @@ export async function runGbpDeepModule(
                 headers: {
                   'Content-Type': 'application/json',
                   'X-Goog-Api-Key': process.env.GOOGLE_PLACES_API_KEY!,
-                  'X-Goog-FieldMask': 'places.id',
+                  // P1-29 (Wave 7): displayName/formattedAddress are required to
+                  // disambiguate multiple candidates — the previous 'places.id'-only
+                  // field mask made scoring impossible and always trusted index 0.
+                  'X-Goog-FieldMask': 'places.displayName,places.id,places.formattedAddress',
                 },
                 body: JSON.stringify({
                   textQuery: `${input.businessName} in ${input.city}`,
-                  maxResultCount: 1,
+                  maxResultCount: 5,
                 }),
                 signal,
               });
@@ -140,7 +144,13 @@ export async function runGbpDeepModule(
       );
 
       if (!searchRes.places?.length) throw new Error('Business not found in Maps');
-      placeId = searchRes.places[0].id;
+      const scored = searchRes.places
+        .map((candidate: any) => ({
+          candidate,
+          score: scorePlaceCandidate(candidate, input.businessName, input.city),
+        }))
+        .sort((a: { score: number }, b: { score: number }) => b.score - a.score);
+      placeId = scored[0].candidate.id;
     }
 
     // 2. Fetch Deep Details

@@ -16,6 +16,51 @@ function normalize(s: string): string {
     .trim();
 }
 
+/**
+ * P1-29 (Wave 7): score a Text Search candidate against the input business identity
+ * using the real signals the search response actually returns (name, address) — no
+ * fabricated certainty. Used to pick the best-matching candidate out of multiple
+ * results instead of blindly trusting index 0, and to flag when the match is not
+ * confidently distinguishable from a same-name/franchise competitor.
+ */
+/**
+ * P1-29 (Wave 7): score a Text Search candidate against the input business identity
+ * using the real signals the search response actually returns (name, address) — no
+ * fabricated certainty. Used to pick the best-matching candidate out of multiple
+ * results instead of blindly trusting index 0, and to flag when the match is not
+ * confidently distinguishable from a same-name/franchise competitor. Exported so
+ * `gbpDeep.ts`'s own independent fallback resolution (used only when the canonical
+ * `gbp` dependency is unavailable) applies the identical disambiguation logic
+ * instead of a second, divergent implementation.
+ */
+export function scorePlaceCandidate(
+  candidate: { displayName?: { text?: string }; formattedAddress?: string },
+  businessName: string,
+  city: string
+): number {
+  const candidateName = normalize(candidate.displayName?.text || '');
+  const targetName = normalize(businessName);
+  let score = 0;
+
+  if (candidateName && targetName) {
+    if (candidateName === targetName) {
+      score += 70;
+    } else if (candidateName.includes(targetName) || targetName.includes(candidateName)) {
+      score += 45;
+    } else {
+      const candidateTokens = new Set(candidateName.split(' ').filter(Boolean));
+      const targetTokens = targetName.split(' ').filter(Boolean);
+      const overlap = targetTokens.filter((t) => candidateTokens.has(t)).length;
+      if (targetTokens.length > 0) score += Math.round((overlap / targetTokens.length) * 40);
+    }
+  }
+
+  const address = (candidate.formattedAddress || '').toLowerCase();
+  if (city && address.includes(city.toLowerCase())) score += 30;
+
+  return score;
+}
+
 /** Check if GBP name is consistent with website domain (e.g. "Main Street Dental" vs mainstreetdental.com) */
 function checkNameMatchesWebsite(
   gbpName: string | undefined,
@@ -52,7 +97,7 @@ export async function runGBPModule(
     const searchData = await withModuleCache<any>(
       {
         module: 'gbp',
-        version: 1,
+        version: 2,
         input: { type: 'places_text_search', businessName: input.businessName, city: input.city },
       },
       { ttlSeconds: 24 * 60 * 60 },
@@ -71,11 +116,15 @@ export async function runGBPModule(
                 'Content-Type': 'application/json',
                 'X-Goog-Api-Key': process.env.GOOGLE_PLACES_API_KEY!,
                 'X-Goog-FieldMask':
-                  'places.name,places.id,places.formattedAddress,places.rating,places.userRatingCount',
+                  'places.displayName,places.id,places.formattedAddress,places.rating,places.userRatingCount',
               },
               body: JSON.stringify({
                 textQuery: `${input.businessName} in ${input.city}`,
-                maxResultCount: 1,
+                // P1-29 (Wave 7): request multiple candidates (same single call, no
+                // added cost) so a common/franchise business name can be
+                // disambiguated by real name+address signals instead of blindly
+                // trusting whatever Places returns first.
+                maxResultCount: 5,
               }),
             });
 
@@ -93,7 +142,32 @@ export async function runGBPModule(
       throw new Error(`Business not found: ${input.businessName} in ${input.city}`);
     }
 
-    const place = searchData.places[0];
+    // P1-29 (Wave 7): score every returned candidate against the real name/address
+    // signals available and select the best match instead of always taking index 0.
+    // When the top two candidates are not clearly distinguishable (or even the best
+    // match is weak), the match is flagged `ambiguous` — a common name or franchise
+    // risk — so the aggregation layer never emits definitive customer-negative
+    // findings about a business we could not confidently confirm is the right one.
+    const scoredCandidates = searchData.places
+      .map((candidate: any) => ({
+        candidate,
+        score: scorePlaceCandidate(candidate, input.businessName, input.city),
+      }))
+      .sort((a: { score: number }, b: { score: number }) => b.score - a.score);
+
+    const best = scoredCandidates[0];
+    const second = scoredCandidates[1];
+    const identityConfidence: 'high' | 'ambiguous' =
+      best.score < 40 || (second && best.score - second.score < 20) ? 'ambiguous' : 'high';
+    const alternateCandidateNames: string[] =
+      identityConfidence === 'ambiguous'
+        ? scoredCandidates
+            .slice(1, 3)
+            .map((s: { candidate: any }) => s.candidate.displayName?.text)
+            .filter((n: unknown): n is string => typeof n === 'string' && n.length > 0)
+        : [];
+
+    const place = best.candidate;
     const placeId = place.id;
 
     // 2. Get Details + Reviews
@@ -195,6 +269,13 @@ export async function runGBPModule(
           details.accessibilityOptions ||
           details.amenities
         ),
+        // P1-29 (Wave 7): real identity-match provenance — never fabricated
+        // certainty. `gbpDeep` and the aggregation layer use this to withhold
+        // definitive customer-negative findings about an unconfirmed match.
+        identityConfidence,
+        matchConfidenceScore: best.score,
+        candidatesConsidered: searchData.places.length,
+        alternateCandidateNames,
       },
     };
   } catch (error) {
