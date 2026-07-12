@@ -12,6 +12,12 @@
 import { logger } from '@/lib/logger';
 import { sendEmail } from '@/lib/notifications/email';
 import { prisma } from '@/lib/prisma';
+import {
+  completeLifecycleSend,
+  guardLifecycleSend,
+  markLifecycleSendUnknown,
+} from '@/lib/retention/lifecycleSafety';
+import { runWithTenantAsync } from '@/lib/tenant/context';
 
 export interface WinBackResult {
   campaignsCreated: number;
@@ -191,7 +197,7 @@ export function generateWinBackEmail(
   <div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;padding:16px;margin:20px 0">
     <h3 style="margin:0 0 8px 0;color:#0369a1;font-size:16px">🚀 What's New Since You Left</h3>
     <ul style="margin:0;color:#0369a1;font-size:14px">
-      <li><strong>AI-Powered Diagnostics</strong> - 3x faster issue detection</li>
+      <li><strong>AI-Powered Diagnostics</strong> - faster issue detection</li>
       <li><strong>Automated Fixes</strong> - One-click solutions for common problems</li>
       <li><strong>Competitor Tracking</strong> - Real-time alerts on competitor changes</li>
       <li><strong>Client Portal</strong> - Your clients can now track their progress</li>
@@ -273,11 +279,11 @@ export function generateWinBackEmail(
     <p style="color:#991b1b;font-size:12px;margin-top:8px">Expires in ${offer.validDays} days</p>
   </div>
   
-  <p style="color:#475569;font-weight:600;margin-top:16px">Why clients come back:</p>
+  <p style="color:#475569;font-weight:600;margin-top:16px">Why clients choose to continue with us:</p>
   <ul style="color:#475569">
-    <li>Average 40% improvement in audit scores within 30 days</li>
-    <li>Automated competitor monitoring saves 10+ hours/week</li>
-    <li>Client retention increases by 25% with our tracking tools</li>
+    <li>Ongoing automated monitoring of your site and competitors</li>
+    <li>Regular audit updates as your business and market change</li>
+    <li>A dedicated team focused on your account</li>
   </ul>
   
   <a href="[RETURN_LINK]" style="display:inline-block;background:#6366f1;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600;margin-top:16px">
@@ -340,56 +346,86 @@ export async function runWinBackCampaign(): Promise<WinBackResult> {
       }
 
       try {
-        // Generate offer
-        const offer = generateWinBackOffer(step, client.totalSpent);
-
-        // Create campaign
-        await createWinBackCampaign(
-          client.tenantId, // Current tenant (agency running the campaign)
-          client.tenantId, // Former tenant being won back
-          step,
-          offer.code
-        );
-
-        // Generate and send email
-        const email = generateWinBackEmail(client.tenantName, step, offer, client.daysSinceChurn);
-
-        await sendEmail({
-          to: client.contactEmail,
-          subject: email.subject,
-          body: email.body
-            .replace(
-              '[RETURN_LINK]',
-              `https://app.proposalengine.app/winback?tenant=${client.tenantId}&code=${offer.code}`
-            )
-            .replace(
-              '[EXPORT_LINK]',
-              `https://app.proposalengine.app/export?tenant=${client.tenantId}`
-            )
-            .replace(
-              '[UNSUBSCRIBE_LINK]',
-              `https://app.proposalengine.app/unsubscribe?email=${encodeURIComponent(client.contactEmail)}`
-            ),
-        });
-
-        // Update campaign status
-        await prisma.winBackCampaign.updateMany({
-          where: { formerTenantId: client.tenantId, step },
-          data: { status: 'sent', lastSentAt: new Date() },
-        });
-
-        emailsSent++;
-        campaignsCreated++;
-
-        logger.info(
-          {
+        await runWithTenantAsync(client.tenantId, async () => {
+          const idempotencyKey = `winback:${client.tenantId}:${step}`;
+          const guard = await guardLifecycleSend({
             tenantId: client.tenantId,
+            idempotencyKey,
+            recipientEmail: client.contactEmail,
+          });
+          if (!guard.allowed) {
+            logger.warn(
+              { tenantId: client.tenantId, step, reason: guard.reason },
+              'Win-back send blocked'
+            );
+            return;
+          }
+
+          // Generate offer
+          const offer = generateWinBackOffer(step, client.totalSpent);
+
+          // Create campaign
+          await createWinBackCampaign(
+            client.tenantId, // Current tenant (agency running the campaign)
+            client.tenantId, // Former tenant being won back
             step,
-            daysSinceChurn: client.daysSinceChurn,
-            offerCode: offer.code,
-          },
-          'Win-back email sent'
-        );
+            offer.code
+          );
+
+          // Generate and send email
+          const email = generateWinBackEmail(client.tenantName, step, offer, client.daysSinceChurn);
+
+          try {
+            await sendEmail({
+              to: client.contactEmail,
+              subject: email.subject,
+              body: email.body
+                .replace(
+                  '[RETURN_LINK]',
+                  `https://app.proposalengine.app/winback?tenant=${client.tenantId}&code=${offer.code}`
+                )
+                .replace(
+                  '[EXPORT_LINK]',
+                  `https://app.proposalengine.app/export?tenant=${client.tenantId}`
+                )
+                .replace(
+                  '[UNSUBSCRIBE_LINK]',
+                  `https://app.proposalengine.app/unsubscribe?email=${encodeURIComponent(client.contactEmail)}`
+                ),
+            });
+          } catch (sendError) {
+            await markLifecycleSendUnknown(
+              { tenantId: client.tenantId, idempotencyKey, recipientEmail: client.contactEmail },
+              sendError instanceof Error ? sendError.message : 'send failed'
+            );
+            throw sendError;
+          }
+
+          await completeLifecycleSend({
+            tenantId: client.tenantId,
+            idempotencyKey,
+            recipientEmail: client.contactEmail,
+          });
+
+          // Update campaign status (scoped to this tenant's own campaign row)
+          await prisma.winBackCampaign.updateMany({
+            where: { formerTenantId: client.tenantId, tenantId: client.tenantId, step },
+            data: { status: 'sent', lastSentAt: new Date() },
+          });
+
+          emailsSent++;
+          campaignsCreated++;
+
+          logger.info(
+            {
+              tenantId: client.tenantId,
+              step,
+              daysSinceChurn: client.daysSinceChurn,
+              offerCode: offer.code,
+            },
+            'Win-back email sent'
+          );
+        });
       } catch (error) {
         errors.push(`Failed to send win-back email to ${client.contactEmail}: ${error}`);
         logger.error({ error, tenantId: client.tenantId, step }, 'Win-back failed');

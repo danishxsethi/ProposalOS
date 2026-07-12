@@ -90,8 +90,26 @@ export async function triggerUpsellProposal(
   reason: string
 ): Promise<{ proposalId: string } | null> {
   try {
-    const audit = await prisma.audit.findUnique({ where: { id: auditId } });
+    // Tenant/target validation: the source audit must belong to the calling tenant.
+    const audit = await prisma.audit.findFirst({ where: { id: auditId, tenantId } });
     if (!audit) return null;
+
+    // Idempotency: at most one open upsell proposal per (tenant, audit).
+    const candidates = await prisma.proposal.findMany({
+      where: { auditId, tenantId },
+      select: { id: true, nextSteps: true },
+    });
+    const existingUpsell = candidates.find((r) =>
+      r.nextSteps?.some((s) => s.startsWith('[upsell:true]'))
+    );
+
+    if (existingUpsell) {
+      logger.info(
+        { proposalId: existingUpsell.id, auditId, tenantId },
+        '[UpsellTrigger] Upsell proposal already exists — reusing'
+      );
+      return { proposalId: existingUpsell.id };
+    }
 
     // Create a fresh proposal record tagged as upsell
     const proposal = await prisma.proposal.create({

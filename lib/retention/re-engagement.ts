@@ -12,6 +12,12 @@
 import { logger } from '@/lib/logger';
 import { sendEmail } from '@/lib/notifications/email';
 import { prisma } from '@/lib/prisma';
+import {
+  completeLifecycleSend,
+  guardLifecycleSend,
+  markLifecycleSendUnknown,
+} from '@/lib/retention/lifecycleSafety';
+import { runWithTenantAsync } from '@/lib/tenant/context';
 
 export interface ReEngagementResult {
   campaignsCreated: number;
@@ -164,7 +170,7 @@ export function generateReEngagementEmail(
   <div style="background:#fef3c7;border:1px solid #fde68a;border-radius:8px;padding:16px;margin:20px 0">
     <h3 style="margin:0 0 8px 0;color:#92400e;font-size:16px">🔍 Industry Trends We're Seeing</h3>
     <ul style="margin:0;color:#92400e;font-size:14px">
-      <li>Average site speeds improving by 25%</li>
+      <li>Site speed and performance continue to matter for rankings</li>
       <li>Mobile UX becoming a key ranking factor</li>
       <li>Accessibility compliance now mandatory in many regions</li>
     </ul>
@@ -270,52 +276,86 @@ export async function runReEngagementCampaign(): Promise<ReEngagementResult> {
       }
 
       try {
-        // Create campaign
-        await createReEngagementCampaign(client.proposalId, client.tenantId, step);
+        await runWithTenantAsync(client.tenantId, async () => {
+          const idempotencyKey = `reengage:${client.proposalId}:${step}`;
+          const guard = await guardLifecycleSend({
+            tenantId: client.tenantId,
+            idempotencyKey,
+            recipientEmail: client.prospectEmail as string,
+          });
+          if (!guard.allowed) {
+            logger.warn(
+              { proposalId: client.proposalId, step, reason: guard.reason },
+              'Re-engagement send blocked'
+            );
+            return;
+          }
 
-        // Generate and send email
-        const email = generateReEngagementEmail(client.businessName, step, days);
+          // Create campaign
+          await createReEngagementCampaign(client.proposalId, client.tenantId, step);
 
-        await sendEmail({
-          to: client.prospectEmail,
-          subject: email.subject,
-          body: email.body
-            .replace(
-              '[SCAN_LINK]',
-              `https://app.proposalengine.app/client/scan?proposal=${client.proposalId}`
-            )
-            .replace('[FEATURES_LINK]', 'https://proposalengine.app/features')
-            .replace(
-              '[UPGRADE_LINK]',
-              `https://app.proposalengine.app/pricing?proposal=${client.proposalId}`
-            )
-            .replace(
-              '[OFFBOARD_LINK]',
-              `https://app.proposalengine.app/client/export?proposal=${client.proposalId}`
-            )
-            .replace(
-              '[UNSUBSCRIBE_LINK]',
-              `https://app.proposalengine.app/unsubscribe?email=${encodeURIComponent(client.prospectEmail)}`
-            ),
+          // Generate and send email
+          const email = generateReEngagementEmail(client.businessName, step, days);
+
+          try {
+            await sendEmail({
+              to: client.prospectEmail as string,
+              subject: email.subject,
+              body: email.body
+                .replace(
+                  '[SCAN_LINK]',
+                  `https://app.proposalengine.app/client/scan?proposal=${client.proposalId}`
+                )
+                .replace('[FEATURES_LINK]', 'https://proposalengine.app/features')
+                .replace(
+                  '[UPGRADE_LINK]',
+                  `https://app.proposalengine.app/pricing?proposal=${client.proposalId}`
+                )
+                .replace(
+                  '[OFFBOARD_LINK]',
+                  `https://app.proposalengine.app/client/export?proposal=${client.proposalId}`
+                )
+                .replace(
+                  '[UNSUBSCRIBE_LINK]',
+                  `https://app.proposalengine.app/unsubscribe?email=${encodeURIComponent(client.prospectEmail as string)}`
+                ),
+            });
+          } catch (sendError) {
+            await markLifecycleSendUnknown(
+              {
+                tenantId: client.tenantId,
+                idempotencyKey,
+                recipientEmail: client.prospectEmail as string,
+              },
+              sendError instanceof Error ? sendError.message : 'send failed'
+            );
+            throw sendError;
+          }
+
+          await completeLifecycleSend({
+            tenantId: client.tenantId,
+            idempotencyKey,
+            recipientEmail: client.prospectEmail as string,
+          });
+
+          // Update campaign status (scoped to this tenant's own campaign row)
+          await prisma.reEngagementCampaign.updateMany({
+            where: { proposalId: client.proposalId, tenantId: client.tenantId, step },
+            data: { status: 'sent', lastSentAt: new Date() },
+          });
+
+          emailsSent++;
+          campaignsCreated++;
+
+          logger.info(
+            {
+              proposalId: client.proposalId,
+              step,
+              daysInactive: days,
+            },
+            'Re-engagement email sent'
+          );
         });
-
-        // Update campaign status
-        await prisma.reEngagementCampaign.updateMany({
-          where: { proposalId: client.proposalId, step },
-          data: { status: 'sent', lastSentAt: new Date() },
-        });
-
-        emailsSent++;
-        campaignsCreated++;
-
-        logger.info(
-          {
-            proposalId: client.proposalId,
-            step,
-            daysInactive: days,
-          },
-          'Re-engagement email sent'
-        );
       } catch (error) {
         errors.push(`Failed to send re-engagement email to ${client.prospectEmail}: ${error}`);
         logger.error({ error, proposalId: client.proposalId, step }, 'Re-engagement failed');
