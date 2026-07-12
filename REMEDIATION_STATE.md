@@ -1616,3 +1616,135 @@ boundaries rather than creating another claim schema.
    structured review reasons, and fixture-mocked tests.
 
 Wave 9 must not begin until Wave 8B is complete and checkpointed.
+
+## Wave 8B result (2026-07-12)
+
+Entry checkpoint was `5d894cd` (`chore(remediation): checkpoint wave 8a`), immediately preceded
+by `574608b` (`fix(claim-policy): complete wave 8a claim-safety batch`). Branch, stash, preserved
+dirty baseline, and entry TypeScript matched the Wave 8A checkpoint.
+
+Wave 8B code commit: `4587703` (`fix(claim-policy): enforce grounded diagnosis proposal and qa`).
+
+### Authoritative scope and finding status
+
+The ledger still contains exactly P0-26, P1-36, and P1-40 at `wave === 8`; all remain verified.
+Wave 8B completed the shared downstream boundary required to prevent recurrence. No Wave 8 item is
+fixed-and-blocked, re-scoped, or open. P1-41 remains the prior fixed-and-externally-blocked
+backlink-provider decision.
+
+### Claim-producer integration
+
+`lib/claims/claimContract.ts` is the single customer-claim boundary. Diagnosis cluster roots and
+narratives, proposal summaries/clusters/actions/package descriptions/features, configured
+timelines/prices, QA, persistence, public token output, proposal page, PDF, and presentation
+preparation now preserve validated claim IDs and Finding IDs. Factual claims require Wave 3-valid
+same-audit/same-tenant Findings; commercial configuration claims require named deterministic rule
+references; unsupported numbers/text, unknown IDs, excluded/ineligible Findings, and model-supplied
+identity fail closed.
+
+### Diagnosis, proposal, and LLM safety
+
+Diagnosis validates all input Findings before graph execution, computes severity deterministically,
+preserves exact Finding membership, uses strict bounded JSON schemas, frames source content as
+untrusted, rejects unknown IDs and severity overrides, and omits invalid narratives. Empty input
+returns an honest empty diagnosis. Adversarial QA can reject/score content but cannot rewrite a
+validated narrative.
+
+Proposal generation now requires a grounded `completeProposal`; legacy `proposalDef` and timeout
+fallback persistence paths were removed. Package composition, configured pricing, effort timelines,
+authorized discounts, and explicit-input ROI arithmetic are deterministic and runtime-validated.
+No ROI is shown when required inputs are absent. Model output is limited to strictly validated,
+Finding-cited synthesis and cannot control identity, severity, tier, price, timeline, discount, or
+ROI.
+
+### QA, persistence, and publication
+
+Deterministic grounding validation runs before adversarial review. AutoQA rejects missing/invalid
+citations, invalid Evidence, cross-scope IDs, policy overclaims, price/tier mismatch, and invalid ROI
+arithmetic. It does not invent or substitute citations. QA decisions, structured reasons, claim
+policy, bindings, and commercial rule metadata persist in `qaResults`. Legacy/unverified or failed-QA
+proposals are blocked from READY/SENT/public token views, email, PDF, presentation, share, accept,
+status publication, and send. Public serialization exposes sanitized claim/Finding references
+without raw secret-bearing Evidence.
+
+### Verification
+
+- New Wave 8B claim/diagnosis/proposal/architecture tests: 42/42.
+- New adversarial-QA strict-schema tests plus affected Wave 8B/security tests: 53/53.
+- Existing diagnosis/proposal/QA/pipeline tests: 29/29.
+- Proposal authorization/readiness routes: 18/18.
+- Wave 8A module claims: 15/15.
+- Wave 3 Finding/Evidence: 45/45.
+- Wave 4 affected safety: 8/8.
+- Wave 5 adapter/result: 26/26.
+- Wave 6 implementations: 41/41.
+- Wave 7A: 26/26.
+- Wave 7B: 53/53.
+- Canonical manifest assertions: 7/7; still exactly 27 modules. Vitest emitted the documented
+  Prisma darwin-arm64 engine unhandled rejection.
+- Identified Wave 0-2/canonical sample: 34/34 assertions, with three documented Prisma engine
+  unhandled rejections.
+- TypeScript: exit 0.
+- Changed-file ESLint: zero errors; warning-class existing debt only.
+- PostgreSQL `5435` and `5444`: unavailable. Prisma darwin-arm64 engine: unavailable. Full suite
+  not run.
+
+Known unrelated failures remain the seven out-of-scope SSRF architecture-guard violations and the
+deprecated AuditOrchestrator timeout. No production DB, provider, browser, network, LLM, customer
+data, or infrastructure was used.
+
+### Wave 9 entry scope
+
+`REMEDIATION_FINDINGS.json` currently has **zero rows with `wave === 9`**. Wave 9 must not invent
+finding IDs. At entry it must re-read the ledger and classify the committed pipeline inventory:
+outreach, closing/conversational agent, scheduling/human handoff, delivery, recurring retention/
+re-audit/upsell, durable state transitions, idempotency, and communication accuracy. The recorded
+`lib/pipeline/agents/accessibilityAgent.ts` simulated success/certification behavior is explicitly
+deferred to that pipeline wave.
+
+## Wave 8B entry and claim-producer inventory (2026-07-12)
+
+Entry verification:
+
+- Branch: `remediation/proposalos-e2e`.
+- HEAD: `5d894cde092b90b08957ae8b5fed8babf5002534`
+  (`chore(remediation): checkpoint wave 8a`), immediately preceded by `574608b`
+  (`fix(claim-policy): complete wave 8a claim-safety batch`).
+- Wave 0-8A fix/checkpoint commits are present and `git stash list` is empty.
+- Dirty tree matches the documented preserved baseline: `AUDIT_REPORT.md`, the logger-typing
+  route group and `lib/logger.ts`, `prompt-performance.ts`,
+  `app/api/cron/metering-sweep/route.ts`, and untracked `scripts/show-leaks.js`.
+- No unrecorded Wave 8B work was present.
+- Entry TypeScript baseline:
+  `./node_modules/.bin/tsc --noEmit --pretty false --incremental false` -> exit 0.
+
+The authoritative Wave 8B scope is the remaining shared boundary recorded by the Wave 8A
+checkpoint: diagnosis grounding, proposal citations and citation survival, deterministic
+commercial calculations, deterministic QA rejection, and strict LLM input/output handling.
+P0-26, P1-36, and P1-40 remain verified and are regression scope only. No additional open
+`wave === 8` ledger finding exists.
+
+### Customer-facing claim-producer map
+
+| Producer                                                  | Classification                                                         | Source function/node                                                          | Runtime schema and Finding IDs                                                           | Trusted audit/tenant source               | Persistence/render destination                     | QA gate                            | Current bypass risk                                                                                                |
+| --------------------------------------------------------- | ---------------------------------------------------------------------- | ----------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- | ----------------------------------------- | -------------------------------------------------- | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| Canonical module Findings                                 | `DETERMINISTIC_OBSERVATION`                                            | Canonical module adapters, Finding normalization, and persistence             | Wave 3 Finding/Evidence contract; stable Finding IDs                                     | Canonical audit execution context         | `Finding` rows, audit APIs, diagnosis input        | Wave 3 validation                  | Low; preserve Wave 3 and Wave 8A boundaries                                                                        |
+| Diagnosis cluster membership and root cause               | `LLM_SYNTHESIS_WITH_FINDING_CITATIONS`                                 | `llmClusterFindings`, `llmSinglePassClustering`, diagnosis graph cluster node | Permissive JSON; cluster-level Finding IDs only                                          | Currently inferred from the first Finding | Proposal pain-cluster JSON and report copy         | Structural cluster validation only | Critical: unknown IDs, malformed output, generic fallback claims, and model-authored prose are not claim-validated |
+| Diagnosis severity and ranking                            | `DETERMINISTIC_DERIVATION`                                             | `scoreCluster` and diagnosis rank node                                        | Severity is deterministic; ROI/effort ranking includes placeholder values                | Diagnosis graph state                     | Proposal ordering and package inputs               | No commercial-rule validation      | High: placeholder ROI and effort can become customer-facing prioritization                                         |
+| Diagnosis narrative                                       | `LLM_SYNTHESIS_WITH_FINDING_CITATIONS`                                 | `generateNarratives`                                                          | Unstructured text with cluster IDs held separately                                       | Currently inferred from the first Finding | Pain-cluster narrative                             | Adversarial review only            | Critical: narrative can add unsupported facts or metrics and fallback text is silently substituted                 |
+| Proposal executive summary                                | `LLM_SYNTHESIS_WITH_FINDING_CITATIONS`                                 | Proposal LLM orchestrator and proposal graph                                  | Plain string; no claim-level Finding IDs                                                 | Proposal graph audit context              | `Proposal.executiveSummary`, web/PDF/email copy    | Heuristic autoQA                   | Critical: factual copy can persist and render without citations                                                    |
+| Proposal pain clusters                                    | `DETERMINISTIC_DERIVATION` plus `LLM_SYNTHESIS_WITH_FINDING_CITATIONS` | Proposal compiler                                                             | Cluster Finding IDs exist; root cause/narrative are not claim-validated                  | Diagnosis output                          | `Proposal.painClusters` JSON, web/PDF/presentation | Citation existence check only      | High: IDs can be valid but unrelated to the prose                                                                  |
+| Tier/package descriptions and features                    | `RECOMMENDATION` plus `COMMERCIAL_CONFIGURATION`                       | Proposal LLM orchestrator, tier mapper, templates                             | Tier-level Finding IDs; free-form descriptions/features/timelines                        | Proposal graph plus pricing configuration | Tier JSON, web/PDF/presentation                    | Tier ID and ordering heuristics    | Critical: model/template output can invent necessity, scope, or timelines                                          |
+| Prices and discounts                                      | `COMMERCIAL_CONFIGURATION`                                             | Pricing rules and proposal graph                                              | Numeric schema exists; configuration provenance and override rejection are incomplete    | Tenant/product pricing configuration      | `Proposal.pricing` and tier JSON                   | Ordering check only                | Critical: model/template fallbacks can supply customer prices                                                      |
+| ROI and expected outcomes                                 | `ESTIMATE_WITH_ASSUMPTIONS`                                            | ROI calculator and proposal graph                                             | Numeric fields exist; hard-coded benchmark fallbacks and unsupported inputs are accepted | Findings plus inferred industry defaults  | Tier JSON and proposal narrative                   | Scenario-shape heuristic           | Critical: fabricated traffic, conversion, value, uplift, or citations can become customer claims                   |
+| Assumptions, recommendations, timelines, and next steps   | `RECOMMENDATION` or `ESTIMATE_WITH_ASSUMPTIONS`                        | Proposal LLM/templates                                                        | Free-form strings without claim classification                                           | Proposal graph                            | Proposal arrays and customer renderers             | Presence/CTA heuristics            | High: observations can be smuggled into recommendations and assumptions can be omitted                             |
+| Comparison/report/presentation copy                       | `DETERMINISTIC_DERIVATION` or `LLM_SYNTHESIS_WITH_FINDING_CITATIONS`   | Comparison builder and render preparation                                     | Metric schemas exist; claim-level provenance is not uniform                              | Audit/proposal context                    | Proposal JSON, web, PDF, presentation/export       | Proposal QA only                   | High: serializers can retain prose while dropping citation context                                                 |
+| QA/autoQA output and adversarial rewrites                 | `INTERNAL_DIAGNOSTIC`                                                  | `runAutoQA`, `ProposalQAService`, adversarial-QA graph nodes                  | Heuristic result objects; permissive Evidence checks                                     | Caller-supplied proposal/findings         | `qaResults`, proposal status, hardened copy        | Final approval decision            | Critical: unsupported content can pass and LLM rewrites can replace content without provenance                     |
+| Legacy proposal records                                   | `UNVERIFIED`                                                           | Proposal load/regenerate/public render paths                                  | No grounding-version marker or complete citation set                                     | Persisted tenant-scoped record            | Existing proposal pages/exports                    | No mandatory legacy rejection      | Critical: old prose can be treated as newly verified                                                               |
+| Outreach, closing, scheduling, delivery, retention agents | `UNVERIFIED`                                                           | Pipeline and agent implementations                                            | Outside the Wave 8 proposal boundary                                                     | Pipeline execution context                | Customer communications/actions                    | Wave 9 scope                       | Deferred: do not modify or validate as Wave 8B implementation                                                      |
+
+Wave 8B will reuse `lib/claims/claimContract.ts` as the only customer-claim boundary. The
+smallest shared fix is to validate structured claims at diagnosis/proposal/QA boundaries, make
+commercial values originate only from validated deterministic rules, persist grounding metadata
+in existing proposal JSON/QA fields, and block approval/public preparation when that metadata is
+missing or invalid. No parallel Evidence system or production data backfill will be added.

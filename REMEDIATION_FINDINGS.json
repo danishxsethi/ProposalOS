@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-07-11T15:12:16.135Z",
+  "generatedAt": "2026-07-12T20:04:37Z",
   "auditSource": "AUDIT_REPORT.md",
   "note": "107 finding rows normalized from AUDIT_REPORT.md (Phase 0 + Pass 1, 2, 3, 4A, 4B batches 1-6, 4C.1). IDs P0-01..P0-18 and P1-10..P1-13 are not rows in this report (prior/other numbering) and are intentionally absent. P2-26 is superseded by an in-report self-correction (line 1450). Wave assignments for findings beyond the current wave are provisional and refined at wave entry. Unfinished audit passes (4C.2, 4C.3, Passes 5-20) are tracked in REMEDIATION_STATE.md as open audit work, NOT as confirmed defects.",
   "severityTotals": {
@@ -147,7 +147,7 @@
         "Rewrite finding language to scoped hedged technical observations + 'not legal advice' disclosure; test asserting no unhedged 'violates'/'illegal' string"
       ],
       "wave": 8,
-      "notes": "Wave 8A verified. privacyCompliance now reports bounded technical observations only; successful absence is distinct from unavailable browser/policy analysis; policy text is framed as untrusted and parsed through a strict technical-only schema; every emitted Finding has Wave 3-valid Evidence and an explicit not-legal-advice/jurisdiction limitation. Tests: wave8aPrivacyClaims.test.ts."
+      "notes": "Wave 8 verified. Wave 8A made privacyCompliance a bounded technical-signal scanner with honest unavailable states, strict untrusted policy parsing, Wave 3-valid Evidence, and explicit not-legal-advice/jurisdiction limitations. Wave 8B now prevents this output from becoming an unsupported downstream diagnosis/proposal claim: all factual claims require validated same-audit/same-tenant Finding citations and deterministic QA rejects prohibited legal verdict language. Tests: wave8aPrivacyClaims.test.ts, claimContract.test.ts, wave8bGrounding.test.ts, wave8b-claim-policy.test.ts."
     },
     {
       "id": "P1-01",
@@ -642,7 +642,7 @@
         "Relabel as automated-scan estimate + 'manual review required' disclosure; test never emits bare cert"
       ],
       "wave": 8,
-      "notes": "Wave 8A verified. Removed wcagLevel A/AA/AAA certification output; successful scans report automated violations or no automated violations, failures report unavailable, DOM snippets are sanitized, rule/selector/impact/timestamp are preserved, and all customer-facing accessibility Findings require manual review for overall conformance. Tests: wave8aAccessibilityClaims.test.ts plus findingGenerator regressions."
+      "notes": "Wave 8 verified. Wave 8A removed wcagLevel certification output and preserved automated violations/no-automated-violations/unavailable states, sanitized snippets, Evidence, and manual-review limits. Wave 8B now requires same-audit/same-tenant Finding citations through diagnosis, proposal, persistence, rendering, and QA; deterministic QA rejects accessibility certification language. Tests: wave8aAccessibilityClaims.test.ts, claimContract.test.ts, wave8bGrounding.test.ts, wave8b-claim-policy.test.ts."
     },
     {
       "id": "P1-37",
@@ -697,7 +697,7 @@
         "Distinguish not-configured/failed from checked-found-nothing; disclose single-snapshot; test"
       ],
       "wave": 8,
-      "notes": "Wave 8A verified. Paid-search checks now use observed/not_observed/unavailable states; missing key, quota, and provider failure cannot become absence; successful empty results are explicitly bounded snapshots; advertiser attribution uses validated hostnames; Evidence records query/location/language/device/provider/timestamp; ungrounded CPC/budget claims were removed. Tests: wave8aPaidSearchClaims.test.ts."
+      "notes": "Wave 8 verified. Wave 8A added observed/not_observed/unavailable paid-search states, bounded snapshot language, hostname attribution, scoped Evidence, and removed invented CPC/budget claims. Wave 8B now carries only validated same-audit/same-tenant Finding-backed claims into diagnosis/proposals and deterministic QA rejects definitive 'not advertising' language. Tests: wave8aPaidSearchClaims.test.ts, claimContract.test.ts, wave8bGrounding.test.ts, wave8b-claim-policy.test.ts."
     },
     {
       "id": "P1-41",

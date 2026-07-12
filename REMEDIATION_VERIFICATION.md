@@ -1947,3 +1947,57 @@ Then emit the required **Wave 8 Result** with entry state, findings/statuses, cl
 diagnosis grounding, proposal citations, deterministic rules, QA enforcement, LLM safety, files,
 tests, exact environment blocks, canonical guard, commits, risks/decisions, and an exact
 full-context Wave 9 prompt. Stop without beginning Wave 9.
+
+## Wave 8B verification result (2026-07-12)
+
+Wave 8B started from `5d894cd` after code commit `574608b`. P0-26, P1-36, and P1-40 remain
+verified; Wave 8 is complete with no open, re-scoped, or newly blocked Wave 8 item.
+
+Wave 8B code commit: `4587703` (`fix(claim-policy): enforce grounded diagnosis proposal and qa`).
+
+Implemented one integrated claim-policy path:
+
+- Wave 3 Finding/Evidence validation plus `lib/claims/claimContract.ts` for every factual
+  diagnosis/proposal claim.
+- Strict same-audit/same-tenant citation resolution and substantive/numeric support checking.
+- Deterministic diagnosis severity, tier mapping, package content, prices, timelines, bounded
+  authorized discounts, and explicit-input ROI arithmetic.
+- Strict bounded diagnosis/proposal/adversarial-QA model schemas with untrusted-content delimiters.
+- No legacy `proposalDef`, timeout, adversarial rewrite, default citation, price, or ROI fallback.
+- Persisted claim IDs, Finding IDs, bindings, commercial rules, QA reasons, and public sanitized
+  citations.
+- Publication guards on READY/SENT transitions, send, public token, PDF, email, presentation,
+  share, accept, and status routes.
+
+Verification:
+
+```text
+Wave 8B new claim/diagnosis/proposal/architecture: 42/42
+Wave 8B strict adversarial schemas + affected security paths: 53/53
+Existing diagnosis/proposal/QA/pipeline: 29/29
+Proposal authorization/readiness: 18/18
+Wave 8A module claims: 15/15
+Wave 3 Finding/Evidence: 45/45
+Wave 4 affected network/browser/provider: 8/8
+Wave 5 adapter/result: 26/26
+Wave 6 implementation: 41/41
+Wave 7A: 26/26
+Wave 7B: 53/53
+Canonical manifest: 7/7 assertions; documented Prisma engine unhandled rejection
+Wave 0-2/canonical sample: 34/34 assertions; three documented Prisma engine rejections
+TypeScript: exit 0
+ESLint: zero errors; warning-class existing debt only
+```
+
+Bounded searches found no proposal persistence fallback, adversarial content rewrite, fabricated
+zero ROI, permissive QA JSON extraction, model-controlled price/tier/ROI path, QA citation
+invention, or unguarded Wave 8B send/publication route. The only zero-Finding claims are explicit
+commercial-configuration claims with deterministic rule references.
+
+PostgreSQL ports 5435/5444 and the Prisma darwin-arm64 engine remain unavailable, so the full suite
+was not run. The seven existing SSRF architecture-guard violations and deprecated
+AuditOrchestrator timeout remain unrelated.
+
+Wave 9 ledger filter result at this checkpoint: zero rows. Wave 9 must derive any newly assigned
+rows at entry and must not invent IDs; its committed scope is the pipeline inventory recorded in
+`REMEDIATION_STATE.md`.
