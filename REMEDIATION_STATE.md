@@ -109,7 +109,7 @@ work**, tracked so a later wave can complete them; they are NOT confirmed defect
 | 3    | Finding/Evidence enforcement layer             | P1-09, P1-25, P1-26, P1-31, P2-13, P2-36, P2-40                                                                       | D      | **COMPLETE — see Wave 3 result** |
 | 4    | Shared network/browser/provider safety         | P1-46, P1-47, P1-48, P2-53, P2-54                                                                                     | G      | **COMPLETE — see Wave 4 result** |
 | 5    | Module adapter & failure-state repair          | P1-28, P1-33, P1-34, P1-39, P1-43, P2-28, P2-47                                                                       | E, H   | **COMPLETE — see Wave 5 result** |
-| 6    | Fully implement broken/missing modules         | P0-25, P1-30, P1-37, P1-41, P1-42, P2-30                                                                              | F      | open                             |
+| 6    | Fully implement broken/missing modules         | P0-25, P1-30, P1-37, P1-41, P1-42, P2-30                                                                              | F      | **COMPLETE - see Wave 6 result** |
 | 7    | Harden remaining partial modules               | P1-27, P1-29, P1-32, P1-35, P1-38, P2-27, P2-31, P2-32, P2-34, P2-35, P2-38, P2-41, P2-42, P2-43, P2-44, P2-46, P2-50 | I, H   | open                             |
 | 8    | Diagnosis + proposal claim-policy enforcement  | P0-26, P1-36, P1-40                                                                                                   | F      | open                             |
 | 9    | Delivery/outreach/closing/retention pipelines  | (Passes 9-12 audit work)                                                                                              | —      | open                             |
@@ -980,5 +980,181 @@ new helper, `normalizeBusinessName()` new helper, `deduplicateFindings()`),
 
 ## Next wave
 
-**Wave 6 — Fully implement broken and missing modules.** See the exact continuation prompt at
-the end of this session's chat response.
+**Wave 7 - Harden remaining partial modules.** See the exact continuation prompt in
+`REMEDIATION_VERIFICATION.md`.
+
+## Wave 6 entry and implementation plan (2026-07-12)
+
+### Entry state
+
+- Branch: `remediation/proposalos-e2e`.
+- Entry HEAD: `101c574727a143cda8b443a1622f805cb680f576`
+  (`chore(remediation): checkpoint wave 5`).
+- Wave 5 code commit present: `6c4e020`
+  (`fix(module-adapters): normalize results dependencies and failure states`).
+- Wave 0-5 fix/checkpoint commits are present; `git stash list` is empty.
+- The dirty tree contains only the documented preserved baseline:
+  `AUDIT_REPORT.md`, logger-typing route edits, `lib/logger.ts`,
+  `lib/self-evolving-prompts/data-access/prompt-performance.ts`,
+  `app/api/cron/metering-sweep/route.ts`, and untracked
+  `scripts/show-leaks.js`. No Wave 6 implementation or artifact edit was present.
+- Entry TypeScript:
+  `./node_modules/.bin/tsc --noEmit --pretty false --incremental false` -> exit 0.
+
+### Authoritative scope and batching
+
+`REMEDIATION_FINDINGS.json | select(.wave == 6)` yields six findings across exactly five
+substantial modules: P0-25/P2-30 (`socialDeep`), P1-30 (`gbpDeep`), P1-37 (`mobileUX`),
+P1-41 (`backlinks`), and P1-42 (`videoPresence`). The adaptive rule therefore requires one
+complete Wave 6 batch (five modules, no Wave 6A/6B split).
+
+P0-26 (`privacyCompliance`) is explicitly assigned to Wave 8 in the ledger and wave table.
+It is not Wave 6 scope and will not be edited in this wave.
+
+### Authoritative Wave 6 module table
+
+| Module          | Findings / classification                                                                                                                                                  | Intended capability                                                                                                        | Current defect and failure behavior                                                                                                                                                                           | Provider / data / config                                                                                                                                                                       | Adapter / dependencies                                             | Evidence / cost / bounds                                                                                                                                                            | Acceptance and fixture verification                                                                                                                                                                                                                                                                                      |
+| --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `socialDeep`    | P0-25 MISSING production implementation; P2-30 phantom cost                                                                                                                | Validate owned social profiles and report only profile/content facts that were actually observable                         | `findSocialProfiles()` returns `[]`; `analyzeProfile()` hardcodes `exists:true`; no-profile and missing-platform findings are fabricated from stub output; SERP cost is recorded without a call               | Website-discovered links plus existing SerpAPI when `SERP_API_KEY` is configured; public profile pages through Wave 4 `safeFetch`; no official metrics provider is configured                  | `socialDeepAdapter`; depends on canonical `social` output          | Real website/search/profile URL evidence; max 5 platforms, max 5 search calls and 5 profile fetches, provider retry policy bounded by Wave 4; track only executed SERP/LLM calls    | Reject share/embed/intent URLs; distinguish verified/likely/ambiguous/inaccessible/absent/unavailable/failed; no fabricated followers/posts/recency; fixtures for valid owned, rejected share URL, ambiguity, unavailable, inaccessible, verified absence, malformed response, abort, no false negative, no phantom cost |
+| `gbpDeep`       | P1-30 fabricated fallback / claimed assumption; Wave 3 already removed the numeric 5/5/5 fallback but the claimed assumption and strict validation/dependency reuse remain | Analyze real Places details, reviews, profile completeness, and bounded photo quality                                      | `isClaimed:true` is hardcoded; photo JSON is unvalidated; adapter refetches details already returned by `gbp`; module catch returns an empty shape that adapter labels COMPLETE                               | Existing Google Places and Gemini configuration; canonical `gbp` dependency reused first; Wave 4 provider resilience and response-derived image safety                                         | `gbpDeepAdapter`; depends on `gbp`                                 | Real Places record/photo evidence; zero duplicate Places calls when dependency has details; max 3 images, bounded response bytes, max 3 Gemini calls; real calls only               | Claimed status observed/inferred/unavailable, never assumed; strict photo schema; null/absent unavailable metrics; honest PARTIAL/FAILED mapping; fixtures for valid, unavailable, malformed, dependency reuse, claimed states, evidence, call counts                                                                    |
+| `mobileUX`      | P1-37 fabricated/mislabeled measurement                                                                                                                                    | Measure bounded mobile DOM/UX signals and real lab metrics for one URL/form factor                                         | Browser hardcodes CLS=0 and labels a DOM event duration as TBT; PageSpeed missing/failure becomes score 0; module failure emits invalid evidence-less finding and adapter labels output COMPLETE              | Existing safe Puppeteer boundary plus PageSpeed v5 when `GOOGLE_PAGESPEED_API_KEY` is configured                                                                                               | `mobileUXAdapter`; depends on `website`                            | URL/DOM selector/PageSpeed run evidence; one mobile browser navigation, at most 2 PageSpeed calls, Wave 4 timeout/abort; no call tracked without a request                          | Real CLS via PerformanceObserver and real Lighthouse metrics when supplied; lab/field and form-factor labels; missing metrics omitted; fixtures for valid/missing/malformed/failure/abort, evidence, no fabricated zero/TBT                                                                                              |
+| `backlinks`     | P1-41 unreliable methodology                                                                                                                                               | Normalize a real provider's backlink/referring-domain records and produce provider-labelled findings                       | Google `site:`/`link:` counts and unrelated SERP mentions are presented as backlinks/authority; missing key/failure becomes zero                                                                              | No real backlink provider, wrapper, env contract, cost enum, or product selection exists in the repository. Implement a provider-neutral contract only; no arbitrary vendor or search fallback | `backlinksAdapter`; optional, no dependency                        | Provider report/link/referring-domain evidence only; provider defines bounded page/result count and request count; no production call or cost when unconfigured                     | Remove all search-proxy logic; unconfigured => UNAVAILABLE/SKIPPED with no negative finding; fixture provider proves parsing, normalization, duplicates, true zero, malformed/failure/abort, provider metric labeling, evidence. Live-provider selection remains an external product decision                            |
+| `videoPresence` | P1-42 MISSING metrics implementation                                                                                                                                       | Verify an owned/likely YouTube channel, observe real public recency/video metadata when available, and scan website embeds | SERP hint is treated as a channel; subscribers/video count are `Unknown`, videos empty, missing timestamp is treated stale; missing key/failure can become no channel; website fetch failure becomes no video | Existing website fetch and SerpAPI discovery; verified channel public page/feed through Wave 4 safe fetch. No separate YouTube Data API key contract exists                                    | `videoPresenceAdapter`; consumes Wave 5 canonical competitor names | Website/search/channel/feed URL evidence; one website fetch, at most 4 bounded channel searches (business + 3 competitors), one channel page/feed path for subject; real calls only | Identity confidence from website/business/location/channel metadata; stale only from a real timestamp; no fake subscribers/count/engagement; fixtures for owned, ambiguous, active, stale, metrics unavailable, provider unavailable, verified absence, malformed, abort, evidence, competitor dependency                |
+
+### Provider decisions and implementation order
+
+1. Reuse the existing Wave 4 `withProviderResilience`, `safeFetch`,
+   `safeFetchResponseDerived`, and `safePageGoto` boundaries. No new network framework.
+2. Reuse the Wave 5 canonical adapters and dependency fields. Module-internal execution
+   state will be mapped to the existing `COMPLETE | PARTIAL | FAILED | SKIPPED` result
+   contract; no second customer-facing state model.
+3. Implement in dependency/risk order: shared result/evidence helpers as needed,
+   `socialDeep`, `gbpDeep`, `mobileUX`, provider-neutral `backlinks`, then
+   `videoPresence`, followed by adapter and architecture guards.
+4. Backlinks live-provider selection is externally blocked. Repository-side provider
+   contract, normalization, honest unavailable behavior, and fixture tests are in scope;
+   choosing or provisioning a paid vendor is not.
+5. YouTube official metrics are not promised without an existing configured YouTube API
+   contract. Public page/feed observations may support verified identity and recency;
+   unavailable subscriber/total-count metrics remain absent and the module reports PARTIAL.
+
+### Red-before / green-after plan
+
+- Red-before defects are directly present in production source and guarded by new tests:
+  hardcoded `exists:true`, unconditional empty discovery, phantom SERP tracking,
+  hardcoded claimed status, placeholder CLS/mislabeled TBT, backlink `link:`/`site:`
+  methodology, `Unknown`/empty video metrics, and stale-on-missing-timestamp.
+- Green-after commands will run each real module test file independently, then Wave 6
+  adapter/static guards, affected existing adapter tests, Wave 3/4/5 contract suites,
+  the recorded Wave 0-5 regression groups, TypeScript, changed-file ESLint, bounded
+  production searches, and the full suite at most once if the documented local database
+  environment is available.
+
+## Wave 6 result summary (Fully implement broken and missing modules)
+
+Code commit: `91dd5ca` (`fix(audit-modules): implement broken and missing capabilities`).
+
+### Findings and module outcomes
+
+- **Verified:** P0-25 (`socialDeep` production stub), P1-30 (`gbpDeep` fabricated
+  claimed/photo states), P1-37 (`mobileUX` placeholder/mislabeled metrics), P1-42
+  (`videoPresence` missing metrics and false stale state), P2-30 (`socialDeep` phantom
+  SERP cost).
+- **Fixed-and-blocked:** P1-41 (`backlinks`). Repository implementation, normalization,
+  evidence, failure semantics, and tests are complete. A live provider cannot be verified
+  until product selects and provisions a real backlink data vendor and adds its cost/config
+  contract.
+- **Open in Wave 6:** none.
+- P0-26 (`privacyCompliance`) remains open in Wave 8 and was not edited.
+
+### Implementations
+
+- `socialDeep`: validates platform/ownership URLs, rejects share/embed/content URLs,
+  consumes canonical website-discovered links, performs at most five configured SerpAPI
+  searches and five bounded safe profile fetches, and distinguishes verified, likely,
+  ambiguous, inaccessible, absent, unavailable, and failed observations. Missing/no-profile
+  findings require successful evidenced searches. No follower/post/recency value is invented.
+- `gbpDeep`: reuses canonical `gbp` details, avoiding duplicate Places calls in the
+  canonical path; removes assumed claimed state; uses null/unavailable for unsupported
+  fields; validates Gemini photo JSON strictly; bounds analysis to three 2 MiB images;
+  keeps unavailable photo/claimed sub-capabilities PARTIAL.
+- `mobileUX`: replaces hardcoded CLS with a buffered layout-shift observer and false TBT
+  with observed long-task blocking time; PageSpeed responses are runtime-validated;
+  missing/malformed provider data remains absent and PARTIAL; every finding carries URL or
+  PageSpeed evidence.
+- `backlinks`: removes all `site:`/`link:` and unrelated search-result proxy logic.
+  The provider-neutral contract normalizes real backlinks, referring domains,
+  follow/nofollow, freshness, source scope, and provider-specific authority. Unconfigured
+  production use returns UNAVAILABLE/SKIPPED and emits no deficiency.
+- `videoPresence`: verifies channel identity from the business website or confidence-scored
+  search, follows up through Wave 4-safe channel/page/feed fetches, and emits stale only
+  from a real public timestamp. Subscriber/total-count metrics remain absent when no
+  official provider supplies them. Wave 5 canonical competitor names are consumed.
+
+### Contracts, evidence, cost, and bounds
+
+- Added optional module execution metadata that adapters map into the existing Wave 5
+  `COMPLETE | PARTIAL | FAILED | SKIPPED` contract. No parallel customer state model.
+- Canonical aggregation now accepts evidence-valid findings from both COMPLETE and PARTIAL
+  modules, matching the Wave 3 eligible-state contract.
+- Every new Wave 6 finding uses `createEvidence()` with a real URL/provider report pointer
+  and collection timestamp; invalid output remains rejected at the Wave 3 boundary.
+- All destination URLs use Wave 4 `safeFetch`, `safeFetchResponseDerived`, or
+  `safePageGoto`; fixed provider hosts remain inside `withProviderResilience`.
+- Provider cost calls occur inside real provider callbacks immediately before requests.
+  Cache hits, missing credentials, unavailable providers, and blocked calls create no
+  phantom cost.
+- Bounds: social <=5 searches + <=5 profiles; GBP photo analysis <=3 images at <=2 MiB
+  each; mobile one browser navigation + <=2 PageSpeed requests; backlinks max 1,000
+  normalized fixture/provider records per call contract; video one website fetch, <=4
+  searches, one subject channel page, and one <=512 KiB public feed.
+
+### Files changed
+
+Production: `lib/audit/runner.ts`, `lib/modules/types.ts`,
+`lib/modules/socialDeep.ts`, `lib/modules/gbpDeep.ts`,
+`lib/modules/mobileUX.ts`, `lib/modules/backlinks.ts`,
+`lib/modules/videoPresence.ts`.
+
+Tests/guards: `lib/audit/__tests__/wave6AdapterStates.test.ts`,
+`lib/modules/__tests__/socialDeepImplementation.test.ts`,
+`lib/modules/__tests__/gbpDeepImplementation.test.ts`,
+`lib/modules/__tests__/gbpDeepEvidence.test.ts`,
+`lib/modules/__tests__/mobileUXImplementation.test.ts`,
+`lib/modules/__tests__/backlinksImplementation.test.ts`,
+`lib/modules/__tests__/videoPresenceImplementation.test.ts`,
+`tests/architecture/wave6-module-implementation-boundary.test.ts`,
+`tests/architecture/ssrf-fetch-boundary.test.ts`.
+
+### Verification
+
+- Red-before architecture guard: 4/4 failed on the Wave 5 checkpoint for the historical
+  production patterns; green-after: 4/4 pass.
+- New/updated Wave 6 module, adapter, and guard set: 8 files / 41 tests pass.
+- Identifiable Wave 0-1 regressions: 14 files / 82 tests pass.
+- Wave 2 execution/queue/cache/widget/manifest regressions: 9 files / 104 tests pass.
+- Wave 3-5 Finding/Evidence, adapter, provider, browser, and SSRF regressions:
+  11 files / 101 tests pass.
+- Other architecture regressions: 8 files / 21 tests pass.
+- Canonical manifest remains exactly 27 modules.
+- TypeScript:
+  `./node_modules/.bin/tsc --noEmit --pretty false --incremental false` -> exit 0.
+- Changed-file ESLint: 0 errors; 63 existing warning-class instances
+  (`no-explicit-any`, legacy runner complexity/unused fields, and one existing architecture
+  test complexity warning).
+- Bounded production search found none of the Wave 6 stub/fabrication/search-proxy patterns.
+- `tests/architecture/ssrf-fetch-boundary.test.ts`: 2/3 pass; sole failure remains the
+  pre-existing `lib/queue/auditJobQueue.ts:433` raw fetch violation documented since Wave 5.
+  All new/changed Wave 6 calls are correctly classified.
+- Full suite not run: local Postgres ports `5435` and `5444` are both closed, matching the
+  documented environment block. No live provider/network/browser/LLM/customer call was made.
+
+### Residual decisions
+
+- Select a real backlink provider, define credentials/pricing/cost enum, implement its
+  `BacklinkProvider` boundary, and run live verification in a non-production test account.
+- YouTube subscriber and total-channel metrics remain legitimately unavailable without an
+  approved official provider/API contract; the implemented website/channel/feed capability
+  remains honest and PARTIAL where those fields are absent.
+- Wave 7 retains its own duplicate collection and partial-quality findings, including P1-32
+  and P1-38; Wave 6 did not incorrectly close them.

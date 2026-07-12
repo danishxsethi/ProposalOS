@@ -1154,3 +1154,184 @@ occurred in any Wave 5 test — `captureScreenshots`, `runVisionModule`, `runSch
 
 Recorded in this session's final chat response (not duplicated here) and in
 `REMEDIATION_STATE.md`'s "Next wave" line.
+
+---
+
+## Wave 6 - Fully implement broken and missing modules
+
+Authoritative findings: **P0-25, P1-30, P1-37, P1-41, P1-42, P2-30**.
+
+Code commit: `91dd5ca` (`fix(audit-modules): implement broken and missing capabilities`).
+
+### Result
+
+- Verified: P0-25, P1-30, P1-37, P1-42, P2-30.
+- Fixed-and-blocked: P1-41. The unreliable search proxy is removed and the real-provider
+  contract is complete, but product must select/provision a backlink vendor before live
+  verification.
+- Open in Wave 6: none.
+- Canonical module count remains 27.
+
+### New Wave 6 implementation tests - GREEN (41/41)
+
+```text
+vitest run \
+  lib/modules/__tests__/socialDeepImplementation.test.ts \
+  lib/modules/__tests__/gbpDeepImplementation.test.ts \
+  lib/modules/__tests__/gbpDeepEvidence.test.ts \
+  lib/modules/__tests__/mobileUXImplementation.test.ts \
+  lib/modules/__tests__/backlinksImplementation.test.ts \
+  lib/modules/__tests__/videoPresenceImplementation.test.ts \
+  lib/audit/__tests__/wave6AdapterStates.test.ts \
+  tests/architecture/wave6-module-implementation-boundary.test.ts
+
+Test Files  8 passed (8)
+Tests       41 passed (41)
+```
+
+The static guard was executed red-before on the Wave 5 checkpoint and failed 4/4 for the
+historical stub/fabrication patterns. It passes 4/4 after the implementations.
+
+### Wave 0-5 regression gates
+
+```text
+Wave 0-1 security/tenant/auth:
+Test Files  14 passed (14)
+Tests       82 passed (82)
+
+Wave 2 execution/queue/cache/widget/manifest:
+Test Files  9 passed (9)
+Tests       104 passed (104)
+
+Wave 3-5 Finding/Evidence/adapter/provider/browser:
+Test Files  11 passed (11)
+Tests       101 passed (101)
+
+Other architecture boundaries:
+Test Files  8 passed (8)
+Tests       21 passed (21)
+```
+
+`tests/architecture/ssrf-fetch-boundary.test.ts` remains 2/3: the sole failure is the
+pre-existing `lib/queue/auditJobQueue.ts:433` raw fetch violation documented in Wave 5.
+After updating fixed-host line references, no Wave 6 module is reported by that guard.
+
+### TypeScript, lint, bounded searches, full suite
+
+```text
+./node_modules/.bin/tsc --noEmit --pretty false --incremental false
+# exit 0
+
+eslint <Wave 6 changed files>
+# 0 errors; 63 existing warning-class instances
+```
+
+Bounded source searches found no active Wave 6 demo/mock stub, hardcoded `exists:true`,
+hardcoded claimed state, placeholder CLS/false TBT, backlink `site:`/`link:` proxy,
+`Unknown` video metrics, stale-on-missing-date behavior, or fabricated provider fallback.
+
+The full suite was not run. `nc -z localhost 5435` and `nc -z localhost 5444` both failed;
+the documented local Postgres dependency remains unavailable. No live provider, network,
+browser, LLM, customer account, production infrastructure, or production data was used.
+
+### Exact continuation prompt for Wave 7
+
+Continue the ProposalOS remediation campaign on branch
+`remediation/proposalos-e2e`. Execute **Wave 7 only**, checkpoint it, emit the next
+continuation prompt, and stop.
+
+This is a remediation campaign, not a new audit or rewrite. Preserve all 27 canonical audit
+modules and every verified Wave 0-6 invariant. Do not disable, hide, delete, downgrade, or
+fake a capability to make tests pass. Never fabricate Finding/Evidence, provider data,
+scores, absence, success, or customer deficiencies. Provider/module failure must remain
+unavailable/failed/skipped, never verified absence. Use the Wave 3 Finding/Evidence runtime
+contract, Wave 4 safe network/browser/provider boundaries, Wave 5 canonical
+adapter/result/dependency contracts, and the real Wave 6 implementations. Tests use local
+fixtures/mocks only; no live provider/network/browser/LLM calls. Do not touch production
+infrastructure, databases, customer data, or provider accounts. Do not begin Wave 8.
+
+Read before editing:
+
+1. `AUDIT_REPORT.md` (immutable; never stage, format, rewrite, or commit it).
+2. `REMEDIATION_STATE.md`, especially the Wave 6 entry/result and preserved dirty baseline.
+3. `REMEDIATION_FINDINGS.json`, filtered authoritatively by `wave === 7`.
+4. `REMEDIATION_VERIFICATION.md`, including all Wave 0-6 gates and this prompt.
+5. Git history, the Wave 6 code commit, and the Wave 6 checkpoint commit.
+6. The Wave 2 canonical 27-module manifest and engine.
+7. Wave 3 Finding/Evidence validation and PARTIAL eligibility.
+8. Wave 4 `safeFetch`/`safePageGoto`/`withProviderResilience` boundaries.
+9. Wave 5 adapter/dependency normalization.
+10. Wave 6 module execution metadata, real provider/data-source paths, and tests.
+
+Verify entry state with:
+
+```text
+git status --short
+git branch --show-current
+git rev-parse HEAD
+git log --oneline -20
+git stash list
+./node_modules/.bin/tsc --noEmit --pretty false --incremental false
+```
+
+Confirm the branch is `remediation/proposalos-e2e`, HEAD is the Wave 6 checkpoint, both Wave 6
+commits are present, stash state is empty, and the dirty tree matches the documented unrelated
+baseline (`AUDIT_REPORT.md`, logger-typing route work, `lib/logger.ts`,
+`lib/self-evolving-prompts/data-access/prompt-performance.ts`,
+`app/api/cron/metering-sweep/route.ts`, and untracked `scripts/show-leaks.js`). Preserve those
+files exactly. Do not reset, clean, stash, restore, stage, format, or commit them.
+
+Wave 7 scope is **Harden remaining PARTIAL audit modules**. Derive the exact finding/module
+set from `REMEDIATION_FINDINGS.json | select(.wave == 7)`; do not infer scope from numeric IDs
+or this prompt alone. Include Wave 6 modules only where the ledger assigns a distinct Wave 7
+partial-hardening finding (for example duplicate data collection, identity matching, or
+dependency reuse). Do not reopen or repeat Wave 6 stub replacement. P1-41's live backlink
+provider selection remains an external product decision unless the ledger explicitly assigns
+that decision to Wave 7.
+
+Before coding, add a Wave 7 authoritative module table to `REMEDIATION_STATE.md` with canonical
+ID, finding IDs, current status, intended capability, exact partial defect, provider/data source,
+credentials, adapter/dependencies, failure behavior, evidence/cost path, current tests,
+acceptance criteria, fixtures, red-before test, green-after test, bounds, and external block.
+If more than five substantial modules remain, split dependency-ordered Wave 7A/7B batches of at
+most five modules, record the split, execute Wave 7A only, and emit Wave 7B rather than Wave 8.
+
+For each in-scope partial module:
+
+- improve correctness and identity matching without fabricating certainty;
+- reuse canonical dependency data and remove duplicate provider/browser/crawl work where the
+  ledger assigns it;
+- preserve honest COMPLETE/PARTIAL/FAILED/SKIPPED mapping;
+- require real evidence for every customer-facing finding;
+- route discovered/user URLs through Wave 4 safety;
+- propagate AbortSignal/deadlines and bound calls, pages, results, bytes, pagination, retries,
+  and concurrency;
+- count cost only for real executed provider/LLM calls;
+- validate provider/LLM output at runtime;
+- ensure missing credentials/provider failures emit no customer-negative finding;
+- add implementation-level fixture tests that execute the real adapter and real module while
+  mocking only lower provider/browser/LLM/cache/persistence/clock boundaries.
+
+Re-run, in order: each new module test, Wave 7 static/architecture guards, affected adapters,
+Wave 3 Finding/Evidence tests, Wave 4 network/browser/provider tests, Wave 5 adapter tests,
+all Wave 6 implementation tests, identifiable Wave 0-6 regressions, TypeScript, changed-file
+ESLint, and bounded production searches. Run the full suite at most once only if the local DB
+environment is available; otherwise record the exact environment block. The known
+`tests/architecture/ssrf-fetch-boundary.test.ts` baseline failure at
+`lib/queue/auditJobQueue.ts:433` is unrelated unless Wave 7's authoritative ledger explicitly
+assigns it; do not silently allowlist or patch it out of scope.
+
+Update `REMEDIATION_FINDINGS.json`, `REMEDIATION_STATE.md`, and
+`REMEDIATION_VERIFICATION.md` with exact findings, implementation decisions, tests, evidence,
+cost/bounds, residuals, and next scope. If green, commit Wave 7 code separately from campaign
+artifacts. For a complete unsplit wave use:
+
+```text
+fix(audit-modules): harden remaining partial capabilities
+chore(remediation): checkpoint wave 7
+```
+
+For a split, use specific Wave 7A commit messages and emit a full-context Wave 7B prompt.
+Do not stage or commit `AUDIT_REPORT.md` or any documented unrelated dirty file. Do not use
+`--no-verify`; do not skip hooks. Workflow:
+`read -> verify -> classify -> test red -> implement -> test green -> record -> commit -> emit -> stop`.

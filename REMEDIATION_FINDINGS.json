@@ -123,15 +123,17 @@
       "id": "P0-25",
       "severity": "P0",
       "title": "socialDeep analyzeProfile/findSocialProfiles are stubs; 'No Active Social Presence' PAINKILLER finding fabricated from non-functional fallback",
-      "status": "open",
+      "status": "verified",
       "rootCauseGroup": "F",
       "dependencies": [],
       "files": ["lib/modules/socialDeep.ts"],
       "verification": [
-        "Implement real profile verification OR disable PAINKILLER absence finding until real check exists; test asserting no fabricated absence finding"
+        "vitest run lib/modules/__tests__/socialDeepImplementation.test.ts (validated owned profile, rejected share/content URLs, private/inaccessible state, genuine bounded-search absence, unavailable/malformed provider, abort propagation, no false negative, no phantom cost)",
+        "vitest run lib/audit/__tests__/wave6AdapterStates.test.ts (unavailable maps to SKIPPED; canonical social dependency forwarded)",
+        "vitest run tests/architecture/wave6-module-implementation-boundary.test.ts (historical exists:true/demo/phantom patterns absent)"
       ],
       "wave": 6,
-      "notes": "MISSING module \u2014 fabricated customer-facing deficiency."
+      "notes": "Wave 6 verified: production stubs removed. Bounded discovery uses validated website links and configured SerpAPI; public profiles are fetched through safeFetch; share/embed/content URLs are rejected; provider/private/ambiguous states remain partial/unavailable; absence findings require successful evidenced searches; no followers/posts/recency are fabricated."
     },
     {
       "id": "P0-26",
@@ -549,15 +551,17 @@
       "id": "P1-30",
       "severity": "P1",
       "title": "gbpDeep photo-analysis degrade returns fabricated {5,5,5} score; isClaimed hardcoded true",
-      "status": "open",
+      "status": "verified",
       "rootCauseGroup": "F",
       "dependencies": [],
       "files": ["lib/modules/gbpDeep.ts"],
       "verification": [
-        "Return null/unavailable on degrade (excluded from scoring); label/remove isClaimed; test"
+        "vitest run lib/modules/__tests__/gbpDeepImplementation.test.ts (dependency reuse, strict valid/malformed photo output, claimed unavailable, provider unavailable/failure, abort, real-call cost)",
+        "vitest run lib/modules/__tests__/gbpDeepEvidence.test.ts (all generated findings pass Finding/Evidence contract)",
+        "vitest run lib/audit/__tests__/wave6AdapterStates.test.ts (PARTIAL mapping and canonical GBP data forwarding)"
       ],
       "wave": 6,
-      "notes": "Fabricated data presented as measured."
+      "notes": "Wave 6 verified: Wave 3's removal of the synthetic 5/5/5 fallback remains intact; hardcoded claimed state is replaced by explicit unavailable status; Gemini output is strict Zod-validated; images are bounded and fetched through safeFetchResponseDerived; canonical GBP details are reused without duplicate Places calls; unavailable sub-metrics make the module PARTIAL."
     },
     {
       "id": "P1-31",
@@ -644,15 +648,16 @@
       "id": "P1-37",
       "severity": "P1",
       "title": "mobileUX hardcodes CLS=0 (placeholder) and mislabels TBT from unrelated timing pair",
-      "status": "open",
+      "status": "verified",
       "rootCauseGroup": "F",
       "dependencies": [],
       "files": ["lib/modules/mobileUX.ts"],
       "verification": [
-        "Return null/omit or implement real CLS via PerformanceObserver; test no fabricated zeros"
+        "vitest run lib/modules/__tests__/mobileUXImplementation.test.ts (real observer metrics, valid/missing/malformed PageSpeed, abort, evidence, no phantom call)",
+        "vitest run tests/architecture/wave6-module-implementation-boundary.test.ts (hardcoded CLS and mislabeled DOM-event TBT absent)"
       ],
       "wave": 6,
-      "notes": "Fabricated/mislabeled measurement."
+      "notes": "Wave 6 verified: CLS is captured with a buffered layout-shift PerformanceObserver; TBT is computed from observed long tasks rather than DOMContentLoaded timing; PageSpeed responses are runtime-validated and missing/failure stays absent/PARTIAL rather than score zero; findings cite the audited URL or PageSpeed run."
     },
     {
       "id": "P1-38",
@@ -698,29 +703,32 @@
       "id": "P1-41",
       "severity": "P1",
       "title": "backlinks derives metrics from Google site:/link: search counts, presented as backlink profile without disclosure",
-      "status": "open",
+      "status": "fixed-and-blocked",
       "rootCauseGroup": "F",
       "dependencies": [],
       "files": ["lib/modules/backlinks.ts"],
       "verification": [
-        "Integrate real backlink provider OR relabel as 'search-index footprint estimate'; test"
+        "vitest run lib/modules/__tests__/backlinksImplementation.test.ts (provider-neutral fixture parsing, duplicates, domain normalization, true zero, provider-specific metric labels, malformed/unavailable/abort, unsafe URL filtering, evidence)",
+        "vitest run tests/architecture/wave6-module-implementation-boundary.test.ts (site:/link: search proxy and serp_api_estimation absent)"
       ],
       "wave": 6,
-      "notes": "Misleading methodology."
+      "notes": "Wave 6 fixed-and-blocked: unreliable Google site:/link: methodology and all SerpAPI backlink fallbacks removed. A provider-neutral, runtime-validated normalization contract now distinguishes backlinks, referring domains, follow/nofollow, source scope, freshness, and provider-specific authority. Production returns UNAVAILABLE when no provider is selected. External block: product must select/provision a real backlink provider and add its cost/config contract before live verification."
     },
     {
       "id": "P1-42",
       "severity": "P1",
       "title": "videoPresence hardcodes channel metrics to Unknown/empty; 'stale channel' finding fires for every discovered channel",
-      "status": "open",
+      "status": "verified",
       "rootCauseGroup": "F",
       "dependencies": [],
       "files": ["lib/modules/videoPresence.ts"],
       "verification": [
-        "Implement channel-page follow-up fetch OR suppress activity finding until real data; test"
+        "vitest run lib/modules/__tests__/videoPresenceImplementation.test.ts (owned/ambiguous channel, active/stale real timestamps, unavailable metrics/provider, genuine absence, malformed response, abort, evidence)",
+        "vitest run lib/audit/__tests__/wave6AdapterStates.test.ts (canonical competitor context consumed and PARTIAL preserved)",
+        "vitest run tests/architecture/wave6-module-implementation-boundary.test.ts (Unknown/empty metrics and stale-on-missing-date patterns absent)"
       ],
       "wave": 6,
-      "notes": "MISSING metrics implementation."
+      "notes": "Wave 6 verified: channel ownership uses website links or confidence-scored SerpAPI discovery; public channel pages and Atom feeds are fetched through safeFetch; activity findings require a real publish timestamp; unavailable subscribers/total counts remain absent; provider failure/ambiguity never becomes no-channel or stale; Wave 5 canonical competitor names are consumed."
     },
     {
       "id": "P1-43",
@@ -1210,13 +1218,16 @@
       "id": "P2-30",
       "severity": "P2",
       "title": "socialDeep over-reports SERP tracker call for work that never happens",
-      "status": "open",
+      "status": "verified",
       "rootCauseGroup": "F",
       "dependencies": ["P0-25"],
       "files": ["lib/modules/socialDeep.ts"],
-      "verification": ["Remove tracker call until SerpAPI integration is real"],
+      "verification": [
+        "vitest run lib/modules/__tests__/socialDeepImplementation.test.ts (zero calls when unconfigured; one tracked call per executed platform search)",
+        "bounded source search confirms tracker call occurs inside the real SerpAPI provider callback"
+      ],
       "wave": 6,
-      "notes": ""
+      "notes": "Wave 6 verified: SERP cost is recorded only inside the configured provider callback immediately before the real fixed-host request; missing configuration and blocked discovery produce zero tracked calls."
     },
     {
       "id": "P2-31",
