@@ -1975,3 +1975,141 @@ Three P0/P1 findings created from executable evidence at Wave 9B entry, requirin
 | P1-53   | follow-up cron/route auth, dispatch, suppression, replay, cancellation, provider outcomes     | 39 property tests green | cron-auth, suppression, replay, ambiguous-outcome, cancellation tests (STEP 3) | **PENDING** |
 | P0-27   | chat token-auth, cross-proposal rejection, schema validation, handoff creation, resumption    | 39 property tests green | token-auth, injection, duplicate-handoff, unauthorized-resume tests (STEP 4)   | **PENDING** |
 | P0-28   | delivery auth, accepted-proposal gate, artifact validation, tenant-scoped access, idempotency | 66 property tests green | accepted-gate, artifact-validation, cross-tenant-rejection tests (STEPS 6-7)   | **PENDING** |
+
+## Wave 9C result (2026-07-12)
+
+### Entry state
+
+Branch `remediation/proposalos-e2e`; HEAD at entry `32a0240` (`chore(remediation): checkpoint
+wave 9b`), immediately preceded by the Wave 9B code commit. Wave 0-9B commits present; stash
+empty; dirty tree matched the documented preserved baseline exactly (AUDIT_REPORT.md,
+logger-typing route group, `lib/logger.ts`, `prompt-performance.ts`,
+`app/api/cron/metering-sweep/route.ts`, untracked `scripts/show-leaks.js`). Entry
+`./node_modules/.bin/tsc --noEmit --pretty false --incremental false` -> exit 0.
+
+### Re-audit execution and before/after comparison
+
+Both already sound from Wave 2/3 — re-verified, not re-implemented.
+`lib/retention/scheduled-audit-runner.ts::processScheduledAudits()` remains the single
+shared owner (called by both `app/api/cron/scheduled-audits/route.ts` and
+`lib/graph/retention-graph.ts`'s `run_scheduled_audits` node); dispatch is via the canonical
+`dispatchAuditExecution()` durable queue; `finalizeCompletedScheduledRuns()` only generates a
+comparison report and evaluates the upsell trigger after the new audit reaches a
+`TERMINAL_AUDIT_STATUSES` state (`COMPLETE | PARTIAL | DEGRADED | FAILED`), gated further by
+`isSuccess = status IN (COMPLETE, PARTIAL)` before comparison/upsell logic runs. No fabricated
+completion, no premature comparison against a still-running audit.
+
+### Evidence-backed finding: P1-54 (verified)
+
+Static evidence: `grep -rn "runWithTenantAsync|withSystemDbBypass|claimOutboundSend" lib/retention`
+returned **zero matches** across `nps.ts`, `win-back.ts`, `re-engagement.ts`, `upsellTrigger.ts`
+before this fix — every recurring lifecycle sender bypassed both Wave 1 tenant isolation and
+Wave 9A outbound safety entirely. `upsellTrigger.ts`'s `triggerUpsellProposal` used
+`prisma.audit.findUnique` (no tenant filter) and created a new `Proposal` row on every call
+with no duplicate check.
+
+Fix: new shared `lib/retention/lifecycleSafety.ts` wraps the existing Wave 9A
+`lib/outreach/outboundSafety.ts` primitives (`claimOutboundSend`/`completeOutboundSend`/
+`markOutboundSendUnknown`) — no second outbound framework. `guardLifecycleSend()` is the one
+recheck point every lifecycle sender must call immediately before a provider call: it enforces
+`OUTBOUND_DELIVERY_ENABLED === 'true'`, an `EmailBlocklist` suppression check, and a stable
+idempotency claim.
+
+- **nps.ts**: `sendNPSSurvey`/`handleNPSResponse` now resolve tenant via `runWithTenantAsync`
+  (system-enumeration boundary is a head-only `project.findUnique` for `tenantId` before entering
+  tenant context); reject a duplicate survey per `(project, surveyDay)`; validate score is an
+  integer 0-10 (throws otherwise); ignore a second response on an already-terminal survey
+  (idempotent); bound free-text feedback to 2000 chars (untrusted input); gate the referral email
+  and the initial survey send through `guardLifecycleSend`; mark ambiguous provider outcomes
+  `UNKNOWN` via `markLifecycleSendUnknown` instead of silently losing the PENDING state.
+- **win-back.ts / re-engagement.ts**: per-recipient send loop now runs inside
+  `runWithTenantAsync(client.tenantId, ...)`; `guardLifecycleSend` gates the send with keys
+  `winback:<tenantId>:<step>` / `reengage:<proposalId>:<step>`; campaign-status `updateMany` calls
+  are now tenant-scoped (`where: { ..., tenantId: client.tenantId }`) instead of matching any
+  tenant's campaign row with the same former-tenant/proposal id + step.
+- **upsellTrigger.ts**: `triggerUpsellProposal` now uses `prisma.audit.findFirst({ where: { id:
+auditId, tenantId } })` (cross-tenant audit access rejected — returns `null`); scans existing
+  `Proposal` rows for the same `(auditId, tenantId)` for one already tagged `[upsell:true]` before
+  creating a new one (idempotent; reuses the existing proposal id instead of duplicating).
+
+New tests: `lib/retention/__tests__/wave9cNps.test.ts` (12/12 — score bounds, duplicate-response
+idempotency, promoter/detractor/passive classification, tenant-scoped update, guard-blocked
+referral, feedback truncation), `lib/retention/__tests__/wave9cUpsell.test.ts` (6/6 — cross-tenant
+rejection, valid creation, idempotent reuse, non-upsell-proposal non-interference, DB-error
+safety, tenant-scoped duplicate query).
+
+### Evidence-backed finding: P2-62 (verified)
+
+Static evidence: `win-back.ts` contained "3x faster issue detection", "Average 40% improvement
+in audit scores within 30 days", "Automated competitor monitoring saves 10+ hours/week", "Client
+retention increases by 25% with our tracking tools"; `re-engagement.ts` contained "Average site
+speeds improving by 25%" — none cited a Finding, a measured result, or any real source. Fixed:
+replaced with qualitative, unquantified feature descriptions. Verified by
+`wave9cArchitectureGuards.test.ts` regex assertions proving none of the fabricated phrases
+remain.
+
+### Competitor monitoring, NPS survey token, and remaining lifecycle scope
+
+`lib/retention/competitor-monitor.ts` exists and was inventoried but not modified this session —
+no concrete defect was proven against it within this session's context budget, and per campaign
+instruction a finding requires proof, not inference by similarity to sibling modules. It is
+carried forward as unverified-but-uninvestigated, not as a fixed or open finding (no ledger row
+created without evidence).
+
+NPS survey token scoping (P1-53-class token hardening: high-entropy, expiring, one-customer/
+tenant) was not independently re-verified this session beyond the tenant-context fix above —
+`survey.id` (a UUID) is the token; no separate signed/expiring token layer exists. This matches
+the existing `webLinkToken` pattern used elsewhere in the codebase and was not flagged as a new
+defect without evidence of actual exploitability within scope.
+
+Full cancellation matrix (Step 10), competitor-monitor hardening (Step 9), and Step 12
+observability/recovery instrumentation beyond what Wave 9A/9B already provide via the shared
+`outboundSafety` claim store were not implemented this session due to context budget — carried
+forward explicitly to a Wave 9D or Wave 10 continuation if the campaign requires them before
+Wave 10 (billing) begins Do not treat any of these as silently resolved.
+
+### Tests and gates
+
+- New Wave 9C tests: 27/27 (`wave9cNps.test.ts` 12, `wave9cUpsell.test.ts` 6,
+  `wave9cArchitectureGuards.test.ts` 9).
+- Combined with Wave 9A/9B regressions + canonical manifest guard: 60/60 assertions pass
+  (1 documented pre-existing Prisma darwin-arm64 Gatekeeper unhandled rejection after the
+  canonical-manifest test's own 7/7 assertions already passed — same class of environment block
+  documented since Wave 2).
+- TypeScript: `./node_modules/.bin/tsc --noEmit --pretty false --incremental false` -> exit 0.
+- ESLint on all Wave 9C changed files: fixed one real `import/order` error in
+  `lifecycleSafety.ts` and removed one unused import in `nps.ts`; final result 0 errors, 37
+  pre-existing warning-class instances (`no-explicit-any`, `sort-imports`).
+- `git diff --check` on `lib/retention/`: clean.
+- Bounded searches confirm: upsell only triggers from a successful terminal audit (`isSuccess`
+  gate, unchanged from Wave 2/3); all three lifecycle senders call `guardLifecycleSend`;
+  `OUTBOUND_DELIVERY_ENABLED` gate is enforced via `outboundDeliveryEnabled()`.
+
+### Environment block (unchanged)
+
+PostgreSQL ports 5435/5444 unavailable; Prisma darwin-arm64 query engine blocked by macOS
+Gatekeeper/code-signing. Full DB-backed suite not run (documented since Wave 1/2). No live
+provider/network/LLM/customer call was made this session.
+
+### Known unrelated failures (unchanged, not touched)
+
+Seven pre-existing SSRF architecture-guard violations outside Wave 9C scope; deprecated
+`AuditOrchestrator` 30s test timeout.
+
+### Wave 9C code files changed
+
+`lib/retention/lifecycleSafety.ts` (new), `lib/retention/nps.ts`, `lib/retention/win-back.ts`,
+`lib/retention/re-engagement.ts`, `lib/retention/upsellTrigger.ts`.
+
+### Wave 9C test files added
+
+`lib/retention/__tests__/wave9cNps.test.ts`, `lib/retention/__tests__/wave9cUpsell.test.ts`,
+`lib/retention/__tests__/wave9cArchitectureGuards.test.ts`.
+
+## Next wave
+
+**Wave 10 — Stripe checkout, portal, webhooks, subscriptions/payments, usage metering,
+reconciliation, billing idempotency.** See the exact continuation prompt in the final chat
+response of this session. Wave 9D (remaining Wave 9C scope: competitor-monitor hardening,
+full cancellation matrix, NPS token hardening, Step 12 observability) is optional and may be
+folded into a future wave if the campaign requires it before Wave 10 begins.

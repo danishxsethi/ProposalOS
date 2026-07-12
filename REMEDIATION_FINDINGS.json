@@ -1780,6 +1780,44 @@
       ],
       "wave": 3,
       "notes": "Discovered while inventorying every prisma.finding.create/createMany call site per Step 2. This is a sandboxed/offline test-fixture code path (opt-in `simulate: true`, not the default production audit flow), but it wrote to the same Finding table with no distinction from real customer findings and no real observation behind the evidence. Status is `fixed` not `verified`: the code change is complete and passed tsc/eslint, but the one test that exercises it end-to-end is DB-environment-blocked in this sandbox, so the fix has not been proven against a live run. Flag for a future session with DB access to confirm outreachE2ESandbox.test.ts still passes."
+    },
+    {
+      "id": "P1-54",
+      "severity": "P1",
+      "title": "Retention lifecycle senders (NPS, win-back, re-engagement) bypass tenant context and Wave 9A outbound safety; upsell trigger has no idempotency or tenant validation on the source audit",
+      "status": "verified",
+      "rootCauseGroup": "C",
+      "dependencies": ["Wave 1 tenant context", "Wave 9A outbound safety"],
+      "files": [
+        "lib/retention/nps.ts",
+        "lib/retention/win-back.ts",
+        "lib/retention/re-engagement.ts",
+        "lib/retention/upsellTrigger.ts",
+        "lib/retention/lifecycleSafety.ts"
+      ],
+      "verification": [
+        "red-before static trace: grep -rn 'runWithTenantAsync|withSystemDbBypass|claimOutboundSend' lib/retention -> zero matches across nps.ts, win-back.ts, re-engagement.ts, upsellTrigger.ts before this fix",
+        "red-before static trace: upsellTrigger.ts's triggerUpsellProposal used prisma.audit.findUnique (no tenantId filter) and created a new Proposal on every call with no duplicate check",
+        "green-after: vitest run lib/retention/__tests__/wave9cNps.test.ts (12/12), lib/retention/__tests__/wave9cUpsell.test.ts (6/6), lib/retention/__tests__/wave9cArchitectureGuards.test.ts (9/9)",
+        "green-after: tsc --noEmit --pretty false --incremental false -> exit 0"
+      ],
+      "wave": 9,
+      "notes": "Created at Wave 9C entry from exact static evidence (grep returned zero matches for tenant-context/outbound-safety primitives across the entire lib/retention directory). Fixed via one shared lib/retention/lifecycleSafety.ts wrapping the existing Wave 9A lib/outreach/outboundSafety primitives (no second outbound framework introduced). nps.ts now resolves tenant via runWithTenantAsync, validates score bounds (0-10 integer), rejects duplicate responses on already-terminal surveys, and gates every send through guardLifecycleSend (suppression + idempotency + OUTBOUND_DELIVERY_ENABLED). win-back.ts and re-engagement.ts wrap their per-recipient send loop in runWithTenantAsync and guardLifecycleSend, and their campaign-status updateMany calls are now tenant-scoped. upsellTrigger.ts validates the source audit belongs to the calling tenant (findFirst with tenantId filter, was findUnique with no tenant check) and checks for an existing upsell proposal on the same audit before creating a new one (idempotent). Upsell trigger call site (scheduled-audit-runner.ts) was already correctly gated behind the audit's successful terminal state (isSuccess && previousAuditId) -- re-verified, not re-implemented."
+    },
+    {
+      "id": "P2-62",
+      "severity": "P2",
+      "title": "Win-back and re-engagement email templates contained unsupported fabricated performance numbers with no Finding citation",
+      "status": "verified",
+      "rootCauseGroup": "F",
+      "dependencies": ["Wave 8 claim contract"],
+      "files": ["lib/retention/win-back.ts", "lib/retention/re-engagement.ts"],
+      "verification": [
+        "red-before static trace: win-back.ts contained '3x faster issue detection', 'Average 40% improvement in audit scores within 30 days', 'Automated competitor monitoring saves 10+ hours/week', 'Client retention increases by 25% with our tracking tools'; re-engagement.ts contained 'Average site speeds improving by 25%' -- none cited a Finding or measured result",
+        "green-after: vitest run lib/retention/__tests__/wave9cArchitectureGuards.test.ts (regex assertions confirm none of the fabricated phrases remain in either file)"
+      ],
+      "wave": 9,
+      "notes": "Discovered while auditing lifecycle email content for Wave 8 ClaimContract compliance. These marketing claims were static template strings, not LLM-generated or Finding-derived -- classified P2 (content-only fix, no logic/authorization defect) rather than P0/P1. Replaced with qualitative, unquantified feature descriptions. No proposal/diagnosis claim-grounding boundary was bypassed (these are not customer-facing audit Findings and do not flow through lib/claims/claimContract.ts), but the specific numeric claims had no measured or cited basis and are removed per the same 'no fabricated marketing/performance claim' principle enforced elsewhere in the campaign (P1-04, Wave 9A/9B win-back removal of identical claim patterns)."
     }
   ]
 }

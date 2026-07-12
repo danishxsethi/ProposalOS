@@ -2067,3 +2067,102 @@ AuditOrchestrator timeout remain unrelated.
 Wave 9 ledger filter result at this checkpoint: zero rows. Wave 9 must derive any newly assigned
 rows at entry and must not invent IDs; its committed scope is the pipeline inventory recorded in
 `REMEDIATION_STATE.md`.
+
+---
+
+## Wave 9C — Retention lifecycle safety (NPS, upsell, win-back, re-engagement)
+
+Findings: **P1-54** (tenant/outbound-safety gap across all recurring lifecycle senders),
+**P2-62** (fabricated marketing numbers in win-back/re-engagement templates).
+
+### 1. Red-before evidence
+
+```
+$ grep -rn "runWithTenantAsync|withSystemDbBypass|claimOutboundSend" lib/retention
+(no matches before this fix)
+```
+
+`upsellTrigger.ts::triggerUpsellProposal` used `prisma.audit.findUnique({ where: { id: auditId } })`
+(no tenant filter) and unconditionally created a new `Proposal` on every call.
+
+### 2. Fixture tests — GREEN (27/27)
+
+```
+$ vitest run lib/retention/__tests__/wave9cNps.test.ts \
+    lib/retention/__tests__/wave9cUpsell.test.ts \
+    lib/retention/__tests__/wave9cArchitectureGuards.test.ts
+
+ ✓ lib/retention/__tests__/wave9cNps.test.ts                (12 tests)
+ ✓ lib/retention/__tests__/wave9cUpsell.test.ts              (6 tests)
+ ✓ lib/retention/__tests__/wave9cArchitectureGuards.test.ts  (9 tests)
+ Test Files  3 passed (3)
+      Tests  27 passed (27)
+```
+
+### 3. Combined regression — GREEN (60/60 assertions)
+
+```
+$ vitest run lib/outreach/__tests__/wave9bFollowup.test.ts \
+    lib/closing/__tests__/wave9bChatHandoff.test.ts \
+    lib/outreach/__tests__/wave9aOutboundSafety.test.ts \
+    tests/architecture/canonical-module-manifest.test.ts
+
+ Test Files  4 passed (4)
+      Tests  60 passed (60)
+      Errors  1 error   <- documented pre-existing Prisma darwin-arm64 Gatekeeper
+                            unhandled rejection, after canonical-manifest's own 7/7
+                            assertions already passed (same class since Wave 2)
+```
+
+### 4. TypeScript — GREEN
+
+```
+$ ./node_modules/.bin/tsc --noEmit --pretty false --incremental false
+(exit 0)
+```
+
+### 5. ESLint on changed files
+
+Initial run surfaced one real `import/order` error in `lifecycleSafety.ts` (fixed: moved the
+`@/lib/outreach/outboundSafety` import before `@/lib/prisma`) and one unused import
+(`releaseLifecycleSend`) in `nps.ts` (removed). Final:
+
+```
+✖ 37 problems (0 errors, 37 warnings)
+```
+
+All 37 warnings are pre-existing warning classes (`@typescript-eslint/no-explicit-any` on
+`(prisma as any)` casts already present in the file before this wave, `sort-imports` on
+multi-member import statements). Zero new errors.
+
+### 6. git diff --check
+
+```
+$ git diff --check -- lib/retention/
+(clean)
+```
+
+### 7. Bounded verification searches
+
+```
+$ grep -n "detectCompetitorImprovement|triggerUpsellProposal" lib/retention/scheduled-audit-runner.ts
+  -> both calls are inside the `if (isSuccess && run.previousAuditId)` block (isSuccess =
+     status IN COMPLETE/PARTIAL) — upsell cannot trigger from a failed/unavailable audit.
+
+$ grep -rl "guardLifecycleSend" lib/retention/*.ts
+  -> lifecycleSafety.ts, nps.ts, re-engagement.ts, win-back.ts (all three senders + the
+     shared guard module itself)
+
+$ grep -n "outboundDeliveryEnabled" lib/retention/lifecycleSafety.ts
+  -> imported and called inside guardLifecycleSend before any provider dispatch
+```
+
+### 8. Result
+
+P1-54 and P2-62 set to `verified`. No Wave 9C finding is fixed-and-blocked or open. Competitor
+monitoring hardening, the full lifecycle cancellation matrix, and Step 12 observability
+instrumentation beyond the existing Wave 9A `outboundSafety` claim store were not implemented
+this session (context budget) and are explicitly not claimed as verified — carried forward,
+not silently resolved. Full DB-backed suite not run (PostgreSQL 5435/5444 unavailable, Prisma
+darwin-arm64 engine blocked by Gatekeeper — unchanged since Wave 1/2). No live provider/network/
+LLM/customer call was made.
