@@ -72,13 +72,22 @@ export class DeliveryEngine implements IDeliveryEngine {
         if (!proposal.acceptance) {
           throw new Error(`Proposal not accepted: ${proposalId}`);
         }
+        if (proposal.acceptance.tier.toLowerCase() !== tier.toLowerCase()) {
+          throw new Error(
+            `Delivery tier must match the accepted proposal tier: ${proposal.acceptance.tier}`
+          );
+        }
 
         if (!proposal.tenantId) {
           throw new Error(`Proposal missing tenantId: ${proposalId}`);
         }
 
         // Get the tier configuration
-        const tierKey = `tier${tier.charAt(0).toUpperCase() + tier.slice(1)}` as
+        const acceptedTier = proposal.acceptance.tier.toLowerCase();
+        if (!Object.hasOwn(TIER_DELIVERY_TIMELINES, acceptedTier)) {
+          throw new Error(`Invalid accepted delivery tier: ${proposal.acceptance.tier}`);
+        }
+        const tierKey = `tier${acceptedTier.charAt(0).toUpperCase() + acceptedTier.slice(1)}` as
           | 'tierEssentials'
           | 'tierGrowth'
           | 'tierPremium';
@@ -91,7 +100,7 @@ export class DeliveryEngine implements IDeliveryEngine {
         const findingIds = tierConfig.findingIds as string[];
 
         // Get the delivery timeline for this tier
-        const deliveryTimelineDays = TIER_DELIVERY_TIMELINES[tier.toLowerCase()] || 30;
+        const deliveryTimelineDays = TIER_DELIVERY_TIMELINES[acceptedTier]!;
         const estimatedCompletionDate = new Date();
         estimatedCompletionDate.setDate(estimatedCompletionDate.getDate() + deliveryTimelineDays);
 
@@ -109,7 +118,31 @@ export class DeliveryEngine implements IDeliveryEngine {
           // Map finding category to agent type
           const agentType = CATEGORY_TO_AGENT_TYPE[finding.category] || 'seo_fix';
 
-          // Create delivery task in database
+          const existing = await prisma.deliveryTask.findFirst({
+            where: {
+              tenantId: proposal.tenantId,
+              proposalId,
+              findingId,
+            },
+          });
+          if (existing?.id) {
+            deliverables.push({
+              id: existing.id,
+              proposalId: existing.proposalId,
+              findingId: existing.findingId,
+              agentType: existing.agentType as Deliverable['agentType'],
+              status: existing.status as Deliverable['status'],
+              estimatedCompletionDate: existing.estimatedCompletionDate,
+              completedAt: existing.completedAt || undefined,
+              verificationAuditId: existing.verificationAuditId || undefined,
+              beforeAfterComparison: existing.beforeAfterComparison as
+                | Record<string, unknown>
+                | undefined,
+            });
+            continue;
+          }
+
+          // Create exactly one durable delivery task for this accepted finding.
           const task = await prisma.deliveryTask.create({
             data: {
               tenantId: proposal.tenantId,
@@ -164,34 +197,20 @@ export class DeliveryEngine implements IDeliveryEngine {
           data: { status: 'in_progress' },
         });
 
-        // In a real implementation, this would dispatch to actual AI agents
-        // For now, we'll create a stub that simulates agent processing
-        try {
-          // Simulate agent work (in production, this would call the actual agent)
-          logger.info(
-            { deliverableId: deliverable.id, agentType: deliverable.agentType },
-            'Dispatching deliverable to agent'
-          );
-
-          // For now, mark as completed immediately (agents will be implemented in subtask 21.5)
-          await prisma.deliveryTask.update({
-            where: { id: deliverable.id },
-            data: {
-              status: 'completed',
-              completedAt: new Date(),
-            },
-          });
-        } catch (error) {
-          // Mark as failed on error
-          await prisma.deliveryTask.update({
-            where: { id: deliverable.id },
-            data: {
-              status: 'failed',
-              errorMessage: error instanceof Error ? error.message : 'Unknown error',
-            },
-          });
-          throw error;
-        }
+        // There is no approved execution adapter for these delivery agents. Keep the work visible
+        // and assigned for human fulfillment rather than fabricating completion.
+        await prisma.deliveryTask.update({
+          where: { id: deliverable.id },
+          data: {
+            status: 'escalated',
+            errorMessage:
+              'DELIVERY_EXECUTOR_UNAVAILABLE: an approved execution adapter is required before this task can be completed',
+          },
+        });
+        logger.warn(
+          { deliverableId: deliverable.id, agentType: deliverable.agentType },
+          'Delivery task requires an approved execution adapter'
+        );
       }
     );
   }
@@ -228,33 +247,9 @@ export class DeliveryEngine implements IDeliveryEngine {
           throw new Error(`Deliverable not completed: ${deliverableId}`);
         }
 
-        // In a real implementation, this would trigger a re-audit
-        // For now, we'll simulate verification
-        const improvementPercent = Math.random() * 50 + 20; // Simulate 20-70% improvement
-
-        const beforeAfterComparison = {
-          before: { score: 50 },
-          after: { score: 50 + improvementPercent },
-          improvement: improvementPercent,
-        };
-
-        // Update task with verification results
-        await prisma.deliveryTask.update({
-          where: { id: deliverableId },
-          data: {
-            status: 'verified',
-            beforeAfterComparison,
-          },
-        });
-
-        return {
-          deliverableId,
-          passed: true,
-          auditId: 'simulated-audit-id',
-          beforeMetrics: { score: 50 },
-          afterMetrics: { score: Math.round(50 + improvementPercent) },
-          improvementPercent,
-        };
+        throw new Error(
+          'DELIVERY_VERIFICATION_UNAVAILABLE: a completed task requires a canonical re-audit verification gate'
+        );
       }
     );
   }

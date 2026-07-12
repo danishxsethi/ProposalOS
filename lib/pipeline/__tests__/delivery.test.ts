@@ -279,17 +279,17 @@ describe('Delivery Engine Unit Tests', () => {
         data: { status: 'in_progress' },
       });
 
-      // Should also update to completed
+      // No approved delivery executor exists, so execution must remain visible for human action.
       expect(prisma.deliveryTask.update).toHaveBeenCalledWith({
         where: { id: 'task-123' },
         data: {
-          status: 'completed',
-          completedAt: expect.any(Date),
+          status: 'escalated',
+          errorMessage: expect.stringContaining('DELIVERY_EXECUTOR_UNAVAILABLE'),
         },
       });
     });
 
-    it('should mark as failed on error', async () => {
+    it('does not fabricate a provider failure or completion when no executor exists', async () => {
       const deliverable: Deliverable = {
         id: 'task-123',
         proposalId: 'proposal-123',
@@ -299,27 +299,28 @@ describe('Delivery Engine Unit Tests', () => {
         estimatedCompletionDate: new Date(),
       };
 
-      (prisma.deliveryTask.update as any)
-        .mockResolvedValueOnce({ ...deliverable, status: 'in_progress' })
-        .mockRejectedValueOnce(new Error('Agent failed'));
+      (prisma.deliveryTask.update as any).mockResolvedValue({
+        ...deliverable,
+        status: 'in_progress',
+      });
       (prisma.deliveryTask.findUnique as any).mockResolvedValue({
         tenantId: 'tenant-123',
       });
 
-      await expect(deliveryEngine.dispatchToAgent(deliverable)).rejects.toThrow('Agent failed');
+      await deliveryEngine.dispatchToAgent(deliverable);
 
       expect(prisma.deliveryTask.update).toHaveBeenCalledWith({
         where: { id: 'task-123' },
         data: {
-          status: 'failed',
-          errorMessage: 'Agent failed',
+          status: 'escalated',
+          errorMessage: expect.stringContaining('DELIVERY_EXECUTOR_UNAVAILABLE'),
         },
       });
     });
   });
 
   describe('verifyDeliverable', () => {
-    it('should verify a completed deliverable', async () => {
+    it('refuses to verify a completed deliverable without a canonical re-audit gate', async () => {
       const deliverableId = 'task-123';
 
       (prisma.deliveryTask.findUnique as any).mockResolvedValue({
@@ -328,23 +329,10 @@ describe('Delivery Engine Unit Tests', () => {
         status: 'completed',
       });
 
-      (prisma.deliveryTask.update as any).mockResolvedValue({
-        id: deliverableId,
-        status: 'verified',
-      });
-
-      const result = await deliveryEngine.verifyDeliverable(deliverableId);
-
-      expect(result.passed).toBe(true);
-      expect(result.improvementPercent).toBeGreaterThan(0);
-
-      expect(prisma.deliveryTask.update).toHaveBeenCalledWith({
-        where: { id: deliverableId },
-        data: expect.objectContaining({
-          status: 'verified',
-          beforeAfterComparison: expect.any(Object),
-        }),
-      });
+      await expect(deliveryEngine.verifyDeliverable(deliverableId)).rejects.toThrow(
+        'DELIVERY_VERIFICATION_UNAVAILABLE'
+      );
+      expect(prisma.deliveryTask.update).not.toHaveBeenCalled();
     });
 
     it('should throw error if deliverable not found', async () => {

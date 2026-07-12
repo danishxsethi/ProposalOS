@@ -1,32 +1,13 @@
 import { NextResponse } from 'next/server';
 
-import { Resend } from 'resend';
-
-import { BRANDING } from '@/lib/config/branding';
+import { validateCustomerClaim } from '@/lib/claims/claimContract';
 import { fillFollowUpTemplate, getFollowUpTemplate } from '@/lib/email-templates/followup-sequence';
 import { logger } from '@/lib/logger';
 import { withAuth } from '@/lib/middleware/auth';
 import { prisma } from '@/lib/prisma';
 import { getTenantId } from '@/lib/tenant/context';
 
-const FROM_EMAIL = `${BRANDING.name} <onboarding@resend.dev>`;
-const PHYSICAL_ADDRESS =
-  process.env.BRAND_PHYSICAL_ADDRESS || '123 Main St, Saskatoon, SK S7N 0A1, Canada';
-
-function getResend() {
-  if (!process.env.RESEND_API_KEY) return null;
-  return new Resend(process.env.RESEND_API_KEY);
-}
-
-function textToHtml(text: string): string {
-  return text
-    .split('\n\n')
-    .map(
-      (p) =>
-        `<p style="margin: 0 0 1rem 0; font-size: 15px; line-height: 1.6;">${p.replace(/\n/g, '<br />')}</p>`
-    )
-    .join('');
-}
+const PHYSICAL_ADDRESS = process.env.BRAND_PHYSICAL_ADDRESS?.trim();
 
 /**
  * POST /api/email/send-followup
@@ -80,94 +61,107 @@ export const POST = withAuth(async (req: Request) => {
       return NextResponse.json({ error: 'No proposal found for this audit' }, { status: 404 });
     }
 
+    if (!PHYSICAL_ADDRESS) {
+      return NextResponse.json(
+        { error: 'Follow-up delivery is unavailable until BRAND_PHYSICAL_ADDRESS is configured' },
+        { status: 503 }
+      );
+    }
+
+    if (proposal.prospectEmail !== recipientEmail) {
+      return NextResponse.json(
+        { error: 'Recipient must match the proposal prospect email' },
+        { status: 400 }
+      );
+    }
+
+    const existing = await prisma.proposalFollowUp.findFirst({
+      where: {
+        tenantId,
+        proposalId: proposal.id,
+        step,
+        type: 'manual_email',
+        status: { in: ['pending', 'sending', 'sent', 'unknown'] },
+      },
+      select: { id: true, status: true },
+    });
+    if (existing) {
+      return NextResponse.json({
+        accepted: existing.status === 'pending' || existing.status === 'sending',
+        followUpId: existing.id,
+        status: existing.status,
+      });
+    }
+
     const baseUrl =
       process.env.BASE_URL || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
     const proposalUrl = `${baseUrl}/proposal/${proposal.webLinkToken}`;
     const unsubscribeUrl = `${baseUrl}/unsubscribe?email=${encodeURIComponent(recipientEmail)}`;
 
     const topFinding = audit.findings[0];
-    const findingText =
-      topFinding?.title || 'several critical issues affecting your online visibility';
-    const metricText = topFinding?.metrics
-      ? (() => {
-          const m = topFinding.metrics as Record<string, unknown>;
-          if (typeof m.loadTimeSeconds === 'number')
-            return `Your mobile load time of ${m.loadTimeSeconds.toFixed(1)}s is costing you ~15% of visitors`;
-          if (typeof m.performanceScore === 'number')
-            return `Your performance score of ${m.performanceScore} is below the 50+ benchmark`;
-          return 'Your site is underperforming compared to local competitors';
-        })()
-      : 'Your site is underperforming compared to local competitors';
-
-    const comparisonReport = proposal.comparisonReport as {
-      competitors?: Array<{ name?: string }>;
-    } | null;
-    const competitorName = comparisonReport?.competitors?.[0]?.name || 'A local competitor';
+    if (!topFinding) {
+      return NextResponse.json(
+        { error: 'A validated finding is required before a follow-up can be queued' },
+        { status: 422 }
+      );
+    }
+    const findingText = [topFinding.title, topFinding.description].filter(Boolean).join(': ');
+    const claim = validateCustomerClaim(
+      {
+        claimId: `manual-followup:${proposal.id}:${step}:${topFinding.id}`,
+        text: findingText,
+        claimType: 'DETERMINISTIC_OBSERVATION',
+        sourceFindingIds: [topFinding.id],
+        configurationRefs: [],
+        classification: 'deterministic',
+        confidence: Math.max(0, Math.min(1, Number(topFinding.confidenceScore) / 10)),
+        assumptions: [],
+        metricInputs: [],
+        estimate: false,
+        recommendation: false,
+        provenance: { producer: 'api.email.send-followup' },
+      },
+      { auditId, tenantId, findings: audit.findings }
+    );
+    if (!claim.success) {
+      return NextResponse.json(
+        { error: 'Follow-up claim validation failed', reasons: claim.issues },
+        { status: 422 }
+      );
+    }
 
     const { subject, body: emailBody } = fillFollowUpTemplate(template, {
       businessName: audit.businessName,
       proposalUrl,
       finding: findingText,
-      metric: metricText,
-      competitorName,
+      metric: '',
       recipientName,
       physicalAddress: PHYSICAL_ADDRESS,
       unsubscribeUrl,
     });
 
-    const resend = getResend();
-    if (!resend) {
-      return NextResponse.json(
-        { error: 'Email service not configured (RESEND_API_KEY missing)' },
-        { status: 503 }
-      );
-    }
-
-    const html = `
-            <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-                ${textToHtml(emailBody)}
-                <hr style="margin: 24px 0; border: none; border-top: 1px solid #e5e7eb;" />
-                <p style="font-size: 11px; color: #6b7280;">
-                    ${PHYSICAL_ADDRESS}<br />
-                    <a href="${unsubscribeUrl}">Unsubscribe</a> from these emails.
-                </p>
-            </div>
-        `;
-
-    const { data, error } = await resend.emails.send({
-      from: FROM_EMAIL,
-      to: recipientEmail,
-      subject,
-      html,
-    });
-
-    if (error) {
-      logger.error(
-        { event: 'followup_email_failed', error, auditId, step },
-        'Follow-up email failed'
-      );
-      return NextResponse.json({ error: error.message || 'Failed to send email' }, { status: 500 });
-    }
-
-    await prisma.followUpEmailSend.create({
+    const followUp = await prisma.proposalFollowUp.create({
       data: {
-        auditId,
         proposalId: proposal.id,
+        tenantId,
         step,
-        recipientEmail,
-        recipientName: recipientName !== 'there' ? recipientName : null,
+        type: 'manual_email',
+        status: 'pending',
+        scheduledAt: new Date(),
         emailSubject: subject,
         emailBody,
-        tenantId,
       },
     });
 
     logger.info(
-      { event: 'followup_email_sent', auditId, step, recipientEmail, resendId: data?.id },
-      'Follow-up email sent'
+      { event: 'followup_email_queued', auditId, step, recipientEmail, followUpId: followUp.id },
+      'Follow-up email queued for durable dispatch'
     );
 
-    return NextResponse.json({ success: true, messageId: data?.id });
+    return NextResponse.json(
+      { accepted: true, followUpId: followUp.id, status: 'pending' },
+      { status: 202 }
+    );
   } catch (err) {
     logger.error(
       { event: 'followup_email_error', error: err instanceof Error ? err.message : String(err) },

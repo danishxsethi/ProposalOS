@@ -15,9 +15,18 @@ import { NextResponse } from 'next/server';
 import { Resend } from 'resend';
 
 import { generateTraceId, InternalError } from '@/lib/api/errors';
+import { withSystemDbBypass } from '@/lib/db';
+import { logger } from '@/lib/logger';
 import { verifyCronAuth } from '@/lib/middleware/cronAuth';
 import { withRateLimit } from '@/lib/middleware/rateLimit';
+import {
+  claimOutboundSend,
+  completeOutboundSend,
+  markOutboundSendUnknown,
+  releaseOutboundSend,
+} from '@/lib/outreach/outboundSafety';
 import { prisma } from '@/lib/prisma';
+import { runWithTenantAsync } from '@/lib/tenant/context';
 
 function getResend() {
   const key = process.env.RESEND_API_KEY;
@@ -35,73 +44,203 @@ async function handleFollowUpsCron(req: Request): Promise<NextResponse> {
     const now = new Date();
 
     // 1. Fetch pending follow-ups due now or in past
-    const dueFollowUps = await prisma.proposalFollowUp.findMany({
-      where: {
-        status: 'pending',
-        scheduledAt: { lte: now },
-      },
-      include: {
-        proposal: {
-          include: { audit: true },
+    const dueFollowUps = await withSystemDbBypass('cron:follow-ups:list-due', (client) =>
+      client.proposalFollowUp.findMany({
+        where: {
+          status: 'pending',
+          scheduledAt: { lte: now },
         },
-      },
-      take: 50, // Batch size to prevent timeouts
-    });
+        select: { id: true, tenantId: true },
+        take: 50,
+        orderBy: { scheduledAt: 'asc' },
+      })
+    );
 
     const results = [];
 
     for (const item of dueFollowUps) {
       try {
-        // Fetch Tenant to get sender info
-        const tenant = await prisma.tenant.findUnique({
-          where: { id: item.tenantId },
-          include: { brandingConfig: true, users: { take: 1 } },
-        });
+        const outcome = await runWithTenantAsync(item.tenantId, async () => {
+          const followUp = await prisma.proposalFollowUp.findFirst({
+            where: {
+              id: item.id,
+              tenantId: item.tenantId,
+              status: 'pending',
+              scheduledAt: { lte: now },
+            },
+            include: {
+              proposal: { include: { audit: true } },
+            },
+          });
+          if (!followUp) return { id: item.id, status: 'skipped', reason: 'not_due_or_claimed' };
 
-        if (!tenant) continue;
-
-        const senderName = tenant.brandingConfig?.brandName || item.proposal.audit.businessName;
-        const senderEmail = 'onboarding@resend.dev'; // Default sandbox
-
-        let toEmail = '';
-
-        if (item.type === 'reminder') {
-          // Send to Operator (first user or contact email)
-          toEmail = tenant.brandingConfig?.contactEmail || tenant.users[0]?.email || '';
-        } else {
-          // Send to Prospect (from proposal.prospectEmail if available)
-          toEmail = (item.proposal as any).prospectEmail;
-        }
-
-        if (toEmail) {
-          const resend = getResend();
-          if (resend) {
-            await resend.emails.send({
-              from: `${senderName} <${senderEmail}>`,
-              to: toEmail,
-              subject: item.emailSubject,
-              text: item.emailBody,
+          const proposal = followUp.proposal;
+          if (
+            proposal.status === 'ACCEPTED' ||
+            proposal.status === 'REJECTED' ||
+            proposal.replyReceivedAt ||
+            proposal.meetingBookedAt
+          ) {
+            await prisma.proposalFollowUp.update({
+              where: { id: followUp.id },
+              data: { status: 'cancelled' },
             });
+            return { id: followUp.id, status: 'cancelled', reason: 'terminal_proposal_state' };
           }
-          await prisma.proposalFollowUp.update({
-            where: { id: item.id },
-            data: resend ? { status: 'sent', sentAt: new Date() } : { status: 'failed_no_resend' },
+
+          const tenant = await prisma.tenant.findUnique({
+            where: { id: item.tenantId },
+            include: { brandingConfig: true, users: { take: 1 } },
           });
-          results.push({ id: item.id, status: resend ? 'sent' : 'skipped', to: toEmail });
-        } else {
-          // Missing email, mark as failed
-          await prisma.proposalFollowUp.update({
-            where: { id: item.id },
-            data: { status: 'failed_no_email' },
+          if (!tenant) return { id: followUp.id, status: 'failed', reason: 'tenant_not_found' };
+
+          const toEmail =
+            followUp.type === 'reminder'
+              ? tenant.brandingConfig?.contactEmail || tenant.users[0]?.email || ''
+              : proposal.prospectEmail || '';
+          if (!toEmail) {
+            await prisma.proposalFollowUp.update({
+              where: { id: followUp.id },
+              data: { status: 'failed_no_email' },
+            });
+            return { id: followUp.id, status: 'failed', reason: 'no_email' };
+          }
+
+          const suppressed = await prisma.emailBlocklist.findUnique({
+            where: { email: toEmail },
+            select: { id: true },
           });
-          results.push({ id: item.id, status: 'failed', reason: 'no email' });
-        }
+          if (suppressed) {
+            await prisma.proposalFollowUp.update({
+              where: { id: followUp.id },
+              data: { status: 'cancelled' },
+            });
+            return { id: followUp.id, status: 'cancelled', reason: 'recipient_suppressed' };
+          }
+
+          const config = await prisma.pipelineConfig.findUnique({
+            where: { tenantId: item.tenantId },
+            select: { dailyVolumeLimit: true },
+          });
+          const alreadySent = await prisma.proposalFollowUp.count({
+            where: {
+              tenantId: item.tenantId,
+              status: 'sent',
+              sentAt: { gte: new Date(now.getFullYear(), now.getMonth(), now.getDate()) },
+            },
+          });
+          const idempotencyKey = `followup:${followUp.proposalId}:${followUp.step}`;
+          const claim = await claimOutboundSend({
+            tenantId: item.tenantId,
+            idempotencyKey,
+            dailyCap: config?.dailyVolumeLimit || 200,
+            capScope: 'followup',
+            alreadySent,
+            now,
+          });
+          if (claim.status !== 'claimed') {
+            return {
+              id: followUp.id,
+              status: claim.status === 'unavailable' ? 'skipped' : claim.status,
+              reason: claim.status === 'unavailable' ? claim.reason : claim.status,
+            };
+          }
+
+          await prisma.proposalFollowUp.update({
+            where: { id: followUp.id },
+            data: { status: 'sending' },
+          });
+
+          const resend = getResend();
+          if (!resend) {
+            await releaseOutboundSend({
+              tenantId: item.tenantId,
+              idempotencyKey,
+              dailyCap: config?.dailyVolumeLimit || 200,
+              capScope: 'followup',
+              now,
+            });
+            await prisma.proposalFollowUp.update({
+              where: { id: followUp.id },
+              data: { status: 'pending' },
+            });
+            return { id: followUp.id, status: 'skipped', reason: 'provider_unavailable' };
+          }
+
+          try {
+            const { data, error } = await resend.emails.send({
+              from: `${tenant.brandingConfig?.brandName || proposal.audit.businessName} <onboarding@resend.dev>`,
+              to: toEmail,
+              subject: followUp.emailSubject,
+              text: followUp.emailBody,
+            });
+            if (error || !data?.id) {
+              await releaseOutboundSend({
+                tenantId: item.tenantId,
+                idempotencyKey,
+                dailyCap: config?.dailyVolumeLimit || 200,
+                capScope: 'followup',
+                now,
+              });
+              await prisma.proposalFollowUp.update({
+                where: { id: followUp.id },
+                data: { status: 'failed' },
+              });
+              return {
+                id: followUp.id,
+                status: 'failed',
+                reason: error?.message || 'provider_rejected',
+              };
+            }
+
+            await prisma.pipelineErrorLog.create({
+              data: {
+                tenantId: item.tenantId,
+                stage: 'outreach',
+                errorType: 'FOLLOW_UP_SENT',
+                errorMessage: 'Provider accepted follow-up delivery',
+                metadata: { followUpId: followUp.id, idempotencyKey, providerMessageId: data.id },
+              },
+            });
+            await prisma.proposalFollowUp.update({
+              where: { id: followUp.id },
+              data: { status: 'sent', sentAt: new Date() },
+            });
+            await completeOutboundSend({
+              tenantId: item.tenantId,
+              idempotencyKey,
+              dailyCap: config?.dailyVolumeLimit || 200,
+              capScope: 'followup',
+              now,
+            });
+            return { id: followUp.id, status: 'sent' };
+          } catch (error) {
+            await markOutboundSendUnknown(
+              {
+                tenantId: item.tenantId,
+                idempotencyKey,
+                dailyCap: config?.dailyVolumeLimit || 200,
+                capScope: 'followup',
+                now,
+              },
+              error instanceof Error ? error.message : 'provider outcome unknown'
+            );
+            await prisma.proposalFollowUp.update({
+              where: { id: followUp.id },
+              data: { status: 'unknown' },
+            });
+            return { id: followUp.id, status: 'unknown', reason: 'provider_outcome_unknown' };
+          }
+        });
+        results.push(outcome);
       } catch (err) {
         logger.error(`Failed to process follow-up ${item.id}`, err);
-        await prisma.proposalFollowUp.update({
-          where: { id: item.id },
-          data: { status: 'failed' },
-        });
+        await runWithTenantAsync(item.tenantId, () =>
+          prisma.proposalFollowUp.update({
+            where: { id: item.id },
+            data: { status: 'failed' },
+          })
+        );
       }
     }
 

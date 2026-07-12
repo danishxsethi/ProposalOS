@@ -3,10 +3,10 @@
   "auditSource": "AUDIT_REPORT.md",
   "note": "107 finding rows normalized from AUDIT_REPORT.md (Phase 0 + Pass 1, 2, 3, 4A, 4B batches 1-6, 4C.1). IDs P0-01..P0-18 and P1-10..P1-13 are not rows in this report (prior/other numbering) and are intentionally absent. P2-26 is superseded by an in-report self-correction (line 1450). Wave assignments for findings beyond the current wave are provisional and refined at wave entry. Unfinished audit passes (4C.2, 4C.3, Passes 5-20) are tracked in REMEDIATION_STATE.md as open audit work, NOT as confirmed defects.",
   "severityTotals": {
-    "P0": 8,
-    "P1": 48,
+    "P0": 10,
+    "P1": 49,
     "P2": 61,
-    "total": 117
+    "total": 120
   },
   "openAuditPasses": [
     "Pass 4C.2 \u2014 cost controls, persistence, idempotency, result integrity",
@@ -1707,6 +1707,63 @@
       ],
       "wave": 9,
       "notes": "Created only after executable/static evidence and verified with the listed fixture-backed tests. Scope is the pipeline-outreach initial-send path, not all historical email routes. The repair enumerates configured tenants through a named bypass, executes every tenant operation in context, validates/persists Finding IDs, writes PENDING intent before dispatch, enforces an explicit live-delivery flag, suppression, stable prospect/proposal idempotency, domain-scoped shared caps, reconciliation on ambiguous results, and idempotent follow-up scheduling. ProposalFollowUp/manual send routes remain separate W9-V04/W9-V05 work and are not represented as fixed by this finding. The canonical manifest assertions passed 7/7, though that Vitest process later hit the documented local Prisma engine block."
+    },
+    {
+      "id": "P0-27",
+      "severity": "P0",
+      "title": "Closing agent allowed model-selected commercial mutations and acceptance without server-side authorization or confirmation",
+      "status": "open",
+      "rootCauseGroup": "C",
+      "dependencies": ["Wave 1 tenant context", "Wave 8 claim contract"],
+      "files": [
+        "lib/closing/agent.ts",
+        "app/api/pipeline/chat/route.ts",
+        "app/api/proposal/[id]/chat/route.ts"
+      ],
+      "verification": [
+        "red-before static trace: lib/closing/agent.ts:287-386 declared model tools that directly updated tiers, discount notes, and ACCEPTED state",
+        "green-after implementation requires targeted chat/tool route tests before status can be verified"
+      ],
+      "wave": 9,
+      "notes": "Created at Wave 9B entry from exact static evidence. The implementation removes model mutation tools and constrains output to grounded citations or human handoff, but end-to-end route/authorization coverage remains required."
+    },
+    {
+      "id": "P0-28",
+      "severity": "P0",
+      "title": "Delivery engine fabricated completion and verification results for unimplemented execution",
+      "status": "open",
+      "rootCauseGroup": "D",
+      "dependencies": ["Wave 2 durable execution", "Wave 8 claim contract"],
+      "files": [
+        "lib/pipeline/deliveryEngine.ts",
+        "lib/graph/delivery-graph.ts",
+        "app/api/delivery/[proposalId]/bundle/route.ts"
+      ],
+      "verification": [
+        "red-before static trace: deliveryEngine dispatch marked tasks completed immediately and verifyDeliverable generated random improvement with simulated-audit-id",
+        "partial green-after: vitest run lib/pipeline/__tests__/delivery.test.ts lib/pipeline/__tests__/delivery.property.test.ts"
+      ],
+      "wave": 9,
+      "notes": "Wave 9B changes leave delivery tasks escalated when no approved execution adapter exists and reject verification without a canonical re-audit gate. Route, artifact, and storage integration coverage remains required."
+    },
+    {
+      "id": "P1-53",
+      "severity": "P1",
+      "title": "Legacy follow-up routes bypass outbound delivery safety and emit unsupported customer copy",
+      "status": "open",
+      "rootCauseGroup": "C",
+      "dependencies": ["P1-52", "Wave 8 claim contract"],
+      "files": [
+        "app/api/cron/follow-ups/route.ts",
+        "app/api/email/send-followup/route.ts",
+        "lib/email-templates/followup-sequence.ts"
+      ],
+      "verification": [
+        "red-before static trace: direct Resend sends lacked explicit delivery gate, suppression, durable intent, provider reconciliation, and claim-safe copy",
+        "green-after route and provider-fixture tests remain required"
+      ],
+      "wave": 9,
+      "notes": "Created at Wave 9B entry from exact static evidence. Initial code now queues manual follow-ups and routes cron sends through the shared outbound claim, but verification is incomplete."
     },
     {
       "id": "P2-61",

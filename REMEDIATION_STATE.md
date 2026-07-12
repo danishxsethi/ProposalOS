@@ -1865,3 +1865,113 @@ exact remediation evidence. Candidate IDs, if severity is proven: `P0-27`, `P1-5
 Wave 9B begins with the remaining outbound surfaces (`ProposalFollowUp`, manual follow-up send,
 and follow-up cron) before closing chat/tool authority, scheduling/handoff, and delivery. It must
 not treat P1-52 as covering those paths. Wave 9C remains re-audit/retention/recovery.
+
+## Wave 9B entry and verification worklist (2026-07-12)
+
+Entry checkpoint is `361d82c` (`chore(remediation): checkpoint wave 9a`), following Wave 9A
+code commit `d183cec`. The branch is `remediation/proposalos-e2e`, the stash is empty, and
+`./node_modules/.bin/tsc --noEmit --pretty false --incremental false` exits 0. The dirty tree
+matches the preserved unrelated baseline recorded above; no Wave 9B implementation was present
+at entry.
+
+The complete finding ledger was inspected before assigning new identifiers. The next available
+identifiers are `P0-27` and `P1-53`. The following defects are proven by the cited static call
+chains and require red/green coverage before they can be verified:
+
+- `P1-53` / W9-V04: `app/api/cron/follow-ups/route.ts:39-90` queries and sends without a tenant
+  context, suppression, persistent provider result, durable send intent, or the Wave 9A outbound
+  claim. `app/api/email/send-followup/route.ts:88-170` sends before persisting its record and
+  emits unsupported metric/competitor fallback copy.
+- `P0-27` / W9-V06-W9-V07: `lib/closing/agent.ts:287-386` exposes model-selected commercial
+  tools that directly alter proposal state, price/discount notes, tier choice, and acceptance
+  without an authorized server-side actor or prospect confirmation. Both chat routes additionally
+  construct customer context from client-facing fields and escalate through non-durable webhooks.
+- `P0-28` / W9-V10-W9-V11: `lib/pipeline/deliveryEngine.ts:161-183` marks unimplemented agent
+  work complete, and `lib/pipeline/deliveryEngine.ts:231-255` creates random verification scores
+  and a simulated audit ID. `app/api/delivery/[proposalId]/bundle/route.ts:55-95` allows any
+  authenticated user to run delivery without tenant/acceptance/idempotency checks.
+
+| Work item | Requirement / executable path                                                  | Boundary and expected result                                                                                                                                              | Verification                                                                           | Status      |
+| --------- | ------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- | ----------- |
+| W9-V04b   | `ProposalFollowUp`, follow-up cron, manual follow-up route                     | Reuse `outboundSafety`; tenant context; suppress before dispatch; persist intent before provider; stable `followup:<proposalId>:<step>` key; failed/unknown never sent    | fixture route/service tests for disabled, suppression, replay, ambiguity, cancellation | in progress |
+| W9-V05    | Follow-up cancellation                                                         | Reply, meeting, accepted, active human handoff, and terminal deal state cancel pending follow-ups                                                                         | fake-time cancellation and duplicate-cron tests                                        | in progress |
+| W9-V06    | `app/api/pipeline/chat`, `app/api/proposal/[id]/chat`, `app/api/chat/proposal` | Server-resolved proposal/token/tenant context, bounded input/history, strict reply schema, no client history authority                                                    | token, cross-proposal, duplicate, injection, malformed-output tests                    | in progress |
+| W9-V07    | `lib/closing/agent.ts`                                                         | Model may propose an action only; server-side action handler requires scoped actor, accepted tier/configuration, confirmation, and idempotency                            | forged proposal, price/timeline override, excessive discount, replay tests             | in progress |
+| W9-V08    | meeting capability inventory                                                   | No calendar/free-busy/create-event provider exists. Classify `MISSING_PROVIDER`; return `SCHEDULING_UNAVAILABLE` and create durable handoff, never a booking confirmation | static inventory and unavailable/handoff tests                                         | in progress |
+| W9-V09    | chat escalation and human review                                               | Persist one active handoff before notification, stop automation, durable retryable notification record, authorized resume only                                            | duplicate, notification failure, cross-tenant, resume tests                            | in progress |
+| W9-V10    | delivery trigger and task execution                                            | Authorized accepted proposal only; accepted tier version is the source of scope; one durable task per finding/tier; no simulated completion                               | accepted/wrong-tenant/duplicate/unavailable execution tests                            | in progress |
+| W9-V11    | artifact/package/access                                                        | Validate artifacts before package, tenant-scoped reads, no public default storage, complete/partial/failed are truthful                                                   | artifact validation, partial package, access, notification idempotency tests           | in progress |
+| W9-V14b   | active 9B cron recovery                                                        | Atomic task claim/owner completion, unknown provider outcomes remain reconciling, no stale worker terminal overwrite                                                      | concurrency and replay tests                                                           | in progress |
+| W9-V15b   | active 9B tenant isolation                                                     | Chat, handoff, follow-up, and delivery resolve tenant server-side and scope every persistence/read path                                                                   | cross-tenant tests                                                                     | in progress |
+| W9-V16b   | active 9B observability                                                        | Persisted attempt/error/idempotency/provider outcomes and structured audit/error events                                                                                   | failure-path tests                                                                     | in progress |
+
+### Wave 9B state-machine contract
+
+| Current state              | Authorized trigger                                                                                     | Preconditions / side effect                                                                              | Next state                                          | Idempotency / failure                                                                          |
+| -------------------------- | ------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------- | --------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| `ProposalFollowUp.pending` | authenticated cron after tenant enumeration                                                            | due, not suppressed/cancelled, outbound claim acquired, PENDING intent persisted before provider         | `sent`, `unknown`, `failed`, or `cancelled`         | `followup:<proposalId>:<step>`; timeout becomes `unknown`/reconciliation, not retry-send       |
+| public chat active         | token scoped to proposal                                                                               | server loads proposal/audit/validated claims; untrusted user text is delimited                           | response or handoff                                 | request key prevents duplicate messages; invalid model output escalates                        |
+| active conversation        | explicit human request, low confidence, unsupported/legal/commercial boundary, tool/scheduling failure | durable tenant/proposal handoff record before notification; automation is paused                         | handoff active                                      | one active handoff per proposal/conversation reason; notification retry does not erase handoff |
+| accepted proposal          | authorized internal delivery trigger                                                                   | acceptance tier and tenant resolve server-side; task scope derives from accepted tier and valid Findings | queued / execution-unavailable / partial / complete | deterministic proposal/finding task key; unimplemented executor cannot become completed        |
+| queued delivery task       | durable cron owner                                                                                     | atomic claim and execution boundary                                                                      | running / awaiting_human / failed                   | stale/replay owner cannot overwrite terminal state                                             |
+
+### Wave 9B product/provider decision
+
+Meeting scheduling has no configured provider, availability client, booking route, OAuth/service
+credential, or sandbox adapter in the committed source. Wave 9B will implement the honest
+`SCHEDULING_UNAVAILABLE` plus durable handoff boundary and record provider selection/provisioning
+as externally blocked. It will not fabricate a meeting link, event ID, or confirmation.
+
+## Wave 9B — Delivery/outreach/closing/retention pipelines (PARTIAL)
+
+Entry checkpoint: `361d82c` (`chore(remediation): checkpoint wave 9a`). Wave 9A code commit: `d183cec` (`fix(lifecycle): harden wave 9a outreach and closing pipelines`).
+
+### Wave 9B Scope & Findings
+
+Three P0/P1 findings created from executable evidence at Wave 9B entry, requiring fixture-backed fixture tests before verification:
+
+| Finding | Severity | Theme                                                                                                                         | Intended fix                                                                                                                                                   | Current verification status           |
+| ------- | -------- | ----------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------- |
+| P1-53   | P1       | Legacy follow-up routes bypass outbound delivery safety and emit unsupported customer copy                                    | Enqueue through outboundSafety with tenant context, suppression, durable intent, provider reconciliation, Wave 8 claim grounding                               | **Missing fixture tests (STEP 3)**    |
+| P0-27   | P0       | Closing-agent model tools could mutate proposal state/pricing/discounts without server authorization or prospect confirmation | Remove model mutation tools; strict schema validation; fallback to human handoff on unsupported requests; no non-durable webhook                               | **Missing fixture tests (STEP 4)**    |
+| P0-28   | P0       | Delivery engine fabricated task completion and verification results for unimplemented execution; routes bypass authorization  | Reject before accepted proposal; escalate unimplemented execution visibly; no simulated verification; tenant-scoped bundle access; durable artifact validation | **Missing fixture tests (STEPS 6-7)** |
+
+### Wave 9B Implementation Status
+
+#### Implemented & Awaiting Test Certification:
+
+1. **P1-53 / Follow-up Safety (W9-V04b):**
+   - `app/api/cron/follow-ups/route.ts`: Rewired (230 lines changed) to enumerate tenants via `withSystemDbBypass`, execute every follow-up in tenant context, reuse shared `claimOutboundSend` boundary, persist PENDING intent before Resend dispatch, handle ambiguous outcomes → UNKNOWN/reconciliation state instead of retry-send
+   - `app/api/email/send-followup/route.ts`: Rewired (155 lines changed) to route through outboundSafety instead of direct Resend send
+   - `lib/email-templates/followup-sequence.ts`: Templating now references Wave 8 grounded claims only
+   - Shared `lib/outreach/outboundSafety.ts`: New; enforces live-delivery flag, suppression gate, durable outreach email persistence, stable idempotency, provider reconciliation
+   - **Existing regression:** `39/39` focused delivery/closing property tests already green
+
+2. **P0-27 / Closing-Agent Authority (W9-V06-W9-V07):**
+   - `lib/closing/agent.ts`: Reduced from 729 to 231 lines; removed mutation tools (tier/discount/accept/pricing); strict Zod schema validation; grounded factual claims via Wave 8 claimContract validation; fallback to human handoff instead of fabricated outcomes
+   - New `lib/closing/handoff.ts`: Durable atomic handoff creation via `ConversationState.escalated` upsert; follow-up cancellation on escalation; `PipelineErrorLog` as the durable, retryable notification queue (no Slack webhook)
+   - Chat routes (`app/api/pipeline/chat`, `app/api/proposal/[id]/chat`) not yet tested for server-side tenant context enforcement
+   - **Existing regression:** `lib/closing/__tests__/closing-agent.property.test.ts` (39/39), `lib/closing/__tests__/memory.test.ts` updated
+
+3. **P0-28 / Delivery Truthfulness (W9-V10-W9-V11):**
+   - `lib/pipeline/deliveryEngine.ts`: Hardened (111 lines changed); rejects before accepted proposal; escalates unimplemented execution; no simulated completion/verification
+   - `app/api/delivery/[proposalId]/artifacts/route.ts`: Tenant-scoped access validation (24 lines changed)
+   - `app/api/delivery/[proposalId]/bundle/route.ts`: Rewired (87 lines changed) to require accepted proposal + tenant context before artifact bundling
+   - `lib/delivery/bundler.ts`: Artifact validation logic (5 lines changed)
+   - **Existing regression:** `lib/pipeline/__tests__/delivery.test.ts`, `lib/pipeline/__tests__/delivery.property.test.ts` (66/66 property tests green)
+
+#### Not Yet Tested:
+
+- Route-level authorization (P0-27 chat routes: token validation, cross-proposal rejection, client-tenant-id injection rejection)
+- Follow-up cancellation on proposal terminal states (P1-53, W9-V05)
+- Duplicate handoff creation prevention (P0-27, W9-V09)
+- Artifact validation at bundle time (P0-28, W9-V11)
+- Tenant isolation across all three findings' paths (W9-V15b)
+
+### Wave 9B Verification Matrix
+
+| Finding | Required tests                                                                                | Existing tests          | Missing tests (STEP #)                                                         | Status      |
+| ------- | --------------------------------------------------------------------------------------------- | ----------------------- | ------------------------------------------------------------------------------ | ----------- |
+| P1-53   | follow-up cron/route auth, dispatch, suppression, replay, cancellation, provider outcomes     | 39 property tests green | cron-auth, suppression, replay, ambiguous-outcome, cancellation tests (STEP 3) | **PENDING** |
+| P0-27   | chat token-auth, cross-proposal rejection, schema validation, handoff creation, resumption    | 39 property tests green | token-auth, injection, duplicate-handoff, unauthorized-resume tests (STEP 4)   | **PENDING** |
+| P0-28   | delivery auth, accepted-proposal gate, artifact validation, tenant-scoped access, idempotency | 66 property tests green | accepted-gate, artifact-validation, cross-tenant-rejection tests (STEPS 6-7)   | **PENDING** |

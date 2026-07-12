@@ -9,6 +9,7 @@ import { getGenerator, RawArtifact } from '@/lib/delivery/generators';
 import { ImplementationPackage, packageArtifact } from '@/lib/delivery/packager';
 import { runValidationPipeline, ValidatedArtifact } from '@/lib/delivery/validationPipeline';
 import { logger } from '@/lib/logger';
+import { deliveryEngine } from '@/lib/pipeline/deliveryEngine';
 import { prisma } from '@/lib/prisma';
 
 export interface GeneratedArtifact {
@@ -420,28 +421,16 @@ export const deliveryGraph = new StateGraph(DeliveryState)
  * Loads findings for the proposal, then runs the full delivery pipeline asynchronously.
  */
 export async function runDeliveryAgent(proposalId: string, tenantId: string): Promise<void> {
-  const proposal = await prisma.proposal.findUnique({
-    where: { id: proposalId },
-    include: { audit: { include: { findings: true } } },
+  const proposal = await prisma.proposal.findFirst({
+    where: { id: proposalId, tenantId },
+    include: { acceptance: { select: { tier: true } } },
   });
 
-  if (!proposal?.audit?.findings?.length) {
-    logger.warn({ proposalId }, '[DeliveryGraph] No findings. Skipping.');
-    return;
+  if (!proposal?.acceptance) {
+    throw new Error('Delivery requires an accepted proposal');
   }
 
-  await deliveryGraph.invoke({
-    findings: proposal.audit.findings,
-    proposalSections: (proposal.tierGrowth as any) || {},
-    artifacts: [],
-    packages: [],
-    bundle: null,
-    validationSummary: { totalArtifacts: 0, validatedCount: 0, failedCount: 0, rejectionRate: 0 },
-    tenantId,
-    proposalId,
-    originalAuditId: proposal.auditId,
-    postDeliveryAuditId: null,
-    comparisonReport: null,
-    improvementScore: 0,
-  });
+  // Delivery execution is durable task creation. Artifact execution and re-audit verification
+  // require approved adapters and remain explicitly unavailable until then.
+  await deliveryEngine.generateDeliverables(proposal.id, proposal.acceptance.tier);
 }

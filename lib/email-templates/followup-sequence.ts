@@ -1,7 +1,7 @@
 /**
  * Follow-up email sequence — 3 emails triggered after an in-person meeting.
  * CAN-SPAM compliant: physical address, unsubscribe mechanism.
- * Variables: {{businessName}}, {{proposalUrl}}, {{finding}}, {{metric}}, {{competitorName}}, {{recipientName}}
+ * Variables: {{businessName}}, {{proposalUrl}}, {{finding}}, {{metric}}, {{recipientName}}
  */
 
 export interface FollowUpEmailTemplate {
@@ -42,9 +42,9 @@ Unsubscribe: {{unsubscribeUrl}}`,
 
 Just checking in — have you had a chance to review the audit I sent?
 
-One thing that stood out: {{finding}} — {{metric}}
+One documented observation was: {{finding}} {{metric}}
 
-This is likely costing you visitors and leads. I'd be happy to show you how we've helped similar businesses fix this.
+The proposal explains the supporting observation and the recommended next steps.
 
 Here's the proposal again: {{proposalUrl}}
 
@@ -59,17 +59,18 @@ Unsubscribe: {{unsubscribeUrl}}`,
   },
   {
     step: 3,
-    name: 'The Competitor Hook',
-    subjectTemplate: '{{competitorName}} just improved their website',
+    name: 'The Final Check-In',
+    subjectTemplate: "Final check-in on {{businessName}}'s website audit",
     bodyTemplate: `Hi {{recipientName}},
 
-I noticed {{competitorName}} recently updated their website — they've improved their {{metric}} and are likely capturing more local searches as a result.
+I wanted to make one final check-in about the audit for {{businessName}}.
 
-If you'd like to stay ahead, we can help. Your audit is ready: {{proposalUrl}}
+The report documents: {{finding}} {{metric}}
 
-We're offering [limited-time offer, e.g. "a 15% discount on our Growth package"] for the next 7 days if you'd like to move forward.
+You can review the proposal here: {{proposalUrl}}
 
-No pressure — the audit is yours to keep either way. But if you want to discuss next steps, I'm here.
+If you would like to discuss the documented findings or next steps, reply to this email and a
+team member can help.
 
 Best,
 [Your name]
@@ -91,7 +92,6 @@ export function fillFollowUpTemplate(
     proposalUrl?: string;
     finding?: string;
     metric?: string;
-    competitorName?: string;
     recipientName?: string;
     physicalAddress?: string;
     unsubscribeUrl?: string;

@@ -1985,6 +1985,35 @@ Wave 9 remains split. Wave 9B must cover ProposalFollowUp/manual direct send and
 closing/chat/tool authority, scheduling/handoff, and delivery. Wave 9C covers re-audit,
 retention, and cross-pipeline recovery. No Wave 10 work has begun.
 
+## Wave 9B in-progress verification (2026-07-12)
+
+Wave 9B entered from `361d82c` with TypeScript green and the preserved dirty baseline intact.
+The complete ledger was inspected before creating P0-27, P0-28, and P1-53 from exact static
+evidence. They remain open: the implementation is in progress and no status was promoted without
+the complete required fixture coverage.
+
+Current checks:
+
+- `vitest run lib/pipeline/__tests__/delivery.test.ts lib/pipeline/__tests__/delivery.property.test.ts lib/closing/__tests__/closing-agent.property.test.ts`: 39/39.
+- TypeScript: `./node_modules/.bin/tsc --noEmit --pretty false --incremental false`: exit 0.
+- Changed-file ESLint: zero errors; existing warnings only.
+
+Implemented but not yet fully certified:
+
+- follow-up cron/manual enqueue routes now use the Wave 9A outbound delivery gate and remove the
+  unsupported competitor/metric/discount template language;
+- closing responses use a strict model-output schema with approved claim IDs only, no model
+  mutation tools, and durable handoff creation;
+- scheduling is represented as `SCHEDULING_UNAVAILABLE` plus handoff because no calendar provider
+  exists in the repository;
+- delivery no longer fabricates completed work or random verification; unimplemented execution
+  is escalated, and re-audit verification remains unavailable pending Wave 9C;
+- delivery routes require tenant-scoped authorization and an accepted proposal before task queueing.
+
+Remaining Wave 9B certification work is fixture coverage for follow-up dispatch, route-level chat
+and handoff, delivery authorization/artifact access, plus the required regression batches. Do not
+checkpoint Wave 9B or begin Wave 9C until those gates are complete.
+
 ## Wave 8B verification result (2026-07-12)
 
 Wave 8B started from `5d894cd` after code commit `574608b`. P0-26, P1-36, and P1-40 remain

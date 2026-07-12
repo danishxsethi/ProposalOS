@@ -1,21 +1,29 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 
-import { auth } from '@/lib/auth';
+import { logger } from '@/lib/logger';
+import { withAuth } from '@/lib/middleware/auth';
 import { prisma } from '@/lib/prisma';
+import { getTenantId } from '@/lib/tenant/context';
 
-export async function GET(
-  request: NextRequest,
+async function getArtifacts(
+  request: Request,
   { params }: { params: Promise<{ proposalId: string }> }
 ) {
   try {
     const { proposalId } = await params;
-    const session = await auth();
-    if (!session?.user) {
+    const tenantId = await getTenantId();
+    if (!tenantId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const proposal = await prisma.proposal.findFirst({
+      where: { id: proposalId, tenantId },
+      select: { id: true },
+    });
+    if (!proposal) return NextResponse.json({ error: 'Proposal not found' }, { status: 404 });
+
     const artifacts = await prisma.generatedArtifact.findMany({
-      where: { proposalId },
+      where: { proposalId, tenantId },
       select: {
         id: true,
         artifactType: true,
@@ -36,3 +44,5 @@ export async function GET(
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
+
+export const GET = withAuth(getArtifacts);

@@ -523,7 +523,7 @@ describe('Delivery Engine Property Tests', () => {
       );
     });
 
-    it('should transition from completed to verified on verification', async () => {
+    it('never transitions from completed to verified without a canonical verification gate', async () => {
       await fc.assert(
         fc.asyncProperty(fc.uuid(), async (deliverableId) => {
           // Setup mock
@@ -532,25 +532,10 @@ describe('Delivery Engine Property Tests', () => {
             tenantId: 'tenant-123',
             status: 'completed',
           });
-          (prisma.deliveryTask.update as any).mockResolvedValue({
-            id: deliverableId,
-            status: 'verified',
-          });
-
-          // Execute
-          const result = await deliveryEngine.verifyDeliverable(deliverableId);
-
-          // Verify status transition
-          expect(prisma.deliveryTask.update).toHaveBeenCalledWith({
-            where: { id: deliverableId },
-            data: expect.objectContaining({
-              status: 'verified',
-            }),
-          });
-
-          // Verify result
-          expect(result.passed).toBe(true);
-          expect(result.improvementPercent).toBeGreaterThan(0);
+          await expect(deliveryEngine.verifyDeliverable(deliverableId)).rejects.toThrow(
+            'DELIVERY_VERIFICATION_UNAVAILABLE'
+          );
+          expect(prisma.deliveryTask.update).not.toHaveBeenCalled();
         }),
         { numRuns: 100 }
       );

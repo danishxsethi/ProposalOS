@@ -104,6 +104,11 @@ export async function uploadBundle(
   proposalId: string,
   tenantId: string
 ): Promise<string> {
+  if (process.env.DELIVERY_STORAGE_ENABLED !== 'true') {
+    throw new Error(
+      'DELIVERY_STORAGE_UNAVAILABLE: a private, access-controlled delivery storage adapter is required'
+    );
+  }
   const fileName = `delivery-bundles/${tenantId}/${proposalId}-${Date.now()}.zip`;
 
   try {
