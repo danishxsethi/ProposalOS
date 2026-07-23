@@ -1,0 +1,608 @@
+# Implementation Plan: Sprint 5-6 Integration & Pilot
+
+## Overview
+
+This plan implements the Sprint 5-6 features transforming Proposal Engine into a platform operating system. The implementation is organized into 8 phases: Advanced Delivery Agents, Multi-Platform Integration, White-Label Platform, Public API & Widget, Compounding Intelligence v2, Autonomous AI Systems, Hyper-Scale Infrastructure, and International Expansion.
+
+All property-based tests use `fast-check` with minimum 100 iterations. Tag format: `Feature: sprint-5-6-integration-pilot, Property {N}: {title}`.
+
+## Tasks
+
+- [x] 1. Database Schema and Core Types
+  - [x] 1.1 Add new Prisma models for delivery agents, platform, and intelligence
+    - Add `DeliveryAgentTask`, `RedesignMockup`, `APIKey`, `WebhookEndpoint`, `WidgetImpression`, `VerticalPlaybook`, `PredictiveModel`, `AnomalyLog`, `PromptVariant`, `ModelBenchmark`, `EmailDomainHealth` models to `prisma/schema.prisma`
+    - Run `npx prisma migrate dev` after schema changes
+    - _Requirements: 1.1, 2.1, 3.1, 7.1, 9.1, 10.1, 11.1, 12.1, 13.1, 14.1, 15.1, 16.1, 17.4_
+  - [x] 1.2 Create TypeScript types and interfaces
+    - Define all interfaces in `lib/platform/types.ts`: `TenantConfig`, `APIKeyConfig`, `WebhookConfig`, `WidgetConfig`, `DeploymentChange`, `PlatformCredentials`
+    - Define all interfaces in `lib/intelligence/types.ts`: `AnonymizedPattern`, `PredictiveModel`, `AnomalyConfig`, `PromptVariant`, `ModelBenchmark`, `RoutingDecision`
+    - _Requirements: All_
+
+- [x] 2. Checkpoint - Schema foundations
+  - Ensure all tests pass, ask the user if questions arise.
+
+- [x] 3. Advanced Delivery Agents - Base Infrastructure
+  - [x] 3.1 Implement base delivery agent in `lib/pipeline/agents/baseDeliveryAgent.ts`
+    - Define common interface: `execute()`, `getStatus()`, `retry()`, `escalate()`
+    - Implement retry with exponential backoff (up to 3 attempts)
+    - Implement cost tracking per agent execution
+    - _Requirements: 1.1, 2.1, 3.1, 4.1, 5.1_
+  - [x] 3.2 Write property test for delivery agent task creation
+    - **Property 2: Delivery Agent Task Creation** — for any accepted proposal with deliverables, a `DeliveryAgentTask` with the correct `agentType` must be created within 5 minutes of acceptance
+    - File: `lib/pipeline/agents/__tests__/deliveryAgents.property.test.ts`
+    - **Validates: Requirements 1.1, 2.1, 3.1, 4.1, 5.1**
+
+- [x] 4. Website Redesign Agent
+  - [x] 4.1 Implement `lib/pipeline/agents/websiteRedesignAgent.ts`
+    - Implement `analyzeSite(url)` for existing site analysis (structure, colors, performance)
+    - Implement `generateMockup(config)` using v0/screenshot-to-code integration
+    - Implement `createPreviewDeployment(mockup)` returning a staging preview URL
+    - Implement `deployToProduction(mockupId, credentials)` via Multi-Platform Integration Layer
+    - Implement `handleRejection(mockupId, feedback)` generating a new version with incremented version number
+    - Enforce 5-minute mockup generation and 15-minute deployment SLAs
+    - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7_
+  - [x] 4.2 Write property tests for website redesign agent
+    - **Property 3: Mockup Preview Before Deployment** — no mockup may transition to `deployed` without a valid `previewUrl`
+    - **Property 4: Rejection Triggers New Version** — any rejected mockup must produce a new mockup with `version = previous + 1`
+    - File: `lib/pipeline/agents/__tests__/deliveryAgents.property.test.ts`
+    - **Validates: Requirements 1.2, 1.3, 1.6**
+  - [x] 4.3 Write unit tests for website redesign agent
+    - Test site analysis extraction, mockup generation with mocked AI service
+    - Test preview deployment creation, rejection handling and version incrementing
+    - _Requirements: 1.1, 1.2, 1.6_
+
+- [x] 5. GBP Optimization Agent
+  - [x] 5.1 Implement `lib/pipeline/agents/gbpOptimizationAgent.ts`
+    - Implement `verifyClaimStatus(placeId)` using Google Business Profile API
+    - Implement `optimizeProfile(config)` updating hours, categories, attributes, description
+    - Implement `generateAndUploadPhotos(config, assets?)` with AI image generation fallback
+    - Implement `schedulePost(config, content)` for GBP posts on configurable cadence
+    - Implement `respondToReview(reviewId, sentiment, draft)` — auto-post for positive (4+ stars), flag for human review for negative (≤3 stars)
+    - Implement `answerQuestion(questionId, answer)` for Q&A management
+    - Implement `getPerformanceMetrics(placeId, dateRange)` returning `GBPMetrics`
+    - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7, 2.8_
+  - [x] 5.2 Write property test for GBP negative review gate
+    - **Property 5: Negative Review Human Review Gate** — for any review with rating ≤ 3, the response must be flagged for human review and must not be auto-posted
+    - File: `lib/pipeline/agents/__tests__/deliveryAgents.property.test.ts`
+    - **Validates: Requirements 2.5, 2.6, 5.3, 5.4**
+  - [x] 5.3 Write unit tests for GBP optimization agent
+    - Test claim status verification, profile optimization updates, review response flagging logic
+    - _Requirements: 2.1, 2.5, 2.6_
+
+- [x] 6. Paid Ads Agent
+  - [x] 6.1 Implement `lib/pipeline/agents/paidAdsAgent.ts`
+    - Implement `createCampaign(config)` using Google Ads API with tier-based budgets (Starter/Growth/Pro)
+    - Implement `generateAdVariants(campaignId, count)` for A/B testing
+    - Implement `startABTest(campaignId, variants)` and `optimizeBidding(campaignId)`
+    - Implement `adjustForPerformance(campaignId, targetCPA)` for CPA-based optimization
+    - Implement `generatePerformanceReport(campaignId, dateRange)` for monthly reports
+    - Implement `requestBudgetApproval(campaignId, newBudget)` for over-tier-allocation flagging
+    - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7, 3.8_
+  - [x] 6.2 Write property test for budget tier enforcement
+    - **Property 6: Budget Tier Enforcement** — for any campaign, initial budget must match tier config; budget changes exceeding tier allocation must be flagged before execution
+    - File: `lib/pipeline/agents/__tests__/deliveryAgents.property.test.ts`
+    - **Validates: Requirements 3.2, 3.8**
+  - [x] 6.3 Write unit tests for paid ads agent
+    - Test campaign creation with each tier budget, ad variant generation, performance-based adjustments, budget approval flagging
+    - _Requirements: 3.2, 3.5, 3.8_
+
+- [x] 7. Social Media Agent
+  - [x] 7.1 Implement `lib/pipeline/agents/socialMediaAgent.ts`
+    - Implement `generateContentCalendar(config, weeks)` for multi-week planning across Instagram, Facebook, LinkedIn
+    - Implement `generatePost(config, contentType)` for platform-specific content matching brand voice and local market
+    - Implement `schedulePost(post)` with optimal timing based on engagement data
+    - Implement `getEngagementMetrics(clientId, dateRange)` and `adjustStrategy(clientId, performanceData)`
+    - Implement `flagForReview(postId, reason)` for negative engagement
+    - _Requirements: 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 4.7, 4.8_
+  - [x] 7.2 Write property test for social media content generation
+    - **Property 2b: Social Content Platform Match** — for any generated post, the content must be tagged with the correct platform and the caption/hashtags must be non-empty
+    - File: `lib/pipeline/agents/__tests__/deliveryAgents.property.test.ts`
+    - **Validates: Requirements 4.1, 4.2, 4.6**
+  - [x] 7.3 Write unit tests for social media agent
+    - Test content generation for each platform, scheduling logic, engagement-based strategy adjustment, negative engagement flagging
+    - _Requirements: 4.1, 4.5, 4.7, 4.8_
+
+- [x] 8. Reputation Management Agent
+  - [x] 8.1 Implement `lib/pipeline/agents/reputationAgent.ts`
+    - Implement `configureMonitoring(config)` for Google, Yelp, BBB, Facebook, industry-specific platforms
+    - Implement `analyzeSentiment(reviews)` returning `SentimentAnalysis` with trend tracking
+    - Implement `generateResponse(review)` with confidence score
+    - Implement `postResponse(reviewId, response)` with human review gate for negative reviews (rating ≤ 3)
+    - Implement `flagForHumanReview(reviewId, reason)` — escalate immediately for potential legal issues
+    - Implement `getReputationReport(clientId, dateRange)` and `identifyPatterns(clientId)`
+    - _Requirements: 5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 5.7, 5.8_
+  - [x] 8.2 Write unit tests for reputation management agent
+    - Test sentiment analysis, response generation quality, human review flagging for negative/legal reviews
+    - _Requirements: 5.3, 5.4, 5.8_
+
+- [x] 9. Checkpoint - Delivery agents complete
+  - Ensure all tests pass, ask the user if questions arise.
+
+- [x] 10. Multi-Platform Integration Layer
+  - [x] 10.1 Implement `lib/platform/integrations/multiPlatformIntegration.ts`
+    - Implement `detectPlatform(siteUrl)` for automatic platform detection with confidence score
+    - Implement `validateCredentials(credentials)` for API credential validation
+    - Implement `createBackup(credentials)` — must be called before any deployment
+    - Implement `deploy(credentials, changes)` dispatching to platform-specific adapters
+    - Implement `rollback(credentials, backupId)` for failed deployment recovery
+    - Implement `getDeploymentHistory(clientId)` with timestamps and status
+    - _Requirements: 6.1, 6.2, 6.3, 6.4, 6.5, 6.6, 6.7, 6.8_
+  - [x] 10.2 Implement WordPress adapter in `lib/platform/integrations/adapters/wordpress.ts`
+    - Implement WordPress REST API integration for speed optimizations, SEO fixes, content updates
+    - Implement plugin installation, theme updates, image optimization
+    - _Requirements: 6.1, 6.3, 6.4, 6.5_
+  - [x] 10.3 Implement Shopify adapter in `lib/platform/integrations/adapters/shopify.ts`
+    - Implement Shopify Admin API integration for theme settings and metafields
+    - _Requirements: 6.1, 6.3, 6.4, 6.5_
+  - [x] 10.4 Implement Wix and Squarespace adapters in `lib/platform/integrations/adapters/`
+    - Implement Wix Velo API and Squarespace API integrations
+    - _Requirements: 6.1_
+  - [x] 10.5 Write property tests for multi-platform integration
+    - **Property 7: Deployment Backup Requirement** — for any deployment, a backup must exist before changes are applied and the backup ID must be in the deployment log
+    - **Property 8: Failed Deployment Rollback** — for any failed deployment, the system must rollback to the most recent backup and set status to `failed`
+    - File: `lib/pipeline/agents/__tests__/integration.property.test.ts`
+    - **Validates: Requirements 6.6, 6.7**
+  - [x] 10.6 Write unit tests for platform adapters
+    - Test platform detection accuracy, backup creation before deployment, rollback on failure
+    - _Requirements: 6.2, 6.6, 6.7_
+
+- [x] 11. Checkpoint - Integration layer complete
+  - Ensure all tests pass, ask the user if questions arise.
+
+- [x] 12. White-Label Platform - Tenant Management
+  - [x] 12.1 Implement `lib/platform/tenant/tenantManager.ts`
+    - Implement `createTenant(config)` with defaults for all tier settings
+    - Implement `getTenant(id)`, `updateTenant(id, updates)`, `suspendTenant(id, reason)`
+    - Implement `getUsageMetrics(tenantId, dateRange)` for per-tenant analytics
+    - Implement `applyBranding(tenantId, content)` replacing platform defaults with tenant branding
+    - Enforce tier limits: `prospectsPerDay`, `activeClients`, `apiRequestsPerHour`
+    - _Requirements: 7.1, 7.2, 7.3, 7.4, 7.7, 7.8_
+  - [x] 12.2 Implement `lib/platform/tenant/tenantBilling.ts`
+    - Implement `calculateRevenueShare(tenantId, period)` with configurable 20-30% platform cut
+    - Implement `generateInvoice(tenantId, period)` with line-item detail
+    - Implement `processPayment(invoiceId)` with Stripe integration
+    - Implement `upgradeTier(tenantId, newTier)` for tier changes
+    - _Requirements: 7.5, 7.6_
+  - [x] 12.3 Implement `lib/platform/tenant/domainManager.ts`
+    - Implement `validateDomain(domain)` for DNS validation
+    - Implement `provisionDomain(tenantId, domain, type)` for proposal/portal/widget custom domains
+    - Implement SSL certificate provisioning
+    - _Requirements: 7.3_
+  - [x] 12.4 Write property tests for tenant management
+    - **Property 1: Tenant Data Isolation** — for any query scoped to a tenant ID, results must contain zero records from a different tenant
+    - **Property 20: Revenue Share Calculation** — for any billing period, revenue share = sum(client revenue) × revenueSharePercent, auditable with line items
+    - **Property 21: Tenant Branding Application** — for any client-facing output with tenant branding configured, output must contain tenant brand name/logo/email, not platform defaults
+    - **Property 22: Platform Tier Limits** — for any tenant, daily prospect count must not exceed the tier's configured limit
+    - File: `lib/platform/__tests__/tenant.property.test.ts`
+    - **Validates: Requirements 7.1, 7.4, 7.5, 7.6, 7.8**
+  - [x] 12.5 Write unit tests for tenant management
+    - Test tenant creation with defaults, branding application, revenue share calculations, tier limit enforcement
+    - _Requirements: 7.2, 7.4, 7.5, 7.6_
+
+- [x] 13. Agency Admin Dashboard
+  - [x] 13.1 Create dashboard API endpoints in `app/api/platform/dashboard/`
+    - `GET /api/platform/dashboard/metrics` — pipeline metrics (prospects, audits, proposals, emails, conversion rate)
+    - `GET /api/platform/dashboard/clients` — client health (active clients, satisfaction, deliverable completion)
+    - `GET /api/platform/dashboard/revenue` — MRR, new/churned revenue, revenue by tier
+    - `GET /api/platform/dashboard/ai-decisions` — AI transparency (why prospects prioritized, why email variants chosen)
+    - _Requirements: 8.1, 8.2, 8.3, 8.4_
+  - [x] 13.2 Create dashboard UI in `app/(agency)/dashboard/`
+    - Implement real-time metrics display with WebSocket/SSE updates (no page refresh)
+    - Implement drill-down views with historical trends for each metric
+    - Implement configurable alert thresholds UI
+    - Implement export functionality for all metrics and reports
+    - _Requirements: 8.1, 8.5, 8.6, 8.7, 8.8_
+
+- [x] 14. Checkpoint - White-label platform complete
+  - Ensure all tests pass, ask the user if questions arise.
+
+- [x] 15. Public REST API
+  - [x] 15.1 Implement API authentication in `lib/platform/api/auth.ts`
+    - Implement `validateAPIKey(key)` with bcrypt hash comparison
+    - Implement `checkRateLimit(keyId)` with Redis-based rolling window (hourly + daily limits)
+    - Implement API key CRUD: create, revoke, list
+    - _Requirements: 9.2_
+  - [x] 15.2 Create public API endpoints in `app/api/v1/`
+    - `POST /api/v1/audits` — create new audit
+    - `GET /api/v1/audits/:id` — get audit status and results
+    - `GET /api/v1/audits/:id/findings` — get audit findings
+    - `GET /api/v1/audits/:id/proposal` — get generated proposal
+    - `POST /api/v1/outreach/:leadId` — trigger outreach
+    - `GET /api/v1/clients` and `GET /api/v1/clients/:id` — list/get clients
+    - All endpoints enforce tenant isolation via API key → tenant mapping
+    - _Requirements: 9.1, 9.3, 9.8_
+  - [x] 15.3 Implement webhook system in `lib/platform/api/webhooks.ts`
+    - Implement `registerWebhook(tenantId, config)` and `POST/DELETE /api/v1/webhooks`
+    - Implement `deliverWebhook(webhookId, event, payload)` with retry logic (3 attempts, exponential backoff)
+    - Implement HMAC signature verification for security
+    - Support all event types: `audit.completed`, `proposal.generated`, `email.sent`, `deal.closed`, `client.created`
+    - _Requirements: 9.4_
+  - [x] 15.4 Write property tests for public API
+    - **Property 9: API Rate Limiting** — for any API key, requests in a rolling hour must not exceed `rateLimitHour`; requests in a rolling day must not exceed `rateLimitDay`
+    - **Property 10: Webhook Event Delivery** — for any webhook-triggering event, all registered webhooks for that tenant and event type must receive a delivery attempt within 60 seconds
+    - File: `lib/platform/__tests__/api.property.test.ts`
+    - **Validates: Requirements 9.2, 9.4**
+  - [x] 15.5 Write unit tests for public API
+    - Test authentication, rate limiting, all endpoint responses, webhook delivery and retry
+    - _Requirements: 9.1, 9.2, 9.4_
+  - [x] 15.6 Create API documentation and developer portal
+    - Generate OpenAPI spec from endpoints
+    - Create interactive documentation page at `/docs/api`
+    - Create Python and JavaScript SDK stubs in `lib/sdks/`
+    - Add Zapier/Make integration configuration
+    - _Requirements: 9.5, 9.6, 9.7_
+
+- [x] 16. Embeddable Audit Widget
+  - [x] 16.1 Implement widget JavaScript in `public/widget/audit-widget.js`
+    - Implement `init(config)` for widget initialization with tenant branding
+    - Implement form rendering with configurable fields (email, phone, name) and button text
+    - Implement audit submission, inline result display, and contact capture before showing full results
+    - Implement event callbacks: `on('submit')`, `on('complete')`, `on('error')`
+    - Load asynchronously without blocking host site
+    - _Requirements: 10.1, 10.2, 10.3, 10.6, 10.7_
+  - [x] 16.2 Implement widget backend in `lib/widget/widgetManager.ts`
+    - Implement `generateEmbedCode(tenantId, config)` returning tenant-specific `<script>` snippet
+    - Implement `processSubmission(tenantId, submission)` triggering audit and creating pipeline lead
+    - Implement `getAnalytics(tenantId, dateRange)` returning impressions, submissions, completions, conversion rate
+    - _Requirements: 10.4, 10.5, 10.8_
+  - [x] 16.3 Create widget API endpoints in `app/api/widget/`
+    - `POST /api/widget/submit` — process widget submission and trigger audit
+    - `GET /api/widget/config/:tenantId` — get widget configuration for rendering
+    - `GET /api/widget/analytics` — get widget performance analytics
+    - _Requirements: 10.2, 10.8_
+  - [x] 16.4 Write property test for widget lead creation
+    - **Property 11: Widget Lead Creation** — for any widget submission with contact info, a lead must be created in the tenant's pipeline with audit results attached within 30 seconds
+    - File: `lib/platform/__tests__/widget.property.test.ts`
+    - **Validates: Requirements 10.3, 10.5**
+  - [x] 16.5 Write unit tests for widget
+    - Test embed code generation, submission processing, lead creation, analytics tracking
+    - _Requirements: 10.1, 10.5, 10.8_
+
+- [x] 17. Checkpoint - API and widget complete
+  - Ensure all tests pass, ask the user if questions arise.
+
+- [x] 18. Cross-Tenant Learning
+  - [x] 18.1 Implement `lib/intelligence/crossTenantLearning.ts`
+    - Implement `aggregatePatterns(outcomes: AnonymizedOutcome[])` stripping all tenant-identifiable data before storage — no tenant IDs, business names, or contact info
+    - Implement `getPatterns(filters: PatternFilters)` returning `AnonymizedPattern[]` weighted by recency and sample size
+    - Implement `computeLift(tenantId)` returning `{ withSharedLearning: number; withoutSharedLearning: number }`
+    - Implement `ensureAnonymized(data)` — validates zero PII fields present, returns boolean
+    - Implement `getModelVersion()` and `rollbackModel(version)` for model versioning
+    - Implement `optOut(tenantId)` / `optIn(tenantId)` — opted-out tenants excluded from aggregation but still benefit from shared model
+    - _Requirements: 11.1, 11.2, 11.3, 11.4, 11.5, 11.6, 11.7, 11.8_
+  - [x] 18.2 Create cron endpoint `app/api/cron/intelligence-aggregation/route.ts`
+    - Run daily pattern aggregation across all opted-in tenants
+    - Version the model on each run, store previous version for rollback
+    - Log aggregation stats: tenants included, patterns generated, model version
+    - _Requirements: 11.3, 11.5_
+  - [x] 18.3 Write property test for cross-tenant anonymization
+    - **Property 12: Cross-Tenant Learning Anonymization** — for any record in the shared intelligence model, it must contain zero tenant-identifiable data (no tenant IDs, business names, contact info, prospect identifiers)
+    - File: `lib/intelligence/__tests__/crossTenant.property.test.ts`
+    - Tag: `Feature: sprint-5-6-integration-pilot, Property 12: Cross-Tenant Learning Anonymization`
+    - Minimum 100 iterations using `fc.record()` generators for `AnonymizedOutcome`
+    - **Validates: Requirements 11.2**
+  - [x] 18.4 Write unit tests for cross-tenant learning
+    - Test pattern aggregation with mixed opted-in/opted-out tenants
+    - Test PII detection and removal from `ensureAnonymized()`
+    - Test lift calculation returns valid numeric comparison
+    - Test opt-out excludes tenant data but model still applies to them
+    - _Requirements: 11.1, 11.2, 11.4, 11.8_
+
+- [x] 19. Vertical Specialization Engine
+  - [x] 19.1 Implement `lib/intelligence/verticalSpecialization.ts`
+    - Implement `detectEmergingVerticals(threshold: number)` analyzing prospect data for verticals not in existing `VerticalPlaybook` records
+    - Implement `generatePlaybook(vertical, outcomes: VerticalOutcome[])` producing `VerticalPlaybook` with `effectiveFindings`, `emailTemplates`, `pricingStrategy`, `commonObjections`, `industryTerms`
+    - Implement `startABTest(playbookId, controlId)` and `evaluateABTest(testId)` with p-value significance check
+    - Implement `promotePlaybook(playbookId)` — only promotes if outperforms control by configured `improvementThreshold` with statistical significance; sets status to `'production'`
+    - Implement `optimizePlaybook(playbookId, newOutcomes)` for continuous improvement of existing playbooks
+    - Implement `getPlaybookPerformance(playbookId)` returning win rate, average deal size, time to close, sample size
+    - Implement `listPlaybooks(filters?)` for querying by status/vertical
+    - _Requirements: 12.1, 12.2, 12.3, 12.4, 12.5, 12.6, 12.7, 12.8_
+  - [x] 19.2 Write property test for playbook A/B test promotion
+    - **Property 19: Vertical Playbook A/B Test Promotion** — for any playbook in testing status, it must only be promoted to production if it outperforms the control by the configured improvement threshold with statistical significance
+    - File: `lib/intelligence/__tests__/verticals.property.test.ts`
+    - Tag: `Feature: sprint-5-6-integration-pilot, Property 19: Vertical Playbook A/B Test Promotion`
+    - Minimum 100 iterations using `fc.record()` generators for `ABTestResult`
+    - **Validates: Requirements 12.4, 12.5**
+  - [x] 19.3 Write unit tests for vertical specialization
+    - Test `detectEmergingVerticals` threshold logic — verticals below threshold not returned
+    - Test `generatePlaybook` produces all required config fields from outcome data
+    - Test `promotePlaybook` rejects promotion when improvement threshold not met
+    - Test `optimizePlaybook` updates performance metrics after new outcomes
+    - _Requirements: 12.1, 12.3, 12.4, 12.6_
+
+- [x] 20. Predictive Lead Scoring
+  - [x] 20.1 Implement `lib/intelligence/predictiveScoring.ts`
+    - Implement `trainModel(outcomes: TrainingOutcome[])` with gradient boosting on historical outcomes, returning `PredictiveModel` with accuracy/precision/recall/AUC-ROC metrics
+    - Implement `validateModel(modelId, testSet)` and `compareToRuleBased(modelId, testSet)` — target 2× precision/recall improvement over rule-based baseline
+    - Implement `scoreProspect(prospect: ProspectFeatures)` returning `LeadScore` with `closeProbability` (0-100), `confidence` (0-1), `factors[]`, and `modelVersion`
+    - Implement `batchScore(prospects: ProspectFeatures[])` for bulk scoring
+    - Implement `getFeatureImportance(modelId)` returning ranked `FeatureImportance[]` for explainability
+    - Implement `rollbackModel(version)` with degradation alerting when performance drops
+    - _Requirements: 13.1, 13.2, 13.3, 13.4, 13.5, 13.6, 13.7, 13.8_
+  - [x] 20.2 Integrate predictive scoring into Pipeline Orchestrator
+    - Update `lib/pipeline/orchestrator.ts` to call `scoreProspect()` and sort by `closeProbability` descending
+    - Add `closeProbability` and `modelVersion` fields to prospect prioritization logic
+    - _Requirements: 13.6_
+  - [x] 20.3 Write property test for predictive score bounds
+    - **Property 13: Predictive Score Bounds** — for any prospect scored by the model, `closeProbability` must be in [0, 100], `confidence` in [0, 1], and `modelVersion` must be a non-empty string
+    - File: `lib/intelligence/__tests__/predictive.property.test.ts`
+    - Tag: `Feature: sprint-5-6-integration-pilot, Property 13: Predictive Score Bounds`
+    - Minimum 100 iterations using `fc.record()` generators for `ProspectFeatures`
+    - **Validates: Requirements 13.2**
+  - [x] 20.4 Write unit tests for predictive scoring
+    - Test `scoreProspect` returns all required fields with valid ranges
+    - Test `compareToRuleBased` returns comparison metrics showing relative improvement
+    - Test `getFeatureImportance` returns non-empty ranked list
+    - Test `rollbackModel` switches active model version
+    - _Requirements: 13.2, 13.3, 13.5, 13.8_
+
+- [x] 21. Checkpoint - Intelligence v2 complete
+  - Ensure all tests pass, ask the user if questions arise.
+
+- [x] 22. Anomaly Detection and Self-Healing
+  - [x] 22.1 Implement `lib/intelligence/anomalyDetection.ts`
+    - Implement `configureMetric(config: AnomalyConfig)` storing config with `metric`, `baseline`, `threshold` (std devs), `windowMinutes`, `remediationAction`
+    - Implement `checkMetrics()` detecting deviations beyond configured standard deviation threshold, returning `DetectedAnomaly[]`
+    - Implement `triggerRemediation(anomalyId)` dispatching to appropriate `SelfHealingPipeline` handler based on `remediationAction` type
+    - Implement `learnFromRemediation(attemptId, outcome)` updating remediation effectiveness scores
+    - Implement `escalate(anomalyId, reason)` for human escalation after max retries
+    - Implement `getSystemHealth()` returning overall `SystemHealthReport`
+    - Persist anomalies to `AnomalyLog` model in `prisma/schema.prisma`
+    - _Requirements: 14.1, 14.2, 14.5, 14.6, 14.7, 14.8_
+  - [x] 22.2 Implement `lib/intelligence/selfHealing.ts`
+    - Implement `handleDeliverabilityDrop(currentRate)` — rotate to healthy domain via `lib/infrastructure/emailInfra.ts` when bounce rate > 5%
+    - Implement `handleConversionDrop(vertical, currentRate)` — adjust pricing strategy for the affected vertical
+    - Implement `handleAPIFailure(provider, errorRate)` — switch to fallback provider when error rate > 10%
+    - Implement `handleLatencySpike(stage, p95Latency)` — scale read replicas when p95 > 500ms
+    - Implement `getAutomatedRemediationRate()` returning percentage of anomalies resolved without human intervention
+    - _Requirements: 14.3, 14.4_
+  - [x] 22.3 Create cron endpoint `app/api/cron/anomaly-check/route.ts`
+    - Run metric checks every 5 minutes via Vercel cron schedule (`"*/5 * * * *"`)
+    - Trigger remediation for each detected anomaly, log all actions to `AnomalyLog`
+    - Send admin notification for escalated anomalies (those exceeding max retry count)
+    - _Requirements: 14.1, 14.2, 14.5_
+  - [x] 22.4 Write property tests for anomaly detection
+    - **Property 14: Anomaly Detection Threshold** — for any monitored metric deviating from baseline by more than the configured threshold, an anomaly must be flagged within 5 minutes
+    - **Property 15: Self-Healing Remediation Rate** — for any set of detected anomalies over 24 hours, at least 99% must be resolved through automated remediation
+    - File: `lib/intelligence/__tests__/anomaly.property.test.ts`
+    - Tag: `Feature: sprint-5-6-integration-pilot, Property 14: Anomaly Detection Threshold`
+    - Tag: `Feature: sprint-5-6-integration-pilot, Property 15: Self-Healing Remediation Rate`
+    - Minimum 100 iterations per property using `fc.record()` generators for `AnomalyConfig` and `DetectedAnomaly`
+    - **Validates: Requirements 14.1, 14.2, 14.4**
+  - [x] 22.5 Write unit tests for self-healing
+    - Test domain rotation triggered when bounce rate exceeds 5% threshold
+    - Test API provider failover when error rate exceeds 10%
+    - Test latency-triggered scaling logic
+    - Test `getAutomatedRemediationRate()` calculation
+    - _Requirements: 14.3, 14.4_
+
+- [ ] 23. Autonomous Prompt Engineering
+  - [x] 23.1 Implement `lib/intelligence/promptEngineering.ts`
+    - Implement `generateVariant(basePromptId)` producing a new `PromptVariant` with incremented version, status `'draft'`, and `createdBy: 'autonomous'`
+    - Implement `startABTest(config: ABTestConfig)` with `controlVariantId`, `testVariantId`, `trafficSplit`, `minSampleSize`, `significanceThreshold`, `improvementThreshold`
+    - Implement `evaluateTest(testId)` computing p-value and improvement delta, returning `ABTestResult`
+    - Implement `promoteVariant(variantId)` — only after `validateGuardrails()` passes; sets status to `'production'`
+    - Implement `rollbackToVersion(promptId, version)` — auto-triggered when quality drops > 20% below baseline
+    - Implement `validateGuardrails(variant)` checking: `noHarmfulContent`, `noMisleadingClaims`, `complianceCheck`, `brandSafetyCheck`
+    - Implement `generateWeeklyReport()` returning `PromptPerformanceReport` for human review
+    - Persist variants to `PromptVariant` model in `prisma/schema.prisma`
+    - _Requirements: 15.1, 15.2, 15.3, 15.4, 15.5, 15.6, 15.7, 15.8_
+  - [x] 23.2 Create cron endpoint `app/api/cron/prompt-optimization/route.ts`
+    - Run weekly prompt performance evaluation across all active `PromptVariant` records
+    - Trigger A/B test evaluation for variants with sufficient sample size (`minSampleSize` reached)
+    - Generate and store weekly performance report via `generateWeeklyReport()`
+    - _Requirements: 15.2, 15.5_
+  - [x] 23.3 Write property tests for prompt engineering
+    - **Property 16: Prompt Guardrail Validation** — for any prompt variant generated autonomously, it must pass all guardrail checks before being promoted to production
+    - **Property 17: Prompt Rollback on Degradation** — for any promoted prompt causing quality degradation (outcome metrics drop > 20% below baseline), the system must auto-rollback within 1 hour
+    - File: `lib/intelligence/__tests__/prompts.property.test.ts`
+    - Tag: `Feature: sprint-5-6-integration-pilot, Property 16: Prompt Guardrail Validation`
+    - Tag: `Feature: sprint-5-6-integration-pilot, Property 17: Prompt Rollback on Degradation`
+    - Minimum 100 iterations per property using `fc.record()` generators for `PromptVariant` and `ABTestResult`
+    - **Validates: Requirements 15.6, 15.8**
+  - [x] 23.4 Write unit tests for prompt engineering
+    - Test `generateVariant` produces valid `PromptVariant` with incremented version and `createdBy: 'autonomous'`
+    - Test `promoteVariant` is blocked when `validateGuardrails()` fails any check
+    - Test `rollbackToVersion` restores correct version and sets previous to `'deprecated'`
+    - Test `evaluateTest` correctly computes p-value significance and improvement delta
+    - _Requirements: 15.1, 15.3, 15.6, 15.8_
+
+- [ ] 24. Multi-Model Orchestration
+  - [x] 24.1 Implement `lib/intelligence/modelOrchestration.ts`
+    - Implement `selectModel(taskType, requirements: ModelRequirements)` returning `RoutingDecision` with `selectedModel`, `reason`, `fallbackModels[]`, `estimatedCost`, `estimatedLatency`
+    - Implement `executeWithFallback(task: LLMTask, routing: RoutingDecision)` — on primary model failure, iterate through `fallbackModels` until success; no task fails due to single model unavailability
+    - Implement `benchmarkModel(modelId, taskType, testCases)` storing results to `ModelBenchmark` in `prisma/schema.prisma`
+    - Implement `registerNewModel(modelId, provider)` for integrating new high-performers
+    - Implement `getOptimalModelForCost(taskType, maxCostPerCall)` targeting < $0.01/audit
+    - Implement `getCostAnalytics(dateRange)` for per-model cost tracking
+    - Support models: `gpt-4o`, `gpt-4-turbo`, `claude-3-opus`, `claude-3-sonnet`, `gemini-pro`, `llama-3`
+    - _Requirements: 16.1, 16.2, 16.3, 16.4, 16.5, 16.6, 16.7, 16.8_
+  - [x] 24.2 Integrate model orchestration into existing LLM call sites
+    - Update email generation in `lib/pipeline/outreach.ts` to use `selectModel()` + `executeWithFallback()`
+    - Update proposal writing in `lib/pipeline/stages/` to use orchestration
+    - Update diagnosis/audit in `lib/pipeline/agents/` to use orchestration
+    - _Requirements: 16.1, 16.3_
+  - [x] 24.3 Write property test for model failover
+    - **Property 18: Model Failover** — for any LLM task where the primary model fails, the system must route to a fallback model and complete the task; no task should fail due to a single model being unavailable
+    - File: `lib/intelligence/__tests__/models.property.test.ts`
+    - Tag: `Feature: sprint-5-6-integration-pilot, Property 18: Model Failover`
+    - Minimum 100 iterations using `fc.record()` generators for `LLMTask` with simulated primary model failures
+    - **Validates: Requirements 16.4**
+  - [x] 24.4 Write unit tests for model orchestration
+    - Test `selectModel` routes to correct model given quality/cost/latency requirements
+    - Test `executeWithFallback` exhausts fallback list before failing
+    - Test `getOptimalModelForCost` returns model within cost constraint
+    - Test `benchmarkModel` persists results to `ModelBenchmark`
+    - _Requirements: 16.3, 16.4, 16.7_
+
+- [x] 25. Checkpoint - Autonomous AI systems complete
+  - Ensure all tests pass, ask the user if questions arise.
+
+- [ ] 26. Hyper-Scale Infrastructure
+  - [x] 26.1 Implement auto-scaling configuration in `lib/infrastructure/scaling.ts`
+    - Define `ScalingConfig` interface with `minInstances`, `maxInstances`, `targetCPUUtilization`, `targetMemoryUtilization`, `scaleUpThreshold`, `scaleDownThreshold`, `cooldownSeconds`
+    - Implement `getScalingStatus()` returning current instance count and utilization metrics
+    - Implement `adjustScaling(config: Partial<ScalingConfig>)` for runtime overrides with bounds validation
+    - Configure Cloud Run parameters targeting 60,000+ prospects/day throughput
+    - _Requirements: 17.1_
+  - [x] 26.2 Implement database sharding in `lib/infrastructure/sharding.ts`
+    - Define `DatabaseShardConfig` with `shardKey: 'tenant_id'`, `shardCount`, `replicationFactor`, `readReplicas`
+    - Implement `getShardHealth()` returning per-shard status and record counts
+    - Implement `rebalanceShards()` for maintenance operations
+    - _Requirements: 17.3_
+  - [x] 26.3 Implement email infrastructure in `lib/infrastructure/emailInfra.ts`
+    - Implement `getDomainHealth()` monitoring 50-domain pool — checks SPF, DKIM, DMARC, reputation score from `EmailDomainHealth` model
+    - Implement `rotateDomain(domain, reason)` for self-healing domain rotation when flagged or blacklisted
+    - Implement `warmupDomain(domain)` for automated warmup process (gradual daily limit increase)
+    - Implement `acquireNewDomain()` for automated domain acquisition when pool drops below minimum
+    - _Requirements: 17.4, 17.5_
+  - [x] 26.4 Implement CDN configuration in `lib/infrastructure/cdn.ts`
+    - Implement `getCDNMetrics()` returning cache hit rate, edge latency, bandwidth
+    - Implement `purgeCache(patterns: string[])` for targeted cache invalidation
+    - Configure global CDN edge caching for proposal pages targeting sub-2-second load times
+    - _Requirements: 17.2_
+  - [x] 26.5 Write unit tests for infrastructure
+    - Test `rotateDomain` selects healthy domain and updates `EmailDomainHealth` status to `'flagged'`
+    - Test `warmupDomain` increments daily limit on schedule without exceeding max
+    - Test `getShardHealth` returns correct shard distribution
+    - Test `adjustScaling` validates config bounds before applying
+    - _Requirements: 17.1, 17.4, 17.5_
+
+- [ ] 27. International Expansion - Localization Engine
+  - [x] 27.1 Implement `lib/platform/localization/localizationEngine.ts`
+    - Implement `getCountryConfig(country: SupportedCountry)` returning full `CountryConfig`
+    - Implement `localizeContent(content, targetCountry)` for content translation/adaptation using country `language` and `emailConfig.toneAdjustments`
+    - Implement `convertCurrency(amount, fromCurrency, toCurrency)` using current exchange rates with `pricingMultiplier` applied
+    - Implement `getLocalizedTemplate(templateId, country)` selecting country-specific template variant
+    - Implement `validateCompliance(content, country)` checking GDPR/PIPEDA/local regulations from `CountryConfig.compliance`
+    - Implement `getCountryMetrics(country)` for per-country performance tracking
+    - _Requirements: 18.1, 18.2, 18.3, 18.4, 18.7, 18.8_
+  - [x] 27.2 Create country configurations in `lib/platform/localization/countryConfigs/`
+    - Create `us.ts`, `uk.ts`, `ca.ts`, `au.ts`, `es.ts`, `br.ts` each exporting a `CountryConfig`
+    - Each config defines: `language`, `currency`, `currencySymbol`, `timezone`, `compliance` (GDPR/PIPEDA flags), `auditModules` (enabled/disabled/countrySpecific), `emailConfig` (toneAdjustments, culturalReferences, legalDisclaimer), `pricingMultiplier`
+    - Create `index.ts` exporting all configs as a map keyed by `SupportedCountry`
+    - _Requirements: 18.1, 18.2, 18.4, 18.8_
+  - [x] 27.3 Implement country-specific domain and data residency routing in `lib/platform/localization/domainRouting.ts`
+    - Configure `.co.uk`, `.ca`, `.com.au` domain routing
+    - Implement data residency routing for country-specific storage requirements
+    - _Requirements: 18.5, 18.6_
+  - [x] 27.4 Write property tests for localization
+    - **Property 23: Localization Currency Conversion** — for any pricing displayed in a non-US country, currency must be converted to local currency with correct symbol matching country config
+    - **Property 24: Compliance Validation** — for any content generated for a GDPR/PIPEDA country, it must pass compliance validation before being sent or displayed
+    - File: `lib/platform/localization/__tests__/localization.property.test.ts`
+    - Tag: `Feature: sprint-5-6-integration-pilot, Property 23: Localization Currency Conversion`
+    - Tag: `Feature: sprint-5-6-integration-pilot, Property 24: Compliance Validation`
+    - Minimum 100 iterations per property using `fc.constantFrom()` generators for `SupportedCountry` and `fc.string()` for content
+    - **Validates: Requirements 18.2, 18.3**
+  - [x] 27.5 Write unit tests for localization
+    - Test `convertCurrency` applies correct exchange rate and pricing multiplier per country
+    - Test `validateCompliance` rejects non-compliant content for GDPR countries (UK, CA)
+    - Test `getLocalizedTemplate` returns country-specific variant when available, falls back to default
+    - Test each `CountryConfig` has all required fields populated (language, currency, compliance, emailConfig)
+    - _Requirements: 18.2, 18.3, 18.4_
+
+- [x] 28. Checkpoint - Infrastructure and localization complete
+  - Ensure all tests pass, ask the user if questions arise.
+
+- [ ] 29. New Revenue Streams
+  - [x] 29.1 Implement outcome-based pricing in `lib/platform/billing/outcomePricing.ts`
+    - Implement `trackOutcomeRevenue(clientId, revenueGenerated)` attributing revenue to specific recommendations
+    - Implement `calculateOutcomeShare(clientId, period)` applying configurable revenue share percentage
+    - Implement `generateOutcomeInvoice(clientId, period)` with line-item attribution detail
+    - _Requirements: 19.1, 19.6_
+  - [x] 29.2 Implement data licensing in `lib/platform/data/dataLicensing.ts`
+    - Implement `generateBenchmarkReport(vertical, dateRange)` producing anonymized industry benchmarks from aggregated audit data — no PII, no tenant identifiers
+    - Implement `exportDataset(format: 'json' | 'csv', filters)` for research firm data exports
+    - Implement `trackLicensingRevenue(customerId, amount)` for revenue tracking
+    - _Requirements: 19.2, 19.6_
+  - [x] 29.3 Implement partner integrations in `lib/platform/partners/`
+    - Implement fintech referral tracking in `lib/platform/partners/fintech.ts` — track Stripe Capital / Clearco referrals with conversion attribution
+    - Implement insurance partnership data feed in `lib/platform/partners/insurance.ts` — expose anonymized audit risk signals for cyber insurance underwriting
+    - Implement PE data service endpoints in `lib/platform/partners/privateEquity.ts` — premium market intelligence API for private equity firms
+    - _Requirements: 19.3, 19.4, 19.5_
+  - [x] 29.4 Write unit tests for revenue streams
+    - Test `calculateOutcomeShare` applies correct percentage and produces auditable line items
+    - Test `generateBenchmarkReport` produces anonymized output with no PII or tenant identifiers
+    - Test fintech referral tracking records conversion events with correct attribution
+    - _Requirements: 19.1, 19.2, 19.6_
+
+- [x] 30. Competitive Moat Metrics
+  - [x] 30.1 Implement `lib/platform/metrics/moatMetrics.ts`
+    - Implement `getDataMoat()` — total audits completed, unique outcome data points from DB aggregation
+    - Implement `getSpeedMoat()` — average audit time and p95 latency from pipeline metrics
+    - Implement `getCostMoat()` — cost per audit and cost trend over time from `ModelBenchmark` and infrastructure costs
+    - Implement `getNetworkMoat()` — agencies on platform count and cross-tenant learning lift from `computeLift()`
+    - Implement `getBrandMoat()` — case studies published, brand mentions (manual input or external API)
+    - Implement `getMoatReport()` returning all five moat dimensions with week-over-week trend
+    - _Requirements: 20.1, 20.2, 20.3, 20.4, 20.5_
+  - [x] 30.2 Implement moat reporting and alerting in `lib/platform/metrics/moatAlerting.ts`
+    - Implement `checkNegativeTrends(report)` detecting any moat metric declining for 2+ consecutive weeks
+    - Implement `sendMoatAlert(metric, trend)` delivering alert to platform administrators
+    - Implement `estimateCatchUpTime(metric, competitorBaseline)` based on current moat delta and growth rate
+    - Implement `generateWeeklyMoatReport()` for scheduled reporting
+    - _Requirements: 20.6, 20.7, 20.8_
+  - [x] 30.3 Create moat dashboard in `app/(admin)/moats/page.tsx`
+    - Display all five moat dimensions with historical trend charts
+    - Show competitor catch-up time estimates per metric
+    - Display active alerts for declining metrics
+    - _Requirements: 20.6_
+  - [x] 30.4 Create cron endpoint `app/api/cron/moat-report/route.ts`
+    - Run weekly moat report generation and negative trend detection
+    - Trigger alerts for any metrics declining 2+ consecutive weeks
+    - _Requirements: 20.7_
+  - [x] 30.5 Write property test for moat metric alerting
+    - **Property 25: Moat Metric Alerting** — for any competitive moat metric trending negatively for 2+ consecutive weeks, an alert must be generated and delivered to platform administrators
+    - File: `lib/platform/metrics/__tests__/moats.property.test.ts`
+    - Tag: `Feature: sprint-5-6-integration-pilot, Property 25: Moat Metric Alerting`
+    - Minimum 100 iterations using `fc.array(fc.float(), { minLength: 2 })` generators for weekly metric sequences
+    - **Validates: Requirements 20.7**
+  - [x] 30.6 Write unit tests for moat metrics
+    - Test `checkNegativeTrends` correctly identifies 2+ consecutive declining weeks vs single-week dip
+    - Test `estimateCatchUpTime` returns finite positive number given valid inputs
+    - Test each moat getter (`getDataMoat`, `getSpeedMoat`, etc.) returns correct data shape
+    - _Requirements: 20.1, 20.7, 20.8_
+
+- [x] 31. Final Checkpoint - All systems integrated
+  - Ensure all tests pass, ask the user if questions arise.
+  - Verify 90%+ delivery automation rate and <2% human touch rate
+  - Verify API authentication, rate limiting, and webhook delivery
+  - Verify cross-tenant learning produces measurable lift
+  - Verify predictive scoring outperforms rule-based by 2×
+
+## Notes
+
+- Sub-tasks marked with `*` are optional (property-based and unit tests) and can be skipped for faster MVP
+- All property-based tests use `fast-check` with minimum 100 iterations per property
+- Tag format for each test: `Feature: sprint-5-6-integration-pilot, Property {N}: {title}`
+- Each property test maps to a specific design document property (Properties 1-25)
+- Checkpoints ensure incremental validation before proceeding to the next phase
+- All new components follow existing patterns in `lib/pipeline/` and `app/api/`
+- The implementation builds on existing Sprint 2-4 infrastructure (Tasks 1-21 complete)
+
+## Sprint 5 Exit Criteria
+
+- [ ] Delivery automation rate: 90%+ across all tiers
+- [ ] Human touch rate: <2%
+- [ ] White-label agencies onboarded: 25+
+- [ ] Platform MRR: $50K+
+- [ ] API consumers: 100+
+- [ ] Embeddable widgets deployed: 50+ agency sites
+- [ ] Cross-tenant intelligence: Measurable lift from shared learning
+- [ ] Predictive lead scoring: 2× improvement over rule-based
+- [ ] Prospects/day (platform-wide): 10,000+
+- [ ] Total MRR (direct + platform): $300K–400K
+
+## Sprint 6 Exit Criteria
+
+- [ ] Human touch rate: <1%
+- [ ] Prospects/day (direct + platform): 60,000+
+- [ ] Vertical playbooks: 100+ auto-generated
+- [ ] White-label agencies: 100+
+- [ ] Total audits completed: 500K+
+- [ ] Audit speed: <5 seconds
+- [ ] Audit cost: <$0.01
+- [ ] International MRR: $20K+
+- [ ] New revenue streams: 3+ at $100K+ combined MRR
+- [ ] Total MRR: $750K–1M
+tak

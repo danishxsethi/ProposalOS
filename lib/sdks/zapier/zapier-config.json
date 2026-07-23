@@ -1,0 +1,145 @@
+{
+  "name": "Proposal Engine",
+  "description": "Automate website audits, proposals, and outreach with Proposal Engine",
+  "version": "1.0.0",
+  "authentication": {
+    "type": "custom",
+    "fields": [
+      {
+        "key": "api_key",
+        "label": "API Key",
+        "type": "string",
+        "required": true,
+        "helpText": "Your Proposal Engine API key (starts with pe_pub_). Find it in your agency dashboard under Settings > API Keys."
+      }
+    ],
+    "test": {
+      "method": "GET",
+      "url": "{{bundle.authData.base_url}}/api/v1/clients?limit=1",
+      "headers": {
+        "Authorization": "Bearer {{bundle.authData.api_key}}"
+      }
+    }
+  },
+  "triggers": [
+    {
+      "key": "audit_completed",
+      "noun": "Audit",
+      "display": {
+        "label": "Audit Completed",
+        "description": "Triggers when a website audit is completed"
+      },
+      "operation": {
+        "type": "hook",
+        "performSubscribe": {
+          "method": "POST",
+          "url": "{{bundle.authData.base_url}}/api/v1/webhooks",
+          "body": {
+            "url": "{{bundle.targetUrl}}",
+            "events": ["audit.completed"]
+          }
+        },
+        "performUnsubscribe": {
+          "method": "DELETE",
+          "url": "{{bundle.authData.base_url}}/api/v1/webhooks/{{bundle.subscribeData.id}}"
+        },
+        "perform": "{{bundle.cleanedRequest.data}}"
+      }
+    },
+    {
+      "key": "proposal_generated",
+      "noun": "Proposal",
+      "display": {
+        "label": "Proposal Generated",
+        "description": "Triggers when a new proposal is generated"
+      },
+      "operation": {
+        "type": "hook",
+        "performSubscribe": {
+          "method": "POST",
+          "url": "{{bundle.authData.base_url}}/api/v1/webhooks",
+          "body": {
+            "url": "{{bundle.targetUrl}}",
+            "events": ["proposal.generated"]
+          }
+        },
+        "performUnsubscribe": {
+          "method": "DELETE",
+          "url": "{{bundle.authData.base_url}}/api/v1/webhooks/{{bundle.subscribeData.id}}"
+        },
+        "perform": "{{bundle.cleanedRequest.data}}"
+      }
+    },
+    {
+      "key": "deal_closed",
+      "noun": "Deal",
+      "display": {
+        "label": "Deal Closed",
+        "description": "Triggers when a deal is closed"
+      },
+      "operation": {
+        "type": "hook",
+        "performSubscribe": {
+          "method": "POST",
+          "url": "{{bundle.authData.base_url}}/api/v1/webhooks",
+          "body": {
+            "url": "{{bundle.targetUrl}}",
+            "events": ["deal.closed"]
+          }
+        },
+        "performUnsubscribe": {
+          "method": "DELETE",
+          "url": "{{bundle.authData.base_url}}/api/v1/webhooks/{{bundle.subscribeData.id}}"
+        },
+        "perform": "{{bundle.cleanedRequest.data}}"
+      }
+    }
+  ],
+  "creates": [
+    {
+      "key": "create_audit",
+      "noun": "Audit",
+      "display": {
+        "label": "Create Audit",
+        "description": "Create a new website audit for a business"
+      },
+      "operation": {
+        "inputFields": [
+          { "key": "businessName", "label": "Business Name", "type": "string", "required": true },
+          { "key": "businessUrl", "label": "Website URL", "type": "string", "required": true },
+          { "key": "city", "label": "City", "type": "string" },
+          { "key": "industry", "label": "Industry", "type": "string" }
+        ],
+        "perform": {
+          "method": "POST",
+          "url": "{{bundle.authData.base_url}}/api/v1/audits",
+          "headers": { "Authorization": "Bearer {{bundle.authData.api_key}}" },
+          "body": {
+            "businessName": "{{bundle.inputData.businessName}}",
+            "businessUrl": "{{bundle.inputData.businessUrl}}",
+            "city": "{{bundle.inputData.city}}",
+            "industry": "{{bundle.inputData.industry}}"
+          }
+        }
+      }
+    },
+    {
+      "key": "trigger_outreach",
+      "noun": "Outreach",
+      "display": {
+        "label": "Trigger Outreach",
+        "description": "Trigger outreach for a specific lead"
+      },
+      "operation": {
+        "inputFields": [
+          { "key": "leadId", "label": "Lead ID", "type": "string", "required": true }
+        ],
+        "perform": {
+          "method": "POST",
+          "url": "{{bundle.authData.base_url}}/api/v1/outreach/{{bundle.inputData.leadId}}",
+          "headers": { "Authorization": "Bearer {{bundle.authData.api_key}}" }
+        }
+      }
+    }
+  ]
+}

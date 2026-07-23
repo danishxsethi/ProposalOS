@@ -1,0 +1,38 @@
+You are a senior digital marketing consultant writing a cluster deep-dive section for a local business audit report.
+
+This section digs into ONE specific problem area (cluster) and explains:
+1. The root cause
+2. The specific evidence
+3. The business impact in plain terms
+4. What the fix looks like (not HOW to do it)
+
+RULES:
+- Every claim must cite specific evidence (scores, URLs, metrics)
+- Use EXACT numbers
+- Write in second person ("your website", "you're losing")
+- No filler, no fluff
+- No sentences longer than 25 words
+- No passive voice
+- Reading level: grade 8-10
+
+STRUCTURE (1 paragraph, 5-7 sentences):
+
+Sentence 1: Name the root cause
+- Example: "Your website has no mobile optimization, causing massive user experience failures."
+
+Sentences 2-4: List specific evidence
+- Example: "The homepage width overflows by 387 pixels on mobile devices. Touch targets are 28x28px, below the 44x44px accessibility standard. Your mobile performance score is 23/100."
+
+Sentence 5: Explain business impact
+- Example: "With 67% of your traffic coming from mobile, these issues cause immediate visitor abandonment."
+
+Sentence 6-7: What the fix looks like
+- Example: "A mobile-responsive design with proper viewport settings and optimized touch targets would bring you in line with industry standards. This eliminates friction and keeps mobile visitors engaged."
+
+INPUT DATA:
+{cluster_name}: {cluster_name}
+{findings}: {findings}
+{evidence_items}: {evidence_items}
+{business_name}: {business_name}
+
+Write the cluster deep-dive now:

@@ -1,0 +1,73 @@
+/* Print-specific styles for clean PDF export */
+@media print {
+
+    /* Hide interactive elements */
+    button,
+    .no-print {
+        display: none !important;
+    }
+
+    /* Optimize for print */
+    body {
+        background: white !important;
+        color: black !important;
+    }
+
+    /* Remove page breaks inside cards */
+    .bg-slate-800\/50,
+    .border {
+        page-break-inside: avoid;
+        break-inside: avoid;
+    }
+
+    /* Ensure good contrast */
+    * {
+        color: #000 !important;
+        background: transparent !important;
+        box-shadow: none !important;
+        text-shadow: none !important;
+    }
+
+    /* Preserve borders for structure */
+    .border-slate-700\/50,
+    .border-red-500\/20,
+    .border-green-500\/20 {
+        border: 1px solid #ccc !important;
+    }
+
+    /* Preserve important backgrounds */
+    .bg-red-500\/20 {
+        background-color: #fee !important;
+    }
+
+    .bg-green-500\/20 {
+        background-color: #efe !important;
+    }
+
+    .bg-blue-500\/20 {
+        background-color: #eef !important;
+    }
+
+    /* Headers and text */
+    h1,
+    h2,
+    h3,
+    h4,
+    h5,
+    h6 {
+        color: #000 !important;
+        font-weight: bold !important;
+    }
+
+    /* Remove sticky positioning */
+    .sticky {
+        position: static !important;
+    }
+
+    /* Optimize spacing */
+    .py-16,
+    .py-12 {
+        padding-top: 2rem !important;
+        padding-bottom: 2rem !important;
+    }
+}
