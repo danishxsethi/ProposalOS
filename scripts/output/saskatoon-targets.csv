@@ -1,0 +1,51 @@
+businessName,placeId,website,phone,address,rating,reviewCount,category,vertical
+Westend Dental,ChIJMQEgbWj3BFMR_VSl7W3_qPw,https://westend-dental.ca/,(306) 978-1700,"3110 Laurier Dr #10, Saskatoon, SK S7L 5J7, Canada",4,191,Dentist,dentist
+Saskatoon Dental Group,ChIJiZpBhGf3BFMRS4x2_qiTsbI,https://www.saskatoondentalgroup.com/,(306) 382-5566,"411 Confederation Dr #3, Saskatoon, SK S7L 5C3, Canada",4.5,132,Dentist,dentist
+Fairhaven Dental,ChIJuW9QY1z3BFMRcn2gbj_7bIw,https://www.fairhavendental.ca/,(306) 384-7191,"3310 Fairlight Dr #5, Saskatoon, SK S7M 4Z1, Canada",4.7,131,Dentist,dentist
+West 14 Dental,ChIJafcBr_L5BFMR_1xZAAu3hDU,https://www.west14dental.com/,(306) 933-2114,"279 Kensington Blvd #60, Saskatoon, SK S7L 4Y7, Canada",4.9,748,Dentist,dentist
+Associated Midtown Dental,ChIJdxXRGNH2BFMRRJTXqVIU6CA,http://associatedmidtowndental.ca/,(306) 975-0328,"402 - 201 1 Ave S, Saskatoon, SK S7K 1J5, Canada",4.9,391,Dentist,dentist
+Cuelenaere LLP,ChIJ-VmUNNH2BFMRjcGM6ybnJwk,https://cuelenaere.com/,(306) 653-5000,"450 2nd Ave N #200, Saskatoon, SK S7K 2C3, Canada",4.2,123,Consultant,law-firm
+Scharfstein LLP,ChIJR5gIFtf2BFMR__JyDpS0vlI,http://www.scharfsteinlaw.com/,(306) 653-2838,"#200 - Princeton Tower, 123 2 Ave S, Saskatoon, SK S7K 7E6, Canada",3.9,53,Consultant,law-firm
+Leland Kimpinski LLP,ChIJ82w-MNf2BFMRfLRqkPTpEZU,http://www.lelandlaw.ca/,(306) 244-6686,"336 6th Ave N, Saskatoon, SK S7K 2S4, Canada",4.5,43,Attorney,law-firm
+W Law LLP,ChIJR5gIFtf2BFMR-u6wbhROKNw,https://wlaw.com/,(306) 244-2242,"122 1 Ave S #1100, Saskatoon, SK S7K 7E5, Canada",3.9,36,Consultant,law-firm
+Gabruch Legal Group,ChIJabK4ytD2BFMRQwf6nkhILEo,https://www.gabruchlegal.ca/,(306) 651-5060,"333 25 St E #200, Saskatoon, SK S7K 2L8, Canada",4.9,30,Consultant,law-firm
+MWK Heating & Cooling LTD,ChIJD8yzh073BFMRuNBuRAlQBsc,https://www.mwkheatingandcooling.com/,(306) 220-7584,"110 Carling Pl, Saskatoon, SK S7M 4C2, Canada",5,223,General Contractor,hvac
+Furnaceguys Heating & Air Conditioning,ChIJWbRumOH2BFMR4PI5yukSG6s,https://www.furnaceguys.com/?utm_source=google&utm_medium=gmb&utm_campaign=furnaceguys-gmb&se_campaign=furnaceguys%20-%20GMB,(306) 518-7924,"3069 Faithfull Ave Unit B, Saskatoon, SK S7K 8B3, Canada",4.9,1802,General Contractor,hvac
+Five Star Plumbing Heating & Air Conditioning,ChIJVXcFI_v2BFMRse8JBtub1Yk,http://www.fivestarheating.ca/,(306) 934-7002,"2270 Northridge Dr, Saskatoon, SK S7L 1B9, Canada",4.9,131,General Contractor,hvac
+Efficiency Heating & Cooling,ChIJvwobyYn2BFMRMUJ1qwJtKHc,https://www.efficiencyheating.com/?utm_source=google&utm_medium=organic&utm_campaign=gbp,(306) 384-4328,"4003 Millar Ave, Saskatoon, SK S7K 2K6, Canada",4.9,246,General Contractor,hvac
+"Reliance Gregg's Heating, Air Conditioning & Plumbing",ChIJycqWKFb3BFMRV6H7tHnXHak,https://reliancehomecomfort.com/saskatoon/?utm_source=google&utm_medium=organic&utm_campaign=gmb-saskatoon,(866) 767-1698,"503 51st St, Saskatoon, SK S7K 6V4, Canada",4.7,2573,Services,hvac
+Loqui,ChIJKYKl1Rv3BFMR24RJCoZNBRs,http://www.loqui.ca/,(306) 955-8255,"312 Avenue C S, Saskatoon, SK S7M 1N4, Canada",4.7,446,Restaurant,restaurant
+The Rabbit Hole,ChIJh5OZVe3xBFMRNIU-EsajR7I,http://therabbitholeyxe.com/,(306) 952-1184,"2404 Melrose Ave, Saskatoon, SK S7J 0V5, Canada",4.5,245,Bar & Grill,restaurant
+Filosophi Wise Cuisine,ChIJhzZBImH3BFMRdm5WbQqLlXE,http://www.filosophi.ca/,(306) 956-7777,"414 Cumberland Ave N, Saskatoon, SK S7N 1M6, Canada",4.8,1936,Restaurant,restaurant
+Saffron Persian Kitchen and Bar,ChIJ10sH15rxBFMRI9YTad4gIlY,https://saffron-restaurant.ca/,(306) 914-8965,"1013 Broadway Ave, Saskatoon, SK S7N 1C1, Canada",4.8,406,Persian Restaurant,restaurant
+Philthy Philly's- Saskatoon,ChIJm2-Y5d73BFMR6kNr4fQD-II,https://philthyphillys.order-online.ai/#/?service=takeout&restoCode=PP030,(306) 954-1107,"107 Confederation Dr #21, Saskatoon, SK S7L 5C3, Canada",4.6,285,Restaurant,restaurant
+Boyes Group Realty Inc.,ChIJZbm30cH2BFMRilSKgB7lTpY,https://boyesgrouprealty.com/,(306) 653-2213,"714 Duchess St, Saskatoon, SK S7K 0R3, Canada",4.7,121,Real Estate Agency,real-estate
+RE/MAX Bridge City Realty - Real Estate Agency in Saskatoon - Residential -Commercial - Farm Realtor,ChIJkYdshCvxBFMR1D51XF9t62I,http://www.bridgecityremax.ca/,(306) 934-8383,"3020 Arlington Ave a, Saskatoon, SK S7J 2J9, Canada",5,35,Real Estate Agency,real-estate
+Katsiris Real Estate - The Agency Saskatoon,ChIJeTVSRDr3BFMRSiSQzynHzE0,http://www.katsirisrealestate.com/,(306) 222-4432,"405 Avenue B S #120, Saskatoon, SK S7M 5N3, Canada",4.9,74,Real Estate Agency,real-estate
+Slade Real Estate Inc.,ChIJV0hWACn3BFMRo2hN3qWf5Ks,http://www.sladerealestate.ca/,(306) 222-9992,"440 4 St E, Saskatoon, SK S7H 1J5, Canada",4.9,112,Real Estate Agency,real-estate
+Coldwell Banker Signature,ChIJVZ9nzAD0BFMRmDPG4dS4EyI,http://www.coldwellbankersaskatoon.ca/,(306) 652-2882,"301 1st Ave N #200, Saskatoon, SK S7K 1X2, Canada",4.1,23,Real Estate Agency,real-estate
+Anytime Fitness,ChIJb4I9RWj3BFMRvWB7rA8mFu0,https://www.anytimefitness.ca/gyms/4804/saskatoon-sk-s7l-1j2/?utm_source=google&utm_medium=organic-businesslisting&utm_campaign=gbp-listing&utm_content=4804,(306) 952-2229,"300 Confederation Dr, Saskatoon, SK S7L 4R6, Canada",3.7,125,Gym,gym
+Fit4Less,ChIJvQ3ycV33BFMRI6I913TfxeU,https://www.fit4less.ca/locations/provinces/saskatchewan/saskatoon/saskatoon-circle-west-plaza?utm_source=G&utm_medium=lpm&utm_campaign=fit4less,(306) 249-5377,"301 Confederation Dr Unit #4, Saskatoon, SK S7L 5C3, Canada",4,344,Gym,gym
+Fitness Focus Saskatoon,ChIJd07uP-b2BFMRyk2zYAsqKo0,https://www.fitnessfocus.ca/,(306) 244-6413,"1250 Ontario Ave, Saskatoon, SK S7K 1S5, Canada",4.9,202,Gym,gym
+Snap Fitness Saskatoon,ChIJtWCWan_2BFMR_8U_eaXqwSs,https://www.snapfitness.com/ca/gyms/saskatoon-sk/?utm_source=gmb&utm_medium=yext,(306) 242-7627,"420 Duchess St #4, Saskatoon, SK S7K 0R1, Canada",4.9,360,Gym,gym
+Rise Strength Lab,ChIJ9RekMvn2BFMREpbEgESfOI8,http://www.risestrengthlab.com/,(306) 652-1866,"2630 Jasper Ave S, Saskatoon, SK S7J 2K2, Canada",5,101,Gym,gym
+Fairlight Veterinary Services,ChIJF3zhAaL3BFMRib1PObxMhT0,https://linktr.ee/fairlightvs,(306) 986-6443,"3315 Fairlight Dr unit c, Saskatoon, SK S7M 3Y5, Canada",4.5,157,Veterinary Care,veterinarian
+Prairieland Veterinary Clinic,ChIJDxE5JcPwBFMRxYwdpQsj-II,http://www.prairielandvetclinic.ca/,(306) 242-5637,"2319 Lorne Ave, Saskatoon, SK S7J 0S3, Canada",4.7,469,Veterinary Care,veterinarian
+VCA Canada All West Animal Hospital,ChIJ7asJa2j3BFMRVbZg6314EK8,http://vcacanada.com/allwest,(306) 978-2100,"3120 Laurier Dr, Saskatoon, SK S7L 5J7, Canada",4.4,199,Veterinary Care,veterinarian
+Orchard Veterinary Care,ChIJsQ1a2ODwBFMR0gW_XjR7H0k,https://www.orchardvetcare.ca/,(306) 668-7297,"493 2nd Ave N, Saskatoon, SK S7K 2C1, Canada",4.7,313,Veterinary Care,veterinarian
+WCVM Small Animal Clinic (Veterinary Medical Centre),ChIJgdSAw7D2BFMRDRaC7AsAn2U,https://vmc.usask.ca/services/small.php,(306) 966-7126,"57 Campus Dr, Saskatoon, SK S7N 5B4, Canada",4,339,Veterinary Care,veterinarian
+Pretty Young Thing Studios,ChIJrfgZD6_3BFMRWmRtzv5VpyY,http://www.pytstudios.com/,(306) 220-2306,"226 Avenue C S unit c, Saskatoon, SK S7M 1N2, Canada",4.9,62,Beauty Salon,hair-salon
+Chalk Salon & Co.,ChIJTUlVe0P3BFMRNs4yUS4wCC4,https://chalksalon.ca/,(306) 652-7467,"632 1st Ave N #40, Saskatoon, SK S7K 1X8, Canada",4.9,261,Beauty Salon,hair-salon
+Blondology Saskatoon Salon,ChIJ9VnKtAnzBFMRdnunT6wmqZw,http://www.blondologyyxe.com/,(306) 241-6327,"815C Gray Ave, Saskatoon, SK S7N 2K8, Canada",4.9,327,Hair Salon,hair-salon
+Revamp Salon Company,ChIJUzxybivxBFMR9vtBoQVxA08,http://www.revampsaloncompany.com/,(306) 653-1343,"706 Broadway Ave, Saskatoon, SK S7N 1B4, Canada",4.8,447,Beauty Salon,hair-salon
+Hairnation salon & spa,ChIJB_7RoIrxBFMRMidILXJqqaE,http://www.hairnationsalonspa.com/,(306) 536-1486,"1003b 8 St E, Saskatoon, SK S7H 0S2, Canada",5,109,Hair Salon,hair-salon
+Hometown Homes,ChIJmSwxelj1BFMRAh0UKyFDgTg,http://www.hometownhomes.ca/,(306) 230-6895,"454 Lenore Dr, Saskatoon, SK S7K 5S7, Canada",5,15,General Contractor,home-contractor
+Lexis Homes,ChIJ05KsszHxBFMR1Cu1aNy7z2k,http://www.lexishomes.ca/,(306) 934-8150,"1124 8 St E, Saskatoon, SK S7H 0S4, Canada",5,57,General Contractor,home-contractor
+Westridge Homes Ltd,ChIJkzRbiIv0BFMRfxbh-L39pq0,http://www.westridgehomes.ca/,(306) 652-9974,"314 Taube Grn, Saskatoon, SK S7V 1M4, Canada",5,28,General Contractor,home-contractor
+Local One Construction,ChIJobAE4-xTj1QRIrJyA7EV_20,http://www.local-one.ca/,(877) 451-5622,"20 Fletcher Rd #1502, Saskatoon, SK S7M 5M1, Canada",5,17,General Contractor,home-contractor
+Legacy Homes Ltd,ChIJ80NV92DxBFMRA5QsYIzIOJ8,http://legacyhomesltd.ca/,(306) 321-5075,"3502 Taylor St E #211, Saskatoon, SK S7H 5H9, Canada",5,10,General Contractor,home-contractor
+Midtown Shopping Centre,ChIJeSXcLdb2BFMRE_gmP5H_llk,https://www.shopmidtown.ca/,(306) 653-8844,"201 1 Ave S, Saskatoon, SK S7K 1J9, Canada",4.1,7296,Shopping Mall,retail
+The Shops of South Kensington,ChIJTQ24rcP5BFMRZWDVlyReqGg,https://www.icrcommercial.com/wp-content/uploads/WPL/821/att_149-Kensington-Blvd-for-Lease.pdf,(306) 664-6118,"149 Kensington Blvd, Saskatoon, SK S7L 7N9, Canada",4.4,193,Shopping Mall,retail
+The Centre Mall,ChIJn3oe21jxBFMRXwslngybI1E,https://thecentremall.com/?utm_source=google&utm_medium=organic&utm_campaign=gbp_listing,(306) 955-6611,"3310 8 St E, Saskatoon, SK S7H 0W6, Canada",4.2,4541,Shopping Mall,retail
+Lawson Heights Mall,ChIJU3jZxX32BFMRPJvuMr_RDDo,https://lawsonheightsmall.ca/?utm_source=google&utm_medium=organic&utm_campaign=gbp_listing,(306) 933-2422,"134 Primrose Dr, Saskatoon, SK S7K 5S6, Canada",4.2,2965,Shopping Mall,retail
+Preston Crossing,ChIJIf22ha_2BFMRDisR5ZVhkMw,http://prestoncrossing.com/,(306) 668-8350,"Preston Ave N, Saskatoon, SK S7H 2V7, Canada",4.3,2306,Shopping Mall,retail
