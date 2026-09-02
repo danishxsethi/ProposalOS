@@ -264,7 +264,7 @@ Observed metric index: ${keyMetricsText.slice(0, 20_000)}`;
 
       const parsed = z
         .object({
-          text: z.string().trim().min(50).max(500),
+          text: z.string().trim().min(50).max(4000),
           finding_ids: z.array(z.string().trim().min(1)).min(1),
         })
         .strict()
@@ -281,8 +281,13 @@ Observed metric index: ${keyMetricsText.slice(0, 20_000)}`;
         throw new Error('Executive summary contains an unknown Finding citation');
       }
 
+      const content =
+        parsed.text.length <= 500
+          ? parsed.text
+          : `${parsed.text.slice(0, 497).replace(/\s+\S*$/, '').trim()}...`;
+
       return {
-        content: parsed.text,
+        content,
         success: true,
         findingIds: parsed.finding_ids,
         tokensUsed,
