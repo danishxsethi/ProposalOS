@@ -215,6 +215,10 @@ async function getRedisInstance(): Promise<import('ioredis').Redis | null> {
       lazyConnect: true,
       maxRetriesPerRequest: 2,
       enableOfflineQueue: false,
+      // Memorystore SERVER_AUTHENTICATION uses a GCP-managed CA not in the
+      // public trust store. Accept the host CA — traffic stays inside the
+      // private VPC, confidentiality is provided by TLS either way.
+      ...(url.startsWith('rediss://') ? { tls: { rejectUnauthorized: false } } : {}),
     });
     await _redisInstance.connect();
     logger.info({ event: 'shared_store.redis_connected' }, 'SharedStore: Redis connected');
