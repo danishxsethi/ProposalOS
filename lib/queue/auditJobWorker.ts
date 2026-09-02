@@ -26,6 +26,7 @@ import {
   heartbeatJob,
   markJobFailed,
   markJobSucceeded,
+  type AuditJobRecord,
 } from './auditJobQueue';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -51,12 +52,17 @@ export type WorkerResult =
  * All audit work runs inside runWithTenantAsync so RLS and tenant context
  * are correctly scoped for every Prisma query inside the audit runner.
  */
-export async function processAuditJob(jobId: string): Promise<WorkerResult> {
+export async function processAuditJob(
+  jobId: string,
+  preclaimedJob?: AuditJobRecord
+): Promise<WorkerResult> {
   // 1. Load the job record (bypass RLS — worker operates cross-tenant under
   //    its own auth, then scopes each operation via runWithTenantAsync)
-  const job = await runWithTenantBypass('worker-load-audit-job', () =>
-    prisma.auditJob.findUnique({ where: { id: jobId } })
-  );
+  const job =
+    preclaimedJob ??
+    (await runWithTenantBypass('worker-load-audit-job', () =>
+      prisma.auditJob.findUnique({ where: { id: jobId } })
+    ));
 
   if (!job) {
     logger.warn({ event: 'worker.job_not_found', jobId }, 'Worker: job not found');
@@ -73,7 +79,9 @@ export async function processAuditJob(jobId: string): Promise<WorkerResult> {
   }
 
   // 3. Claim the job (sets RUNNING, acquires distributed lock)
-  const claimed = await runWithTenantBypass('worker-claim-audit-job', () => claimJob(jobId));
+  const claimed =
+    preclaimedJob ??
+    (await runWithTenantBypass('worker-claim-audit-job', () => claimJob(jobId)));
   if (!claimed) {
     logger.info({ event: 'worker.lock_contention', jobId }, 'Worker: lock contention — skipping');
     return { outcome: 'LOCK_CONTENTION', jobId };

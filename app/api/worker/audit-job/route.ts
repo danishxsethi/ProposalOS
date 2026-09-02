@@ -83,7 +83,7 @@ export async function POST(req: Request): Promise<NextResponse> {
       { event: 'worker.poll_dispatch', jobId: next.id, traceId },
       'Worker: dispatching claimed job'
     );
-    const result = await processAuditJob(next.id);
+    const result = await processAuditJob(next.id, next);
     results.push(result);
   }
 
