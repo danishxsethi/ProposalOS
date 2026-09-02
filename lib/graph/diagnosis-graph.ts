@@ -609,7 +609,10 @@ export async function invokeDiagnosisGraphWithTimeout(
 
   try {
     return await Promise.race([
-      diagnosisGraph.invoke(initialState as State, { signal: controller.signal } as any),
+      diagnosisGraph.invoke(
+        initialState as State,
+        { signal: controller.signal, recursionLimit: 100 } as any
+      ),
       timeoutPromise,
     ]);
   } catch (error) {

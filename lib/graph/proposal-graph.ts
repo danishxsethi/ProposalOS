@@ -462,7 +462,10 @@ export async function invokeProposalGraphWithTimeout(
 
   try {
     return await Promise.race([
-      proposalGraph.invoke(initialState as State, { signal: controller.signal } as any),
+      proposalGraph.invoke(
+        initialState as State,
+        { signal: controller.signal, recursionLimit: 100 } as any
+      ),
       timeoutPromise,
     ]);
   } catch (error) {
