@@ -73,14 +73,37 @@ async function runAudit(target: Target): Promise<{ auditId: string; status: stri
     headers: headers(),
     body: JSON.stringify({
       url: target.url,
-      name: target.businessName,
-      city: 'Saskatoon',
+      businessName: target.businessName,
+      businessCity: target.businessCity || 'Saskatoon',
       industry: target.vertical,
     }),
   });
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || data.details || res.statusText);
-  return { auditId: data.auditId, status: data.status };
+
+  // Poll audit status until complete/failed/timeout
+  const timeoutMs = 60_000; // 1 minute
+  const pollInterval = 2_000; // 2 seconds
+  const pollTimeout = timeoutMs / pollInterval;
+  let polled = 0;
+  let auditStatus = data.status;
+
+  while (polled < pollTimeout && auditStatus !== 'complete' && auditStatus !== 'failed') {
+    await sleep(pollInterval);
+    polled++;
+    const statusRes = await fetch(`${BASE_URL}/api/audit/${data.auditId}`, {
+      headers: headers(),
+    });
+    const statusData = await statusRes.json();
+    if (!statusRes.ok) throw new Error(statusData.error || statusRes.statusText);
+    auditStatus = statusData.status || auditStatus;
+  }
+
+  if (auditStatus !== 'complete') {
+    throw new Error(`Audit ${data.auditId} did not complete after ${timeoutMs}ms (status: ${auditStatus})`);
+  }
+
+  return { auditId: data.auditId, status: auditStatus };
 }
 
 async function runPropose(

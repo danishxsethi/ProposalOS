@@ -114,8 +114,8 @@ async function runAudit(target: TargetBusiness): Promise<AuditResponse> {
     method: 'POST',
     body: JSON.stringify({
       url: target.website,
-      name: target.businessName,
-      city: 'Saskatoon',
+      businessName: target.businessName,
+      businessCity: 'Saskatoon',
       industry: target.vertical,
     }),
   });

@@ -22,6 +22,9 @@
 
 import { logger } from '@/lib/logger';
 
+const UPSTASH_URL = process.env.UPSTASH_REDIS_REST_URL;
+const UPSTASH_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN;
+
 // ─── Interface ───────────────────────────────────────────────────────────────
 
 export interface SharedStore {
@@ -79,6 +82,121 @@ export interface SharedStore {
    * Clear all keys in the store. Mainly for admin/tests.
    */
   clear?(): Promise<void>;
+}
+
+// ─── Upstash REST adapter (serverless-safe, no TCP/VPC needed) ──────────────
+
+/** Lazy-loaded singleton for Upstash REST client. */
+let _upstashUrl: string | null = null;
+let _upstashToken: string | null = null;
+
+function getUpstashConfig(): { url: string; token: string } | null {
+  if (_upstashUrl && _upstashToken) return { url: _upstashUrl, token: _upstashToken };
+  const url = process.env.UPSTASH_REDIS_REST_URL;
+  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
+  if (!url || !token) return null;
+  _upstashUrl = url;
+  _upstashToken = token;
+  return { url, token };
+}
+
+function makeUpstashAdapter(config: { url: string; token: string }): SharedStore {
+  const base = config.url.replace(/\/$/, '');
+  const token = config.token;
+
+  async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+    const res = await fetch(`${base}${path}`, {
+      ...init,
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+        ...init.headers,
+      },
+    });
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      throw new Error(`Upstash HTTP ${res.status}: ${text}`);
+    }
+    if (res.status === 204) return undefined as unknown as T;
+    return res.json() as Promise<T>;
+  }
+
+  return {
+    async get(key) {
+      const data = await request<{ result: string | null }>(`/get/${encodeURIComponent(key)}`);
+      return data.result;
+    },
+    async set(key, value, ttlSeconds) {
+      await request(`/set/${encodeURIComponent(key)}`, {
+        method: 'POST',
+        body: JSON.stringify({ value, ex: ttlSeconds }),
+      });
+    },
+    async setIfNotExists(key, value, ttlSeconds) {
+      const data = await request<{ result: boolean }>(`/set/${encodeURIComponent(key)}`, {
+        method: 'POST',
+        body: JSON.stringify({ value, ex: ttlSeconds, nx: true }),
+      });
+      return data.result;
+    },
+    async increment(key, ttlSeconds) {
+      const data = await request<{ result: number }>(`/incr/${encodeURIComponent(key)}`);
+      // Set expiry on first write (Upstash doesn't support EX on INCR directly)
+      // We'll set it separately; race is acceptable for this use case
+      await request(`/expire/${encodeURIComponent(key)}`, {
+        method: 'POST',
+        body: JSON.stringify({ ex: ttlSeconds }),
+      }).catch(() => {});
+      return data.result;
+    },
+    async incrementFloat(key, amount, ttlSeconds) {
+      const data = await request<{ result: number }>(`/incrbyfloat/${encodeURIComponent(key)}`, {
+        method: 'POST',
+        body: JSON.stringify({ amount }),
+      });
+      await request(`/expire/${encodeURIComponent(key)}`, {
+        method: 'POST',
+        body: JSON.stringify({ ex: ttlSeconds }),
+      }).catch(() => {});
+      return data.result;
+    },
+    async checkAndIncrementFloat(key, amount, cap, ttlSeconds) {
+      // Use Lua via EVAL for atomicity (Upstash supports EVAL)
+      const luaScript = `
+        local current = tonumber(redis.call('GET', KEYS[1]) or '0')
+        local amount = tonumber(ARGV[1])
+        local cap = tonumber(ARGV[2])
+        local ttl = tonumber(ARGV[3])
+        local newVal = current + amount
+        if newVal > cap then
+          return {0, tostring(current)}
+        end
+        redis.call('SET', KEYS[1], tostring(newVal))
+        if current == 0 then
+          redis.call('EXPIRE', KEYS[1], ttl)
+        end
+        return {1, tostring(newVal)}
+      `;
+      const data = await request<{ result: [number, string] }>(`/eval`, {
+        method: 'POST',
+        body: JSON.stringify({
+          script: luaScript,
+          keys: [key],
+          args: [String(amount), String(cap), String(ttlSeconds)],
+        }),
+      });
+      return {
+        allowed: data.result[0] === 1,
+        newValue: parseFloat(data.result[1]),
+      };
+    },
+    async del(key) {
+      await request(`/del/${encodeURIComponent(key)}`, { method: 'POST' });
+    },
+    async clear() {
+      await request(`/flushdb`, { method: 'POST' });
+    },
+  };
 }
 
 // ─── Redis adapter (ioredis) ─────────────────────────────────────────────────
@@ -283,7 +401,15 @@ export async function getSharedStore(): Promise<SharedStore> {
     return _instance;
   }
 
-  // No Redis available — check whether we're allowed to fall back
+  // Check Upstash REST (serverless-safe, no TCP/VPC connector needed)
+  const upstash = getUpstashConfig();
+  if (upstash) {
+    _instance = makeUpstashAdapter(upstash);
+    logger.info({ event: 'shared_store.upstash_connected' }, 'SharedStore: Upstash REST connected');
+    return _instance;
+  }
+
+  // No Redis or Upstash available — check whether we're allowed to fall back
   const isProd = process.env.NODE_ENV === 'production';
   const requiredDisabled = process.env.SHARED_STORE_REQUIRED === 'false';
 

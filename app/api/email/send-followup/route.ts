@@ -96,7 +96,7 @@ export const POST = withAuth(async (req: Request) => {
     const baseUrl =
       process.env.BASE_URL || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
     const proposalUrl = `${baseUrl}/proposal/${proposal.webLinkToken}`;
-    const unsubscribeUrl = `${baseUrl}/unsubscribe?email=${encodeURIComponent(recipientEmail)}`;
+    const unsubscribeUrl = `${baseUrl}/api/email/unsubscribe?email=${encodeURIComponent(recipientEmail)}`;
 
     const topFinding = audit.findings[0];
     if (!topFinding) {

@@ -1,6 +1,12 @@
 import type { NextAuthConfig } from 'next-auth';
 
+const trustHost = process.env.AUTH_TRUST_HOST === 'true' || process.env.NODE_ENV !== 'production';
+
+const authBaseUrl = process.env.NEXTAUTH_URL || process.env.AUTH_URL || process.env.BASE_URL || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+console.info('[auth.config] trustHost=%s authBaseUrl=%s NODE_ENV=%s', trustHost, authBaseUrl, process.env.NODE_ENV);
+
 export const authConfig = {
+  trustHost,
   pages: {
     signIn: '/login',
     newUser: '/register',
@@ -62,9 +68,27 @@ export const authConfig = {
       name: `__Host-next-auth.session-token`,
       options: {
         httpOnly: true,
-        sameSite: 'strict', // Enhanced CSRF protection
+        sameSite: 'strict',
         path: '/',
-        secure: true, // Always use HTTPS
+        secure: true,
+      },
+    },
+    callbackUrl: {
+      name: `__Host-next-auth.callback-url`,
+      options: {
+        httpOnly: true,
+        sameSite: 'strict',
+        path: '/',
+        secure: true,
+      },
+    },
+    csrfToken: {
+      name: `__Host-next-auth.csrf-token`,
+      options: {
+        httpOnly: true,
+        sameSite: 'strict',
+        path: '/',
+        secure: true,
       },
     },
   },
