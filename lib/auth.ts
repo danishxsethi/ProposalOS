@@ -97,12 +97,18 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       // If the merged token is null or falsy, return it immediately
       if (!mergedToken) return null;
 
-      // 2. Ensure we have a JTI (session token identifier)
-      if (!mergedToken.jti) {
-        mergedToken.jti = crypto.randomUUID();
-      }
+      // Auth.js may assign/replace the standard JWT `jti` while encoding the
+      // cookie. Keep our own stable claim for the database-backed session
+      // check so the stored identifier matches the token we later receive.
+      const legacyJti = mergedToken.jti as string | undefined;
+      const sessionToken =
+        (mergedToken as typeof mergedToken & { sessionId?: string }).sessionId ??
+        legacyJti ??
+        crypto.randomUUID();
+      (mergedToken as typeof mergedToken & { sessionId: string }).sessionId = sessionToken;
+      if (!mergedToken.jti) mergedToken.jti = sessionToken;
 
-      const jti = mergedToken.jti as string;
+      const jti = sessionToken;
 
       // 3. Handle session database tracking and revocation
       if (user) {
