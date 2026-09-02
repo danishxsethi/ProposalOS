@@ -29,6 +29,7 @@ import type { Target, TargetList } from './target-list';
 
 let BASE_URL = process.env.BASE_URL || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
 const API_KEY = process.env.API_KEY;
+const SESSION_COOKIE = process.env.SESSION_COOKIE;
 const TENANT_ID = process.env.DEFAULT_TENANT_ID || process.env.E2E_TENANT_ID;
 const TARGETS_PATH = path.join(process.cwd(), 'data', 'saskatoon-targets.json');
 const REPORTS_DIR = path.join(process.cwd(), 'audit', 'reports');
@@ -57,8 +58,9 @@ function parseArgs(): {
 function headers(): Record<string, string> {
   const h: Record<string, string> = {
     'Content-Type': 'application/json',
-    Authorization: `Bearer ${API_KEY}`,
   };
+  if (SESSION_COOKIE) h.Cookie = SESSION_COOKIE;
+  else if (API_KEY) h.Authorization = `Bearer ${API_KEY}`;
   if (TENANT_ID) h['x-tenant-id'] = TENANT_ID;
   return h;
 }
@@ -257,8 +259,8 @@ function generateReport(results: AuditResult[]): string {
 }
 
 async function main(): Promise<void> {
-  if (!API_KEY) {
-    console.error('API_KEY required. Add to .env or .env.local');
+  if (!API_KEY && !SESSION_COOKIE) {
+    console.error('API_KEY or SESSION_COOKIE required. Add one to the environment.');
     process.exit(1);
   }
 
