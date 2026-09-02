@@ -138,6 +138,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             },
           })
         );
+        logger.info({ event: 'session.created', jti, userId: user.id as string }, 'Session record created');
 
         // Emit session.created event
         await recordAuditTrailEvent({
