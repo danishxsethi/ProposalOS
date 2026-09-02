@@ -4,9 +4,11 @@ import { NextResponse } from 'next/server';
 
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
+import { runWithTenantBypass } from '@/lib/tenant/context';
 
 export async function GET(req: Request) {
-  try {
+  return runWithTenantBypass('public-email-unsubscribe', async () => {
+    try {
     const { searchParams } = new URL(req.url);
     const email = searchParams.get('email');
     const reason = searchParams.get('reason') || 'unsubscribe';
@@ -106,8 +108,9 @@ export async function GET(req: Request) {
       status: 200,
       headers: { 'Content-Type': 'text/html' },
     });
-  } catch (error) {
-    logger.error({ error, event: 'email.unsubscribe.error' }, 'Error processing unsubscribe');
-    return new NextResponse('Internal server error', { status: 500 });
-  }
+    } catch (error) {
+      logger.error({ error, event: 'email.unsubscribe.error' }, 'Error processing unsubscribe');
+      return new NextResponse('Internal server error', { status: 500 });
+    }
+  });
 }

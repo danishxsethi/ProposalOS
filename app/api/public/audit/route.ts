@@ -87,7 +87,9 @@ async function handlePublicAudit(req: Request): Promise<NextResponse> {
 
         // Trigger execution via the durable job queue (canonical engine, P1-24)
         // Record billable usage (fire-and-forget — never blocks the audit)
-        trackUsage(systemTenant.id, 'audit.created').catch(() => {});
+        runWithTenantAsync(systemTenant.id, () => trackUsage(systemTenant.id, 'audit.created')).catch(
+          () => {}
+        );
 
         logger.info(
           {
