@@ -159,7 +159,7 @@ ${JSON.stringify(preClustersJson)}
           input: prompt,
           thinkingBudget: getThinkingBudgetForNode('cluster_root_causes'),
           temperature: 0,
-          maxOutputTokens: 2048,
+          maxOutputTokens: 4096,
           responseModality: 'json',
           metadata: { node: 'cluster_root_causes', auditId },
         });
@@ -274,7 +274,7 @@ ${context.text.slice(0, 100_000)}
           input: [{ type: 'text', data: prompt }, ...context.images],
           thinkingBudget: getThinkingBudgetForNode('cluster_root_causes') || 16384, // Heavy reasoning assigned here
           temperature: 0,
-          maxOutputTokens: 2048,
+          maxOutputTokens: 4096,
           responseModality: 'json',
           metadata: { node: 'cluster_root_causes', auditId },
         });
@@ -378,7 +378,7 @@ ${JSON.stringify(cluster.findingIds)}
             input: prompt,
             thinkingBudget: getThinkingBudgetForNode('generate_narrative'),
             temperature: 0.3,
-            maxOutputTokens: 512,
+            maxOutputTokens: 2048,
             responseModality: 'json',
             metadata: { node: 'generate_narrative', auditId },
           });

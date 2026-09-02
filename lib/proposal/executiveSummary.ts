@@ -197,7 +197,7 @@ export async function generateExecutiveSummary(
           input: prompt,
           thinkingBudget: getThinkingBudgetForNode('draft_proposal'),
           temperature: 0.2,
-          maxOutputTokens: 512,
+          maxOutputTokens: 2048,
           responseModality: 'json',
           metadata: { node: 'draft_proposal', auditId },
         });

@@ -48,7 +48,7 @@ export class ProposalLLMOrchestrator {
     this.defaultOptions = {
       model: process.env.PROPOSAL_MODEL || 'gemini-3.1-pro',
       temperature: 0.2,
-      maxOutputTokens: 1024,
+      maxOutputTokens: 4096,
       thinkingBudget: 50,
       maxRetries: 3,
       timeoutMs: 30000,
