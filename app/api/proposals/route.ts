@@ -10,6 +10,7 @@
 
 import { NextResponse } from 'next/server';
 
+import { logger } from '@/lib/logger';
 import { generateTraceId } from '@/lib/api/errors';
 import { withAuth } from '@/lib/middleware/auth';
 import { RateLimitPresets, withRateLimit } from '@/lib/middleware/rateLimit';

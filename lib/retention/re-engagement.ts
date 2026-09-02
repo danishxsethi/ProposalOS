@@ -16,6 +16,7 @@ import {
   completeLifecycleSend,
   guardLifecycleSend,
   markLifecycleSendUnknown,
+  recheckLifecycleSend,
 } from '@/lib/retention/lifecycleSafety';
 import { runWithTenantAsync } from '@/lib/tenant/context';
 
@@ -278,11 +279,15 @@ export async function runReEngagementCampaign(): Promise<ReEngagementResult> {
       try {
         await runWithTenantAsync(client.tenantId, async () => {
           const idempotencyKey = `reengage:${client.proposalId}:${step}`;
-          const guard = await guardLifecycleSend({
+          const lifecycleInput = {
             tenantId: client.tenantId,
             idempotencyKey,
             recipientEmail: client.prospectEmail as string,
-          });
+            workflow: 'RE_ENGAGEMENT' as const,
+            entityId: client.proposalId,
+            occurrenceKey: String(step),
+          };
+          const guard = await guardLifecycleSend(lifecycleInput);
           if (!guard.allowed) {
             logger.warn(
               { proposalId: client.proposalId, step, reason: guard.reason },
@@ -298,6 +303,7 @@ export async function runReEngagementCampaign(): Promise<ReEngagementResult> {
           const email = generateReEngagementEmail(client.businessName, step, days);
 
           try {
+            if (!(await recheckLifecycleSend(lifecycleInput))) return;
             await sendEmail({
               to: client.prospectEmail as string,
               subject: email.subject,
@@ -322,21 +328,13 @@ export async function runReEngagementCampaign(): Promise<ReEngagementResult> {
             });
           } catch (sendError) {
             await markLifecycleSendUnknown(
-              {
-                tenantId: client.tenantId,
-                idempotencyKey,
-                recipientEmail: client.prospectEmail as string,
-              },
+              lifecycleInput,
               sendError instanceof Error ? sendError.message : 'send failed'
             );
             throw sendError;
           }
 
-          await completeLifecycleSend({
-            tenantId: client.tenantId,
-            idempotencyKey,
-            recipientEmail: client.prospectEmail as string,
-          });
+          await completeLifecycleSend(lifecycleInput);
 
           // Update campaign status (scoped to this tenant's own campaign row)
           await prisma.reEngagementCampaign.updateMany({

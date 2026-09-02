@@ -13,6 +13,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 
+import { logger } from '@/lib/logger';
 import { generateTraceId, InternalError, NotFoundError, UnauthorizedError } from '@/lib/api/errors';
 import { withRateLimit } from '@/lib/middleware/rateLimit';
 import { getProspectContext } from '@/lib/pipeline/humanReview';

@@ -2113,3 +2113,19 @@ reconciliation, billing idempotency.** See the exact continuation prompt in the 
 response of this session. Wave 9D (remaining Wave 9C scope: competitor-monitor hardening,
 full cancellation matrix, NPS token hardening, Step 12 observability) is optional and may be
 folded into a future wave if the campaign requires it before Wave 10 begins.
+
+## Wave 9D — Deferred lifecycle residuals (partial checkpoint, 2026-07-13)
+
+`W9-V15` and `W9-V16` were already assigned to historical Wave 9 work items, so this checkpoint
+uses collision-free `W9D-*` IDs and does not rewrite prior entries.
+
+| Work item | Entry point | Model/state | Tenant source / owner | Idempotency | Cancellation / provider boundary | Evidence and status |
+| --- | --- | --- | --- | --- | --- | --- |
+| W9D-V15 | `competitor-monitor.ts`, scheduled audit comparison | Explicit `NOT_CONFIGURED` / `UNAVAILABLE`; evidence snapshots only | Named `runWithTenantBypass` enumeration, then `runWithTenantAsync` per target | No customer alert path exists until an approved provider/Evidence contract exists | No LLM/email/provider fallback; incompatible/missing snapshots are not unchanged | **verified** by Wave 9D fixtures and architecture guard |
+| W9D-V16 | `lifecycleSafety.ts`, NPS/win-back/re-engagement senders, unsubscribe | `LifecycleOccurrence`: QUEUED, RUNNING, SENT, RECONCILING, RETRY_SCHEDULED, DEAD, CANCELLED, SUPPRESSED, MANUAL_REVIEW | Tenant-scoped occurrence with hashed recipient and current outbound claim owner | Existing stable lifecycle keys retained | Recheck before provider call; terminal completion rejects cancelled occurrence; unsubscribe cancels future occurrence work | **partially verified**: recurring lifecycle senders only; broader existing follow-up/delivery matrix remains in W9A/W9B |
+| W9D-V17 | `nps.ts`, `app/api/nps/respond` | SHA-256 token hash, expiry and consumed marker | Survey tenant/project binding; raw token only in email URL | Existing survey response policy remains idempotent | Public route rate-limited and generic; score/feedback bounds retained | **verified** by Wave 9D fixtures and Prisma schema validation |
+| W9D-V18 | `lifecycleControl.ts` | Durable status, attempts, next attempt, error, cancellation, lease fields | Tenant-scoped occurrence; authorized replay API requires explicit authorization | Original occurrence/idempotency key retained on replay | Reconciliation, bounded retry scheduling, DEAD and MANUAL_REVIEW states are durable; audit event on replay | **partially verified**: helper contract is fixture-tested; no production recovery worker/authorized route is wired |
+
+Findings created from red-before evidence: `P1-55` and `P1-56`, both fixed in code and fixture-tested.
+Wave 9 is **not re-closed by this partial checkpoint**: W9D-V16 and W9D-V18 need the remaining
+cross-workflow cancellation/recovery integration before a truthful final Wave 9 closure.

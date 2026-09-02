@@ -1,4 +1,4 @@
-import pino from 'pino';
+import pino, { type Logger } from 'pino';
 
 import { getObservabilityContext } from '@/lib/observability/context';
 import { isEncryptedField } from '@/lib/security/encryption/envelope';
@@ -58,6 +58,17 @@ function sanitizeValue(value: unknown, path: string = ''): unknown {
   return value;
 }
 
+type MessageFirstLogMethod = (message: string, ...args: unknown[]) => void;
+
+type AppLogger = Logger & {
+  trace: Logger['trace'] & MessageFirstLogMethod;
+  debug: Logger['debug'] & MessageFirstLogMethod;
+  info: Logger['info'] & MessageFirstLogMethod;
+  warn: Logger['warn'] & MessageFirstLogMethod;
+  error: Logger['error'] & MessageFirstLogMethod;
+  fatal: Logger['fatal'] & MessageFirstLogMethod;
+};
+
 // Configure logger
 export const logger = pino({
   level: process.env.LOG_LEVEL || 'info',
@@ -111,7 +122,7 @@ export const logger = pino({
     },
   },
   timestamp: pino.stdTimeFunctions.isoTime,
-});
+}) as AppLogger;
 
 /**
  * Determines if a request should be logged based on its path

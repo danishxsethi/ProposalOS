@@ -66,4 +66,25 @@ describe('Wave 9C lifecycle architecture guards', () => {
     const src = readFileSync(join(RETENTION_DIR, 'lifecycleSafety.ts'), 'utf-8');
     expect(src).toMatch(/from '@\/lib\/outreach\/outboundSafety'/);
   });
+
+  it('all lifecycle sender paths recheck cancellation immediately before provider dispatch', () => {
+    for (const file of ['nps.ts', 'win-back.ts', 're-engagement.ts']) {
+      expect(readSource(file), `${file} should recheck cancellation`).toMatch(/recheckLifecycleSend/);
+    }
+  });
+
+  it('NPS uses an expiring hashed public token and the response route is rate limited', () => {
+    const nps = readSource('nps.ts');
+    const route = readFileSync(join(RETENTION_DIR, '../../app/api/nps/respond/route.ts'), 'utf-8');
+    expect(nps).toMatch(/randomBytes\(32\)/);
+    expect(nps).toMatch(/tokenHash/);
+    expect(nps).toMatch(/tokenExpiresAt/);
+    expect(route).toMatch(/withRateLimit/);
+  });
+
+  it('competitor monitoring cannot send ungrounded LLM-generated alerts', () => {
+    const src = readSource('competitor-monitor.ts');
+    expect(src).toMatch(/NOT_CONFIGURED/);
+    expect(src).not.toMatch(/generateWithGemini|sendProposalEmail/);
+  });
 });

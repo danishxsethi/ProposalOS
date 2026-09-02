@@ -16,6 +16,7 @@ import {
   completeLifecycleSend,
   guardLifecycleSend,
   markLifecycleSendUnknown,
+  recheckLifecycleSend,
 } from '@/lib/retention/lifecycleSafety';
 import { runWithTenantAsync } from '@/lib/tenant/context';
 
@@ -348,11 +349,15 @@ export async function runWinBackCampaign(): Promise<WinBackResult> {
       try {
         await runWithTenantAsync(client.tenantId, async () => {
           const idempotencyKey = `winback:${client.tenantId}:${step}`;
-          const guard = await guardLifecycleSend({
+          const lifecycleInput = {
             tenantId: client.tenantId,
             idempotencyKey,
             recipientEmail: client.contactEmail,
-          });
+            workflow: 'WIN_BACK' as const,
+            entityId: client.tenantId,
+            occurrenceKey: String(step),
+          };
+          const guard = await guardLifecycleSend(lifecycleInput);
           if (!guard.allowed) {
             logger.warn(
               { tenantId: client.tenantId, step, reason: guard.reason },
@@ -376,6 +381,7 @@ export async function runWinBackCampaign(): Promise<WinBackResult> {
           const email = generateWinBackEmail(client.tenantName, step, offer, client.daysSinceChurn);
 
           try {
+            if (!(await recheckLifecycleSend(lifecycleInput))) return;
             await sendEmail({
               to: client.contactEmail,
               subject: email.subject,
@@ -395,17 +401,13 @@ export async function runWinBackCampaign(): Promise<WinBackResult> {
             });
           } catch (sendError) {
             await markLifecycleSendUnknown(
-              { tenantId: client.tenantId, idempotencyKey, recipientEmail: client.contactEmail },
+              lifecycleInput,
               sendError instanceof Error ? sendError.message : 'send failed'
             );
             throw sendError;
           }
 
-          await completeLifecycleSend({
-            tenantId: client.tenantId,
-            idempotencyKey,
-            recipientEmail: client.contactEmail,
-          });
+          await completeLifecycleSend(lifecycleInput);
 
           // Update campaign status (scoped to this tenant's own campaign row)
           await prisma.winBackCampaign.updateMany({

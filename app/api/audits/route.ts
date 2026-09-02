@@ -10,6 +10,7 @@
 
 import { NextResponse } from 'next/server';
 
+import { logger } from '@/lib/logger';
 import { generateTraceId } from '@/lib/api/errors';
 import { getCostStatus } from '@/lib/config/costBudget';
 import { withAuth } from '@/lib/middleware/auth';

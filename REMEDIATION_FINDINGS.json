@@ -1818,6 +1818,50 @@
       ],
       "wave": 9,
       "notes": "Discovered while auditing lifecycle email content for Wave 8 ClaimContract compliance. These marketing claims were static template strings, not LLM-generated or Finding-derived -- classified P2 (content-only fix, no logic/authorization defect) rather than P0/P1. Replaced with qualitative, unquantified feature descriptions. No proposal/diagnosis claim-grounding boundary was bypassed (these are not customer-facing audit Findings and do not flow through lib/claims/claimContract.ts), but the specific numeric claims had no measured or cited basis and are removed per the same 'no fabricated marketing/performance claim' principle enforced elsewhere in the campaign (P1-04, Wave 9A/9B win-back removal of identical claim patterns)."
+    },
+    {
+      "id": "P1-55",
+      "severity": "P1",
+      "title": "Lifecycle sends had no durable cancellation/recovery state and the legacy competitor monitor could generate an ungrounded customer email",
+      "status": "fixed",
+      "rootCauseGroup": "C",
+      "dependencies": ["Wave 1 tenant context", "Wave 4 provider safety", "Wave 9A outbound safety"],
+      "files": [
+        "lib/retention/lifecycleControl.ts",
+        "lib/retention/lifecycleSafety.ts",
+        "lib/retention/competitor-monitor.ts",
+        "lib/retention/re-engagement.ts",
+        "lib/retention/win-back.ts",
+        "app/api/email/unsubscribe/route.ts"
+      ],
+      "verification": [
+        "red-before static trace: competitor-monitor.ts imported generateWithGemini and sendProposalEmail, while no approved monitor provider or Evidence-backed signal contract existed",
+        "green-after: vitest run lib/retention/__tests__/wave9dLifecycle.test.ts (6/6) proves NOT_CONFIGURED/UNAVAILABLE are distinct and no late completion can override cancellation",
+        "green-after: tsc --noEmit --pretty false --incremental false -> exit 0"
+      ],
+      "wave": 9,
+      "notes": "A generic LifecycleOccurrence record now owns cancellation, terminal state, retry scheduling, reconciliation, and authorized replay for the hardened recurring sender paths. Recipient unsubscribe cancels pending/claimed occurrences by hashed email; lifecycleSafety rechecks cancellation immediately before provider dispatch and terminal completion uses a cancellation-aware update. The dormant legacy competitor monitor now performs only named bypass enumeration and reports NOT_CONFIGURED or UNAVAILABLE; it has no LLM or email path. Full cancellation coverage for unrelated pipeline follow-up and delivery models remains separately tracked in existing Wave 9A/9B work items."
+    },
+    {
+      "id": "P1-56",
+      "severity": "P1",
+      "title": "NPS response links used the persistent survey UUID with no expiry, hashed storage, revocation marker, or rate-limited public response route",
+      "status": "fixed",
+      "rootCauseGroup": "C",
+      "dependencies": ["Wave 1 tenant boundaries", "Wave 9C lifecycle safety"],
+      "files": [
+        "lib/retention/nps.ts",
+        "app/api/nps/respond/route.ts",
+        "prisma/schema.prisma",
+        "prisma/migrations/20260713090000_wave9d_lifecycle_controls/migration.sql"
+      ],
+      "verification": [
+        "red-before static trace: buildNpsSurveyHtml embedded surveyId in /api/nps/respond and no route existed",
+        "green-after: wave9dLifecycle.test.ts proves 256-bit random token format, hash lookup, expiry, malformed/unknown generic failure, and idempotent response handling",
+        "green-after: npx prisma validate -> schema valid"
+      ],
+      "wave": 9,
+      "notes": "NPS now creates a 32-byte random public token, persists only SHA-256 hash plus expiry/consumed timestamp, and sends the raw value only in the email URL. The public route is fail-closed rate-limited, accepts only integer NPS scores 0-10, and returns a generic response without logging the token. The forward-only migration has not been applied to a database because the documented local PostgreSQL/Prisma environment block remains."
     }
   ]
 }

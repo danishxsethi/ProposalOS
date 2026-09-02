@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 
 import { z } from 'zod';
 
+import { logger } from '@/lib/logger';
 import { generateTraceId, InternalError } from '@/lib/api/errors';
 import { prisma } from '@/lib/prisma';
 import { getProposalPriceId, stripe } from '@/lib/stripe/stripe';

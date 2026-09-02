@@ -120,7 +120,8 @@ async function finalizeCompletedScheduledRuns(): Promise<{
           }
 
           try {
-            const { triggered, reason } = await detectCompetitorImprovement(
+            const { triggered, reason, status } = await detectCompetitorImprovement(
+              run.tenantId,
               run.previousAuditId,
               run.auditId
             );
@@ -134,6 +135,12 @@ async function finalizeCompletedScheduledRuns(): Promise<{
                   reason,
                 },
                 'Upsell proposal auto-generated from competitor improvement'
+              );
+            }
+            if (status === 'UNAVAILABLE' || status === 'INCOMPATIBLE') {
+              logger.warn(
+                { event: 'scheduled_audits.competitor_unavailable', auditId: run.auditId, status },
+                reason
               );
             }
           } catch (upsellErr) {

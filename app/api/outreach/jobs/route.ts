@@ -15,6 +15,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { Prisma, ProspectDiscoveryJobStatus } from '@prisma/client';
 import { z } from 'zod';
 
+import { logger } from '@/lib/logger';
 import { generateTraceId, InternalError, NotFoundError, UnauthorizedError } from '@/lib/api/errors';
 import { getServerSession } from '@/lib/auth';
 import { withRateLimit } from '@/lib/middleware/rateLimit';

@@ -1,3 +1,5 @@
+import { createHash } from 'crypto';
+
 import { NextResponse } from 'next/server';
 
 import { logger } from '@/lib/logger';
@@ -18,6 +20,23 @@ export async function GET(req: Request) {
       where: { email },
       update: { reason },
       create: { email, reason },
+    });
+
+    // Wave 9D: cancel pending/claimed lifecycle occurrences for this recipient.
+    // The hash avoids adding raw email addresses to the generic work ledger.
+    await (prisma as any).lifecycleOccurrence?.updateMany?.({
+      where: {
+        recipientHash: createHash('sha256').update(email.trim().toLowerCase()).digest('hex'),
+        status: { in: ['QUEUED', 'PENDING', 'RUNNING', 'RETRY_SCHEDULED', 'RECONCILING'] },
+      },
+      data: {
+        status: 'CANCELLED',
+        cancellationActor: 'recipient',
+        cancellationReason: reason,
+        cancelledAt: new Date(),
+        leaseOwner: null,
+        leaseExpiresAt: null,
+      },
     });
 
     // Optional: Cancel any pending follow-ups for this email

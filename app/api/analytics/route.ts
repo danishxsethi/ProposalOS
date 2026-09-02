@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 
 import { format, startOfWeek, subDays } from 'date-fns';
 
+import { logger } from '@/lib/logger';
 import { withAuth } from '@/lib/middleware/auth';
 import { prisma } from '@/lib/prisma';
 import { getTenantId } from '@/lib/tenant/context';

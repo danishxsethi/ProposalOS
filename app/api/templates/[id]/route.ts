@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 
+import { logger } from '@/lib/logger';
 import { withAuth } from '@/lib/middleware/auth';
 import { prisma } from '@/lib/prisma';
 

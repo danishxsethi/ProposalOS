@@ -2166,3 +2166,48 @@ this session (context budget) and are explicitly not claimed as verified — car
 not silently resolved. Full DB-backed suite not run (PostgreSQL 5435/5444 unavailable, Prisma
 darwin-arm64 engine blocked by Gatekeeper — unchanged since Wave 1/2). No live provider/network/
 LLM/customer call was made.
+
+## Wave 9D partial verification result (2026-07-13)
+
+New red-before findings: `P1-55` (ungrounded competitor alert path plus no durable lifecycle
+cancellation/recovery state) and `P1-56` (NPS UUID public token with no expiry/hash/route).
+
+Implemented and verified:
+
+- legacy competitor monitoring no longer imports an LLM or email sender; it uses an audited system
+  enumeration boundary and returns `NOT_CONFIGURED`/`UNAVAILABLE`, never an inferred no-change;
+- `LifecycleOccurrence` adds tenant-scoped durable status, cancellation actor/reason, attempts,
+  retry/reconciliation/dead/manual-review state, lease metadata and original idempotency key;
+- lifecycle senders recheck cancellation immediately before provider dispatch, unsubscribe cancels
+  hashed-recipient occurrence work, and late completion cannot overwrite `CANCELLED`;
+- NPS uses a 256-bit random token, stores only SHA-256 plus expiry/consumed marker, and has a
+  generic fail-closed rate-limited public response route;
+- the old `nps-survey.ts` graph path now delegates to the hardened `nps.ts` sender.
+
+Green gates:
+
+```text
+vitest run lib/retention/__tests__/wave9dLifecycle.test.ts \
+  lib/retention/__tests__/wave9cNps.test.ts \
+  lib/retention/__tests__/wave9cArchitectureGuards.test.ts \
+  lib/retention/__tests__/wave9cUpsell.test.ts
+
+Test Files  4 passed (4)
+Tests  36 passed (36)
+
+./node_modules/.bin/tsc --noEmit --pretty false --incremental false
+(exit 0)
+
+npx prisma validate
+The schema at prisma/schema.prisma is valid
+```
+
+Changed-file ESLint: zero errors, existing warning-class diagnostics only. Targeted
+`git diff --check` is clean. The new forward-only migration was inspected but not applied:
+PostgreSQL ports 5435/5444 remain unavailable. The Prisma schema validation command itself now
+works in this environment.
+
+This is intentionally a **partial** Wave 9D checkpoint. It does not certify the full cancellation
+matrix for existing pipeline follow-ups, handoffs, delivery, tenant deletion/suspension, or a
+production recovery worker/manual replay route. Those controls remain open under `W9D-V16` and
+`W9D-V18`; do not mark Wave 9 complete on this evidence.

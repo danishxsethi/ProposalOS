@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 
 import { Prisma } from '@prisma/client';
 
+import { logger } from '@/lib/logger';
 import { withAuth } from '@/lib/middleware/auth';
 import { prisma } from '@/lib/prisma';
 

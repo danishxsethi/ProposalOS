@@ -24,7 +24,7 @@ import { logger } from '@/lib/logger';
 import { verifyCronAuth } from '@/lib/middleware/cronAuth';
 
 export async function POST(req: Request) {
-  const authResult = verifyCronAuth(req);
+  const authResult = await verifyCronAuth(req);
   if (authResult) return authResult; // 401 if auth fails
 
   try {

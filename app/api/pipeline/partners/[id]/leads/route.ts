@@ -13,6 +13,7 @@ import { NextRequest, NextResponse } from 'next/server';
 
 import { z } from 'zod';
 
+import { logger } from '@/lib/logger';
 import { generateTraceId, InternalError, NotFoundError, UnauthorizedError } from '@/lib/api/errors';
 import { auth } from '@/lib/auth';
 import { withRateLimit } from '@/lib/middleware/rateLimit';

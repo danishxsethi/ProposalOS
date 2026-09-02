@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 
 import { Storage } from '@google-cloud/storage';
 
+import { logger } from '@/lib/logger';
 import { withAuth } from '@/lib/middleware/auth';
 import { getTenantId } from '@/lib/tenant/context';
 

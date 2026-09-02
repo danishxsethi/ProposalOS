@@ -1,85 +1,65 @@
 import { NextResponse } from 'next/server';
 
+import { z } from 'zod';
+
 import { runClosingAgent } from '@/lib/closing/agent';
+import { createHumanHandoff } from '@/lib/closing/handoff';
 import { logError, logger } from '@/lib/logger';
-import { sendWebhook } from '@/lib/notifications/webhook';
 import { prisma } from '@/lib/prisma';
+
+const RequestSchema = z
+  .object({
+    message: z.string().trim().min(1).max(1_000),
+    sessionId: z.string().uuid(),
+  })
+  .strict();
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const resolvedParams = await params;
-    const proposalId = resolvedParams.id;
-    const body = await req.json();
+    const { id: proposalId } = await params;
+    const parsed = RequestSchema.safeParse(await req.json());
+    if (!parsed.success) return NextResponse.json({ error: 'Invalid chat request' }, { status: 400 });
 
-    const { message, sessionId } = body;
-
-    if (!message || !sessionId) {
-      return NextResponse.json({ error: 'Missing message or sessionId' }, { status: 400 });
-    }
-
-    // P0 FIX: Enforce Authorization by requiring the secret webLinkToken (passed as sessionId from the frontend viewer)
     const proposal = await prisma.proposal.findUnique({
       where: { id: proposalId },
-      include: { audit: true },
+      include: { audit: { select: { businessName: true } } },
     });
-
-    if (!proposal || proposal.webLinkToken !== sessionId) {
-      return NextResponse.json(
-        { error: 'Proposal not found or unauthorized session' },
-        { status: 404 }
-      );
+    if (!proposal || proposal.webLinkToken !== parsed.data.sessionId) {
+      return NextResponse.json({ error: 'Proposal not found' }, { status: 404 });
     }
 
-    const businessName = proposal.audit.businessName;
-    // Build a concise context representation string
-    const prospectContext = `
-Audit Status: Complete
-Executive Summary:
-${proposal.executiveSummary}
-
-Pricing Tier Structure:
-${JSON.stringify(proposal.pricing)}
-        `.trim();
-
     const result = await runClosingAgent(
-      proposalId,
-      sessionId,
-      businessName,
-      prospectContext,
-      message
+      proposal.id,
+      parsed.data.sessionId,
+      proposal.audit.businessName,
+      '',
+      parsed.data.message
     );
-
-    logger.info(
-      {
-        event: 'closing_chat.message_processed',
-        proposalId,
-        sessionId,
-        escalated: result.escalated,
-        sentiment: result.sentiment,
-      },
-      'Closing Chat message generated'
-    );
-
     if (result.escalated) {
-      await sendWebhook('chat.escalated', {
-        proposalId,
+      await createHumanHandoff({
         tenantId: proposal.tenantId,
-        businessName,
-        sessionId,
-        reason: 'LangGraph Agent Escalation',
+        proposalId: proposal.id,
+        sessionId: parsed.data.sessionId,
+        reason: result.proposedAction,
+        confidence: Math.max(0, (result.sentiment + 1) / 2),
+        findingIds: result.supportingFindingIds,
+        lastSafeMessage: result.reply,
       });
     }
 
+    logger.info(
+      { event: 'closing_chat.message_processed', proposalId, escalated: result.escalated },
+      'Closing chat response generated'
+    );
     return NextResponse.json({
       reply: result.reply,
       escalated: result.escalated,
       sentiment: result.sentiment,
+      citations: result.supportingFindingIds,
+      proposedAction: result.proposedAction,
     });
   } catch (error) {
-    logError('Error processing prospect chat', error, { proposalId: undefined });
-    return NextResponse.json(
-      { error: 'Internal server error while processing chat' },
-      { status: 500 }
-    );
+    logError('Error processing prospect chat', error, {});
+    return NextResponse.json({ error: 'Unable to process chat safely' }, { status: 503 });
   }
 }

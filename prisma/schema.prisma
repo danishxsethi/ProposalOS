@@ -1793,6 +1793,9 @@ model NPSSurvey {
   id          String          @id @default(uuid())
   projectId   String
   tenantId    String
+  tokenHash   String?         @unique
+  tokenExpiresAt DateTime?
+  tokenConsumedAt DateTime?
   score       Int?
   feedback    String?
   surveyDay   Int // 30 or 90
@@ -1807,6 +1810,7 @@ model NPSSurvey {
   @@index([projectId])
   @@index([tenantId])
   @@index([surveyDay, status])
+  @@index([tokenExpiresAt])
 }
 
 enum NPSSurveyStatus {
@@ -2088,6 +2092,37 @@ model WinBackCampaign {
 
   @@index([tenantId, status])
   @@index([formerTenantId])
+}
+
+// Durable control plane for lifecycle work. Workflow-specific records retain their
+// domain data; this model owns cancellation, leasing, retries, and terminal state.
+model LifecycleOccurrence {
+  id                  String   @id @default(uuid())
+  tenantId            String
+  workflow            String
+  entityId            String
+  occurrenceKey       String
+  idempotencyKey      String
+  recipientHash       String?
+  status              String   @default("QUEUED")
+  attemptCount        Int      @default(0)
+  maxAttempts         Int      @default(3)
+  nextAttemptAt       DateTime?
+  providerMessageId   String?
+  lastErrorCode       String?
+  leaseOwner          String?
+  leaseExpiresAt      DateTime?
+  cancellationReason  String?
+  cancellationActor   String?
+  cancelledAt         DateTime?
+  completedAt         DateTime?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@unique([tenantId, workflow, entityId, occurrenceKey])
+  @@index([tenantId, status, nextAttemptAt])
+  @@index([idempotencyKey])
+  @@index([recipientHash, status])
 }
 
 // ============================================================================

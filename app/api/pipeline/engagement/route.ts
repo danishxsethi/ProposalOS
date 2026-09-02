@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 
+import { logger } from '@/lib/logger';
 import { recordEvent } from '@/lib/pipeline/dealCloser';
 import type { EngagementEvent } from '@/lib/pipeline/types';
 

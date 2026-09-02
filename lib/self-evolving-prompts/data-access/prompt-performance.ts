@@ -92,6 +92,10 @@ function appendTenantScope(
   };
 }
 
+function toUtcTimestampParam(date: Date): string {
+  return date.toISOString().replace('T', ' ').replace('Z', '');
+}
+
 /**
  * Log a prompt performance entry (append-only)
  * Validates: Requirements 1.1, 10.2
@@ -150,6 +154,7 @@ export async function logPerformance(
   const query = `
     INSERT INTO "PromptPerformanceLog" (
       id,
+      timestamp,
       "promptVersionHash",
       "nodeId",
       "qualityScore",
@@ -162,7 +167,7 @@ export async function logPerformance(
       "variantId",
       metadata,
       "tenantId"
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::uuid, $11::uuid, $12, $13)
+    ) VALUES ($1, NOW() AT TIME ZONE 'UTC', $2, $3, $4, $5, $6, $7, $8, $9, $10::uuid, $11::uuid, $12, $13)
     RETURNING
       id,
       timestamp,
@@ -219,8 +224,8 @@ export async function getPerformanceByVersion(
   const params: unknown[] = [versionHash];
 
   if (timeRange) {
-    query += ` AND timestamp >= $2 AND timestamp <= $3`;
-    params.push(timeRange.start, timeRange.end);
+    query += ` AND timestamp >= $2::timestamp AND timestamp <= $3::timestamp`;
+    params.push(toUtcTimestampParam(timeRange.start), toUtcTimestampParam(timeRange.end));
   }
 
   const scoped = appendTenantScope(query, params, 'PromptPerformanceLog.getByVersion');
@@ -247,8 +252,8 @@ export async function getPerformanceByNode(
   const params: unknown[] = [nodeId];
 
   if (timeRange) {
-    query += ` AND timestamp >= $2 AND timestamp <= $3`;
-    params.push(timeRange.start, timeRange.end);
+    query += ` AND timestamp >= $2::timestamp AND timestamp <= $3::timestamp`;
+    params.push(toUtcTimestampParam(timeRange.start), toUtcTimestampParam(timeRange.end));
   }
 
   const scoped = appendTenantScope(query, params, 'PromptPerformanceLog.getByNode');
@@ -300,8 +305,8 @@ export async function getPerformanceByQualityThreshold(
   const params: unknown[] = [threshold];
 
   if (timeRange) {
-    query += ` AND timestamp >= $2 AND timestamp <= $3`;
-    params.push(timeRange.start, timeRange.end);
+    query += ` AND timestamp >= $2::timestamp AND timestamp <= $3::timestamp`;
+    params.push(toUtcTimestampParam(timeRange.start), toUtcTimestampParam(timeRange.end));
   }
 
   const scoped = appendTenantScope(query, params, 'PromptPerformanceLog.getByQualityThreshold');
@@ -338,8 +343,8 @@ export async function getAggregateMetrics(
   const params: unknown[] = [versionHash];
 
   if (timeRange) {
-    query += ` AND timestamp >= $2 AND timestamp <= $3`;
-    params.push(timeRange.start, timeRange.end);
+    query += ` AND timestamp >= $2::timestamp AND timestamp <= $3::timestamp`;
+    params.push(toUtcTimestampParam(timeRange.start), toUtcTimestampParam(timeRange.end));
   }
 
   const scoped = appendTenantScope(query, params, 'PromptPerformanceLog.getAggregateMetrics');

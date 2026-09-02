@@ -7,16 +7,31 @@
  * Called by the nps-surveys cron endpoint.
  */
 
+import { createHash, randomBytes, timingSafeEqual } from 'crypto';
+
 import { NPSSurveyStatus } from '@prisma/client';
 
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
+import { ensureLifecycleOccurrence } from '@/lib/retention/lifecycleControl';
 import {
   completeLifecycleSend,
   guardLifecycleSend,
   markLifecycleSendUnknown,
+  recheckLifecycleSend,
 } from '@/lib/retention/lifecycleSafety';
 import { runWithTenantAsync } from '@/lib/tenant/context';
+
+const NPS_TOKEN_TTL_MS = 14 * 24 * 60 * 60 * 1000;
+
+function hashNpsToken(token: string): string {
+  return createHash('sha256').update(token).digest('hex');
+}
+
+export function createNpsResponseToken(): { raw: string; hash: string; expiresAt: Date } {
+  const raw = randomBytes(32).toString('hex');
+  return { raw, hash: hashNpsToken(raw), expiresAt: new Date(Date.now() + NPS_TOKEN_TTL_MS) };
+}
 
 // ─── Email helper ──────────────────────────────────────────────────────────────
 // Uses the same Resend-based email utility pattern as the rest of the codebase.
@@ -51,11 +66,11 @@ async function sendEmail(to: string, subject: string, html: string): Promise<voi
 function buildNpsSurveyHtml(
   prospectName: string,
   surveyDay: number,
-  surveyId: string,
+  token: string,
   appUrl: string
 ): string {
   const baseUrl = appUrl.replace(/\/$/, '');
-  const responseUrl = `${baseUrl}/api/nps/respond?surveyId=${surveyId}&score=`;
+  const responseUrl = `${baseUrl}/api/nps/respond?token=${token}&score=`;
 
   return `<!DOCTYPE html>
 <html>
@@ -123,19 +138,10 @@ export async function sendNPSSurvey(projectId: string, surveyDay: 30 | 90): Prom
         return existing.id;
       }
 
-      const idempotencyKey = `nps:${projectId}:${surveyDay}`;
-      const guard = await guardLifecycleSend({
-        tenantId: projectHead.tenantId,
-        idempotencyKey,
-        recipientEmail: project.proposal.prospectEmail,
-      });
-      if (!guard.allowed) {
-        logger.warn({ projectId, surveyDay, reason: guard.reason }, '[NPS] Send blocked');
-        return null;
-      }
-
       const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://app.proposalengine.app';
       const surveyName = project.proposal.prospectName ?? 'there';
+      const token = createNpsResponseToken();
+      const idempotencyKey = `nps:${projectId}:${surveyDay}`;
 
       // Create pending survey record first to get the ID
       const survey = await (prisma as any).npsSurvey.create({
@@ -144,12 +150,29 @@ export async function sendNPSSurvey(projectId: string, surveyDay: 30 | 90): Prom
           tenantId: projectHead.tenantId,
           surveyDay,
           status: NPSSurveyStatus.PENDING,
+          tokenHash: token.hash,
+          tokenExpiresAt: token.expiresAt,
         },
       });
 
-      const html = buildNpsSurveyHtml(surveyName, surveyDay, survey.id, appUrl);
+      const lifecycleInput = {
+        tenantId: projectHead.tenantId,
+        idempotencyKey,
+        recipientEmail: project.proposal.prospectEmail,
+        workflow: 'NPS' as const,
+        entityId: survey.id,
+        occurrenceKey: String(surveyDay),
+      };
+      const guard = await guardLifecycleSend(lifecycleInput);
+      if (!guard.allowed) {
+        logger.warn({ projectId, surveyDay, reason: guard.reason }, '[NPS] Send blocked');
+        return null;
+      }
+
+      const html = buildNpsSurveyHtml(surveyName, surveyDay, token.raw, appUrl);
 
       try {
+        if (!(await recheckLifecycleSend(lifecycleInput))) return null;
         await sendEmail(
           project.proposal.prospectEmail,
           surveyDay === 30
@@ -160,21 +183,13 @@ export async function sendNPSSurvey(projectId: string, surveyDay: 30 | 90): Prom
       } catch (sendError) {
         // Ambiguous outcome: the provider call may or may not have succeeded.
         await markLifecycleSendUnknown(
-          {
-            tenantId: projectHead.tenantId,
-            idempotencyKey,
-            recipientEmail: project.proposal.prospectEmail,
-          },
+          lifecycleInput,
           sendError instanceof Error ? sendError.message : 'send failed'
         );
         throw sendError;
       }
 
-      await completeLifecycleSend({
-        tenantId: projectHead.tenantId,
-        idempotencyKey,
-        recipientEmail: project.proposal.prospectEmail,
-      });
+      await completeLifecycleSend(lifecycleInput);
 
       // Mark as SENT
       await (prisma as any).npsSurvey.update({
@@ -189,6 +204,42 @@ export async function sendNPSSurvey(projectId: string, surveyDay: 30 | 90): Prom
     logger.error({ err: error, projectId, surveyDay }, '[NPS] sendNPSSurvey failed');
     return null;
   }
+}
+
+export async function processPendingNPSSurveys(): Promise<{
+  day30Processed: number;
+  day90Processed: number;
+  sent: number;
+  errors: string[];
+}> {
+  const now = new Date();
+  const errors: string[] = [];
+  let day30Processed = 0;
+  let day90Processed = 0;
+  let sent = 0;
+  const projects = await (prisma as any).project.findMany({
+    where: { status: 'COMPLETE', completedAt: { not: null } },
+    include: { npsSurveys: { select: { surveyDay: true } } },
+  });
+
+  for (const project of projects) {
+    if (!project.completedAt) continue;
+    const days = Math.floor((now.getTime() - new Date(project.completedAt).getTime()) / 86_400_000);
+    const existing = new Set<number>(project.npsSurveys.map((survey: any) => survey.surveyDay));
+    for (const surveyDay of [30, 90] as const) {
+      const inWindow = surveyDay === 30 ? days >= 30 && days < 35 : days >= 90 && days < 95;
+      if (!inWindow || existing.has(surveyDay)) continue;
+      try {
+        const surveyId = await sendNPSSurvey(project.id, surveyDay);
+        if (surveyDay === 30) day30Processed++;
+        else day90Processed++;
+        if (surveyId) sent++;
+      } catch {
+        errors.push(`NPS ${surveyDay}-day survey failed for ${project.id}`);
+      }
+    }
+  }
+  return { day30Processed, day90Processed, sent, errors };
 }
 
 /**
@@ -239,7 +290,13 @@ export async function handleNPSResponse(
 
       const survey = await (prisma as any).npsSurvey.update({
         where: { id: surveyId, tenantId: surveyHead.tenantId },
-        data: { score, feedback: sanitizedFeedback, status, respondedAt: new Date() },
+        data: {
+          score,
+          feedback: sanitizedFeedback,
+          status,
+          respondedAt: new Date(),
+          tokenConsumedAt: new Date(),
+        },
         include: {
           project: {
             include: {
@@ -254,11 +311,15 @@ export async function handleNPSResponse(
       // Auto-action: send referral email for promoters
       if (status === NPSSurveyStatus.REFERRAL_SENT && survey.project?.proposal?.prospectEmail) {
         const referralKey = `nps-referral:${surveyId}`;
-        const guard = await guardLifecycleSend({
+        const lifecycleInput = {
           tenantId: surveyHead.tenantId,
           idempotencyKey: referralKey,
           recipientEmail: survey.project.proposal.prospectEmail,
-        });
+          workflow: 'NPS_REFERRAL' as const,
+          entityId: surveyId,
+          occurrenceKey: 'referral',
+        };
+        const guard = await guardLifecycleSend(lifecycleInput);
         if (guard.allowed) {
           const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://app.proposalengine.app';
           const name = survey.project.proposal.prospectName ?? 'there';
@@ -272,25 +333,15 @@ export async function handleNPSResponse(
 </body>
 </html>`;
           try {
+            if (!(await recheckLifecycleSend(lifecycleInput))) return;
             await sendEmail(
               survey.project.proposal.prospectEmail,
               'Know someone we can help? 🤝',
               html
             );
-            await completeLifecycleSend({
-              tenantId: surveyHead.tenantId,
-              idempotencyKey: referralKey,
-              recipientEmail: survey.project.proposal.prospectEmail,
-            });
+            await completeLifecycleSend(lifecycleInput);
           } catch (sendError) {
-            await markLifecycleSendUnknown(
-              {
-                tenantId: surveyHead.tenantId,
-                idempotencyKey: referralKey,
-                recipientEmail: survey.project.proposal.prospectEmail,
-              },
-              sendError instanceof Error ? sendError.message : 'send failed'
-            );
+            await markLifecycleSendUnknown(lifecycleInput, sendError instanceof Error ? sendError.message : 'send failed');
           }
         } else {
           logger.warn({ surveyId, reason: guard.reason }, '[NPS] Referral email blocked');
@@ -299,6 +350,23 @@ export async function handleNPSResponse(
 
       // Auto-action: flag detractors for durable manual outreach (no automated public claim).
       if (status === NPSSurveyStatus.FLAGGED_DETRACTOR) {
+        await ensureLifecycleOccurrence({
+          tenantId: surveyHead.tenantId,
+          workflow: 'NPS_DETRACTOR_REVIEW',
+          entityId: surveyId,
+          occurrenceKey: 'review',
+          idempotencyKey: `nps-detractor:${surveyId}`,
+        });
+        await (prisma as any).lifecycleOccurrence?.updateMany?.({
+          where: {
+            tenantId: surveyHead.tenantId,
+            workflow: 'NPS_DETRACTOR_REVIEW',
+            entityId: surveyId,
+            occurrenceKey: 'review',
+            status: { not: 'MANUAL_REVIEW' },
+          },
+          data: { status: 'MANUAL_REVIEW' },
+        });
         logger.warn(
           { surveyId, score, tenantId: surveyHead.tenantId, projectId: survey.projectId },
           '[NPS] Detractor flagged — manual outreach required'
@@ -308,5 +376,36 @@ export async function handleNPSResponse(
   } catch (error) {
     logger.error({ err: error, surveyId }, '[NPS] handleNPSResponse failed');
     throw error;
+  }
+}
+
+/** Public-token entry point. It deliberately exposes no tenant or survey existence information. */
+export async function handleNPSResponseToken(
+  token: string,
+  score: number,
+  feedback?: string
+): Promise<boolean> {
+  if (!/^[a-f0-9]{64}$/i.test(token)) return false;
+
+  const tokenHash = hashNpsToken(token);
+  const survey = await (prisma as any).npsSurvey.findFirst({
+    where: {
+      tokenHash,
+      tokenExpiresAt: { gt: new Date() },
+      tokenConsumedAt: null,
+    },
+    select: { id: true, tokenHash: true },
+  });
+  if (!survey?.tokenHash) return false;
+
+  const expected = Buffer.from(survey.tokenHash, 'hex');
+  const supplied = Buffer.from(tokenHash, 'hex');
+  if (expected.length !== supplied.length || !timingSafeEqual(expected, supplied)) return false;
+
+  try {
+    await handleNPSResponse(survey.id, score, feedback);
+    return true;
+  } catch {
+    return false;
   }
 }

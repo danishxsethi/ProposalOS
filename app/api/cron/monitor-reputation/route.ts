@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 
+import { logger } from '@/lib/logger';
 import { verifyCronAuth } from '@/lib/middleware/cronAuth';
 import { monitorReputation } from '@/lib/monitoring/reputationMonitor';
 

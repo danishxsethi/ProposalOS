@@ -12,6 +12,7 @@
 
 import { NextResponse } from 'next/server';
 
+import { logger } from '@/lib/logger';
 import { generateTraceId, InternalError } from '@/lib/api/errors';
 import { verifyCronAuth } from '@/lib/middleware/cronAuth';
 import { withRateLimit } from '@/lib/middleware/rateLimit';
