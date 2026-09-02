@@ -21,6 +21,7 @@ import { randomUUID } from 'crypto';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 import { getSharedStore } from '@/lib/store/shared';
+import { runWithTenantAsync, runWithTenantBypass } from '@/lib/tenant/context';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -171,27 +172,33 @@ export async function enqueueBatchJobs(
  * process the same job concurrently.
  */
 export async function claimNextJob(tenantId?: string): Promise<AuditJobRecord | null> {
-  const now = new Date();
-  const where = {
-    attempts: { lt: MAX_RETRIES },
-    ...(tenantId ? { tenantId } : {}),
-    OR: [
-      { status: 'QUEUED' as const },
-      // P2-12: a RUNNING job whose lease expired is reclaimable — its previous
-      // worker is presumed dead/hung. Ordered after QUEUED by createdAt below so
-      // fresh work is preferred over reclaim, but reclaim is still found.
-      { status: 'RUNNING' as const, leaseExpiresAt: { lt: now } },
-    ],
+  const run = async () => {
+    const now = new Date();
+    const where = {
+      attempts: { lt: MAX_RETRIES },
+      ...(tenantId ? { tenantId } : {}),
+      OR: [
+        { status: 'QUEUED' as const },
+        // P2-12: a RUNNING job whose lease expired is reclaimable — its previous
+        // worker is presumed dead/hung. Ordered after QUEUED by createdAt below so
+        // fresh work is preferred over reclaim, but reclaim is still found.
+        { status: 'RUNNING' as const, leaseExpiresAt: { lt: now } },
+      ],
+    };
+
+    const candidate = await prisma.auditJob.findFirst({
+      where,
+      orderBy: { createdAt: 'asc' },
+    });
+
+    if (!candidate) return null;
+
+    return claimJob(candidate.id);
   };
 
-  const candidate = await prisma.auditJob.findFirst({
-    where,
-    orderBy: { createdAt: 'asc' },
-  });
-
-  if (!candidate) return null;
-
-  return claimJob(candidate.id);
+  return tenantId
+    ? runWithTenantAsync(tenantId, run)
+    : runWithTenantBypass('worker-global-audit-job-poll', run);
 }
 
 /**

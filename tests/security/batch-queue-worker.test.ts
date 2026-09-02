@@ -145,6 +145,7 @@ vi.mock('@/lib/store/shared', () => ({
 vi.mock('@/lib/tenant/context', () => ({
   getTenantId: vi.fn().mockResolvedValue('tenant-a'),
   runWithTenantAsync: vi.fn().mockImplementation((_tid: string, fn: () => any) => fn()),
+  runWithTenantBypass: vi.fn().mockImplementation((_reason: string, fn: () => any) => fn()),
 }));
 
 // Stub fetch (no real HTTP)

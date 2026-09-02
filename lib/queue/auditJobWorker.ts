@@ -18,7 +18,7 @@ import { logger } from '@/lib/logger';
 import { recordAuditTrailEvent } from '@/lib/observability/auditTrail';
 import { prisma } from '@/lib/prisma';
 import { generateProposal } from '@/lib/proposal/runner';
-import { runWithTenantAsync } from '@/lib/tenant/context';
+import { runWithTenantAsync, runWithTenantBypass } from '@/lib/tenant/context';
 
 import {
   claimJob,
@@ -54,7 +54,9 @@ export type WorkerResult =
 export async function processAuditJob(jobId: string): Promise<WorkerResult> {
   // 1. Load the job record (bypass RLS — worker operates cross-tenant under
   //    its own auth, then scopes each operation via runWithTenantAsync)
-  const job = await prisma.auditJob.findUnique({ where: { id: jobId } });
+  const job = await runWithTenantBypass('worker-load-audit-job', () =>
+    prisma.auditJob.findUnique({ where: { id: jobId } })
+  );
 
   if (!job) {
     logger.warn({ event: 'worker.job_not_found', jobId }, 'Worker: job not found');
@@ -71,7 +73,7 @@ export async function processAuditJob(jobId: string): Promise<WorkerResult> {
   }
 
   // 3. Claim the job (sets RUNNING, acquires distributed lock)
-  const claimed = await claimJob(jobId);
+  const claimed = await runWithTenantBypass('worker-claim-audit-job', () => claimJob(jobId));
   if (!claimed) {
     logger.info({ event: 'worker.lock_contention', jobId }, 'Worker: lock contention — skipping');
     return { outcome: 'LOCK_CONTENTION', jobId };
@@ -108,7 +110,7 @@ export async function processAuditJob(jobId: string): Promise<WorkerResult> {
   // dead worker and reclaimed out from under it.
   const heartbeat = leaseToken
     ? setInterval(() => {
-        heartbeatJob(jobId, leaseToken).catch((err) =>
+        runWithTenantAsync(tenantId, () => heartbeatJob(jobId, leaseToken)).catch((err) =>
           logger.warn({ event: 'worker.heartbeat_error', jobId, err }, 'Worker: heartbeat failed')
         );
       }, HEARTBEAT_INTERVAL_MS)
@@ -143,7 +145,9 @@ export async function processAuditJob(jobId: string): Promise<WorkerResult> {
       if (heartbeat) clearInterval(heartbeat);
     }
 
-    const completed = leaseToken ? await markJobSucceeded(jobId, leaseToken) : false;
+    const completed = leaseToken
+      ? await runWithTenantAsync(tenantId, () => markJobSucceeded(jobId, leaseToken))
+      : false;
     if (!completed) {
       logger.warn(
         { event: 'worker.job_succeeded_but_lease_lost', jobId, auditId, tenantId },
@@ -190,16 +194,19 @@ export async function processAuditJob(jobId: string): Promise<WorkerResult> {
     );
 
     if (leaseToken) {
-      await markJobFailed(jobId, errorMessage, maxAttempts, leaseToken);
+      await runWithTenantAsync(tenantId, () =>
+        markJobFailed(jobId, errorMessage, maxAttempts, leaseToken)
+      );
     }
 
     // Also mark the underlying Audit record as FAILED so the batch status
     // route reflects the correct state without joining audit_jobs
-    await prisma.audit
-      .update({
+    await runWithTenantAsync(tenantId, () =>
+      prisma.audit.update({
         where: { id: auditId },
         data: { status: 'FAILED' },
       })
+    )
       .catch((e) =>
         logger.error(
           { event: 'worker.audit_status_update_failed', jobId, auditId, err: e },
