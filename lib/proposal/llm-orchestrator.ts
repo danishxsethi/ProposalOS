@@ -219,6 +219,7 @@ Observed metric index: ${keyMetricsText.slice(0, 20_000)}`;
         temperature: opts.temperature,
         maxOutputTokens: opts.maxOutputTokens,
         thinkingBudget: opts.thinkingBudget,
+        responseModality: 'json',
         metadata: {
           node: 'executive_summary',
           experimentId: 'proposal_generation',
