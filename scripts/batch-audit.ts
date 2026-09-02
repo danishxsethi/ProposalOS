@@ -88,9 +88,12 @@ async function runAudit(target: Target): Promise<{ auditId: string; status: stri
   const pollInterval = 2_000; // 2 seconds
   const pollTimeout = timeoutMs / pollInterval;
   let polled = 0;
-  let auditStatus = data.status;
+  let auditStatus = String(data.status || '').toUpperCase();
 
-  while (polled < pollTimeout && auditStatus !== 'complete' && auditStatus !== 'failed') {
+  while (
+    polled < pollTimeout &&
+    !['COMPLETE', 'PARTIAL', 'FAILED', 'DEAD'].includes(auditStatus)
+  ) {
     await sleep(pollInterval);
     polled++;
     const statusRes = await fetch(`${BASE_URL}/api/audit/${data.auditId}`, {
@@ -98,10 +101,14 @@ async function runAudit(target: Target): Promise<{ auditId: string; status: stri
     });
     const statusData = await statusRes.json();
     if (!statusRes.ok) throw new Error(statusData.error || statusRes.statusText);
-    auditStatus = statusData.status || auditStatus;
+    auditStatus = String(statusData.status || auditStatus).toUpperCase();
   }
 
-  if (auditStatus !== 'complete') {
+  if (auditStatus === 'FAILED' || auditStatus === 'DEAD') {
+    throw new Error(`Audit ${data.auditId} failed (status: ${auditStatus})`);
+  }
+
+  if (!['COMPLETE', 'PARTIAL'].includes(auditStatus)) {
     throw new Error(`Audit ${data.auditId} did not complete after ${timeoutMs}ms (status: ${auditStatus})`);
   }
 
