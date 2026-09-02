@@ -18,6 +18,7 @@
  */
 
 import { type AuditJobRecord, enqueueAuditJob } from '@/lib/queue/auditJobQueue';
+import { runWithTenantAsync } from '@/lib/tenant/context';
 
 export interface DispatchAuditExecutionInput {
   tenantId: string;
@@ -31,10 +32,12 @@ export interface DispatchAuditExecutionInput {
 export async function dispatchAuditExecution(
   input: DispatchAuditExecutionInput
 ): Promise<AuditJobRecord> {
-  return enqueueAuditJob({
-    tenantId: input.tenantId,
-    batchId: input.auditId,
-    auditId: input.auditId,
-    idempotencyKey: `single:${input.auditId}`,
-  });
+  return runWithTenantAsync(input.tenantId, () =>
+    enqueueAuditJob({
+      tenantId: input.tenantId,
+      batchId: input.auditId,
+      auditId: input.auditId,
+      idempotencyKey: `single:${input.auditId}`,
+    })
+  );
 }
