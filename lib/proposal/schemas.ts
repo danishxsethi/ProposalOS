@@ -383,23 +383,29 @@ export function detectHallucinations(
     totalClaims++;
     let foundSupport = false;
 
-    // Check if number appears in any finding metrics
+    // Check if number appears in any finding metrics, impact score, or finding
+    // text (title/description). Numbers cited from audit findings usually live
+    // in the finding title or description (e.g. "LCP is 13653ms (Poor)") rather
+    // than the (often empty) structured metrics map — treat any of these as
+    // grounded support. Break out of the findings loop on the first match.
     for (const finding of findingRefs) {
+      if (foundSupport) break;
+
       const metricsValues = Object.values(finding.metrics).filter(
         (v) => typeof v === 'number'
       ) as number[];
 
       // Allow 10% tolerance for rounded numbers
-      for (const metricValue of metricsValues) {
-        if (Math.abs(metricValue - claim.value) / Math.max(metricValue, 1) <= 0.1) {
-          foundSupport = true;
-          supportedClaims++;
-          break;
-        }
-      }
+      const metricMatch = metricsValues.some(
+        (metricValue) => Math.abs(metricValue - claim.value) / Math.max(metricValue, 1) <= 0.1
+      );
+      const impactMatch =
+        claim.value === finding.impactScore || claim.value === Math.round(finding.impactScore);
+      const textMatch =
+        finding.title.includes(String(claim.value)) ||
+        finding.description.includes(String(claim.value));
 
-      // Check impact score matches
-      if (claim.value === finding.impactScore || claim.value === Math.round(finding.impactScore)) {
+      if (metricMatch || impactMatch || textMatch) {
         foundSupport = true;
         supportedClaims++;
         break;
@@ -442,8 +448,16 @@ export function detectHallucinations(
   const confidenceScore =
     totalClaims > 0 ? Math.max(0, Math.min(1, supportedClaims / totalClaims)) : 1;
 
+  // Only high-severity deviations (fabricated statistics, guarantee/legal-risk
+  // language) hard-block proposal generation. Medium "may not be grounded"
+  // phrase flags are noisy heuristics on natural-language summaries — they feed
+  // confidenceScore and are surfaced in QA telemetry, but a grounded proposal
+  // must not be rejected outright on them. Downstream ProposalQAService performs
+  // precise claim-contract grounding verification for the published QA score.
+  const hasHallucinations = flaggedClaims.some((claim) => claim.severity === 'high');
+
   return {
-    hasHallucinations: flaggedClaims.length > 0,
+    hasHallucinations,
     flaggedClaims,
     confidenceScore,
   };
