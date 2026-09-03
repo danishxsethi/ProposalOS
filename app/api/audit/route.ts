@@ -18,7 +18,7 @@ import { dispatchAuditExecution } from '@/lib/audit/dispatch';
 import { checkAndDecrementQuota, checkAuditLimit } from '@/lib/billing/limits';
 import { logError, logger } from '@/lib/logger';
 import { Metrics } from '@/lib/metrics';
-import { withAuth } from '@/lib/middleware/auth';
+import { isInternalOpsRequest, withAuth } from '@/lib/middleware/auth';
 import { withIdempotency } from '@/lib/middleware/idempotency';
 import { RateLimitPresets, withRateLimit } from '@/lib/middleware/rateLimit';
 import { withRole } from '@/lib/middleware/withRole';
@@ -72,7 +72,8 @@ async function handleAuditCreation(req: Request): Promise<NextResponse> {
         // Check Daily Quota
         const { checkDailyAuditLimit, incrementAuditCount } =
           await import('@/lib/costs/costTracker');
-        const dailyLimit = checkDailyAuditLimit(tenantId);
+        const isInternalOps = isInternalOpsRequest(req);
+        const dailyLimit = checkDailyAuditLimit(tenantId, isInternalOps);
         if (!dailyLimit.allowed) {
           await recordAuditTrailEvent({
             eventType: 'abuse.quota_exceeded',
@@ -114,7 +115,7 @@ async function handleAuditCreation(req: Request): Promise<NextResponse> {
         let audit;
         try {
           audit = await prisma.$transaction(async (tx) => {
-            await checkAndDecrementQuota(tenantId, tx);
+            await checkAndDecrementQuota(tenantId, tx, 1, isInternalOps);
 
             return await tx.audit.create({
               data: {

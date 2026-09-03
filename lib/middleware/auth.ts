@@ -13,6 +13,12 @@ function timingSafeStringEqual(a: string, b: string): boolean {
   return timingSafeEqual(hashA, hashB);
 }
 
+export function isInternalOpsRequest(req: Request): boolean {
+  const configured = process.env.INTERNAL_OPS_KEY;
+  const supplied = req.headers.get('x-internal-ops-key');
+  return Boolean(configured && supplied && timingSafeStringEqual(supplied, configured));
+}
+
 // Typed handler signature used by withAuth and withRole
 // Note: args uses any[] (not unknown[]) because Next.js route handlers receive typed `{ params }` objects
 // as the second argument, which cannot be assigned to unknown without breaking all dynamic routes.
@@ -32,6 +38,17 @@ interface AuthUser {
 // API key can be passed via Authorization: Bearer <key> OR X-API-Key header (for Cloud Run + identity token)
 export function withAuth(handler: AuthHandler) {
   return async (req: Request, ...args: any[]) => {
+    if (isInternalOpsRequest(req)) {
+      const tenantId = req.headers.get('x-tenant-id')?.trim();
+      if (!tenantId) {
+        return NextResponse.json(
+          { error: 'x-tenant-id is required for internal ops requests' },
+          { status: 400 }
+        );
+      }
+      return runWithTenantAsync(tenantId, () => handler(req, ...args));
+    }
+
     const authHeader = req.headers.get('Authorization');
     const xApiKey = req.headers.get('x-api-key')?.trim();
     const token =

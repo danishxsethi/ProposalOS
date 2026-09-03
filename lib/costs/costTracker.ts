@@ -614,12 +614,21 @@ export async function reportAuditSpend(
 /**
  * Check if tenant has exceeded daily audit limit (legacy in-memory — kept for backward compat)
  */
-export function checkDailyAuditLimit(tenantId: string): {
+export function checkDailyAuditLimit(tenantId: string, isInternalOps = false): {
   allowed: boolean;
   todayCount: number;
   limit: number;
   remaining: number;
 } {
+  if (isInternalOps) {
+    return {
+      allowed: true,
+      todayCount: 0,
+      limit: Number.MAX_SAFE_INTEGER,
+      remaining: Number.MAX_SAFE_INTEGER,
+    };
+  }
+
   const record = globalSpendTracker.getRecord(tenantId);
   if (!record) {
     return {
