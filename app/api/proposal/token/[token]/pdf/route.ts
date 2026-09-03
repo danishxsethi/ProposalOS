@@ -17,6 +17,7 @@ import { generatePdf } from '@/lib/pdf/generatePdf';
 import { uploadPdfToGCS } from '@/lib/pdf/uploadPdf';
 import { prisma } from '@/lib/prisma';
 import { assertProposalPublishable } from '@/lib/proposal/publication';
+import { runWithTenantAsync, runWithTenantBypass } from '@/lib/tenant/context';
 
 interface Params {
   params: Promise<{ token: string }>;
@@ -31,20 +32,25 @@ async function handlePdf(req: Request, { params }: Params): Promise<NextResponse
   try {
     const { token } = await params;
 
-    const proposal = await prisma.proposal.findUnique({
-      where: { webLinkToken: token },
-      include: { audit: true },
-    });
+    // Token lookup is the narrow unauthenticated boundary. All subsequent
+    // proposal reads/writes run under the proposal tenant context.
+    const proposal = await runWithTenantBypass('pdf-token-proposal-lookup', () =>
+      prisma.proposal.findUnique({
+        where: { webLinkToken: token },
+        include: { audit: true },
+      })
+    );
 
     if (!proposal) {
       return NextResponse.json(new NotFoundError('Proposal', token).toEnvelope(req.url, traceId), {
         status: 404,
       });
     }
-    assertProposalPublishable(proposal);
+    return runWithTenantAsync(proposal.tenantId, async () => {
+      assertProposalPublishable(proposal);
 
-    // Check if PDF already cached
-    if (proposal.pdfUrl) {
+      // Check if PDF already cached
+      if (proposal.pdfUrl) {
       logger.info(
         {
           event: 'pdf.cache_hit',
@@ -58,59 +64,60 @@ async function handlePdf(req: Request, { params }: Params): Promise<NextResponse
       const response = NextResponse.redirect(proposal.pdfUrl);
       response.headers.set('X-Trace-Id', traceId);
       response.headers.set('X-Cache', 'HIT');
-      return response;
-    }
+        return response;
+      }
 
     // Generate new PDF
-    logger.info(
+      logger.info(
       {
         event: 'pdf.generating',
         proposalId: proposal.id,
         businessName: proposal.audit.businessName,
       },
       'Generating PDF'
-    );
+      );
 
-    const pdfBuffer = await generatePdf(token, undefined, proposal.audit.businessName);
+      const pdfBuffer = await generatePdf(token, undefined, proposal.audit.businessName);
 
     // Upload to GCS and cache URL (optional - if upload fails, still return PDF)
-    try {
+      try {
       const pdfUrl = await uploadPdfToGCS(proposal.id, pdfBuffer);
-      await prisma.proposal.update({
+        await prisma.proposal.update({
         where: { id: proposal.id },
         data: {
           pdfUrl,
           pdfGeneratedAt: new Date(),
         },
       });
-      logger.info(
+        logger.info(
         { event: 'pdf.cached', proposalId: proposal.id, pdfUrl },
         'PDF generated and cached'
-      );
-    } catch (uploadError) {
-      logger.warn(
+        );
+      } catch (uploadError) {
+        logger.warn(
         {
           event: 'pdf.upload_skipped',
           proposalId: proposal.id,
           error: uploadError instanceof Error ? uploadError.message : String(uploadError),
         },
         'GCS upload failed, returning PDF without caching'
-      );
-    }
+        );
+      }
 
     // Return PDF buffer
-    const filename = `proposal-${proposal.audit.businessName.replace(/[^a-z0-9]/gi, '_').toLowerCase()}-${token.substring(0, 8)}.pdf`;
+      const filename = `proposal-${proposal.audit.businessName.replace(/[^a-z0-9]/gi, '_').toLowerCase()}-${token.substring(0, 8)}.pdf`;
 
-    const response = new NextResponse(pdfBuffer as any as BodyInit, {
+      const response = new NextResponse(pdfBuffer as any as BodyInit, {
       headers: {
         'Content-Type': 'application/pdf',
         'Content-Disposition': `attachment; filename="${filename}"`,
         'X-Trace-Id': traceId,
         'X-Cache': 'MISS',
       },
-    });
+      });
 
-    return response;
+      return response;
+    });
   } catch (error) {
     const internalError = new InternalError('Failed to generate PDF', {
       originalError: error instanceof Error ? error.message : String(error),
