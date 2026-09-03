@@ -116,11 +116,15 @@ export class ProposalLLMOrchestrator {
     );
 
     if (!validation.overallValid) {
-      throw new Error(
-        [...validation.proposalValidation.errors, ...validation.citationValidation.errors].join(
-          '; '
-        )
+      const hallucinationReasons = validation.hallucinationDetection.flaggedClaims.map(
+        (claim) => `[hallucination:${claim.severity}] ${claim.location}: ${claim.reason}`
       );
+      const reasons = [
+        ...validation.proposalValidation.errors,
+        ...validation.citationValidation.errors,
+        ...hallucinationReasons,
+      ];
+      throw new Error(reasons.length > 0 ? reasons.join('; ') : 'Proposal validation failed');
     }
 
     return results;
