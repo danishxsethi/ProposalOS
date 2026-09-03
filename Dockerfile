@@ -30,6 +30,12 @@ FROM base AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production
+ENV CHROME_EXECUTABLE_PATH=/usr/bin/chromium-browser
+
+# Chromium for browser-based audit modules (privacy / conversion / mobile UX)
+# and PDF generation. Alpine's chromium package installs to /usr/bin/chromium-browser.
+RUN apk add --no-cache chromium nss freetype harfbuzz ca-certificates ttf-freefont \
+  && chmod +x /usr/bin/chromium-browser
 
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
