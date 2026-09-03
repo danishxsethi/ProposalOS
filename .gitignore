@@ -95,3 +95,6 @@ lib/cache/store/
 # See .kiro/specs/100m-stage-1/tasks.md for documentation.
 lib/audit-engine/
 lib/raos/
+
+# Generated batch audit reports
+/audit/reports/
