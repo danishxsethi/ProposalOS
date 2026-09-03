@@ -8,8 +8,10 @@ import { ProviderName, ProviderPolicy } from './types';
 
 export const PROVIDER_POLICIES: Record<ProviderName, ProviderPolicy> = {
   pagespeed: {
-    timeoutMs: 30000,
-    maxAttempts: 2,
+    // PageSpeed is supplemental to crawler evidence. It must not consume the
+    // entire phase-one budget and prevent dependent browser modules from running.
+    timeoutMs: 8000,
+    maxAttempts: 1,
     baseDelayMs: 500,
     maxDelayMs: 10000,
     jitter: true,
