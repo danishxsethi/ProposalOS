@@ -47,7 +47,12 @@ export async function generateCaseStudyPdf(
     }
 
     browser = await puppeteer.launch({
-      args: ['--no-sandbox', '--disable-setuid-sandbox'],
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-gpu',
+        '--disable-dev-shm-usage',
+      ],
       defaultViewport: { width: 1920, height: 1080, deviceScaleFactor: 1 },
       executablePath,
       headless: true,

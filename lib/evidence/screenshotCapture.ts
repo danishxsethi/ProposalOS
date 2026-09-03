@@ -67,7 +67,7 @@ async function getBrowser(): Promise<Browser> {
   } else {
     // Production - use Chromium from @sparticuz/chromium
     browserInstance = await puppeteer.launch({
-      args: chromium.args,
+      args: [...chromium.args, '--disable-gpu', '--disable-dev-shm-usage'],
       defaultViewport: { width: 1920, height: 1080, deviceScaleFactor: 1 },
       executablePath: await chromium.executablePath(),
       headless: true,
