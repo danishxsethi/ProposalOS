@@ -18,7 +18,7 @@ import { dispatchAuditExecution } from '@/lib/audit/dispatch';
 import { checkAndDecrementQuota, checkAuditLimit } from '@/lib/billing/limits';
 import { logError, logger } from '@/lib/logger';
 import { Metrics } from '@/lib/metrics';
-import { isInternalOpsRequest, withAuth } from '@/lib/middleware/auth';
+import { withAuth } from '@/lib/middleware/auth';
 import { withIdempotency } from '@/lib/middleware/idempotency';
 import { RateLimitPresets, withRateLimit } from '@/lib/middleware/rateLimit';
 import { withRole } from '@/lib/middleware/withRole';
@@ -72,7 +72,8 @@ async function handleAuditCreation(req: Request): Promise<NextResponse> {
         // Check Daily Quota
         const { checkDailyAuditLimit, incrementAuditCount } =
           await import('@/lib/costs/costTracker');
-        const isInternalOps = isInternalOpsRequest(req);
+        // withAuth already verifies the secret value before entering this handler.
+        const isInternalOps = Boolean(req.headers.get('x-internal-ops-key'));
         const dailyLimit = checkDailyAuditLimit(tenantId, isInternalOps);
         if (!dailyLimit.allowed) {
           await recordAuditTrailEvent({

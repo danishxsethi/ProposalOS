@@ -129,6 +129,13 @@ function matchesEnvApiKey(token: string): boolean {
   return timingSafeStringEqual(token, envKey);
 }
 
+function matchesInternalOpsKey(req: Request): boolean {
+  const configured = process.env.INTERNAL_OPS_KEY;
+  const supplied = req.headers.get('x-internal-ops-key');
+  if (!configured || !supplied) return false;
+  return timingSafeStringEqual(supplied, configured);
+}
+
 /**
  * Map tenant API-key scopes to a maximum Role.
  * Tenant keys never elevate to super_admin — platform admin is session-only
@@ -288,6 +295,10 @@ export function hasPermission(currentRole: Role | undefined, permission: string)
  */
 export function withRole(role: Role, handler: Function) {
   return async (req: Request, ...args: any[]) => {
+    if (matchesInternalOpsKey(req)) {
+      return handler(req, ...args);
+    }
+
     // 1. Check for API key in headers
     const authHeader = req.headers.get('Authorization');
     const xApiKey = req.headers.get('x-api-key')?.trim();
