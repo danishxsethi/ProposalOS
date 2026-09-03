@@ -1,8 +1,8 @@
 import { Prisma } from '@prisma/client';
 
 import { prisma } from '@/lib/prisma';
+import { getTenantId, runWithTenantAsync, runWithTenantBypass } from '@/lib/tenant/context';
 import { PlanCatalogService } from '@/lib/stripe/PlanCatalogService';
-import { getTenantId, runWithTenantAsync } from '@/lib/tenant/context';
 
 export async function checkAndDecrementQuota(
   tenantId: string,
