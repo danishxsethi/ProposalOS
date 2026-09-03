@@ -65,11 +65,20 @@ async function getBrowser(): Promise<Browser> {
       args: ['--no-sandbox', '--disable-setuid-sandbox'],
     });
   } else {
-    // Production - use Chromium from @sparticuz/chromium
+    const executablePath =
+      process.env.CHROME_EXECUTABLE_PATH || (await chromium.executablePath());
     browserInstance = await puppeteer.launch({
-      args: [...chromium.args, '--disable-gpu', '--disable-dev-shm-usage'],
+      args: [
+        ...(process.env.CHROME_EXECUTABLE_PATH ? [] : chromium.args),
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-gpu',
+        '--disable-dev-shm-usage',
+        '--disable-software-rasterizer',
+        '--no-zygote',
+      ],
       defaultViewport: { width: 1920, height: 1080, deviceScaleFactor: 1 },
-      executablePath: await chromium.executablePath(),
+      executablePath,
       headless: true,
     });
   }

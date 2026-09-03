@@ -34,15 +34,31 @@ export async function runWebsiteModule(
       tracker
     );
 
-    // Run PageSpeed on homepage for Core Web Vitals
+    // PageSpeed is useful but external-provider failure must not poison the
+    // crawler data and skip every module that depends on website.
+    const emptyPageSpeed: PageSpeedResult = {
+      findings: [],
+      coreWebVitals: { fcp: null, lcp: null, cls: null, tbt: null },
+      scores: { performance: 0, accessibility: 0, bestPractices: 0, seo: 0 },
+      finalUrl: input.url,
+      rawResponse: {},
+    };
     tracker?.addApiCall('PAGESPEED');
-    const psiResult = await getPageSpeedFindings(input.url);
+    const psiResult = await getPageSpeedFindings(input.url).catch((error) => {
+      logger.warn({ error }, '[WebsiteModule] PageSpeed failed, using crawler findings');
+      return emptyPageSpeed;
+    });
 
     // Fetch homepage HTML for schema analysis and conversion detection
     let schemaAnalysis = null;
     let conversionAnalysis = null;
     try {
-      const html = await withProviderResilience<string>(
+      const crawlerHtml = crawlerResult.evidenceSnapshots
+        .map((snapshot) => snapshot?.rawResponse?.html)
+        .find((html): html is string => typeof html === 'string' && html.length > 0);
+      const html =
+        crawlerHtml ??
+        (await withProviderResilience<string>(
         {
           provider: 'crawler',
           operation: 'website:fetchHtmlSchema',
@@ -59,7 +75,7 @@ export async function runWebsiteModule(
           if (!htmlRes.ok) throw new Error(`HTTP ${htmlRes.status}: ${htmlRes.statusText}`);
           return await htmlRes.text();
         }
-      );
+      ));
       schemaAnalysis = analyzeSchemaMarkup(html);
       const schemaFindings = generateSchemaFindings(schemaAnalysis, input.url);
       psiResult.findings.push(...schemaFindings);

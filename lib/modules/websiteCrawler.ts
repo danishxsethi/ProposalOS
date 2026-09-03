@@ -60,7 +60,8 @@ interface WebsiteCrawlerInput {
   signal?: AbortSignal;
 }
 
-const MAX_PAGES = 20;
+// Leave capacity in the shared crawler rate-limit budget for dependent modules.
+const MAX_PAGES = 8;
 const MAX_DEPTH = 3;
 const PAGE_TIMEOUT_MS = 45000;
 const TOTAL_TIMEOUT_MS = 45000;
