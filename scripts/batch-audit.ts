@@ -84,7 +84,7 @@ async function runAudit(target: Target): Promise<{ auditId: string; status: stri
   if (!res.ok) throw new Error(data.error || data.details || res.statusText);
 
   // Poll audit status until complete/failed/timeout
-  const timeoutMs = 60_000; // 1 minute
+  const timeoutMs = 180_000; // 3 minutes (real audits include full module run)
   const pollInterval = 2_000; // 2 seconds
   const pollTimeout = timeoutMs / pollInterval;
   let polled = 0;
@@ -92,7 +92,7 @@ async function runAudit(target: Target): Promise<{ auditId: string; status: stri
 
   while (
     polled < pollTimeout &&
-    !['COMPLETE', 'PARTIAL', 'FAILED', 'DEAD'].includes(auditStatus)
+    !['COMPLETE', 'PARTIAL', 'DEGRADED', 'FAILED', 'DEAD'].includes(auditStatus)
   ) {
     await sleep(pollInterval);
     polled++;
@@ -108,7 +108,7 @@ async function runAudit(target: Target): Promise<{ auditId: string; status: stri
     throw new Error(`Audit ${data.auditId} failed (status: ${auditStatus})`);
   }
 
-  if (!['COMPLETE', 'PARTIAL'].includes(auditStatus)) {
+  if (!['COMPLETE', 'PARTIAL', 'DEGRADED'].includes(auditStatus)) {
     throw new Error(`Audit ${data.auditId} did not complete after ${timeoutMs}ms (status: ${auditStatus})`);
   }
 
