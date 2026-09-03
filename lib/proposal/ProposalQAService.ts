@@ -142,7 +142,11 @@ export class ProposalQAService {
 
     // Also run original segment local marketing checks
     const segment = inferOrganizationSegment(url, businessName, context?.industry);
-    const isNonSmb = segment !== 'smb_local' && segment !== 'baseline_unknown';
+    // Healthcare practices are commonly local SMBs. Keep their GBP/local SEO
+    // recommendations valid instead of treating every healthcare segment as
+    // enterprise copy leakage.
+    const isNonSmb =
+      segment !== 'smb_local' && segment !== 'baseline_unknown' && segment !== 'healthcare';
     const hasLocalSleaze = isNonSmb && foundCommercialTerms.length > 0;
 
     let copywritingSafety = 10;

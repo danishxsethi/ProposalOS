@@ -86,9 +86,20 @@ export class ProposalLLMOrchestrator {
       opts.segment,
       businessIndustry
     );
+    const topActions = [...findings]
+      .sort((a, b) => (b.impactScore || 0) - (a.impactScore || 0))
+      .slice(0, 3)
+      .map((finding) => ({
+        findingId: finding.id,
+        title: finding.title,
+        impact: finding.impactScore,
+        effort: (finding.effortEstimate || 'MEDIUM').toUpperCase(),
+        timeline: this.timelineByEffort(finding.effortEstimate),
+      }));
     const results: ProposalResult = {
       executiveSummary,
       painClusters: clusters,
+      topActions,
       tiers,
       pricing: { ...pricing, currency: 'USD' },
       assumptions: generateAssumptions(businessName),
@@ -365,26 +376,35 @@ Observed metric index: ${keyMetricsText.slice(0, 20_000)}`;
   ): ProposalResult['tiers'] {
     const findingMap = new Map(findings.map((f) => [f.id, f]));
 
+    const mappedClusterFindingIds = clusters.flatMap((cluster) =>
+      cluster.findingIds.filter((findingId) => findingMap.has(findingId))
+    );
+    // LLM clustering can return stale or malformed IDs. Do not emit a proposal
+    // with empty tiers when persisted findings are available; fall back to the
+    // validated finding set and let deterministic tier mapping assign them.
+    const sourceFindingIds =
+      mappedClusterFindingIds.length > 0
+        ? [...new Set(mappedClusterFindingIds)]
+        : findings.map((finding) => finding.id);
+
     // Group findings by impact and effort for tier assignment
     const essentialsFindings: string[] = [];
     const growthFindings: string[] = [];
     const premiumFindings: string[] = [];
 
-    for (const cluster of clusters) {
-      for (const findingId of cluster.findingIds) {
-        const finding = findingMap.get(findingId);
-        if (!finding) continue;
+    for (const findingId of sourceFindingIds) {
+      const finding = findingMap.get(findingId);
+      if (!finding) continue;
 
-        const impact = finding.impactScore;
-        const effort = finding.effortEstimate || 'MEDIUM';
+      const impact = finding.impactScore;
+      const effort = finding.effortEstimate || 'MEDIUM';
 
-        if (impact >= 7 && effort === 'LOW') {
-          essentialsFindings.push(findingId);
-        } else if (impact >= 5 || effort === 'MEDIUM') {
-          growthFindings.push(findingId);
-        } else {
-          premiumFindings.push(findingId);
-        }
+      if (impact >= 7 && effort === 'LOW') {
+        essentialsFindings.push(findingId);
+      } else if (impact >= 5 || effort === 'MEDIUM') {
+        growthFindings.push(findingId);
+      } else {
+        premiumFindings.push(findingId);
       }
     }
 
@@ -405,6 +425,13 @@ Observed metric index: ${keyMetricsText.slice(0, 20_000)}`;
     const recommendedTier = recommendTier(findings);
 
     return getCustomizedTiers(segment, pricing, recommendedTier, tierMapping, findings);
+  }
+
+  private timelineByEffort(effort?: string | null): string {
+    const normalized = (effort || 'MEDIUM').toUpperCase();
+    if (normalized === 'LOW') return '7 days';
+    if (normalized === 'HIGH') return '30-45 days';
+    return '14-21 days';
   }
 
   /**
