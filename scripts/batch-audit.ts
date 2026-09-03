@@ -81,7 +81,12 @@ async function runAudit(target: Target): Promise<{ auditId: string; status: stri
     }),
   });
   const data = await res.json();
-  if (!res.ok) throw new Error(data.error || data.details || res.statusText);
+  if (!res.ok) {
+    const err = data?.error;
+    const message =
+      typeof err === 'string' ? err : typeof err?.message === 'string' ? err.message : JSON.stringify(data);
+    throw new Error(message);
+  }
 
   // Poll audit status until complete/failed/timeout
   const timeoutMs = 180_000; // 3 minutes (real audits include full module run)
@@ -124,7 +129,12 @@ async function runPropose(
     body: JSON.stringify({}),
   });
   const data = await res.json();
-  if (!res.ok) throw new Error(data.error || data.details || res.statusText);
+  if (!res.ok) {
+    const err = data?.error;
+    const message =
+      typeof err === 'string' ? err : typeof err?.message === 'string' ? err.message : JSON.stringify(data);
+    throw new Error(message);
+  }
   return {
     proposalId: data.proposalId,
     webLinkToken: data.proposal?.webLinkToken ?? data.webLinkToken,
