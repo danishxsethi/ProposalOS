@@ -325,7 +325,7 @@ export function getSocialProofForVertical(vertical?: string | null): SocialProof
   const norm = (vertical || '').toLowerCase();
   for (const [key, study] of Object.entries(CANONICAL_OFFERS.realCaseStudies)) {
     if (norm.includes(key) || key.includes(norm)) {
-      return study;
+    return study;
     }
   }
   return null;
@@ -337,14 +337,13 @@ export function getSocialProofForVertical(vertical?: string | null): SocialProof
 export function getEvidenceBenchmarkForVertical(vertical?: string | null): IndustryEvidenceBenchmark {
   const norm = (vertical || '').toLowerCase();
   if (norm.includes('dent') || norm.includes('ortho') || norm.includes('clinic') || norm.includes('med')) {
-    return CANONICAL_OFFERS.evidenceBenchmarks.dental;
+    return CANONICAL_OFFERS.evidenceBenchmarks.dental!;
   }
   if (norm.includes('fit') || norm.includes('gym') || norm.includes('athletic') || norm.includes('yoga')) {
-    return CANONICAL_OFFERS.evidenceBenchmarks.fitness;
+    return CANONICAL_OFFERS.evidenceBenchmarks.fitness!;
   }
   if (norm.includes('rest') || norm.includes('pizza') || norm.includes('food') || norm.includes('cafe')) {
-    return CANONICAL_OFFERS.evidenceBenchmarks.restaurant;
+    return CANONICAL_OFFERS.evidenceBenchmarks.restaurant!;
   }
-  return CANONICAL_OFFERS.evidenceBenchmarks.default;
+  return CANONICAL_OFFERS.evidenceBenchmarks.default!;
 }
-
