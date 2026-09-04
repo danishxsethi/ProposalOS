@@ -61,6 +61,7 @@ vi.mock('langsmith', () => ({
 // Mock Auth & Tenant
 vi.mock('@/lib/middleware/auth', () => ({
   withAuth: (handler: any) => handler,
+  isInternalOpsRequest: vi.fn(() => false),
 }));
 vi.mock('@/lib/auth', () => ({
   auth: vi.fn(async () => ({

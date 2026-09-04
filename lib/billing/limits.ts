@@ -4,17 +4,30 @@ import { prisma } from '@/lib/prisma';
 import { PlanCatalogService } from '@/lib/stripe/PlanCatalogService';
 import { getTenantId, runWithTenantAsync } from '@/lib/tenant/context';
 
+export class QuotaExceededError extends Error {
+  readonly code = 'QUOTA_EXCEEDED';
+  constructor(message: string) {
+    super(message);
+    this.name = 'QuotaExceededError';
+  }
+}
+
 export async function checkAndDecrementQuota(
   tenantId: string,
-  tx: Prisma.TransactionClient,
+  tx?: Prisma.TransactionClient,
   countRequested: number = 1,
   isInternalOps = false
 ): Promise<void> {
-  await tx.$executeRawUnsafe('SELECT id FROM "Tenant" WHERE id = $1 FOR UPDATE', tenantId);
+  // Ops-key bypass: internal requests are completely exempt from quota limits and never touch quota queries
+  if (isInternalOps) {
+    return;
+  }
 
-  const tenant = await tx.tenant.findUnique({
-    where: { id: tenantId },
-  });
+  // Pure reads — execute outside of any explicit transaction.
+  // Note: tenant queries run under tenant context or explicit query.
+  const tenant = tx
+    ? await tx.tenant.findUnique({ where: { id: tenantId } })
+    : await runWithTenantAsync(tenantId, () => prisma.tenant.findUnique({ where: { id: tenantId } }));
 
   if (!tenant) {
     throw new Error('Tenant not found');
@@ -22,45 +35,65 @@ export async function checkAndDecrementQuota(
 
   if (tenant.status === 'trial') {
     const trialLimit = 100;
-    if (!isInternalOps) {
-      const count = await tx.audit.count({
-        where: { tenantId, status: { not: 'FAILED' } },
-      });
-      if (count + countRequested > trialLimit) {
-        throw new Error('Quota exceeded: Pro Trial limit of ' + trialLimit + ' audits would be exceeded.');
-      }
+    const count = tx
+      ? await tx.audit.count({ where: { tenantId, status: { not: 'FAILED' } } })
+      : await runWithTenantAsync(tenantId, () =>
+          prisma.audit.count({ where: { tenantId, status: { not: 'FAILED' } } })
+        );
+    if (count + countRequested > trialLimit) {
+      throw new QuotaExceededError('Quota exceeded: Pro Trial limit of ' + trialLimit + ' audits would be exceeded.');
     }
     return;
   }
 
   const planTier = tenant.planTier || 'free';
   const plan = PlanCatalogService.getPlanById(planTier);
-  const limit = isInternalOps ? Number.MAX_SAFE_INTEGER : (plan?.limits?.audits ?? 3);
+  const limit = plan?.limits?.audits ?? 3;
 
-  const sub = await tx.subscription.findFirst({
-    where: { tenantId },
-    orderBy: { currentPeriodEnd: 'desc' },
-  });
+  const sub = tx
+    ? await tx.subscription.findFirst({
+        where: { tenantId },
+        orderBy: { currentPeriodEnd: 'desc' },
+      })
+    : await runWithTenantAsync(tenantId, () =>
+        prisma.subscription.findFirst({
+          where: { tenantId },
+          orderBy: { currentPeriodEnd: 'desc' },
+        })
+      );
 
   const billingCycleStart =
     sub?.currentPeriodStart || new Date(new Date().getFullYear(), new Date().getMonth(), 1);
   const billingCycleEnd =
     sub?.currentPeriodEnd || new Date(new Date().getFullYear(), new Date().getMonth() + 1, 1);
 
-  const count = await tx.audit.count({
-    where: {
-      tenantId,
-      status: { not: 'FAILED' },
-      createdAt: {
-        gte: billingCycleStart,
-        lte: billingCycleEnd,
-      },
-    },
-  });
+  const count = tx
+    ? await tx.audit.count({
+        where: {
+          tenantId,
+          status: { not: 'FAILED' },
+          createdAt: {
+            gte: billingCycleStart,
+            lte: billingCycleEnd,
+          },
+        },
+      })
+    : await runWithTenantAsync(tenantId, () =>
+        prisma.audit.count({
+          where: {
+            tenantId,
+            status: { not: 'FAILED' },
+            createdAt: {
+              gte: billingCycleStart,
+              lte: billingCycleEnd,
+            },
+          },
+        })
+      );
 
-  if (!isInternalOps && count + countRequested > limit) {
+  if (count + countRequested > limit) {
     const remaining = Math.max(0, limit - count);
-    throw new Error(
+    throw new QuotaExceededError(
       'Quota exceeded: Requesting ' +
         countRequested +
         ' audits, but only ' +

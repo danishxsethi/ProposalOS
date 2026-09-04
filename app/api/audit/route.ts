@@ -15,10 +15,10 @@ import { NextResponse } from 'next/server';
 import { generateTraceId, InternalError, ValidationError } from '@/lib/api/errors';
 import { auditTriggerSchema } from '@/lib/api/schemas/audit';
 import { dispatchAuditExecution } from '@/lib/audit/dispatch';
-import { checkAndDecrementQuota, checkAuditLimit } from '@/lib/billing/limits';
+import { checkAndDecrementQuota, checkAuditLimit, QuotaExceededError } from '@/lib/billing/limits';
 import { logError, logger } from '@/lib/logger';
 import { Metrics } from '@/lib/metrics';
-import { withAuth } from '@/lib/middleware/auth';
+import { isInternalOpsRequest, withAuth } from '@/lib/middleware/auth';
 import { withIdempotency } from '@/lib/middleware/idempotency';
 import { RateLimitPresets, withRateLimit } from '@/lib/middleware/rateLimit';
 import { withRole } from '@/lib/middleware/withRole';
@@ -69,11 +69,12 @@ async function handleAuditCreation(req: Request): Promise<NextResponse> {
 
         const { url, industry, businessName, businessCity, placeId } = result.data;
 
-        // Check Daily Quota
+        // Ops-key bypass: internal requests are completely exempt from quota limits and never touch quota checks
+        const isInternalOps = isInternalOpsRequest(req) || Boolean(req.headers.get('x-internal-ops-key'));
+
+        // Check Daily Quota (bypassed for internal ops)
         const { checkDailyAuditLimit, incrementAuditCount } =
           await import('@/lib/costs/costTracker');
-        // withAuth already verifies the secret value before entering this handler.
-        const isInternalOps = Boolean(req.headers.get('x-internal-ops-key'));
         const dailyLimit = checkDailyAuditLimit(tenantId, isInternalOps);
         if (!dailyLimit.allowed) {
           await recordAuditTrailEvent({
@@ -112,38 +113,54 @@ async function handleAuditCreation(req: Request): Promise<NextResponse> {
           targetUrl = extracted.url;
         }
 
-        // Transactionally check monthly/plan limit with SELECT FOR UPDATE row lock and create audit
+        // Check monthly quota if not internal ops.
+        // Pure reads are done outside any transaction; only QuotaExceededError maps to 429.
+        if (!isInternalOps) {
+          try {
+            await checkAndDecrementQuota(tenantId, undefined, 1, false);
+          } catch (err: unknown) {
+            if (err instanceof QuotaExceededError) {
+              return NextResponse.json(
+                {
+                  error: {
+                    code: 'QUOTA_EXCEEDED',
+                    message: err.message,
+                    details: { reason: 'QUOTA_EXHAUSTED', upgrade: true },
+                    timestamp: new Date().toISOString(),
+                    traceId,
+                  },
+                },
+                { status: 429 }
+              );
+            }
+            // Unexpected database/system errors return 500 with real message — no masking
+            logError('Monthly quota check failed unexpectedly', err, { tenantId, traceId });
+            const message = err instanceof Error ? err.message : String(err);
+            const internalError = new InternalError(message, { reason: 'DATABASE_ERROR' });
+            return NextResponse.json(internalError.toEnvelope(req.url, traceId), { status: 500 });
+          }
+        }
+
+        // Create audit record
         let audit;
         try {
-          audit = await prisma.$transaction(async (tx) => {
-            await checkAndDecrementQuota(tenantId, tx, 1, isInternalOps);
-
-            return await tx.audit.create({
-              data: {
-                tenantId,
-                businessName: name || 'Pending...',
-                businessCity: city ?? null,
-                businessUrl: targetUrl ?? null,
-                placeId: placeId ?? null,
-                businessIndustry: industry || 'Generic',
-                status: 'QUEUED',
-                apiCostCents: 0,
-              },
-            });
-          });
-        } catch (quotaError: any) {
-          return NextResponse.json(
-            {
-              error: {
-                code: 'QUOTA_EXCEEDED',
-                message: quotaError instanceof Error ? quotaError.message : String(quotaError),
-                details: { reason: 'QUOTA_EXHAUSTED', upgrade: true },
-                timestamp: new Date().toISOString(),
-                traceId,
-              },
+          audit = await prisma.audit.create({
+            data: {
+              tenantId,
+              businessName: name || 'Pending...',
+              businessCity: city ?? null,
+              businessUrl: targetUrl ?? null,
+              placeId: placeId ?? null,
+              businessIndustry: industry || 'Generic',
+              status: 'QUEUED',
+              apiCostCents: 0,
             },
-            { status: 429 }
-          );
+          });
+        } catch (dbErr: unknown) {
+          logError('Failed to create audit record in database', dbErr, { tenantId, traceId });
+          const message = dbErr instanceof Error ? dbErr.message : String(dbErr);
+          const internalError = new InternalError(message, { reason: 'DATABASE_ERROR' });
+          return NextResponse.json(internalError.toEnvelope(req.url, traceId), { status: 500 });
         }
 
         incrementAuditCount(tenantId);
