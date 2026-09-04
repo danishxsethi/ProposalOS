@@ -559,7 +559,7 @@ export default async function PdfTemplate({ proposal, branding }: PdfTemplatePro
           </div>
         </div>
 
-        {/* Social Proof Case Study */}
+        {/* Why This Works — Cited Industry Benchmark Evidence */}
         <div
           style={{
             padding: '14px 18px',
@@ -570,19 +570,48 @@ export default async function PdfTemplate({ proposal, branding }: PdfTemplatePro
           }}
         >
           <div style={{ fontSize: '10px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginBottom: '2px' }}>
-            VERIFIED CLIENT BENCHMARK • {model.socialProof.vertical.toUpperCase()}
+            WHY THIS WORKS • CITED INDUSTRY EVIDENCE ({model.whyThisWorks.citation})
           </div>
-          <div style={{ fontSize: '12px', fontWeight: 700, color: '#0f172a', marginBottom: '6px' }}>
-            {model.socialProof.headline}
+          <div style={{ fontSize: '12px', fontWeight: 700, color: '#0f172a', marginBottom: '4px' }}>
+            {model.whyThisWorks.headline}
           </div>
+          <p style={{ fontSize: '11px', color: '#475569', margin: '0 0 8px 0', lineHeight: 1.4 }}>
+            {model.whyThisWorks.context}
+          </p>
           <div style={{ display: 'flex', gap: '16px', fontSize: '10px', color: '#334155' }}>
-            {model.socialProof.metrics.map((m, mIdx) => (
+            {model.whyThisWorks.metrics.map((m, mIdx) => (
               <div key={mIdx}>
-                <span style={{ fontWeight: 800, color: '#4361ee' }}>{m.value}</span> {m.label} ({m.timeframe})
+                <span style={{ fontWeight: 800, color: '#4361ee' }}>{m.value}</span> {m.label} ({m.source})
               </div>
             ))}
           </div>
         </div>
+
+        {/* Real Case Study (Conditionally rendered ONLY if genuine verified client exists) */}
+        {model.realCaseStudy && (
+          <div
+            style={{
+              padding: '14px 18px',
+              backgroundColor: '#f8fafc',
+              border: '1px solid #e2e8f0',
+              borderRadius: '8px',
+              marginBottom: '20px',
+            }}
+          >
+            <div style={{ fontSize: '10px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginBottom: '2px' }}>
+              VERIFIED CLIENT BRIEF • {model.realCaseStudy.clientName}
+            </div>
+            <div style={{ fontSize: '12px', fontWeight: 700, color: '#0f172a', marginBottom: '4px' }}>
+              {model.realCaseStudy.headline}
+            </div>
+            <p style={{ fontSize: '11px', fontStyle: 'italic', color: '#475569', margin: '0 0 6px 0' }}>
+              "{model.realCaseStudy.quote}"
+            </p>
+            <div style={{ fontSize: '10px', color: '#64748b' }}>
+              {model.realCaseStudy.author} — {model.realCaseStudy.role}
+            </div>
+          </div>
+        )}
 
         {/* Single Global Call to Action */}
         <div

@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { apiClient } from '@/lib/api-client';
 import { Competitor, ReportData } from '@/lib/types';
 
-import { mapModuleToFrontendCategories } from '@shared/audit';
+import { mapModuleToFrontendCategories } from '@/lib/shared-audit';
 
 // Map impact score to severity
 function mapImpactToSeverity(impact: number): 'critical' | 'high' | 'medium' | 'low' {

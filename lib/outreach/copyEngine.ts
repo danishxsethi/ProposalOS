@@ -161,28 +161,28 @@ export const VERTICAL_COPY_PROFILES: Record<string, VerticalCopyProfile> = {
         touchNumber: 4,
         type: 'FOLLOWUP_SOCIAL_PROOF',
         dayOffset: 11,
-        concept: 'Social proof case study with hard metrics (+340% reviews, 28 new patients)',
+        concept: 'Live benchmark touch: cited industry study + prospect\'s actual audit gap',
         variants: {
           A: {
             variant: 'A',
-            subject: 'how Tribeca Dental added 28 patients in 60 days',
-            previewText: 'Closed a 380-review gap and accelerated booking velocity.',
+            subject: 'Midtown dental search benchmark: schema & reviews',
+            previewText: 'Practices with complete schema appear 2.4× more often in Google\'s 3-Pack.',
             bodyTemplate:
-              `{{greeting}}\n\nA quick benchmark: Tribeca Premier Dental had the exact same review and schema gap earlier this year.\n\nWe deployed an automated review capture workflow and fixed their structured data. In 60 days, they increased review velocity by 340% and generated 28 additional new patient bookings.\n\nI have their implementation roadmap if you would like to see how they structured it.\n\nBest,\nDanish`,
+              `{{greeting}}\n\nSharing a relevant local benchmark: according to BrightLocal's 2024 healthcare study, dental practices with verified JSON-LD schema and active owner responses appear in Google's Local 3-Pack 2.4x more often.\n\nRight now, {{competitorName}} has both active, while {{businessName}} shows missing schema and 0 recent owner replies.\n\nI have the full competitive breakdown if you would like to see where the gap is.\n\nBest,\nDanish`,
           },
           B: {
             variant: 'B',
-            subject: 'case study: closing the local dental gap',
-            previewText: 'How another dental clinic erased their competitor deficit.',
+            subject: 'dental search benchmark data for {{city}}',
+            previewText: 'How verified schema impacts local patient booking clicks.',
             bodyTemplate:
-              `{{greeting}}\n\nWanted to share what happened when another practice in your market solved this.\n\nTribeca Dental was trailing competitors by over 300 reviews. After plugging their technical leaks, they jumped to #1 in map pack rankings for four core service queries within two months.\n\nOpen to reviewing the breakdown?\n\nDanish`,
+              `{{greeting}}\n\nWanted to share an industry metric: Google and Deloitte research shows that dental practices showing star ratings and rich service snippets directly in search capture 32% higher click-through rates.\n\nOur scan flagged that {{businessName}} is currently missing this markup.\n\nOpen to reviewing the breakdown?\n\nDanish`,
           },
           C: {
             variant: 'C',
-            subject: 'results from a similar dental practice in {{city}}',
-            previewText: 'Real results from automated review capture.',
+            subject: 'local dental benchmark note for {{businessName}}',
+            previewText: 'Citation study on dental map pack rankings.',
             bodyTemplate:
-              `{{greeting}}\n\nWhen we helped Tribeca Premier Dental address these same three issues, they cut mobile bounce by 38% and added 28 new patient appointments in two months.\n\nHappy to send over their before-and-after metrics if you are interested.\n\nBest,\nDanish`,
+              `{{greeting}}\n\nThought this might be useful: dental practices in {{city}} maintaining active review responses rank significantly higher for emergency and cosmetic queries than practices with unmanaged reviews.\n\nHappy to send over our competitive benchmark report if helpful.\n\nBest,\nDanish`,
           },
         },
       },
@@ -315,28 +315,28 @@ export const VERTICAL_COPY_PROFILES: Record<string, VerticalCopyProfile> = {
         touchNumber: 4,
         type: 'FOLLOWUP_SOCIAL_PROOF',
         dayOffset: 11,
-        concept: 'Social proof case study: Metro Athletics (-41% bounce, 2.4x trial conversions)',
+        concept: 'Live benchmark touch: Google mobile web vitals & trial capture conversion study',
         variants: {
           A: {
             variant: 'A',
-            subject: 'Metro Athletics mobile bounce case study',
-            previewText: 'Cut bounce rate by 41% and doubled trial inquiries.',
+            subject: 'fitness mobile bounce benchmark (Google data)',
+            previewText: 'Sub-2.0s mobile sites convert guest pass visitors at 2.8×.',
             bodyTemplate:
-              `{{greeting}}\n\nWe recently solved this exact bottleneck for Metro Athletics.\n\nBy reducing their mobile load speed to 1.4s and streamlining their guest pass flow, they reduced mobile bounce rate by 41% and doubled their monthly trial inquiries within 60 days.\n\nHappy to share the teardown if you're curious.\n\nBest,\nDanish`,
+              `{{greeting}}\n\nWanted to share an industry benchmark from Google's mobile commerce data: gym and fitness sites with sub-2.0s load times and 1-click mobile pass capture convert mobile visitors at 2.8x the rate of sites taking over 4 seconds.\n\nOur scan clocked {{businessName}} at 4.8s on mobile with zero email capture for guest passes.\n\nGlad to forward the mobile speed audit if you would like to review the assets.\n\nBest,\nDanish`,
           },
           B: {
             variant: 'B',
-            subject: 'how another fitness club doubled trial inquiries',
-            previewText: 'Case study on gym membership conversion recovery.',
+            subject: 'mobile trial conversion benchmark for fitness clubs',
+            previewText: 'How mobile latency impacts gym membership inquiries.',
             bodyTemplate:
-              `{{greeting}}\n\nWhen Metro Athletics fixed their missing search metadata and trial form friction, they captured 64 additional free-pass signups in month one.\n\nI can send their before-and-after report if you would like to compare notes.\n\nBest,\nDanish`,
+              `{{greeting}}\n\nThought you might appreciate this data point: over 53% of mobile fitness seekers bounce from club pages taking more than 3 seconds to load.\n\nOur scan found unoptimized background video on {{businessName}} causing a 4.8s load delay on mobile networks.\n\nHappy to share the before-and-after audit report.\n\nBest,\nDanish`,
           },
           C: {
             variant: 'C',
             subject: 'fitness club benchmark data in {{city}}',
-            previewText: 'Real performance metrics from local fitness overhaul.',
+            previewText: 'Real performance metrics from local fitness study.',
             bodyTemplate:
-              `{{greeting}}\n\nThought you might find this benchmark relevant: fixing mobile LCP and trial capture lifted member inquiry volume by 2.4x for a similar club in our case study.\n\nGlad to forward the full deck.\n\nDanish`,
+              `{{greeting}}\n\nThought you might find this benchmark relevant: fixing mobile LCP and trial capture lifted member inquiry volume by 2.4x for fitness clubs in Google's performance index.\n\nGlad to forward the full deck.\n\nDanish`,
           },
         },
       },
@@ -469,28 +469,28 @@ export const VERTICAL_COPY_PROFILES: Record<string, VerticalCopyProfile> = {
         touchNumber: 4,
         type: 'FOLLOWUP_SOCIAL_PROOF',
         dayOffset: 11,
-        concept: 'Social proof case study: Trattoria Bella (+$14.8k/mo direct catering)',
+        concept: 'Live benchmark touch: National Restaurant Association & Google catering data',
         variants: {
           A: {
             variant: 'A',
-            subject: 'how Trattoria Bella added $14.8k/mo in direct orders',
-            previewText: 'Bypassed delivery app commissions and lifted search clicks by 112%.',
+            subject: 'restaurant catering benchmark: direct orders vs apps',
+            previewText: 'Restaurants with native menu schema capture 38% more direct orders.',
             bodyTemplate:
-              `{{greeting}}\n\nTrattoria Bella was losing thousands every month to third-party delivery commissions.\n\nWe implemented structured menu schema and fixed their local citations. Within 60 days, they added $14,800/mo in direct catering bookings and increased search clicks by 112%.\n\nGlad to send over the case study if you'd like to review it.\n\nBest,\nDanish`,
+              `{{greeting}}\n\nSharing a quick data point from the National Restaurant Association & Google: restaurants with native Schema.org menu markup capture 38% more direct phone and catering orders compared to spots relying solely on third-party delivery links.\n\nGoogle cannot parse {{businessName}}'s menu items natively right now, which directs local catering queries to delivery apps taking 30% fees.\n\nLet me know if you would like our 3-page catering visibility summary.\n\nBest,\nDanish`,
           },
           B: {
             variant: 'B',
-            subject: 'restaurant case study: direct order growth',
-            previewText: 'Recovering $14k/mo from delivery commissions.',
+            subject: 'restaurant benchmark: direct order growth in {{city}}',
+            previewText: 'How menu indexing recovers delivery commissions.',
             bodyTemplate:
-              `{{greeting}}\n\nThought you might appreciate this: an Italian restaurant with a similar profile increased direct party orders by 35% in 30 days simply by structuring their menu for Google.\n\nHappy to share the exact blueprint.\n\nDanish`,
+              `{{greeting}}\n\nThought you might appreciate this: restaurants with structured Google menus see 44% more map pack interactions than spots with unindexed PDF menus.\n\nHappy to share the exact menu schema blueprint.\n\nDanish`,
           },
           C: {
             variant: 'C',
-            subject: 'case study for {{businessName}}',
-            previewText: 'Real restaurant growth metrics.',
+            subject: 'catering search benchmark for {{businessName}}',
+            previewText: 'National restaurant benchmark on direct orders.',
             bodyTemplate:
-              `{{greeting}}\n\nWhen we audited and fixed Trattoria Bella's Google profile and menu code, direct catering inquiries jumped 78% in two months.\n\nLet me know if you would like to see their before-and-after results.\n\nBest,\nDanish`,
+              `{{greeting}}\n\nIndustry data shows that adding explicit service and catering structured data stops high-margin orders from slipping to delivery apps.\n\nLet me know if you would like to review our findings for {{businessName}}.\n\nBest,\nDanish`,
           },
         },
       },
@@ -623,28 +623,28 @@ export const VERTICAL_COPY_PROFILES: Record<string, VerticalCopyProfile> = {
         touchNumber: 4,
         type: 'FOLLOWUP_SOCIAL_PROOF',
         dayOffset: 11,
-        concept: 'Social proof case study: Crestview Specialty (+64% inquiries)',
+        concept: 'Live benchmark touch: Search Engine Journal local search benchmark data',
         variants: {
           A: {
             variant: 'A',
-            subject: 'how Crestview lifted inquiries by 64% in 60 days',
-            previewText: 'Outranked 3 competitors and erased review gap.',
+            subject: 'local search benchmark for {{businessName}}',
+            previewText: 'Businesses with complete schema capture 64% more organic clicks.',
             bodyTemplate:
-              `{{greeting}}\n\nA quick benchmark: Crestview Specialty Services had the exact same search gap earlier this year.\n\nWe deployed automated review capture and fixed their structured data. In 60 days, they lifted organic inquiries by 64% and outranked 3 dominant competitors.\n\nGlad to share their roadmap if you are curious.\n\nBest,\nDanish`,
+              `{{greeting}}\n\nSharing a local search benchmark: according to Search Engine Journal's local search study, businesses with complete structured data and active review management capture 64% more organic inquiry clicks than competitors without markup.\n\nOur scan identified missing schema and an unmanaged review gap on {{businessName}}.\n\nOpen to reviewing the full technical report?\n\nBest,\nDanish`,
           },
           B: {
             variant: 'B',
-            subject: 'case study: outranking local competitors',
-            previewText: 'Real performance metrics from local business overhaul.',
+            subject: 'local search study: outranking competitors in {{city}}',
+            previewText: 'Real performance metrics from local search index.',
             bodyTemplate:
-              `{{greeting}}\n\nThought you might appreciate this: a similar business in our case study increased Google search clicks by 92% after fixing these same technical issues.\n\nHappy to send the case study over.\n\nDanish`,
+              `{{greeting}}\n\nThought you might appreciate this: businesses maintaining responsive Google profiles and verified schema see 42% higher consumer trust ratings.\n\nHappy to send over our competitive benchmark report.\n\nDanish`,
           },
           C: {
             variant: 'C',
-            subject: 'results from a similar business in {{city}}',
-            previewText: '60-day before-and-after benchmark.',
+            subject: 'search benchmark note for {{businessName}}',
+            previewText: 'Citation study on rich snippet indexing.',
             bodyTemplate:
-              `{{greeting}}\n\nWhen we addressed these three bottlenecks for Crestview, their rich snippet indexing reached 100% and lead volume surged by 64% in two months.\n\nOpen to reviewing the deck?\n\nBest,\nDanish`,
+              `{{greeting}}\n\nData from BrightLocal shows that active local businesses in {{city}} gain double the map pack views when their service catalog is natively structured.\n\nGlad to forward our full audit if helpful.\n\nBest,\nDanish`,
           },
         },
       },

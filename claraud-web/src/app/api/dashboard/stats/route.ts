@@ -50,7 +50,7 @@ export async function GET() {
         pipelineValue,
         conversionRate: Math.round(conversionRate),
       },
-      recentActivity: recentAuditsData.map((a) => ({
+      recentActivity: recentAuditsData.map((a: any) => ({
         id: a.id,
         title: `Audit ${a.status.toLowerCase()} for ${a.businessName}`,
         date: a.createdAt,

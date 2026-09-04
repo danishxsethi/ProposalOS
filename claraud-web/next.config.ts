@@ -18,7 +18,7 @@ const nextConfig: NextConfig = {
     ? {}
     : {
         turbopack: {
-          root: path.resolve(__dirname, '..'),
+          root: path.resolve(__dirname),
         },
       }),
   images: {
@@ -30,7 +30,7 @@ const nextConfig: NextConfig = {
   },
   // Performance optimizations
   compiler: {
-    removeConsole: process.env.NODE_ENV === 'production',
+    // removeConsole: process.env.NODE_ENV === 'production',
   },
   // Code splitting hints
   webpack: (config, { isServer }) => {

@@ -26,7 +26,7 @@ export async function GET(req: Request) {
     return NextResponse.json({
       profile: { name: user?.name, email: user?.email },
       branding: tenant?.branding || {},
-      apiKeys: apiKeys.map((k) => ({
+      apiKeys: apiKeys.map((k: any) => ({
         id: k.id,
         name: k.name,
         prefix: k.keyPrefix,

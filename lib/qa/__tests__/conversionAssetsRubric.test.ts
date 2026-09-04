@@ -62,10 +62,10 @@ describe('Phase 5: Scoring Rubrics & Adversarial Verification', () => {
       expect(model.guarantee.summary).toContain('100% free');
     });
 
-    it('Dimension 5: Social Proof (Score: 9.0/10)', () => {
-      expect(model.socialProof.metrics.length).toBeGreaterThanOrEqual(2);
-      expect(model.socialProof.headline.length).toBeGreaterThan(10);
-      expect(model.socialProof.quote.length).toBeGreaterThan(20);
+    it('Dimension 5: Why This Works (Cited Industry Evidence) (Score: 9.0/10)', () => {
+      expect(model.whyThisWorks.metrics.length).toBeGreaterThanOrEqual(2);
+      expect(model.whyThisWorks.headline.length).toBeGreaterThan(10);
+      expect(model.whyThisWorks.citation.length).toBeGreaterThan(5);
     });
 
     it('Dimension 6: Urgency & Pricing Lock (Score: 9.0/10)', () => {
@@ -134,7 +134,7 @@ describe('Phase 5: Scoring Rubrics & Adversarial Verification', () => {
       expect(sequence[0].body).toContain('342 more reviews');
       expect(sequence[1].body).toContain('missing LocalBusiness and FAQPage schema');
       expect(sequence[2].body).toContain('quick win your team can deploy today in 5 minutes');
-      expect(sequence[3].body).toContain('Tribeca Premier Dental');
+      expect(sequence[3].body).toContain("BrightLocal's 2024 healthcare study");
       expect(sequence[4].subject).toContain('permission to close your file?');
     });
 

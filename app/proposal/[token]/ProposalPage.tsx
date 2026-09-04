@@ -445,28 +445,43 @@ export default function ProposalPage({ proposal, branding }: ProposalProps) {
             <p className="text-[11px] text-white/40 mt-4 italic">{model.guarantee.disclaimer}</p>
           </div>
 
-          {/* ─── 8. Social Proof Case Study ──────────────────────── */}
+          {/* ─── 8. Why This Works (Cited Industry Evidence) ───────── */}
           <div className="p-8 rounded-2xl bg-[#0f172a] border border-white/10 flex flex-col md:flex-row items-center justify-between gap-6">
             <div className="flex-1">
               <div className="text-xs font-bold uppercase text-[#38bdf8] tracking-wider mb-1">
-                Verified Benchmark • {model.socialProof.vertical}
+                Why This Works • Cited Industry Evidence ({model.whyThisWorks.citation})
               </div>
-              <h3 className="text-lg sm:text-xl font-bold text-white mb-2">{model.socialProof.headline}</h3>
-              <p className="text-xs sm:text-sm text-white/70 italic mb-4">"{model.socialProof.quote}"</p>
-              <div className="text-xs font-bold text-white">
-                {model.socialProof.author} <span className="text-white/50 font-normal">• {model.socialProof.role}</span>
+              <h3 className="text-lg sm:text-xl font-bold text-white mb-2">{model.whyThisWorks.headline}</h3>
+              <p className="text-xs sm:text-sm text-white/70 mb-4 leading-relaxed">{model.whyThisWorks.context}</p>
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded bg-white/5 border border-white/10 text-xs text-white/60">
+                <span>Verified Metric:</span>
+                <span className="font-bold text-emerald-400">{model.whyThisWorks.statHighlight}</span>
               </div>
             </div>
             <div className="grid grid-cols-3 gap-3 shrink-0 w-full md:w-auto">
-              {model.socialProof.metrics.map((m, mIdx) => (
+              {model.whyThisWorks.metrics.map((m, mIdx) => (
                 <div key={mIdx} className="p-3 rounded-xl bg-white/5 border border-white/10 text-center">
                   <div className="text-lg font-black text-[#38bdf8]">{m.value}</div>
                   <div className="text-[10px] text-white/70">{m.label}</div>
-                  <div className="text-[9px] text-white/40">{m.timeframe}</div>
+                  <div className="text-[9px] text-white/40">{m.source}</div>
                 </div>
               ))}
             </div>
           </div>
+
+          {/* Real Case Study (Only renders when verified client is present in config) */}
+          {model.realCaseStudy && (
+            <div className="mt-6 p-8 rounded-2xl bg-[#0f172a] border border-white/10">
+              <div className="text-xs font-bold uppercase text-emerald-400 tracking-wider mb-1">
+                Verified Client Brief • {model.realCaseStudy.clientName}
+              </div>
+              <h3 className="text-lg font-bold text-white mb-2">{model.realCaseStudy.headline}</h3>
+              <p className="text-sm text-white/70 italic mb-3">"{model.realCaseStudy.quote}"</p>
+              <div className="text-xs text-white/50">
+                {model.realCaseStudy.author} — {model.realCaseStudy.role}
+              </div>
+            </div>
+          )}
         </div>
       </section>
 

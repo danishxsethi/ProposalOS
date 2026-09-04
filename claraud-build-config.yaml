@@ -1,3 +1,7 @@
 steps:
   - name: 'gcr.io/cloud-builders/docker'
     args: ['build', '-t', 'us-central1-docker.pkg.dev/proposal-487522/proposalos-prod-containers/claraud-web:latest', '-f', 'claraud-web/Dockerfile', '.']
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', 'us-central1-docker.pkg.dev/proposal-487522/proposalos-prod-containers/claraud-web:latest']
+images:
+  - 'us-central1-docker.pkg.dev/proposal-487522/proposalos-prod-containers/claraud-web:latest'

@@ -21,7 +21,7 @@ export async function POST(req: Request) {
 
       const passwordHash = await bcrypt.hash(validatedData.password, 10);
 
-      const created = await prisma.$transaction(async (tx) => {
+      const created = await prisma.$transaction(async (tx: any) => {
         const tenant = await tx.tenant.create({
           data: {
             name: `${validatedData.name}'s Workspace`,

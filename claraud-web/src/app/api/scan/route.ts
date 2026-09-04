@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-import { apiClient } from '@/lib/api-client';
+import { apiClient, lastApiError } from '@/lib/api-client';
 import { ScanRequest } from '@/lib/types';
 
 export async function POST(req: NextRequest) {
   try {
+    process.stdout.write('[scan route] POST called\n');
     const body: ScanRequest = await req.json();
+    process.stdout.write(`[scan route] body: ${JSON.stringify(body)}\n`);
     const { url, businessName, placeId, city, industry } = body;
 
     // Validate input
@@ -32,16 +34,17 @@ export async function POST(req: NextRequest) {
       businessCity: city,
       businessIndustry: industry,
     });
+    process.stdout.write(`[scan route] audit result: ${JSON.stringify(audit)}\n`);
 
-    if (audit && audit.id) {
+    if (audit && (audit.id || audit.auditId)) {
       return NextResponse.json(
-        { token: audit.id, status: 'scanning' },
+        { token: audit.id || audit.auditId, status: 'scanning' },
         { headers: { 'Cache-Control': 'no-store' } }
       );
     }
 
     return NextResponse.json(
-      { error: 'Audit service temporarily unavailable' },
+      { error: 'Audit service temporarily unavailable', detail: lastApiError },
       { status: 503, headers: { 'Cache-Control': 'no-store' } }
     );
   } catch (err) {

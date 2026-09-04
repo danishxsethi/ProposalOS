@@ -18,9 +18,11 @@ import { calculateFindingROI, INDUSTRY_ROI_BENCHMARKS } from './roiCalculator';
 import {
   CANONICAL_OFFERS,
   formatDollar,
+  getEvidenceBenchmarkForVertical,
   getOffersForProposal,
   getSocialProofForVertical,
   getUrgencyExpiryDate,
+  IndustryEvidenceBenchmark,
   OfferTierDefinition,
   RiskReversalGuarantee,
   SocialProofCaseStudy,
@@ -105,8 +107,9 @@ export interface ProposalConversionModel {
   // 7. Risk Reversal Guarantee
   guarantee: RiskReversalGuarantee;
 
-  // 8. Social Proof
-  socialProof: SocialProofCaseStudy;
+  // 8. Why This Works (Cited Industry Evidence Benchmark) & Real Case Study (if exists)
+  whyThisWorks: IndustryEvidenceBenchmark;
+  realCaseStudy: SocialProofCaseStudy | null;
 
   // Competitor Comparison
   competitorSummary?: {
@@ -410,7 +413,8 @@ export function buildProposalConversionModel(
     roadmap,
     pricingTiers,
     guarantee: CANONICAL_OFFERS.guarantee,
-    socialProof: getSocialProofForVertical(businessIndustry),
+    whyThisWorks: getEvidenceBenchmarkForVertical(businessIndustry),
+    realCaseStudy: getSocialProofForVertical(businessIndustry),
     competitorSummary,
   };
 }

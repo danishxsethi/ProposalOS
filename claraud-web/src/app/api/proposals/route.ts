@@ -40,7 +40,7 @@ export async function GET(req: Request) {
     );
 
     return NextResponse.json({
-      proposals: proposals.map((p) => ({
+      proposals: proposals.map((p: any) => ({
         id: p.id,
         businessName: p.audit.businessName,
         status: p.status,

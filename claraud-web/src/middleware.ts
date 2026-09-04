@@ -25,6 +25,9 @@ const publicPrefixes = [
   '/api/lead',
   '/api/health',
   '/api/scan',
+  '/api/scan-status',
+  '/api/report',
+  '/api/proposal',
   '/industries/',
   '/legal/',
 ];

@@ -31,7 +31,9 @@ RUN adduser --system --uid 1001 nextjs
 
 # Copy the standalone output which maintains the monorepo structure
 COPY --from=builder --chown=nextjs:nodejs /app/claraud-web/.next/standalone ./
+COPY --from=builder --chown=nextjs:nodejs /app/claraud-web/.next/static ./.next/static
 COPY --from=builder --chown=nextjs:nodejs /app/claraud-web/.next/static ./claraud-web/.next/static
+COPY --from=builder /app/claraud-web/public ./public
 COPY --from=builder /app/claraud-web/public ./claraud-web/public
 
 USER nextjs
@@ -39,6 +41,5 @@ EXPOSE 3000
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
 
-# Run the app from the nested claraud-web directory
-WORKDIR /app/claraud-web
+WORKDIR /app
 CMD ["node", "server.js"]

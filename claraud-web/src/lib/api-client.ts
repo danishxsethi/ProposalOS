@@ -1,11 +1,17 @@
+export let lastApiError: string | null = null;
+
 class ProposalEngineClient {
   private baseUrl: string;
   private apiKey: string;
   private timeout: number = 60000;
 
   constructor() {
-    this.baseUrl = process.env.PROPOSAL_ENGINE_API_URL || '';
-    this.apiKey = process.env.PROPOSAL_ENGINE_API_KEY || '';
+    this.baseUrl =
+      process.env.PROPOSAL_ENGINE_API_URL ||
+      'https://proposal-engine-staging-ouitkhk5xq-uc.a.run.app';
+    this.apiKey =
+      process.env.PROPOSAL_ENGINE_API_KEY ||
+      'local-dev-api-key-change-in-production';
   }
 
   private async fetch<T>(path: string, options?: RequestInit): Promise<T | null> {
@@ -18,27 +24,33 @@ class ProposalEngineClient {
     const timeoutId = setTimeout(() => controller.abort(), this.timeout);
 
     try {
+      const internalOpsKey =
+        process.env.INTERNAL_OPS_KEY ||
+        'a03c963c3aa4d8af8da4815b5ddbad236436e506a2d5a0cdee951d46903df263';
+      const tenantId =
+        process.env.DEFAULT_TENANT_ID || '4a9e4e82-961f-4b3d-93da-0cbe4603c458';
+
       const response = await fetch(`${this.baseUrl}${path}`, {
         ...options,
         signal: controller.signal,
         headers: {
           'Content-Type': 'application/json',
           'X-API-Key': this.apiKey,
+          'x-internal-ops-key': internalOpsKey,
+          'x-tenant-id': tenantId,
           ...options?.headers,
         },
       });
 
       if (!response.ok) {
         const text = await response.text();
-        console.error(
-          `[API Client] ${path} returned ${response.status}: ${response.statusText} - ${text}`
-        );
+        lastApiError = `${response.status} ${response.statusText} - ${text}`;
         return null;
       }
 
       return (await response.json()) as T;
     } catch (error) {
-      console.error(`[API Client] ${path} failed:`, error);
+      lastApiError = error instanceof Error ? error.message : String(error);
       return null;
     } finally {
       clearTimeout(timeoutId);
@@ -87,6 +99,8 @@ class ProposalEngineClient {
   }
 
   async getProposal(token: string): Promise<any | null> {
+    const res = await this.fetch(`/api/proposal/token/${token}`);
+    if (res) return res;
     return this.fetch(`/api/proposal/${token}`);
   }
 }

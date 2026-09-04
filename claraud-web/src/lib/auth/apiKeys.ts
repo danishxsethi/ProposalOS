@@ -62,7 +62,7 @@ export async function validateApiKey(rawKey: string) {
           where: { id: apiKey.id },
           data: { usageCount: 1, lastResetAt: now, lastUsedAt: now },
         })
-        .catch((err) => console.error('Failed to reset API key usage', err));
+        .catch((err: any) => console.error('Failed to reset API key usage', err));
     } else {
       // Same day - check limit
       if (currentUsage >= apiKey.rateLimitPerDay) {
@@ -86,7 +86,7 @@ export async function validateApiKey(rawKey: string) {
           where: { id: apiKey.id },
           data: { usageCount: { increment: 1 }, lastUsedAt: now },
         })
-        .catch((err) => console.error('Failed to update API key usage', err));
+        .catch((err: any) => console.error('Failed to update API key usage', err));
     }
 
     return {

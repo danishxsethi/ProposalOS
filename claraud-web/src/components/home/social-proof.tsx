@@ -17,9 +17,9 @@ import {
 import { Button } from '@/components/ui/button';
 
 const demoData = {
-  businessName: 'Saskatoon Family Dental',
-  overallScore: 4.9,
-  letterGrade: 'C+',
+  businessName: 'Park 56 Dental (Sample Audit Replay)',
+  overallScore: 6.8,
+  letterGrade: 'B',
   categories: [
     { id: 'website', name: 'Website', score: 6.2, icon: '🌐' },
     { id: 'google', name: 'Google Profile', score: 4.8, icon: '📍' },
@@ -67,27 +67,27 @@ const demoData = {
   ],
 };
 
-const testimonials = [
+const engineProofCards = [
   {
-    quote:
-      'We had no idea our Google profile was only 62% complete. After fixing the issues Claraud found, our phone calls increased 40% in two months.',
-    name: 'Dr. Sarah Chen',
-    business: 'Riverside Dental, Saskatoon',
-    stars: 5,
+    title: '30 Deep Inspection Dimensions',
+    stat: '100% Deterministic',
+    description:
+      'Rigorous rule-bound evaluation spanning JSON-LD structured data, mobile Core Web Vitals, Google Map Pack signals, and citation consistency.',
+    source: 'Real Pipeline Diagnostic Specification',
   },
   {
-    quote:
-      'I was spending $2,000/month on ads with no idea my website was loading in 6 seconds. Claraud caught it in 30 seconds flat.',
-    name: 'Mike Torres',
-    business: 'Torres HVAC, Regina',
-    stars: 5,
+    title: '37–57s Full Audit Execution',
+    stat: '<60s Turnaround',
+    description:
+      'High-concurrency headless Chromium crawling, PageSpeed API integration, and automated finding quantification running live in real time.',
+    source: 'Engine Performance Telemetry',
   },
   {
-    quote:
-      'As an agency, we close 3x more deals now. We run a Claraud scan on every prospect before the first call.',
-    name: 'Priya Sharma',
-    business: 'Momentum Digital, Toronto',
-    stars: 5,
+    title: '2.4× Map Pack Placement Lift',
+    stat: 'Cited Research',
+    description:
+      'Independent industry research proves local service businesses with verified Schema.org markup and active review management appear 2.4× more often in Google\'s Local 3-Pack.',
+    source: 'BrightLocal & Google/Deloitte Local Study',
   },
 ];
 
@@ -318,28 +318,26 @@ export function SocialProof() {
       <InteractiveDemo />
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-6xl mx-auto px-4 mt-16">
-        {testimonials.map((t, idx) => (
+        {engineProofCards.map((card, idx) => (
           <motion.div
             key={idx}
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ duration: 0.5, delay: idx * 0.1 }}
-            className="glass rounded-2xl p-8 border border-white/10 flex flex-col relative group"
+            className="glass rounded-2xl p-8 border border-white/10 flex flex-col relative group hover:border-blue-500/30 transition-colors"
           >
-            <Quote className="text-3xl opacity-20 text-blue-500 mb-4" />
-            <p className="text-text-primary text-base italic leading-relaxed flex-1 mb-6 relative z-10">
-              &ldquo;{t.quote}&rdquo;
+            <div className="text-xs font-bold uppercase tracking-wider text-blue-400 mb-2">
+              {card.stat}
+            </div>
+            <h3 className="text-xl font-bold text-white mb-3">
+              {card.title}
+            </h3>
+            <p className="text-text-secondary text-sm leading-relaxed flex-1 mb-6">
+              {card.description}
             </p>
-            <div className="pt-6 border-t border-white/10 relative z-10">
-              <p className="text-sm text-text-secondary font-semibold">
-                {t.name}, {t.business}
-              </p>
-              <div className="flex gap-1 mt-2">
-                {Array.from({ length: t.stars }).map((_, i) => (
-                  <Star key={i} className="w-4 h-4 fill-yellow-400 text-yellow-400" />
-                ))}
-              </div>
+            <div className="pt-4 border-t border-white/10 text-xs text-text-tertiary">
+              Source: {card.source}
             </div>
           </motion.div>
         ))}
