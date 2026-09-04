@@ -7,7 +7,7 @@ import { recordAuditTrailEvent } from '@/lib/observability/auditTrail';
 import { prisma } from '@/lib/prisma';
 import { assertProposalPublishable, publicProposalCitations } from '@/lib/proposal/publication';
 import { hashSensitive } from '@/lib/security/abuseDefense/policies';
-import { getTenantId } from '@/lib/tenant/context';
+import { getTenantId, runWithTenantAsync, runWithTenantBypass } from '@/lib/tenant/context';
 
 interface Params {
   params: Promise<{ token: string }>;
@@ -22,19 +22,21 @@ export async function GET(request: Request, { params }: Params) {
     const { token } = await params;
 
     // Find proposal by token first
-    const proposal = await prisma.proposal.findUnique({
-      where: { webLinkToken: token },
-      include: {
-        audit: {
-          include: {
-            findings: {
-              where: { excluded: false },
-              orderBy: { impactScore: 'desc' },
+    const proposal = await runWithTenantBypass('proposal-token-lookup', () =>
+      prisma.proposal.findUnique({
+        where: { webLinkToken: token },
+        include: {
+          audit: {
+            include: {
+              findings: {
+                where: { excluded: false },
+                orderBy: { impactScore: 'desc' },
+              },
             },
           },
         },
-      },
-    });
+      })
+    );
 
     if (!proposal) {
       // 1. Invalid Token Attempt: IP-scoped strict rate limit (10 attempts per hour)

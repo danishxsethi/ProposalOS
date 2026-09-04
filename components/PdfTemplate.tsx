@@ -1,692 +1,624 @@
-import {
-  type BusinessData,
-  type CompetitorData,
-  generateComparisonChartSVG,
-  generatePriorityMatrixSVG,
-  generateScoreGaugeSVG,
-} from '@/lib/pdf/charts';
-
-/* PDF Design System — navy #1a1a2e + accent blue #4361ee */
-const COLORS = {
-  primary: '#1a1a2e',
-  accent: '#4361ee',
-  secondary: '#16213e',
-  background: '#ffffff',
-  sectionBg: '#f8f9fa',
-  text: '#1a1a2e',
-  textMuted: '#6c757d',
-  scoreGreen: '#22c55e',
-  scoreYellow: '#f59e0b',
-  scoreOrange: '#f97316',
-  scoreRed: '#ef4444',
-};
-
-/** 0-40 = red, 41-70 = yellow, 71-100 = green */
-function getScoreColor(score: number): string {
-  if (score >= 71) return COLORS.scoreGreen;
-  if (score >= 41) return COLORS.scoreYellow;
-  return COLORS.scoreRed;
-}
-
-function getSeverityColor(severity: string): string {
-  switch (severity.toUpperCase()) {
-    case 'CRITICAL':
-      return COLORS.scoreRed;
-    case 'HIGH':
-      return COLORS.scoreOrange;
-    case 'MEDIUM':
-      return COLORS.scoreYellow;
-    case 'LOW':
-      return COLORS.scoreGreen;
-    default:
-      return COLORS.textMuted;
-  }
-}
-
-function extractScores(findings: any[]): {
-  performance: number;
-  seo: number;
-  accessibility: number;
-  security: number;
-} {
-  let performance = 0,
-    seo = 0,
-    accessibility = 0,
-    security = 0;
-  let pCount = 0,
-    sCount = 0,
-    aCount = 0,
-    secCount = 0;
-
-  for (const f of findings) {
-    const m = (f.metrics as Record<string, number>) || {};
-    if (typeof m.performanceScore === 'number') {
-      performance += m.performanceScore;
-      pCount++;
-    }
-    if (typeof m.seoScore === 'number') {
-      seo += m.seoScore;
-      sCount++;
-    }
-    if (typeof m.accessibilityScore === 'number') {
-      accessibility += m.accessibilityScore;
-      aCount++;
-    }
-    if (f.module === 'security' && typeof m.score === 'number') {
-      security += m.score;
-      secCount++;
-    }
-  }
-
-  return {
-    performance: pCount ? Math.round(performance / pCount) : 0,
-    seo: sCount ? Math.round(seo / sCount) : 0,
-    accessibility: aCount ? Math.round(accessibility / aCount) : 0,
-    security: secCount ? Math.round(security / secCount) : 0,
-  };
-}
-
-function groupFindingsByCategory(findings: any[]): Record<string, any[]> {
-  const groups: Record<string, any[]> = {
-    Speed: [],
-    SEO: [],
-    Reputation: [],
-    Conversion: [],
-    Security: [],
-    Other: [],
-  };
-
-  const categoryMap: Record<string, string> = {
-    performance: 'Speed',
-    visibility: 'SEO',
-    trust: 'Reputation',
-    conversion: 'Conversion',
-    security: 'Security',
-  };
-
-  const moduleToCategory: Record<string, string> = {
-    website: 'Speed',
-    seo: 'SEO',
-    gbp: 'Reputation',
-    reputation: 'Reputation',
-    competitor: 'Reputation',
-    social: 'Reputation',
-    conversion: 'Conversion',
-    security: 'Security',
-  };
-
-  for (const f of findings) {
-    const cat = categoryMap[f.category] || moduleToCategory[f.module] || 'Other';
-    const key = groups[cat] ? cat : 'Other';
-    if (!groups[key]) groups[key] = [];
-    groups[key].push(f);
-  }
-
-  return groups;
-}
+import { buildProposalConversionModel } from '@/lib/proposal/conversionViewModel';
+import { generateScoreGaugeSVG } from '@/lib/pdf/charts';
 
 interface PdfTemplateProps {
-  proposal: {
-    executiveSummary: string | null;
-    painClusters: unknown;
-    comparisonReport?: unknown;
-    tierEssentials: any;
-    tierGrowth: any;
-    tierPremium: any;
-    pricing: any;
-    nextSteps: string[];
-    audit: {
-      businessName: string;
-      businessCity: string | null;
-      businessIndustry: string | null;
-      overallScore: number | null;
-      findings: any[];
-    };
-    createdAt: Date;
-    webLinkToken: string;
+  proposal: any;
+  branding: {
+    name: string;
+    logoUrl: string | null;
+    contact: { website?: string; email?: string };
+    colors?: { primary?: string; accent?: string };
   };
-  branding: { name: string; logoUrl: string | null; contact: { website?: string } };
 }
 
 export default async function PdfTemplate({ proposal, branding }: PdfTemplateProps) {
-  const formatDate = (d: Date) =>
-    new Date(d).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
-  const scores = extractScores(proposal.audit.findings);
-  const painkillers = proposal.audit.findings
-    .filter((f: any) => f.type === 'PAINKILLER')
-    .sort((a: any, b: any) => b.impactScore - a.impactScore);
-  const topFinding = painkillers[0];
-  const groupedFindings = groupFindingsByCategory(proposal.audit.findings);
-  const pricing =
-    (proposal.pricing as { essentials?: number; growth?: number; premium?: number }) || {};
-  const tierEssentials = proposal.tierEssentials || {};
-  const tierGrowth = proposal.tierGrowth || {};
-  const tierPremium = proposal.tierPremium || {};
-  const proposalUrl = `${process.env.NEXT_PUBLIC_BASE_URL || 'https://proposalengine.com'}/proposal/${proposal.webLinkToken}`;
+  const model = buildProposalConversionModel(proposal, {
+    calendarUrl: branding.contact?.website || process.env.OUTREACH_CALENDAR_URL,
+  });
+
+  const brandName = branding?.name || model.brandName;
+  const bookingUrl = model.calendarBookingUrl;
 
   return (
-    <div className="pdf-document">
-      {/* Page 1 — Cover (new agency-grade design) */}
-      <div className="pdf-page pdf-cover">
-        <div className="pdf-cover-content">
-          <div className="pdf-cover-logo-text">{branding.name}</div>
-          <h1 className="pdf-cover-business">{proposal.audit.businessName}</h1>
-          <p className="pdf-cover-subtitle">Website Performance & Growth Roadmap</p>
-          <p className="pdf-cover-date">{formatDate(proposal.createdAt)}</p>
+    <div className="pdf-document" style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>
+      {/* ─── Page 1: Executive Cover Page ────────────────────────── */}
+      <div
+        className="pdf-page pdf-cover"
+        style={{
+          pageBreakAfter: 'always',
+          minHeight: '260mm',
+          backgroundColor: '#0f172a',
+          color: '#ffffff',
+          padding: '48px 40px',
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'space-between',
+          boxSizing: 'border-box',
+        }}
+      >
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ fontSize: '18px', fontWeight: 700, letterSpacing: '0.05em', color: '#38bdf8' }}>
+            {brandName.toUpperCase()}
+          </div>
+          <div
+            style={{
+              fontSize: '11px',
+              fontWeight: 600,
+              letterSpacing: '0.08em',
+              textTransform: 'uppercase',
+              padding: '6px 14px',
+              borderRadius: '9999px',
+              backgroundColor: 'rgba(56, 189, 248, 0.15)',
+              color: '#38bdf8',
+              border: '1px solid rgba(56, 189, 248, 0.3)',
+            }}
+          >
+            CONFIDENTIAL BRIEFING
+          </div>
         </div>
-        <div className="pdf-cover-footer">
-          <p>Prepared by {branding.name}</p>
-          {branding.logoUrl && <img src={branding.logoUrl} alt="" className="pdf-cover-logo" />}
+
+        <div style={{ margin: 'auto 0', padding: '60px 0' }}>
+          <div
+            style={{
+              display: 'inline-block',
+              fontSize: '12px',
+              fontWeight: 600,
+              color: '#94a3b8',
+              textTransform: 'uppercase',
+              letterSpacing: '0.1em',
+              marginBottom: '16px',
+            }}
+          >
+            Forensic Digital Performance & Revenue Audit
+          </div>
+          <h1
+            style={{
+              fontSize: '38px',
+              fontWeight: 800,
+              lineHeight: 1.15,
+              color: '#ffffff',
+              margin: '0 0 20px 0',
+            }}
+          >
+            {model.businessName}
+          </h1>
+          <p
+            style={{
+              fontSize: '18px',
+              lineHeight: 1.5,
+              color: '#e2e8f0',
+              maxWidth: '680px',
+              margin: '0 0 24px 0',
+            }}
+          >
+            {model.hookHeader.headline}
+          </p>
+          <div
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '12px',
+              padding: '10px 18px',
+              backgroundColor: 'rgba(239, 68, 68, 0.15)',
+              border: '1px solid rgba(239, 68, 68, 0.3)',
+              borderRadius: '8px',
+              color: '#fca5a5',
+              fontSize: '13px',
+              fontWeight: 600,
+            }}
+          >
+            <span>Primary Revenue Leak:</span>
+            <span style={{ color: '#ffffff' }}>{model.hookHeader.primaryProblemTitle}</span>
+            <span>({model.hookHeader.primaryProblemLossFormatted}/mo)</span>
+          </div>
+        </div>
+
+        <div
+          style={{
+            borderTop: '1px solid rgba(255, 255, 255, 0.15)',
+            paddingTop: '20px',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'flex-end',
+            fontSize: '11px',
+            color: '#94a3b8',
+          }}
+        >
+          <div>
+            <div>Prepared for: Executive Leadership, {model.businessName}</div>
+            <div>Location: {model.businessCity} • Industry: {model.businessIndustry}</div>
+          </div>
+          <div style={{ textAlign: 'right' }}>
+            <div>Audit Completed: {model.auditDateFormatted}</div>
+            <div style={{ color: '#38bdf8', fontWeight: 600 }}>
+              Pricing & Implementation Slot Locked Until: {model.expiryDateFormatted}
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* Page 2 — Visual Score Gauges (4 in a row) */}
-      <div className="pdf-page pdf-content pdf-gauges-page">
-        <h2 className="pdf-heading">Score Dashboard</h2>
-        <div className="pdf-gauges-row">
-          {[
-            { key: 'performance', label: 'Performance', score: scores.performance || 0 },
-            { key: 'seo', label: 'SEO', score: scores.seo || 0 },
-            { key: 'accessibility', label: 'Accessibility', score: scores.accessibility || 0 },
-            { key: 'security', label: 'Security', score: scores.security || 0 },
-          ].map(({ key, label, score }) => (
+      {/* ─── Page 2: Hook Header & Executive Summary ──────────────── */}
+      <div
+        className="pdf-page pdf-content"
+        style={{
+          pageBreakAfter: 'always',
+          padding: '28px 36px',
+          boxSizing: 'border-box',
+        }}
+      >
+        <div style={{ marginBottom: '24px' }}>
+          <div style={{ fontSize: '11px', fontWeight: 700, color: '#4361ee', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            Section 01 • Executive Overview
+          </div>
+          <h2 style={{ fontSize: '24px', fontWeight: 800, color: '#0f172a', margin: '4px 0 8px 0' }}>
+            Revenue Impact & Diagnostic Summary
+          </h2>
+          <p style={{ fontSize: '13px', color: '#475569', lineHeight: 1.6, margin: 0 }}>
+            {model.executiveSummary.overview}
+          </p>
+        </div>
+
+        {/* Quantified Bleed KPI Cards */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '14px', marginBottom: '24px' }}>
+          <div style={{ padding: '16px', backgroundColor: '#fef2f2', border: '1px solid #fecaca', borderRadius: '8px' }}>
+            <div style={{ fontSize: '11px', fontWeight: 600, color: '#991b1b', textTransform: 'uppercase' }}>
+              Est. Monthly Bleed
+            </div>
+            <div style={{ fontSize: '24px', fontWeight: 800, color: '#dc2626', margin: '4px 0' }}>
+              {model.hookHeader.totalMonthlyBleedFormatted}
+            </div>
+            <div style={{ fontSize: '11px', color: '#7f1d1d' }}>Recoverable through technical fixes</div>
+          </div>
+          <div style={{ padding: '16px', backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px' }}>
+            <div style={{ fontSize: '11px', fontWeight: 600, color: '#475569', textTransform: 'uppercase' }}>
+              Annual Opportunity
+            </div>
+            <div style={{ fontSize: '24px', fontWeight: 800, color: '#0f172a', margin: '4px 0' }}>
+              {model.hookHeader.totalAnnualBleedFormatted}
+            </div>
+            <div style={{ fontSize: '11px', color: '#64748b' }}>Cumulative 12-month run-rate</div>
+          </div>
+          <div style={{ padding: '16px', backgroundColor: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '8px' }}>
+            <div style={{ fontSize: '11px', fontWeight: 600, color: '#1e40af', textTransform: 'uppercase' }}>
+              Implementation Window
+            </div>
+            <div style={{ fontSize: '24px', fontWeight: 800, color: '#2563eb', margin: '4px 0' }}>
+              5–14 Days
+            </div>
+            <div style={{ fontSize: '11px', color: '#1e3a8a' }}>Turnaround to live verification</div>
+          </div>
+        </div>
+
+        {/* 3 Executive Findings Max (Never a wall of text) */}
+        <div style={{ marginBottom: '24px' }}>
+          <h3 style={{ fontSize: '15px', fontWeight: 700, color: '#0f172a', marginBottom: '12px' }}>
+            Top 3 High-Friction Drivers (Ranked by Revenue Bleed)
+          </h3>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            {model.executiveSummary.topThreePoints.map((item, idx) => (
+              <div
+                key={idx}
+                style={{
+                  padding: '12px 16px',
+                  backgroundColor: '#ffffff',
+                  border: '1px solid #e2e8f0',
+                  borderLeft: '4px solid #ef4444',
+                  borderRadius: '6px',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                }}
+              >
+                <div style={{ flex: 1, paddingRight: '16px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '2px' }}>
+                    <span style={{ fontSize: '11px', fontWeight: 700, color: '#ef4444' }}>
+                      #{idx + 1}
+                    </span>
+                    <span style={{ fontSize: '13px', fontWeight: 700, color: '#0f172a' }}>
+                      {item.title}
+                    </span>
+                  </div>
+                  <div style={{ fontSize: '11px', color: '#64748b', lineHeight: 1.4 }}>
+                    {item.explanation}
+                  </div>
+                </div>
+                <div style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
+                  <div style={{ fontSize: '14px', fontWeight: 800, color: '#ef4444' }}>
+                    -{item.monthlyLossFormatted}
+                  </div>
+                  <div style={{ fontSize: '10px', color: '#94a3b8' }}>per month</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Quick Wins Box (Do-This-Week Items, Builds Instant Trust) */}
+        <div
+          style={{
+            padding: '16px',
+            backgroundColor: '#f0fdf4',
+            border: '1px solid #bbf7d0',
+            borderRadius: '8px',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+            <span style={{ fontSize: '14px' }}>⚡</span>
+            <span style={{ fontSize: '13px', fontWeight: 700, color: '#166534' }}>
+              Immediate Quick Wins (Deployable This Week at Low Effort)
+            </span>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '10px' }}>
+            {model.quickWins.slice(0, 2).map((qw, qIdx) => (
+              <div key={qIdx} style={{ fontSize: '11px', color: '#14532d' }}>
+                <div style={{ fontWeight: 700 }}>• {qw.title}</div>
+                <div style={{ color: '#15803d', marginTop: '2px' }}>{qw.recommendedFix}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* ─── Page 3: What We Found (Ranked by Revenue Impact) ─────── */}
+      <div
+        className="pdf-page pdf-content"
+        style={{
+          pageBreakAfter: 'always',
+          padding: '28px 36px',
+          boxSizing: 'border-box',
+        }}
+      >
+        <div style={{ marginBottom: '20px' }}>
+          <div style={{ fontSize: '11px', fontWeight: 700, color: '#4361ee', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            Section 02 • Detailed Diagnostics
+          </div>
+          <h2 style={{ fontSize: '24px', fontWeight: 800, color: '#0f172a', margin: '4px 0 6px 0' }}>
+            All Identified Vulnerabilities
+          </h2>
+          <p style={{ fontSize: '12px', color: '#64748b', margin: 0 }}>
+            Every finding prioritized by measurable impact on search indexing, local map pack position, and patient/customer conversion.
+          </p>
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          {model.rankedFindings.slice(0, 5).map((f, idx) => (
             <div
-              key={key}
-              className="pdf-gauge-svg-wrap"
-              dangerouslySetInnerHTML={{ __html: generateScoreGaugeSVG(score, label, 70) }}
-            />
+              key={f.id || idx}
+              style={{
+                padding: '14px 16px',
+                backgroundColor: '#ffffff',
+                border: '1px solid #e2e8f0',
+                borderRadius: '8px',
+                pageBreakInside: 'avoid',
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '6px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span
+                    style={{
+                      fontSize: '10px',
+                      fontWeight: 700,
+                      textTransform: 'uppercase',
+                      padding: '2px 8px',
+                      borderRadius: '4px',
+                      backgroundColor:
+                        f.severity === 'Critical'
+                          ? '#fef2f2'
+                          : f.severity === 'High'
+                          ? '#fff7ed'
+                          : '#fefce8',
+                      color:
+                        f.severity === 'Critical'
+                          ? '#dc2626'
+                          : f.severity === 'High'
+                          ? '#ea580c'
+                          : '#ca8a04',
+                      border:
+                        f.severity === 'Critical'
+                          ? '1px solid #fecaca'
+                          : f.severity === 'High'
+                          ? '1px solid #fed7aa'
+                          : '1px solid #fef08a',
+                    }}
+                  >
+                    {f.severity}
+                  </span>
+                  <span style={{ fontSize: '13px', fontWeight: 700, color: '#0f172a' }}>
+                    {f.title}
+                  </span>
+                </div>
+                <div style={{ fontSize: '13px', fontWeight: 800, color: '#dc2626', whiteSpace: 'nowrap' }}>
+                  -{f.monthlyDollarFormatted}/mo
+                </div>
+              </div>
+
+              <div style={{ fontSize: '11px', color: '#475569', lineHeight: 1.5, marginBottom: '6px' }}>
+                {f.description}
+              </div>
+
+              {f.evidenceSnippets.length > 0 && (
+                <div
+                  style={{
+                    fontSize: '10px',
+                    fontFamily: 'monospace',
+                    backgroundColor: '#f8fafc',
+                    border: '1px solid #e2e8f0',
+                    borderRadius: '4px',
+                    padding: '6px 10px',
+                    color: '#334155',
+                    marginBottom: '6px',
+                  }}
+                >
+                  <span style={{ fontWeight: 700, color: '#64748b' }}>EVIDENCE: </span>
+                  {f.evidenceSnippets[0]}
+                </div>
+              )}
+
+              <div style={{ fontSize: '11px', color: '#166534', backgroundColor: '#f0fdf4', padding: '6px 10px', borderRadius: '4px' }}>
+                <span style={{ fontWeight: 700 }}>FIX: </span>
+                {f.recommendedFix}
+              </div>
+            </div>
           ))}
         </div>
       </div>
 
-      {/* Page 2 — Executive Summary */}
-      <div className="pdf-page pdf-content">
-        <h2 className="pdf-heading">Executive Summary</h2>
-        <div className="pdf-exec-layout">
-          <div className="pdf-exec-text">
-            {(proposal.executiveSummary || 'No executive summary available.')
-              .split('\n\n')
-              .map((p, i) => (
-                <p key={i} className="pdf-body">
-                  {p}
-                </p>
-              ))}
+      {/* ─── Page 4: Phased Roadmap & Implementation Plan ─────────── */}
+      <div
+        className="pdf-page pdf-content"
+        style={{
+          pageBreakAfter: 'always',
+          padding: '28px 36px',
+          boxSizing: 'border-box',
+        }}
+      >
+        <div style={{ marginBottom: '24px' }}>
+          <div style={{ fontSize: '11px', fontWeight: 700, color: '#4361ee', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            Section 03 • Action Plan
           </div>
-          <div className="pdf-exec-scores">
-            <div
-              className="pdf-score-callout"
-              style={{ borderColor: getScoreColor(scores.performance || 0) }}
-            >
-              <span
-                className="pdf-score-num"
-                style={{ color: getScoreColor(scores.performance || 0) }}
-              >
-                {scores.performance || '—'}
-              </span>
-              <span className="pdf-score-name">Performance</span>
-            </div>
-            <div
-              className="pdf-score-callout"
-              style={{ borderColor: getScoreColor(scores.seo || 0) }}
-            >
-              <span className="pdf-score-num" style={{ color: getScoreColor(scores.seo || 0) }}>
-                {scores.seo || '—'}
-              </span>
-              <span className="pdf-score-name">SEO</span>
-            </div>
-            <div
-              className="pdf-score-callout"
-              style={{ borderColor: getScoreColor(scores.accessibility || 0) }}
-            >
-              <span
-                className="pdf-score-num"
-                style={{ color: getScoreColor(scores.accessibility || 0) }}
-              >
-                {scores.accessibility || '—'}
-              </span>
-              <span className="pdf-score-name">Accessibility</span>
-            </div>
-            <div
-              className="pdf-score-callout"
-              style={{ borderColor: getScoreColor(scores.security || 0) }}
-            >
-              <span
-                className="pdf-score-num"
-                style={{ color: getScoreColor(scores.security || 0) }}
-              >
-                {scores.security || '—'}
-              </span>
-              <span className="pdf-score-name">Security</span>
-            </div>
-          </div>
-        </div>
-        {topFinding && (
-          <div className="pdf-key-finding">
-            <strong>Key Finding:</strong> {topFinding.title} —{' '}
-            {topFinding.description || 'See details in findings section.'}
-          </div>
-        )}
-      </div>
-
-      {/* Competitor Comparison */}
-      {(() => {
-        const cr = proposal.comparisonReport as
-          | {
-              prospect?: {
-                name?: string;
-                performanceScore?: number;
-                mobileScore?: number;
-                loadTimeSeconds?: number;
-                rating?: number;
-                reviewCount?: number;
-              };
-              competitors?: Array<{
-                name?: string;
-                performanceScore?: number;
-                mobileScore?: number;
-                loadTimeSeconds?: number;
-                rating?: number;
-                reviewCount?: number;
-              }>;
-              prospectRank?: number;
-              winningCategories?: string[];
-              losingCategories?: string[];
-              summaryStatement?: string;
-              positiveStatement?: string;
-              urgencyStatement?: string;
-              quickWins?: Array<{
-                action?: string;
-                effortEstimate?: string;
-                expectedImpact?: string;
-              }>;
-              comparisonTableRows?: Array<{
-                metric: string;
-                prospectValue: string | number;
-                prospectStatus: string;
-                competitorValues: Array<{ name: string; value: string | number; status: string }>;
-              }>;
-              summaryRow?: string;
-              whereAhead?: string[];
-              whereBehind?: string[];
-            }
-          | null
-          | undefined;
-        const matrixFinding = proposal.audit.findings.find((f: any) =>
-          f.evidence?.some((e: any) => e.matrix || e.raw?.matrix)
-        );
-        const matrix =
-          matrixFinding?.evidence?.find((e: any) => e.matrix || e.raw?.matrix)?.matrix ||
-          matrixFinding?.evidence?.find((e: any) => e.raw?.matrix)?.raw?.matrix;
-        const prospectData = cr?.prospect || matrix?.business;
-        const competitorsData = cr?.competitors || matrix?.competitors || [];
-        if (!prospectData || !competitorsData?.length) return null;
-        const toBiz = (d: any) => {
-          const perf = d.performanceScore ?? d.websiteSpeed;
-          const seo = d.seoScore;
-          const a11y = d.accessibilityScore;
-          const overall = [perf, seo, a11y].filter((x) => typeof x === 'number').length
-            ? Math.round(
-                [perf, seo, a11y]
-                  .filter((x) => typeof x === 'number')
-                  .reduce((a: number, b: number) => a + b, 0) /
-                  [perf, seo, a11y].filter((x) => typeof x === 'number').length
-              )
-            : perf;
-          return {
-            name: d.name || proposal.audit.businessName,
-            pageSpeed: perf,
-            overallScore: overall,
-            mobileScore: d.mobileScore ?? perf,
-            seoScore: seo,
-            accessibilityScore: a11y,
-            reviewCount: d.reviewCount,
-            rating: d.rating,
-          };
-        };
-        const prospect: BusinessData = toBiz(prospectData);
-        const competitors: CompetitorData[] = competitorsData.slice(0, 3).map((c: any) => toBiz(c));
-        const prospectName = prospectData?.name || proposal.audit.businessName;
-        const compNames = competitorsData.slice(0, 3).map((c: any) => c?.name || 'Competitor');
-
-        const cellBg = (status: string) =>
-          status === 'win' ? '#dcfce7' : status === 'lose' ? '#fee2e2' : '#fef9c3';
-        const hasTableRows = cr?.comparisonTableRows && cr.comparisonTableRows.length > 0;
-
-        return (
-          <div className="pdf-page pdf-content">
-            <h2 className="pdf-heading">Competitive Intelligence</h2>
-            {cr && (
-              <div className="pdf-comparison-badge">
-                <p className="pdf-body">
-                  <strong>
-                    You rank #{cr.prospectRank} out of {competitors.length + 1}{' '}
-                    {proposal.audit.businessIndustry || 'business'}s in your area.
-                  </strong>
-                </p>
-                <p className="pdf-body">{cr.summaryStatement}</p>
-                {cr.summaryRow && (
-                  <p className="pdf-body">
-                    <strong>{cr.summaryRow}</strong>
-                  </p>
-                )}
-              </div>
-            )}
-
-            {hasTableRows ? (
-              <div
-                className="pdf-comparison-table-wrap"
-                style={{ overflowX: 'auto', marginBottom: 16 }}
-              >
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
-                  <thead>
-                    <tr style={{ borderBottom: '2px solid #1a1a2e' }}>
-                      <th style={{ padding: '8px', textAlign: 'left', fontWeight: 600 }}>Metric</th>
-                      <th
-                        style={{
-                          padding: '8px',
-                          textAlign: 'center',
-                          fontWeight: 700,
-                          backgroundColor: '#e0e7ff',
-                        }}
-                      >
-                        {prospectName} (You)
-                      </th>
-                      {compNames.map((n: string, i: number) => (
-                        <th
-                          key={i}
-                          style={{ padding: '8px', textAlign: 'center', fontWeight: 600 }}
-                        >
-                          {n}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {cr!.comparisonTableRows!.map((row, i) => (
-                      <tr key={i} style={{ borderBottom: '1px solid #e5e7eb' }}>
-                        <td style={{ padding: '8px', color: '#6b7280' }}>{row.metric}</td>
-                        <td
-                          style={{
-                            padding: '8px',
-                            textAlign: 'center',
-                            fontWeight: 700,
-                            backgroundColor: cellBg(row.prospectStatus),
-                          }}
-                        >
-                          {row.prospectValue}
-                        </td>
-                        {row.competitorValues.map((cv, j) => (
-                          <td
-                            key={j}
-                            style={{
-                              padding: '8px',
-                              textAlign: 'center',
-                              backgroundColor: cellBg(cv.status),
-                            }}
-                          >
-                            {cv.value}
-                          </td>
-                        ))}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            ) : (
-              <div
-                className="pdf-comparison-chart"
-                dangerouslySetInnerHTML={{
-                  __html: generateComparisonChartSVG(prospect, competitors),
-                }}
-              />
-            )}
-
-            {cr && (cr.whereAhead?.length ?? 0) > 0 && (
-              <div
-                className="pdf-winning-section"
-                style={{ marginTop: 16, padding: 12, backgroundColor: '#dcfce7', borderRadius: 8 }}
-              >
-                <h3 className="pdf-subheading" style={{ color: '#166534', marginBottom: 8 }}>
-                  Where You&apos;re Ahead
-                </h3>
-                <ul style={{ margin: 0, paddingLeft: 20 }}>
-                  {(cr.whereAhead ?? []).map((s, i) => (
-                    <li key={i} style={{ marginBottom: 4 }}>
-                      {s}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-            {cr && (cr.whereBehind?.length ?? 0) > 0 && (
-              <div
-                className="pdf-ahead-section"
-                style={{ marginTop: 16, padding: 12, backgroundColor: '#fee2e2', borderRadius: 8 }}
-              >
-                <h3 className="pdf-subheading" style={{ color: '#991b1b', marginBottom: 8 }}>
-                  Where They&apos;re Beating You
-                </h3>
-                <ul style={{ margin: 0, paddingLeft: 20 }}>
-                  {(cr.whereBehind ?? []).map((s, i) => (
-                    <li key={i} style={{ marginBottom: 4 }}>
-                      {s}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-
-            {cr &&
-              (cr.whereAhead?.length ?? 0) === 0 &&
-              (cr.winningCategories?.length ?? 0) > 0 && (
-                <div className="pdf-winning-section">
-                  <h3 className="pdf-subheading">You&apos;re Winning</h3>
-                  <p className="pdf-body">{cr.positiveStatement}</p>
-                  <ul>
-                    {(cr.winningCategories ?? []).map((cat, i) => (
-                      <li key={i}>{cat}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-            {cr &&
-              (cr.whereBehind?.length ?? 0) === 0 &&
-              (cr.losingCategories?.length ?? 0) > 0 && (
-                <div className="pdf-ahead-section">
-                  <h3 className="pdf-subheading">They&apos;re Ahead</h3>
-                  <p className="pdf-body">{cr.urgencyStatement}</p>
-                  <ul>
-                    {(cr.losingCategories ?? []).map((cat, i) => (
-                      <li key={i}>{cat}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-            {cr && (cr.quickWins?.length ?? 0) > 0 && (
-              <div className="pdf-quickwins-section">
-                <h3 className="pdf-subheading">Quick Wins to Overtake</h3>
-                <ol>
-                  {(cr.quickWins ?? []).map((qw, i) => (
-                    <li key={i}>
-                      <strong>{qw.action}</strong> — {qw.effortEstimate}. {qw.expectedImpact}
-                    </li>
-                  ))}
-                </ol>
-              </div>
-            )}
-          </div>
-        );
-      })()}
-
-      {/* Priority Action Matrix */}
-      <div className="pdf-page pdf-content">
-        <h2 className="pdf-heading">Priority Action Matrix</h2>
-        <p className="pdf-body">Focus on Quick Wins (high impact, low effort) first.</p>
-        <div
-          className="pdf-priority-matrix"
-          dangerouslySetInnerHTML={{
-            __html: generatePriorityMatrixSVG(
-              proposal.audit.findings.map((f: any) => ({
-                id: f.id,
-                title: f.title,
-                impactScore: f.impactScore,
-                effortEstimate: f.effortEstimate,
-              }))
-            ),
-          }}
-        />
-      </div>
-
-      {/* Pages 4+ — Findings */}
-      {Object.entries(groupedFindings)
-        .filter(([, items]) => items.length > 0)
-        .map(([category, items]) => (
-          <div key={category} className="pdf-page pdf-content">
-            <h2 className="pdf-heading">Findings: {category}</h2>
-            <div className="pdf-findings">
-              {items.map((f: any) => {
-                const severity =
-                  f.impactScore >= 8
-                    ? 'CRITICAL'
-                    : f.impactScore >= 6
-                      ? 'HIGH'
-                      : f.impactScore >= 4
-                        ? 'MEDIUM'
-                        : 'LOW';
-                const metrics = f.metrics || {};
-                const fix = Array.isArray(f.recommendedFix) ? f.recommendedFix[0] : null;
-                const imageEvidence =
-                  f.evidence?.filter((e: any) => e.type === 'image' && e.value) || [];
-
-                return (
-                  <div key={f.id} className="pdf-finding-card">
-                    <span
-                      className="pdf-finding-badge"
-                      style={{ backgroundColor: getSeverityColor(severity) }}
-                    >
-                      {severity}
-                    </span>
-                    <h3 className="pdf-finding-title">{f.title}</h3>
-                    {f.description && <p className="pdf-finding-desc">{f.description}</p>}
-                    {imageEvidence.length > 0 && (
-                      <div
-                        className="pdf-finding-screenshots"
-                        style={{
-                          display: 'flex',
-                          gap: '8px',
-                          marginTop: '12px',
-                          marginBottom: '12px',
-                        }}
-                      >
-                        {imageEvidence.map((img: any, i: number) => (
-                          <img
-                            key={i}
-                            src={img.value}
-                            alt={img.label || 'Screenshot Evidence'}
-                            style={{
-                              maxWidth: '100%',
-                              maxHeight: '400px',
-                              objectFit: 'contain',
-                              borderRadius: '4px',
-                              border: '1px solid #e5e7eb',
-                            }}
-                          />
-                        ))}
-                      </div>
-                    )}
-                    {Object.keys(metrics).length > 0 && (
-                      <p className="pdf-finding-state">
-                        <strong>Current:</strong>{' '}
-                        {JSON.stringify(metrics).replace(/[{}"]/g, '').slice(0, 80)}…
-                      </p>
-                    )}
-                    {fix && (
-                      <p className="pdf-finding-action">
-                        <strong>Recommended:</strong> {fix}
-                      </p>
-                    )}
-                    <p className="pdf-finding-source">
-                      Source: {f.evidence?.[0]?.source || f.module}
-                    </p>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        ))}
-
-      {/* Pricing Page */}
-      <div className="pdf-page pdf-content">
-        <h2 className="pdf-heading">Investment Options</h2>
-        <div className="pdf-pricing-grid">
-          <div className="pdf-pricing-col">
-            <h3>{tierEssentials.name || 'Starter'}</h3>
-            <p className="pdf-price">${(pricing.essentials || 497).toLocaleString()}</p>
-            <p className="pdf-delivery">{tierEssentials.deliveryTime || '5 business days'}</p>
-            <ul>
-              {(tierEssentials.features || []).map((x: string, i: number) => (
-                <li key={i}>✓ {x}</li>
-              ))}
-            </ul>
-            <div className="pdf-cta">Let&apos;s Get Started</div>
-          </div>
-          <div className="pdf-pricing-col pdf-pricing-recommended">
-            <span className="pdf-recommended-badge">
-              {(tierGrowth as { badge?: string })?.badge || 'BEST VALUE'}
-            </span>
-            <h3>{tierGrowth.name || 'Growth'}</h3>
-            <p className="pdf-price">${(pricing.growth || 1497).toLocaleString()}</p>
-            <p className="pdf-delivery">{tierGrowth.deliveryTime || '10 business days'}</p>
-            <ul>
-              {(tierGrowth.features || []).map((x: string, i: number) => (
-                <li key={i}>✓ {x}</li>
-              ))}
-            </ul>
-            <div className="pdf-cta pdf-cta-accent">Let&apos;s Get Started</div>
-          </div>
-          <div className="pdf-pricing-col">
-            <h3>{tierPremium.name || 'Premium'}</h3>
-            <p className="pdf-price">${(pricing.premium || 2997).toLocaleString()}</p>
-            <p className="pdf-delivery">{tierPremium.deliveryTime || '15 business days'}</p>
-            <ul>
-              {(tierPremium.features || []).map((x: string, i: number) => (
-                <li key={i}>✓ {x}</li>
-              ))}
-            </ul>
-            <div className="pdf-cta">Let&apos;s Get Started</div>
-          </div>
-        </div>
-      </div>
-
-      {/* Last Page — Next Steps */}
-      <div className="pdf-page pdf-content pdf-next-steps">
-        <h2 className="pdf-heading">Next Steps</h2>
-        <div className="pdf-steps">
-          <div className="pdf-step">
-            <span className="pdf-step-num">1</span> Review this report
-          </div>
-          <div className="pdf-step">
-            <span className="pdf-step-num">2</span> Pick your plan
-          </div>
-          <div className="pdf-step">
-            <span className="pdf-step-num">3</span> We handle the rest
-          </div>
-        </div>
-        <div className="pdf-contact">
-          <p>
-            <strong>Contact</strong>
+          <h2 style={{ fontSize: '24px', fontWeight: 800, color: '#0f172a', margin: '4px 0 6px 0' }}>
+            Implementation Roadmap & Milestones
+          </h2>
+          <p style={{ fontSize: '12px', color: '#64748b', margin: 0 }}>
+            Structured engineering sprints designed to eliminate risk, deliver rapid validation, and permanently plug revenue leaks.
           </p>
-          {branding.contact?.website && <p>{branding.contact.website}</p>}
         </div>
-        <div className="pdf-qr-placeholder">
-          <div className="pdf-qr-box">QR Code</div>
-          <p>Scan to view online proposal</p>
-          <p className="pdf-qr-url">{proposalUrl}</p>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          {model.roadmap.map((phase) => (
+            <div
+              key={phase.phase}
+              style={{
+                padding: '18px 20px',
+                backgroundColor: '#ffffff',
+                border: '1px solid #e2e8f0',
+                borderRadius: '8px',
+                pageBreakInside: 'avoid',
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <div
+                    style={{
+                      width: '24px',
+                      height: '24px',
+                      borderRadius: '50%',
+                      backgroundColor: '#4361ee',
+                      color: '#ffffff',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: '12px',
+                      fontWeight: 800,
+                    }}
+                  >
+                    {phase.phase}
+                  </div>
+                  <span style={{ fontSize: '14px', fontWeight: 800, color: '#0f172a' }}>
+                    {phase.name}
+                  </span>
+                </div>
+                <span
+                  style={{
+                    fontSize: '11px',
+                    fontWeight: 700,
+                    color: '#4361ee',
+                    backgroundColor: '#eef2ff',
+                    padding: '3px 10px',
+                    borderRadius: '9999px',
+                  }}
+                >
+                  {phase.timeline}
+                </span>
+              </div>
+
+              <ul style={{ margin: '8px 0 10px 0', paddingLeft: '20px', fontSize: '11px', color: '#334155' }}>
+                {phase.deliverables.map((item, dIdx) => (
+                  <li key={dIdx} style={{ marginBottom: '4px' }}>
+                    {item}
+                  </li>
+                ))}
+              </ul>
+
+              <div
+                style={{
+                  fontSize: '11px',
+                  color: '#475569',
+                  backgroundColor: '#f8fafc',
+                  padding: '8px 12px',
+                  borderRadius: '6px',
+                  borderLeft: '3px solid #38bdf8',
+                }}
+              >
+                <span style={{ fontWeight: 700, color: '#0f172a' }}>Expected Outcome: </span>
+                {phase.impactSummary}
+              </div>
+            </div>
+          ))}
         </div>
-        <p className="pdf-closing">
-          Thank you for the opportunity to serve your business. We look forward to helping you
-          achieve your digital goals.
-        </p>
+      </div>
+
+      {/* ─── Page 5: Pricing, Guarantee, & Single Global CTA ──────── */}
+      <div
+        className="pdf-page pdf-content"
+        style={{
+          padding: '28px 36px',
+          boxSizing: 'border-box',
+        }}
+      >
+        <div style={{ marginBottom: '20px' }}>
+          <div style={{ fontSize: '11px', fontWeight: 700, color: '#4361ee', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            Section 04 • Commercial Terms
+          </div>
+          <h2 style={{ fontSize: '24px', fontWeight: 800, color: '#0f172a', margin: '4px 0 6px 0' }}>
+            Implementation Packages & Guarantee
+          </h2>
+          <div style={{ fontSize: '11px', fontWeight: 600, color: '#dc2626' }}>
+            ⏰ Pricing and execution bandwidth reserved through: {model.expiryDateFormatted}
+          </div>
+        </div>
+
+        {/* 3 Tiers with Decoy Anchoring */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginBottom: '20px' }}>
+          {model.pricingTiers.map((tier) => (
+            <div
+              key={tier.id}
+              style={{
+                padding: '16px',
+                borderRadius: '8px',
+                backgroundColor: tier.recommended ? '#f8faff' : '#ffffff',
+                border: tier.recommended ? '2px solid #4361ee' : '1px solid #e2e8f0',
+                position: 'relative',
+                display: 'flex',
+                flexDirection: 'column',
+                justifyContent: 'space-between',
+              }}
+            >
+              {tier.recommended && (
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: '-10px',
+                    left: '50%',
+                    transform: 'translateX(-50%)',
+                    backgroundColor: '#4361ee',
+                    color: '#ffffff',
+                    fontSize: '9px',
+                    fontWeight: 800,
+                    textTransform: 'uppercase',
+                    padding: '2px 10px',
+                    borderRadius: '9999px',
+                    letterSpacing: '0.05em',
+                  }}
+                >
+                  RECOMMENDED
+                </div>
+              )}
+              <div>
+                <div style={{ fontSize: '14px', fontWeight: 800, color: '#0f172a' }}>{tier.name}</div>
+                <div style={{ fontSize: '10px', color: '#64748b', marginBottom: '8px' }}>
+                  Delivery: {tier.deliveryTimeline}
+                </div>
+                <div style={{ fontSize: '22px', fontWeight: 800, color: tier.recommended ? '#4361ee' : '#0f172a' }}>
+                  {tier.priceFormatted}
+                </div>
+                <div style={{ fontSize: '10px', color: '#16a34a', fontWeight: 600, marginBottom: '10px' }}>
+                  Est. Value: {tier.monthlyRoiFormatted}
+                </div>
+                <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: '8px', fontSize: '10px', color: '#334155' }}>
+                  {tier.features.slice(0, 4).map((feat, fIdx) => (
+                    <div key={fIdx} style={{ marginBottom: '4px', display: 'flex', gap: '4px' }}>
+                      <span style={{ color: '#4361ee', fontWeight: 800 }}>✓</span>
+                      <span>{feat}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Risk Reversal Guarantee */}
+        <div
+          style={{
+            padding: '16px 20px',
+            backgroundColor: '#faf5ff',
+            border: '1px solid #e9d5ff',
+            borderRadius: '8px',
+            marginBottom: '18px',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+            <span style={{ fontSize: '14px' }}>🛡️</span>
+            <span style={{ fontSize: '12px', fontWeight: 800, color: '#7e22ce' }}>
+              {model.guarantee.title} ({model.guarantee.badge})
+            </span>
+          </div>
+          <div style={{ fontSize: '11px', color: '#581c87', lineHeight: 1.5 }}>
+            {model.guarantee.summary}
+          </div>
+        </div>
+
+        {/* Social Proof Case Study */}
+        <div
+          style={{
+            padding: '14px 18px',
+            backgroundColor: '#f8fafc',
+            border: '1px solid #e2e8f0',
+            borderRadius: '8px',
+            marginBottom: '20px',
+          }}
+        >
+          <div style={{ fontSize: '10px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginBottom: '2px' }}>
+            VERIFIED CLIENT BENCHMARK • {model.socialProof.vertical.toUpperCase()}
+          </div>
+          <div style={{ fontSize: '12px', fontWeight: 700, color: '#0f172a', marginBottom: '6px' }}>
+            {model.socialProof.headline}
+          </div>
+          <div style={{ display: 'flex', gap: '16px', fontSize: '10px', color: '#334155' }}>
+            {model.socialProof.metrics.map((m, mIdx) => (
+              <div key={mIdx}>
+                <span style={{ fontWeight: 800, color: '#4361ee' }}>{m.value}</span> {m.label} ({m.timeframe})
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Single Global Call to Action */}
+        <div
+          style={{
+            textAlign: 'center',
+            padding: '16px',
+            backgroundColor: '#0f172a',
+            borderRadius: '8px',
+            color: '#ffffff',
+          }}
+        >
+          <div style={{ fontSize: '14px', fontWeight: 800, marginBottom: '4px' }}>
+            Ready to plug your digital revenue leaks?
+          </div>
+          <div style={{ fontSize: '11px', color: '#94a3b8', marginBottom: '12px' }}>
+            Book a 15-minute briefing to review your technical roadmap and lock in audit sprint pricing.
+          </div>
+          <a
+            href={bookingUrl}
+            style={{
+              display: 'inline-block',
+              backgroundColor: '#22c55e',
+              color: '#ffffff',
+              fontSize: '13px',
+              fontWeight: 800,
+              padding: '10px 24px',
+              borderRadius: '6px',
+              textDecoration: 'none',
+            }}
+          >
+            {model.singleCtaText} →
+          </a>
+          <div style={{ fontSize: '10px', color: '#64748b', marginTop: '8px' }}>
+            Direct Booking Link: {bookingUrl}
+          </div>
+        </div>
       </div>
     </div>
   );

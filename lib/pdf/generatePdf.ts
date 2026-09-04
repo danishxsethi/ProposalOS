@@ -134,7 +134,10 @@ export async function generatePdf(
     const footerLeft = `${brandName} | Confidential`;
     const footerCenter =
       'Page <span class="pageNumber"></span> of <span class="totalPages"></span>';
-    const footerRight = contactEmail ? `Questions? ${contactEmail}` : '';
+    const bookingUrlText = process.env.OUTREACH_CALENDAR_URL
+      ? process.env.OUTREACH_CALENDAR_URL.replace(/^https?:\/\//, '')
+      : 'claraud.com/book';
+    const footerRight = `Review Plan: ${bookingUrlText}`;
 
     // Add timeout protection for PDF generation
     const pdfPromise = page.pdf({
@@ -172,6 +175,107 @@ export async function generatePdf(
   } catch (error) {
     logger.error({ error }, 'PDF generation error');
     throw error;
+  } finally {
+    if (browser) {
+      await browser.close();
+    }
+  }
+}
+
+/**
+ * Generate a PDF directly from HTML content without requiring an external HTTP server
+ */
+export async function generatePdfFromHtml(
+  html: string,
+  options?: {
+    businessName?: string;
+    format?: PdfFormat;
+    branding?: PdfBrandingOptions;
+  }
+): Promise<Buffer> {
+  let browser;
+  try {
+    const fs = require('fs');
+    const localPaths = [
+      process.env.CHROME_EXECUTABLE_PATH,
+      '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+      '/Applications/Chromium.app/Contents/MacOS/Chromium',
+      '/usr/bin/google-chrome',
+      '/usr/bin/chromium-browser',
+    ].filter(Boolean) as string[];
+
+    let executablePath: string | undefined;
+    for (const p of localPaths) {
+      if (p && fs.existsSync(p)) {
+        executablePath = p;
+        break;
+      }
+    }
+
+    if (!executablePath) {
+      try {
+        executablePath = await chromium.executablePath();
+      } catch {}
+    }
+
+    if (!executablePath) {
+      throw new Error('Chromium not found. Install Chrome or set CHROME_EXECUTABLE_PATH.');
+    }
+
+    browser = await puppeteer.launch({
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-gpu',
+        '--disable-dev-shm-usage',
+      ],
+      defaultViewport: { width: 1920, height: 1080, deviceScaleFactor: 1 },
+      executablePath,
+      headless: true,
+    } as Parameters<typeof puppeteer.launch>[0]);
+
+    const page = await browser.newPage();
+    await page.setContent(html, { waitUntil: 'load', timeout: 30000 });
+
+    const brandName = options?.branding?.name || BRANDING.name;
+    const brandPrimary = options?.branding?.colors?.primary || BRANDING.colors.primary;
+    const footerLeft = `${brandName} | Confidential`;
+    const footerCenter = 'Page <span class="pageNumber"></span> of <span class="totalPages"></span>';
+    const bookingUrlText = process.env.OUTREACH_CALENDAR_URL
+      ? process.env.OUTREACH_CALENDAR_URL.replace(/^https?:\/\//, '')
+      : 'claraud.com/book';
+    const footerRight = `Review Plan: ${bookingUrlText}`;
+
+    const pdfPromise = page.pdf({
+      format: options?.format === 'Letter' ? 'Letter' : 'A4',
+      landscape: false,
+      printBackground: true,
+      margin: {
+        top: '2.5cm',
+        right: '2cm',
+        bottom: '2.5cm',
+        left: '2cm',
+      },
+      tagged: true,
+      outline: true,
+      displayHeaderFooter: true,
+      headerTemplate: '<div></div>',
+      footerTemplate: `
+        <div style="font-size: 9px; color: #6c757d; width: 100%; padding: 8px 2cm 0; border-top: 1px solid #e5e7eb; display: flex; justify-content: space-between; align-items: center; box-sizing: border-box;">
+          <span style="color: ${brandPrimary}; font-weight: 500;">${footerLeft}</span>
+          <span>${footerCenter}</span>
+          <span>${footerRight}</span>
+        </div>
+      `,
+      preferCSSPageSize: true,
+    });
+
+    const timeoutPromise = new Promise<Buffer>((_, reject) => {
+      setTimeout(() => reject(new Error('PDF generation timed out after 30 seconds')), 30000);
+    });
+
+    const pdfBuffer = (await Promise.race([pdfPromise, timeoutPromise])) as Buffer;
+    return Buffer.from(pdfBuffer);
   } finally {
     if (browser) {
       await browser.close();
