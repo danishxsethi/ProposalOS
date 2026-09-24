@@ -1,6 +1,8 @@
+import { randomUUID } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { cleanupDb } from '@/lib/__tests__/utils/cleanup';
+import { withTestSystemSetup, withTestTenant } from '@/lib/__tests__/utils/testPrincipal';
 /**
  * Unit Tests for Tenant Configuration
  *
@@ -27,11 +29,14 @@ import {
 import type { Tenant, TenantBranding } from '@prisma/client';
 
 describe('Tenant Configuration', () => {
-  const testTenantId = 'test-tenant-config-id';
+  const testTenantId = randomUUID();
 
   beforeEach(async () => {
     // Clean up test data
     await cleanupDb(prisma);
+    await withTestSystemSetup(() => prisma.tenant.create({
+      data: { id: testTenantId, name: 'Tenant Config Test', slug: `tenant-config-${testTenantId}` },
+    }));
   });
 
   afterEach(async () => {
@@ -42,9 +47,9 @@ describe('Tenant Configuration', () => {
   describe('Default Configuration Generation', () => {
     it('should create default configuration for new tenant', async () => {
       // Check if test tenant exists
-      const tenant = await prisma.tenant.findUnique({
+      const tenant = await withTestTenant(testTenantId, () => prisma.tenant.findUnique({
         where: { id: testTenantId },
-      });
+      }));
 
       if (!tenant) {
         // Skip test if tenant doesn't exist
@@ -70,9 +75,9 @@ describe('Tenant Configuration', () => {
 
     it('should not overwrite existing configuration on re-onboarding', async () => {
       // Check if test tenant exists
-      const tenant = await prisma.tenant.findUnique({
+      const tenant = await withTestTenant(testTenantId, () => prisma.tenant.findUnique({
         where: { id: testTenantId },
-      });
+      }));
 
       if (!tenant) {
         return;
@@ -147,9 +152,9 @@ describe('Tenant Configuration', () => {
 
     it('should accept valid configuration', async () => {
       // Check if test tenant exists
-      const tenant = await prisma.tenant.findUnique({
+      const tenant = await withTestTenant(testTenantId, () => prisma.tenant.findUnique({
         where: { id: testTenantId },
-      });
+      }));
 
       if (!tenant) {
         return;
@@ -288,9 +293,9 @@ describe('Tenant Configuration', () => {
   describe('Stage Pause/Resume', () => {
     it('should pause and resume stages', async () => {
       // Check if test tenant exists
-      const tenant = await prisma.tenant.findUnique({
+      const tenant = await withTestTenant(testTenantId, () => prisma.tenant.findUnique({
         where: { id: testTenantId },
-      });
+      }));
 
       if (!tenant) {
         return;
@@ -312,9 +317,9 @@ describe('Tenant Configuration', () => {
     });
 
     it('should handle pausing already paused stage', async () => {
-      const tenant = await prisma.tenant.findUnique({
+      const tenant = await withTestTenant(testTenantId, () => prisma.tenant.findUnique({
         where: { id: testTenantId },
-      });
+      }));
 
       if (!tenant) {
         return;
@@ -333,9 +338,9 @@ describe('Tenant Configuration', () => {
     });
 
     it('should handle multiple paused stages', async () => {
-      const tenant = await prisma.tenant.findUnique({
+      const tenant = await withTestTenant(testTenantId, () => prisma.tenant.findUnique({
         where: { id: testTenantId },
-      });
+      }));
 
       if (!tenant) {
         return;

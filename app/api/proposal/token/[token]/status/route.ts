@@ -12,12 +12,13 @@
 import { NextResponse } from 'next/server';
 
 import { generateTraceId, InternalError, NotFoundError, ValidationError } from '@/lib/api/errors';
-import { proposalStatusSchema } from '@/lib/api/schemas/proposal';
+import { withAuth } from '@/lib/middleware/auth';
 import { withIdempotency } from '@/lib/middleware/idempotency';
 import { withRateLimit } from '@/lib/middleware/rateLimit';
 import { recordAuditTrailEvent } from '@/lib/observability/auditTrail';
 import { prisma } from '@/lib/prisma';
 import { assertProposalPublishable } from '@/lib/proposal/publication';
+import { getTenantId } from '@/lib/tenant/context';
 
 interface Params {
   params: Promise<{ token: string }>;
@@ -30,28 +31,24 @@ async function handleStatusUpdate(req: Request, { params }: Params): Promise<Nex
   const traceId = generateTraceId();
 
   try {
+    const tenantId = await getTenantId();
+    if (!tenantId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
     const { token } = await params;
     const body = await req.json();
-    const { status } = body;
-
-    // Validate status using Zod schema
-    const result = proposalStatusSchema.safeParse(status);
+    const statusSchema = (await import('zod')).z.enum(['READY', 'SENT', 'VIEWED']);
+    const result = statusSchema.safeParse(body?.status);
     if (!result.success) {
-      const errorDetails = result.error.errors.map((e) => ({
-        field: e.path.join('.'),
-        message: e.message,
-      }));
       return NextResponse.json(
-        new ValidationError('Invalid status value', errorDetails).toEnvelope(req.url, traceId),
+        new ValidationError('Only READY, SENT, or VIEWED may be set by an agency operator').toEnvelope(req.url, traceId),
         { status: 400 }
       );
     }
-
     const normalizedStatus = result.data;
 
-    // Find proposal by token
-    const proposal = await prisma.proposal.findUnique({
-      where: { webLinkToken: token },
+    const proposal = await prisma.proposal.findFirst({
+      where: { webLinkToken: token, tenantId },
     });
 
     if (!proposal) {
@@ -59,9 +56,10 @@ async function handleStatusUpdate(req: Request, { params }: Params): Promise<Nex
         status: 404,
       });
     }
-    assertProposalPublishable(proposal);
+    if (normalizedStatus === 'VIEWED') assertProposalPublishable(proposal);
 
-    // Update status and set timestamp if transitioning to 'SENT'
+    // This route is for authenticated agency operators only. Public recipients use
+    // dedicated acceptance/contact endpoints and cannot set internal lifecycle state.
     const updateData: Record<string, unknown> = { status: normalizedStatus };
     if (normalizedStatus === 'SENT' && !proposal.sentAt) {
       updateData.sentAt = new Date();
@@ -71,7 +69,7 @@ async function handleStatusUpdate(req: Request, { params }: Params): Promise<Nex
     }
 
     const updatedProposal = await prisma.proposal.update({
-      where: { id: proposal.id },
+      where: { id: proposal.id, tenantId },
       data: updateData,
     });
 
@@ -122,4 +120,6 @@ const idempotentHandler = (req: Request, params: Params) =>
     req
   );
 
-export const PATCH = (req: Request, params: Params) => idempotentHandler(req, params);
+export const PATCH = withAuth((req: Request, ...args: Params[]) =>
+  idempotentHandler(req, args[0]!)
+);

@@ -1,18 +1,17 @@
 import { execSync } from 'child_process';
+import { resolve } from 'node:path';
 
 import { PrismaClient } from '@prisma/client';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const REPO_ROOT = process.cwd();
-const TEST_DB = 'proposal_rls_smoke';
+const TEST_DB = process.env.PROPOSALOS_RLS_TEST_DB || 'proposal_rls_smoke';
 const POSTGRES_PASSWORD = 'password';
 const DIRECT_URL = `postgresql://postgres:${POSTGRES_PASSWORD}@localhost:5435/${TEST_DB}`;
 const POOLED_POSTGRES_URL = `postgresql://postgres:${POSTGRES_PASSWORD}@localhost:6432/${TEST_DB}?pgbouncer=true`;
 const POOLED_APP_USER_URL = `postgresql://app_user:${POSTGRES_PASSWORD}@localhost:6432/${TEST_DB}?pgbouncer=true`;
-const RLS_MIGRATION_PATH =
-  '/Users/danishsethi/VSCODE/ProposalOS/prisma/migrations/20260429093000_enable_rls/migration.sql';
-const BYPASS_MIGRATION_PATH =
-  '/Users/danishsethi/VSCODE/ProposalOS/prisma/migrations/20260501014500_rls_bypass_policies/migration.sql';
+const RLS_MIGRATION_PATH = resolve(REPO_ROOT, 'prisma/migrations/20260429093000_enable_rls/migration.sql');
+const BYPASS_MIGRATION_PATH = resolve(REPO_ROOT, 'prisma/migrations/20260501014500_rls_bypass_policies/migration.sql');
 
 type RuntimeModules = {
   prisma: PrismaClient;
@@ -92,17 +91,12 @@ function resetSchemaAndRls() {
   );
 
   runShell(
-    `DATABASE_URL='${POOLED_POSTGRES_URL}' DIRECT_URL='${DIRECT_URL}' npx prisma db push --skip-generate`
+    `DATABASE_URL='${DIRECT_URL}' DIRECT_URL='${DIRECT_URL}' npx prisma migrate deploy`
   );
 
   runShell(
-    `PGPASSWORD=${POSTGRES_PASSWORD} psql -h localhost -p 5435 -U postgres -d ${TEST_DB} -f ${RLS_MIGRATION_PATH}`
+    `PGPASSWORD=${POSTGRES_PASSWORD} psql -h localhost -p 5435 -U postgres -d ${TEST_DB} -c 'GRANT ALL ON SCHEMA public TO app_user; GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO app_user; GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO app_user;'`
   );
-
-  runShell(
-    `PGPASSWORD=${POSTGRES_PASSWORD} psql -h localhost -p 5435 -U postgres -d ${TEST_DB} -f ${BYPASS_MIGRATION_PATH}`
-  );
-
   runShell(
     `PGPASSWORD=${POSTGRES_PASSWORD} psql -h localhost -p 5435 -U postgres -d ${TEST_DB} -c "ALTER ROLE app_user WITH LOGIN PASSWORD '${POSTGRES_PASSWORD}';"`
   );

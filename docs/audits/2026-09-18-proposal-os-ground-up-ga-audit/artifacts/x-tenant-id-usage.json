@@ -1,0 +1,36 @@
+{
+  "classification": "internal-ops-only: accepted solely when isInternalOpsRequest (shared secret) is true; ignored for env API key auth; never read by route handlers",
+  "productionFiles": [
+    {
+      "file": "lib/middleware/auth.ts",
+      "lines": [
+        44,
+        47,
+        81
+      ]
+    }
+  ],
+  "allFiles": [
+    {
+      "file": "lib/middleware/auth.test.ts",
+      "lines": [
+        48
+      ]
+    },
+    {
+      "file": "lib/middleware/auth.ts",
+      "lines": [
+        44,
+        47,
+        81
+      ]
+    },
+    {
+      "file": "lib/tenant/__tests__/principalAuthority.test.ts",
+      "lines": [
+        12,
+        16
+      ]
+    }
+  ]
+}

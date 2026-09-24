@@ -509,26 +509,10 @@ export async function runSecurityModule(
     logger.error({ error, url }, '[Security] Audit failed');
     return {
       moduleId: 'security',
-      status: 'success',
+      status: 'failed',
       timestamp: new Date().toISOString(),
-      data: {
-        status: 'error',
-        data: {
-          score: 0,
-          grade: 'F',
-          https: {
-            enabled: false,
-            redirects: false,
-            certificate: { valid: false, expiresAt: '', issuer: '' },
-          },
-          headers: [],
-          mixedContent: false,
-          serverExposed: false,
-          recommendations: [
-            `Security audit failed: ${error instanceof Error ? error.message : 'Unknown error'}. Ensure the URL is accessible.`,
-          ],
-        },
-      },
-    };
+      error: error instanceof Error ? error.message : 'Security audit failed',
+      data: {},
+    } as unknown as LegacyAuditModuleResult;
   }
 }

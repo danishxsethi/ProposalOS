@@ -85,6 +85,14 @@ export interface ApiKeyValidationResult {
   };
 }
 
+/** A tenant API key can only address the tenant that issued it. */
+export function apiKeyCanAccessTenant(
+  principal: Pick<ApiKeyValidationResult, 'tenantId'>,
+  requestedTenantId: string
+): boolean {
+  return principal.tenantId === requestedTenantId;
+}
+
 export interface ApiKeyErrorResult {
   error: string;
   limit?: number;

@@ -619,10 +619,30 @@ describe('Signal Detector Property Tests', () => {
     it('new_business_license signals reference business name in generated email', async () => {
       await fc.assert(
         fc.asyncProperty(fc.string({ minLength: 5, maxLength: 50 }), async (businessName) => {
-          await runWithTenantBypass('new-business-license-test', async () => {
+          // Production (lib/pipeline/signalDetector.ts::triggerSignalOutreach) resolves
+          // the owning tenant from the signal's lead and fails closed if it cannot —
+          // a signal with no lead has no owning tenant and is rejected. The property
+          // therefore exercises the reachable path: a signal attached to a real lead.
+          await runPropertyWithTenant(async (tenantId) => {
+            const leadId = randomUUID();
+            createdLeadIds.push(leadId);
+            await prisma.prospectLead.create({
+              data: {
+                id: leadId,
+                tenantId,
+                businessName,
+                source: 'test',
+                sourceExternalId: `test-${leadId}`,
+                city: 'San Francisco',
+                vertical: 'default',
+                painScore: 70,
+                status: 'QUALIFIED',
+              },
+            });
+
             const signal: DetectedSignal = {
               id: `signal-${Date.now()}`,
-              leadId: undefined, // New business, no lead yet
+              leadId,
               signalType: 'new_business_license',
               sourceData: {
                 businessName,
@@ -642,7 +662,7 @@ describe('Signal Detector Property Tests', () => {
             // Verify signal was persisted with correct data
             const persistedSignal = await prisma.detectedSignal.findFirst({
               where: {
-                leadId: null,
+                leadId,
                 signalType: 'new_business_license',
               },
               orderBy: {

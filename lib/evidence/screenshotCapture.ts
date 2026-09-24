@@ -50,7 +50,7 @@ interface ScreenshotTask {
 let browserInstance: Browser | null = null;
 
 async function getBrowser(): Promise<Browser> {
-  if (browserInstance && browserInstance.isConnected()) {
+  if (browserInstance && browserInstance.connected) {
     return browserInstance;
   }
 

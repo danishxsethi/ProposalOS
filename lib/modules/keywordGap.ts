@@ -91,21 +91,9 @@ export async function runKeywordGapModule(
   } catch (error) {
     logger.error({ error, businessName: input.businessName }, '[KeywordGap] Analysis failed');
     return {
-      findings: [
-        {
-          type: 'VITAMIN',
-          category: 'Visibility',
-          title: 'Keyword Analysis Unavailable',
-          description: 'Unable to perform deep keyword gap analysis at this time.',
-          impactScore: 1,
-          confidenceScore: normalizeConfidence(0, '1-10'),
-          evidence: [],
-          metrics: {},
-          effortEstimate: 'LOW',
-          recommendedFix: [],
-        },
-      ],
+      findings: [],
       evidenceSnapshots: [],
+      execution: { state: 'unavailable', reason: error instanceof Error ? error.message : 'Keyword analysis unavailable' },
     };
   }
 }

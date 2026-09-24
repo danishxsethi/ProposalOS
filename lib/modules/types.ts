@@ -6,6 +6,7 @@ export interface AuditModuleResult {
     state: 'complete' | 'partial' | 'unavailable' | 'failed';
     reason?: string;
   };
+  unavailableChecks?: string[];
   /** Legacy: modules may include moduleId for runner compatibility */
   moduleId?: string;
   /** Normalized data for finding generator compatibility (scores, coreWebVitals, finalUrl, schemaAnalysis, conversionAnalysis) */
@@ -41,7 +42,7 @@ export interface WebsiteModuleInput {
 }
 
 // Finding types
-export type FindingType = 'PAINKILLER' | 'VITAMIN' | 'POSITIVE';
+export type FindingType = 'PAINKILLER' | 'VITAMIN' | 'VISUAL_UX' | 'VISUAL_DESIGN' | 'VISUAL_COMPARISON';
 export type EffortLevel = 'LOW' | 'MEDIUM' | 'HIGH';
 
 export interface Finding {

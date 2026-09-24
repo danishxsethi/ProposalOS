@@ -15,6 +15,7 @@ import { generateTraceId, InternalError, UnauthorizedError } from '@/lib/api/err
 import { API_KEY_SCOPES, generateApiKey, validateApiKey } from '@/lib/auth/apiKeys';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
+import { runWithTenantAsync } from '@/lib/tenant/context';
 
 export const dynamic = 'force-dynamic';
 
@@ -221,15 +222,12 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       throw new UnauthorizedError('Invalid or insufficient API key');
     }
 
-    // Check for admin scope
-    const hasAdminScope =
-      validation.scopes.includes(API_KEY_SCOPES.ALL) || validation.scopes.includes('admin:*');
-
-    if (!hasAdminScope) {
-      throw new UnauthorizedError('Admin scope required');
+    if (!validation.scopes.includes(API_KEY_SCOPES.ALL)) {
+      throw new UnauthorizedError('Full tenant scope required');
     }
 
-    const tenants = await prisma.tenant.findMany({
+    const tenant = await runWithTenantAsync(validation.tenantId, () => prisma.tenant.findFirst({
+      where: { id: validation.tenantId },
       select: {
         id: true,
         name: true,
@@ -254,11 +252,9 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
           },
         },
       },
-      orderBy: { createdAt: 'desc' },
-      take: 100,
-    });
+    }));
 
-    return NextResponse.json({ tenants }, { headers: { 'X-Trace-Id': traceId } });
+    return NextResponse.json({ tenants: tenant ? [tenant] : [] }, { headers: { 'X-Trace-Id': traceId } });
   } catch (error) {
     logger.error({ error }, 'Failed to list tenants');
 

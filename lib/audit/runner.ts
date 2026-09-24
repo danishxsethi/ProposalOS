@@ -1,5 +1,3 @@
-import { createHash } from 'crypto';
-
 import { RunTree } from 'langsmith';
 
 import { runWithConcurrency } from '@/lib/audit/concurrency';
@@ -7,8 +5,7 @@ import {
   normalizeAndValidateModuleFindings,
   type RejectedFinding,
 } from '@/lib/audit/findingContract';
-import { persistFindings } from '@/lib/audit/findingPersistence';
-import { redisCache } from '@/lib/cache/redisCache';
+import { persistAuditResult } from '@/lib/audit/findingPersistence';
 import { FEATURE_FLAGS, isFeatureEnabledEffective } from '@/lib/config/feature-flags';
 import { CostTracker } from '@/lib/costs/costTracker';
 import { logger } from '@/lib/logger';
@@ -73,10 +70,23 @@ export interface ModuleInput {
 }
 
 export interface ModuleResult {
-  status: 'COMPLETE' | 'PARTIAL' | 'FAILED' | 'SKIPPED';
+  status: 'COMPLETE' | 'PARTIAL' | 'UNAVAILABLE' | 'FAILED' | 'SKIPPED';
   data: any;
   error?: string;
   cost?: number;
+}
+
+export interface AuditRunResult {
+  success: boolean;
+  auditId: string;
+  status: 'COMPLETE' | 'PARTIAL' | 'DEGRADED' | 'FAILED';
+  modulesCompleted: string[];
+  modulesFailed: Array<{ module: string; status?: string; error?: string }>;
+  findingsCount: number;
+  costCents: number;
+  apiCostCents: number;
+  duration_ms: number;
+  error?: string;
 }
 
 // --- Step 2: Define the 3-phase execution plan ---
@@ -91,25 +101,96 @@ interface ModuleConfig {
 }
 
 function adaptAuditModuleResult(data: {
+  findings: unknown[];
+  evidenceSnapshots: unknown[];
+  unavailableChecks?: string[];
   execution?: {
     state: 'complete' | 'partial' | 'unavailable' | 'failed';
     reason?: string;
   };
 }): ModuleResult {
-  switch (data.execution?.state) {
+  const observation = data as {
+    findings: unknown[];
+    evidenceSnapshots: unknown[];
+    unavailableChecks?: string[];
+    execution?: { state: 'complete' | 'partial' | 'unavailable' | 'failed'; reason?: string };
+  };
+  switch (observation.execution?.state) {
     case 'partial':
-      return { status: 'PARTIAL', data, error: data.execution.reason };
+      return { status: 'PARTIAL', data, error: observation.execution.reason };
     case 'unavailable':
       return {
-        status: 'SKIPPED',
+        status: 'UNAVAILABLE',
         data,
-        error: `UNAVAILABLE: ${data.execution.reason || 'provider unavailable'}`,
+        error: observation.execution.reason || 'Provider unavailable',
       };
     case 'failed':
-      return { status: 'FAILED', data: null, error: data.execution.reason || 'Module failed' };
-    default:
+      return { status: 'FAILED', data: null, error: observation.execution.reason || 'Module failed' };
+    case 'complete':
       return { status: 'COMPLETE', data };
+    default: {
+      return {
+        status: observation.unavailableChecks?.length ? 'PARTIAL' : 'COMPLETE',
+        data,
+        error: observation.unavailableChecks?.join(', '),
+      };
+    }
   }
+}
+
+function adaptLegacyModuleResult(data: unknown, label: string): ModuleResult {
+  if (!data || typeof data !== 'object') {
+    return { status: 'FAILED', data: null, error: `${label} returned malformed data` };
+  }
+  const value = data as Record<string, unknown>;
+  if (value.status === 'failed' || value.status === 'error') {
+    return {
+      status: 'FAILED',
+      data: null,
+      error: typeof value.error === 'string' ? value.error : `${label} failed`,
+    };
+  }
+  if (value.execution && typeof value.execution === 'object') {
+    const execution = value.execution as Record<string, unknown>;
+    if (['complete', 'partial', 'unavailable', 'failed'].includes(String(execution.state))) {
+      return adaptAuditModuleResult(data as { findings: unknown[]; evidenceSnapshots: unknown[]; unavailableChecks?: string[]; execution: { state: 'complete' | 'partial' | 'unavailable' | 'failed'; reason?: string } });
+    }
+  }
+  if (value.status === 'success' && value.data && typeof value.data === 'object') {
+    const nested = value.data as Record<string, unknown>;
+    if (nested.execution && typeof nested.execution === 'object') {
+      const state = (nested.execution as Record<string, unknown>).state;
+      if (['complete', 'partial', 'unavailable', 'failed'].includes(String(state))) {
+        return adaptAuditModuleResult(nested as { findings: unknown[]; evidenceSnapshots: unknown[]; unavailableChecks?: string[]; execution: { state: 'complete' | 'partial' | 'unavailable' | 'failed'; reason?: string } });
+      }
+    }
+    if (nested.status === 'error') {
+      return { status: 'FAILED', data: null, error: `${label} returned an internal error result` };
+    }
+    if (nested.skipped === true || nested.executionState === 'unavailable') {
+      return {
+        status: 'UNAVAILABLE',
+        data: value.data,
+        error: typeof nested.reason === 'string' ? nested.reason : `${label} could not be checked`,
+      };
+    }
+    return { status: 'COMPLETE', data: value.data };
+  }
+  if (Array.isArray(value.findings) && Array.isArray(value.evidenceSnapshots)) {
+    const result = data as { findings: unknown[]; evidenceSnapshots: unknown[]; unavailableChecks?: string[] };
+    if (result.unavailableChecks?.length) {
+      return { status: result.findings.length ? 'PARTIAL' : 'UNAVAILABLE', data: result, error: result.unavailableChecks.join(', ') };
+    }
+    return { status: 'COMPLETE', data: result };
+  }
+  if (value.skipped === true) {
+    return {
+      status: 'UNAVAILABLE',
+      data,
+      error: typeof value.reason === 'string' ? value.reason : `${label} could not be checked`,
+    };
+  }
+  return { status: 'COMPLETE', data };
 }
 
 async function withTimeout<T>(
@@ -147,8 +228,8 @@ const websiteAdapter = async (input: ModuleInput, tracker: CostTracker): Promise
   // P1-27 (Wave 7): forward auditId so runWebsiteModule's internal crawl call and
   // the sibling `websiteCrawler` module's own call coalesce into one real crawl
   // (see lib/modules/websiteCrawlerModule.ts's single-flight cache).
-  const data = await runWebsiteModule({ url: input.url, auditId: input.auditId }, tracker);
-  return { status: 'COMPLETE', data };
+      const data = await runWebsiteModule({ url: input.url, auditId: input.auditId }, tracker);
+  return adaptLegacyModuleResult(data, 'Website');
 };
 
 const websiteCrawlerAdapter = async (
@@ -165,7 +246,7 @@ const websiteCrawlerAdapter = async (
     },
     tracker
   );
-  return { status: 'COMPLETE', data };
+  return adaptLegacyModuleResult(data, 'Accessibility');
 };
 
 const gbpAdapter = async (input: ModuleInput, tracker: CostTracker): Promise<ModuleResult> => {
@@ -175,14 +256,12 @@ const gbpAdapter = async (input: ModuleInput, tracker: CostTracker): Promise<Mod
     tracker
   );
   const legacy = raw as unknown as Record<string, any>;
-  // P1-33-adjacent adapter defect (Wave 3, Step 8): the module's own success/failure
-  // signal (LegacyAuditModuleResult.status) must not be discarded — a "not found"/error
-  // result is a real module failure/absence, never a silent COMPLETE. Provider failure
-  // must never be masked into an apparently-successful module result.
-  if (legacy?.status === 'failed' || legacy?.status === 'error') {
-    return { status: 'FAILED', data: null, error: legacy.error || 'GBP module reported failure' };
+  const normalized = adaptLegacyModuleResult(legacy, 'GBP');
+  const gbpObservation = normalized.data as Record<string, unknown> | null;
+  if (normalized.status === 'COMPLETE' && !gbpObservation?.placeId && !gbpObservation?.identityConfidence) {
+    return { status: 'UNAVAILABLE', data: normalized.data, error: 'Business listing identity was not confirmed' };
   }
-  return { status: 'COMPLETE', data: legacy?.data ?? legacy };
+  return normalized;
 };
 
 const competitorAdapter = async (
@@ -197,21 +276,7 @@ const competitorAdapter = async (
   const legacy = raw as unknown as Record<string, any>;
   // Same adapter defect as gbpAdapter above — the module's own failure status was being
   // silently discarded, reporting COMPLETE regardless (Wave 3, Step 8).
-  if (legacy?.status === 'failed' || legacy?.status === 'error') {
-    return {
-      status: 'FAILED',
-      data: null,
-      error: legacy.error || 'Competitor module reported failure',
-    };
-  }
-  if (legacy?.data?.execution?.state === 'unavailable') {
-    return {
-      status: 'SKIPPED',
-      data: legacy.data,
-      error: `UNAVAILABLE: ${legacy.data.execution.reason || 'Competitor providers unavailable'}`,
-    };
-  }
-  return { status: 'COMPLETE', data: legacy?.data ?? legacy };
+  return adaptLegacyModuleResult(legacy, 'Competitor');
 };
 
 const techStackAdapter = async (
@@ -220,7 +285,7 @@ const techStackAdapter = async (
 ): Promise<ModuleResult> => {
   if (!input.url) throw new Error('url required');
   const data = await runTechStackModule({ url: input.url, signal: input.signal }, tracker);
-  return { status: 'COMPLETE', data };
+  return adaptLegacyModuleResult(data, 'Accessibility');
 };
 
 const securityAdapter = async (input: ModuleInput, tracker: CostTracker): Promise<ModuleResult> => {
@@ -233,7 +298,7 @@ const securityAdapter = async (input: ModuleInput, tracker: CostTracker): Promis
     },
     tracker
   );
-  return { status: 'COMPLETE', data: (data as unknown as Record<string, any>)?.data || data };
+  return adaptLegacyModuleResult(data, 'Security');
 };
 
 const emailFinderAdapter = async (
@@ -266,14 +331,16 @@ const reputationAdapter = async (
   trace: any
 ): Promise<ModuleResult> => {
   const gbpData = input.dependencyResults?.gbp;
-  if (!gbpData?.reviews || gbpData.reviews.length === 0)
-    return { status: 'SKIPPED', data: null, error: 'No reviews found' };
+  if (!gbpData) return { status: 'UNAVAILABLE', data: null, error: 'Business profile result unavailable' };
+  if (gbpData.reviewsUnavailable === true) return { status: 'UNAVAILABLE', data: null, error: 'Reviews could not be retrieved' };
+  if (!gbpData.reviews || gbpData.reviews.length === 0)
+    return { status: 'SKIPPED', data: null, error: 'No reviews were available to analyze' };
   const data = await runReputationModule(
     { reviews: gbpData.reviews, businessName: input.businessName || 'Unknown' },
     tracker,
     trace
   );
-  return { status: 'COMPLETE', data: (data as unknown as Record<string, any>)?.data || data };
+  return adaptLegacyModuleResult(data, 'Reputation');
 };
 
 const socialAdapter = async (input: ModuleInput, tracker: CostTracker): Promise<ModuleResult> => {
@@ -282,7 +349,7 @@ const socialAdapter = async (input: ModuleInput, tracker: CostTracker): Promise<
     { websiteUrl: input.url, businessName: input.businessName },
     tracker
   );
-  return { status: 'COMPLETE', data: (data as unknown as Record<string, any>)?.data || data };
+  return adaptLegacyModuleResult(data, 'Social');
 };
 
 const socialDeepAdapter = async (
@@ -304,7 +371,7 @@ const socialDeepAdapter = async (
     },
     tracker
   );
-  return adaptAuditModuleResult(data);
+  return adaptLegacyModuleResult(data, 'Accessibility');
 };
 
 const gbpDeepAdapter = async (input: ModuleInput, tracker: CostTracker): Promise<ModuleResult> => {
@@ -356,7 +423,7 @@ const seoDeepAdapter = async (input: ModuleInput, tracker: CostTracker): Promise
     },
     tracker
   );
-  return { status: 'COMPLETE', data };
+  return adaptAuditModuleResult(data);
 };
 
 const accessibilityAdapter = async (
@@ -376,7 +443,7 @@ const accessibilityAdapter = async (
         data.error || data.data?.data?.recommendations?.[0] || 'Accessibility scan unavailable',
     };
   }
-  return { status: 'COMPLETE', data };
+  return adaptLegacyModuleResult(data, 'Accessibility');
 };
 
 const mobileUXAdapter = async (input: ModuleInput, tracker: CostTracker): Promise<ModuleResult> => {
@@ -422,7 +489,7 @@ const contentQualityAdapter = async (
     },
     tracker
   );
-  return { status: 'COMPLETE', data };
+  return adaptAuditModuleResult(data);
 };
 
 const conversionAdapter = async (
@@ -440,7 +507,7 @@ const conversionAdapter = async (
     },
     tracker
   );
-  return { status: 'COMPLETE', data };
+  return adaptLegacyModuleResult(data, 'Conversion');
 };
 
 const citationsAdapter = async (
@@ -452,7 +519,7 @@ const citationsAdapter = async (
     { businessName: input.businessName, city: input.city },
     tracker
   );
-  return { status: 'COMPLETE', data };
+  return adaptAuditModuleResult(data);
 };
 
 const paidSearchAdapter = async (
@@ -524,10 +591,8 @@ const schemaMarkupAdapter = async (input: ModuleInput): Promise<ModuleResult> =>
   // honestly (fixed alongside P1-33 — fetch/parse failure used to always be
   // laundered into an outer 'success'). Provider/fetch failure must never be
   // reported as COMPLETE.
-  if (legacy?.status === 'failed' || legacy?.status === 'error') {
-    return { status: 'FAILED', data: null, error: legacy.error || 'Schema markup analysis failed' };
-  }
-  return { status: 'COMPLETE', data: legacy?.data ?? legacy };
+  if (legacy?.status === 'failed' || legacy?.status === 'error') return adaptLegacyModuleResult(legacy, 'Schema markup');
+  return adaptLegacyModuleResult(legacy, 'Schema markup');
 };
 
 const keywordGapAdapter = async (
@@ -544,7 +609,7 @@ const keywordGapAdapter = async (
     },
     tracker
   );
-  return { status: 'COMPLETE', data };
+  return adaptAuditModuleResult(data);
 };
 
 /**
@@ -629,7 +694,8 @@ const competitorStrategyAdapter = async (
     (c): c is typeof c & { website: string } =>
       !!c.website && !!c.name && normalizeBusinessName(c.name) !== selfNormalized
   );
-  if (!topComp) return { status: 'SKIPPED', data: null, error: 'No major competitor found' };
+  if (!compData) return { status: 'UNAVAILABLE', data: null, error: 'Competitor search unavailable' };
+  if (!topComp) return { status: 'SKIPPED', data: null, error: 'No major competitor identified' };
   const data = await runCompetitorStrategyModule(
     {
       businessName: input.businessName,
@@ -642,7 +708,11 @@ const competitorStrategyAdapter = async (
     },
     tracker
   );
-  return { status: 'COMPLETE', data };
+  const result = adaptAuditModuleResult(data);
+  if (result.status === 'UNAVAILABLE' && Array.isArray(data.findings) && data.findings.length === 0 && data.evidenceSnapshots.length > 0) {
+    return { status: 'COMPLETE', data };
+  }
+  return result;
 };
 
 const visionAdapter = async (input: ModuleInput, tracker: CostTracker): Promise<ModuleResult> => {
@@ -660,7 +730,7 @@ const visionAdapter = async (input: ModuleInput, tracker: CostTracker): Promise<
     },
     tracker
   );
-  return { status: 'COMPLETE', data };
+  return adaptAuditModuleResult(data);
 };
 
 // P1-7: Adapters for previously dead modules — using existing utility functions
@@ -751,7 +821,7 @@ const coreWebVitalsAdapter = async (input: ModuleInput): Promise<ModuleResult> =
       // as observed real-user responsiveness.
       description: `INP (lab, single Lighthouse run) is ${cwv.inp.rating} (threshold: good < ${cwv.inp.thresholdGood}ms). Slow INP means clicks and taps feel sluggish to users.`,
       impactScore: cwv.inp.rating === 'poor' ? 6 : 4,
-      confidenceScore: 8.5,
+      confidenceScore: 9,
       evidence: [
         createEvidence({
           pointer: input.url || 'https://pagespeed.web.dev/',
@@ -1030,7 +1100,9 @@ export function extractFindingsFromRegistryResult(
   result: ModuleResult,
   input: ModuleInput
 ): { findings: any[]; snapshots: any[] } {
-  if (result.status !== 'COMPLETE' || !result.data) return { findings: [], snapshots: [] };
+  if ((result.status !== 'COMPLETE' && result.status !== 'PARTIAL') || !result.data) {
+    return { findings: [], snapshots: [] };
+  }
   const rd = result.data;
 
   const findings: any[] = [];
@@ -1066,7 +1138,7 @@ export function extractFindingsFromRegistryResult(
             : '.') +
           ' Specific profile findings are withheld until the correct listing is confirmed.',
         impactScore: 0,
-        confidenceScore: 40,
+        confidenceScore: 4,
         evidence: [
           createEvidence({
             pointer: rd.placeId
@@ -1157,6 +1229,46 @@ export function extractFindingsFromRegistryResult(
   return { findings, snapshots };
 }
 
+const REQUIRED_AUDIT_MODULES = new Set([
+  'website',
+  'websiteCrawler',
+  'gbp',
+  'competitor',
+  'techStack',
+  'security',
+  'coreWebVitals',
+  'schemaAnalysis',
+  'reputation',
+  'social',
+  'seoDeep',
+  'accessibility',
+  'mobileUX',
+  'contentQuality',
+  'conversion',
+  'citations',
+  'privacyCompliance',
+  'schemaMarkup',
+  'keywordGap',
+  'competitorStrategy',
+]);
+
+export function assessAuditResult(results: Map<string, ModuleResult>, rejectedFindingCount: number) {
+  const required = [...REQUIRED_AUDIT_MODULES];
+  const completeRequired = required.filter((name) => results.get(name)?.status === 'COMPLETE').length;
+  const failures = required.filter((name) => results.get(name)?.status !== 'COMPLETE');
+  const status = completeRequired === required.length
+    ? 'COMPLETE'
+    : completeRequired > 0
+      ? 'PARTIAL'
+      : 'FAILED';
+  const trustState = status === 'FAILED'
+    ? 'FAILED'
+    : status === 'COMPLETE' && rejectedFindingCount === 0
+      ? 'TRUSTED'
+      : 'DEGRADED_REVIEW_REQUIRED';
+  return { status, trustState, incompleteRequiredModules: failures } as const;
+}
+
 // --- Step 3: Replace the current execution logic ---
 
 /**
@@ -1216,9 +1328,10 @@ async function executePhase(
 
     // Check dependencies
     if (mod.dependsOn) {
-      const missingDeps = mod.dependsOn.filter(
-        (dep) => !results.has(dep) || results.get(dep)!.status === 'FAILED'
-      );
+      const missingDeps = mod.dependsOn.filter((dep) => {
+        const dependency = results.get(dep);
+        return !dependency || ['FAILED', 'UNAVAILABLE', 'SKIPPED'].includes(dependency.status);
+      });
       if (missingDeps.length > 0 && !mod.optional) {
         logger.warn({ module: mod.name, missingDeps }, 'Skipping module — dependencies failed');
         results.set(mod.name, {
@@ -1232,7 +1345,10 @@ async function executePhase(
 
     const moduleStart = Date.now();
     try {
-      if (signal?.aborted) return;
+      if (signal?.aborted) {
+        results.set(mod.name, { status: 'UNAVAILABLE', data: null, error: 'Audit aborted' });
+        return;
+      }
 
       const moduleInput: ModuleInput = {
         ...input,
@@ -1240,7 +1356,7 @@ async function executePhase(
         dependencyResults: Object.fromEntries(
           (mod.dependsOn || [])
             .map((dep) => [dep, results.get(dep)?.data])
-            .filter(([_, v]) => v != null)
+            .filter(([name, v]) => v != null && results.get(String(name))?.status === 'COMPLETE')
         ),
       };
 
@@ -1267,17 +1383,23 @@ async function executePhase(
       );
     } catch (error) {
       const durationMs = Date.now() - moduleStart;
+      const message = error instanceof Error ? error.message : String(error);
+      const aborted = signal?.aborted || (error instanceof Error && error.name === 'AbortError');
       logger.error(
         {
           event: 'audit.module_failed',
           phase,
           module: mod.name,
           durationMs,
-          error: String(error),
+          error: message,
         },
         'Module execution failed'
       );
-      results.set(mod.name, { status: 'FAILED', data: null, error: String(error) });
+      results.set(mod.name, {
+        status: aborted ? 'UNAVAILABLE' : 'FAILED',
+        data: null,
+        error: message,
+      });
     }
   });
 
@@ -1377,12 +1499,10 @@ export function deduplicateFindings(findings: any[]): any[] {
 // ─── P2-1: Global audit timeout ──────────────────────────────────────────────
 /**
  * Wall-clock limit for an entire audit run (all phases + DB writes).
- * P0 FIX: Reduced from 5 minutes to 30 seconds to meet performance target.
- * If audit exceeds 30s, it will be marked as FAILED and cached result will be checked.
  */
 const GLOBAL_AUDIT_TIMEOUT_MS = process.env.GLOBAL_AUDIT_TIMEOUT_MS
   ? parseInt(process.env.GLOBAL_AUDIT_TIMEOUT_MS, 10)
-  : 60 * 1000; // 60 seconds (adjusted to support slower local Puppeteer navigations)
+  : 5 * 60 * 1000;
 
 // Module-level timeout - each module should complete within this time
 const MODULE_TIMEOUT_MS = 10 * 1000; // 10 seconds per module
@@ -1462,16 +1582,16 @@ class AuditPerformanceTimer {
 const auditTimer = new AuditPerformanceTimer();
 
 /**
- * Public entry point. Wraps the internal runner in a hard 5-minute timeout.
+ * Public entry point. Wraps the internal runner in the configured global timeout.
  * If the timeout fires, the audit row is marked FAILED and the error is rethrown.
  */
-export async function runAudit(auditId: string) {
+export async function runAudit(auditId: string): Promise<AuditRunResult> {
   const controller = new AbortController();
   let timeoutId: NodeJS.Timeout | undefined;
   const timeoutPromise = new Promise<never>((_, reject) => {
     timeoutId = setTimeout(() => {
       controller.abort();
-      reject(new Error('AUDIT_TIMEOUT: Global 5-minute limit exceeded'));
+      reject(new Error(`AUDIT_TIMEOUT: Global ${GLOBAL_AUDIT_TIMEOUT_MS}ms limit exceeded`));
     }, GLOBAL_AUDIT_TIMEOUT_MS);
   });
   return withTenantRuntimeContext({ auditSignal: controller.signal }, async () => {
@@ -1483,7 +1603,7 @@ export async function runAudit(auditId: string) {
         await prisma.audit
           .update({
             where: { id: auditId },
-            data: { status: 'FAILED', completedAt: new Date() },
+            data: { status: 'FAILED', trustState: 'FAILED', completedAt: new Date() },
           })
           .catch(() => null);
       }
@@ -1494,14 +1614,6 @@ export async function runAudit(auditId: string) {
   });
 }
 
-/**
- * Generate cache key from URL
- */
-function generateUrlHash(url: string | null | undefined): string | null {
-  if (!url) return null;
-  return createHash('sha256').update(url).digest('hex');
-}
-
 /** Internal implementation — called only by runAudit() above. */
 async function runAuditInternal(auditId: string, signal?: AbortSignal) {
   const audit = await prisma.audit.findUnique({
@@ -1510,29 +1622,6 @@ async function runAuditInternal(auditId: string, signal?: AbortSignal) {
 
   if (!audit) {
     throw new Error(`Audit ${auditId} not found`);
-  }
-
-  // P0 FIX: Check cache first for same URL audit within 24h
-  const urlHash = generateUrlHash(audit.businessUrl);
-  if (urlHash) {
-    try {
-      const cachedAudit = await redisCache.get<any>('audit', urlHash);
-      if (cachedAudit && cachedAudit.status === 'COMPLETE') {
-        logger.info(
-          { auditId, urlHash },
-          '[runAudit] Returning cached audit result (same URL within 24h)'
-        );
-        return {
-          success: true,
-          auditId: audit.id,
-          status: 'COMPLETE',
-          cached: true,
-          ...cachedAudit,
-        };
-      }
-    } catch (error) {
-      logger.warn({ error }, '[runAudit] Cache check failed, proceeding with fresh audit');
-    }
   }
 
   return withChildObservabilityContext(
@@ -1616,7 +1705,18 @@ async function runAuditInternal(auditId: string, signal?: AbortSignal) {
               completedAt: new Date(),
             },
           });
-          return { success: false, auditId: audit.id, status: 'FAILED', error: 'BUDGET_EXCEEDED' };
+          return {
+            success: false,
+            auditId: audit.id,
+            status: 'FAILED' as const,
+            modulesCompleted: [],
+            modulesFailed: [{ module: 'budget', status: 'FAILED', error: 'BUDGET_EXCEEDED' }],
+            findingsCount: 0,
+            costCents: 0,
+            apiCostCents: 0,
+            duration_ms: 0,
+            error: 'BUDGET_EXCEEDED',
+          };
         }
         reservedCents = reservation.reservedCents;
       } catch (budgetErr) {
@@ -1687,7 +1787,14 @@ async function runAuditInternal(auditId: string, signal?: AbortSignal) {
         const modulesCompleted: string[] = [];
         const modulesFailed: any[] = [];
         const rejectedFindings: RejectedFinding[] = [];
-        let failedEvidenceWrites = 0;
+        const evidenceToPersist: Array<{
+          module: string;
+          source: string;
+          rawResponse: any;
+          collectedAt?: Date;
+          targetUrl?: string | null;
+          observationStatus: string;
+        }> = [];
 
         // Synthesize results into discoveries and evidence
         for (const [modName, res] of Array.from(results.entries())) {
@@ -1708,33 +1815,19 @@ async function runAuditInternal(auditId: string, signal?: AbortSignal) {
             rejectedFindings.push(...rejected);
 
             for (const snap of ext.snapshots) {
-              try {
-                await prisma.evidenceSnapshot.create({
-                  data: {
-                    auditId: audit.id,
-                    module: modName,
-                    source: snap.source || modName,
-                    rawResponse: snap.rawResponse ?? snap,
-                    tenantId: audit.tenantId,
-                  },
-                });
-              } catch (error) {
-                failedEvidenceWrites += 1;
-                Metrics.increment('failed_evidence_writes' as any);
-                logger.warn(
-                  {
-                    event: 'audit.evidence_snapshot_write_failed',
-                    auditId: audit.id,
-                    module: modName,
-                    source: snap.source || modName,
-                    error: String(error),
-                  },
-                  'Failed to persist evidence snapshot (non-fatal)'
-                );
-              }
+              evidenceToPersist.push({
+                module: modName,
+                source: String(snap.source || modName),
+                rawResponse: snap.rawResponse ?? snap,
+                collectedAt: snap.collectedAt instanceof Date ? snap.collectedAt : undefined,
+                targetUrl: url,
+                observationStatus: res.status,
+              });
             }
           } else if (res.status === 'FAILED') {
             modulesFailed.push({ module: modName, error: res.error });
+          } else {
+            modulesFailed.push({ module: modName, status: res.status, error: res.error });
           }
         }
 
@@ -1769,21 +1862,6 @@ async function runAuditInternal(auditId: string, signal?: AbortSignal) {
 
         // Create Finding records in DB (Wave 3, Step 6: routed through the one
         // validated persistence boundary — no direct prisma.finding.createMany here).
-        if (dedupedFindings.length > 0) {
-          const persistResult = await persistFindings(audit.id, audit.tenantId, dedupedFindings);
-          if (persistResult.rejected.length > 0) {
-            logger.warn(
-              {
-                event: 'audit.findings_rejected_at_persistence',
-                auditId: audit.id,
-                tenantId: audit.tenantId,
-                rejectedCount: persistResult.rejected.length,
-              },
-              `[Audit] Persistence layer rejected ${persistResult.rejected.length} finding(s) that passed aggregation but failed final revalidation`
-            );
-          }
-        }
-
         // Calculate total API cost
         const totalCostCents = costTracker.getTotalCents();
 
@@ -1808,14 +1886,20 @@ async function runAuditInternal(auditId: string, signal?: AbortSignal) {
           return !moduleResult || moduleResult.status !== 'COMPLETE';
         });
 
-        // Guardrail: never emit COMPLETE if any critical module failed/skipped.
-        if (finalStatus === 'COMPLETE' && failedCriticalModules.length > 0) {
-          finalStatus = 'PARTIAL';
+        const assessed = assessAuditResult(results, rejectedFindings.length);
+        finalStatus = assessed.status;
+        const incompleteRequiredModules = assessed.incompleteRequiredModules;
+
+        // Trust is not a percentage: every required module and critical identity check
+        // must complete before the audit may claim COMPLETE.
+        if (finalStatus === 'COMPLETE' && (failedCriticalModules.length > 0 || incompleteRequiredModules.length > 0)) {
+          finalStatus = completedRequiredModules > 0 ? 'PARTIAL' : 'FAILED';
           logger.warn(
             {
               event: 'audit.final_status_downgraded_for_critical_failures',
               auditId: audit.id,
               failedCriticalModules,
+              incompleteRequiredModules,
             },
             'Downgrading audit status from COMPLETE because critical modules were not completed'
           );
@@ -1858,10 +1942,23 @@ async function runAuditInternal(auditId: string, signal?: AbortSignal) {
           rating: gbpData?.rating,
         });
 
-        await prisma.audit.update({
-          where: { id: audit.id },
-          data: {
-            status: finalStatus as any,
+        const moduleResults = Object.fromEntries(
+          Array.from(results.entries()).map(([module, result]) => [module, {
+            status: result.status,
+            error: result.error ?? null,
+          }])
+        );
+        const trustState = assessAuditResult(results, rejectedFindings.length).trustState;
+
+        const persisted = await persistAuditResult({
+          auditId: audit.id,
+          tenantId: audit.tenantId,
+          findings: dedupedFindings,
+          evidence: evidenceToPersist,
+          auditUpdate: {
+            status: finalStatus as 'COMPLETE' | 'PARTIAL' | 'DEGRADED' | 'FAILED',
+            trustState,
+            moduleResults,
             modulesCompleted,
             modulesFailed,
             apiCostCents: totalCostCents,
@@ -1870,6 +1967,9 @@ async function runAuditInternal(auditId: string, signal?: AbortSignal) {
             verticalPlaybookId: verticalPlaybookId !== 'general' ? verticalPlaybookId : undefined,
           },
         });
+        if (persisted.rejectedFindings.length > 0) {
+          throw new Error(`AUDIT_INTEGRITY_FAILURE: ${persisted.rejectedFindings.length} finding(s) failed persistence validation`);
+        }
 
         const duration_ms = Date.now() - startTime;
         MetricsRecorder.auditCompleted(
@@ -1905,7 +2005,8 @@ async function runAuditInternal(auditId: string, signal?: AbortSignal) {
             findingsCount: allFindings.length,
             modulesCompleted: modulesCompleted.length,
             modulesFailed: modulesFailed.length,
-            failedEvidenceWrites,
+            persistedEvidence: persisted.persistedEvidence,
+            trustState,
             failedCriticalModules,
             duration_ms,
             apiCostCents: totalCostCents,
@@ -1916,35 +2017,14 @@ async function runAuditInternal(auditId: string, signal?: AbortSignal) {
         const result = {
           success: true,
           auditId: audit.id,
-          status: finalStatus,
+          status: finalStatus as AuditRunResult['status'],
           modulesCompleted,
           modulesFailed,
           findingsCount: allFindings.length,
           costCents: totalCostCents,
+          apiCostCents: totalCostCents,
           duration_ms,
         };
-
-        // P0 FIX: Cache successful audit results for 24h
-        if (urlHash && finalStatus === 'COMPLETE') {
-          try {
-            await redisCache.set(
-              'audit',
-              urlHash,
-              {
-                status: finalStatus,
-                modulesCompleted,
-                findingsCount: allFindings.length,
-                costCents: totalCostCents,
-                duration_ms,
-                completedAt: new Date().toISOString(),
-              },
-              { ttl: 24 * 60 * 60 } // 24 hours
-            );
-            logger.info({ auditId, urlHash }, '[runAudit] Cached audit result');
-          } catch (error) {
-            logger.warn({ error }, '[runAudit] Failed to cache audit result');
-          }
-        }
 
         return result;
       } finally {

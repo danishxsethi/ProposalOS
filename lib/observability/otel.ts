@@ -15,11 +15,15 @@
 import { getNodeAutoInstrumentations } from '@opentelemetry/auto-instrumentations-node';
 import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-grpc';
 import { OTLPTraceExporter as HTTPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
-import { Resource } from '@opentelemetry/resources';
+import { resourceFromAttributes } from '@opentelemetry/resources';
 import { NodeSDK } from '@opentelemetry/sdk-node';
 import { ConsoleSpanExporter } from '@opentelemetry/sdk-trace-base';
 import { BatchSpanProcessor } from '@opentelemetry/sdk-trace-node';
-import { SemanticResourceAttributes } from '@opentelemetry/semantic-conventions';
+import {
+  ATTR_DEPLOYMENT_ENVIRONMENT_NAME,
+  ATTR_SERVICE_NAME,
+  ATTR_SERVICE_VERSION,
+} from '@opentelemetry/semantic-conventions';
 
 import { logger } from '@/lib/logger';
 
@@ -48,10 +52,10 @@ export function initializeOpenTelemetry(): void {
 
   try {
     // Build resource with service identification
-    const resource = new Resource({
-      [SemanticResourceAttributes.SERVICE_NAME]: OTEL_SERVICE_NAME,
-      [SemanticResourceAttributes.SERVICE_VERSION]: process.env.npm_package_version || '0.1.0',
-      [SemanticResourceAttributes.DEPLOYMENT_ENVIRONMENT]: process.env.NODE_ENV || 'development',
+    const resource = resourceFromAttributes({
+      [ATTR_SERVICE_NAME]: OTEL_SERVICE_NAME,
+      [ATTR_SERVICE_VERSION]: process.env.npm_package_version || '0.1.0',
+      [ATTR_DEPLOYMENT_ENVIRONMENT_NAME]: process.env.NODE_ENV || 'development',
       ...(GCP_PROJECT_ID && {
         ['gcp.project_id']: GCP_PROJECT_ID,
       }),

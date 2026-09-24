@@ -64,6 +64,10 @@ vi.mock('@/lib/middleware/auth', () => ({
   withAuth: (handler: any) => handler,
   isInternalOpsRequest: vi.fn(() => false),
 }));
+// This suite targets quota behavior; authorization is covered by dedicated tests.
+vi.mock('@/lib/auth/rbac', () => ({
+  withRole: (_role: string, handler: any) => handler,
+}));
 vi.mock('@/lib/auth', () => ({
   auth: vi.fn(async () => ({
     user: {

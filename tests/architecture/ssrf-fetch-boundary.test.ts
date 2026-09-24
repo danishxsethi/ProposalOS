@@ -66,7 +66,7 @@ const ALLOWED_RAW_FETCH: AllowedRawFetch[] = [
   },
   {
     file: 'lib/modules/keywordGap.ts',
-    line: 208,
+    line: 196,
     host: 'serpapi.com',
     reason: 'Fixed host; keyword in query params',
   },
@@ -90,7 +90,7 @@ const ALLOWED_RAW_FETCH: AllowedRawFetch[] = [
   },
   {
     file: 'lib/modules/socialDeep.ts',
-    line: 220,
+    line: 230,
     host: 'serpapi.com',
     reason: 'Fixed host; businessName/city in query',
   },
@@ -116,13 +116,13 @@ const ALLOWED_RAW_FETCH: AllowedRawFetch[] = [
   // Google Places API (fixed host: places.googleapis.com)
   {
     file: 'lib/modules/gbp.ts',
-    line: 103,
+    line: 113,
     host: 'places.googleapis.com',
     reason: 'Fixed host; businessName in POST body, not URL',
   },
   {
     file: 'lib/modules/gbp.ts',
-    line: 203,
+    line: 213,
     host: 'places.googleapis.com',
     reason: 'Fixed host; placeId from prior Google response (template literal path)',
   },
@@ -134,7 +134,7 @@ const ALLOWED_RAW_FETCH: AllowedRawFetch[] = [
   },
   {
     file: 'lib/modules/gbpDeep.ts',
-    line: 186,
+    line: 198,
     host: 'places.googleapis.com',
     reason: 'Fixed host; placeId from Google response (template literal path)',
   },
@@ -148,7 +148,7 @@ const ALLOWED_RAW_FETCH: AllowedRawFetch[] = [
   // Google PageSpeed Insights (fixed host: googleapis.com)
   {
     file: 'lib/modules/website.ts',
-    line: 343,
+    line: 378,
     host: 'googleapis.com',
     reason: 'Fixed host; user URL in ?url= param only (Google validates)',
   },
@@ -160,13 +160,13 @@ const ALLOWED_RAW_FETCH: AllowedRawFetch[] = [
   },
   {
     file: 'lib/modules/mobileUX.ts',
-    line: 473,
+    line: 443,
     host: 'googleapis.com',
     reason: 'Fixed host; user URL in ?url= param',
   },
   {
     file: 'lib/modules/mobileUX.ts',
-    line: 497,
+    line: 467,
     host: 'googleapis.com',
     reason: 'Fixed host; user URL in ?url= param',
   },
@@ -194,15 +194,22 @@ const ALLOWED_RAW_FETCH: AllowedRawFetch[] = [
   // System-internal / fixed-host calls outside lib/modules/
   {
     file: 'lib/queue/auditJobQueue.ts',
-    line: 331,
+    line: 447,
     host: 'internal (env)',
     reason: 'workerUrl from process.env — system-configured, not user-influenced',
   },
   {
     file: 'lib/retention/nps.ts',
-    line: 20,
+    line: 41,
     host: 'api.resend.com',
     reason: 'Fixed host; hardcoded Resend API endpoint',
+  },
+  {
+    file: 'lib/store/shared.ts',
+    line: 108,
+    host: 'internal (env)',
+    reason:
+      'Upstash REST base URL from UPSTASH_REDIS_REST_URL env — operator-configured, not user-influenced; path is an internal Redis command',
   },
   {
     file: 'lib/db.ts',

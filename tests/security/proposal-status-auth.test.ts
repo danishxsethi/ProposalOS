@@ -25,6 +25,7 @@ const mocks = vi.hoisted(() => ({
   getTenantId: vi.fn(),
   proposalFindFirst: vi.fn(),
   proposalUpdate: vi.fn(),
+  publicationAssertion: vi.fn(),
 }));
 
 // withAuth passthrough — the route handler runs directly; tenant context is
@@ -45,6 +46,10 @@ vi.mock('@/lib/prisma', () => ({
       update: mocks.proposalUpdate,
     },
   },
+}));
+
+vi.mock('@/lib/proposal/publication', () => ({
+  assertProposalPublishable: mocks.publicationAssertion,
 }));
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────

@@ -16,8 +16,9 @@
  */
 
 // P0-3: Redirect to single source of truth
-import { runAudit } from '@/lib/audit/runner';
+import { dispatchAuditExecution } from '@/lib/audit/dispatch';
 import { prisma } from '@/lib/prisma';
+import { processAuditJob } from '@/lib/queue/auditJobWorker';
 
 import { logStageFailure } from '../metrics';
 import { transition } from '../stateMachine';
@@ -106,7 +107,8 @@ export async function processOneAudit(prospectId: string): Promise<StageResult> 
 
   // 2. Run the audit via runner (P0-3)
   try {
-    await runAudit(audit.id);
+    const job = await dispatchAuditExecution({ tenantId, auditId: audit.id, push: false, generateProposal: false });
+    await processAuditJob(job.id);
   } catch (error) {
     // runner threw (e.g. timeout)
     const err = error instanceof Error ? error : new Error(String(error));
@@ -129,15 +131,10 @@ export async function processOneAudit(prospectId: string): Promise<StageResult> 
   }
 
   // Fetch updated audit to get cost and status
-  const updatedAudit = await prisma.audit.findUnique({
-    where: { id: audit.id },
-  });
+  const updatedAudit = await prisma.audit.findUnique({ where: { id: audit.id } });
 
   const costCents = updatedAudit?.apiCostCents ?? 0;
-  const isSuccess =
-    updatedAudit?.status === 'COMPLETE' ||
-    updatedAudit?.status === 'PARTIAL' ||
-    (updatedAudit?.status as any) === 'DEGRADED';
+  const isSuccess = updatedAudit?.status === 'COMPLETE' && updatedAudit.trustState === 'TRUSTED';
 
   if (isSuccess) {
     // 3. Success: link to prospect, transition to "audited"

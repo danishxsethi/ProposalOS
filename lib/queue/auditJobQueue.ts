@@ -52,6 +52,7 @@ export interface AuditJobRecord {
   tenantId: string;
   batchId: string;
   auditId: string;
+  generateProposal: boolean;
   idempotencyKey: string;
   status: AuditJobStatus;
   attempts: number;
@@ -73,6 +74,9 @@ export interface EnqueueJobInput {
   auditId: string;
   /** Caller-controlled idempotency key — same key = same job, no duplicate. */
   idempotencyKey: string;
+  /** Worker caller may execute directly after enqueue and suppress duplicate push. */
+  dispatch?: boolean;
+  generateProposal?: boolean;
 }
 
 // ─── Enqueue ─────────────────────────────────────────────────────────────────
@@ -105,6 +109,7 @@ export async function enqueueAuditJob(input: EnqueueJobInput): Promise<AuditJobR
       tenantId: input.tenantId,
       batchId: input.batchId,
       auditId: input.auditId,
+      generateProposal: input.generateProposal ?? true,
       idempotencyKey: input.idempotencyKey,
       status: 'QUEUED',
       attempts: 0,
@@ -124,12 +129,14 @@ export async function enqueueAuditJob(input: EnqueueJobInput): Promise<AuditJobR
   );
 
   // Best-effort dispatch trigger to worker endpoint (if configured)
-  dispatchJobTrigger(job.id).catch((err) =>
-    logger.warn(
-      { event: 'audit_job.dispatch_failed', jobId: job.id, err },
-      'AuditJob: dispatch trigger failed'
-    )
-  );
+  if (input.dispatch !== false) {
+    dispatchJobTrigger(job.id).catch((err) =>
+      logger.warn(
+        { event: 'audit_job.dispatch_failed', jobId: job.id, err },
+        'AuditJob: dispatch trigger failed'
+      )
+    );
+  }
 
   return job as AuditJobRecord;
 }

@@ -332,7 +332,7 @@ describe('Worker — processAuditJob', () => {
     mocks.auditJobFindUnique.mockResolvedValue(mockJob({ status: 'QUEUED' }));
     mocks.auditJobUpdateMany.mockResolvedValue({ count: 1 });
     mocks.runAudit.mockResolvedValue(undefined);
-    mocks.auditFindUnique.mockResolvedValue({ status: 'COMPLETE' });
+    mocks.auditFindUnique.mockResolvedValue({ status: 'COMPLETE', trustState: 'TRUSTED' });
     mocks.generateProposal.mockResolvedValue(undefined);
 
     const result = await processAuditJob('job-1');
@@ -350,11 +350,11 @@ describe('Worker — processAuditJob', () => {
     );
   });
 
-  it('skips proposal when audit status is not COMPLETE/PARTIAL', async () => {
+  it('skips proposal when audit is not COMPLETE and TRUSTED', async () => {
     mocks.auditJobFindUnique.mockResolvedValue(mockJob({ status: 'QUEUED' }));
     mocks.auditJobUpdateMany.mockResolvedValue({ count: 1 });
     mocks.runAudit.mockResolvedValue(undefined);
-    mocks.auditFindUnique.mockResolvedValue({ status: 'FAILED' });
+    mocks.auditFindUnique.mockResolvedValue({ status: 'COMPLETE', trustState: 'DEGRADED_REVIEW_REQUIRED' });
     mocks.generateProposal.mockResolvedValue(undefined);
 
     const result = await processAuditJob('job-1');
@@ -383,7 +383,7 @@ describe('Worker — processAuditJob', () => {
     );
     expect(mocks.auditUpdate).toHaveBeenCalledWith({
       where: { id: 'audit-1' },
-      data: { status: 'FAILED' },
+      data: expect.objectContaining({ status: 'FAILED', trustState: 'FAILED' }),
     });
   });
 

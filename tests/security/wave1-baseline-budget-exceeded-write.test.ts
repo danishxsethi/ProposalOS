@@ -95,6 +95,12 @@ describe('runAudit — BUDGET_EXCEEDED write shape (baseline repair)', () => {
       auditId: 'audit-1',
       status: 'FAILED',
       error: 'BUDGET_EXCEEDED',
+      modulesCompleted: [],
+      modulesFailed: [{ module: 'budget', status: 'FAILED', error: 'BUDGET_EXCEEDED' }],
+      findingsCount: 0,
+      duration_ms: 0,
+      costCents: 0,
+      apiCostCents: 0,
     });
 
     const call = findFailedUpdateCall();

@@ -123,6 +123,11 @@ describe('Auth & Session Architecture Boundary Tests', () => {
       'email/',
       'stripe/',
       'onboarding/',
+      // NPS survey response is a public token-gated endpoint: authentication is a
+      // single-use hashed token (see lib/retention/nps.ts hashNpsToken), same class
+      // as proposal/token/ and team/invite/ above. It is additionally rate-limited
+      // fail-closed (routeClass 'public_nps'). No session auth by design.
+      'nps/respond/',
     ];
 
     const exemptExact = [

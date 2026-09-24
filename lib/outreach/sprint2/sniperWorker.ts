@@ -9,13 +9,14 @@ import {
   ProspectLead,
   ProspectLeadStatus,
 } from '@prisma/client';
+
 import { dispatchAuditExecution } from '@/lib/audit/dispatch';
 import { FeatureFlagService } from '@/lib/config/FeatureFlagService';
 import { logger } from '@/lib/logger';
+import { assertLiveProviderReady, getSendProvider } from '@/lib/outreach/providers';
 import { prisma } from '@/lib/prisma';
 import { generateProposal } from '@/lib/proposal/runner';
 import { runWithTenantAsync } from '@/lib/tenant/context';
-import { assertLiveProviderReady, getSendProvider } from '@/lib/outreach/providers';
 
 import { incrementDomainCounter, selectDomainForSend } from './domainRotation';
 import { ensureBaseUrl, ensureLeadScorecardToken, scorecardUrlForToken } from './scorecard';
@@ -348,7 +349,7 @@ export async function processSniperOutreach(
             scorecardUrl: scorecardUrl,
           });
 
-          // eslint-disable-next-line no-console
+
           logger.info(
             'DEBUG SEQUENCE:',
             JSON.stringify(

@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { ProposalQAService } from '@/lib/proposal/ProposalQAService';
+import { buildProposalGrounding } from '@/lib/proposal/grounding';
 import { prisma } from '@/lib/prisma';
 
 // Mock prisma and logs
@@ -43,91 +44,203 @@ describe('Self-Serve Automated Onboarding & Operations Security Tests', () => {
   // PART C: ProposalQAService & 7-Dimension Rubric Scoring
   // =================================================================--------
   describe('ProposalQAService Rubric & Auto-Promotion Gating', () => {
+    // Trust-foundation fixture (Wave 3+): every finding a proposal cites must satisfy
+    // the runtime Finding contract (lib/audit/findingContract.ts): category, type,
+    // confidenceScore, metrics, effortEstimate, recommendedFix, and evidence with a
+    // real, non-placeholder pointer AND source. QA scores evidenceQuality/relevance/
+    // specificity/clarity/clientReadiness as 0 when these foundations are missing,
+    // and autoQA hard-fails on ungrounded proposals — that blocking behavior is the
+    // security control under test, so the "perfect" fixture must clear it honestly.
+    const makeFinding = (
+      id: string,
+      module: string,
+      category: string,
+      title: string,
+      impactScore: number,
+      pointer: string,
+      source: string,
+      value: number | string,
+      label: string
+    ) =>
+      ({
+        id,
+        auditId: 'audit-1',
+        tenantId: 'tenant-1',
+        module,
+        category,
+        type: 'PAINKILLER',
+        title,
+        description: `${title} was observed.`,
+        impactScore,
+        confidenceScore: 9,
+        evidence: [
+          {
+            pointer,
+            source,
+            collected_at: '2026-05-30T00:00:00.000Z',
+            type: 'metric',
+            value,
+            label,
+          },
+        ],
+        metrics: { [label.toLowerCase()]: value },
+        effortEstimate: 'MEDIUM',
+        recommendedFix: [`Address ${title}`],
+      }) as any;
+
     const dummyFindings = [
-      {
-        id: 'f1',
-        title: 'LCP bad',
-        module: 'performance',
-        impactScore: 8,
-        evidence: [{ pointer: 'some-pointer', collected_at: '2026-05-30' }],
-      },
-      {
-        id: 'f2',
-        title: 'No SEO',
-        module: 'seo',
-        impactScore: 7,
-        evidence: [{ pointer: 'some-pointer', collected_at: '2026-05-30' }],
-      },
-      {
-        id: 'f3',
-        title: 'SSL missing',
-        module: 'security',
-        impactScore: 9,
-        evidence: [{ pointer: 'some-pointer', collected_at: '2026-05-30' }],
-      },
-      {
-        id: 'f4',
-        title: 'Broken links',
-        module: 'links',
-        impactScore: 6,
-        evidence: [{ pointer: 'some-pointer', collected_at: '2026-05-30' }],
-      },
+      makeFinding(
+        'f1',
+        'performance',
+        'Performance',
+        'Slow page speed',
+        8,
+        'https://acme.com/',
+        'pagespeed_v5',
+        4200,
+        'LCP'
+      ),
+      makeFinding(
+        'f2',
+        'seo',
+        'SEO',
+        'Missing meta tags',
+        7,
+        'https://acme.com/head',
+        'website_crawler',
+        'missing title',
+        'Meta'
+      ),
+      makeFinding(
+        'f3',
+        'security',
+        'Security',
+        'SSL missing',
+        9,
+        'https://acme.com/headers',
+        'security_scan',
+        'missing hsts',
+        'SSL'
+      ),
+      makeFinding(
+        'f4',
+        'links',
+        'Links',
+        'Broken links',
+        6,
+        'https://acme.com/sitemap',
+        'link_crawler',
+        3,
+        'links'
+      ),
     ] as any[];
 
-    const perfectProposal = {
-      executiveSummary:
-        'This is a premium high-quality customized proposal for Acme Corporation in Regina software team. We analyzed your LCP of 4.5 seconds and identified 5 critical findings and 3 painkillers to save 12 hours of website performance issues, boosting your annual revenue!',
-      tiers: {
-        essentials: {
-          name: 'Essentials',
-          findingIds: ['f1', 'f2'],
-          deliveryTime: '5 days',
-          roi: {
-            scenarios: {
-              best: 10,
-              base: 5,
-              worst: 1,
-              assumptions: ['Access granted', 'No blockers'],
-            },
-          },
-        },
-        growth: {
-          name: 'Growth',
-          findingIds: ['f1', 'f2', 'f3'],
-          deliveryTime: '10 days',
-          roi: {
-            scenarios: {
-              best: 20,
-              base: 10,
-              worst: 2,
-              assumptions: ['Access granted', 'No blockers'],
-            },
-          },
-        },
-        premium: {
-          name: 'Premium',
-          findingIds: ['f1', 'f2', 'f3', 'f4'],
-          deliveryTime: '15 days',
-          roi: {
-            scenarios: {
-              best: 35,
-              base: 18,
-              worst: 5,
-              assumptions: ['Access granted', 'No blockers'],
-            },
-          },
+    const makeTier = (
+      name: string,
+      findingIds: string[],
+      titles: string[],
+      deliveryTime: string,
+      price: number,
+      monthlyValue: number
+    ) => ({
+      name,
+      description: `Addresses: ${titles.join('; ')}`,
+      features: titles.map((t) => `Address ${t}`),
+      findingIds,
+      deliveryTime,
+      price,
+      roi: {
+        monthlyValue,
+        ratio: Number((monthlyValue / price).toFixed(1)),
+        scenarios: {
+          best: monthlyValue * 2,
+          base: monthlyValue,
+          worst: Math.round(monthlyValue / 5),
+          assumptions: ['Access granted', 'No blockers'],
         },
       },
-      pricing: { essentials: 1000, growth: 2500, premium: 4000, currency: 'USD' },
-      assumptions: ['Prerequisites satisfied.', 'AdWords configured.'],
-      disclaimers: ['Normal variance.'],
-      nextSteps: [
-        'Apply impact: high effort: low timeline: immediate structure here.',
-        'Apply impact: high effort: med timeline: month structure here.',
-        'Apply impact: high effort: high timeline: quarter structure here.',
-        'Reply or schedule to book your kick-off session!',
-      ],
-    } as any;
+    });
+
+    const buildPerfectProposal = () => {
+      const proposal = {
+        executiveSummary:
+          'Acme Corporation: Slow page speed, Missing meta tags, SSL missing and Broken links were observed and are addressed below.',
+        painClusters: [
+          {
+            id: 'cluster-1',
+            rootCause: 'Slow page speed; Missing meta tags',
+            severity: 'critical' as const,
+            findingIds: ['f1', 'f2'],
+          },
+        ],
+        topActions: [
+          {
+            findingId: 'f1',
+            title: 'Slow page speed',
+            impact: 8,
+            effort: 'MEDIUM',
+            timeline: '14 days',
+          },
+          {
+            findingId: 'f2',
+            title: 'Missing meta tags',
+            impact: 7,
+            effort: 'LOW',
+            timeline: '7 days',
+          },
+          {
+            findingId: 'f3',
+            title: 'SSL missing',
+            impact: 9,
+            effort: 'LOW',
+            timeline: '3 days',
+          },
+        ],
+        tiers: {
+          essentials: makeTier(
+            'Essentials',
+            ['f1', 'f2'],
+            ['Slow page speed', 'Missing meta tags'],
+            '5 days',
+            1000,
+            2500
+          ),
+          growth: makeTier(
+            'Growth',
+            ['f1', 'f2', 'f3'],
+            ['Slow page speed', 'Missing meta tags', 'SSL missing'],
+            '10 days',
+            2500,
+            6250
+          ),
+          premium: makeTier(
+            'Premium',
+            ['f1', 'f2', 'f3', 'f4'],
+            ['Slow page speed', 'Missing meta tags', 'SSL missing', 'Broken links'],
+            '15 days',
+            4000,
+            10000
+          ),
+        },
+        pricing: { essentials: 1000, growth: 2500, premium: 4000, currency: 'USD' },
+        assumptions: ['Prerequisites satisfied.', 'AdWords configured.'],
+        disclaimers: ['Normal variance.'],
+        nextSteps: [
+          'Apply impact: high effort: low timeline: immediate structure here.',
+          'Apply impact: high effort: med timeline: month structure here.',
+          'Apply impact: high effort: high timeline: quarter structure here.',
+          'Reply or schedule to book your kick-off session!',
+        ],
+      } as any;
+      proposal.grounding = buildProposalGrounding(
+        proposal,
+        { auditId: 'audit-1', tenantId: 'tenant-1', findings: dummyFindings },
+        ['f1', 'f2', 'f3', 'f4']
+      );
+      return proposal;
+    };
+
+    const perfectProposal = buildPerfectProposal();
 
     it('should pass and auto-promote if overallScore >= 7.5 and all dimensions >= 7.0', () => {
       const evaluation = ProposalQAService.evaluateProposal(

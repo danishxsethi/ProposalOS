@@ -5,7 +5,7 @@ import { logger } from '@/lib/logger';
 
 import { normalizeConfidence } from './findingGenerator';
 import { runGbpDeepModule } from './gbpDeep';
-import { AuditModuleResult, Finding } from './types';
+import { AuditModuleResult, createEvidence, Finding } from './types';
 import { crawlWebsite } from './websiteCrawler';
 
 export interface CompetitorStrategyInput {
@@ -140,6 +140,7 @@ export async function runCompetitorStrategyModule(
     return {
       findings: [],
       evidenceSnapshots: [],
+      execution: { state: 'unavailable', reason: error instanceof Error ? error.message : 'Competitor strategy unavailable' },
     };
   }
 }
@@ -212,7 +213,13 @@ function generateStrategyFindings(
         description: `${input.competitorName} is using this to win customers. ${insight.recommendation}`,
         impactScore: 6,
         confidenceScore: normalizeConfidence(90, '0-100'),
-        evidence: [{ type: 'text', value: insight.observation, label: 'Competitor Tactic' }],
+        evidence: [createEvidence({
+          pointer: input.competitorWebsite,
+          source: 'competitor_strategy',
+          type: 'text',
+          value: insight.observation,
+          label: 'Competitor Tactic',
+        })],
         metrics: {},
         effortEstimate: 'MEDIUM',
         recommendedFix: [insight.recommendation],
@@ -228,7 +235,13 @@ function generateStrategyFindings(
       description: `You have an edge over ${input.competitorName} in these areas: ${analysis.ourAdvantages.join(', ')}.`,
       impactScore: 3,
       confidenceScore: normalizeConfidence(80, '0-100'),
-      evidence: [],
+      evidence: [createEvidence({
+        pointer: input.websiteUrl,
+        source: 'competitor_strategy_comparison',
+        type: 'text',
+        value: analysis.ourAdvantages.join('; '),
+        label: 'Comparison basis',
+      })],
       metrics: {},
       effortEstimate: 'LOW',
       recommendedFix: ['Double down on these strengths'],

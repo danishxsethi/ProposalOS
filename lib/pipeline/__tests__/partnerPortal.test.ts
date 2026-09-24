@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { cleanupDb } from '@/lib/__tests__/utils/cleanup';
+import { withTestSystemSetup, withTestTenant } from '@/lib/__tests__/utils/testPrincipal';
 import { prisma } from '@/lib/prisma';
 
 import {
@@ -20,12 +21,12 @@ describe('Partner Portal', () => {
   beforeEach(async (context) => {
     console.log('START beforeEach for:', context.task.name, new Date().toISOString());
     // Create test tenant
-    const tenant = await prisma.tenant.create({
+    const tenant = await withTestSystemSetup(() => prisma.tenant.create({
       data: {
         name: 'Test Tenant',
         slug: `test-${Date.now()}`,
       },
-    });
+    }));
     tenantId = tenant.id;
 
     // Create test partner
@@ -42,7 +43,7 @@ describe('Partner Portal', () => {
     partnerId = await onboardPartner(config);
 
     // Create test prospect
-    const prospect = await prisma.prospectLead.create({
+    const prospect = await withTestTenant(tenantId, () => prisma.prospectLead.create({
       data: {
         tenantId,
         businessName: 'Test Dental Practice',
@@ -67,7 +68,7 @@ describe('Partner Portal', () => {
         decisionMakerEmail: 'dr.smith@testdental.com',
         status: 'QUALIFIED',
       },
-    });
+    }));
     leadId = prospect.id;
     console.log(
       'END beforeEach for:',
@@ -100,9 +101,9 @@ describe('Partner Portal', () => {
 
       const newPartnerId = await onboardPartner(config);
 
-      const partner = await prisma.agencyPartner.findUnique({
+      const partner = await withTestSystemSetup(() => prisma.agencyPartner.findUnique({
         where: { id: newPartnerId },
-      });
+      }));
 
       expect(partner).toBeDefined();
       expect(partner?.name).toBe('New Agency');
@@ -122,9 +123,9 @@ describe('Partner Portal', () => {
       };
 
       const newPartnerId = await onboardPartner(config);
-      const partner = await prisma.agencyPartner.findUnique({
+      const partner = await withTestSystemSetup(() => prisma.agencyPartner.findUnique({
         where: { id: newPartnerId },
-      });
+      }));
 
       expect(partner?.isActive).toBe(true);
       expect(partner?.monthlyVolume).toBe(25);
@@ -145,12 +146,12 @@ describe('Partner Portal', () => {
     it('should record delivery in database', async () => {
       await deliverLead(partnerId, leadId);
 
-      const delivery = await prisma.partnerDeliveredLead.findFirst({
+      const delivery = await withTestSystemSetup(() => prisma.partnerDeliveredLead.findFirst({
         where: {
           partnerId,
           leadId,
         },
-      });
+      }));
 
       expect(delivery).toBeDefined();
       expect(delivery?.status).toBe('delivered');
@@ -173,9 +174,9 @@ describe('Partner Portal', () => {
     it('should update lead status to viewed', async () => {
       await updateLeadStatus(partnerId, leadId, 'viewed');
 
-      const delivery = await prisma.partnerDeliveredLead.findFirst({
+      const delivery = await withTestSystemSetup(() => prisma.partnerDeliveredLead.findFirst({
         where: { partnerId, leadId },
-      });
+      }));
 
       expect(delivery?.status).toBe('viewed');
     });
@@ -183,9 +184,9 @@ describe('Partner Portal', () => {
     it('should update lead status to contacted', async () => {
       await updateLeadStatus(partnerId, leadId, 'contacted');
 
-      const delivery = await prisma.partnerDeliveredLead.findFirst({
+      const delivery = await withTestSystemSetup(() => prisma.partnerDeliveredLead.findFirst({
         where: { partnerId, leadId },
-      });
+      }));
 
       expect(delivery?.status).toBe('contacted');
     });
@@ -193,9 +194,9 @@ describe('Partner Portal', () => {
     it('should update lead status to converted', async () => {
       await updateLeadStatus(partnerId, leadId, 'converted');
 
-      const delivery = await prisma.partnerDeliveredLead.findFirst({
+      const delivery = await withTestSystemSetup(() => prisma.partnerDeliveredLead.findFirst({
         where: { partnerId, leadId },
-      });
+      }));
 
       expect(delivery?.status).toBe('converted');
     });
@@ -210,7 +211,7 @@ describe('Partner Portal', () => {
   describe('getPartnerMetrics', () => {
     beforeEach(async () => {
       // Deliver multiple leads with different statuses
-      const prospect2 = await prisma.prospectLead.create({
+      const prospect2 = await withTestTenant(tenantId, () => prisma.prospectLead.create({
         data: {
           tenantId,
           businessName: 'Test HVAC',
@@ -235,7 +236,7 @@ describe('Partner Portal', () => {
           decisionMakerEmail: 'bob@hvac.com',
           status: 'QUALIFIED',
         },
-      });
+      }));
 
       await deliverLead(partnerId, leadId);
       await deliverLead(partnerId, prospect2.id);
@@ -287,7 +288,7 @@ describe('Partner Portal', () => {
   describe('matchLeadsToPartner', () => {
     beforeEach(async () => {
       // Create additional prospects
-      await prisma.prospectLead.create({
+      await withTestTenant(tenantId, () => prisma.prospectLead.create({
         data: {
           tenantId,
           businessName: 'HVAC Company',
@@ -312,10 +313,10 @@ describe('Partner Portal', () => {
           decisionMakerEmail: 'alice@hvac.com',
           status: 'QUALIFIED',
         },
-      });
+      }));
 
       // Create prospect outside partner's geographies
-      await prisma.prospectLead.create({
+      await withTestTenant(tenantId, () => prisma.prospectLead.create({
         data: {
           tenantId,
           businessName: 'Chicago Dental',
@@ -340,7 +341,7 @@ describe('Partner Portal', () => {
           decisionMakerEmail: 'charlie@dental.com',
           status: 'QUALIFIED',
         },
-      });
+      }));
     });
 
     it('should match leads by vertical and geography', async () => {
@@ -360,7 +361,7 @@ describe('Partner Portal', () => {
 
     it('should exclude already delivered leads', async () => {
       console.log('DEBUG: leadId =', leadId);
-      const allProspects = await prisma.prospectLead.findMany();
+      const allProspects = await withTestTenant(tenantId, () => prisma.prospectLead.findMany());
       console.log(
         'DEBUG: allProspects ids =',
         allProspects.map((p) => p.id)

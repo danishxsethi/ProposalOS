@@ -23,6 +23,7 @@ import {
 } from '@/lib/api/errors';
 import { dispatchAuditExecution } from '@/lib/audit/dispatch';
 import { logger } from '@/lib/logger';
+import { withAuth } from '@/lib/middleware/auth';
 import { withRateLimit } from '@/lib/middleware/rateLimit';
 import { prisma } from '@/lib/prisma';
 
@@ -70,6 +71,8 @@ async function handlePostScan(req: Request): Promise<NextResponse> {
     }
 
     const { token, auditId, url, businessName, email } = result.data;
+    const authenticatedTenantId = await import('@/lib/tenant/context').then(({ getTenantId }) => getTenantId());
+    if (!authenticatedTenantId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     if (!token && !auditId) {
       return NextResponse.json(
@@ -86,8 +89,8 @@ async function handlePostScan(req: Request): Promise<NextResponse> {
     let businessUrl: string | null;
 
     if (token) {
-      const proposal = await prisma.proposal.findUnique({
-        where: { webLinkToken: token },
+      const proposal = await prisma.proposal.findFirst({
+        where: { webLinkToken: token, tenantId: authenticatedTenantId },
         include: {
           audit: {
             select: { id: true, tenantId: true, businessUrl: true },
@@ -106,8 +109,8 @@ async function handlePostScan(req: Request): Promise<NextResponse> {
       tenantId = proposal.audit.tenantId;
       businessUrl = proposal.audit.businessUrl;
     } else if (auditId) {
-      const audit = await prisma.audit.findUnique({
-        where: { id: auditId ?? undefined },
+      const audit = await prisma.audit.findFirst({
+        where: { id: auditId ?? undefined, tenantId: authenticatedTenantId },
         select: { tenantId: true, businessUrl: true },
       });
 
@@ -184,8 +187,8 @@ async function handlePostScan(req: Request): Promise<NextResponse> {
     }
 
     // Get the original audit for business details
-    const originalAudit = await prisma.audit.findUnique({
-      where: { id: targetAuditId },
+    const originalAudit = await prisma.audit.findFirst({
+      where: { id: targetAuditId, tenantId },
       select: {
         businessName: true,
         businessCity: true,
@@ -292,8 +295,10 @@ async function handleGetScanStatus(req: Request): Promise<NextResponse> {
       );
     }
 
-    const audit = await prisma.audit.findUnique({
-      where: { id: auditId ?? undefined },
+    const tenantId = await import('@/lib/tenant/context').then(({ getTenantId }) => getTenantId());
+    if (!tenantId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const audit = await prisma.audit.findFirst({
+      where: { id: auditId ?? undefined, tenantId },
     });
 
     if (!audit) {
@@ -307,7 +312,7 @@ async function handleGetScanStatus(req: Request): Promise<NextResponse> {
 
     // Get findings count separately
     const findingsCount = await prisma.finding.count({
-      where: { auditId: auditId ?? undefined },
+      where: { auditId: auditId ?? undefined, tenantId },
     });
 
     const response = NextResponse.json({
@@ -362,5 +367,5 @@ const rateLimitedGet = (req: Request) =>
     message: 'Too many status requests. Please wait before trying again.',
   })(req, () => handleGetScanStatus(req));
 
-export const POST = rateLimitedPost;
-export const GET = rateLimitedGet;
+export const POST = withAuth(rateLimitedPost);
+export const GET = withAuth(rateLimitedGet);

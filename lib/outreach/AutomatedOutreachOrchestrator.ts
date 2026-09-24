@@ -1,11 +1,13 @@
 import { EffortLevel, FindingType, OutreachLeadStage, ProspectLeadStatus } from '@prisma/client';
 
+import { dispatchAuditExecution } from '@/lib/audit/dispatch';
 import { persistFindings } from '@/lib/audit/findingPersistence';
-import { runAudit } from '@/lib/audit/runner';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
+import { buildProposalGrounding } from '@/lib/proposal/grounding';
 import { ProposalQAService } from '@/lib/proposal/ProposalQAService';
 import { generateProposal } from '@/lib/proposal/runner';
+import { processAuditJob } from '@/lib/queue/auditJobWorker';
 import { runWithTenantAsync } from '@/lib/tenant/context';
 
 export interface AuditProposalLoopResult {
@@ -159,7 +161,8 @@ export class AutomatedOutreachOrchestrator {
             logger.info({ auditId: audit.id }, 'Simulated audit completed successfully');
           } else {
             // Execute real crawler
-            await runAudit(audit.id);
+            const job = await dispatchAuditExecution({ tenantId, auditId: audit.id, push: false });
+            await processAuditJob(job.id);
           }
 
           // Fetch the completed audit
@@ -200,68 +203,81 @@ export class AutomatedOutreachOrchestrator {
             const cityName = lead.city || 'Unknown';
             const industryName = lead.vertical || 'Unknown';
 
+            // ROI ratio must equal monthlyValue/price (deterministic commercial
+            // arithmetic is verified by the QA gate).
+            const pricing = {
+              essentials: 999,
+              growth: 1999,
+              premium: 3999,
+              currency: 'USD',
+            };
+            const makeRoi = (monthlyValue: number, price: number) => ({
+              monthlyValue,
+              ratio: Number((monthlyValue / price).toFixed(1)),
+              scenarios: {
+                best: monthlyValue * 2,
+                base: monthlyValue,
+                worst: Math.floor(monthlyValue / 5),
+                assumptions: ['Cooperation', 'Traffic volume stable'],
+              },
+            });
+
             const mockProposalContent = {
-              executiveSummary: `Highly targeted growth strategy for ${lead.businessName} (Industry: ${industryName}) in ${cityName}. Our audit identified 4 critical issues, leading to a 35% revenue loss and slow 4.5s speed. Fixing these can drive a 50% increase in bookings and positive conversion.`,
-              painClusters: [],
+              executiveSummary: `Highly targeted growth strategy for ${lead.businessName} (Industry: ${industryName}) in ${cityName}. Our audit identified critical issues — Missing Sitemap and Robot.txt and Slow Largest Contentful Paint (LCP) — that are reducing indexation speed and search visibility and driving higher user bounce rates. Fixing these can increase bookings and improve conversion.`,
+              painClusters: [
+                {
+                  id: 'cluster-1',
+                  rootCause:
+                    'Missing Sitemap and Robot.txt and Slow Largest Contentful Paint (LCP) are the root causes suppressing organic visibility.',
+                  severity: 'critical' as const,
+                  findingIds,
+                },
+              ],
+              // Grounding requires at least 2 findings per tier mapping.
               tiers: {
                 essentials: {
                   name: 'Essentials',
-                  description: 'Core fixes',
+                  description:
+                    'Core fixes: Missing Sitemap and Robot.txt plus Slow Largest Contentful Paint (LCP) remediation.',
                   findingIds: findingIds,
                   deliveryTime: '5 business days',
+                  price: 999,
                   recommended: false,
-                  roi: {
-                    monthlyValue: 500,
-                    ratio: 1.5,
-                    scenarios: {
-                      best: 1000,
-                      base: 500,
-                      worst: 100,
-                      assumptions: ['Cooperation', 'Traffic volume stable'],
-                    },
-                  },
+                  roi: makeRoi(500, 999),
                 },
                 growth: {
                   name: 'Growth',
-                  description: 'SEO + Perf fixes',
+                  description:
+                    'Growth: fixes for Missing Sitemap and Robot.txt and Slow Largest Contentful Paint (LCP) with ongoing monitoring.',
                   findingIds: findingIds,
                   deliveryTime: '10 business days',
+                  price: 1999,
                   recommended: true,
-                  roi: {
-                    monthlyValue: 1500,
-                    ratio: 2.0,
-                    scenarios: {
-                      best: 3000,
-                      base: 1500,
-                      worst: 300,
-                      assumptions: ['Cooperation', 'Traffic volume stable'],
-                    },
-                  },
+                  roi: makeRoi(1000, 1999),
                 },
                 premium: {
                   name: 'Premium',
-                  description: 'Full service',
+                  description:
+                    'Premium: full remediation of Missing Sitemap and Robot.txt and Slow Largest Contentful Paint (LCP) with quarterly reviews.',
                   findingIds: findingIds,
                   deliveryTime: '15 business days',
+                  price: 3999,
                   recommended: false,
-                  roi: {
-                    monthlyValue: 4000,
-                    ratio: 2.5,
-                    scenarios: {
-                      best: 8000,
-                      base: 4000,
-                      worst: 800,
-                      assumptions: ['Cooperation', 'Traffic volume stable'],
-                    },
-                  },
+                  roi: makeRoi(2000, 3999),
                 },
               },
-              pricing: {
-                essentials: 999,
-                growth: 1999,
-                premium: 3999,
-                currency: 'USD',
-              },
+              // Grounding binds finding-backed top actions (the QA gate checks for
+              // up to 3; fewer findings → fewer actions).
+              topActions: completedAudit!.findings
+                .slice(0, 3)
+                .map((finding, index) => ({
+                  findingId: finding.id,
+                  title: finding.title,
+                  impact: finding.impactScore,
+                  effort: finding.effortEstimate ?? 'MEDIUM',
+                  timeline: `Schedule within ${index + 2} business days`,
+                })),
+              pricing,
               assumptions: [
                 'Assumes cooperation with technical staff.',
                 'Assumes standard CMS access is provided.',
@@ -274,9 +290,23 @@ export class AutomatedOutreachOrchestrator {
               ],
             };
 
+            // Simulated proposals must carry the same canonical claim grounding the
+            // real generator produces — ProposalQAService hard-fails GROUNDING_INVALID
+            // otherwise. Build it via the one production builder (no QA weakening).
+            const grounding = buildProposalGrounding(
+              mockProposalContent as any,
+              {
+                auditId: audit.id,
+                tenantId,
+                findings: completedAudit!.findings,
+              },
+              findingIds
+            );
+            const groundedProposalContent = { ...mockProposalContent, grounding };
+
             // Run the actual ProposalQAService evaluate method
             const evaluation = ProposalQAService.evaluateProposal(
-              mockProposalContent as any,
+              groundedProposalContent as any,
               completedAudit.findings,
               lead.businessName,
               lead.city,
@@ -290,7 +320,7 @@ export class AutomatedOutreachOrchestrator {
                 tenantId,
                 version: 1,
                 executiveSummary: mockProposalContent.executiveSummary,
-                painClusters: [] as any,
+                painClusters: mockProposalContent.painClusters as any,
                 tierEssentials: mockProposalContent.tiers.essentials as any,
                 tierGrowth: mockProposalContent.tiers.growth as any,
                 tierPremium: mockProposalContent.tiers.premium as any,

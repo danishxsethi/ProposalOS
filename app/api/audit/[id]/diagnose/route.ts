@@ -34,6 +34,13 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       return NextResponse.json({ error: 'Audit not found' }, { status: 404 });
     }
 
+    if (audit.trustState !== 'TRUSTED') {
+      return NextResponse.json(
+        { error: 'Audit requires review before diagnosis', trustState: audit.trustState },
+        { status: 409 }
+      );
+    }
+
     if (audit.findings.length === 0) {
       return NextResponse.json({ error: 'No findings to diagnose' }, { status: 400 });
     }

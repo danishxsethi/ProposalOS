@@ -26,7 +26,7 @@ describe('P0-25 containment (Wave 6 scope): socialDeep stub cannot emit a custom
       description:
         'We could not find any active social media profiles. In 2026, social proof is critical for trust.',
       impactScore: 8,
-      confidenceScore: 95,
+      confidenceScore: 9,
       evidence: [], // exactly what the current stubbed implementation produces
       metrics: { activeCount: 0 },
       effortEstimate: 'MEDIUM',
@@ -50,7 +50,7 @@ describe('P0-25 containment (Wave 6 scope): socialDeep stub cannot emit a custom
       category: 'Visibility',
       title: 'No Active Social Presence',
       impactScore: 8,
-      confidenceScore: 9.5,
+      confidenceScore: 9,
       evidence: [
         {
           pointer: 'https://serpapi.com/search?q=site:facebook.com...',

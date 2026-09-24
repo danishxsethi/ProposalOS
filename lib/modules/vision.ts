@@ -132,12 +132,13 @@ DO NOT wrap the response in markdown codeblocks. Just raw JSON. Keep it professi
           collectedAt: new Date(),
         },
       ],
+      execution: { state: findings.length > 0 ? 'complete' : 'unavailable', reason: findings.length ? undefined : 'Vision analysis returned no supported findings' },
     };
   } catch (e) {
     logger.error(
       { error: e, auditId: input.auditId },
       '[VisionModule] Failed to analyze vision inputs'
     );
-    return { findings: [], evidenceSnapshots: [] };
+    return { findings: [], evidenceSnapshots: [], execution: { state: 'unavailable', reason: e instanceof Error ? e.message : 'Vision analysis failed' } };
   }
 }

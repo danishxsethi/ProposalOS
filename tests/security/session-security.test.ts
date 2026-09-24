@@ -11,6 +11,9 @@ const mocks = vi.hoisted(() => ({
   sessionFindUnique: vi.fn(),
   sessionUpdate: vi.fn(),
   proposalFindUnique: vi.fn(),
+  proposalFindFirst: vi.fn(),
+  evidenceFindMany: vi.fn(),
+  rateLimit: vi.fn(),
   apiKeyFindUnique: vi.fn(),
   apiKeyUpdate: vi.fn(),
 
@@ -42,7 +45,9 @@ vi.mock('@/lib/prisma', () => ({
     },
     proposal: {
       findUnique: mocks.proposalFindUnique,
+      findFirst: mocks.proposalFindFirst,
     },
+    evidenceSnapshot: { findMany: mocks.evidenceFindMany },
     apiKey: {
       findUnique: mocks.apiKeyFindUnique,
       update: mocks.apiKeyUpdate,
@@ -54,6 +59,14 @@ vi.mock('@/lib/prisma', () => ({
 vi.mock('@/lib/tenant/context', () => ({
   runWithTenantAsync: mocks.runWithTenantAsync,
   runWithTenantBypass: mocks.runWithTenantBypass,
+}));
+
+vi.mock('@/lib/proposal/publication', () => ({
+  assertProposalPublishable: vi.fn(),
+  publicProposalCitations: vi.fn(() => ({ status: 'verified', claims: [] })),
+}));
+vi.mock('@/lib/middleware/rateLimit', () => ({
+  checkRateLimit: mocks.rateLimit,
 }));
 
 // Mock logger
@@ -109,6 +122,8 @@ describe('Session Security, Device Context & RTR', () => {
     mocks.runWithTenantBypass.mockImplementation(
       async (_reason: string, fn: () => Promise<unknown>) => fn()
     );
+    mocks.evidenceFindMany.mockResolvedValue([]);
+    mocks.rateLimit.mockResolvedValue({ success: true });
 
     // Default runWithTenantAsync passthrough
     mocks.runWithTenantAsync.mockImplementation(
@@ -155,6 +170,30 @@ describe('Session Security, Device Context & RTR', () => {
   });
 
   describe('NextAuth jwt callback - subsequent verification requests', () => {
+    it('does not allow client session updates to change tenant, role, identity, permissions, or admin flags', async () => {
+      const token = { jti: 's-valid-token', id: 'u-1', tenantId: 'tenant-a', role: 'member' };
+      mocks.sessionFindUnique.mockResolvedValue({
+        id: 'sess-1', sessionToken: 's-valid-token', userId: 'u-1',
+        expires: new Date(Date.now() + 30000), revokedAt: null,
+        user: { id: 'u-1', email: 'test@example.com', tenantId: 'tenant-a', role: 'member' },
+      });
+      const baseJwt = mocks.capturedConfig.callbacks.jwt;
+      const result = await baseJwt({
+        token,
+        trigger: 'update',
+        session: { user: {
+          id: 'attacker', tenantId: 'tenant-b', role: 'super_admin', permissions: ['*'], admin: true,
+          name: 'Renamed', image: 'https://example.test/avatar.png',
+        } },
+      });
+
+      expect(result.id).toBe('u-1');
+      expect(result.tenantId).toBe('tenant-a');
+      expect(result.role).toBe('member');
+      expect(result).not.toHaveProperty('permissions');
+      expect(result).not.toHaveProperty('admin');
+    });
+
     it('allows access for a valid, active, and unexpired database session', async () => {
       const mockToken = { jti: 's-valid-token', email: 'test@example.com' };
 
@@ -295,6 +334,7 @@ describe('Session Security, Device Context & RTR', () => {
           findings: [],
         },
       });
+      mocks.evidenceFindMany.mockResolvedValue([]);
 
       const res = await getProposalToken(
         new Request('http://localhost/api/proposal/token/valid-token'),

@@ -22,8 +22,10 @@ import {
   ValidationError,
 } from '@/lib/api/errors';
 import { logger } from '@/lib/logger';
+import { withAuth } from '@/lib/middleware/auth';
 import { withRateLimit } from '@/lib/middleware/rateLimit';
 import { prisma } from '@/lib/prisma';
+import { getTenantId, runWithTenantAsync } from '@/lib/tenant/context';
 
 interface Params {
   params: Promise<{ auditId: string }>;
@@ -100,6 +102,8 @@ async function handleImprovementReport(req: Request, { params }: Params): Promis
 
   try {
     const { auditId } = await params;
+    const tenantId = await getTenantId();
+    if (!tenantId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     const { searchParams } = new URL(req.url);
     const token = searchParams.get('token');
     const previousId = searchParams.get('previousId');
@@ -133,13 +137,10 @@ async function handleImprovementReport(req: Request, { params }: Params): Promis
     }
 
     // Get current audit
-    const currentAudit = await prisma.audit.findUnique({
-      where: { id: auditId },
-      include: {
-        findings: true,
-        FindingStatus: true,
-      },
-    });
+    const currentAudit = await runWithTenantAsync(tenantId, () => prisma.audit.findFirst({
+      where: { id: auditId, tenantId },
+      include: { findings: true, FindingStatus: true },
+    }));
 
     if (!currentAudit) {
       return NextResponse.json(new NotFoundError('Audit', auditId).toEnvelope(req.url, traceId), {
@@ -150,22 +151,22 @@ async function handleImprovementReport(req: Request, { params }: Params): Promis
     // Get previous audit (specified or most recent before current)
     let previousAudit;
     if (previousId) {
-      previousAudit = await prisma.audit.findUnique({
-        where: { id: previousId },
+      previousAudit = await runWithTenantAsync(tenantId, () => prisma.audit.findFirst({
+        where: { id: previousId, tenantId },
         include: { findings: true },
-      });
+      }));
     } else {
       // Find most recent audit before current
-      previousAudit = await prisma.audit.findFirst({
+      previousAudit = await runWithTenantAsync(tenantId, () => prisma.audit.findFirst({
         where: {
-          tenantId: currentAudit.tenantId,
+          tenantId,
           businessUrl: currentAudit.businessUrl ?? undefined,
           createdAt: { lt: currentAudit.createdAt },
           overallScore: { not: null },
         },
         orderBy: { createdAt: 'desc' },
         include: { findings: true },
-      });
+      }));
     }
 
     // Calculate comparison
@@ -293,4 +294,4 @@ const rateLimitedHandler = (req: Request, params: Params) =>
     message: 'Too many improvement report requests. Please wait before trying again.',
   })(req, () => handleImprovementReport(req, params));
 
-export const GET = (req: Request, params: Params) => rateLimitedHandler(req, params);
+export const GET = withAuth((req: Request, ...args: Params[]) => rateLimitedHandler(req, args[0]!));

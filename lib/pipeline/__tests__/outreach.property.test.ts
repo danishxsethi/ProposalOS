@@ -4,6 +4,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanupDb } from '@/lib/__tests__/utils/cleanup';
 import { runWithTenantBypass } from '@/lib/tenant/context';
 
+// sendWithRotation fails closed unless the explicit outbound-delivery gate is on
+// (lib/outreach/outboundSafety.ts). These tests exercise the delivery path with a
+// mocked provider, so they enable the gate explicitly (same as the sibling
+// inboxRotation.test.ts suite) rather than weakening the production control.
+process.env.OUTBOUND_DELIVERY_ENABLED = 'true';
+
 // Mock Resend Email Sender to avoid live API calls
 vi.mock('../../outreach/emailSender', () => ({
   sendEmail: vi.fn().mockResolvedValue({ success: true, messageId: 'msg-123' }),
@@ -39,57 +45,119 @@ import type { EmailQAConfig, GeneratedEmail, OutreachContext } from '../types';
 /**
  * Generate a valid OutreachContext
  */
-const outreachContextArb = fc.record({
-  prospect: fc.record({
-    id: fc.uuid(),
-    businessName: fc.string({ minLength: 5, maxLength: 50 }),
-    name: fc.string({ minLength: 5, maxLength: 50 }),
-    tenantId: fc.uuid(),
-  }),
-  audit: fc.record({
-    id: fc.uuid(),
-    status: fc.constant('COMPLETE'),
-  }),
-  proposal: fc.record({
-    id: fc.uuid(),
-    webLinkToken: fc.option(fc.uuid(), { nil: undefined }),
-  }),
-  findings: fc.array(
-    fc.record({
+// Word-based text: the claim-support validator requires at least one substantive
+// (>=4-char, non-stop-word) term overlap between a claim and its cited Findings.
+// Random fast-check strings shrink to punctuation-only values that can never
+// satisfy this, so generators produce word-based text (same arbitrary space minus
+// the impossible inputs).
+const wordTextArb = (minLength: number, maxLength: number) =>
+  fc
+    .array(fc.stringMatching(/^[a-z]{4,12}$/), { minLength: 1, maxLength: 8 })
+    .map((words) => words.join(' '))
+    .filter((value) => value.length >= minLength && value.length <= maxLength);
+
+// Generates a contract-valid OutreachContext: production (lib/pipeline/outreach.ts)
+// rejects whitespace-only strings, requires proposal.auditId/tenantId to match the
+// prospect/audit, requires tenantBranding.footerText, and validates each Finding
+// against the Wave 3 runtime contract (non-blank title, impactScore 1-10, cited
+// findings must carry the same auditId/tenantId). Generators that produce impossible
+// inputs would make these properties vacuous, so validity is enforced at the boundary.
+const nonBlankStringArb = (minLength: number, maxLength: number) =>
+  fc
+    .string({ minLength, maxLength })
+    .filter((value) => value.trim().length > 0);
+
+const outreachContextArb = fc
+  .record({
+    prospect: fc.record({
       id: fc.uuid(),
-      title: fc.string({ minLength: 5, maxLength: 100 }),
-      module: fc.constantFrom(
-        'pagespeed',
-        'mobile',
-        'ssl',
-        'gbp',
-        'review',
-        'social',
-        'competitor',
-        'accessibility'
-      ),
-      severity: fc.constantFrom('critical', 'high', 'medium', 'low'),
-      impactScore: fc.integer({ min: 0, max: 100 }),
-      description: fc.string({ minLength: 10, maxLength: 200 }),
+      businessName: nonBlankStringArb(5, 50),
+      name: nonBlankStringArb(5, 50),
+      tenantId: fc.uuid(),
     }),
-    { minLength: 2, maxLength: 10 }
-  ),
-  painBreakdown: fc.record({
-    websiteSpeed: fc.integer({ min: 0, max: 20 }),
-    mobileBroken: fc.integer({ min: 0, max: 15 }),
-    gbpNeglected: fc.integer({ min: 0, max: 15 }),
-    noSsl: fc.integer({ min: 0, max: 10 }),
-    zeroReviewResponses: fc.integer({ min: 0, max: 10 }),
-    socialMediaDead: fc.integer({ min: 0, max: 10 }),
-    competitorsOutperforming: fc.integer({ min: 0, max: 10 }),
-    accessibilityViolations: fc.integer({ min: 0, max: 10 }),
-  }),
-  vertical: fc.constantFrom('dentist', 'hvac', 'restaurant', 'default'),
-  tenantBranding: fc.record({
-    brandName: fc.string({ minLength: 3, maxLength: 50 }),
-    contactEmail: fc.emailAddress(),
-  }),
-});
+    audit: fc.record({
+      id: fc.uuid(),
+      status: fc.constant('COMPLETE'),
+    }),
+    proposal: fc.record({
+      id: fc.uuid(),
+      webLinkToken: fc.option(fc.uuid(), { nil: undefined }),
+    }),
+    findings: fc.array(
+      fc.record({
+        id: fc.uuid(),
+        title: wordTextArb(5, 100),
+        module: fc.constantFrom(
+          'pagespeed',
+          'mobile',
+          'ssl',
+          'gbp',
+          'review',
+          'social',
+          'competitor',
+          'accessibility'
+        ),
+        // Wave 3 runtime Finding contract (lib/audit/findingContract.ts): every
+        // cited Finding must carry category, a valid type, and non-empty valid
+        // evidence — findings without them are impossible inputs production rejects.
+        category: nonBlankStringArb(3, 30),
+        type: fc.constantFrom('PAINKILLER', 'VITAMIN'),
+        severity: fc.constantFrom('critical', 'high', 'medium', 'low'),
+        impactScore: fc.integer({ min: 1, max: 10 }),
+        // Finite confidenceScore: generateEmail divides it by 10 for the claim
+        // contract and NaN is rejected (impossible input).
+        confidenceScore: fc.integer({ min: 0, max: 10 }),
+        description: wordTextArb(10, 200),
+        evidence: fc.array(
+          fc.record({
+            // Evidence pointers must be real source URIs — the contract rejects
+            // placeholder/fabricated pointers (example.com etc.).
+            pointer: fc
+              .uuid()
+              .map((id) => `https://observed.test/${id}#evidence`),
+            source: nonBlankStringArb(3, 30),
+            collected_at: fc
+              .date({ min: new Date('2020-01-01'), max: new Date('2030-12-31') })
+              .filter((d) => !isNaN(d.getTime()))
+              .map((d) => d.toISOString()),
+          }),
+          { minLength: 1, maxLength: 3 }
+        ),
+      }),
+      { minLength: 2, maxLength: 10 }
+    ),
+    painBreakdown: fc.record({
+      websiteSpeed: fc.integer({ min: 0, max: 20 }),
+      mobileBroken: fc.integer({ min: 0, max: 15 }),
+      gbpNeglected: fc.integer({ min: 0, max: 15 }),
+      noSsl: fc.integer({ min: 0, max: 10 }),
+      zeroReviewResponses: fc.integer({ min: 0, max: 10 }),
+      socialMediaDead: fc.integer({ min: 0, max: 10 }),
+      competitorsOutperforming: fc.integer({ min: 0, max: 10 }),
+      accessibilityViolations: fc.integer({ min: 0, max: 10 }),
+    }),
+    vertical: fc.constantFrom('dentist', 'hvac', 'restaurant', 'default'),
+    tenantBranding: fc.record({
+      brandName: nonBlankStringArb(3, 50),
+      contactEmail: fc.emailAddress(),
+      footerText: nonBlankStringArb(5, 100),
+    }),
+  })
+  .map((context) => ({
+    ...context,
+    // The proposal must belong to the same audit and tenant as the prospect —
+    // cross-tenant/mismatched proposals are impossible inputs production rejects.
+    proposal: {
+      ...context.proposal,
+      auditId: context.audit.id,
+      tenantId: context.prospect.tenantId,
+    },
+    findings: context.findings.map((finding) => ({
+      ...finding,
+      auditId: context.audit.id,
+      tenantId: context.prospect.tenantId,
+    })),
+  }));
 
 /**
  * Generate a GeneratedEmail
@@ -158,8 +226,16 @@ describe('Outreach Agent Property Tests', () => {
           expect(email.scorecardUrl).toBeDefined();
           expect(email.scorecardUrl.length).toBeGreaterThan(0);
 
-          // Scorecard URL must be in the body
-          expect(email.body).toContain(email.scorecardUrl);
+          // Scorecard URL must be in the body (the body is HTML, so the URL is
+          // HTML-escaped there — compare against the escaped form)
+          const escapedScorecardUrl = email.scorecardUrl.replace(
+            /[&<>"']/g,
+            (character) =>
+              ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[
+                character
+              ] as string
+          );
+          expect(email.body).toContain(escapedScorecardUrl);
         }),
         { numRuns: 100 }
       );
@@ -424,9 +500,80 @@ describe('Outreach Agent Property Tests', () => {
    * **Validates: Requirements 4.6**
    */
   describe('Property 17: Inbox rotation daily limit per domain', () => {
+    /**
+     * sendWithRotation now requires grounded delivery (Wave 3): a real auditId and
+     * Finding IDs belonging to the tenant, or the send fails closed. This helper
+     * provisions that minimal grounded fixture and builds emails citing it.
+     */
+    async function createGroundedEmailFixture(tenantId: string) {
+      const audit = await prisma.audit.create({
+        data: {
+          tenantId,
+          businessName: 'Rotation Fixture Biz',
+          businessUrl: 'https://fixture.example.com',
+          status: 'COMPLETE',
+        },
+      });
+
+      const finding = await prisma.finding.create({
+        data: {
+          tenantId,
+          auditId: audit.id,
+          module: 'seo',
+          category: 'SEO',
+          type: 'PAINKILLER',
+          title: 'Rotation fixture finding title',
+          description: 'Rotation fixture finding description for grounded send tests.',
+          impactScore: 8,
+          confidenceScore: 9,
+          effortEstimate: 'LOW',
+          evidence: [
+            {
+              pointer: `sandbox://rotation-fixture/${audit.id}#evidence`,
+              source: 'rotation_fixture_test',
+              collected_at: new Date().toISOString(),
+              type: 'text',
+              value: 'fixture observation',
+            },
+          ],
+          metrics: {},
+          recommendedFix: [],
+        },
+      });
+
+      return (email: Omit<GeneratedEmail, 'auditId' | 'findingIds'>): GeneratedEmail => ({
+        ...email,
+        auditId: audit.id,
+        findingIds: [finding.id],
+      });
+    }
+
+    /**
+     * sendWithRotation dedupes INITIAL sends per lead (a lead that already has a
+     * SENT/PENDING initial email is never sent to twice), so volume-based tests
+     * must send each email to a distinct lead to exercise the daily-cap path.
+     */
+    async function createQualifiedLead(tenantId: string, label: string): Promise<string> {
+      const leadId = crypto.randomUUID();
+      await prisma.prospectLead.create({
+        data: {
+          tenantId,
+          id: leadId,
+          businessName: `Test Business ${label}`,
+          source: 'test',
+          sourceExternalId: `test-${label}`,
+          city: 'Test City',
+          vertical: 'dentist',
+          painScore: 75,
+          status: 'QUALIFIED',
+          decisionMakerEmail: `recipient-${label}@example.com`,
+        },
+      });
+      return leadId;
+    }
+
     it('domain selection respects daily limits', async () => {
       const tenantId = crypto.randomUUID();
-      const leadId = crypto.randomUUID();
 
       await runWithTenantBypass('test', async () => {
         // Create a tenant first
@@ -437,21 +584,7 @@ describe('Outreach Agent Property Tests', () => {
           },
         });
 
-        // Create a prospect lead with decisionMakerEmail
-        await prisma.prospectLead.create({
-          data: {
-            tenantId,
-            id: leadId,
-            businessName: 'Test Business',
-            source: 'test',
-            sourceExternalId: 'test-respects-limits',
-            city: 'Test City',
-            vertical: 'dentist',
-            painScore: 75,
-            status: 'QUALIFIED',
-            decisionMakerEmail: 'recipient@example.com',
-          },
-        });
+        const groundEmail = await createGroundedEmailFixture(tenantId);
 
         // Create a domain with a low daily limit
         const domain = await prisma.outreachSendingDomain.create({
@@ -466,9 +599,11 @@ describe('Outreach Agent Property Tests', () => {
           },
         });
 
-        // Send emails up to the limit
+        // Send emails up to the limit (each to a distinct lead — INITIAL sends
+        // are deduped per lead in production)
         for (let i = 0; i < 5; i++) {
-          const email: GeneratedEmail = {
+          const leadId = await createQualifiedLead(tenantId, `limits-${i}`);
+          const email: GeneratedEmail = groundEmail({
             id: crypto.randomUUID(),
             subject: 'Test',
             body: 'Test body',
@@ -477,23 +612,23 @@ describe('Outreach Agent Property Tests', () => {
             findingReferences: ['finding1', 'finding2'],
             scorecardUrl: 'https://example.com/scorecard',
             generatedAt: new Date(),
-          };
+          });
 
           const result = await sendWithRotation(email, tenantId);
           expect(result.status).toBe('sent');
         }
 
         // Next email should be queued (limit reached)
-        const email: GeneratedEmail = {
+        const email: GeneratedEmail = groundEmail({
           id: crypto.randomUUID(),
           subject: 'Test',
           body: 'Test body',
-          prospectId: leadId,
+          prospectId: await createQualifiedLead(tenantId, 'limits-overflow'),
           proposalId: crypto.randomUUID(),
           findingReferences: ['finding1', 'finding2'],
           scorecardUrl: 'https://example.com/scorecard',
           generatedAt: new Date(),
-        };
+        });
 
         const result = await sendWithRotation(email, tenantId);
         expect(result.status).toBe('queued');
@@ -506,8 +641,6 @@ describe('Outreach Agent Property Tests', () => {
 
     it('multiple domains distribute load', async () => {
       const tenantId = crypto.randomUUID();
-      const leadId = crypto.randomUUID();
-
       await runWithTenantBypass('test', async () => {
         // Create a tenant first
         await prisma.tenant.create({
@@ -517,21 +650,7 @@ describe('Outreach Agent Property Tests', () => {
           },
         });
 
-        // Create a prospect lead with decisionMakerEmail
-        await prisma.prospectLead.create({
-          data: {
-            tenantId,
-            id: leadId,
-            businessName: 'Test Business Multi',
-            source: 'test',
-            sourceExternalId: 'test-multiple-domains',
-            city: 'Test City',
-            vertical: 'dentist',
-            painScore: 75,
-            status: 'QUALIFIED',
-            decisionMakerEmail: 'recipient-multi@example.com',
-          },
-        });
+        const groundEmail = await createGroundedEmailFixture(tenantId);
 
         // Create multiple domains
         const domain1 = await prisma.outreachSendingDomain.create({
@@ -558,19 +677,20 @@ describe('Outreach Agent Property Tests', () => {
           },
         });
 
-        // Send multiple emails
+        // Send multiple emails (each to a distinct lead — INITIAL sends are
+        // deduped per lead in production)
         const sentDomains: string[] = [];
         for (let i = 0; i < 15; i++) {
-          const email: GeneratedEmail = {
+          const email: GeneratedEmail = groundEmail({
             id: crypto.randomUUID(),
             subject: 'Test',
             body: 'Test body',
-            prospectId: leadId,
+            prospectId: await createQualifiedLead(tenantId, `multi-${i}`),
             proposalId: crypto.randomUUID(),
             findingReferences: ['finding1', 'finding2'],
             scorecardUrl: 'https://example.com/scorecard',
             generatedAt: new Date(),
-          };
+          });
 
           const result = await sendWithRotation(email, tenantId);
           if (result.status === 'sent') {
@@ -661,7 +781,8 @@ describe('Outreach Agent Property Tests', () => {
         });
 
         // Send an email - should use domain2 (lower usage)
-        const email: GeneratedEmail = {
+        const groundEmail = await createGroundedEmailFixture(tenantId);
+        const email: GeneratedEmail = groundEmail({
           id: crypto.randomUUID(),
           subject: 'Test',
           body: 'Test body',
@@ -670,7 +791,7 @@ describe('Outreach Agent Property Tests', () => {
           findingReferences: ['finding1', 'finding2'],
           scorecardUrl: 'https://example.com/scorecard',
           generatedAt: new Date(),
-        };
+        });
 
         const result = await sendWithRotation(email, tenantId);
         expect(result.status).toBe('sent');

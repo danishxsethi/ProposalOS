@@ -67,10 +67,28 @@ const mocks = vi.hoisted(() => ({
   tenantFindFirst: vi.fn(),
   tenantUpsert: vi.fn(),
   auditCreate: vi.fn(),
+  auditUpdate: vi.fn(),
+  trackUsage: vi.fn(),
+  dispatchAuditExecution: vi.fn(),
+  runModuleSubset: vi.fn(),
 }));
 
 vi.mock('@/lib/audit/runner', () => ({
   runAudit: mocks.runAudit,
+  runModuleSubset: mocks.runModuleSubset,
+  extractFindingsFromRegistryResult: () => ({ findings: [] }),
+}));
+
+vi.mock('@/lib/audit/dispatch', () => ({
+  dispatchAuditExecution: mocks.dispatchAuditExecution,
+}));
+
+vi.mock('@/lib/billing/metering', () => ({ trackUsage: mocks.trackUsage }));
+
+vi.mock('@/lib/costs/costTracker', () => ({
+  CostTracker: class {
+    getTotalCents() { return 0; }
+  },
 }));
 
 vi.mock('@/lib/modules/websiteCrawler', () => ({
@@ -90,6 +108,7 @@ vi.mock('@/lib/prisma', () => ({
     },
     audit: {
       create: mocks.auditCreate,
+      update: mocks.auditUpdate,
     },
   },
 }));
@@ -134,6 +153,10 @@ describe('Public Routes Abuse Defense Integration Tests', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     currentStore = makeTestStore();
+    mocks.trackUsage.mockResolvedValue(undefined);
+    mocks.dispatchAuditExecution.mockResolvedValue({ id: 'job-1', status: 'QUEUED' });
+    mocks.runModuleSubset.mockResolvedValue(new Map());
+    mocks.auditUpdate.mockResolvedValue({});
   });
 
   describe('POST /api/public/audit (Public Audit Creation)', () => {

@@ -9,9 +9,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 import { generateTraceId, InternalError, UnauthorizedError } from '@/lib/api/errors';
-import { API_KEY_SCOPES, validateApiKey } from '@/lib/auth/apiKeys';
+import { API_KEY_SCOPES, apiKeyCanAccessTenant, validateApiKey } from '@/lib/auth/apiKeys';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
+import { runWithTenantAsync } from '@/lib/tenant/context';
 
 export const dynamic = 'force-dynamic';
 
@@ -86,18 +87,17 @@ export async function POST(
       throw new UnauthorizedError('Invalid or insufficient API key');
     }
 
-    const hasAdminScope =
-      validation.scopes.includes(API_KEY_SCOPES.ALL) || validation.scopes.includes('admin:*');
-
-    if (!hasAdminScope && validation.tenantId !== tenantId) {
+    if (!apiKeyCanAccessTenant(validation, tenantId)) {
       throw new UnauthorizedError('Access denied to this tenant');
     }
 
     // Get tenant's custom domain
-    const branding = await prisma.tenantBranding.findUnique({
-      where: { tenantId },
-      select: { customDomain: true, customDomainVerified: true },
-    });
+    const branding = await runWithTenantAsync(tenantId, () =>
+      prisma.tenantBranding.findUnique({
+        where: { tenantId },
+        select: { customDomain: true, customDomainVerified: true },
+      })
+    );
 
     if (!branding?.customDomain) {
       return NextResponse.json(
@@ -142,13 +142,12 @@ export async function POST(
     }
 
     // Mark domain as verified
-    await prisma.tenantBranding.update({
-      where: { tenantId },
-      data: {
-        customDomainVerified: true,
-        customDomainVerifiedAt: new Date(),
-      },
-    });
+    await runWithTenantAsync(tenantId, () =>
+      prisma.tenantBranding.update({
+        where: { tenantId },
+        data: { customDomainVerified: true, customDomainVerifiedAt: new Date() },
+      })
+    );
 
     logger.info(
       {

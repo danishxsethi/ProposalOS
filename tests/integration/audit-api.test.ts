@@ -63,6 +63,11 @@ vi.mock('@/lib/middleware/auth', () => ({
   withAuth: (handler: any) => handler,
   isInternalOpsRequest: vi.fn(() => false),
 }));
+// These integration tests exercise the handler's validation/quota/dispatch path;
+// auth and role enforcement have dedicated middleware tests.
+vi.mock('@/lib/auth/rbac', () => ({
+  withRole: (_role: string, handler: any) => handler,
+}));
 vi.mock('@/lib/auth', () => ({
   auth: vi.fn(async () => ({
     user: {

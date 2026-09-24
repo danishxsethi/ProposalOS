@@ -1,0 +1,15 @@
+product_claim,implementation,test,live_verification,evidence,gap
+audits tenant-isolated,tenant IDs/RLS/Prisma extension,security/property tests,NO,TEST_EVIDENCE,live two-tenant route/RLS proof
+every finding has evidence,finding contract/persistence,contract tests,NO,TEST_EVIDENCE,all 27 modules and snapshots
+diagnosis cannot invent findings,claim/citation validation,adversarial graph tests,NO,TEST_EVIDENCE,live hostile provider trace
+proposal claims grounded,claim contract/grounding,grounding tests,NO,TEST_EVIDENCE,full rendered section coverage
+pricing correct,deterministic pricing,unit tests,NO,TEST_EVIDENCE,configuration/version/tenant test
+QA blocks unsafe output,QA/publication sources,architecture tests,NO,TEST_EVIDENCE,one canonical route gate
+PDF matches proposal state,PDF generator,none observed live,NO,SOURCE_ONLY,deployed artifact smoke
+proposal links secure,token routes/rate limits,partial security tests,NO,SOURCE_ONLY,all alternate surfaces/expiry
+retries do not duplicate effects,idempotency/queue,queue tests,NO,TEST_EVIDENCE,worker crash/external effect injection
+outreach sends once,outbound safety/provider,partial tests,NO,SOURCE_ONLY,sandbox provider delivery
+billing idempotent,Stripe signature/event dedupe,webhook tests,NO,SOURCE_ONLY,test-mode event matrix
+workflow recovers,AuditJob leases/retries,worker tests,NO,TEST_EVIDENCE,live isolated crash/reclaim
+real audits meet latency,runner timeouts/cost tracker,none p95,NO,NOT_EVIDENCED,multi-vertical dataset
+backup restorable,Terraform/docs,none observed,NO,DOCUMENTED_CLAIM,isolated restore drill

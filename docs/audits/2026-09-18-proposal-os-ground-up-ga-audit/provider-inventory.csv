@@ -1,0 +1,15 @@
+provider,purpose,source,credential_or_config,environment,timeout_or_retry,runtime_status
+Google Places,business/GBP/competitor,lib/modules/gbp.ts;competitor.ts,GOOGLE_PLACES_API_KEY,unknown,source-defined,not evidenced
+Google PageSpeed,performance,lib/modules/website.ts;coreWebVitals.ts,GOOGLE_PAGESPEED_API_KEY,unknown,source-defined,not evidenced
+SerpAPI,search/competitors/citations,lib/modules/*.ts,SERP_API_KEY,unknown,source-defined,not evidenced
+Vertex AI/Gemini,analysis/proposal/QA,lib/diagnosis;lib/proposal;modules,GOOGLE_AI_API_KEY/GCP,unknown,"source-defined; PII/model cost unknown",not evidenced
+OpenAI,model dependency/source,package.json;lib,OPENAI_API_KEY,unknown,unknown,not evidenced
+Resend,email,lib/outreach/providers.ts;lib/email,RESEND_API_KEY,unknown,"source gate; external communication",not evidenced
+Zoho SMTP,email,feat(outreach) source boundary,ZOHO SMTP env,unknown,"source gate; external communication",not evidenced
+Stripe,billing/checkout/webhook,app/api/stripe;lib/stripe,STRIPE_SECRET_KEY/WEBHOOK,unknown,real money,not evidenced
+Google Cloud Storage,PDF/artifacts,lib/pdf;lib/storage;terraform,GCS config,unknown,tenant data,not evidenced
+Redis/Upstash,cache/rate limiting,lib/cache;lib/store,Redis/Upstash env,local disabled,source-defined,not evidenced
+LangSmith,LLM traces/evals,lib/tracing.ts,LANGCHAIN_API_KEY/LANGCHAIN_PROJECT,local disabled,PII risk,not evidenced
+Temporal,durable workflow,none in package/source,none,not present,not applicable,not implemented
+n8n,edge automation,no verified workflow artifact,unknown,unknown,external effect,not evidenced
+Dify,ops sandbox,no verified production integration,unknown,unknown,PII/prompt risk,not evidenced

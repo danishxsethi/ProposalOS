@@ -63,7 +63,7 @@ export async function getTenantConfig(tenantId: string): Promise<TenantConfigRes
       where: { id: tenantId },
       include: {
         pipelineConfig: true,
-        branding: true,
+        brandingConfig: true,
       },
     });
 
@@ -73,7 +73,7 @@ export async function getTenantConfig(tenantId: string): Promise<TenantConfigRes
 
     return {
       config: tenant.pipelineConfig!,
-      branding: tenant.branding,
+      branding: tenant.brandingConfig,
       tenant: {
         id: tenant.id,
         name: tenant.name,

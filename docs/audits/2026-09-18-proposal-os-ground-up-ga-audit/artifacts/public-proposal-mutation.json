@@ -1,0 +1,137 @@
+{
+  "generatedAt": "2026-09-24T06:58:48.333Z",
+  "scope": "app/api/proposal/token/** public/tokenized proposal surfaces",
+  "forbiddenAuthorities": [
+    "payment/stripe",
+    "tenant configuration",
+    "internal sales pipeline",
+    "QA authority",
+    "pricing/plan authority",
+    "fulfillment/delivery",
+    "auth/user authority",
+    "audit engine authority"
+  ],
+  "allowedProposalUpdateFields": [
+    "status",
+    "acceptedAt",
+    "acceptedByName",
+    "acceptedByEmail",
+    "signatureDataUrl",
+    "shareCount",
+    "lastSharedAt",
+    "emailSentCount",
+    "lastEmailedAt",
+    "lastViewedAt",
+    "viewCount",
+    "contactRequestedAt",
+    "updatedAt",
+    "sentAt",
+    "replyReceivedAt",
+    "outcome",
+    "tierChosen",
+    "closedAt",
+    "meetingBookedAt"
+  ],
+  "surfaces": [
+    {
+      "route": "/api/proposal/token/[token]/accept",
+      "file": "app/api/proposal/token/[token]/accept/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "writes": [
+        "proposal.update",
+        "proposalAcceptance.create"
+      ],
+      "guard": "inline",
+      "violations": []
+    },
+    {
+      "route": "/api/proposal/token/[token]/contact",
+      "file": "app/api/proposal/token/[token]/contact/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "writes": [
+        "contactRequest.create",
+        "proposal.update"
+      ],
+      "guard": "rateLimit",
+      "violations": []
+    },
+    {
+      "route": "/api/proposal/token/[token]/email",
+      "file": "app/api/proposal/token/[token]/email/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "writes": [
+        "proposal.update"
+      ],
+      "guard": "rateLimit",
+      "violations": []
+    },
+    {
+      "route": "/api/proposal/token/[token]/pdf",
+      "file": "app/api/proposal/token/[token]/pdf/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "writes": [
+        "proposal.update"
+      ],
+      "guard": "rateLimit",
+      "violations": []
+    },
+    {
+      "route": "/api/proposal/token/[token]",
+      "file": "app/api/proposal/token/[token]/route.ts",
+      "methods": [
+        "GET",
+        "PATCH"
+      ],
+      "writes": [
+        "proposal.update"
+      ],
+      "guard": "withAuth+rateLimit",
+      "violations": []
+    },
+    {
+      "route": "/api/proposal/token/[token]/share",
+      "file": "app/api/proposal/token/[token]/share/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "writes": [
+        "proposal.update"
+      ],
+      "guard": "rateLimit",
+      "violations": []
+    },
+    {
+      "route": "/api/proposal/token/[token]/status",
+      "file": "app/api/proposal/token/[token]/status/route.ts",
+      "methods": [
+        "PATCH"
+      ],
+      "writes": [
+        "proposal.update"
+      ],
+      "guard": "withAuth+rateLimit",
+      "violations": []
+    },
+    {
+      "route": "/api/proposal/token/[token]/track",
+      "file": "app/api/proposal/token/[token]/track/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "writes": [
+        "proposalView.create",
+        "proposalView.update"
+      ],
+      "guard": "rateLimit",
+      "violations": []
+    }
+  ]
+}

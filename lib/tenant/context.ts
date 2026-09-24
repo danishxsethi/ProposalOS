@@ -1,7 +1,5 @@
 import { AsyncLocalStorage } from 'async_hooks';
 
-import { headers } from 'next/headers';
-
 import { logger } from '@/lib/logger';
 
 import type { Prisma } from '@prisma/client';
@@ -163,20 +161,18 @@ export function getAuditSignalFromStore(): AbortSignal | undefined {
 }
 
 export async function getTenantId(): Promise<string | null> {
-  // 1. Check context set by API Key middleware (avoids Request clone issues)
+  // Auth middleware sets this from a validated session/API key/server credential.
   const stored = tenantStorage.getStore()?.tenantId;
   if (stored) return stored;
 
-  const headerList = await headers();
-  const apiKeyTenant = headerList.get('x-tenant-id');
-  if (apiKeyTenant) return apiKeyTenant;
-
-  // 2. Check Session (Dynamic import to break circular dependency with lib/prisma)
+  // Dynamic import avoids the auth/prisma circular dependency. Never resolve tenant
+  // identity from a request header, query parameter, or request body.
   try {
     const { auth } = await import('@/lib/auth');
     const session = await auth();
     if (session?.user && 'tenantId' in session.user) {
-      return (session.user as unknown as { tenantId: string }).tenantId;
+      const tenantId = (session.user as { tenantId?: unknown }).tenantId;
+      return typeof tenantId === 'string' && tenantId.trim() ? tenantId : null;
     }
   } catch {
     // Ignore auth import errors during build

@@ -91,6 +91,12 @@ vi.mock('@/lib/observability/auditTrail', () => ({
   recordAuditTrailEvent: mocks.recordAuditTrailEvent,
 }));
 
+// This suite verifies abuse-rate limits; proposal publication is covered separately.
+vi.mock('@/lib/proposal/publication', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/proposal/publication')>();
+  return { ...actual, assertProposalPublishable: () => undefined };
+});
+
 vi.mock('@/lib/auth', () => ({
   getServerSession: mocks.getServerSession,
 }));

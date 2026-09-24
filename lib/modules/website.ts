@@ -18,6 +18,7 @@ export async function runWebsiteModule(
   tracker?: CostTracker
 ): Promise<AuditModuleResult> {
   logger.info({ url: input.url }, '[WebsiteModule] Starting comprehensive website analysis');
+  const unavailableChecks: string[] = [];
 
   try {
     // Run comprehensive website crawler (up to 20 pages). P1-27 (Wave 7): the
@@ -36,18 +37,22 @@ export async function runWebsiteModule(
 
     // PageSpeed is useful but external-provider failure must not poison the
     // crawler data and skip every module that depends on website.
-    const emptyPageSpeed: PageSpeedResult = {
-      findings: [],
-      coreWebVitals: { fcp: null, lcp: null, cls: null, tbt: null },
-      scores: { performance: 0, accessibility: 0, bestPractices: 0, seo: 0 },
-      finalUrl: input.url,
-      rawResponse: {},
-    };
     tracker?.addApiCall('PAGESPEED');
-    const psiResult = await getPageSpeedFindings(input.url).catch((error) => {
-      logger.warn({ error }, '[WebsiteModule] PageSpeed failed, using crawler findings');
-      return emptyPageSpeed;
+    const psiResult: PageSpeedResult = await getPageSpeedFindings(input.url).catch((error) => {
+      logger.warn({ error }, '[WebsiteModule] PageSpeed unavailable; preserving crawler findings only');
+      unavailableChecks.push('pagespeed');
+      return {
+        findings: [],
+        coreWebVitals: { fcp: null, lcp: null, cls: null, tbt: null },
+        scores: null,
+        finalUrl: input.url,
+        rawResponse: null,
+        execution: { state: 'unavailable' as const, reason: String(error) },
+      };
     });
+    if (psiResult.execution?.state === 'unavailable' && !unavailableChecks.includes('pagespeed')) {
+      unavailableChecks.push('pagespeed');
+    }
 
     // Fetch homepage HTML for schema analysis and conversion detection
     let schemaAnalysis = null;
@@ -111,8 +116,14 @@ export async function runWebsiteModule(
     return {
       findings: allFindings,
       evidenceSnapshots: [...crawlerResult.evidenceSnapshots, psiSnapshot],
+      execution: crawlerResult.execution?.state === 'failed'
+        ? crawlerResult.execution
+        : unavailableChecks.length
+          ? { state: 'partial' as const, reason: `Unavailable checks: ${unavailableChecks.join(', ')}` }
+          : { state: 'complete' as const },
+      unavailableChecks,
       data: {
-        scores: psiResult.scores,
+        ...(psiResult.scores ? { scores: psiResult.scores } : {}),
         coreWebVitals: psiResult.coreWebVitals,
         schemaAnalysis: schemaAnalysis ?? undefined,
         conversionAnalysis: conversionAnalysis ?? undefined,
@@ -136,7 +147,7 @@ export async function runWebsiteModule(
           },
         ],
         data: {
-          scores: psiResult.scores,
+        ...(psiResult.scores ? { scores: psiResult.scores } : {}),
           coreWebVitals: psiResult.coreWebVitals,
           finalUrl: psiResult.finalUrl,
         },
@@ -156,7 +167,8 @@ export async function runWebsiteModule(
       return {
         findings: [],
         evidenceSnapshots: [],
-        data: { scores: {}, coreWebVitals: {}, finalUrl: input.url },
+        data: { coreWebVitals: {}, finalUrl: input.url },
+        execution: { state: 'failed', reason: 'Website crawler and PageSpeed analysis failed' },
       };
     }
   }
@@ -179,9 +191,10 @@ interface PageSpeedResult {
     full?: CoreWebVitalsFull;
     schemaAnalysis?: ReturnType<typeof analyzeSchemaMarkup>;
   };
-  scores: { performance: number; accessibility: number; bestPractices: number; seo: number };
+  scores: { performance: number; accessibility: number; bestPractices: number; seo: number } | null;
   finalUrl: string;
   rawResponse: unknown;
+  execution?: { state: 'complete' | 'unavailable'; reason?: string };
 }
 
 function generateSchemaFindings(
@@ -328,14 +341,14 @@ async function getPageSpeedFindings(url: string): Promise<PageSpeedResult> {
   const empty: PageSpeedResult = {
     findings: [],
     coreWebVitals: emptyLegacy,
-    scores: { performance: 0, accessibility: 0, bestPractices: 0, seo: 0 },
+    scores: null,
     finalUrl: url,
     rawResponse: {},
   };
 
   if (!process.env.GOOGLE_PAGESPEED_API_KEY) {
     logger.warn('[WebsiteModule] GOOGLE_PAGESPEED_API_KEY missing, skipping PageSpeed');
-    return empty;
+    return { ...empty, execution: { state: 'unavailable' as const, reason: 'GOOGLE_PAGESPEED_API_KEY missing' } };
   }
 
   try {
@@ -402,7 +415,7 @@ async function getPageSpeedFindings(url: string): Promise<PageSpeedResult> {
       tbt_ms: legacy.tbt,
       inp_ms: legacy.inp,
       ttfb_ms: legacy.ttfb,
-      performanceScore: Math.round((scores.performance ?? 0) * 100),
+      performanceScore: Math.round(scores.performance * 100),
     };
 
     const addCwvFinding = (
@@ -814,9 +827,10 @@ async function getPageSpeedFindings(url: string): Promise<PageSpeedResult> {
       scores,
       finalUrl,
       rawResponse: { ...data, coreWebVitals: { ...legacy, full: cwvFull }, finalUrl },
+      execution: { state: 'complete' as const },
     };
   } catch (error) {
     logger.warn({ error }, '[WebsiteModule] PageSpeed failed, skipping');
-    return empty;
+    return { ...empty, execution: { state: 'unavailable' as const, reason: 'PageSpeed request failed' } };
   }
 }

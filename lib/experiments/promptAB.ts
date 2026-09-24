@@ -77,7 +77,7 @@ export function getPromptVariant(experimentName: ExperimentName, auditId: string
 function loadPrompt(filename: string): string {
   // Dynamic import to avoid build-time issues if this module is somehow included in client bundle
   // although 'server-only' should prevent that.
-  /* eslint-disable @typescript-eslint/no-var-requires */
+
   const fs = require('fs');
   const path = require('path');
 

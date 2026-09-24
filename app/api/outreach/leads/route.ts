@@ -15,9 +15,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { Prisma, ProspectLeadStatus } from '@prisma/client';
 import { z } from 'zod';
 
-import { logger } from '@/lib/logger';
 import { generateTraceId, InternalError, NotFoundError, UnauthorizedError } from '@/lib/api/errors';
 import { getServerSession } from '@/lib/auth';
+import { logger } from '@/lib/logger';
 import { withRateLimit } from '@/lib/middleware/rateLimit';
 import { normalizeVertical } from '@/lib/outreach/sprint2/config';
 import { prisma } from '@/lib/prisma';

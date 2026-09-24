@@ -219,22 +219,9 @@ export async function runContentQualityModule(
     logger.error({ error, url: input.url }, '[ContentQuality] Analysis failed');
 
     return {
-      findings: [
-        {
-          type: 'VITAMIN',
-          category: 'Conversion',
-          title: 'Content Analysis Unavailable',
-          description:
-            'Unable to complete content quality analysis. This may indicate API issues or missing page content.',
-          impactScore: 1,
-          confidenceScore: normalizeConfidence(50, '0-100'),
-          evidence: [],
-          metrics: {},
-          effortEstimate: 'LOW',
-          recommendedFix: ['Try running content analysis again later'],
-        },
-      ],
+      findings: [],
       evidenceSnapshots: [],
+      execution: { state: 'unavailable', reason: error instanceof Error ? error.message : 'Content analysis unavailable' },
     };
   }
 }

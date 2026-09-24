@@ -9,8 +9,8 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 
-import { logger } from '@/lib/logger';
 import { authOptions, getServerSession } from '@/lib/auth';
+import { logger } from '@/lib/logger';
 import {
   approveProspect,
   getReviewQueue,

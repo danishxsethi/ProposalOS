@@ -3,6 +3,7 @@ import { NextRequest } from 'next/server';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { cleanupDb } from '@/lib/__tests__/utils/cleanup';
+import { withTestSystemSetup, withTestTenant } from '@/lib/__tests__/utils/testPrincipal';
 import { prisma } from '@/lib/prisma';
 import { deliverLead, onboardPartner } from '@/lib/pipeline/partnerPortal';
 
@@ -14,12 +15,12 @@ describe('Partner Matching Cron', () => {
 
   beforeEach(async () => {
     // Create test tenant
-    const tenant = await prisma.tenant.create({
+    const tenant = await withTestSystemSetup(() => prisma.tenant.create({
       data: {
         name: 'Test Tenant',
         slug: `test-${Date.now()}`,
       },
-    });
+    }));
     tenantId = tenant.id;
 
     // Create test partner
@@ -53,7 +54,7 @@ describe('Partner Matching Cron', () => {
   it('should match and deliver leads to partners', async () => {
     // Create test prospects
     const prospects = await Promise.all([
-      prisma.prospectLead.create({
+      withTestTenant(tenantId, () => prisma.prospectLead.create({
         data: {
           tenantId,
           businessName: 'Dental Practice',
@@ -78,8 +79,8 @@ describe('Partner Matching Cron', () => {
           source: 'test',
           sourceExternalId: 'test-2',
         },
-      }),
-      prisma.prospectLead.create({
+      })),
+      withTestTenant(tenantId, () => prisma.prospectLead.create({
         data: {
           tenantId,
           businessName: 'HVAC Company',
@@ -104,7 +105,7 @@ describe('Partner Matching Cron', () => {
           source: 'test',
           sourceExternalId: 'test-3',
         },
-      }),
+      })),
     ]);
 
     const request = new NextRequest('http://localhost:3000/api/cron/partner-matching', {

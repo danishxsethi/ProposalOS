@@ -209,7 +209,7 @@ async function getRedisInstance(): Promise<import('ioredis').Redis | null> {
   const url = process.env.REDIS_URL;
   if (!url) return null;
   try {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
+
     const { default: Redis } = await import('ioredis');
     _redisInstance = new Redis(url, {
       lazyConnect: true,

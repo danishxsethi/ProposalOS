@@ -2,7 +2,7 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 import { Annotation, StateGraph } from '@langchain/langgraph';
 import { Finding, ProjectStatus } from '@prisma/client';
 
-import { runAudit } from '@/lib/audit/runner';
+import { dispatchAuditExecution } from '@/lib/audit/dispatch';
 import { assembleBundle, createBundleRecord, uploadBundle } from '@/lib/delivery/bundler';
 import { ComparisonReportResult, generateComparisonReport } from '@/lib/delivery/comparisonReport';
 import { getGenerator, RawArtifact } from '@/lib/delivery/generators';
@@ -11,6 +11,7 @@ import { runValidationPipeline, ValidatedArtifact } from '@/lib/delivery/validat
 import { logger } from '@/lib/logger';
 import { deliveryEngine } from '@/lib/pipeline/deliveryEngine';
 import { prisma } from '@/lib/prisma';
+import { processAuditJob } from '@/lib/queue/auditJobWorker';
 
 export interface GeneratedArtifact {
   id: string;
@@ -316,7 +317,8 @@ async function trigger_reaudit(state: typeof DeliveryState.State) {
 
     // 2. Actually run the audit (blocks until complete)
     try {
-      await runAudit(reAudit.id);
+      const job = await dispatchAuditExecution({ tenantId: state.tenantId, auditId: reAudit.id, push: false, generateProposal: false });
+      await processAuditJob(job.id);
     } catch (e) {
       logger.error({ error: e }, '[ReAudit] runAudit() failed — continuing with empty re-audit');
     }

@@ -1,0 +1,2358 @@
+{
+  "generatedAt": "2026-09-24T06:58:16.250Z",
+  "source": "app/api/**/route.ts static scan",
+  "routeFileCount": 146,
+  "entryCount": 197,
+  "entries": [
+    {
+      "path": "/api/admin/feature-flags",
+      "method": "GET",
+      "auth": [
+        "withRateLimit"
+      ],
+      "routeClass": "admin",
+      "isPublic": false,
+      "isMutation": false,
+      "tenantSource": "tenant-bypass(token-lookup)",
+      "ownerResourceRule": "read-only"
+    },
+    {
+      "path": "/api/admin/feature-flags",
+      "method": "POST",
+      "auth": [
+        "withRateLimit"
+      ],
+      "routeClass": "admin",
+      "isPublic": false,
+      "isMutation": true,
+      "tenantSource": "tenant-bypass(token-lookup)",
+      "ownerResourceRule": "admin-role-only"
+    },
+    {
+      "path": "/api/admin/hallucination-telemetry",
+      "method": "GET",
+      "auth": [
+        "withAuth"
+      ],
+      "routeClass": "admin",
+      "isPublic": false,
+      "isMutation": false,
+      "tenantSource": "tenant-context(session/api-key)|tenant-context-wrapper|tenantId-referenced",
+      "ownerResourceRule": "read-only"
+    },
+    {
+      "path": "/api/admin/human-review",
+      "method": "GET",
+      "auth": [
+        "withAuth",
+        "withRateLimit"
+      ],
+      "routeClass": "admin",
+      "isPublic": false,
+      "isMutation": false,
+      "tenantSource": "tenant-context(session/api-key)|tenantId-referenced",
+      "ownerResourceRule": "read-only"
+    },
+    {
+      "path": "/api/admin/human-review",
+      "method": "PATCH",
+      "auth": [
+        "withAuth",
+        "withRateLimit"
+      ],
+      "routeClass": "admin",
+      "isPublic": false,
+      "isMutation": true,
+      "tenantSource": "tenant-context(session/api-key)|tenantId-referenced",
+      "ownerResourceRule": "admin-role-only"
+    },
+    {
+      "path": "/api/admin/metrics",
+      "method": "GET",
+      "auth": [
+        "withRateLimit"
+      ],
+      "routeClass": "admin",
+      "isPublic": false,
+      "isMutation": false,
+      "tenantSource": "tenant-bypass(token-lookup)",
+      "ownerResourceRule": "read-only"
+    },
+    {
+      "path": "/api/admin/model-metrics",
+      "method": "GET",
+      "auth": [],
+      "routeClass": "admin",
+      "isPublic": false,
+      "isMutation": false,
+      "tenantSource": "none-detected",
+      "ownerResourceRule": "read-only"
+    },
+    {
+      "path": "/api/admin/observability-metrics",
+      "method": "GET",
+      "auth": [],
+      "routeClass": "admin",
+      "isPublic": false,
+      "isMutation": false,
+      "tenantSource": "none-detected",
+      "ownerResourceRule": "read-only"
+    },
+    {
+      "path": "/api/admin/qa-telemetry",
+      "method": "GET",
+      "auth": [],
+      "routeClass": "admin",
+      "isPublic": false,
+      "isMutation": false,
+      "tenantSource": "tenantId-referenced",
+      "ownerResourceRule": "read-only"
+    },
+    {
+      "path": "/api/analytics/benchmarks",
+      "method": "GET",
+      "auth": [
+        "getServerSession",
+        "withRateLimit"
+      ],
+      "routeClass": "session_authenticated",
+      "isPublic": false,
+      "isMutation": false,
+      "tenantSource": "none-detected",
+      "ownerResourceRule": "read-only"
+    },
+    {
+      "path": "/api/analytics/cart-abandonment",
+      "method": "DELETE",
+      "auth": [
+        "getServerSession",
+        "withRateLimit"
+      ],
+      "routeClass": "session_authenticated",
+      "isPublic": false,
+      "isMutation": true,
+      "tenantSource": "none-detected",
+      "ownerResourceRule": "tenant-scoped: resource must belong to caller tenant (session/api-key tenantId)"
+    },
+    {
+      "path": "/api/analytics/cart-abandonment",
+      "method": "GET",
+      "auth": [
+        "getServerSession",
+        "withRateLimit"
+      ],
+      "routeClass": "session_authenticated",
+      "isPublic": false,
+      "isMutation": false,
+      "tenantSource": "none-detected",
+      "ownerResourceRule": "read-only"
+    },
+    {
+      "path": "/api/analytics/cart-abandonment",
+      "method": "POST",
+      "auth": [
+        "getServerSession",
+        "withRateLimit"
+      ],
+      "routeClass": "session_authenticated",
+      "isPublic": false,
+      "isMutation": true,
+      "tenantSource": "none-detected",
+      "ownerResourceRule": "tenant-scoped: resource must belong to caller tenant (session/api-key tenantId)"
+    },
+    {
+      "path": "/api/analytics/cart-abandonment",
+      "method": "PUT",
+      "auth": [
+        "getServerSession",
+        "withRateLimit"
+      ],
+      "routeClass": "session_authenticated",
+      "isPublic": false,
+      "isMutation": true,
+      "tenantSource": "none-detected",
+      "ownerResourceRule": "tenant-scoped: resource must belong to caller tenant (session/api-key tenantId)"
+    },
+    {
+      "path": "/api/analytics",
+      "method": "GET",
+      "auth": [
+        "withAuth"
+      ],
+      "routeClass": "session_authenticated",
+      "isPublic": false,
+      "isMutation": false,
+      "tenantSource": "tenant-context(session/api-key)|tenantId-referenced",
+      "ownerResourceRule": "read-only"
+    },
+    {
+      "path": "/api/analytics/tenant/[tenantId]/metrics",
+      "method": "GET",
+      "auth": [
+        "validateApiKey"
+      ],
+      "routeClass": "session_authenticated",
+      "isPublic": false,
+      "isMutation": false,
+      "tenantSource": "tenant-context-wrapper|tenantId-referenced",
+      "ownerResourceRule": "read-only"
+    },
+    {
+      "path": "/api/analytics/upsell",
+      "method": "GET",
+      "auth": [
+        "getServerSession",
+        "withRateLimit"
+      ],
+      "routeClass": "session_authenticated",
+      "isPublic": false,
+      "isMutation": false,
+      "tenantSource": "tenantId-referenced",
+      "ownerResourceRule": "read-only"
+    },
+    {
+      "path": "/api/analytics/upsell",
+      "method": "PATCH",
+      "auth": [
+        "getServerSession",
+        "withRateLimit"
+      ],
+      "routeClass": "session_authenticated",
+      "isPublic": false,
+      "isMutation": true,
+      "tenantSource": "tenantId-referenced",
+      "ownerResourceRule": "tenant-scoped: resource must belong to caller tenant (session/api-key tenantId)"
+    },
+    {
+      "path": "/api/analytics/upsell",
+      "method": "POST",
+      "auth": [
+        "getServerSession",
+        "withRateLimit"
+      ],
+      "routeClass": "session_authenticated",
+      "isPublic": false,
+      "isMutation": true,
+      "tenantSource": "tenantId-referenced",
+      "ownerResourceRule": "tenant-scoped: resource must belong to caller tenant (session/api-key tenantId)"
+    },
+    {
+      "path": "/api/analytics/win-loss",
+      "method": "GET",
+      "auth": [
+        "withAuth"
+      ],
+      "routeClass": "session_authenticated",
+      "isPublic": false,
+      "isMutation": false,
+      "tenantSource": "none-detected",
+      "ownerResourceRule": "read-only"
+    },
+    {
+      "path": "/api/audit/[id]/compare/[previousId]",
+      "method": "GET",
+      "auth": [
+        "withAuth"
+      ],
+      "routeClass": "session_authenticated",
+      "isPublic": false,
+      "isMutation": false,
+      "tenantSource": "tenant-context(session/api-key)|tenantId-referenced",
+      "ownerResourceRule": "read-only"
+    },
+    {
+      "path": "/api/audit/[id]/diagnose",
+      "method": "POST",
+      "auth": [],
+      "routeClass": "public_unauthenticated",
+      "isPublic": true,
+      "isMutation": true,
+      "tenantSource": "tenant-context(session/api-key)|tenantId-referenced",
+      "ownerResourceRule": "tenant-scoped: resource must belong to caller tenant (session/api-key tenantId)"
+    },
+    {
+      "path": "/api/audit/[id]/propose",
+      "method": "POST",
+      "auth": [
+        "withAuth",
+        "withRateLimit"
+      ],
+      "routeClass": "session_authenticated",
+      "isPublic": false,
+      "isMutation": true,
+      "tenantSource": "tenant-context(session/api-key)|tenantId-referenced",
+      "ownerResourceRule": "tenant-scoped: resource must belong to caller tenant (session/api-key tenantId)"
+    },
+    {
+      "path": "/api/audit/[id]/regenerate",
+      "method": "POST",
+      "auth": [
+        "withAuth",
+        "withRateLimit"
+      ],
+      "routeClass": "session_authenticated",
+      "isPublic": false,
+      "isMutation": true,
+      "tenantSource": "tenant-context(session/api-key)|tenantId-referenced",
+      "ownerResourceRule": "tenant-scoped: resource must belong to caller tenant (session/api-key tenantId)"
+    },
+    {
+      "path": "/api/audit/[id]",
+      "method": "GET",
+      "auth": [
+        "withAuth"
+      ],
+      "routeClass": "session_authenticated",
+      "isPublic": false,
+      "isMutation": false,
+      "tenantSource": "tenant-context(session/api-key)|tenantId-referenced",
+      "ownerResourceRule": "read-only"
+    },
+    {
+      "path": "/api/audit/batch/[batchId]",
+      "method": "GET",
+      "auth": [
+        "withAuth"
+      ],
+      "routeClass": "session_authenticated",
+      "isPublic": false,
+      "isMutation": false,
+      "tenantSource": "tenant-context(session/api-key)|tenantId-referenced",
+      "ownerResourceRule": "read-only"
+    },
+    {
+      "path": "/api/audit/batch",
+      "method": "POST",
+      "auth": [
+        "withAuth",
+        "withRateLimit"
+      ],
+      "routeClass": "session_authenticated",
+      "isPublic": false,
+      "isMutation": true,
+      "tenantSource": "tenant-context(session/api-key)|tenantId-referenced",
+      "ownerResourceRule": "tenant-scoped: resource must belong to caller tenant (session/api-key tenantId)"
+    },
+    {
+      "path": "/api/audit",
+      "method": "POST",
+      "auth": [
+        "withAuth",
+        "withRateLimit"
+      ],
+      "routeClass": "session_authenticated",
+      "isPublic": false,
+      "isMutation": true,
+      "tenantSource": "tenant-context(session/api-key)|tenantId-referenced",
+      "ownerResourceRule": "tenant-scoped: resource must belong to caller tenant (session/api-key tenantId)"
+    },
+    {
+      "path": "/api/audits",
+      "method": "GET",
+      "auth": [
+        "withAuth",
+        "withRateLimit"
+      ],
+      "routeClass": "session_authenticated",
+      "isPublic": false,
+      "isMutation": false,
+      "tenantSource": "tenant-context(session/api-key)|tenantId-referenced",
+      "ownerResourceRule": "read-only"
+    },
+    {
+      "path": "/api/auth/[...nextauth]",
+      "method": "POST",
+      "auth": [],
+      "routeClass": "token_gated_public",
+      "isPublic": true,
+      "isMutation": true,
+      "tenantSource": "token-lookup",
+      "ownerResourceRule": "token-scoped: write bounded to resource resolved by unguessable token"
+    },
+    {
+      "path": "/api/auth/register",
+      "method": "POST",
+      "auth": [
+        "withRateLimit"
+      ],
+      "routeClass": "token_gated_public",
+      "isPublic": true,
+      "isMutation": true,
+      "tenantSource": "tenant-bypass(token-lookup)|tenantId-referenced",
+      "ownerResourceRule": "token-scoped: write bounded to resource resolved by unguessable token"
+    },
+    {
+      "path": "/api/billing/checkout-proposal",
+      "method": "POST",
+      "auth": [],
+      "routeClass": "public_unauthenticated",
+      "isPublic": true,
+      "isMutation": true,
+      "tenantSource": "none-detected",
+      "ownerResourceRule": "tenant-scoped: resource must belong to caller tenant (session/api-key tenantId)"
+    },
+    {
+      "path": "/api/billing/checkout",
+      "method": "POST",
+      "auth": [],
+      "routeClass": "public_unauthenticated",
+      "isPublic": true,
+      "isMutation": true,
+      "tenantSource": "none-detected",
+      "ownerResourceRule": "tenant-scoped: resource must belong to caller tenant (session/api-key tenantId)"
+    },
+    {
+      "path": "/api/billing/portal",
+      "method": "POST",
+      "auth": [],
+      "routeClass": "public_unauthenticated",
+      "isPublic": true,
+      "isMutation": true,
+      "tenantSource": "none-detected",
+      "ownerResourceRule": "tenant-scoped: resource must belong to caller tenant (session/api-key tenantId)"
+    },
+    {
+      "path": "/api/billing/webhook",
+      "method": "POST",
+      "auth": [],
+      "routeClass": "webhook",
+      "isPublic": false,
+      "isMutation": true,
+      "tenantSource": "none-detected",
+      "ownerResourceRule": "provider-signature-verified"
+    },
+    {
+      "path": "/api/cache/clear",
+      "method": "POST",
+      "auth": [],
+      "routeClass": "public_unauthenticated",
+      "isPublic": true,
+      "isMutation": true,
+      "tenantSource": "none-detected",
+      "ownerResourceRule": "tenant-scoped: resource must belong to caller tenant (session/api-key tenantId)"
+    },
+    {
+      "path": "/api/case-study/[auditId]/generate",
+      "method": "GET",
+      "auth": [
+        "getServerSession"
+      ],
+      "routeClass": "session_authenticated",
+      "isPublic": false,
+      "isMutation": false,
+      "tenantSource": "tenant-context-wrapper|tenant-bypass(token-lookup)|tenantId-referenced",
+      "ownerResourceRule": "read-only"
+    },
+    {
+      "path": "/api/chat/proposal",
+      "method": "POST",
+      "auth": [],
+      "routeClass": "public_unauthenticated",
+      "isPublic": true,
+      "isMutation": true,
+      "tenantSource": "none-detected",
+      "ownerResourceRule": "tenant-scoped: resource must belong to caller tenant (session/api-key tenantId)"
+    },
+    {
+      "path": "/api/checkout",
+      "method": "POST",
+      "auth": [],
+      "routeClass": "public_unauthenticated",
+      "isPublic": true,
+      "isMutation": true,
+      "tenantSource": "none-detected",
+      "ownerResourceRule": "tenant-scoped: resource must belong to caller tenant (session/api-key tenantId)"
+    },
+    {
+      "path": "/api/client/export/[auditId]",
+      "method": "GET",
+      "auth": [
+        "withAuth",
+        "withRateLimit"
+      ],
+      "routeClass": "token_gated_public",
+      "isPublic": true,
+      "isMutation": false,
+      "tenantSource": "tenant-context(session/api-key)|tenant-context-wrapper|tenantId-referenced",
+      "ownerResourceRule": "read-only"
+    },
+    {
+      "path": "/api/client/export/[auditId]",
+      "method": "POST",
+      "auth": [
+        "withAuth",
+        "withRateLimit"
+      ],
+      "routeClass": "token_gated_public",
+      "isPublic": true,
+      "isMutation": true,
+      "tenantSource": "tenant-context(session/api-key)|tenant-context-wrapper|tenantId-referenced",
+      "ownerResourceRule": "token-scoped: write bounded to resource resolved by unguessable token"
+    },
+    {
+      "path": "/api/client/improvement/[auditId]",
+      "method": "GET",
+      "auth": [
+        "withAuth",
+        "withRateLimit"
+      ],
+      "routeClass": "token_gated_public",
+      "isPublic": true,
+      "isMutation": false,
+      "tenantSource": "tenant-context(session/api-key)|tenant-context-wrapper|tenantId-referenced",
+      "ownerResourceRule": "read-only"
+    },
+    {
+      "path": "/api/client/portal/data",
+      "method": "GET",
+      "auth": [
+        "withRateLimit"
+      ],
+      "routeClass": "token_gated_public",
+      "isPublic": true,
+      "isMutation": false,
+      "tenantSource": "tenantId-referenced",
+      "ownerResourceRule": "read-only"
+    },
+    {
+      "path": "/api/client/scan",
+      "method": "GET",
+      "auth": [
+        "withAuth",
+        "withRateLimit"
+      ],
+      "routeClass": "token_gated_public",
+      "isPublic": true,
+      "isMutation": false,
+      "tenantSource": "tenant-context(session/api-key)|tenantId-referenced",
+      "ownerResourceRule": "read-only"
+    },
+    {
+      "path": "/api/client/scan",
+      "method": "POST",
+      "auth": [
+        "withAuth",
+        "withRateLimit"
+      ],
+      "routeClass": "token_gated_public",
+      "isPublic": true,
+      "isMutation": true,
+      "tenantSource": "tenant-context(session/api-key)|tenantId-referenced",
+      "ownerResourceRule": "token-scoped: write bounded to resource resolved by unguessable token"
+    },
+    {
+      "path": "/api/cron/auto-promote",
+      "method": "GET",
+      "auth": [
+        "verifyCronAuth"
+      ],
+      "routeClass": "cron",
+      "isPublic": false,
+      "isMutation": false,
+      "tenantSource": "none-detected",
+      "ownerResourceRule": "read-only"
+    },
+    {
+      "path": "/api/cron/check-grace-periods",
+      "method": "GET",
+      "auth": [
+        "verifyCronAuth",
+        "withRateLimit"
+      ],
+      "routeClass": "cron",
+      "isPublic": false,
+      "isMutation": false,
+      "tenantSource": "tenantId-referenced",
+      "ownerResourceRule": "read-only"
+    },
+    {
+      "path": "/api/cron/check-grace-periods",
+      "method": "POST",
+      "auth": [
+        "verifyCronAuth",
+        "withRateLimit"
+      ],
+      "routeClass": "cron",
+      "isPublic": false,
+      "isMutation": true,
+      "tenantSource": "tenantId-referenced",
+      "ownerResourceRule": "server-authority: scheduler/worker secret, no caller tenant"
+    },
+    {
+      "path": "/api/cron/cleanup-stale-jobs",
+      "method": "GET",
+      "auth": [
+        "verifyCronAuth"
+      ],
+      "routeClass": "cron",
+      "isPublic": false,
+      "isMutation": false,
+      "tenantSource": "tenant-bypass(token-lookup)|tenantId-referenced",
+      "ownerResourceRule": "read-only"
+    },
+    {
+      "path": "/api/cron/discovery",
+      "method": "GET",
+      "auth": [
+        "verifyCronAuth",
+        "withRateLimit"
+      ],
+      "routeClass": "cron",
+      "isPublic": false,
+      "isMutation": false,
+      "tenantSource": "tenantId-referenced",
+      "ownerResourceRule": "read-only"
+    },
+    {
+      "path": "/api/cron/email-sequence",
+      "method": "GET",
+      "auth": [
+        "verifyCronAuth",
+        "withRateLimit"
+      ],
+      "routeClass": "cron",
+      "isPublic": false,
+      "isMutation": false,
+      "tenantSource": "none-detected",
+      "ownerResourceRule": "read-only"
+    },
+    {
+      "path": "/api/cron/email-sequence",
+      "method": "POST",
+      "auth": [
+        "verifyCronAuth",
+        "withRateLimit"
+      ],
+      "routeClass": "cron",
+      "isPublic": false,
+      "isMutation": true,
+      "tenantSource": "none-detected",
+      "ownerResourceRule": "server-authority: scheduler/worker secret, no caller tenant"
+    },
+    {
+      "path": "/api/cron/follow-ups",
+      "method": "GET",
+      "auth": [
+        "verifyCronAuth",
+        "withRateLimit"
+      ],
+      "routeClass": "cron",
+      "isPublic": false,
+      "isMutation": false,
+      "tenantSource": "tenant-context-wrapper|tenantId-referenced",
+      "ownerResourceRule": "read-only"
+    },
+    {
+      "path": "/api/cron/gdpr-cleanup",
+      "method": "GET",
+      "auth": [
+        "verifyCronAuth",
+        "withRateLimit"
+      ],
+      "routeClass": "cron",
+      "isPublic": false,
+      "isMutation": false,
+      "tenantSource": "tenantId-referenced",
+      "ownerResourceRule": "read-only"
+    },
+    {
+      "path": "/api/cron/intelligence-aggregation",
+      "method": "POST",
+      "auth": [
+        "verifyCronAuth",
+        "withRateLimit"
+      ],
+      "routeClass": "cron",
+      "isPublic": false,
+      "isMutation": true,
+      "tenantSource": "tenant-context-wrapper|tenant-bypass(token-lookup)|tenantId-referenced",
+      "ownerResourceRule": "server-authority: scheduler/worker secret, no caller tenant"
+    },
+    {
+      "path": "/api/cron/metering-sweep",
+      "method": "POST",
+      "auth": [
+        "verifyCronAuth"
+      ],
+      "routeClass": "cron",
+      "isPublic": false,
+      "isMutation": true,
+      "tenantSource": "none-detected",
+      "ownerResourceRule": "server-authority: scheduler/worker secret, no caller tenant"
+    },
+    {
+      "path": "/api/cron/monitor-reputation",
+      "method": "GET",
+      "auth": [
+        "verifyCronAuth"
+      ],
+      "routeClass": "cron",
+      "isPublic": false,
+      "isMutation": false,
+      "tenantSource": "none-detected",
+      "ownerResourceRule": "read-only"
+    },
+    {
+      "path": "/api/cron/nps-surveys",
+      "method": "GET",
+      "auth": [
+        "verifyCronAuth"
+      ],
+      "routeClass": "cron",
+      "isPublic": false,
+      "isMutation": false,
+      "tenantSource": "none-detected",
+      "ownerResourceRule": "read-only"
+    },
+    {
+      "path": "/api/cron/partner-matching",
+      "method": "POST",
+      "auth": [
+        "verifyCronAuth"
+      ],
+      "routeClass": "cron",
+      "isPublic": false,
+      "isMutation": true,
+      "tenantSource": "none-detected",
+      "ownerResourceRule": "server-authority: scheduler/worker secret, no caller tenant"
+    },
+    {
+      "path": "/api/cron/pipeline-audit",
+      "method": "GET",
+      "auth": [
+        "verifyCronAuth",
+        "withRateLimit"
+      ],
+      "routeClass": "cron",
+      "isPublic": false,
+      "isMutation": false,
+      "tenantSource": "tenantId-referenced",
+      "ownerResourceRule": "read-only"
+    },
+    {
+      "path": "/api/cron/pipeline-closing",
+      "method": "GET",
+      "auth": [
+        "verifyCronAuth"
+      ],
+      "routeClass": "cron",
+      "isPublic": false,
+      "isMutation": false,
+      "tenantSource": "tenant-context-wrapper|tenantId-referenced",
+      "ownerResourceRule": "read-only"
+    },
+    {
+      "path": "/api/cron/pipeline-closing",
+      "method": "POST",
+      "auth": [
+        "verifyCronAuth"
+      ],
+      "routeClass": "cron",
+      "isPublic": false,
+      "isMutation": true,
+      "tenantSource": "tenant-context-wrapper|tenantId-referenced",
+      "ownerResourceRule": "server-authority: scheduler/worker secret, no caller tenant"
+    },
+    {
+      "path": "/api/cron/pipeline-delivery",
+      "method": "GET",
+      "auth": [
+        "verifyCronAuth",
+        "withRateLimit"
+      ],
+      "routeClass": "cron",
+      "isPublic": false,
+      "isMutation": false,
+      "tenantSource": "none-detected",
+      "ownerResourceRule": "read-only"
+    },
+    {
+      "path": "/api/cron/pipeline-outreach",
+      "method": "GET",
+      "auth": [
+        "verifyCronAuth",
+        "withRateLimit"
+      ],
+      "routeClass": "cron",
+      "isPublic": false,
+      "isMutation": false,
+      "tenantSource": "tenant-context-wrapper|tenant-bypass(token-lookup)|tenantId-referenced",
+      "ownerResourceRule": "read-only"
+    },
+    {
+      "path": "/api/cron/predictions-calibration",
+      "method": "POST",
+      "auth": [
+        "verifyCronAuth",
+        "withRateLimit"
+      ],
+      "routeClass": "cron",
+      "isPublic": false,
+      "isMutation": true,
+      "tenantSource": "none-detected",
+      "ownerResourceRule": "server-authority: scheduler/worker secret, no caller tenant"
+    },
+    {
+      "path": "/api/cron/prompt-promotion",
+      "method": "GET",
+      "auth": [
+        "verifyCronAuth"
+      ],
+      "routeClass": "cron",
+      "isPublic": false,
+      "isMutation": false,
+      "tenantSource": "tenant-context-wrapper|tenant-bypass(token-lookup)|tenantId-referenced",
+      "ownerResourceRule": "read-only"
+    },
+    {
+      "path": "/api/cron/reconcile-billing",
+      "method": "GET",
+      "auth": [
+        "verifyCronAuth",
+        "withRateLimit"
+      ],
+      "routeClass": "cron",
+      "isPublic": false,
+      "isMutation": false,
+      "tenantSource": "none-detected",
+      "ownerResourceRule": "read-only"
+    },
+    {
+      "path": "/api/cron/retention",
+      "method": "GET",
+      "auth": [
+        "verifyCronAuth",
+        "withRateLimit"
+      ],
+      "routeClass": "cron",
+      "isPublic": false,
+      "isMutation": false,
+      "tenantSource": "none-detected",
+      "ownerResourceRule": "read-only"
+    },
+    {
+      "path": "/api/cron/retention",
+      "method": "POST",
+      "auth": [
+        "verifyCronAuth",
+        "withRateLimit"
+      ],
+      "routeClass": "cron",
+      "isPublic": false,
+      "isMutation": true,
+      "tenantSource": "none-detected",
+      "ownerResourceRule": "server-authority: scheduler/worker secret, no caller tenant"
+    },
+    {
+      "path": "/api/cron/retry-webhooks",
+      "method": "GET",
+      "auth": [
+        "verifyCronAuth",
+        "withRateLimit"
+      ],
+      "routeClass": "cron",
+      "isPublic": false,
+      "isMutation": false,
+      "tenantSource": "none-detected",
+      "ownerResourceRule": "read-only"
+    },
+    {
+      "path": "/api/cron/retry-webhooks",
+      "method": "POST",
+      "auth": [
+        "verifyCronAuth",
+        "withRateLimit"
+      ],
+      "routeClass": "cron",
+      "isPublic": false,
+      "isMutation": true,
+      "tenantSource": "none-detected",
+      "ownerResourceRule": "server-authority: scheduler/worker secret, no caller tenant"
+    },
+    {
+      "path": "/api/cron/scheduled-audits",
+      "method": "GET",
+      "auth": [
+        "verifyCronAuth",
+        "withRateLimit"
+      ],
+      "routeClass": "cron",
+      "isPublic": false,
+      "isMutation": false,
+      "tenantSource": "none-detected",
+      "ownerResourceRule": "read-only"
+    },
+    {
+      "path": "/api/cron/signal-detection",
+      "method": "GET",
+      "auth": [
+        "verifyCronAuth"
+      ],
+      "routeClass": "cron",
+      "isPublic": false,
+      "isMutation": false,
+      "tenantSource": "tenantId-referenced",
+      "ownerResourceRule": "read-only"
+    },
+    {
+      "path": "/api/csrf",
+      "method": "GET",
+      "auth": [],
+      "routeClass": "public_unauthenticated",
+      "isPublic": true,
+      "isMutation": false,
+      "tenantSource": "none-detected",
+      "ownerResourceRule": "read-only"
+    },
+    {
+      "path": "/api/delivery/[proposalId]/artifacts",
+      "method": "GET",
+      "auth": [
+        "withAuth"
+      ],
+      "routeClass": "session_authenticated",
+      "isPublic": false,
+      "isMutation": false,
+      "tenantSource": "tenant-context(session/api-key)|tenantId-referenced",
+      "ownerResourceRule": "read-only"
+    },
+    {
+      "path": "/api/delivery/[proposalId]/bundle",
+      "method": "GET",
+      "auth": [
+        "withAuth"
+      ],
+      "routeClass": "session_authenticated",
+      "isPublic": false,
+      "isMutation": false,
+      "tenantSource": "tenant-context(session/api-key)|tenantId-referenced",
+      "ownerResourceRule": "read-only"
+    },
+    {
+      "path": "/api/delivery/[proposalId]/bundle",
+      "method": "POST",
+      "auth": [
+        "withAuth"
+      ],
+      "routeClass": "session_authenticated",
+      "isPublic": false,
+      "isMutation": true,
+      "tenantSource": "tenant-context(session/api-key)|tenantId-referenced",
+      "ownerResourceRule": "tenant-scoped: resource must belong to caller tenant (session/api-key tenantId)"
+    },
+    {
+      "path": "/api/email/generate",
+      "method": "POST",
+      "auth": [
+        "withAuth"
+      ],
+      "routeClass": "session_authenticated",
+      "isPublic": false,
+      "isMutation": true,
+      "tenantSource": "tenant-context(session/api-key)|tenantId-referenced",
+      "ownerResourceRule": "tenant-scoped: resource must belong to caller tenant (session/api-key tenantId)"
+    },
+    {
+      "path": "/api/email/send-followup",
+      "method": "POST",
+      "auth": [
+        "withAuth"
+      ],
+      "routeClass": "session_authenticated",
+      "isPublic": false,
+      "isMutation": true,
+      "tenantSource": "tenant-context(session/api-key)|tenantId-referenced",
+      "ownerResourceRule": "tenant-scoped: resource must belong to caller tenant (session/api-key tenantId)"
+    },
+    {
+      "path": "/api/email/tracking",
+      "method": "GET",
+      "auth": [],
+      "routeClass": "token_gated_public",
+      "isPublic": true,
+      "isMutation": false,
+      "tenantSource": "token-lookup",
+      "ownerResourceRule": "read-only"
+    },
+    {
+      "path": "/api/email/unsubscribe",
+      "method": "GET",
+      "auth": [],
+      "routeClass": "token_gated_public",
+      "isPublic": true,
+      "isMutation": false,
+      "tenantSource": "tenant-bypass(token-lookup)|tenantId-referenced",
+      "ownerResourceRule": "read-only"
+    },
+    {
+      "path": "/api/finding/[id]",
+      "method": "DELETE",
+      "auth": [
+        "withAuth"
+      ],
+      "routeClass": "session_authenticated",
+      "isPublic": false,
+      "isMutation": true,
+      "tenantSource": "tenant-context(session/api-key)|tenantId-referenced",
+      "ownerResourceRule": "tenant-scoped: resource must belong to caller tenant (session/api-key tenantId)"
+    },
+    {
+      "path": "/api/finding/[id]",
+      "method": "GET",
+      "auth": [
+        "withAuth"
+      ],
+      "routeClass": "session_authenticated",
+      "isPublic": false,
+      "isMutation": false,
+      "tenantSource": "tenant-context(session/api-key)|tenantId-referenced",
+      "ownerResourceRule": "read-only"
+    },
+    {
+      "path": "/api/finding/[id]",
+      "method": "PATCH",
+      "auth": [
+        "withAuth"
+      ],
+      "routeClass": "session_authenticated",
+      "isPublic": false,
+      "isMutation": true,
+      "tenantSource": "tenant-context(session/api-key)|tenantId-referenced",
+      "ownerResourceRule": "tenant-scoped: resource must belong to caller tenant (session/api-key tenantId)"
+    },
+    {
+      "path": "/api/health",
+      "method": "GET",
+      "auth": [],
+      "routeClass": "public_unauthenticated",
+      "isPublic": true,
+      "isMutation": false,
+      "tenantSource": "tenant-bypass(token-lookup)",
+      "ownerResourceRule": "read-only"
+    },
+    {
+      "path": "/api/metrics",
+      "method": "GET",
+      "auth": [],
+      "routeClass": "public_unauthenticated",
+      "isPublic": true,
+      "isMutation": false,
+      "tenantSource": "none-detected",
+      "ownerResourceRule": "read-only"
+    },
+    {
+      "path": "/api/nps/respond",
+      "method": "GET",
+      "auth": [
+        "withRateLimit"
+      ],
+      "routeClass": "token_gated_public",
+      "isPublic": true,
+      "isMutation": false,
+      "tenantSource": "token-lookup",
+      "ownerResourceRule": "read-only"
+    },
+    {
+      "path": "/api/nps/respond",
+      "method": "POST",
+      "auth": [
+        "withRateLimit"
+      ],
+      "routeClass": "token_gated_public",
+      "isPublic": true,
+      "isMutation": true,
+      "tenantSource": "token-lookup",
+      "ownerResourceRule": "token-scoped: write bounded to resource resolved by unguessable token"
+    },
+    {
+      "path": "/api/onboarding/provision",
+      "method": "POST",
+      "auth": [
+        "withRateLimit"
+      ],
+      "routeClass": "session_authenticated",
+      "isPublic": false,
+      "isMutation": true,
+      "tenantSource": "tenantId-referenced",
+      "ownerResourceRule": "tenant-scoped: resource must belong to caller tenant (session/api-key tenantId)"
+    },
+    {
+      "path": "/api/onboarding/step",
+      "method": "POST",
+      "auth": [
+        "withAuth"
+      ],
+      "routeClass": "session_authenticated",
+      "isPublic": false,
+      "isMutation": true,
+      "tenantSource": "tenant-context(session/api-key)|tenantId-referenced",
+      "ownerResourceRule": "tenant-scoped: resource must belong to caller tenant (session/api-key tenantId)"
+    },
+    {
+      "path": "/api/openapi",
+      "method": "GET",
+      "auth": [],
+      "routeClass": "public_unauthenticated",
+      "isPublic": true,
+      "isMutation": false,
+      "tenantSource": "none-detected",
+      "ownerResourceRule": "read-only"
+    },
+    {
+      "path": "/api/outreach/jobs",
+      "method": "GET",
+      "auth": [
+        "getServerSession",
+        "withRateLimit"
+      ],
+      "routeClass": "session_authenticated",
+      "isPublic": false,
+      "isMutation": false,
+      "tenantSource": "tenant-context(session/api-key)|tenantId-referenced",
+      "ownerResourceRule": "read-only"
+    },
+    {
+      "path": "/api/outreach/jobs",
+      "method": "POST",
+      "auth": [
+        "getServerSession",
+        "withRateLimit"
+      ],
+      "routeClass": "session_authenticated",
+      "isPublic": false,
+      "isMutation": true,
+      "tenantSource": "tenant-context(session/api-key)|tenantId-referenced",
+      "ownerResourceRule": "tenant-scoped: resource must belong to caller tenant (session/api-key tenantId)"
+    },
+    {
+      "path": "/api/outreach/leads",
+      "method": "GET",
+      "auth": [
+        "getServerSession",
+        "withRateLimit"
+      ],
+      "routeClass": "session_authenticated",
+      "isPublic": false,
+      "isMutation": false,
+      "tenantSource": "tenant-context(session/api-key)|tenantId-referenced",
+      "ownerResourceRule": "read-only"
+    },
+    {
+      "path": "/api/outreach/metrics",
+      "method": "GET",
+      "auth": [
+        "getServerSession",
+        "withRateLimit"
+      ],
+      "routeClass": "session_authenticated",
+      "isPublic": false,
+      "isMutation": false,
+      "tenantSource": "tenant-context(session/api-key)|tenantId-referenced",
+      "ownerResourceRule": "read-only"
+    },
+    {
+      "path": "/api/outreach/scorecard/[token]/track",
+      "method": "POST",
+      "auth": [],
+      "routeClass": "token_gated_public",
+      "isPublic": true,
+      "isMutation": true,
+      "tenantSource": "tenantId-referenced",
+      "ownerResourceRule": "token-scoped: write bounded to resource resolved by unguessable token"
+    },
+    {
+      "path": "/api/outreach/sniper/worker",
+      "method": "GET",
+      "auth": [
+        "withAuth"
+      ],
+      "routeClass": "session_authenticated",
+      "isPublic": false,
+      "isMutation": false,
+      "tenantSource": "tenant-context(session/api-key)|tenantId-referenced",
+      "ownerResourceRule": "read-only"
+    },
+    {
+      "path": "/api/outreach/sniper/worker",
+      "method": "POST",
+      "auth": [
+        "withAuth"
+      ],
+      "routeClass": "session_authenticated",
+      "isPublic": false,
+      "isMutation": true,
+      "tenantSource": "tenant-context(session/api-key)|tenantId-referenced",
+      "ownerResourceRule": "tenant-scoped: resource must belong to caller tenant (session/api-key tenantId)"
+    },
+    {
+      "path": "/api/outreach/track/click/[emailId]",
+      "method": "GET",
+      "auth": [],
+      "routeClass": "token_gated_public",
+      "isPublic": true,
+      "isMutation": false,
+      "tenantSource": "tenantId-referenced",
+      "ownerResourceRule": "read-only"
+    },
+    {
+      "path": "/api/outreach/track/open/[emailId]",
+      "method": "GET",
+      "auth": [],
+      "routeClass": "token_gated_public",
+      "isPublic": true,
+      "isMutation": false,
+      "tenantSource": "tenantId-referenced",
+      "ownerResourceRule": "read-only"
+    },
+    {
+      "path": "/api/outreach/track/reply",
+      "method": "POST",
+      "auth": [
+        "withAuth"
+      ],
+      "routeClass": "token_gated_public",
+      "isPublic": true,
+      "isMutation": true,
+      "tenantSource": "tenant-context(session/api-key)|tenantId-referenced",
+      "ownerResourceRule": "token-scoped: write bounded to resource resolved by unguessable token"
+    },
+    {
+      "path": "/api/outreach/worker",
+      "method": "GET",
+      "auth": [
+        "withAuth"
+      ],
+      "routeClass": "session_authenticated",
+      "isPublic": false,
+      "isMutation": false,
+      "tenantSource": "tenant-context(session/api-key)|tenantId-referenced",
+      "ownerResourceRule": "read-only"
+    },
+    {
+      "path": "/api/outreach/worker",
+      "method": "POST",
+      "auth": [
+        "withAuth"
+      ],
+      "routeClass": "session_authenticated",
+      "isPublic": false,
+      "isMutation": true,
+      "tenantSource": "tenant-context(session/api-key)|tenantId-referenced",
+      "ownerResourceRule": "tenant-scoped: resource must belong to caller tenant (session/api-key tenantId)"
+    },
+    {
+      "path": "/api/pipeline/chat",
+      "method": "POST",
+      "auth": [
+        "withRateLimit"
+      ],
+      "routeClass": "session_authenticated",
+      "isPublic": false,
+      "isMutation": true,
+      "tenantSource": "tenantId-referenced",
+      "ownerResourceRule": "tenant-scoped: resource must belong to caller tenant (session/api-key tenantId)"
+    },
+    {
+      "path": "/api/pipeline/config/onboard",
+      "method": "POST",
+      "auth": [
+        "getServerSession"
+      ],
+      "routeClass": "session_authenticated",
+      "isPublic": false,
+      "isMutation": true,
+      "tenantSource": "tenantId-referenced",
+      "ownerResourceRule": "tenant-scoped: resource must belong to caller tenant (session/api-key tenantId)"
+    },
+    {
+      "path": "/api/pipeline/config",
+      "method": "GET",
+      "auth": [
+        "getServerSession",
+        "withRateLimit"
+      ],
+      "routeClass": "session_authenticated",
+      "isPublic": false,
+      "isMutation": false,
+      "tenantSource": "tenantId-referenced",
+      "ownerResourceRule": "read-only"
+    },
+    {
+      "path": "/api/pipeline/config",
+      "method": "PUT",
+      "auth": [
+        "getServerSession",
+        "withRateLimit"
+      ],
+      "routeClass": "session_authenticated",
+      "isPublic": false,
+      "isMutation": true,
+      "tenantSource": "tenantId-referenced",
+      "ownerResourceRule": "tenant-scoped: resource must belong to caller tenant (session/api-key tenantId)"
+    },
+    {
+      "path": "/api/pipeline/engagement",
+      "method": "GET",
+      "auth": [],
+      "routeClass": "public_unauthenticated",
+      "isPublic": true,
+      "isMutation": false,
+      "tenantSource": "none-detected",
+      "ownerResourceRule": "read-only"
+    },
+    {
+      "path": "/api/pipeline/engagement",
+      "method": "POST",
+      "auth": [],
+      "routeClass": "public_unauthenticated",
+      "isPublic": true,
+      "isMutation": true,
+      "tenantSource": "none-detected",
+      "ownerResourceRule": "tenant-scoped: resource must belong to caller tenant (session/api-key tenantId)"
+    },
+    {
+      "path": "/api/pipeline/learning",
+      "method": "GET",
+      "auth": [
+        "getServerSession"
+      ],
+      "routeClass": "session_authenticated",
+      "isPublic": false,
+      "isMutation": false,
+      "tenantSource": "none-detected",
+      "ownerResourceRule": "read-only"
+    },
+    {
+      "path": "/api/pipeline/learning",
+      "method": "POST",
+      "auth": [
+        "getServerSession"
+      ],
+      "routeClass": "session_authenticated",
+      "isPublic": false,
+      "isMutation": true,
+      "tenantSource": "none-detected",
+      "ownerResourceRule": "tenant-scoped: resource must belong to caller tenant (session/api-key tenantId)"
+    },
+    {
+      "path": "/api/pipeline/metrics",
+      "method": "GET",
+      "auth": [
+        "getServerSession"
+      ],
+      "routeClass": "session_authenticated",
+      "isPublic": false,
+      "isMutation": false,
+      "tenantSource": "tenantId-referenced",
+      "ownerResourceRule": "read-only"
+    },
+    {
+      "path": "/api/pipeline/partners/[id]/leads",
+      "method": "GET",
+      "auth": [
+        "withRateLimit"
+      ],
+      "routeClass": "session_authenticated",
+      "isPublic": false,
+      "isMutation": false,
+      "tenantSource": "none-detected",
+      "ownerResourceRule": "read-only"
+    },
+    {
+      "path": "/api/pipeline/partners/[id]/leads",
+      "method": "POST",
+      "auth": [
+        "withRateLimit"
+      ],
+      "routeClass": "session_authenticated",
+      "isPublic": false,
+      "isMutation": true,
+      "tenantSource": "none-detected",
+      "ownerResourceRule": "tenant-scoped: resource must belong to caller tenant (session/api-key tenantId)"
+    },
+    {
+      "path": "/api/pipeline/partners",
+      "method": "GET",
+      "auth": [
+        "withRateLimit"
+      ],
+      "routeClass": "session_authenticated",
+      "isPublic": false,
+      "isMutation": false,
+      "tenantSource": "none-detected",
+      "ownerResourceRule": "read-only"
+    },
+    {
+      "path": "/api/pipeline/partners",
+      "method": "POST",
+      "auth": [
+        "withRateLimit"
+      ],
+      "routeClass": "session_authenticated",
+      "isPublic": false,
+      "isMutation": true,
+      "tenantSource": "none-detected",
+      "ownerResourceRule": "tenant-scoped: resource must belong to caller tenant (session/api-key tenantId)"
+    },
+    {
+      "path": "/api/pipeline/prospects/[id]/override",
+      "method": "POST",
+      "auth": [
+        "withRateLimit"
+      ],
+      "routeClass": "session_authenticated",
+      "isPublic": false,
+      "isMutation": true,
+      "tenantSource": "tenant-context(session/api-key)|tenant-context-wrapper|tenantId-referenced",
+      "ownerResourceRule": "tenant-scoped: resource must belong to caller tenant (session/api-key tenantId)"
+    },
+    {
+      "path": "/api/pipeline/prospects/[id]",
+      "method": "GET",
+      "auth": [
+        "withAuth",
+        "withRateLimit"
+      ],
+      "routeClass": "session_authenticated",
+      "isPublic": false,
+      "isMutation": false,
+      "tenantSource": "tenant-context(session/api-key)|tenant-context-wrapper|tenantId-referenced",
+      "ownerResourceRule": "read-only"
+    },
+    {
+      "path": "/api/pipeline/review",
+      "method": "GET",
+      "auth": [
+        "getServerSession"
+      ],
+      "routeClass": "session_authenticated",
+      "isPublic": false,
+      "isMutation": false,
+      "tenantSource": "tenantId-referenced",
+      "ownerResourceRule": "read-only"
+    },
+    {
+      "path": "/api/pipeline/review",
+      "method": "POST",
+      "auth": [
+        "getServerSession"
+      ],
+      "routeClass": "session_authenticated",
+      "isPublic": false,
+      "isMutation": true,
+      "tenantSource": "tenantId-referenced",
+      "ownerResourceRule": "tenant-scoped: resource must belong to caller tenant (session/api-key tenantId)"
+    },
+    {
+      "path": "/api/predictions",
+      "method": "GET",
+      "auth": [
+        "withAuth"
+      ],
+      "routeClass": "session_authenticated",
+      "isPublic": false,
+      "isMutation": false,
+      "tenantSource": "tenant-context(session/api-key)|tenant-context-wrapper|tenantId-referenced",
+      "ownerResourceRule": "read-only"
+    },
+    {
+      "path": "/api/predictions",
+      "method": "POST",
+      "auth": [
+        "withAuth"
+      ],
+      "routeClass": "session_authenticated",
+      "isPublic": false,
+      "isMutation": true,
+      "tenantSource": "tenant-context(session/api-key)|tenant-context-wrapper|tenantId-referenced",
+      "ownerResourceRule": "tenant-scoped: resource must belong to caller tenant (session/api-key tenantId)"
+    },
+    {
+      "path": "/api/presentation/[token]/export",
+      "method": "GET",
+      "auth": [],
+      "routeClass": "token_gated_public",
+      "isPublic": true,
+      "isMutation": false,
+      "tenantSource": "tenantId-referenced",
+      "ownerResourceRule": "read-only"
+    },
+    {
+      "path": "/api/pricing/plans",
+      "method": "GET",
+      "auth": [
+        "getServerSession",
+        "withRateLimit"
+      ],
+      "routeClass": "session_authenticated",
+      "isPublic": false,
+      "isMutation": false,
+      "tenantSource": "tenant-bypass(token-lookup)",
+      "ownerResourceRule": "read-only"
+    },
+    {
+      "path": "/api/pricing/plans",
+      "method": "PATCH",
+      "auth": [
+        "getServerSession",
+        "withRateLimit"
+      ],
+      "routeClass": "session_authenticated",
+      "isPublic": false,
+      "isMutation": true,
+      "tenantSource": "tenant-bypass(token-lookup)",
+      "ownerResourceRule": "tenant-scoped: resource must belong to caller tenant (session/api-key tenantId)"
+    },
+    {
+      "path": "/api/pricing/plans",
+      "method": "POST",
+      "auth": [
+        "getServerSession",
+        "withRateLimit"
+      ],
+      "routeClass": "session_authenticated",
+      "isPublic": false,
+      "isMutation": true,
+      "tenantSource": "tenant-bypass(token-lookup)",
+      "ownerResourceRule": "tenant-scoped: resource must belong to caller tenant (session/api-key tenantId)"
+    },
+    {
+      "path": "/api/pricing/plans",
+      "method": "PUT",
+      "auth": [
+        "getServerSession",
+        "withRateLimit"
+      ],
+      "routeClass": "session_authenticated",
+      "isPublic": false,
+      "isMutation": true,
+      "tenantSource": "tenant-bypass(token-lookup)",
+      "ownerResourceRule": "tenant-scoped: resource must belong to caller tenant (session/api-key tenantId)"
+    },
+    {
+      "path": "/api/prompt/experiments/[id]",
+      "method": "DELETE",
+      "auth": [],
+      "routeClass": "public_unauthenticated",
+      "isPublic": true,
+      "isMutation": true,
+      "tenantSource": "none-detected",
+      "ownerResourceRule": "tenant-scoped: resource must belong to caller tenant (session/api-key tenantId)"
+    },
+    {
+      "path": "/api/prompt/experiments/[id]",
+      "method": "GET",
+      "auth": [],
+      "routeClass": "public_unauthenticated",
+      "isPublic": true,
+      "isMutation": false,
+      "tenantSource": "none-detected",
+      "ownerResourceRule": "read-only"
+    },
+    {
+      "path": "/api/prompt/experiments/[id]",
+      "method": "PUT",
+      "auth": [],
+      "routeClass": "public_unauthenticated",
+      "isPublic": true,
+      "isMutation": true,
+      "tenantSource": "none-detected",
+      "ownerResourceRule": "tenant-scoped: resource must belong to caller tenant (session/api-key tenantId)"
+    },
+    {
+      "path": "/api/prompt/experiments",
+      "method": "GET",
+      "auth": [],
+      "routeClass": "public_unauthenticated",
+      "isPublic": true,
+      "isMutation": false,
+      "tenantSource": "tenantId-referenced",
+      "ownerResourceRule": "read-only"
+    },
+    {
+      "path": "/api/prompt/experiments",
+      "method": "POST",
+      "auth": [],
+      "routeClass": "public_unauthenticated",
+      "isPublic": true,
+      "isMutation": true,
+      "tenantSource": "tenantId-referenced",
+      "ownerResourceRule": "tenant-scoped: resource must belong to caller tenant (session/api-key tenantId)"
+    },
+    {
+      "path": "/api/proposal-status/status",
+      "method": "PATCH",
+      "auth": [
+        "withAuth"
+      ],
+      "routeClass": "session_authenticated",
+      "isPublic": false,
+      "isMutation": true,
+      "tenantSource": "tenant-context(session/api-key)|tenant-context-wrapper|tenantId-referenced",
+      "ownerResourceRule": "tenant-scoped: resource must belong to caller tenant (session/api-key tenantId)"
+    },
+    {
+      "path": "/api/proposal/[id]/chat",
+      "method": "POST",
+      "auth": [],
+      "routeClass": "public_unauthenticated",
+      "isPublic": true,
+      "isMutation": true,
+      "tenantSource": "tenantId-referenced",
+      "ownerResourceRule": "tenant-scoped: resource must belong to caller tenant (session/api-key tenantId)"
+    },
+    {
+      "path": "/api/proposal/id/[id]/closeability",
+      "method": "POST",
+      "auth": [
+        "withAuth"
+      ],
+      "routeClass": "session_authenticated",
+      "isPublic": false,
+      "isMutation": true,
+      "tenantSource": "none-detected",
+      "ownerResourceRule": "tenant-scoped: resource must belong to caller tenant (session/api-key tenantId)"
+    },
+    {
+      "path": "/api/proposal/id/[id]/outcome",
+      "method": "POST",
+      "auth": [
+        "withAuth"
+      ],
+      "routeClass": "session_authenticated",
+      "isPublic": false,
+      "isMutation": true,
+      "tenantSource": "none-detected",
+      "ownerResourceRule": "tenant-scoped: resource must belong to caller tenant (session/api-key tenantId)"
+    },
+    {
+      "path": "/api/proposal/id/[id]/resend",
+      "method": "POST",
+      "auth": [
+        "withAuth"
+      ],
+      "routeClass": "session_authenticated",
+      "isPublic": false,
+      "isMutation": true,
+      "tenantSource": "tenant-context(session/api-key)|tenantId-referenced",
+      "ownerResourceRule": "tenant-scoped: resource must belong to caller tenant (session/api-key tenantId)"
+    },
+    {
+      "path": "/api/proposal/id/[id]/save-template",
+      "method": "POST",
+      "auth": [
+        "withAuth"
+      ],
+      "routeClass": "session_authenticated",
+      "isPublic": false,
+      "isMutation": true,
+      "tenantSource": "tenantId-referenced",
+      "ownerResourceRule": "tenant-scoped: resource must belong to caller tenant (session/api-key tenantId)"
+    },
+    {
+      "path": "/api/proposal/id/[id]/send",
+      "method": "POST",
+      "auth": [
+        "withAuth",
+        "withRateLimit"
+      ],
+      "routeClass": "session_authenticated",
+      "isPublic": false,
+      "isMutation": true,
+      "tenantSource": "tenant-context(session/api-key)|tenantId-referenced",
+      "ownerResourceRule": "tenant-scoped: resource must belong to caller tenant (session/api-key tenantId)"
+    },
+    {
+      "path": "/api/proposal/token/[token]/accept",
+      "method": "POST",
+      "auth": [],
+      "routeClass": "token_gated_public",
+      "isPublic": true,
+      "isMutation": true,
+      "tenantSource": "tenantId-referenced",
+      "ownerResourceRule": "token-scoped: write bounded to resource resolved by unguessable token"
+    },
+    {
+      "path": "/api/proposal/token/[token]/contact",
+      "method": "POST",
+      "auth": [
+        "withRateLimit"
+      ],
+      "routeClass": "token_gated_public",
+      "isPublic": true,
+      "isMutation": true,
+      "tenantSource": "tenantId-referenced",
+      "ownerResourceRule": "token-scoped: write bounded to resource resolved by unguessable token"
+    },
+    {
+      "path": "/api/proposal/token/[token]/email",
+      "method": "POST",
+      "auth": [
+        "withRateLimit"
+      ],
+      "routeClass": "token_gated_public",
+      "isPublic": true,
+      "isMutation": true,
+      "tenantSource": "token-lookup",
+      "ownerResourceRule": "token-scoped: write bounded to resource resolved by unguessable token"
+    },
+    {
+      "path": "/api/proposal/token/[token]/pdf",
+      "method": "GET",
+      "auth": [
+        "withRateLimit"
+      ],
+      "routeClass": "token_gated_public",
+      "isPublic": true,
+      "isMutation": false,
+      "tenantSource": "tenant-context-wrapper|tenant-bypass(token-lookup)|tenantId-referenced",
+      "ownerResourceRule": "read-only"
+    },
+    {
+      "path": "/api/proposal/token/[token]",
+      "method": "GET",
+      "auth": [
+        "withAuth"
+      ],
+      "routeClass": "token_gated_public",
+      "isPublic": true,
+      "isMutation": false,
+      "tenantSource": "tenant-context(session/api-key)|tenant-context-wrapper|tenant-bypass(token-lookup)|tenantId-referenced",
+      "ownerResourceRule": "read-only"
+    },
+    {
+      "path": "/api/proposal/token/[token]",
+      "method": "PATCH",
+      "auth": [
+        "withAuth"
+      ],
+      "routeClass": "token_gated_public",
+      "isPublic": true,
+      "isMutation": true,
+      "tenantSource": "tenant-context(session/api-key)|tenant-context-wrapper|tenant-bypass(token-lookup)|tenantId-referenced",
+      "ownerResourceRule": "token-scoped: write bounded to resource resolved by unguessable token"
+    },
+    {
+      "path": "/api/proposal/token/[token]/share",
+      "method": "POST",
+      "auth": [
+        "withRateLimit"
+      ],
+      "routeClass": "token_gated_public",
+      "isPublic": true,
+      "isMutation": true,
+      "tenantSource": "token-lookup",
+      "ownerResourceRule": "token-scoped: write bounded to resource resolved by unguessable token"
+    },
+    {
+      "path": "/api/proposal/token/[token]/status",
+      "method": "PATCH",
+      "auth": [
+        "withAuth",
+        "withRateLimit"
+      ],
+      "routeClass": "token_gated_public",
+      "isPublic": true,
+      "isMutation": true,
+      "tenantSource": "tenant-context(session/api-key)|tenantId-referenced",
+      "ownerResourceRule": "token-scoped: write bounded to resource resolved by unguessable token"
+    },
+    {
+      "path": "/api/proposal/token/[token]/track",
+      "method": "POST",
+      "auth": [
+        "withRateLimit"
+      ],
+      "routeClass": "token_gated_public",
+      "isPublic": true,
+      "isMutation": true,
+      "tenantSource": "tenant-context-wrapper|tenant-bypass(token-lookup)|tenantId-referenced",
+      "ownerResourceRule": "token-scoped: write bounded to resource resolved by unguessable token"
+    },
+    {
+      "path": "/api/proposals/[id]/send",
+      "method": "POST",
+      "auth": [
+        "withAuth",
+        "withRateLimit"
+      ],
+      "routeClass": "session_authenticated",
+      "isPublic": false,
+      "isMutation": true,
+      "tenantSource": "tenant-context(session/api-key)|tenantId-referenced",
+      "ownerResourceRule": "tenant-scoped: resource must belong to caller tenant (session/api-key tenantId)"
+    },
+    {
+      "path": "/api/proposals",
+      "method": "GET",
+      "auth": [
+        "withAuth",
+        "withRateLimit"
+      ],
+      "routeClass": "session_authenticated",
+      "isPublic": false,
+      "isMutation": false,
+      "tenantSource": "tenant-context(session/api-key)|tenantId-referenced",
+      "ownerResourceRule": "read-only"
+    },
+    {
+      "path": "/api/public/audit/[id]",
+      "method": "GET",
+      "auth": [],
+      "routeClass": "token_gated_public",
+      "isPublic": true,
+      "isMutation": false,
+      "tenantSource": "tenant-context-wrapper|tenant-bypass(token-lookup)",
+      "ownerResourceRule": "read-only"
+    },
+    {
+      "path": "/api/public/audit",
+      "method": "POST",
+      "auth": [
+        "withRateLimit"
+      ],
+      "routeClass": "token_gated_public",
+      "isPublic": true,
+      "isMutation": true,
+      "tenantSource": "tenant-context-wrapper|tenant-bypass(token-lookup)|tenantId-referenced",
+      "ownerResourceRule": "token-scoped: write bounded to resource resolved by unguessable token"
+    },
+    {
+      "path": "/api/schedule/[id]",
+      "method": "DELETE",
+      "auth": [
+        "withAuth"
+      ],
+      "routeClass": "session_authenticated",
+      "isPublic": false,
+      "isMutation": true,
+      "tenantSource": "tenant-context(session/api-key)|tenantId-referenced",
+      "ownerResourceRule": "tenant-scoped: resource must belong to caller tenant (session/api-key tenantId)"
+    },
+    {
+      "path": "/api/schedule/[id]",
+      "method": "PATCH",
+      "auth": [
+        "withAuth"
+      ],
+      "routeClass": "session_authenticated",
+      "isPublic": false,
+      "isMutation": true,
+      "tenantSource": "tenant-context(session/api-key)|tenantId-referenced",
+      "ownerResourceRule": "tenant-scoped: resource must belong to caller tenant (session/api-key tenantId)"
+    },
+    {
+      "path": "/api/schedule",
+      "method": "GET",
+      "auth": [
+        "withAuth"
+      ],
+      "routeClass": "session_authenticated",
+      "isPublic": false,
+      "isMutation": false,
+      "tenantSource": "tenant-context(session/api-key)|tenantId-referenced",
+      "ownerResourceRule": "read-only"
+    },
+    {
+      "path": "/api/schedule",
+      "method": "POST",
+      "auth": [
+        "withAuth"
+      ],
+      "routeClass": "session_authenticated",
+      "isPublic": false,
+      "isMutation": true,
+      "tenantSource": "tenant-context(session/api-key)|tenantId-referenced",
+      "ownerResourceRule": "tenant-scoped: resource must belong to caller tenant (session/api-key tenantId)"
+    },
+    {
+      "path": "/api/settings/api-keys/[id]",
+      "method": "DELETE",
+      "auth": [
+        "withAuth",
+        "withRateLimit"
+      ],
+      "routeClass": "session_authenticated",
+      "isPublic": false,
+      "isMutation": true,
+      "tenantSource": "tenant-context(session/api-key)|tenantId-referenced",
+      "ownerResourceRule": "tenant-scoped: resource must belong to caller tenant (session/api-key tenantId)"
+    },
+    {
+      "path": "/api/settings/api-keys",
+      "method": "GET",
+      "auth": [
+        "withAuth"
+      ],
+      "routeClass": "session_authenticated",
+      "isPublic": false,
+      "isMutation": false,
+      "tenantSource": "tenant-context(session/api-key)|tenantId-referenced",
+      "ownerResourceRule": "read-only"
+    },
+    {
+      "path": "/api/settings/api-keys",
+      "method": "POST",
+      "auth": [
+        "withAuth"
+      ],
+      "routeClass": "session_authenticated",
+      "isPublic": false,
+      "isMutation": true,
+      "tenantSource": "tenant-context(session/api-key)|tenantId-referenced",
+      "ownerResourceRule": "tenant-scoped: resource must belong to caller tenant (session/api-key tenantId)"
+    },
+    {
+      "path": "/api/settings/domain/verify",
+      "method": "POST",
+      "auth": [
+        "withAuth"
+      ],
+      "routeClass": "session_authenticated",
+      "isPublic": false,
+      "isMutation": true,
+      "tenantSource": "tenant-context(session/api-key)|tenantId-referenced",
+      "ownerResourceRule": "tenant-scoped: resource must belong to caller tenant (session/api-key tenantId)"
+    },
+    {
+      "path": "/api/settings/notifications",
+      "method": "DELETE",
+      "auth": [
+        "withRateLimit"
+      ],
+      "routeClass": "session_authenticated",
+      "isPublic": false,
+      "isMutation": true,
+      "tenantSource": "tenantId-referenced",
+      "ownerResourceRule": "tenant-scoped: resource must belong to caller tenant (session/api-key tenantId)"
+    },
+    {
+      "path": "/api/settings/notifications",
+      "method": "GET",
+      "auth": [
+        "withRateLimit"
+      ],
+      "routeClass": "session_authenticated",
+      "isPublic": false,
+      "isMutation": false,
+      "tenantSource": "tenantId-referenced",
+      "ownerResourceRule": "read-only"
+    },
+    {
+      "path": "/api/settings/notifications",
+      "method": "PUT",
+      "auth": [
+        "withRateLimit"
+      ],
+      "routeClass": "session_authenticated",
+      "isPublic": false,
+      "isMutation": true,
+      "tenantSource": "tenantId-referenced",
+      "ownerResourceRule": "tenant-scoped: resource must belong to caller tenant (session/api-key tenantId)"
+    },
+    {
+      "path": "/api/settings/templates/[id]",
+      "method": "DELETE",
+      "auth": [
+        "withAuth",
+        "withRateLimit"
+      ],
+      "routeClass": "session_authenticated",
+      "isPublic": false,
+      "isMutation": true,
+      "tenantSource": "tenant-context(session/api-key)|tenantId-referenced",
+      "ownerResourceRule": "tenant-scoped: resource must belong to caller tenant (session/api-key tenantId)"
+    },
+    {
+      "path": "/api/settings/templates/[id]",
+      "method": "GET",
+      "auth": [
+        "withAuth",
+        "withRateLimit"
+      ],
+      "routeClass": "session_authenticated",
+      "isPublic": false,
+      "isMutation": false,
+      "tenantSource": "tenant-context(session/api-key)|tenantId-referenced",
+      "ownerResourceRule": "read-only"
+    },
+    {
+      "path": "/api/settings/templates/[id]",
+      "method": "PATCH",
+      "auth": [
+        "withAuth",
+        "withRateLimit"
+      ],
+      "routeClass": "session_authenticated",
+      "isPublic": false,
+      "isMutation": true,
+      "tenantSource": "tenant-context(session/api-key)|tenantId-referenced",
+      "ownerResourceRule": "tenant-scoped: resource must belong to caller tenant (session/api-key tenantId)"
+    },
+    {
+      "path": "/api/settings/templates",
+      "method": "GET",
+      "auth": [
+        "withAuth"
+      ],
+      "routeClass": "session_authenticated",
+      "isPublic": false,
+      "isMutation": false,
+      "tenantSource": "tenant-context(session/api-key)|tenantId-referenced",
+      "ownerResourceRule": "read-only"
+    },
+    {
+      "path": "/api/settings/templates",
+      "method": "POST",
+      "auth": [
+        "withAuth"
+      ],
+      "routeClass": "session_authenticated",
+      "isPublic": false,
+      "isMutation": true,
+      "tenantSource": "tenant-context(session/api-key)|tenantId-referenced",
+      "ownerResourceRule": "tenant-scoped: resource must belong to caller tenant (session/api-key tenantId)"
+    },
+    {
+      "path": "/api/stats",
+      "method": "GET",
+      "auth": [
+        "withAuth"
+      ],
+      "routeClass": "session_authenticated",
+      "isPublic": false,
+      "isMutation": false,
+      "tenantSource": "tenant-context(session/api-key)|tenantId-referenced",
+      "ownerResourceRule": "read-only"
+    },
+    {
+      "path": "/api/stripe/checkout-proposal",
+      "method": "POST",
+      "auth": [],
+      "routeClass": "public_unauthenticated",
+      "isPublic": true,
+      "isMutation": true,
+      "tenantSource": "tenantId-referenced",
+      "ownerResourceRule": "tenant-scoped: resource must belong to caller tenant (session/api-key tenantId)"
+    },
+    {
+      "path": "/api/stripe/checkout-saas",
+      "method": "POST",
+      "auth": [
+        "withAuth"
+      ],
+      "routeClass": "session_authenticated",
+      "isPublic": false,
+      "isMutation": true,
+      "tenantSource": "tenant-context(session/api-key)|tenantId-referenced",
+      "ownerResourceRule": "tenant-scoped: resource must belong to caller tenant (session/api-key tenantId)"
+    },
+    {
+      "path": "/api/stripe/portal",
+      "method": "POST",
+      "auth": [
+        "withAuth"
+      ],
+      "routeClass": "session_authenticated",
+      "isPublic": false,
+      "isMutation": true,
+      "tenantSource": "tenant-context(session/api-key)|tenantId-referenced",
+      "ownerResourceRule": "tenant-scoped: resource must belong to caller tenant (session/api-key tenantId)"
+    },
+    {
+      "path": "/api/stripe/webhook",
+      "method": "POST",
+      "auth": [],
+      "routeClass": "webhook",
+      "isPublic": false,
+      "isMutation": true,
+      "tenantSource": "tenantId-referenced",
+      "ownerResourceRule": "provider-signature-verified"
+    },
+    {
+      "path": "/api/team/invite/[token]/accept",
+      "method": "POST",
+      "auth": [],
+      "routeClass": "token_gated_public",
+      "isPublic": true,
+      "isMutation": true,
+      "tenantSource": "tenantId-referenced",
+      "ownerResourceRule": "token-scoped: write bounded to resource resolved by unguessable token"
+    },
+    {
+      "path": "/api/team/invite/[token]",
+      "method": "GET",
+      "auth": [],
+      "routeClass": "token_gated_public",
+      "isPublic": true,
+      "isMutation": false,
+      "tenantSource": "token-lookup",
+      "ownerResourceRule": "read-only"
+    },
+    {
+      "path": "/api/team/invite",
+      "method": "POST",
+      "auth": [
+        "withAuth"
+      ],
+      "routeClass": "session_authenticated",
+      "isPublic": false,
+      "isMutation": true,
+      "tenantSource": "tenant-context(session/api-key)|tenant-context-wrapper|tenant-bypass(token-lookup)|tenantId-referenced",
+      "ownerResourceRule": "tenant-scoped: resource must belong to caller tenant (session/api-key tenantId)"
+    },
+    {
+      "path": "/api/templates/[id]",
+      "method": "DELETE",
+      "auth": [
+        "withAuth"
+      ],
+      "routeClass": "session_authenticated",
+      "isPublic": false,
+      "isMutation": true,
+      "tenantSource": "none-detected",
+      "ownerResourceRule": "tenant-scoped: resource must belong to caller tenant (session/api-key tenantId)"
+    },
+    {
+      "path": "/api/templates/[id]",
+      "method": "GET",
+      "auth": [
+        "withAuth"
+      ],
+      "routeClass": "session_authenticated",
+      "isPublic": false,
+      "isMutation": false,
+      "tenantSource": "none-detected",
+      "ownerResourceRule": "read-only"
+    },
+    {
+      "path": "/api/templates",
+      "method": "GET",
+      "auth": [
+        "withAuth"
+      ],
+      "routeClass": "session_authenticated",
+      "isPublic": false,
+      "isMutation": false,
+      "tenantSource": "tenant-context(session/api-key)|tenantId-referenced",
+      "ownerResourceRule": "read-only"
+    },
+    {
+      "path": "/api/templates",
+      "method": "POST",
+      "auth": [
+        "withAuth"
+      ],
+      "routeClass": "session_authenticated",
+      "isPublic": false,
+      "isMutation": true,
+      "tenantSource": "tenant-context(session/api-key)|tenantId-referenced",
+      "ownerResourceRule": "tenant-scoped: resource must belong to caller tenant (session/api-key tenantId)"
+    },
+    {
+      "path": "/api/tenant/default",
+      "method": "GET",
+      "auth": [
+        "withAuth"
+      ],
+      "routeClass": "session_authenticated",
+      "isPublic": false,
+      "isMutation": false,
+      "tenantSource": "tenant-context(session/api-key)|tenantId-referenced",
+      "ownerResourceRule": "read-only"
+    },
+    {
+      "path": "/api/tenants/[tenantId]/delete-data",
+      "method": "DELETE",
+      "auth": [
+        "verifyCronAuth"
+      ],
+      "routeClass": "session_authenticated",
+      "isPublic": false,
+      "isMutation": true,
+      "tenantSource": "tenant-context-wrapper|tenantId-referenced",
+      "ownerResourceRule": "tenant-scoped: resource must belong to caller tenant (session/api-key tenantId)"
+    },
+    {
+      "path": "/api/tenants/[tenantId]/delete-data",
+      "method": "GET",
+      "auth": [
+        "verifyCronAuth"
+      ],
+      "routeClass": "session_authenticated",
+      "isPublic": false,
+      "isMutation": false,
+      "tenantSource": "tenant-context-wrapper|tenantId-referenced",
+      "ownerResourceRule": "read-only"
+    },
+    {
+      "path": "/api/tenants/[tenantId]/domain",
+      "method": "DELETE",
+      "auth": [
+        "validateApiKey"
+      ],
+      "routeClass": "session_authenticated",
+      "isPublic": false,
+      "isMutation": true,
+      "tenantSource": "tenant-context-wrapper|tenantId-referenced",
+      "ownerResourceRule": "tenant-scoped: resource must belong to caller tenant (session/api-key tenantId)"
+    },
+    {
+      "path": "/api/tenants/[tenantId]/domain",
+      "method": "GET",
+      "auth": [
+        "validateApiKey"
+      ],
+      "routeClass": "session_authenticated",
+      "isPublic": false,
+      "isMutation": false,
+      "tenantSource": "tenant-context-wrapper|tenantId-referenced",
+      "ownerResourceRule": "read-only"
+    },
+    {
+      "path": "/api/tenants/[tenantId]/domain",
+      "method": "POST",
+      "auth": [
+        "validateApiKey"
+      ],
+      "routeClass": "session_authenticated",
+      "isPublic": false,
+      "isMutation": true,
+      "tenantSource": "tenant-context-wrapper|tenantId-referenced",
+      "ownerResourceRule": "tenant-scoped: resource must belong to caller tenant (session/api-key tenantId)"
+    },
+    {
+      "path": "/api/tenants/[tenantId]/domain/verify",
+      "method": "POST",
+      "auth": [
+        "validateApiKey"
+      ],
+      "routeClass": "session_authenticated",
+      "isPublic": false,
+      "isMutation": true,
+      "tenantSource": "tenant-context-wrapper|tenantId-referenced",
+      "ownerResourceRule": "tenant-scoped: resource must belong to caller tenant (session/api-key tenantId)"
+    },
+    {
+      "path": "/api/tenants/[tenantId]/offboard",
+      "method": "DELETE",
+      "auth": [
+        "validateApiKey"
+      ],
+      "routeClass": "session_authenticated",
+      "isPublic": false,
+      "isMutation": true,
+      "tenantSource": "tenant-context-wrapper|tenantId-referenced",
+      "ownerResourceRule": "tenant-scoped: resource must belong to caller tenant (session/api-key tenantId)"
+    },
+    {
+      "path": "/api/tenants/[tenantId]/offboard",
+      "method": "POST",
+      "auth": [
+        "validateApiKey"
+      ],
+      "routeClass": "session_authenticated",
+      "isPublic": false,
+      "isMutation": true,
+      "tenantSource": "tenant-context-wrapper|tenantId-referenced",
+      "ownerResourceRule": "tenant-scoped: resource must belong to caller tenant (session/api-key tenantId)"
+    },
+    {
+      "path": "/api/tenants",
+      "method": "GET",
+      "auth": [
+        "validateApiKey"
+      ],
+      "routeClass": "session_authenticated",
+      "isPublic": false,
+      "isMutation": false,
+      "tenantSource": "tenant-context-wrapper|tenantId-referenced",
+      "ownerResourceRule": "read-only"
+    },
+    {
+      "path": "/api/tenants",
+      "method": "POST",
+      "auth": [
+        "validateApiKey"
+      ],
+      "routeClass": "session_authenticated",
+      "isPublic": false,
+      "isMutation": true,
+      "tenantSource": "tenant-context-wrapper|tenantId-referenced",
+      "ownerResourceRule": "tenant-scoped: resource must belong to caller tenant (session/api-key tenantId)"
+    },
+    {
+      "path": "/api/upload",
+      "method": "POST",
+      "auth": [
+        "withAuth"
+      ],
+      "routeClass": "session_authenticated",
+      "isPublic": false,
+      "isMutation": true,
+      "tenantSource": "tenant-context(session/api-key)|tenantId-referenced",
+      "ownerResourceRule": "tenant-scoped: resource must belong to caller tenant (session/api-key tenantId)"
+    },
+    {
+      "path": "/api/v1/audit/[id]",
+      "method": "GET",
+      "auth": [
+        "withAuth"
+      ],
+      "routeClass": "session_authenticated",
+      "isPublic": false,
+      "isMutation": false,
+      "tenantSource": "tenant-context(session/api-key)",
+      "ownerResourceRule": "read-only"
+    },
+    {
+      "path": "/api/v1/audit",
+      "method": "POST",
+      "auth": [
+        "withAuth",
+        "withRateLimit"
+      ],
+      "routeClass": "session_authenticated",
+      "isPublic": false,
+      "isMutation": true,
+      "tenantSource": "tenant-context(session/api-key)|tenantId-referenced",
+      "ownerResourceRule": "tenant-scoped: resource must belong to caller tenant (session/api-key tenantId)"
+    },
+    {
+      "path": "/api/widget/quick-audit",
+      "method": "OPTIONS",
+      "auth": [
+        "withRateLimit"
+      ],
+      "routeClass": "token_gated_public",
+      "isPublic": true,
+      "isMutation": false,
+      "tenantSource": "tenant-context-wrapper|tenant-bypass(token-lookup)|tenantId-referenced",
+      "ownerResourceRule": "read-only"
+    },
+    {
+      "path": "/api/widget/quick-audit",
+      "method": "POST",
+      "auth": [
+        "withRateLimit"
+      ],
+      "routeClass": "token_gated_public",
+      "isPublic": true,
+      "isMutation": true,
+      "tenantSource": "tenant-context-wrapper|tenant-bypass(token-lookup)|tenantId-referenced",
+      "ownerResourceRule": "token-scoped: write bounded to resource resolved by unguessable token"
+    },
+    {
+      "path": "/api/worker/audit-job",
+      "method": "POST",
+      "auth": [
+        "verifyWorkerAuth"
+      ],
+      "routeClass": "worker",
+      "isPublic": false,
+      "isMutation": true,
+      "tenantSource": "none-detected",
+      "ownerResourceRule": "server-authority: scheduler/worker secret, no caller tenant"
+    }
+  ]
+}

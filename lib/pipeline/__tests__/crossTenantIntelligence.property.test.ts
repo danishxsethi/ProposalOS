@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { cleanupDb } from '@/lib/__tests__/utils/cleanup';
 import { prisma } from '@/lib/prisma';
+import { withTestSystemSetup } from '@/lib/__tests__/utils/testPrincipal';
 
 import {
   aggregatePatterns,
@@ -48,9 +49,9 @@ describe('Cross-Tenant Intelligence - Property Tests', () => {
 
           await aggregatePatterns('tenant-1', winLossData);
 
-          const model = await prisma.sharedIntelligenceModel.findFirst({
+          const model = await withTestSystemSetup(() => prisma.sharedIntelligenceModel.findFirst({
             where: { isActive: true },
-          });
+          }));
 
           if (model) {
             const patterns = model.patterns as any[];
@@ -171,9 +172,9 @@ describe('Cross-Tenant Intelligence - Property Tests', () => {
 
           await aggregatePatterns('tenant-1', winLossData);
 
-          const model = await prisma.sharedIntelligenceModel.findFirst({
+          const model = await withTestSystemSetup(() => prisma.sharedIntelligenceModel.findFirst({
             where: { isActive: true },
-          });
+          }));
 
           if (model) {
             const patterns = model.patterns as any[];
@@ -216,9 +217,9 @@ describe('Cross-Tenant Intelligence - Property Tests', () => {
 
           await aggregatePatterns('tenant-1', winLossData);
 
-          const model = await prisma.sharedIntelligenceModel.findFirst({
+          const model = await withTestSystemSetup(() => prisma.sharedIntelligenceModel.findFirst({
             where: { isActive: true },
-          });
+          }));
 
           if (model) {
             const patterns = model.patterns as any[];

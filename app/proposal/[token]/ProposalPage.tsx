@@ -1,9 +1,12 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+
 import dynamic from 'next/dynamic';
-import { useProposalViewTracking } from './ProposalViewTracker';
+
 import { buildProposalConversionModel } from '@/lib/proposal/conversionViewModel';
+
+import { useProposalViewTracking } from './ProposalViewTracker';
 
 const ProposalShareButton = dynamic(
   () => import('@/components/ProposalShareButton').then((mod) => mod.ProposalShareButton),

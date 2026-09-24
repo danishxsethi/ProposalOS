@@ -18,6 +18,7 @@ export interface CitationsModuleInput {
 
 interface DirectoryListing {
   directory: string;
+  status: 'FOUND' | 'ABSENT' | 'UNAVAILABLE';
   found: boolean;
   url?: string;
   name?: string;
@@ -42,6 +43,7 @@ interface CitationAnalysis {
   napConsistency: NAPConsistency;
   totalFound: number;
   totalChecked: number;
+  unavailable: string[];
 }
 
 /**
@@ -59,6 +61,11 @@ export async function runCitationsModule(
   try {
     const analysis = await analyzeCitations(input, tracker);
     const findings = generateCitationFindings(analysis, input);
+    const execution = analysis.unavailable.length === 0
+      ? { state: 'complete' as const }
+      : analysis.totalChecked > 0
+        ? { state: 'partial' as const, reason: `Unavailable directories: ${analysis.unavailable.join(', ')}` }
+        : { state: 'unavailable' as const, reason: `No directories could be checked: ${analysis.unavailable.join(', ')}` };
 
     const evidenceSnapshot = {
       module: 'citations',
@@ -84,27 +91,15 @@ export async function runCitationsModule(
     return {
       findings,
       evidenceSnapshots: [evidenceSnapshot],
+      execution,
     };
   } catch (error) {
     logger.error({ error, businessName: input.businessName }, '[Citations] Analysis failed');
 
     return {
-      findings: [
-        {
-          type: 'VITAMIN',
-          category: 'Visibility',
-          title: 'Citation Analysis Unavailable',
-          description:
-            'Unable to check business listings across directories. This may indicate API issues or network problems.',
-          impactScore: 1,
-          confidenceScore: normalizeConfidence(50, '0-100'),
-          evidence: [],
-          metrics: {},
-          effortEstimate: 'LOW',
-          recommendedFix: ['Try running citation analysis again later'],
-        },
-      ],
+      findings: [],
       evidenceSnapshots: [],
+      execution: { state: 'failed', reason: error instanceof Error ? error.message : 'Citation analysis failed' },
     };
   }
 }
@@ -135,14 +130,16 @@ async function analyzeCitations(
   listings.push(appleMapsListing);
 
   // Calculate NAP consistency
-  const foundListings = listings.filter((l) => l.found);
+  const foundListings = listings.filter((l) => l.status === 'FOUND');
   const napConsistency = calculateNAPConsistency(input, foundListings);
 
+  const checkedListings = listings.filter((listing) => listing.status !== 'UNAVAILABLE');
   return {
     listings,
     napConsistency,
     totalFound: foundListings.length,
-    totalChecked: listings.length,
+    totalChecked: checkedListings.length,
+    unavailable: listings.filter((listing) => listing.status === 'UNAVAILABLE').map((listing) => listing.directory),
   };
 }
 
@@ -168,8 +165,7 @@ async function checkYelp(
         {
           provider: 'crawler',
           operation: 'citations:yelp_scrape',
-          degrade: true,
-          fallbackValue: '',
+      degrade: false,
         },
         async () => {
           const res = await fetch(url, {
@@ -186,7 +182,7 @@ async function checkYelp(
       const firstResult = $('.businessName').first();
 
       if (firstResult.length === 0) {
-        return { directory: 'Yelp', found: false };
+        return { directory: 'Yelp', found: false, status: 'ABSENT' };
       }
 
       const name = firstResult.text().trim();
@@ -201,6 +197,7 @@ async function checkYelp(
       return {
         directory: 'Yelp',
         found: true,
+        status: 'FOUND',
         url: `https://yelp.com${$('a').first().attr('href')}`,
         name,
         rating,
@@ -233,8 +230,7 @@ async function checkYelp(
           {
             provider: 'serpapi',
             operation: 'citations:yelp_search',
-            degrade: true,
-            fallbackValue: { organic_results: [] },
+            degrade: false,
           },
           async () => {
             const res = await fetch(serpUrl);
@@ -248,17 +244,18 @@ async function checkYelp(
     );
 
     if (!data.organic_results || data.organic_results.length === 0) {
-      return { directory: 'Yelp', found: false };
+      return { directory: 'Yelp', found: false, status: 'ABSENT' };
     }
 
     const firstResult = data.organic_results[0];
     if (!firstResult) {
-      return { directory: 'Yelp', found: false };
+      return { directory: 'Yelp', found: false, status: 'ABSENT' };
     }
 
     return {
       directory: 'Yelp',
       found: true,
+      status: 'FOUND',
       url: firstResult.link,
       name: firstResult.title,
       rating: firstResult.rating,
@@ -266,7 +263,7 @@ async function checkYelp(
     };
   } catch (error) {
     logger.warn({ error }, '[Citations] Yelp check failed');
-    return { directory: 'Yelp', found: false };
+    return { directory: 'Yelp', found: false, status: 'UNAVAILABLE' };
   }
 }
 
@@ -286,7 +283,7 @@ async function checkFacebook(
     const serpApiKey = process.env.SERP_API_KEY;
 
     if (!serpApiKey) {
-      return { directory: 'Facebook', found: false };
+      return { directory: 'Facebook', found: false, status: 'UNAVAILABLE' };
     }
 
     tracker?.addApiCall('SERP');
@@ -306,8 +303,7 @@ async function checkFacebook(
           {
             provider: 'serpapi',
             operation: 'citations:facebook_search',
-            degrade: true,
-            fallbackValue: { organic_results: [] },
+            degrade: false,
           },
           async () => {
             const res = await fetch(serpUrl);
@@ -321,7 +317,7 @@ async function checkFacebook(
     );
 
     if (!data.organic_results || data.organic_results.length === 0) {
-      return { directory: 'Facebook', found: false };
+      return { directory: 'Facebook', found: false, status: 'ABSENT' };
     }
 
     const facebookPage = data.organic_results.find(
@@ -329,18 +325,19 @@ async function checkFacebook(
     );
 
     if (!facebookPage) {
-      return { directory: 'Facebook', found: false };
+      return { directory: 'Facebook', found: false, status: 'ABSENT' };
     }
 
     return {
       directory: 'Facebook',
       found: true,
+      status: 'FOUND',
       url: facebookPage.link,
       name: facebookPage.title,
     };
   } catch (error) {
     logger.warn({ error }, '[Citations] Facebook check failed');
-    return { directory: 'Facebook', found: false };
+    return { directory: 'Facebook', found: false, status: 'UNAVAILABLE' };
   }
 }
 
@@ -362,8 +359,7 @@ async function checkBBB(
       {
         provider: 'crawler',
         operation: 'citations:bbb_scrape',
-        degrade: true,
-        fallbackValue: '',
+      degrade: false,
       },
       async () => {
         const res = await fetch(url, {
@@ -380,7 +376,7 @@ async function checkBBB(
     const firstResult = $('.result-item').first();
 
     if (firstResult.length === 0) {
-      return { directory: 'BBB', found: false };
+      return { directory: 'BBB', found: false, status: 'ABSENT' };
     }
 
     const name = firstResult.find('.business-name').text().trim();
@@ -391,13 +387,14 @@ async function checkBBB(
     return {
       directory: 'BBB',
       found: true,
+      status: 'FOUND',
       url: `https://bbb.org${firstResult.find('a').attr('href')}`,
       name,
       verified: accredited,
     };
   } catch (error) {
     logger.warn({ error }, '[Citations] BBB check failed');
-    return { directory: 'BBB', found: false };
+    return { directory: 'BBB', found: false, status: 'UNAVAILABLE' };
   }
 }
 
@@ -419,8 +416,7 @@ async function checkYellowPages(
       {
         provider: 'crawler',
         operation: 'citations:yellowpages_scrape',
-        degrade: true,
-        fallbackValue: '',
+      degrade: false,
       },
       async () => {
         const res = await fetch(url, {
@@ -437,7 +433,7 @@ async function checkYellowPages(
     const firstResult = $('.result').first();
 
     if (firstResult.length === 0) {
-      return { directory: 'Yellow Pages', found: false };
+      return { directory: 'Yellow Pages', found: false, status: 'ABSENT' };
     }
 
     const name = firstResult.find('.business-name').text().trim();
@@ -447,6 +443,7 @@ async function checkYellowPages(
     return {
       directory: 'Yellow Pages',
       found: true,
+      status: 'FOUND',
       url: `https://yellowpages.com${firstResult.find('a').attr('href')}`,
       name,
       phone,
@@ -454,7 +451,7 @@ async function checkYellowPages(
     };
   } catch (error) {
     logger.warn({ error }, '[Citations] Yellow Pages check failed');
-    return { directory: 'Yellow Pages', found: false };
+    return { directory: 'Yellow Pages', found: false, status: 'UNAVAILABLE' };
   }
 }
 
@@ -474,7 +471,7 @@ async function checkAppleMaps(
     const serpApiKey = process.env.SERP_API_KEY;
 
     if (!serpApiKey) {
-      return { directory: 'Apple Maps', found: false };
+      return { directory: 'Apple Maps', found: false, status: 'UNAVAILABLE' };
     }
 
     tracker?.addApiCall('SERP');
@@ -494,8 +491,7 @@ async function checkAppleMaps(
           {
             provider: 'serpapi',
             operation: 'citations:applemaps_search',
-            degrade: true,
-            fallbackValue: { organic_results: [] },
+            degrade: false,
           },
           async () => {
             const res = await fetch(serpUrl);
@@ -509,7 +505,7 @@ async function checkAppleMaps(
     );
 
     if (!data.organic_results || data.organic_results.length === 0) {
-      return { directory: 'Apple Maps', found: false };
+      return { directory: 'Apple Maps', found: false, status: 'ABSENT' };
     }
 
     const appleMapsResult = data.organic_results.find((r: any) =>
@@ -517,18 +513,19 @@ async function checkAppleMaps(
     );
 
     if (!appleMapsResult) {
-      return { directory: 'Apple Maps', found: false };
+      return { directory: 'Apple Maps', found: false, status: 'ABSENT' };
     }
 
     return {
       directory: 'Apple Maps',
       found: true,
+      status: 'FOUND',
       url: appleMapsResult.link,
       name: appleMapsResult.title,
     };
   } catch (error) {
     logger.warn({ error }, '[Citations] Apple Maps check failed');
-    return { directory: 'Apple Maps', found: false };
+    return { directory: 'Apple Maps', found: false, status: 'UNAVAILABLE' };
   }
 }
 
@@ -635,7 +632,7 @@ function generateCitationFindings(
   const yellowPagesListing = analysis.listings.find((l) => l.directory === 'Yellow Pages');
 
   // PAINKILLER: Not listed on Yelp
-  if (yelpListing && !yelpListing.found) {
+  if (yelpListing?.status === 'ABSENT') {
     findings.push({
       type: 'PAINKILLER',
       category: 'Visibility',
@@ -693,7 +690,7 @@ function generateCitationFindings(
   }
 
   // VITAMIN: Not on BBB
-  if (bbbListing && !bbbListing.found) {
+  if (bbbListing?.status === 'ABSENT') {
     findings.push({
       type: 'VITAMIN',
       category: 'Visibility',
@@ -722,7 +719,7 @@ function generateCitationFindings(
   }
 
   // VITAMIN: Not on Yellow Pages
-  if (yellowPagesListing && !yellowPagesListing.found) {
+  if (yellowPagesListing?.status === 'ABSENT') {
     findings.push({
       type: 'VITAMIN',
       category: 'Visibility',
@@ -781,7 +778,7 @@ function generateCitationFindings(
   }
 
   // VITAMIN: No Facebook business page
-  if (facebookListing && !facebookListing.found) {
+  if (facebookListing?.status === 'ABSENT') {
     findings.push({
       type: 'VITAMIN',
       category: 'Visibility',

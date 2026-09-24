@@ -39,6 +39,8 @@ interface AuthUser {
 export function withAuth(handler: AuthHandler) {
   return async (req: Request, ...args: any[]) => {
     if (isInternalOpsRequest(req)) {
+      // The secret establishes server authority; the tenant header is only a requested
+      // target for this privileged server-to-server operation.
       const tenantId = req.headers.get('x-tenant-id')?.trim();
       if (!tenantId) {
         return NextResponse.json(

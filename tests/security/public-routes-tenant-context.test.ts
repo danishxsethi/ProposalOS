@@ -35,6 +35,9 @@ const mocks = vi.hoisted(() => ({
   generateCaseStudyPdf: vi.fn(),
   crawlWebsite: vi.fn(),
   runGBPModule: vi.fn(),
+  runModuleSubset: vi.fn(),
+  dispatchAuditExecution: vi.fn(),
+  auditUpdate: vi.fn(),
 
   // rate limit passthrough
   withRateLimit: vi.fn(),
@@ -62,6 +65,7 @@ vi.mock('@/lib/prisma', () => ({
     audit: {
       findUnique: mocks.auditFindUnique,
       create: mocks.auditCreate,
+      update: mocks.auditUpdate,
     },
   },
 }));
@@ -88,7 +92,22 @@ vi.mock('@/lib/modules/gbp', () => ({
   runGBPModule: mocks.runGBPModule,
 }));
 
-vi.mock('@/lib/middleware/rateLimit', () => ({
+vi.mock('@/lib/audit/dispatch', () => ({
+  dispatchAuditExecution: mocks.dispatchAuditExecution,
+}));
+
+vi.mock('@/lib/audit/runner', () => ({
+  runModuleSubset: mocks.runModuleSubset,
+  extractFindingsFromRegistryResult: () => ({ findings: [] }),
+}));
+
+vi.mock('@/lib/costs/costTracker', () => ({
+  CostTracker: class {
+    getTotalCents() { return 0; }
+  },
+}));
+
+  vi.mock('@/lib/middleware/rateLimit', () => ({
   withRateLimit: (_opts: unknown) => (_req: Request, handler: () => Promise<Response>) => handler(),
   checkRateLimit: vi.fn().mockResolvedValue({ success: true }),
   RateLimitPresets: { publicApi: {} },
@@ -349,10 +368,13 @@ describe('POST /api/widget/quick-audit', () => {
     setupPassthroughTenantHelpers();
     mocks.crawlWebsite.mockResolvedValue({ pages: [] });
     mocks.runGBPModule.mockResolvedValue({ status: 'success', data: {} });
+    mocks.runModuleSubset.mockResolvedValue(new Map());
+    mocks.dispatchAuditExecution.mockResolvedValue({ id: 'job-1', status: 'QUEUED' });
     mocks.auditCreate.mockResolvedValue({
       id: 'new-audit-id',
       businessName: 'Test Biz',
     });
+    mocks.auditUpdate.mockResolvedValue({});
   });
 
   const makeRequest = (

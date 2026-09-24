@@ -213,6 +213,12 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           return null; // Deny session
         }
 
+        // Authorization claims are refreshed from persisted identity on each
+        // verification; client session updates cannot change role or tenant.
+        mergedToken.id = sessionRecord.user.id;
+        mergedToken.role = sessionRecord.user.role;
+        mergedToken.tenantId = sessionRecord.user.tenantId;
+
         // Update lastSeenAt in the background asynchronously to avoid blocking the critical path
         runWithAuthAdapterContext(
           { operation: 'session.updateLastSeen', models: ['Session'] },

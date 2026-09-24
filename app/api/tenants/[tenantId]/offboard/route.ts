@@ -10,7 +10,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 import { generateTraceId, InternalError, UnauthorizedError } from '@/lib/api/errors';
-import { API_KEY_SCOPES, validateApiKey } from '@/lib/auth/apiKeys';
+import { API_KEY_SCOPES, apiKeyCanAccessTenant, validateApiKey } from '@/lib/auth/apiKeys';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 import { runWithTenantAsync } from '@/lib/tenant/context';
@@ -55,10 +55,7 @@ export async function POST(
     }
 
     // Verify access to this tenant
-    const hasAdminScope =
-      validation.scopes.includes(API_KEY_SCOPES.ALL) || validation.scopes.includes('admin:*');
-
-    if (!hasAdminScope && validation.tenantId !== tenantId) {
+    if (!apiKeyCanAccessTenant(validation, tenantId)) {
       throw new UnauthorizedError('Access denied to this tenant');
     }
 
@@ -182,11 +179,11 @@ export async function DELETE(
       throw new UnauthorizedError('Invalid API key');
     }
 
-    const hasAdminScope =
-      validation.scopes.includes(API_KEY_SCOPES.ALL) || validation.scopes.includes('admin:*');
-
-    if (!hasAdminScope) {
-      throw new UnauthorizedError('Admin scope required for hard delete');
+    if (!apiKeyCanAccessTenant(validation, tenantId)) {
+      throw new UnauthorizedError('Access denied to this tenant');
+    }
+    if (!validation.scopes.includes(API_KEY_SCOPES.ALL)) {
+      throw new UnauthorizedError('Full tenant scope required for hard delete');
     }
 
     return runWithTenantAsync(tenantId, async () => {

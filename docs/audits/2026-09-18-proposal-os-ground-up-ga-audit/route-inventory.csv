@@ -1,0 +1,147 @@
+route,method_surface,source_auth_observation,tenant_scope_observation,runtime_verified,notes
+/api/audit,POST,withRole+withAuth+rate+idempotency,getTenantId,NO,canonical enqueue path
+/api/audit/batch,POST,auth source,tenant-scoped jobs,NO,enqueue path
+/api/audit/batch/[batchId],GET,source route,tenant-scoped jobs,NO,batch status route
+/api/audit/[id],GET/PATCH,source route,tenant query,NO,live matrix required
+/api/audit/[id]/diagnose,POST,tenant helper,tenant query,NO,degraded returns 200
+/api/audit/[id]/propose,POST,withAuth source,tenant query,NO,split proposal inputs
+/api/worker/audit-job,POST,worker secret,job tenant,NO,worker deployment unverified
+/api/v1/audit,POST,source auth,tenant-scoped,NO,versioned API
+/api/public/audit,POST,public route,public/token context,NO,public audit path
+/api/client/scan,POST/GET,token/auth inconsistent,tenant context inconsistent,NO,missing-token concerns
+/api/client/export/[auditId],GET,token optional,tenant context inconsistent,NO,raw export risk
+/api/client/improvement/[auditId],GET,token optional,tenant context inconsistent,NO,previous audit ownership gap
+/api/proposal/token/[token],GET/PATCH,GET public; PATCH auth,public lookup then tenant,NO,primary public projection
+/api/proposal/token/[token]/status,PATCH,no auth wrapper,public token only,NO,public lifecycle mutation blocker
+/api/proposal/token/[token]/accept,POST,public token,context inconsistent,NO,acceptance/payment mismatch
+/api/proposal/token/[token]/contact,POST,public token,context inconsistent,NO,public mutation
+/api/proposal/token/[token]/email,POST,public token,context inconsistent,NO,external send risk
+/api/proposal/token/[token]/pdf,GET,public token publication check,tenant entered after lookup,NO,expiry mismatch
+/api/proposal/token/[token]/share,POST,public token,context inconsistent,NO,tracking mutation
+/api/proposal/token/[token]/track,POST,public token,context inconsistent,NO,synthetic engagement risk
+/api/presentation/[token]/export,GET,public token publication only,context inconsistent,NO,no rate limit observed
+/api/stripe/checkout-proposal,POST,source route,proposal tenant,NO,checkout state gate verify
+/api/stripe/webhook,POST,Stripe signature,handler tenant mapping,NO,payment/fulfillment discontinuity
+/api/onboarding/provision,POST,CSRF/rate limit,creates tenant,NO,does not verify checkout session
+/api/pipeline/prospects/[id],GET,public source,raw x-tenant-id possible,NO,IDOR risk
+/api/predictions,GET/POST,withRole path,header/context risk,NO,tenant context risk
+/api/tenants/[tenantId]/offboard,POST/DELETE,Bearer API key,route tenant authority,NO,wildcard scope risk
+/api/health,GET,public,global counts/provider checks,NO,disclosure/resource risk
+/api/metrics,GET,public,global,NO,operational disclosure
+/api/upload,POST,source route,storage scope unknown,NO,file/security test required
+/api/widget/quick-audit,POST,public/widget,tenant attribute/origin,NO,origin allowlist runtime required
+/api/auth/register,POST,public registration,tenant creation,NO,rate/plan abuse test required
+/api/admin/feature-flags,UNKNOWN,source-specific admin,global/admin,NO,source inventory only
+/api/admin/hallucination-telemetry,UNKNOWN,source-specific admin,global/admin,NO,source inventory only
+/api/admin/human-review,UNKNOWN,source-specific admin,global/admin,NO,source inventory only
+/api/admin/metrics,UNKNOWN,source-specific admin,global/admin,NO,source inventory only
+/api/admin/model-metrics,UNKNOWN,source-specific admin,global/admin,NO,source inventory only
+/api/admin/observability-metrics,UNKNOWN,admin or cron source,global/admin,NO,cron credential concern
+/api/admin/qa-telemetry,UNKNOWN,admin or cron source,global/admin,NO,cron credential concern
+/api/analytics/benchmarks,UNKNOWN,source route,tenant/global unknown,NO,source inventory only
+/api/analytics/cart-abandonment,UNKNOWN,source route,tenant/global unknown,NO,source inventory only
+/api/analytics,UNKNOWN,source route,tenant/global unknown,NO,source inventory only
+/api/analytics/tenant/[tenantId]/metrics,UNKNOWN,source route,tenant param,NO,IDOR test required
+/api/analytics/upsell,UNKNOWN,source route,tenant/global unknown,NO,source inventory only
+/api/analytics/win-loss,UNKNOWN,source route,tenant/global unknown,NO,learning scope test required
+/api/audit/[id]/compare/[previousId],UNKNOWN,source route,tenant query,NO,previous ownership test required
+/api/audit/[id]/regenerate,UNKNOWN,source route,tenant query,NO,duplicate effect test required
+/api/audits,UNKNOWN,source route,tenant query,NO,source inventory only
+/api/auth/[...nextauth],GET/POST,Auth.js,session scope,NO,provider/runtime not verified
+/api/billing/checkout,POST,source route,tenant/proposal,NO,billing state test required
+/api/billing/checkout-proposal,POST,source route,tenant/proposal,NO,billing state test required
+/api/billing/portal,POST,source route,tenant/customer,NO,billing state test required
+/api/billing/webhook,POST,signature source,tenant mapping,NO,duplicate/stale event test required
+/api/cache/clear,UNKNOWN,source route,global/admin unknown,NO,dangerous admin route test
+/api/case-study/[auditId]/generate,UNKNOWN,source route,audit tenant unknown,NO,IDOR/public output test
+/api/chat/proposal,UNKNOWN,source route,proposal tenant unknown,NO,source inventory only
+/api/checkout,UNKNOWN,source route,tenant/proposal unknown,NO,duplicate checkout test
+/api/client/portal/data,UNKNOWN,source route,client tenant unknown,NO,auth/context test
+/api/cron/auto-promote,UNKNOWN,cron source,global/tenant varies,NO,prompt mutation safety
+/api/cron/check-grace-periods,UNKNOWN,cron source,global/tenant varies,NO,destructive schedule
+/api/cron/cleanup-stale-jobs,UNKNOWN,cron source,queue/global,NO,worker recovery test
+/api/cron/discovery,UNKNOWN,cron source,global/tenant varies,NO,external discovery not verified
+/api/cron/email-sequence,UNKNOWN,cron source,tenant varies,NO,duplicate outreach test
+/api/cron/follow-ups,UNKNOWN,cron source,tenant varies,NO,duplicate outreach test
+/api/cron/gdpr-cleanup,UNKNOWN,cron source,tenant varies,NO,deletion restore test
+/api/cron/intelligence-aggregation,UNKNOWN,cron source,global/tenant varies,NO,learning scope test
+/api/cron/metering-sweep,UNKNOWN,cron source,global/tenant varies,NO,cost accounting test
+/api/cron/monitor-reputation,UNKNOWN,cron source,tenant varies,NO,provider unknown semantics
+/api/cron/nps-surveys,UNKNOWN,cron source,tenant varies,NO,retention graph gap
+/api/cron/partner-matching,UNKNOWN,cron source,tenant varies,NO,DB unavailable test baseline
+/api/cron/pipeline-audit,UNKNOWN,cron source,tenant varies,NO,direct runner bypass
+/api/cron/pipeline-closing,UNKNOWN,cron source,tenant varies,NO,external effect test
+/api/cron/pipeline-delivery,UNKNOWN,cron source,tenant varies,NO,executor unavailable
+/api/cron/pipeline-outreach,UNKNOWN,cron source,tenant varies,NO,multiple outreach path
+/api/cron/predictions-calibration,UNKNOWN,cron source,global/tenant varies,NO,learning scope test
+/api/cron/prompt-promotion,UNKNOWN,cron source,global/tenant varies,NO,auto-promotion safety
+/api/cron/reconcile-billing,UNKNOWN,cron source,global billing,NO,global service/RLS test
+/api/cron/retention,UNKNOWN,cron source,tenant varies,NO,graph disconnected
+/api/cron/retry-webhooks,UNKNOWN,cron source,global billing,NO,replay test
+/api/cron/scheduled-audits,UNKNOWN,cron source,tenant varies,NO,scheduled runner runtime
+/api/cron/signal-detection,UNKNOWN,cron source,tenant varies,NO,duplicate signal test
+/api/csrf,GET,public utility,none,NO,source inventory only
+/api/delivery/[proposalId]/artifacts,UNKNOWN,source route,proposal tenant unknown,NO,fulfillment source only
+/api/delivery/[proposalId]/bundle,UNKNOWN,source route,proposal tenant unknown,NO,artifact authorization test
+/api/email/generate,UNKNOWN,source route,tenant/proposal unknown,NO,LLM/external content
+/api/email/send-followup,UNKNOWN,source route,tenant/proposal unknown,NO,external send gate
+/api/email/tracking,UNKNOWN,public tracking,proposal tenant unknown,NO,synthetic telemetry test
+/api/email/unsubscribe,UNKNOWN,public token,tenant unknown,NO,compliance test
+/api/finding/[id],UNKNOWN,source auth,tenant query,NO,tenant IDOR test
+/api/nps/respond,UNKNOWN,public/client token,tenant unknown,NO,retention scope
+/api/onboarding/step,POST,CSRF/rate limit,tenant creation,NO,untyped settings merge
+/api/openapi,GET,public docs,none,NO,route exposure only
+/api/outreach/jobs,UNKNOWN,source auth,tenant varies,NO,queue scope test
+/api/outreach/leads,UNKNOWN,source auth,tenant varies,NO,PII scope test
+/api/outreach/metrics,UNKNOWN,source auth,tenant/global unknown,NO,aggregate scope test
+/api/outreach/scorecard/[token]/track,POST,public token,tenant via lead,NO,tracking integrity test
+/api/outreach/sniper/worker,POST,worker secret source,tenant job,NO,worker deployment unverified
+/api/outreach/track/click/[emailId],GET,public tracking,tenant via email,NO,token integrity test
+/api/outreach/track/open/[emailId],GET,public tracking,tenant via email,NO,token integrity test
+/api/outreach/track/reply,POST,provider/webhook source,tenant via email,NO,signature/replay test
+/api/outreach/worker,POST,worker secret source,tenant job,NO,worker deployment unverified
+/api/pipeline/chat,UNKNOWN,source auth,tenant varies,NO,LLM data scope test
+/api/pipeline/config/onboard,UNKNOWN,source auth,tenant varies,NO,configuration scope test
+/api/pipeline/config,UNKNOWN,source auth,tenant varies,NO,configuration scope test
+/api/pipeline/engagement,UNKNOWN,source auth,tenant varies,NO,aggregate scope test
+/api/pipeline/learning,GET/POST,auth but tenant scope gap,global learning possible,NO,critical scope finding
+/api/pipeline/metrics,UNKNOWN,source auth,tenant/global unknown,NO,aggregate scope test
+/api/pipeline/partners/[id]/leads,UNKNOWN,source auth,partner/tenant unknown,NO,partner IDOR test
+/api/pipeline/partners,UNKNOWN,source auth,tenant varies,NO,partner scope test
+/api/pipeline/prospects/[id]/override,POST,withRole context risk,raw tenant context possible,NO,header spoof test
+/api/pipeline/review,UNKNOWN,source auth,tenant varies,NO,human review scope test
+/api/pricing/plans,GET,public/source route,global pricing,NO,pricing authority test
+/api/prompt/experiments/[id],UNKNOWN,source auth,tenant/global unknown,NO,prompt mutation scope test
+/api/prompt/experiments,UNKNOWN,source auth,tenant/global unknown,NO,prompt mutation scope test
+/api/proposal-status/status,UNKNOWN,source route,proposal tenant unknown,NO,legacy route inventory
+/api/proposal/[id]/chat,UNKNOWN,source auth,proposal tenant unknown,NO,proposal IDOR test
+/api/proposal/id/[id]/closeability,UNKNOWN,source auth,proposal tenant unknown,NO,proposal IDOR test
+/api/proposal/id/[id]/outcome,UNKNOWN,source auth,proposal tenant unknown,NO,win/loss integrity
+/api/proposal/id/[id]/resend,UNKNOWN,source auth,proposal tenant unknown,NO,external send idempotency
+/api/proposal/id/[id]/save-template,UNKNOWN,source auth,proposal tenant unknown,NO,template tenant scope
+/api/proposal/id/[id]/send,UNKNOWN,source auth,proposal tenant unknown,NO,external send idempotency
+/api/proposals/[id]/send,UNKNOWN,source auth,proposal tenant unknown,NO,duplicate send path
+/api/proposals,UNKNOWN,source auth,tenant varies,NO,route family overlap
+/api/public/audit/[id],GET,public source,public token context,NO,IDOR/public projection test
+/api/schedule/[id],UNKNOWN,source auth,tenant varies,NO,schedule IDOR test
+/api/schedule,UNKNOWN,source auth,tenant varies,NO,schedule scope test
+/api/settings/api-keys/[id],UNKNOWN,source auth,tenant varies,NO,key IDOR/rotation test
+/api/settings/api-keys,UNKNOWN,source auth,tenant varies,NO,key scope test
+/api/settings/domain/verify,UNKNOWN,source auth,tenant varies,NO,domain verification test
+/api/settings/notifications,UNKNOWN,source auth,tenant varies,NO,settings scope test
+/api/settings/templates/[id],UNKNOWN,source auth,tenant varies,NO,template IDOR test
+/api/settings/templates,UNKNOWN,source auth,tenant varies,NO,template scope test
+/api/stats,GET,source route,tenant/global unknown,NO,aggregate scope test
+/api/stripe/checkout-saas,POST,source route,tenant creation,NO,session verification gap
+/api/stripe/portal,POST,source auth,tenant/customer,NO,billing scope test
+/api/team/invite/[token]/accept,POST,public token,tenant via invite,NO,invite token test
+/api/team/invite/[token],GET,public token,tenant via invite,NO,invite token test
+/api/team/invite,POST,source auth,tenant varies,NO,invite scope test
+/api/templates/[id],UNKNOWN,source auth,tenant varies,NO,template IDOR test
+/api/templates,UNKNOWN,source auth,tenant varies,NO,template scope test
+/api/tenant/default,UNKNOWN,source auth,tenant varies,NO,tenant resolution test
+/api/tenants/[tenantId]/delete-data,UNKNOWN,API key/source auth,route tenant authority,NO,destructive cross-tenant test
+/api/tenants/[tenantId]/domain,UNKNOWN,API key/source auth,route tenant authority,NO,wildcard scope test
+/api/tenants/[tenantId]/domain/verify,UNKNOWN,API key/source auth,route tenant authority,NO,wildcard scope test
+/api/tenants,POST,public self-signup,creates tenant,NO,unlimited key/plan abuse test
+/api/v1/audit/[id],GET,source auth,tenant query,NO,versioned IDOR test

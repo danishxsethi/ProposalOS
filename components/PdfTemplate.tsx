@@ -1,5 +1,5 @@
-import { buildProposalConversionModel } from '@/lib/proposal/conversionViewModel';
 import { generateScoreGaugeSVG } from '@/lib/pdf/charts';
+import { buildProposalConversionModel } from '@/lib/proposal/conversionViewModel';
 
 interface PdfTemplateProps {
   proposal: any;

@@ -25,15 +25,29 @@ export async function GET(request: Request, { params }: Params) {
     const proposal = await runWithTenantBypass('proposal-token-lookup', () =>
       prisma.proposal.findUnique({
         where: { webLinkToken: token },
-        include: {
-          audit: {
-            include: {
-              findings: {
-                where: { excluded: false },
-                orderBy: { impactScore: 'desc' },
+      include: {
+        audit: {
+          include: {
+            findings: {
+              where: { excluded: false },
+              orderBy: { impactScore: 'desc' },
+              select: {
+                id: true,
+                module: true,
+                category: true,
+                type: true,
+                title: true,
+                description: true,
+                impactScore: true,
+                confidenceScore: true,
+                effortEstimate: true,
+                recommendedFix: true,
+                metrics: true,
+                evidence: true,
               },
             },
           },
+        },
         },
       })
     );
@@ -172,8 +186,9 @@ export const PATCH = withAuth(async (request: Request, { params }: Params) => {
     const body = await request.json();
     const { status } = body;
 
-    // Validate status
-    const validStatuses = ['DRAFT', 'READY', 'SENT', 'VIEWED', 'ACCEPTED', 'REJECTED'];
+    // Public share tokens may only record a view. Acceptance/rejection have
+    // dedicated client actions; payment and close state are server-owned.
+    const validStatuses = ['VIEWED'];
     if (status && !validStatuses.includes(status)) {
       return NextResponse.json(
         { error: `Invalid status. Must be one of: ${validStatuses.join(', ')}` },
@@ -183,7 +198,7 @@ export const PATCH = withAuth(async (request: Request, { params }: Params) => {
 
     const existing = await prisma.proposal.findFirst({ where: { webLinkToken: token, tenantId } });
     if (!existing) return NextResponse.json({ error: 'Proposal not found' }, { status: 404 });
-    if (status === 'READY' || status === 'SENT') assertProposalPublishable(existing);
+    if (status === 'VIEWED') assertProposalPublishable(existing);
 
     const updateData: Record<string, unknown> = {};
     if (status) {
@@ -194,7 +209,7 @@ export const PATCH = withAuth(async (request: Request, { params }: Params) => {
     }
 
     const proposal = await prisma.proposal.update({
-      where: { id: existing.id },
+      where: { id: existing.id, tenantId },
       data: updateData,
     });
 

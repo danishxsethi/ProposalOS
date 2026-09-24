@@ -1,0 +1,841 @@
+{
+  "generatedAt": "2026-09-24T06:58:19.418Z",
+  "audit": "2026-09-18-proposal-os-ground-up-ga-audit",
+  "source": "lib/audit/runner.ts::MODULE_REGISTRY",
+  "expectedModuleCount": 27,
+  "actualModuleCount": 27,
+  "qualified": true,
+  "modules": [
+    {
+      "name": "website",
+      "phase": 1,
+      "optional": false,
+      "timeoutMs": 30000,
+      "dependsOn": [],
+      "featureFlag": null,
+      "sourceFiles": [
+        "lib/modules/website.ts"
+      ],
+      "providers": [
+        "Google PageSpeed"
+      ],
+      "providerBoundary": {
+        "rawFetchViolations": [],
+        "qualified": true
+      },
+      "failurePropagation": {
+        "honestStatusMapping": true,
+        "qualified": true
+      },
+      "identityInjection": {
+        "strategy": "restamped: f.module = registryName"
+      },
+      "unsafeStates": {
+        "unavailableCredentials": "UNAVAILABLE or SKIPPED, never COMPLETE",
+        "ambiguousIdentity": "n/a"
+      }
+    },
+    {
+      "name": "websiteCrawler",
+      "phase": 1,
+      "optional": false,
+      "timeoutMs": 45000,
+      "dependsOn": [],
+      "featureFlag": null,
+      "sourceFiles": [
+        "lib/modules/websiteCrawlerModule.ts"
+      ],
+      "providers": [
+        "internal crawler (safeFetch)"
+      ],
+      "providerBoundary": {
+        "rawFetchViolations": [],
+        "qualified": true
+      },
+      "failurePropagation": {
+        "honestStatusMapping": true,
+        "qualified": true
+      },
+      "identityInjection": {
+        "strategy": "restamped: f.module = registryName"
+      },
+      "unsafeStates": {
+        "unavailableCredentials": "UNAVAILABLE or SKIPPED, never COMPLETE",
+        "ambiguousIdentity": "n/a"
+      }
+    },
+    {
+      "name": "gbp",
+      "phase": 1,
+      "optional": false,
+      "timeoutMs": 20000,
+      "dependsOn": [],
+      "featureFlag": null,
+      "sourceFiles": [
+        "lib/modules/gbp.ts"
+      ],
+      "providers": [
+        "Google Places"
+      ],
+      "providerBoundary": {
+        "rawFetchViolations": [],
+        "qualified": true
+      },
+      "failurePropagation": {
+        "honestStatusMapping": true,
+        "qualified": true
+      },
+      "identityInjection": {
+        "strategy": "generator + ambiguous-identity advisory"
+      },
+      "unsafeStates": {
+        "unavailableCredentials": "UNAVAILABLE or SKIPPED, never COMPLETE",
+        "ambiguousIdentity": "explicit: findings withheld, advisory emitted"
+      }
+    },
+    {
+      "name": "competitor",
+      "phase": 1,
+      "optional": false,
+      "timeoutMs": 25000,
+      "dependsOn": [],
+      "featureFlag": null,
+      "sourceFiles": [
+        "lib/modules/competitor.ts"
+      ],
+      "providers": [
+        "SerpAPI",
+        "Google Places",
+        "Google PageSpeed"
+      ],
+      "providerBoundary": {
+        "rawFetchViolations": [],
+        "qualified": true
+      },
+      "failurePropagation": {
+        "honestStatusMapping": true,
+        "qualified": true
+      },
+      "identityInjection": {
+        "strategy": "generator-constructed with canonical module name"
+      },
+      "unsafeStates": {
+        "unavailableCredentials": "UNAVAILABLE or SKIPPED, never COMPLETE",
+        "ambiguousIdentity": "n/a"
+      }
+    },
+    {
+      "name": "techStack",
+      "phase": 1,
+      "optional": false,
+      "timeoutMs": 15000,
+      "dependsOn": [],
+      "featureFlag": null,
+      "sourceFiles": [
+        "lib/modules/techStack.ts"
+      ],
+      "providers": [
+        "target website (safeFetch)"
+      ],
+      "providerBoundary": {
+        "rawFetchViolations": [],
+        "qualified": true
+      },
+      "failurePropagation": {
+        "honestStatusMapping": true,
+        "qualified": true
+      },
+      "identityInjection": {
+        "strategy": "restamped: f.module = registryName"
+      },
+      "unsafeStates": {
+        "unavailableCredentials": "UNAVAILABLE or SKIPPED, never COMPLETE",
+        "ambiguousIdentity": "n/a"
+      }
+    },
+    {
+      "name": "security",
+      "phase": 1,
+      "optional": false,
+      "timeoutMs": 20000,
+      "dependsOn": [],
+      "featureFlag": "ENABLE_SECURITY_AUDIT_MODULE",
+      "sourceFiles": [
+        "lib/modules/security.ts"
+      ],
+      "providers": [
+        "target website (fetchWithRedirect + validateUrl)"
+      ],
+      "providerBoundary": {
+        "rawFetchViolations": [],
+        "qualified": true
+      },
+      "failurePropagation": {
+        "honestStatusMapping": true,
+        "qualified": true
+      },
+      "identityInjection": {
+        "strategy": "restamped: f.module = registryName"
+      },
+      "unsafeStates": {
+        "unavailableCredentials": "UNAVAILABLE or SKIPPED, never COMPLETE",
+        "ambiguousIdentity": "n/a"
+      }
+    },
+    {
+      "name": "emailFinder",
+      "phase": 1,
+      "optional": true,
+      "timeoutMs": 15000,
+      "dependsOn": [],
+      "featureFlag": null,
+      "sourceFiles": [
+        "lib/modules/emailFinder.ts"
+      ],
+      "providers": [
+        "target website (safeFetch)"
+      ],
+      "providerBoundary": {
+        "rawFetchViolations": [],
+        "qualified": true
+      },
+      "failurePropagation": {
+        "honestStatusMapping": true,
+        "qualified": true
+      },
+      "identityInjection": {
+        "strategy": "generator-constructed with canonical module name"
+      },
+      "unsafeStates": {
+        "unavailableCredentials": "UNAVAILABLE or SKIPPED, never COMPLETE",
+        "ambiguousIdentity": "n/a"
+      }
+    },
+    {
+      "name": "coreWebVitals",
+      "phase": 2,
+      "optional": false,
+      "timeoutMs": 10000,
+      "dependsOn": [
+        "website"
+      ],
+      "featureFlag": "ENABLE_PERFORMANCE_AUDIT_MODULE",
+      "sourceFiles": [
+        "lib/modules/coreWebVitals.ts"
+      ],
+      "providers": [
+        "none (derives from website Lighthouse audits)"
+      ],
+      "providerBoundary": {
+        "rawFetchViolations": [],
+        "qualified": true
+      },
+      "failurePropagation": {
+        "honestStatusMapping": true,
+        "qualified": true
+      },
+      "identityInjection": {
+        "strategy": "restamped: f.module = registryName"
+      },
+      "unsafeStates": {
+        "unavailableCredentials": "UNAVAILABLE or SKIPPED, never COMPLETE",
+        "ambiguousIdentity": "n/a"
+      }
+    },
+    {
+      "name": "schemaAnalysis",
+      "phase": 2,
+      "optional": false,
+      "timeoutMs": 20000,
+      "dependsOn": [
+        "websiteCrawler"
+      ],
+      "featureFlag": null,
+      "sourceFiles": [
+        "lib/modules/schemaAnalysis.ts"
+      ],
+      "providers": [
+        "none (derives from websiteCrawler HTML)"
+      ],
+      "providerBoundary": {
+        "rawFetchViolations": [],
+        "qualified": true
+      },
+      "failurePropagation": {
+        "honestStatusMapping": true,
+        "qualified": true
+      },
+      "identityInjection": {
+        "strategy": "restamped: f.module = registryName"
+      },
+      "unsafeStates": {
+        "unavailableCredentials": "UNAVAILABLE or SKIPPED, never COMPLETE",
+        "ambiguousIdentity": "n/a"
+      }
+    },
+    {
+      "name": "reputation",
+      "phase": 2,
+      "optional": false,
+      "timeoutMs": 30000,
+      "dependsOn": [
+        "gbp"
+      ],
+      "featureFlag": null,
+      "sourceFiles": [
+        "lib/modules/reputation.ts"
+      ],
+      "providers": [
+        "AI provider (Gemini/Vertex)"
+      ],
+      "providerBoundary": {
+        "rawFetchViolations": [],
+        "qualified": true
+      },
+      "failurePropagation": {
+        "honestStatusMapping": true,
+        "qualified": true
+      },
+      "identityInjection": {
+        "strategy": "generator-constructed with canonical module name"
+      },
+      "unsafeStates": {
+        "unavailableCredentials": "UNAVAILABLE or SKIPPED, never COMPLETE",
+        "ambiguousIdentity": "n/a"
+      }
+    },
+    {
+      "name": "social",
+      "phase": 2,
+      "optional": false,
+      "timeoutMs": 30000,
+      "dependsOn": [
+        "website"
+      ],
+      "featureFlag": null,
+      "sourceFiles": [
+        "lib/modules/social.ts"
+      ],
+      "providers": [
+        "target website (safeFetch)"
+      ],
+      "providerBoundary": {
+        "rawFetchViolations": [],
+        "qualified": true
+      },
+      "failurePropagation": {
+        "honestStatusMapping": true,
+        "qualified": true
+      },
+      "identityInjection": {
+        "strategy": "generator-constructed with canonical module name"
+      },
+      "unsafeStates": {
+        "unavailableCredentials": "UNAVAILABLE or SKIPPED, never COMPLETE",
+        "ambiguousIdentity": "n/a"
+      }
+    },
+    {
+      "name": "socialDeep",
+      "phase": 2,
+      "optional": true,
+      "timeoutMs": 45000,
+      "dependsOn": [
+        "social"
+      ],
+      "featureFlag": null,
+      "sourceFiles": [
+        "lib/modules/socialDeep.ts"
+      ],
+      "providers": [
+        "SerpAPI",
+        "AI provider"
+      ],
+      "providerBoundary": {
+        "rawFetchViolations": [],
+        "qualified": true
+      },
+      "failurePropagation": {
+        "honestStatusMapping": true,
+        "qualified": true
+      },
+      "identityInjection": {
+        "strategy": "restamped: f.module = registryName"
+      },
+      "unsafeStates": {
+        "unavailableCredentials": "UNAVAILABLE or SKIPPED, never COMPLETE",
+        "ambiguousIdentity": "n/a"
+      }
+    },
+    {
+      "name": "gbpDeep",
+      "phase": 2,
+      "optional": true,
+      "timeoutMs": 45000,
+      "dependsOn": [
+        "gbp"
+      ],
+      "featureFlag": null,
+      "sourceFiles": [
+        "lib/modules/gbpDeep.ts"
+      ],
+      "providers": [
+        "Google Places"
+      ],
+      "providerBoundary": {
+        "rawFetchViolations": [],
+        "qualified": true
+      },
+      "failurePropagation": {
+        "honestStatusMapping": true,
+        "qualified": true
+      },
+      "identityInjection": {
+        "strategy": "restamped: f.module = registryName"
+      },
+      "unsafeStates": {
+        "unavailableCredentials": "UNAVAILABLE or SKIPPED, never COMPLETE",
+        "ambiguousIdentity": "explicit: findings withheld, advisory emitted"
+      }
+    },
+    {
+      "name": "seoDeep",
+      "phase": 2,
+      "optional": false,
+      "timeoutMs": 60000,
+      "dependsOn": [
+        "website",
+        "websiteCrawler"
+      ],
+      "featureFlag": "ENABLE_SEO_AUDIT_MODULE",
+      "sourceFiles": [
+        "lib/modules/seoDeep.ts"
+      ],
+      "providers": [
+        "SerpAPI",
+        "target website (safeFetch)"
+      ],
+      "providerBoundary": {
+        "rawFetchViolations": [],
+        "qualified": true
+      },
+      "failurePropagation": {
+        "honestStatusMapping": true,
+        "qualified": true
+      },
+      "identityInjection": {
+        "strategy": "restamped: f.module = registryName"
+      },
+      "unsafeStates": {
+        "unavailableCredentials": "UNAVAILABLE or SKIPPED, never COMPLETE",
+        "ambiguousIdentity": "n/a"
+      }
+    },
+    {
+      "name": "accessibility",
+      "phase": 2,
+      "optional": false,
+      "timeoutMs": 45000,
+      "dependsOn": [
+        "website"
+      ],
+      "featureFlag": "ENABLE_ACCESSIBILITY_AUDIT_MODULE",
+      "sourceFiles": [
+        "lib/modules/accessibility.ts"
+      ],
+      "providers": [
+        "headless browser (validated navigation)"
+      ],
+      "providerBoundary": {
+        "rawFetchViolations": [],
+        "qualified": true
+      },
+      "failurePropagation": {
+        "honestStatusMapping": true,
+        "qualified": true
+      },
+      "identityInjection": {
+        "strategy": "restamped: f.module = registryName"
+      },
+      "unsafeStates": {
+        "unavailableCredentials": "UNAVAILABLE or SKIPPED, never COMPLETE",
+        "ambiguousIdentity": "n/a"
+      }
+    },
+    {
+      "name": "mobileUX",
+      "phase": 2,
+      "optional": false,
+      "timeoutMs": 45000,
+      "dependsOn": [
+        "website"
+      ],
+      "featureFlag": null,
+      "sourceFiles": [
+        "lib/modules/mobileUX.ts"
+      ],
+      "providers": [
+        "Google PageSpeed",
+        "headless browser"
+      ],
+      "providerBoundary": {
+        "rawFetchViolations": [],
+        "qualified": true
+      },
+      "failurePropagation": {
+        "honestStatusMapping": true,
+        "qualified": true
+      },
+      "identityInjection": {
+        "strategy": "restamped: f.module = registryName"
+      },
+      "unsafeStates": {
+        "unavailableCredentials": "UNAVAILABLE or SKIPPED, never COMPLETE",
+        "ambiguousIdentity": "n/a"
+      }
+    },
+    {
+      "name": "contentQuality",
+      "phase": 2,
+      "optional": false,
+      "timeoutMs": 60000,
+      "dependsOn": [
+        "websiteCrawler"
+      ],
+      "featureFlag": null,
+      "sourceFiles": [
+        "lib/modules/contentQuality.ts"
+      ],
+      "providers": [
+        "AI provider"
+      ],
+      "providerBoundary": {
+        "rawFetchViolations": [],
+        "qualified": true
+      },
+      "failurePropagation": {
+        "honestStatusMapping": true,
+        "qualified": true
+      },
+      "identityInjection": {
+        "strategy": "restamped: f.module = registryName"
+      },
+      "unsafeStates": {
+        "unavailableCredentials": "UNAVAILABLE or SKIPPED, never COMPLETE",
+        "ambiguousIdentity": "n/a"
+      }
+    },
+    {
+      "name": "conversion",
+      "phase": 2,
+      "optional": false,
+      "timeoutMs": 45000,
+      "dependsOn": [
+        "website"
+      ],
+      "featureFlag": null,
+      "sourceFiles": [
+        "lib/modules/conversion.ts"
+      ],
+      "providers": [
+        "headless browser",
+        "AI provider"
+      ],
+      "providerBoundary": {
+        "rawFetchViolations": [],
+        "qualified": true
+      },
+      "failurePropagation": {
+        "honestStatusMapping": true,
+        "qualified": true
+      },
+      "identityInjection": {
+        "strategy": "restamped: f.module = registryName"
+      },
+      "unsafeStates": {
+        "unavailableCredentials": "UNAVAILABLE or SKIPPED, never COMPLETE",
+        "ambiguousIdentity": "n/a"
+      }
+    },
+    {
+      "name": "citations",
+      "phase": 2,
+      "optional": false,
+      "timeoutMs": 30000,
+      "dependsOn": [
+        "gbp"
+      ],
+      "featureFlag": null,
+      "sourceFiles": [
+        "lib/modules/citations.ts"
+      ],
+      "providers": [
+        "SerpAPI",
+        "directory hosts (fixed)"
+      ],
+      "providerBoundary": {
+        "rawFetchViolations": [],
+        "qualified": true
+      },
+      "failurePropagation": {
+        "honestStatusMapping": true,
+        "qualified": true
+      },
+      "identityInjection": {
+        "strategy": "restamped: f.module = registryName"
+      },
+      "unsafeStates": {
+        "unavailableCredentials": "UNAVAILABLE or SKIPPED, never COMPLETE",
+        "ambiguousIdentity": "n/a"
+      }
+    },
+    {
+      "name": "paidSearch",
+      "phase": 2,
+      "optional": true,
+      "timeoutMs": 30000,
+      "dependsOn": [],
+      "featureFlag": null,
+      "sourceFiles": [
+        "lib/modules/paidSearch.ts"
+      ],
+      "providers": [
+        "SerpAPI"
+      ],
+      "providerBoundary": {
+        "rawFetchViolations": [],
+        "qualified": true
+      },
+      "failurePropagation": {
+        "honestStatusMapping": true,
+        "qualified": true
+      },
+      "identityInjection": {
+        "strategy": "restamped: f.module = registryName"
+      },
+      "unsafeStates": {
+        "unavailableCredentials": "UNAVAILABLE or SKIPPED, never COMPLETE",
+        "ambiguousIdentity": "n/a"
+      }
+    },
+    {
+      "name": "backlinks",
+      "phase": 2,
+      "optional": true,
+      "timeoutMs": 30000,
+      "dependsOn": [],
+      "featureFlag": null,
+      "sourceFiles": [
+        "lib/modules/backlinks.ts"
+      ],
+      "providers": [
+        "SerpAPI"
+      ],
+      "providerBoundary": {
+        "rawFetchViolations": [],
+        "qualified": true
+      },
+      "failurePropagation": {
+        "honestStatusMapping": true,
+        "qualified": true
+      },
+      "identityInjection": {
+        "strategy": "restamped: f.module = registryName"
+      },
+      "unsafeStates": {
+        "unavailableCredentials": "UNAVAILABLE or SKIPPED, never COMPLETE",
+        "ambiguousIdentity": "n/a"
+      }
+    },
+    {
+      "name": "privacyCompliance",
+      "phase": 2,
+      "optional": false,
+      "timeoutMs": 30000,
+      "dependsOn": [
+        "website"
+      ],
+      "featureFlag": null,
+      "sourceFiles": [
+        "lib/modules/privacyCompliance.ts"
+      ],
+      "providers": [
+        "headless browser (validated navigation)"
+      ],
+      "providerBoundary": {
+        "rawFetchViolations": [],
+        "qualified": true
+      },
+      "failurePropagation": {
+        "honestStatusMapping": true,
+        "qualified": true
+      },
+      "identityInjection": {
+        "strategy": "restamped: f.module = registryName"
+      },
+      "unsafeStates": {
+        "unavailableCredentials": "UNAVAILABLE or SKIPPED, never COMPLETE",
+        "ambiguousIdentity": "n/a"
+      }
+    },
+    {
+      "name": "schemaMarkup",
+      "phase": 2,
+      "optional": false,
+      "timeoutMs": 30000,
+      "dependsOn": [
+        "websiteCrawler",
+        "gbp"
+      ],
+      "featureFlag": null,
+      "sourceFiles": [
+        "lib/modules/schemaMarkup.ts"
+      ],
+      "providers": [
+        "target website (safeFetch)"
+      ],
+      "providerBoundary": {
+        "rawFetchViolations": [],
+        "qualified": true
+      },
+      "failurePropagation": {
+        "honestStatusMapping": true,
+        "qualified": true
+      },
+      "identityInjection": {
+        "strategy": "restamped: f.module = registryName"
+      },
+      "unsafeStates": {
+        "unavailableCredentials": "UNAVAILABLE or SKIPPED, never COMPLETE",
+        "ambiguousIdentity": "n/a"
+      }
+    },
+    {
+      "name": "keywordGap",
+      "phase": 2,
+      "optional": false,
+      "timeoutMs": 45000,
+      "dependsOn": [
+        "gbp",
+        "competitor"
+      ],
+      "featureFlag": null,
+      "sourceFiles": [
+        "lib/modules/keywordGap.ts"
+      ],
+      "providers": [
+        "SerpAPI"
+      ],
+      "providerBoundary": {
+        "rawFetchViolations": [],
+        "qualified": true
+      },
+      "failurePropagation": {
+        "honestStatusMapping": true,
+        "qualified": true
+      },
+      "identityInjection": {
+        "strategy": "restamped: f.module = registryName"
+      },
+      "unsafeStates": {
+        "unavailableCredentials": "UNAVAILABLE or SKIPPED, never COMPLETE",
+        "ambiguousIdentity": "n/a"
+      }
+    },
+    {
+      "name": "videoPresence",
+      "phase": 2,
+      "optional": true,
+      "timeoutMs": 30000,
+      "dependsOn": [
+        "competitor"
+      ],
+      "featureFlag": null,
+      "sourceFiles": [
+        "lib/modules/videoPresence.ts"
+      ],
+      "providers": [
+        "SerpAPI",
+        "AI provider"
+      ],
+      "providerBoundary": {
+        "rawFetchViolations": [],
+        "qualified": true
+      },
+      "failurePropagation": {
+        "honestStatusMapping": true,
+        "qualified": true
+      },
+      "identityInjection": {
+        "strategy": "restamped: f.module = registryName"
+      },
+      "unsafeStates": {
+        "unavailableCredentials": "UNAVAILABLE or SKIPPED, never COMPLETE",
+        "ambiguousIdentity": "n/a"
+      }
+    },
+    {
+      "name": "competitorStrategy",
+      "phase": 3,
+      "optional": false,
+      "timeoutMs": 60000,
+      "dependsOn": [
+        "competitor",
+        "seoDeep"
+      ],
+      "featureFlag": null,
+      "sourceFiles": [
+        "lib/modules/competitorStrategy.ts"
+      ],
+      "providers": [
+        "AI provider"
+      ],
+      "providerBoundary": {
+        "rawFetchViolations": [],
+        "qualified": true
+      },
+      "failurePropagation": {
+        "honestStatusMapping": true,
+        "qualified": true
+      },
+      "identityInjection": {
+        "strategy": "restamped: f.module = registryName"
+      },
+      "unsafeStates": {
+        "unavailableCredentials": "UNAVAILABLE or SKIPPED, never COMPLETE",
+        "ambiguousIdentity": "n/a"
+      }
+    },
+    {
+      "name": "vision",
+      "phase": 3,
+      "optional": true,
+      "timeoutMs": 60000,
+      "dependsOn": [
+        "websiteCrawler"
+      ],
+      "featureFlag": null,
+      "sourceFiles": [
+        "lib/modules/vision.ts"
+      ],
+      "providers": [
+        "AI provider (multimodal)"
+      ],
+      "providerBoundary": {
+        "rawFetchViolations": [],
+        "qualified": true
+      },
+      "failurePropagation": {
+        "honestStatusMapping": true,
+        "qualified": true
+      },
+      "identityInjection": {
+        "strategy": "restamped: f.module = registryName"
+      },
+      "unsafeStates": {
+        "unavailableCredentials": "UNAVAILABLE or SKIPPED, never COMPLETE",
+        "ambiguousIdentity": "n/a"
+      }
+    }
+  ]
+}

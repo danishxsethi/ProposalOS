@@ -56,7 +56,7 @@ export async function assertSafeDbRole(client: RoleQueryClient): Promise<DbRoleC
     if (process.env.NODE_ENV === 'production') {
       throw new Error(`P1-06: unsafe database role in production — ${message}`);
     }
-    // eslint-disable-next-line no-console
+
     console.warn(`[dbRoleGuard] ${message} (non-fatal outside production)`);
   }
 

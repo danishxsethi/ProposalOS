@@ -23,7 +23,7 @@ import { v4 as uuidv4 } from 'uuid';
 import type { prisma as appPrismaType } from '@/lib/prisma';
 import type { runWithTenantAsync as runWithTenantAsyncType } from '../context';
 
-const TEST_DB = 'proposal_rls_smoke';
+const TEST_DB = process.env.PROPOSALOS_RLS_TEST_DB || 'proposal_rls_smoke';
 const POSTGRES_PASSWORD = 'password';
 const DIRECT_URL = `postgresql://postgres:${POSTGRES_PASSWORD}@localhost:5435/${TEST_DB}`;
 const POOLED_APP_USER_URL = `postgresql://app_user:${POSTGRES_PASSWORD}@localhost:6432/${TEST_DB}?pgbouncer=true`;
@@ -61,7 +61,7 @@ describe('Multi-Tenant Isolation Stress Test (100 Tenants)', () => {
   beforeAll(async () => {
     // Set database URL to the non-superuser app_user to enforce RLS
     const env = process.env as Record<string, string | undefined>;
-    env.DATABASE_URL = POOLED_APP_USER_URL;
+    env.DATABASE_URL = process.env.PROPOSALOS_RLS_APP_URL || POOLED_APP_USER_URL;
     env.DIRECT_URL = DIRECT_URL;
 
     vi.resetModules();
@@ -125,7 +125,7 @@ describe('Multi-Tenant Isolation Stress Test (100 Tenants)', () => {
             title: `${testTenant.name} - Finding ${i + 1}`,
             description: `This finding belongs to tenant ${testTenant.id}`,
             impactScore: 5 + Math.floor(Math.random() * 5),
-            confidenceScore: 80 + Math.floor(Math.random() * 20),
+        confidenceScore: 8 + Math.floor(Math.random() * 2),
           },
         });
         testTenant.findingIds.push(finding.id);
@@ -181,7 +181,7 @@ describe('Multi-Tenant Isolation Stress Test (100 Tenants)', () => {
         title: 'Global Finding',
         description: 'This should never be accessible',
         impactScore: 10,
-        confidenceScore: 100,
+        confidenceScore: 10,
       },
     });
     globalFindingId = globalFinding.id;
@@ -347,9 +347,9 @@ describe('Multi-Tenant Isolation Stress Test (100 Tenants)', () => {
     it('should handle 1000 concurrent queries without data leakage', async () => {
       const queries = Array.from({ length: 1000 }, (_, i) => {
         const tenant = testTenants[i % TENANT_COUNT]!;
-        return prisma.audit.findMany({
+        return runWithTenantAsync(tenant.id, () => appPrisma.audit.findMany({
           where: { tenantId: tenant.id },
-        });
+        }));
       });
 
       const results = await Promise.all(queries);
@@ -377,7 +377,7 @@ describe('Multi-Tenant Isolation Stress Test (100 Tenants)', () => {
               type: 'PAINKILLER',
               title: 'Concurrent Test Finding',
               impactScore: 5,
-              confidenceScore: 90,
+              confidenceScore: 9,
             },
           })
         );
@@ -512,7 +512,7 @@ describe('Multi-Tenant Isolation Stress Test (100 Tenants)', () => {
           type: 'PAINKILLER',
           title: 'Temp Finding',
           impactScore: 5,
-          confidenceScore: 80,
+          confidenceScore: 8,
         },
       });
 

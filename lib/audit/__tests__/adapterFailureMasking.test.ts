@@ -103,7 +103,7 @@ describe('competitorAdapter (Step 8 regression)', () => {
     expect(result.error).toMatch(/quota/);
   });
 
-  it('reports SKIPPED when the real module says its providers are not configured', async () => {
+  it('reports UNAVAILABLE when the real module says its providers are not configured', async () => {
     vi.mocked(runCompetitorModule).mockResolvedValue({
       moduleId: 'competitor-audit',
       status: 'success',
@@ -120,7 +120,7 @@ describe('competitorAdapter (Step 8 regression)', () => {
       undefined
     );
 
-    expect(result.status).toBe('SKIPPED');
-    expect(result.error).toMatch(/UNAVAILABLE/);
+    expect(result.status).toBe('UNAVAILABLE');
+    expect(result.error).toMatch(/SERP|provider|unavailable/i);
   });
 });

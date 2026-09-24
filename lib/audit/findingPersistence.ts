@@ -15,15 +15,152 @@
  * enforcement point, not the database.
  */
 import { logger } from '@/lib/logger';
+import { containsSecretLike } from '@/lib/modules/types';
 import { prisma } from '@/lib/prisma';
 
 import { RejectedFinding, RuntimeFinding, validateFindingForPersistence } from './findingContract';
 
-import type { Prisma, FindingType as PrismaFindingType } from '@prisma/client';
+import type { Prisma } from '@prisma/client';
 
 export interface PersistFindingsResult {
   persisted: number;
   rejected: RejectedFinding[];
+}
+
+export interface AuditEvidenceInput {
+  module: string;
+  source: string;
+  rawResponse: Prisma.InputJsonValue;
+  collectedAt?: Date;
+  targetUrl?: string | null;
+  providerRequestId?: string | null;
+  methodVersion?: string | null;
+  observationStatus?: string;
+}
+
+export interface PersistAuditResultInput {
+  auditId: string;
+  tenantId: string;
+  findings: unknown[];
+  evidence: AuditEvidenceInput[];
+  auditUpdate: Prisma.AuditUpdateInput;
+}
+
+function validateSnapshotPayload(value: unknown, path = 'rawResponse'): void {
+  if (typeof value === 'string') {
+    if (containsSecretLike(value)) throw new Error(`AUDIT_EVIDENCE_SECRET_REJECTED: ${path}`);
+    return;
+  }
+  if (Array.isArray(value)) {
+    value.forEach((item, index) => validateSnapshotPayload(item, `${path}[${index}]`));
+    return;
+  }
+  if (value && typeof value === 'object') {
+    for (const [key, item] of Object.entries(value)) {
+      if (/^(authorization|cookie|set-cookie|api[_-]?key|secret|password|access[_-]?token|refresh[_-]?token)$/i.test(key)) {
+        throw new Error(`AUDIT_EVIDENCE_SECRET_REJECTED: ${path}.${key}`);
+      }
+      validateSnapshotPayload(item, `${path}.${key}`);
+    }
+  }
+}
+
+export interface PersistAuditResult {
+  persistedFindings: number;
+  persistedEvidence: number;
+  rejectedFindings: RejectedFinding[];
+}
+
+/** Persist the audit's findings, their source snapshots and trust/status atomically. */
+export async function persistAuditResult(input: PersistAuditResultInput): Promise<PersistAuditResult> {
+  const rejectedFindings: RejectedFinding[] = [];
+  const valid: RuntimeFinding[] = [];
+
+  for (const raw of input.findings) {
+    const candidate = raw as Record<string, unknown> | null;
+    const moduleName = typeof candidate?.module === 'string' ? candidate.module : 'unknown';
+    const result = validateFindingForPersistence(raw, {
+      auditId: input.auditId,
+      tenantId: input.tenantId,
+      moduleName,
+    });
+    if (result.ok) {
+      valid.push(result.finding);
+    } else {
+      rejectedFindings.push({
+        module: moduleName,
+        title: typeof candidate?.title === 'string' ? candidate.title : undefined,
+        reason: 'rejected at atomic audit persistence',
+        issues: result.issues,
+      });
+    }
+  }
+  for (const evidence of input.evidence) validateSnapshotPayload(evidence.rawResponse);
+
+  await prisma.$transaction(async (tx) => {
+    if (input.evidence.length > 0) {
+      await tx.evidenceSnapshot.createMany({
+        data: input.evidence.map((snapshot) => ({
+          auditId: input.auditId,
+          tenantId: input.tenantId,
+          module: snapshot.module,
+          source: snapshot.source,
+          rawResponse: snapshot.rawResponse,
+          collectedAt: snapshot.collectedAt ?? new Date(),
+          targetUrl: snapshot.targetUrl ?? null,
+          providerRequestId: snapshot.providerRequestId ?? null,
+          methodVersion: snapshot.methodVersion ?? null,
+          observationStatus: snapshot.observationStatus ?? 'COMPLETE',
+        })),
+      });
+    }
+
+    if (valid.length > 0) {
+      await tx.finding.createMany({
+        data: valid.map((finding) => ({
+          module: finding.module,
+          category: finding.category,
+          type: finding.type,
+          title: finding.title,
+          description: finding.description,
+          evidence: finding.evidence as unknown as Prisma.InputJsonValue,
+          metrics: finding.metrics as unknown as Prisma.InputJsonValue,
+          impactScore: Math.round(finding.impactScore),
+          confidenceScore: Math.round(finding.confidenceScore),
+          effortEstimate: finding.effortEstimate,
+          recommendedFix: finding.recommendedFix as unknown as Prisma.InputJsonValue,
+          auditId: input.auditId,
+          tenantId: input.tenantId,
+          manuallyEdited: false,
+          excluded: false,
+        })),
+      });
+    }
+
+    await tx.audit.update({
+      where: { id: input.auditId, tenantId: input.tenantId },
+      data: input.auditUpdate,
+    });
+  });
+
+  if (rejectedFindings.length > 0) {
+    logger.warn(
+      {
+        event: 'audit.findings_rejected_at_atomic_persistence',
+        auditId: input.auditId,
+        tenantId: input.tenantId,
+        rejectedCount: rejectedFindings.length,
+        rejectedFindings,
+      },
+      `[findingPersistence] Persisted valid findings and rejected ${rejectedFindings.length} malformed finding(s)`
+    );
+  }
+
+  return {
+    persistedFindings: valid.length,
+    persistedEvidence: input.evidence.length,
+    rejectedFindings,
+  };
 }
 
 /**
@@ -82,13 +219,7 @@ export async function persistFindings(
       data: valid.map((f) => ({
         module: f.module,
         category: f.category,
-        // NOTE: lib/modules/types.ts's TS `FindingType` union includes 'POSITIVE' for
-        // forward-compat, but the Prisma `FindingType` enum (pre-existing, unchanged
-        // this wave — a schema migration was not judged necessary for Wave 3) only
-        // defines PAINKILLER/VITAMIN/VISUAL_*. No module currently emits 'POSITIVE';
-        // this cast documents the pre-existing gap rather than silently widening the
-        // runtime contract's accepted set to match the DB enum.
-        type: f.type as unknown as PrismaFindingType,
+        type: f.type,
         title: f.title,
         description: f.description,
         evidence: f.evidence as unknown as Prisma.InputJsonValue,

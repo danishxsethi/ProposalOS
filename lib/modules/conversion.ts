@@ -616,29 +616,11 @@ export async function runConversionModule(
     logger.error({ error, url }, '[Conversion] Analysis failed');
     return {
       moduleId: 'conversion',
-      status: 'success',
+      status: 'failed',
       timestamp: new Date().toISOString(),
-      data: {
-        status: 'error',
-        data: {
-          score: 0,
-          elements: {
-            ctas: { count: 0, aboveFold: 0, texts: [] },
-            phone: { present: false, clickToCall: false, number: null },
-            contactForm: { present: false, onHomepage: false, fields: [] },
-            chat: { present: false, provider: null },
-            booking: { present: false, provider: null },
-            emailCapture: { present: false, type: null },
-            socialProof: { testimonials: false, reviews: false, trustBadges: false },
-            maps: { present: false, provider: null },
-          },
-          missing: ['Analysis failed'],
-          recommendations: [
-            `Conversion analysis failed: ${error instanceof Error ? error.message : 'Unknown error'}. Ensure the URL is accessible.`,
-          ],
-        },
-      },
-    };
+      error: error instanceof Error ? error.message : 'Conversion analysis failed',
+      data: {},
+    } as unknown as LegacyAuditModuleResult;
   } finally {
     if (browserKey) await releaseSharedBrowser(browserKey);
   }

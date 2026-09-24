@@ -299,6 +299,7 @@ describe('audit propose authorization', () => {
     mocks.auditFindFirst.mockResolvedValue({
       id: 'audit-1',
       tenantId: 'tenant-a',
+      trustState: 'TRUSTED',
       businessName: 'Acme Dental',
       businessIndustry: 'Dental',
       businessCity: 'Regina',

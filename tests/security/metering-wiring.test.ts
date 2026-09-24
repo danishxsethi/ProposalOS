@@ -20,6 +20,7 @@ const mocks = vi.hoisted(() => ({
   withAuth: vi.fn(),
   withIdempotency: vi.fn(),
   runAudit: vi.fn(),
+  dispatchAuditExecution: vi.fn(),
   recordAuditTrailEvent: vi.fn(),
   getObservabilityContext: vi.fn(),
   runWithObservabilityContext: vi.fn(),
@@ -64,6 +65,10 @@ vi.mock('@/lib/audit/runner', () => ({
   runAudit: mocks.runAudit,
 }));
 
+vi.mock('@/lib/audit/dispatch', () => ({
+  dispatchAuditExecution: mocks.dispatchAuditExecution,
+}));
+
 vi.mock('@/lib/observability/auditTrail', () => ({
   recordAuditTrailEvent: mocks.recordAuditTrailEvent,
 }));
@@ -97,6 +102,7 @@ vi.mock('@/lib/security/abuseDefense/policies', () => ({
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.trackUsage.mockResolvedValue({ id: 'usage-1', credits: 1 });
+  mocks.dispatchAuditExecution.mockResolvedValue({ id: 'job-1', status: 'QUEUED' });
   mocks.recordAuditTrailEvent.mockResolvedValue(undefined);
   mocks.getObservabilityContext.mockReturnValue({});
   mocks.createObservabilityContextFromRequest.mockReturnValue({});

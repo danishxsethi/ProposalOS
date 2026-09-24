@@ -96,6 +96,13 @@ async function handleProposal(req: Request, { params }: Params): Promise<NextRes
       return NextResponse.json({ error: 'Audit not found' }, { status: 404 });
     }
 
+    if (audit.trustState !== 'TRUSTED') {
+      return NextResponse.json(
+        { error: 'Audit requires review before proposal generation', trustState: audit.trustState },
+        { status: 409 }
+      );
+    }
+
     if (audit.findings.length === 0) {
       return NextResponse.json({ error: 'No findings to generate proposal from' }, { status: 400 });
     }

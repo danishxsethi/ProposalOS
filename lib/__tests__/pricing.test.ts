@@ -366,10 +366,13 @@ describe('Proposal Pricing', () => {
       expect(pricing1.starter).toBe(pricing2.starter);
     });
 
-    it('should handle case-insensitive revenue', () => {
-      const pricing1 = getDynamicPricing({ industry: 'general', revenue: '1M-5M' });
-      const pricing2 = getDynamicPricing({ industry: 'general', revenue: '1m-5m' });
-      expect(pricing1).toEqual(pricing2);
+    it('should reject non-canonical revenue enum values (pricing is case-sensitive)', () => {
+      // DynamicPricingInputSchema enforces the canonical lowercase revenue enum
+      // exactly ('0-100k' | '100k-500k' | '500k-1m' | '1m-5m' | '5m+' | 'unknown').
+      // Case variants like '1M-5M' are invalid input at this customer-money
+      // boundary and must throw a ZodError rather than being silently coerced
+      // into a price multiplier.
+      expect(() => getDynamicPricing({ industry: 'general', revenue: '1M-5M' })).toThrow();
     });
   });
 });

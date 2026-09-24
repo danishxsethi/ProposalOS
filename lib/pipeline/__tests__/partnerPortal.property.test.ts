@@ -3,6 +3,7 @@ import fc from 'fast-check';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { cleanupDb } from '@/lib/__tests__/utils/cleanup';
+import { withTestSystemSetup, withTestTenant } from '@/lib/__tests__/utils/testPrincipal';
 import { prisma } from '@/lib/prisma';
 
 import { deliverLead, getPartnerMetrics, onboardPartner, updateLeadStatus } from '../partnerPortal';
@@ -11,12 +12,12 @@ describe('Partner Portal - Property Tests', () => {
   let tenantId: string;
 
   beforeEach(async () => {
-    const tenant = await prisma.tenant.create({
+    const tenant = await withTestSystemSetup(() => prisma.tenant.create({
       data: {
         name: 'Test Tenant',
         slug: `test-${Date.now()}`,
       },
-    });
+    }));
     tenantId = tenant.id;
   });
 
@@ -62,7 +63,7 @@ describe('Partner Portal - Property Tests', () => {
           // Create prospects for each partner
           const prospects = await Promise.all(
             partnerIds.map((_, idx) =>
-              prisma.prospectLead.create({
+              withTestTenant(tenantId, () => prisma.prospectLead.create({
                 data: {
                   tenantId,
                   source: 'test_partner_portal',
@@ -87,7 +88,7 @@ describe('Partner Portal - Property Tests', () => {
                   decisionMakerEmail: `owner${idx}@business.com`,
                   status: 'QUALIFIED',
                 },
-              })
+              }))
             )
           );
 
@@ -138,7 +139,7 @@ describe('Partner Portal - Property Tests', () => {
           // Create and deliver prospects
           const prospects = await Promise.all(
             statusUpdates.map((_, idx) =>
-              prisma.prospectLead.create({
+              withTestTenant(tenantId, () => prisma.prospectLead.create({
                 data: {
                   tenantId,
                   source: 'test_partner_portal',
@@ -163,7 +164,7 @@ describe('Partner Portal - Property Tests', () => {
                   decisionMakerEmail: `owner${idx}@business.com`,
                   status: 'QUALIFIED',
                 },
-              })
+              }))
             )
           );
 
@@ -224,7 +225,7 @@ describe('Partner Portal - Property Tests', () => {
           });
 
           // Create prospect
-          const prospect = await prisma.prospectLead.create({
+          const prospect = await withTestTenant(tenantId, () => prisma.prospectLead.create({
             data: {
               tenantId,
               source: 'test_partner_portal',
@@ -249,7 +250,7 @@ describe('Partner Portal - Property Tests', () => {
               decisionMakerEmail: prospectData.decisionMakerEmail,
               status: 'QUALIFIED',
             },
-          });
+          }));
 
           // Deliver lead
           const packagedLead = await deliverLead(partnerId, prospect.id);

@@ -2,6 +2,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { v4 as uuidv4 } from 'uuid';
 
 import { cleanupDb } from '@/lib/__tests__/utils/cleanup';
+import { withTestTenant, withTestSystemSetup } from '@/lib/__tests__/utils/testPrincipal';
 /**
  * Unit Tests for Human Review Queue
  *
@@ -28,8 +29,7 @@ describe('Human Review Queue', () => {
 
   beforeEach(async () => {
     // Clean up test data and recreate test tenant with bypass
-    const { runWithTenantBypass } = await import('@/lib/tenant/context');
-    await runWithTenantBypass('test-cleanup', async () => {
+    await withTestSystemSetup(async () => {
       await cleanupDb(prisma);
       await prisma.tenant.create({
         data: {
@@ -44,16 +44,16 @@ describe('Human Review Queue', () => {
 
   afterEach(async () => {
     // Clean up test data with bypass
-    const { runWithTenantBypass } = await import('@/lib/tenant/context');
-    await runWithTenantBypass('test-cleanup', () => cleanupDb(prisma));
+    await withTestSystemSetup(() => cleanupDb(prisma));
   });
 
+  const tenantIt = (name: string, fn: () => Promise<void>) =>
+    it(name, () => withTestTenant(testTenantId, fn));
+
   describe('Routing Logic', () => {
-    it('should route prospect to review queue', async () => {
+    tenantIt('should route prospect to review queue', async () => {
       // Create test prospect with bypass or proper context
-      const { runWithTenantAsync } = await import('@/lib/tenant/context');
-      const prospect = await runWithTenantAsync(testTenantId, () =>
-        prisma.prospectLead.create({
+      const prospect = await prisma.prospectLead.create({
           data: {
             tenantId: testTenantId,
             businessName: 'Test Business',
@@ -66,8 +66,7 @@ describe('Human Review Queue', () => {
             painBreakdown: { websiteSpeed: 20, mobileBroken: 15 },
             engagementScore: 85,
           },
-        })
-      );
+        });
 
       testProspectIds.push(prospect.id);
 
@@ -93,7 +92,7 @@ describe('Human Review Queue', () => {
   });
 
   describe('Review Queue Retrieval', () => {
-    it('should get review queue with default filters', async () => {
+    tenantIt('should get review queue with default filters', async () => {
       // Create test prospects
       const prospects = await Promise.all([
         prisma.prospectLead.create({
@@ -135,7 +134,7 @@ describe('Human Review Queue', () => {
       expect(queue.items[0].engagementScore).toBeGreaterThanOrEqual(queue.items[1].engagementScore);
     });
 
-    it('should filter by vertical', async () => {
+    tenantIt('should filter by vertical', async () => {
       const prospects = await Promise.all([
         prisma.prospectLead.create({
           data: {
@@ -177,7 +176,7 @@ describe('Human Review Queue', () => {
       expect(queue.items[0].prospect.vertical).toBe('dental');
     });
 
-    it('should filter by engagement score', async () => {
+    tenantIt('should filter by engagement score', async () => {
       const prospects = await Promise.all([
         prisma.prospectLead.create({
           data: {
@@ -219,7 +218,7 @@ describe('Human Review Queue', () => {
       expect(queue.items[0].engagementScore).toBeGreaterThanOrEqual(80);
     });
 
-    it('should support pagination', async () => {
+    tenantIt('should support pagination', async () => {
       // Create 5 prospects
       const prospects = await Promise.all(
         Array.from({ length: 5 }, (_, i) =>
@@ -264,7 +263,7 @@ describe('Human Review Queue', () => {
   });
 
   describe('Approve/Reject Workflows', () => {
-    it('should approve prospect and log action', async () => {
+    tenantIt('should approve prospect and log action', async () => {
       const prospect = await prisma.prospectLead.create({
         data: {
           tenantId: testTenantId,
@@ -309,7 +308,7 @@ describe('Human Review Queue', () => {
       expect(logs[0].errorMessage).toContain('operator@test.com');
     });
 
-    it('should reject prospect and log action with reason', async () => {
+    tenantIt('should reject prospect and log action with reason', async () => {
       const prospect = await prisma.prospectLead.create({
         data: {
           tenantId: testTenantId,
@@ -357,7 +356,7 @@ describe('Human Review Queue', () => {
   });
 
   describe('Prospect Context', () => {
-    it('should get full prospect context', async () => {
+    tenantIt('should get full prospect context', async () => {
       const prospect = await prisma.prospectLead.create({
         data: {
           tenantId: testTenantId,
@@ -384,14 +383,14 @@ describe('Human Review Queue', () => {
       expect(context?.engagementScore).toBe(85);
     });
 
-    it('should return null for non-existent prospect', async () => {
+    tenantIt('should return null for non-existent prospect', async () => {
       const context = await getProspectContext('non-existent-id');
       expect(context).toBeNull();
     });
   });
 
   describe('Manual Status Override', () => {
-    it('should override prospect status and log action', async () => {
+    tenantIt('should override prospect status and log action', async () => {
       const prospect = await prisma.prospectLead.create({
         data: {
           tenantId: testTenantId,
@@ -438,7 +437,7 @@ describe('Human Review Queue', () => {
   });
 
   describe('Review Queue Statistics', () => {
-    it('should calculate queue statistics', async () => {
+    tenantIt('should calculate queue statistics', async () => {
       // Create test prospects
       await Promise.all([
         prisma.prospectLead.create({

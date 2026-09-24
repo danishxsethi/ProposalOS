@@ -46,8 +46,12 @@ export const authConfig = {
         // Add issued at time for token age verification
         token.iat = Date.now();
       }
-      if (trigger === 'update' && session) {
-        token = { ...token, ...session.user };
+      if (trigger === 'update' && session?.user) {
+        // Session updates are client-controlled. Only copy presentation fields;
+        // identity, tenant, role, permissions, and admin claims are server authority.
+        const update = session.user as Record<string, unknown>;
+        if (typeof update.name === 'string') token.name = update.name.slice(0, 200);
+        if (typeof update.image === 'string' && update.image.length <= 2048) token.picture = update.image;
       }
       return token;
     },

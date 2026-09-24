@@ -70,7 +70,7 @@ async function handleAuditCreation(req: Request): Promise<NextResponse> {
         const { url, industry, businessName, businessCity, placeId } = result.data;
 
         // Ops-key bypass: internal requests are completely exempt from quota limits and never touch quota checks
-        const isInternalOps = isInternalOpsRequest(req) || Boolean(req.headers.get('x-internal-ops-key'));
+        const isInternalOps = isInternalOpsRequest(req);
 
         // Check Daily Quota (bypassed for internal ops)
         const { checkDailyAuditLimit, incrementAuditCount } =

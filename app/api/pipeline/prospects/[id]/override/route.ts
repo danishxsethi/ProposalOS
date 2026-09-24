@@ -23,12 +23,11 @@ import {
   ValidationError,
 } from '@/lib/api/errors';
 import { logger } from '@/lib/logger';
-import { auth } from '@/lib/auth';
 import { withRateLimit } from '@/lib/middleware/rateLimit';
 import { withRole } from '@/lib/middleware/withRole';
 import { overrideProspectStatus } from '@/lib/pipeline/humanReview';
 import { prisma } from '@/lib/prisma';
-import { getTenantId, runWithTenantAsync, runWithTenantBypass } from '@/lib/tenant/context';
+import { getTenantId, runWithTenantAsync } from '@/lib/tenant/context';
 
 interface Params {
   params: Promise<{ id: string }>;
@@ -42,15 +41,6 @@ const statusOverrideSchema = z.object({
   reason: z.string().min(1).max(500),
 });
 
-export async function resolveProspectTenantForOverride(prospectId: string) {
-  return runWithTenantBypass('prospect-override-route-fallback-tenant-discovery', () =>
-    prisma.prospectLead.findUnique({
-      where: { id: prospectId },
-      select: { tenantId: true },
-    })
-  );
-}
-
 /**
  * Inner handler for status override
  */
@@ -59,9 +49,15 @@ async function handleStatusOverride(req: NextRequest, params: Params): Promise<N
   const { id } = await params.params;
 
   try {
-    const session = await auth();
     const tenantId = (await getTenantId()) || '';
 
+    if (!tenantId) {
+      return NextResponse.json(
+        new UnauthorizedError('Authenticated tenant context required').toEnvelope(req.url, traceId),
+        { status: 401 }
+      );
+    }
+    const session = await import('@/lib/auth').then(({ auth }) => auth());
     if (!session?.user?.id || !session?.user?.email) {
       return NextResponse.json(
         new UnauthorizedError('Authentication required').toEnvelope(req.url, traceId),
@@ -87,9 +83,9 @@ async function handleStatusOverride(req: NextRequest, params: Params): Promise<N
     const { newStatus, reason } = result.data;
 
     const executeOverride = async () => {
-      const prospect = await prisma.prospectLead.findUnique({
-        where: { id },
-        select: { id: true },
+      const prospect = await prisma.prospectLead.findFirst({
+        where: { id, tenantId },
+        select: { id: true, tenantId: true },
       });
 
       if (!prospect) {
@@ -108,18 +104,6 @@ async function handleStatusOverride(req: NextRequest, params: Params): Promise<N
       response.headers.set('X-Trace-Id', traceId);
       return response;
     };
-
-    if (!tenantId) {
-      const prospect = await resolveProspectTenantForOverride(id);
-
-      if (!prospect?.tenantId) {
-        return NextResponse.json(new NotFoundError('Prospect', id).toEnvelope(req.url, traceId), {
-          status: 404,
-        });
-      }
-
-      return runWithTenantAsync(prospect.tenantId, executeOverride);
-    }
 
     return runWithTenantAsync(tenantId, executeOverride);
   } catch (error) {

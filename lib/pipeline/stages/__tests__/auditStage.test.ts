@@ -50,8 +50,16 @@ vi.mock('../../metrics', () => ({
 }));
 
 const mockRunAudit = vi.fn();
+const mockDispatchAuditExecution = vi.fn();
+const mockProcessAuditJob = vi.fn();
 vi.mock('@/lib/audit/runner', () => ({
   runAudit: (...args: any[]) => mockRunAudit(...args),
+}));
+vi.mock('@/lib/audit/dispatch', () => ({
+  dispatchAuditExecution: (...args: unknown[]) => mockDispatchAuditExecution(...args),
+}));
+vi.mock('@/lib/queue/auditJobWorker', () => ({
+  processAuditJob: (...args: unknown[]) => mockProcessAuditJob(...args),
 }));
 
 import { processAuditStage, processOneAudit } from '../auditStage';
@@ -73,7 +81,7 @@ function makeProspect(overrides: Record<string, any> = {}) {
 }
 
 function makeAudit(id = 'audit-1') {
-  return { id, tenantId: 'tenant-1', status: 'QUEUED' };
+  return { id, tenantId: 'tenant-1', status: 'QUEUED', trustState: 'PENDING' };
 }
 
 // --- Tests ---
@@ -86,6 +94,7 @@ describe('Audit Stage', () => {
     mockAuditFindUnique.mockResolvedValue({
       id: 'audit-1',
       status: 'COMPLETE',
+      trustState: 'TRUSTED',
       apiCostCents: 42,
       modulesCompleted: ['website', 'gbp'],
     });
@@ -100,6 +109,8 @@ describe('Audit Stage', () => {
     mockErrorLogCreate.mockResolvedValue({});
     mockLogStageFailure.mockResolvedValue(undefined);
     mockRunAudit.mockResolvedValue(undefined);
+    mockDispatchAuditExecution.mockImplementation(async ({ auditId }: { auditId: string }) => ({ id: `job-${auditId}` }));
+    mockProcessAuditJob.mockResolvedValue({ outcome: 'SUCCEEDED' });
   });
 
   describe('processOneAudit', () => {
@@ -107,7 +118,8 @@ describe('Audit Stage', () => {
       mockFindUnique.mockResolvedValue(makeProspect());
       mockAuditFindUnique.mockResolvedValue({
         id: 'audit-1',
-        status: 'COMPLETE',
+      status: 'COMPLETE',
+      trustState: 'TRUSTED',
         apiCostCents: 42,
         modulesCompleted: ['website', 'gbp'],
       });
@@ -120,19 +132,20 @@ describe('Audit Stage', () => {
       expect(mockTransition).toHaveBeenCalledWith('prospect-1', 'audited', 'audit');
     });
 
-    it('transitions to "audited" when orchestrator returns PARTIAL', async () => {
+    it('transitions to audit_failed when audit trust state is partial', async () => {
       mockFindUnique.mockResolvedValue(makeProspect());
       mockAuditFindUnique.mockResolvedValue({
         id: 'audit-1',
         status: 'PARTIAL',
+        trustState: 'DEGRADED_REVIEW_REQUIRED',
         apiCostCents: 42,
         modulesCompleted: ['website'],
       });
 
       const result = await processOneAudit('prospect-1');
 
-      expect(result.success).toBe(true);
-      expect(result.toStatus).toBe('audited');
+      expect(result.success).toBe(false);
+      expect(result.toStatus).toBe('audit_failed');
     });
 
     it('transitions to "audit_failed" when orchestrator returns FAILED', async () => {
@@ -152,7 +165,7 @@ describe('Audit Stage', () => {
 
     it('transitions to "audit_failed" when orchestrator throws', async () => {
       mockFindUnique.mockResolvedValue(makeProspect());
-      mockRunAudit.mockRejectedValue(new Error('Network timeout'));
+      mockProcessAuditJob.mockRejectedValue(new Error('Network timeout'));
       mockAuditFindUnique.mockResolvedValue({
         id: 'audit-1',
         status: 'FAILED',
@@ -248,6 +261,7 @@ describe('Audit Stage', () => {
       mockAuditFindUnique.mockResolvedValue({
         id: 'audit-1',
         status: 'COMPLETE',
+        trustState: 'TRUSTED',
         apiCostCents: 42,
         modulesCompleted: ['website', 'gbp'],
       });

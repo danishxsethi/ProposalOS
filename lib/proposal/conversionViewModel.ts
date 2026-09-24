@@ -14,7 +14,6 @@
  * 10. Pricing Urgency / Expiry Date
  */
 
-import { calculateFindingROI, INDUSTRY_ROI_BENCHMARKS } from './roiCalculator';
 import {
   CANONICAL_OFFERS,
   formatDollar,
@@ -27,6 +26,7 @@ import {
   RiskReversalGuarantee,
   SocialProofCaseStudy,
 } from './offers';
+import { calculateFindingROI, INDUSTRY_ROI_BENCHMARKS } from './roiCalculator';
 
 export interface QuantifiedFinding {
   id: string;

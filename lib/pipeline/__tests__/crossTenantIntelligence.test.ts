@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { cleanupDb } from '@/lib/__tests__/utils/cleanup';
 import { prisma } from '@/lib/prisma';
+import { withTestSystemSetup } from '@/lib/__tests__/utils/testPrincipal';
 
 import {
   aggregatePatterns,
@@ -46,9 +47,9 @@ describe('Cross-Tenant Intelligence', () => {
 
       await aggregatePatterns('tenant-1', outcomes);
 
-      const model = await prisma.sharedIntelligenceModel.findFirst({
+      const model = await withTestSystemSetup(() => prisma.sharedIntelligenceModel.findFirst({
         where: { isActive: true },
-      });
+      }));
 
       expect(model).toBeDefined();
       expect(model?.patterns).toBeDefined();
@@ -69,9 +70,9 @@ describe('Cross-Tenant Intelligence', () => {
 
       await aggregatePatterns('tenant-1', outcomes);
 
-      const model = await prisma.sharedIntelligenceModel.findFirst({
+      const model = await withTestSystemSetup(() => prisma.sharedIntelligenceModel.findFirst({
         where: { isActive: true },
-      });
+      }));
 
       const patterns = model?.patterns as any[];
       const pattern = patterns.find((p) => p.vertical === 'hvac');
@@ -81,7 +82,7 @@ describe('Cross-Tenant Intelligence', () => {
     it('should handle empty outcomes', async () => {
       await aggregatePatterns('tenant-1', []);
 
-      const models = await prisma.sharedIntelligenceModel.findMany();
+      const models = await withTestSystemSetup(() => prisma.sharedIntelligenceModel.findMany());
       expect(models.length).toBe(0);
     });
 
@@ -97,9 +98,9 @@ describe('Cross-Tenant Intelligence', () => {
       await aggregatePatterns('tenant-1', outcomes1);
       await aggregatePatterns('tenant-1', outcomes2);
 
-      const activeModels = await prisma.sharedIntelligenceModel.findMany({
+      const activeModels = await withTestSystemSetup(() => prisma.sharedIntelligenceModel.findMany({
         where: { isActive: true },
-      });
+      }));
 
       expect(activeModels.length).toBe(1);
     });
@@ -186,15 +187,15 @@ describe('Cross-Tenant Intelligence', () => {
       ];
 
       await aggregatePatterns('tenant-1', outcomes1);
-      const model1 = await prisma.sharedIntelligenceModel.findFirst({
+      const model1 = await withTestSystemSetup(() => prisma.sharedIntelligenceModel.findFirst({
         where: { isActive: true },
-      });
+      }));
       const version1 = model1?.version;
 
       await aggregatePatterns('tenant-1', outcomes2);
-      const model2 = await prisma.sharedIntelligenceModel.findFirst({
+      const model2 = await withTestSystemSetup(() => prisma.sharedIntelligenceModel.findFirst({
         where: { isActive: true },
-      });
+      }));
       const version2 = model2?.version;
 
       expect(version1).not.toBe(version2);
@@ -202,9 +203,9 @@ describe('Cross-Tenant Intelligence', () => {
       // Rollback to version 1
       await rollbackModel(version1!);
 
-      const activeModel = await prisma.sharedIntelligenceModel.findFirst({
+      const activeModel = await withTestSystemSetup(() => prisma.sharedIntelligenceModel.findFirst({
         where: { isActive: true },
-      });
+      }));
 
       expect(activeModel?.version).toBe(version1);
     });

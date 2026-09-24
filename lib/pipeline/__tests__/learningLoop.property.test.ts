@@ -76,7 +76,7 @@ const outreachOutcomeArb = fc.record({
 const winLossDataArb = fc.record({
   outcome: fc.constantFrom<'won' | 'lost' | 'ghosted'>('won', 'lost', 'ghosted'),
   tierChosen: fc.option(fc.constantFrom('Essentials', 'Growth', 'Premium'), { nil: undefined }),
-  dealValue: fc.option(fc.double({ min: 100, max: 10000 }), { nil: undefined }),
+  dealValue: fc.option(fc.double({ min: 100, max: 10000, noNaN: true }), { nil: undefined }),
   lostReason: fc.option(fc.constantFrom('price', 'timing', 'competitor', 'no_response'), {
     nil: undefined,
   }),

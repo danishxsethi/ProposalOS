@@ -21,12 +21,12 @@ import { generateProposal } from '@/lib/proposal/runner';
 import { runWithTenantAsync, runWithTenantBypass } from '@/lib/tenant/context';
 
 import {
+  type AuditJobRecord,
   claimJob,
   HEARTBEAT_INTERVAL_MS,
   heartbeatJob,
   markJobFailed,
   markJobSucceeded,
-  type AuditJobRecord,
 } from './auditJobQueue';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -87,7 +87,7 @@ export async function processAuditJob(
     return { outcome: 'LOCK_CONTENTION', jobId };
   }
 
-  const { tenantId, auditId, attempts, maxAttempts, leaseToken } = claimed;
+  const { tenantId, auditId, attempts, maxAttempts, leaseToken, generateProposal: shouldGenerateProposal } = claimed;
 
   await recordAuditTrailEvent({
     eventType: 'worker.job_claimed',
@@ -137,15 +137,15 @@ export async function processAuditJob(
         // Step 2: Generate Proposal if audit succeeded
         const audit = await prisma.audit.findUnique({
           where: { id: auditId },
-          select: { status: true },
+          select: { status: true, trustState: true },
         });
 
-        if (audit?.status === 'COMPLETE' || audit?.status === 'PARTIAL') {
+        if (shouldGenerateProposal !== false && audit?.status === 'COMPLETE' && audit.trustState === 'TRUSTED') {
           await generateProposal(auditId);
         } else {
           logger.warn(
-            { event: 'worker.skipping_proposal', jobId, auditId, auditStatus: audit?.status },
-            'Worker: skipping proposal generation — audit did not complete successfully'
+            { event: 'worker.skipping_proposal', jobId, auditId, auditStatus: audit?.status, trustState: audit?.trustState },
+            'Worker: skipping proposal generation — audit is not trusted or proposal generation was disabled'
           );
         }
       });
@@ -212,7 +212,7 @@ export async function processAuditJob(
     await runWithTenantAsync(tenantId, () =>
       prisma.audit.update({
         where: { id: auditId },
-        data: { status: 'FAILED' },
+        data: { status: 'FAILED', trustState: 'FAILED', completedAt: new Date() },
       })
     )
       .catch((e) =>

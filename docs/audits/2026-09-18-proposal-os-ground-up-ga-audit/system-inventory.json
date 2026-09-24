@@ -1,0 +1,12 @@
+{
+  "commit": "88967f1323313b519625dd4a61451fa884c51fd5",
+  "tree": "61839351e95839cc1d2a3ba4d2c1cb6d3603ffc3",
+  "trackedFiles": 1473,
+  "apiRouteFiles": 146,
+  "auditModuleFiles": 27,
+  "testFilesObserved": 249,
+  "services": ["Next.js app/API", "Prisma/PostgreSQL", "AuditJob worker route", "LangGraph diagnosis/proposal", "Email", "Stripe", "GCS/PDF", "Terraform/GCP"],
+  "notObservedAsCurrentRuntime": ["Temporal", "n8n production workflows", "Dify production workflow", "Cloud Run revision", "image digest", "live database", "running worker", "LangSmith trace"],
+  "sourceTruth": "substantial implementation with conflicting paths",
+  "runtimeTruth": "blocked/not evidenced"
+}

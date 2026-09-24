@@ -19,8 +19,8 @@ import {
   UnauthorizedError,
   ValidationError,
 } from '@/lib/api/errors';
-import { logger } from '@/lib/logger';
 import { auth } from '@/lib/auth';
+import { logger } from '@/lib/logger';
 import { withRateLimit } from '@/lib/middleware/rateLimit';
 import { withRole } from '@/lib/middleware/withRole';
 import { onboardPartner, PartnerConfig } from '@/lib/pipeline/partnerPortal';

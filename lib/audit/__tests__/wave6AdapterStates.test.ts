@@ -88,10 +88,10 @@ describe('Wave 6 canonical adapter state mapping', () => {
       tracker
     );
 
-    expect(social.status).toBe('SKIPPED');
-    expect(social.error).toMatch(/UNAVAILABLE/);
+    expect(social.status).toBe('UNAVAILABLE');
+    expect(social.error).toMatch(/SERP_API_KEY missing/);
     expect(mobile.status).toBe('FAILED');
-    expect(backlinks.status).toBe('SKIPPED');
+    expect(backlinks.status).toBe('UNAVAILABLE');
   });
 
   it('maps partial output to PARTIAL and forwards canonical GBP dependency data', async () => {

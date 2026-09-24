@@ -123,6 +123,7 @@ export async function runTechStackModule(
     return {
       findings: [],
       evidenceSnapshots: [],
+      execution: { state: 'unavailable', reason: error instanceof Error ? error.message : 'Website fetch failed' },
     };
   }
 }

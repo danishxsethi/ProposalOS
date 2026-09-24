@@ -528,33 +528,10 @@ async function executeCrawl(
   } catch (error) {
     logger.error({ error, businessName: input.businessName }, '[WebsiteCrawler] Crawl failed');
 
-    // Return error as a finding
     return {
-      findings: [
-        {
-          type: 'PAINKILLER',
-          category: 'Technical SEO',
-          title: 'Website Crawl Failed',
-          description: `Unable to crawl website: ${error instanceof Error ? error.message : 'Unknown error'}`,
-          impactScore: 3,
-          confidenceScore: normalizeConfidence(50, '0-100'),
-          evidence: [
-            {
-              type: 'text',
-              value: error instanceof Error ? error.message : 'Unknown error',
-              label: 'Error',
-            },
-          ],
-          metrics: {},
-          effortEstimate: 'LOW',
-          recommendedFix: [
-            'Verify website URL is accessible',
-            'Check if site is blocking crawlers',
-            'Ensure no server firewall issues',
-          ],
-        },
-      ],
+      findings: [],
       evidenceSnapshots: [],
+      execution: { state: 'unavailable', reason: error instanceof Error ? error.message : 'Website crawl failed' },
     };
   }
 }

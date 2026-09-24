@@ -3,6 +3,7 @@ import { createHash, timingSafeEqual } from 'crypto';
 import { NextResponse } from 'next/server';
 
 import { auth } from '@/lib/auth';
+import { runWithTenantAsync } from '@/lib/tenant/context';
 
 /**
  * Role definitions for the Proposal Engine
@@ -296,7 +297,7 @@ export function hasPermission(currentRole: Role | undefined, permission: string)
 export function withRole(role: Role, handler: Function) {
   return async (req: Request, ...args: any[]) => {
     if (matchesInternalOpsKey(req)) {
-      return handler(req, ...args);
+      return NextResponse.json({ error: 'Platform operator role is not granted by internal ops credentials' }, { status: 403 });
     }
 
     // 1. Check for API key in headers
@@ -309,7 +310,14 @@ export function withRole(role: Role, handler: Function) {
       // Platform env key — server-to-server only; timing-safe compare.
       // Does not grant via tenant-scoped pe_live_* scopes.
       if (matchesEnvApiKey(token)) {
-        return handler(req, ...args);
+        if (role === 'super_admin') {
+          return NextResponse.json({ error: 'Platform administrator session required' }, { status: 403 });
+        }
+        const tenantId = process.env.DEFAULT_TENANT_ID?.trim();
+        if (!tenantId) {
+          return NextResponse.json({ error: 'Server API key is not bound to a tenant' }, { status: 503 });
+        }
+        return runWithTenantAsync(tenantId, () => handler(req, ...args));
       }
 
       if (token.startsWith('pe_live_')) {
@@ -317,7 +325,7 @@ export function withRole(role: Role, handler: Function) {
         const validation = await validateApiKey(token);
         if (validation && !('error' in validation)) {
           if (apiKeySatisfiesRole(validation.scopes, role)) {
-            return handler(req, ...args);
+            return runWithTenantAsync(validation.tenantId, () => handler(req, ...args));
           }
         }
         return NextResponse.json({ error: 'Forbidden: Insufficient Permissions' }, { status: 403 });
@@ -331,7 +339,11 @@ export function withRole(role: Role, handler: Function) {
       return NextResponse.json({ error: 'Forbidden: Insufficient Permissions' }, { status: 403 });
     }
 
-    return handler(req, ...args);
+    const tenantId = (session?.user as { tenantId?: unknown } | undefined)?.tenantId;
+    if (typeof tenantId !== 'string' || !tenantId.trim()) {
+      return NextResponse.json({ error: 'Tenant context required' }, { status: 403 });
+    }
+    return runWithTenantAsync(tenantId, () => handler(req, ...args));
   };
 }
 
@@ -358,7 +370,11 @@ export function withPermission(permission: string, handler: Function) {
 
     if (token) {
       if (matchesEnvApiKey(token)) {
-        return handler(req, ...args);
+        const tenantId = process.env.DEFAULT_TENANT_ID?.trim();
+        if (!tenantId) {
+          return NextResponse.json({ error: 'Server API key is not bound to a tenant' }, { status: 503 });
+        }
+        return runWithTenantAsync(tenantId, () => handler(req, ...args));
       }
 
       if (token.startsWith('pe_live_')) {
@@ -366,7 +382,7 @@ export function withPermission(permission: string, handler: Function) {
         const validation = await validateApiKey(token);
         if (validation && !('error' in validation)) {
           if (apiKeySatisfiesPermission(validation.scopes, permission)) {
-            return handler(req, ...args);
+            return runWithTenantAsync(validation.tenantId, () => handler(req, ...args));
           }
         }
         return NextResponse.json({ error: 'Forbidden: Insufficient Permissions' }, { status: 403 });
@@ -380,7 +396,11 @@ export function withPermission(permission: string, handler: Function) {
       return NextResponse.json({ error: 'Forbidden: Insufficient Permissions' }, { status: 403 });
     }
 
-    return handler(req, ...args);
+    const tenantId = (session?.user as { tenantId?: unknown } | undefined)?.tenantId;
+    if (typeof tenantId !== 'string' || !tenantId.trim()) {
+      return NextResponse.json({ error: 'Tenant context required' }, { status: 403 });
+    }
+    return runWithTenantAsync(tenantId, () => handler(req, ...args));
   };
 }
 

@@ -96,7 +96,14 @@ export function hasContractValidEvidence(evidence: unknown): boolean {
 
 // ─── Finding ─────────────────────────────────────────────────────────────────
 
-const FindingTypeSchema = z.enum(['PAINKILLER', 'VITAMIN', 'POSITIVE']);
+const FindingTypeSchema = z.enum([
+  'PAINKILLER',
+  'VITAMIN',
+  'POSITIVE',
+  'VISUAL_UX',
+  'VISUAL_DESIGN',
+  'VISUAL_COMPARISON',
+]);
 const EffortLevelSchema = z.enum(['LOW', 'MEDIUM', 'HIGH']);
 
 /**
