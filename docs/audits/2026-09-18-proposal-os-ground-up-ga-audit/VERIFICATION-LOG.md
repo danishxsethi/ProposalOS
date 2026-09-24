@@ -111,3 +111,31 @@ Source identity remains branch `remediation/proposalos-e2e`, HEAD `88967f1323313
 | Live providers / GCP / production data | NOT RUN |
 
 R3 acceptance is NOT ESTABLISHED. Remaining release gates include resolution/explicit risk acceptance for full-suite failures and dependency advisories; the 27-module provider/failure/identity matrix; real PostgreSQL worker crash/reclaim/stale-worker acceptance; transaction fault injection; representative legacy-data migration verification; exhaustive route tenant A → tenant B matrix; and public proposal mutation sweep. No production tenant enforcement was relaxed. No commit, push, merge, or deployment occurred.
+
+## GA Remediation Campaign 4 (2026-09-24)
+
+Starting source identity: branch `remediation/proposalos-e2e`, HEAD `88967f1323313b519625dd4a61451fa884c51fd5`, tree `61839351e95839cc1d2a3ba4d2c1cb6d3603ffc3`; prior R1/R2/R3 worktree and audit artifacts preserved. Ending source identity after commit/push: branch `remediation/proposalos-e2e`, HEAD `848620769266abc24216b0cf32862c9277089d10`, tree `48900a6885a985a3cd774c2ccd7eb6b7ccc385cb`, upstream `origin/remediation/proposalos-e2e`, clean worktree. No merge or deployment occurred.
+
+| Command / observation | Result |
+| --- | --- |
+| Failure authority parse of `/tmp/proposalos-r3-full-tests-final3.json` | CONFIRMED: 26 failing suites / 21 failing tests across outreach, pricing, auth boundary, SSRF, self-serve, legacy orchestrator, and rate limits |
+| Outreach failures (`outreachE2ESandbox`, `outreach.property`, `signalDetector.property`) | CLOSED: generator/fixture and sandbox grounding corrected without counting simulated delivery as real |
+| Pricing + self-serve failures | CLOSED: strict canonical pricing input retained; self-serve fixture brought into the hardened evidence/grounding contract |
+| Auth/session, SSRF, rate-limit, legacy orchestrator failures | CLOSED: 4 files / 17 tests pass; NPS classified as token-gated public, raw-fetch allowlist updated to current fixed-host/env targets, orchestrator mocked at module boundary |
+| Module qualification matrix (`tests/matrix/module-provider-matrix.test.ts`) | PASS: 41 tests; artifact `docs/audits/.../artifacts/module-matrix.json` reports expected/actual 27 modules, qualified=true |
+| Real PostgreSQL persistence fault injection (`tests/fault-injection/auditPersistenceFaultInjection.test.ts`) | PASS: evidence-stage, finding-stage, and finalization faults roll back with no partial rows; retry writes exactly once |
+| Real PostgreSQL worker lease/crash/reclaim (`tests/worker/auditJobWorkerCrashReclaim.test.ts`) | PASS: 9 tests cover claim/heartbeat/expiry/reclaim/stale-worker rejection/no double finalization/retry/enqueue idempotence/proposal gating |
+| Representative legacy migration (`scripts/check-legacy-migration.sh`) | PASS: 26/26 checks; artifact `artifacts/legacy-migration.json` proves row/tenant/relationship preservation, confidence normalization, enum validity, and Prisma readback |
+| Route matrix (`tests/architecture/route-matrix.test.ts`) | PASS: 197 route-method entries from 146 route files; artifact `artifacts/route-matrix.json` |
+| Public proposal mutation sweep (`tests/architecture/public-proposal-mutation.test.ts`) | PASS: 8 token surfaces, 0 violations; artifact `artifacts/public-proposal-mutation.json` |
+| `x-tenant-id` classification | PASS: production header use is limited to the validated internal-ops shared-secret path; artifact `artifacts/x-tenant-id-usage.json` |
+| Full deterministic suite (`npm test -- --reporter=json`, `/tmp/proposalos-r4-full-tests-committed.json`) | PASS: 988 suites / 988 passed; 2,694 tests / 2,694 passed; 0 failed; 0 pending |
+| Dependency audit (`npm audit --omit=dev --audit-level=high`) | IMPROVED: from 64 total / 4 critical to 8 total / 0 critical / 2 high after targeted upgrades and safe non-force fixes |
+| `npm run typecheck` | PASS |
+| `npm run build` | PASS on Next.js 16.3.3; middleware deprecation, Redis-disabled, local auth URL, LangSmith-disabled, and Tailwind PostCSS warnings observed |
+| `npm run lint` | PASS: 0 errors, 1,887 warnings after repository-wide scan expansion and mechanical fixes |
+| `npx prisma validate` / `npx prisma format --check` / `npx prisma generate` / `npx prisma migrate status` | PASS |
+| `git diff --check` | PASS |
+| Final independent reviews | Security: PASS no CRITICAL/HIGH. Database: PASS WITH WARNINGS (migration lock/backfill warnings). Adversarial: follow-up fixes applied for contract/persistence edge cases |
+| Git commits/push | COMMITTED `fc7ac02` dependency remediation and `8486207` trust foundation; PUSHED `origin/remediation/proposalos-e2e` |
+| Live providers / GCP / production data | NOT RUN |
