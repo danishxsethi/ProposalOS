@@ -22,8 +22,25 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Enforce dependency advisory policy
+        run: npm run security:audit:prod
+
       - name: Generate Prisma Client
         run: npx prisma generate
 
-      - name: Run Tests
-        run: npm test
+      - name: Start canonical local Postgres and PgBouncer stack
+        run: docker compose -f docker-compose.yml up -d --wait postgres && docker compose -f docker-compose.pgbouncer.yml up -d --wait pgbouncer
+
+      - name: Run migrations and deterministic tests
+        env:
+          PROPOSALOS_TEST_DB_ADMIN_USER: postgres
+          PROPOSALOS_TEST_DB_ADMIN_PASSWORD: password
+          PROPOSALOS_TEST_DB_APP_PASSWORD: password
+          PROPOSALOS_PGBOUNCER_CONTAINER: proposalos-pgbouncer
+          PROPOSALOS_POSTGRES_CONTAINER: proposal_engine_db
+          PROPOSALOS_RLS_SET_ROLE_PASSWORD: '0'
+          PROPOSALOS_PGBOUNCER_HOST: localhost
+          PROPOSALOS_PGBOUNCER_PORT: '6432'
+          PROPOSALOS_TEST_DB_PORT: '5435'
+          NODE_ENV: test
+        run: bash scripts/bootstrap-test-databases.sh -- npm test -- --reporter=dot
