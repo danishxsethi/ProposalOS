@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   findFirst: vi.fn(),
   update: vi.fn(),
   assertPublishable: vi.fn(),
+  resolvePublicProposalAccess: vi.fn(),
 }));
 
 vi.mock('@/lib/tenant/context', () => ({ getTenantId: mocks.getTenantId }));
@@ -14,7 +15,16 @@ vi.mock('@/lib/middleware/auth', () => ({ withAuth: (handler: (...args: any[]) =
 vi.mock('@/lib/middleware/idempotency', () => ({ withIdempotency: (handler: (...args: any[]) => unknown) => handler }));
 vi.mock('@/lib/middleware/rateLimit', () => ({ withRateLimit: () => (_req: Request, next: () => unknown) => next() }));
 vi.mock('@/lib/observability/auditTrail', () => ({ recordAuditTrailEvent: vi.fn().mockResolvedValue(undefined) }));
-vi.mock('@/lib/proposal/publication', () => ({ assertProposalPublishable: mocks.assertPublishable }));
+vi.mock('@/lib/proposal/publication', () => ({
+  assertProposalPublishable: mocks.assertPublishable,
+  proposalPublicationFingerprint: vi.fn(() => 'status-authority-fingerprint'),
+}));
+vi.mock('@/lib/proposal/publicAccess', () => ({
+  PublicProposalAccessError: class PublicProposalAccessError extends Error {
+    constructor(message: string, readonly status: number) { super(message); }
+  },
+  resolvePublicProposalAccess: mocks.resolvePublicProposalAccess,
+}));
 
 import { PATCH } from '@/app/api/proposal/token/[token]/status/route';
 
@@ -22,6 +32,7 @@ describe('public proposal token status boundary', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.assertPublishable.mockImplementation(() => undefined);
+    mocks.resolvePublicProposalAccess.mockResolvedValue({ proposalId: 'p1', tenantId: 'tenant-a' });
   });
 
   it.each(['ACCEPTED', 'REJECTED', 'CLOSED_WON', 'CLOSED_LOST', 'PAID', 'READY', 'SENT'])(
@@ -38,6 +49,7 @@ describe('public proposal token status boundary', () => {
 
   it('only allows authenticated tenant operator view-state transitions', async () => {
     mocks.getTenantId.mockResolvedValue('tenant-a');
+    mocks.resolvePublicProposalAccess.mockResolvedValue({ proposalId: 'p1', tenantId: 'tenant-a' });
     mocks.findFirst.mockResolvedValue({ id: 'p1', tenantId: 'tenant-a', auditId: 'a1', status: 'SENT', qaResults: {} });
     mocks.update.mockResolvedValue({ id: 'p1', status: 'VIEWED', viewedAt: new Date(), sentAt: new Date() });
     const response = await PATCH(new Request('https://local.test/api/proposal/token/t/status', {

@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { generateTraceId, InternalError } from '@/lib/api/errors';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
+import { PublicProposalAccessError, resolvePublicProposalAccess } from '@/lib/proposal/publicAccess';
 import { getProposalPriceId, stripe } from '@/lib/stripe/stripe';
 import type { ProposalPlanId } from '@/lib/stripe/stripe';
 
@@ -64,6 +65,14 @@ export async function POST(req: Request) {
     });
     if (!proposal) {
       return NextResponse.json({ error: 'not found' }, { status: 404 });
+    }
+    try {
+      await resolvePublicProposalAccess(webLinkToken);
+    } catch (error) {
+      if (error instanceof PublicProposalAccessError) {
+        return NextResponse.json({ error: error.message }, { status: error.status });
+      }
+      throw error;
     }
 
     const priceId = getProposalPriceId(tierId);

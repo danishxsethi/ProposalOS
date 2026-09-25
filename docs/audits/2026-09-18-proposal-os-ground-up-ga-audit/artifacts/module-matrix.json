@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-24T07:07:09.414Z",
+  "generatedAt": "2026-09-25T03:23:09.350Z",
   "audit": "2026-09-18-proposal-os-ground-up-ga-audit",
   "source": "lib/audit/runner.ts::MODULE_REGISTRY",
   "expectedModuleCount": 27,

@@ -1,306 +1,76 @@
-import { RunTree } from 'langsmith';
-
-import { generateComparison } from '@/lib/analysis/competitorComparison';
-// P0-3: Use LangGraph path
-import { CostTracker } from '@/lib/costs/costTracker';
-import { invokeDiagnosisGraphWithTimeout } from '@/lib/graph/diagnosis-graph';
-import { invokeProposalGraphWithTimeout } from '@/lib/graph/proposal-graph';
 import { logError, logger } from '@/lib/logger';
-import { Metrics } from '@/lib/metrics';
 import { sendProposalReady } from '@/lib/notifications/email';
 import { sendWebhook } from '@/lib/notifications/webhook';
 import { recordAuditTrailEvent } from '@/lib/observability/auditTrail';
 import { withChildObservabilityContext } from '@/lib/observability/context';
 import { MetricsRecorder } from '@/lib/observability/MetricsRecorder';
 import { prisma } from '@/lib/prisma';
-import { runProposalPipeline } from '@/lib/proposal';
-import { ProposalQAService } from '@/lib/proposal/ProposalQAService';
-import { buildPersistedQaResults } from '@/lib/proposal/publication';
-import { determineProposalStatus } from '@/lib/proposal/status';
-import { runAutoQA } from '@/lib/qa/autoQA';
+import { compileAndPersistProposal, getCurrentProposalVersion } from '@/lib/proposal/compiler';
 import { createParentTrace } from '@/lib/tracing';
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
 
 export async function generateProposal(auditId: string) {
-  // Fetch audit with findings
-  const audit = await prisma.audit.findUnique({
-    where: { id: auditId },
-    include: {
-      findings: true,
-      evidence: {
-        where: { module: 'competitor' },
-        orderBy: { collectedAt: 'desc' },
-        take: 1,
-      },
-    },
-  });
-
-  if (!audit) {
-    throw new Error(`Audit ${auditId} not found`);
-  }
+  const audit = await prisma.audit.findFirst({ where: { id: auditId }, include: { findings: true } });
+  if (!audit) throw new Error(`Audit ${auditId} not found`);
 
   return withChildObservabilityContext(
-    {
-      auditId,
-      tenantId: audit.tenantId,
-      workflow: 'proposal-runner',
-    },
+    { auditId, tenantId: audit.tenantId, workflow: 'proposal-runner' },
     async () => {
-      const startTime = Date.now();
-
-      logger.info(
-        {
-          event: 'proposal.start',
-          auditId,
-          tenantId: audit.tenantId,
-          findingsCount: audit.findings.length,
-        },
-        'Starting proposal generation'
-      );
-
-      if (audit.findings.length === 0) {
-        logger.warn({ auditId, tenantId: audit.tenantId }, 'No findings to generate proposal from');
-        return null;
-      }
-
-      const tracker = new CostTracker();
-
-      // Create parent trace for this proposal generation flow
-      let parentTrace: RunTree | undefined;
+      logger.info({ event: 'proposal.start', auditId, tenantId: audit.tenantId }, 'Starting proposal generation');
       try {
-        parentTrace = await createParentTrace(auditId, 'proposal-generation', {
-          tenantId: audit.tenantId,
-          industry: audit.businessIndustry,
-          findingsCount: audit.findings.length,
-        });
-      } catch (e) {
-        logger.error({ error: e }, 'Failed to create parent trace');
-      }
-
-      try {
-        // Step 1: Run diagnosis to get clusters via LangGraph (P0-3)
-        const diagnosisResult = await invokeDiagnosisGraphWithTimeout({
-          findings: audit.findings,
-          tenantId: audit.tenantId,
-          auditId: audit.id,
-          mode: 'MULTI_STEP',
-          // Notice: tracker & parentTrace are not passed here yet since diagnosisGraph
-          // doesn't natively support tracing/tracking in the same way, but it resolves
-          // the P0-3 requirement to use the LangGraph pipeline with QA.
-        });
-
-        logger.info(
-          {
-            event: 'diagnosis.complete',
-            auditId,
-            clusterCount: diagnosisResult.clusters?.length || 0,
-            duration_ms: Date.now() - startTime,
-          },
-          'Diagnosis complete'
-        );
-
-        // Build comparison report from competitor evidence
-        let comparisonReport = null;
-        const competitorEvidence = audit.evidence?.[0]?.rawResponse as
-          | { comparisonMatrix?: { business?: unknown; competitors?: unknown[] } }
-          | undefined;
-        if (
-          competitorEvidence?.comparisonMatrix?.business &&
-          competitorEvidence.comparisonMatrix.competitors?.length
-        ) {
-          const { business, competitors } = competitorEvidence.comparisonMatrix;
-          comparisonReport = generateComparison(
-            business as Parameters<typeof generateComparison>[0],
-            competitors as Parameters<typeof generateComparison>[1],
-            audit.businessIndustry || undefined
-          );
-        }
-
-        let version = 1;
-        let proposal = null;
-        let evaluationResult = null;
-
-        while (version <= 3) {
-          // Step 2: Generate proposal via canonical timeout wrapper
-          const proposalGraphState = await invokeProposalGraphWithTimeout({
-            businessName: audit.businessName,
-            businessIndustry: audit.businessIndustry || undefined,
-            clusters: diagnosisResult.clusters,
-            findings: audit.findings,
+        try {
+          await createParentTrace(auditId, 'proposal-generation', {
             tenantId: audit.tenantId,
-            auditId: audit.id,
-            // P0-1: Pass evidence snapshots for QA grounding
-            evidenceSnapshots: await prisma.evidenceSnapshot.findMany({
-              where: { auditId: audit.id },
-            }),
+            industry: audit.businessIndustry,
           });
-
-          if (!proposalGraphState.completeProposal) {
-            throw new Error('Proposal graph did not produce a grounded complete proposal');
-          }
-          const finalProposal = proposalGraphState.completeProposal;
-
-          // Step 3: Run automated QA evaluation via ProposalQAService
-          const evaluation = ProposalQAService.evaluateProposal(
-            finalProposal,
-            audit.findings,
-            audit.businessName,
-            audit.businessCity,
-            {
-              industry: audit.businessIndustry,
-              comparisonReport: comparisonReport ?? undefined,
-            }
-          );
-
-          const proposalStatus = evaluation.passed ? 'READY' : 'DRAFT';
-
-          logger.info(
-            {
-              event: 'proposal.status.decided',
-              auditId,
-              version,
-              overallScore: evaluation.overallScore,
-              passedChecks: evaluation.autoQAStatus.passedChecks,
-              totalChecks: evaluation.autoQAStatus.totalChecks,
-              status: proposalStatus,
-            },
-            'Proposal status decided'
-          );
-
-          // Step 4: Save proposal to database (serialize to JSON)
-          proposal = await prisma.proposal.create({
-            data: {
-              auditId,
-              tenantId: audit.tenantId,
-              version,
-              executiveSummary: finalProposal.executiveSummary,
-              painClusters: finalProposal.painClusters as any,
-              tierEssentials: finalProposal.tiers.essentials as any,
-              tierGrowth: finalProposal.tiers.growth as any,
-              tierPremium: finalProposal.tiers.premium as any,
-              pricing: finalProposal.pricing as any,
-              assumptions: finalProposal.assumptions,
-              disclaimers: finalProposal.disclaimers,
-              nextSteps: finalProposal.nextSteps,
-              comparisonReport: comparisonReport ? (comparisonReport as any) : undefined,
-              status: proposalStatus,
-              qaScore: evaluation.autoQAStatus.score,
-              clientScore: evaluation.autoQAStatus.clientPerfect.score,
-              qaResults: JSON.parse(
-                JSON.stringify(buildPersistedQaResults(evaluation, finalProposal))
-              ),
-              clientScoreResults: JSON.parse(JSON.stringify(evaluation.autoQAStatus.clientPerfect)),
-            },
-          });
-
-          evaluationResult = evaluation;
-
-          if (evaluation.passed) {
-            logger.info(
-              {
-                event: 'proposal.promotion.passed',
-                auditId,
-                version,
-                overallScore: evaluation.overallScore,
-              },
-              'Proposal passed QA and is promoted to READY'
-            );
-            break;
-          } else {
-            logger.warn(
-              {
-                event: 'proposal.promotion.failed',
-                auditId,
-                version,
-                overallScore: evaluation.overallScore,
-                feedbackLogs: evaluation.feedbackLogs,
-              },
-              'Proposal failed QA auto-promotion'
-            );
-            if (version < 3) {
-              version++;
-            } else {
-              logger.info({ auditId }, 'Max automated QA regenerations reached.');
-              break;
-            }
-          }
+        } catch (error) {
+          logger.error({ error }, 'Failed to create parent trace');
         }
 
-        if (!proposal || !evaluationResult) {
-          throw new Error('Failed to generate any proposal version');
-        }
-
-        const finalStatus = proposal.status;
-
-        // Update audit cost
-        await prisma.audit.update({
-          where: { id: auditId },
-          data: {
-            apiCostCents: { increment: tracker.getTotalCents() },
-          },
-        });
-
-        const duration_ms = Date.now() - startTime;
-        MetricsRecorder.proposalGenerated(audit.tenantId, finalStatus, undefined);
+        const nextVersion = await getCurrentProposalVersion(auditId, audit.tenantId);
+        const result = await compileAndPersistProposal({ auditId, tenantId: audit.tenantId, version: nextVersion });
+        const saved = result.proposalRecord;
+        const status = saved.status;
+        MetricsRecorder.proposalGenerated(audit.tenantId, status, undefined);
         await recordAuditTrailEvent({
           eventType: 'proposal.generated',
           tenantId: audit.tenantId,
           auditId,
-          proposalId: proposal.id,
-          findingsCount: audit.findings.length,
+          proposalId: saved.id,
+          findingsCount: result.diagnosis.findings.length,
           proposalGenerated: true,
           payload: {
-            status: finalStatus,
-            qaScore: evaluationResult.autoQAStatus.score,
-            durationMs: duration_ms,
-            costCents: tracker.getTotalCents(),
-            overallScore: evaluationResult.overallScore,
-            dimensions: evaluationResult.dimensions,
-            feedbackLogs: evaluationResult.feedbackLogs,
-            passed: evaluationResult.passed,
+            status,
+            qaScore: result.evaluation.autoQAStatus.score,
+            costCents: result.costTracker.getTotalCents(),
+            overallScore: result.evaluation.overallScore,
+            dimensions: result.evaluation.dimensions,
+            feedbackLogs: result.evaluation.feedbackLogs,
+            passed: result.evaluation.passed,
           },
         });
+        logger.info({ event: 'proposal.complete', auditId, proposalId: saved.id }, 'Proposal complete');
 
-        logger.info(
-          {
-            event: 'proposal.complete',
-            auditId,
-            proposalId: proposal.id,
-            duration_ms,
-            cost_cents: tracker.getTotalCents(),
-          },
-          'Proposal complete'
+        const proposalUrl = `${APP_URL}/proposal/${saved.webLinkToken}`;
+        sendProposalReady(auditId, audit.businessName, proposalUrl).catch((error) =>
+          logError('Failed to send proposal-ready notification', error, { auditId, proposalId: saved.id })
         );
-
-        const proposalUrl = `${APP_URL}/proposal/${proposal.webLinkToken}`;
-
-        // Send notifications (fire and forget)
-        sendProposalReady(auditId, audit.businessName, proposalUrl).catch((e) =>
-          logError('Failed to send proposal-ready notification', e, {
-            auditId,
-            proposalId: proposal.id,
-          })
-        );
-        sendWebhook('proposal.ready', {
-          auditId,
-          proposalId: proposal.id,
-          url: proposalUrl,
-        });
+        sendWebhook('proposal.ready', { auditId, proposalId: saved.id, url: proposalUrl });
 
         return {
           success: true,
           auditId,
-          proposalId: proposal.id,
-          webLinkToken: proposal.webLinkToken,
-          status: finalStatus,
-          qaScore: evaluationResult.autoQAStatus.score,
-          costCents: tracker.getTotalCents(),
+          proposalId: saved.id,
+          webLinkToken: saved.webLinkToken,
+          status,
+          qaScore: result.evaluation.autoQAStatus.score,
+          costCents: result.costTracker.getTotalCents(),
           evaluation: {
-            dimensions: evaluationResult.dimensions,
-            overallScore: evaluationResult.overallScore,
-            passed: evaluationResult.passed,
-            feedbackLogs: evaluationResult.feedbackLogs,
+            dimensions: result.evaluation.dimensions,
+            overallScore: result.evaluation.overallScore,
+            passed: result.evaluation.passed,
+            feedbackLogs: result.evaluation.feedbackLogs,
           },
         };
       } catch (error) {

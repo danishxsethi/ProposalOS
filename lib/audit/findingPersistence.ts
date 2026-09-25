@@ -69,6 +69,7 @@ export interface PersistAuditResult {
   persistedFindings: number;
   persistedEvidence: number;
   rejectedFindings: RejectedFinding[];
+  trustState: 'TRUSTED' | 'DEGRADED_REVIEW_REQUIRED' | 'FAILED';
 }
 
 /** Persist the audit's findings, their source snapshots and trust/status atomically. */
@@ -137,9 +138,12 @@ export async function persistAuditResult(input: PersistAuditResultInput): Promis
       });
     }
 
+    const auditUpdate: Prisma.AuditUpdateInput = rejectedFindings.length > 0
+      ? { ...input.auditUpdate, trustState: 'DEGRADED_REVIEW_REQUIRED' }
+      : input.auditUpdate;
     await tx.audit.update({
       where: { id: input.auditId, tenantId: input.tenantId },
-      data: input.auditUpdate,
+      data: auditUpdate,
     });
   });
 
@@ -160,6 +164,9 @@ export async function persistAuditResult(input: PersistAuditResultInput): Promis
     persistedFindings: valid.length,
     persistedEvidence: input.evidence.length,
     rejectedFindings,
+    trustState: rejectedFindings.length > 0
+      ? 'DEGRADED_REVIEW_REQUIRED'
+      : (input.auditUpdate as { trustState?: 'TRUSTED' | 'DEGRADED_REVIEW_REQUIRED' | 'FAILED' }).trustState ?? 'FAILED',
   };
 }
 

@@ -1,18 +1,12 @@
 import { NextResponse } from 'next/server';
 
-import { CostTracker } from '@/lib/costs/costTracker';
-import { invokeDiagnosisGraphWithTimeout } from '@/lib/graph/diagnosis-graph';
 import { logger } from '@/lib/logger';
 import { withAuth } from '@/lib/middleware/auth';
 import { withIdempotency } from '@/lib/middleware/idempotency';
 import { withRateLimit } from '@/lib/middleware/rateLimit';
 import { recordAuditTrailEvent } from '@/lib/observability/auditTrail';
 import { prisma } from '@/lib/prisma';
-import { runProposalPipeline } from '@/lib/proposal';
-import { ProposalQAService } from '@/lib/proposal/ProposalQAService';
-import { buildPersistedQaResults } from '@/lib/proposal/publication';
-import { determineProposalStatus } from '@/lib/proposal/status';
-import { runAutoQA } from '@/lib/qa/autoQA';
+import { compileAndPersistProposal, getCurrentProposalVersion } from '@/lib/proposal/compiler';
 import { getTenantId } from '@/lib/tenant/context';
 
 interface Params {
@@ -81,6 +75,13 @@ async function handleRegeneration(request: Request, { params }: Params): Promise
       return NextResponse.json({ error: 'Audit not found' }, { status: 404 });
     }
 
+    if (audit.status !== 'COMPLETE' || audit.trustState !== 'TRUSTED') {
+      return NextResponse.json(
+        { error: 'Audit requires review before proposal generation', trustState: audit.trustState },
+        { status: 409 }
+      );
+    }
+
     if (audit.findings.length === 0) {
       return NextResponse.json(
         { error: 'No findings available for proposal generation' },
@@ -90,7 +91,7 @@ async function handleRegeneration(request: Request, { params }: Params): Promise
 
     // Get next version number
     const currentVersion = audit.proposals[0]?.version || 0;
-    const nextVersion = currentVersion + 1;
+    const nextVersion = Math.max(currentVersion + 1, await getCurrentProposalVersion(auditId, tenantId));
 
     // Check max regenerations (3 per spec)
     if (nextVersion > 3) {
@@ -103,99 +104,17 @@ async function handleRegeneration(request: Request, { params }: Params): Promise
       );
     }
 
-    const tracker = new CostTracker();
-
     logger.info(
       { event: 'regenerate.start', auditId, version: nextVersion },
       'Starting regeneration'
     );
 
-    const evidenceSnapshots = await prisma.evidenceSnapshot.findMany({
-      where: {
-        auditId,
-        tenantId: audit.tenantId,
-      },
-    });
-
-    // Re-run diagnosis with current (possibly edited) findings via LangGraph (P0-3)
-    const diagnosisResult = await invokeDiagnosisGraphWithTimeout({
-      findings: audit.findings,
-      evidenceSnapshots,
-      tenantId: audit.tenantId,
-      auditId: audit.id,
-      mode: 'MULTI_STEP',
-    });
-    logger.info(
-      {
-        event: 'regenerate.diagnosis_complete',
-        auditId,
-        clusterCount: diagnosisResult.clusters?.length ?? 0,
-      },
-      'Diagnosis complete'
-    );
-
-    // Re-run proposal generation
-    const proposalResult = await runProposalPipeline(
-      audit.businessName,
-      audit.businessIndustry || 'general',
-      diagnosisResult.clusters,
-      audit.findings,
-      tracker,
-      undefined,
-      null,
-      null,
-      audit.businessCity,
-      audit.businessUrl
-    );
+    const result = await compileAndPersistProposal({ auditId, tenantId, version: nextVersion });
+    const { proposalRecord: proposal, evaluation } = result;
+    const proposalStatus = proposal.status;
+    const costCents = result.costTracker.getTotalCents();
     logger.info({ event: 'regenerate.generated', auditId }, 'Proposal generated');
-
-    // Log costs
-    logger.info(
-      { event: 'regenerate.cost', auditId, costCents: tracker.getTotalCents() },
-      'Regeneration cost'
-    );
-
-    // Save new proposal version via ProposalQAService
-    const evaluation = ProposalQAService.evaluateProposal(
-      proposalResult,
-      audit.findings,
-      audit.businessName,
-      audit.businessCity,
-      {
-        industry: audit.businessIndustry,
-      }
-    );
-    const proposalStatus = evaluation.passed ? 'READY' : 'DRAFT';
-
-    const proposal = await prisma.proposal.create({
-      data: {
-        auditId,
-        tenantId: audit.tenantId,
-        version: nextVersion,
-        executiveSummary: proposalResult.executiveSummary,
-        painClusters: JSON.parse(JSON.stringify(diagnosisResult.clusters)),
-        tierEssentials: JSON.parse(JSON.stringify(proposalResult.tiers.essentials)),
-        tierGrowth: JSON.parse(JSON.stringify(proposalResult.tiers.growth)),
-        tierPremium: JSON.parse(JSON.stringify(proposalResult.tiers.premium)),
-        pricing: JSON.parse(JSON.stringify(proposalResult.pricing)),
-        assumptions: proposalResult.assumptions,
-        disclaimers: proposalResult.disclaimers,
-        nextSteps: proposalResult.nextSteps,
-        status: proposalStatus,
-        qaScore: evaluation.autoQAStatus.score,
-        clientScore: evaluation.autoQAStatus.clientPerfect.score,
-        qaResults: JSON.parse(JSON.stringify(buildPersistedQaResults(evaluation, proposalResult))),
-        clientScoreResults: JSON.parse(JSON.stringify(evaluation.autoQAStatus.clientPerfect)),
-      },
-    });
-
-    // Update audit cost
-    await prisma.audit.update({
-      where: { id: auditId },
-      data: {
-        apiCostCents: { increment: tracker.getTotalCents() },
-      },
-    });
+    logger.info({ event: 'regenerate.cost', auditId, costCents }, 'Regeneration cost');
 
     await recordAuditTrailEvent({
       eventType: 'proposal.generated',
@@ -206,7 +125,7 @@ async function handleRegeneration(request: Request, { params }: Params): Promise
         version: nextVersion,
         status: proposalStatus,
         qaScore: evaluation.autoQAStatus.score,
-        costCents: tracker.getTotalCents(),
+        costCents,
         isRegeneration: true,
         overallScore: evaluation.overallScore,
         dimensions: evaluation.dimensions,
@@ -229,7 +148,7 @@ async function handleRegeneration(request: Request, { params }: Params): Promise
       executiveSummary: proposal.executiveSummary?.slice(0, 200) + '...',
       pricing: proposal.pricing,
       regenerationsRemaining: 3 - nextVersion,
-      costCents: tracker.getTotalCents(),
+      costCents,
       evaluation: {
         dimensions: evaluation.dimensions,
         overallScore: evaluation.overallScore,

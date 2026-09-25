@@ -26,8 +26,8 @@ describe('Wave 8B claim-policy architecture', () => {
   });
 
   it.each([
-    'app/api/proposals/[id]/send/route.ts',
     'app/api/proposal/token/[token]/route.ts',
+    'app/api/proposals/[id]/send/route.ts',
     'app/api/proposal/token/[token]/pdf/route.ts',
     'app/api/proposal/token/[token]/email/route.ts',
     'app/api/proposal/token/[token]/status/route.ts',
@@ -37,6 +37,12 @@ describe('Wave 8B claim-policy architecture', () => {
     'app/presentation/[token]/page.tsx',
     'app/api/presentation/[token]/export/route.ts',
   ])('blocks publication without persisted QA and grounding in %s', (path) => {
-    expect(source(path)).toContain('assertProposalPublishable');
+    if (path === 'app/api/proposals/[id]/send/route.ts') {
+      expect(source(path)).toContain('resolvePublicProposalAccess');
+      expect(source(path)).toContain('PublicProposalAccessError');
+    } else {
+      expect(source(path)).toContain('resolvePublicProposalAccess');
+      expect(source('lib/proposal/publicAccess.ts')).toContain('assertProposalPublishable');
+    }
   });
 });

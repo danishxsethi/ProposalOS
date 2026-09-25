@@ -82,6 +82,10 @@ export const DiagnosisState = Annotation.Root({
     reducer: (x, y) => y,
     default: () => false,
   }),
+  resultState: Annotation<'trusted' | 'degraded' | 'failed'>({
+    reducer: (x, y) => y,
+    default: () => 'failed',
+  }),
   staleFindingsCount: Annotation<number>({
     reducer: (x, y) => y,
     default: () => 0,
@@ -157,8 +161,19 @@ function validateDiagnosisInput(state: Pick<State, 'findings' | 'auditId' | 'ten
 // P1-4: Use real evidence for stale checks
 async function verify_evidence(state: State): Promise<Partial<State>> {
   try {
-    const { findings, staleCount } = await verifyEvidenceActivity(state.findings);
-    return { findings, staleFindingsCount: staleCount };
+    const { findings, staleCount, invalidCount } = await verifyEvidenceActivity(
+      state.findings,
+      24,
+      state.evidenceSnapshots
+    );
+    return {
+      findings,
+      staleFindingsCount: staleCount,
+      degraded: state.degraded || invalidCount > 0 || staleCount > 0,
+      ...(invalidCount > 0 || staleCount > 0
+        ? { errors: [nodeError('verify_evidence', `Evidence eligibility failure: invalid=${invalidCount}, stale=${staleCount}`)] }
+        : {}),
+    };
   } catch (error) {
     // On error skip verification — do NOT block the pipeline
     logger.error(
@@ -597,6 +612,16 @@ export async function invokeDiagnosisGraphWithTimeout(
     throw new Error(`DIAGNOSIS_INPUT_INVALID: ${inputIssues.join('; ')}`);
   }
 
+  if (!initialState.evidenceSnapshots || initialState.evidenceSnapshots.length === 0) {
+    throw new Error('DIAGNOSIS_EVIDENCE_REQUIRED: Evidence snapshots are required for trusted diagnosis');
+  }
+  const invalidEvidenceFindingIds = (initialState.findings ?? [])
+    .filter((finding) => !Array.isArray(finding.evidence) || finding.evidence.length === 0)
+    .map((finding) => finding.id);
+  if (invalidEvidenceFindingIds.length > 0) {
+    throw new Error(`DIAGNOSIS_EVIDENCE_INVALID: Findings without evidence: ${invalidEvidenceFindingIds.join(',')}`);
+  }
+
   const controller = new AbortController();
 
   let timeoutId: NodeJS.Timeout | undefined;
@@ -608,13 +633,20 @@ export async function invokeDiagnosisGraphWithTimeout(
   });
 
   try {
-    return await Promise.race([
+    const result = await Promise.race([
       diagnosisGraph.invoke(
         initialState as State,
         { signal: controller.signal, recursionLimit: 100 } as any
       ),
       timeoutPromise,
     ]);
+    const qaMissing = result.errors.some((error) => error.node === 'adversarial_qa');
+    const resultState = result.degraded || result.errors.length > 0 || qaMissing
+      ? 'degraded'
+      : result.validation?.valid
+        ? 'trusted'
+        : 'failed';
+    return { ...result, resultState };
   } catch (error) {
     if (error instanceof Error && error.message.startsWith('DIAGNOSIS_GRAPH_TIMEOUT')) {
       logger.error({ error, timeoutMs }, '[DiagnosisGraph] Timed out — returning degraded state');
@@ -634,6 +666,7 @@ export async function invokeDiagnosisGraphWithTimeout(
         },
         retryCount: initialState.retryCount ?? 0,
         degraded: true,
+        resultState: 'degraded',
         staleFindingsCount: initialState.staleFindingsCount ?? 0,
         tenantId: initialState.tenantId ?? 'unknown',
         mode: initialState.mode ?? 'MULTI_STEP',
@@ -649,7 +682,7 @@ export async function invokeDiagnosisGraphWithTimeout(
         costTracker: initialState.costTracker,
       } as State;
     }
-    throw error;
+    throw new Error(`DIAGNOSIS_FAILED: ${error instanceof Error ? error.message : String(error)}`);
   } finally {
     if (timeoutId) clearTimeout(timeoutId);
   }

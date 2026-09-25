@@ -4,41 +4,27 @@ import pptxgen from 'pptxgenjs';
 
 import { getBranding } from '@/lib/config/branding';
 import { logger } from '@/lib/logger';
-import { prisma } from '@/lib/prisma';
-import { assertProposalPublishable } from '@/lib/proposal/publication';
+import { withRateLimit } from '@/lib/middleware/rateLimit';
+import {
+  PublicProposalAccessError,
+  resolvePublicProposalAccess,
+} from '@/lib/proposal/publicAccess';
 
 interface Params {
   params: Promise<{ token: string }>;
 }
 
-export async function GET(request: Request, { params }: Params) {
+async function handleExport(request: Request, { params }: Params) {
   try {
     const { token } = await params;
 
-    const proposal = await prisma.proposal.findUnique({
-      where: { webLinkToken: token },
-      include: {
-        audit: {
-          include: {
-            findings: {
-              where: { excluded: false },
-              orderBy: { impactScore: 'desc' },
-            },
-          },
-        },
-      },
-    });
-
-    if (!proposal) {
-      return NextResponse.json({ error: 'Proposal not found' }, { status: 404 });
-    }
-    assertProposalPublishable(proposal);
+    const { proposal, tenantId } = await resolvePublicProposalAccess(token);
 
     // Create PowerPoint presentation
     const pres = new pptxgen();
 
     // Get branding
-    const branding = await getBranding(proposal.tenantId);
+    const branding = await getBranding(tenantId);
 
     // Title Slide
     const titleSlide = pres.addSlide();
@@ -295,15 +281,6 @@ export async function GET(request: Request, { params }: Params) {
         color: 'DC2626',
         bold: true,
       });
-      findingSlide.addText(`Source Finding: ${finding.id}`, {
-        x: 0.5,
-        y: 5.05,
-        w: '90%',
-        h: 0.25,
-        fontSize: 10,
-        color: '6B7280',
-      });
-
       if (finding.recommendedFix?.[0]) {
         findingSlide.addText('Recommended Fix:', {
           x: 0.5,
@@ -401,10 +378,21 @@ export async function GET(request: Request, { params }: Params) {
       headers: {
         'Content-Type': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
         'Content-Disposition': `attachment; filename="presentation-${proposal.audit.businessName.replace(/[^a-z0-9]/gi, '_').toLowerCase()}-${token.substring(0, 8)}.pptx"`,
+        'X-Proposal-Version': String(proposal.version),
       },
     });
   } catch (error) {
+    if (error instanceof PublicProposalAccessError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
     logger.error('Presentation export error:', error);
     return NextResponse.json({ error: 'Failed to generate presentation' }, { status: 500 });
   }
 }
+
+export const GET = (request: Request, context: Params) =>
+  withRateLimit({
+    windowMs: 60 * 1000,
+    max: 10,
+    message: 'Too many presentation export requests. Please wait before trying again.',
+  })(request, () => handleExport(request, context));

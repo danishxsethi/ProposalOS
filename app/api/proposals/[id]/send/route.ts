@@ -26,7 +26,7 @@ import {
 } from '@/lib/observability/context';
 import { MetricsRecorder } from '@/lib/observability/MetricsRecorder';
 import { prisma } from '@/lib/prisma';
-import { assertProposalPublishable } from '@/lib/proposal/publication';
+import { PublicProposalAccessError, resolvePublicProposalAccess } from '@/lib/proposal/publicAccess';
 import { getTenantId } from '@/lib/tenant/context';
 
 const sendSchema = z.object({
@@ -92,7 +92,7 @@ async function handleSendProposal(
           applyObservabilityHeaders(notFound);
           return notFound;
         }
-        assertProposalPublishable(existingProposal);
+        await resolvePublicProposalAccess(existingProposal.webLinkToken);
 
         // Update Proposal
         const proposal = await prisma.proposal.update({
@@ -134,6 +134,11 @@ async function handleSendProposal(
         applyObservabilityHeaders(response);
         return response;
       } catch (e) {
+        if (e instanceof PublicProposalAccessError) {
+          const blocked = NextResponse.json({ error: e.message }, { status: e.status });
+          applyObservabilityHeaders(blocked);
+          return blocked;
+        }
         logError('Failed to send proposal', e);
         const internalError = new InternalError('Failed to send proposal', {
           originalError: e instanceof Error ? e.message : String(e),

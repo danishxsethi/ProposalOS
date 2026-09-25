@@ -1815,10 +1815,11 @@ async function runAuditInternal(auditId: string, signal?: AbortSignal) {
             rejectedFindings.push(...rejected);
 
             for (const snap of ext.snapshots) {
+              const snapshotRaw = snap.rawResponse ?? snap;
               evidenceToPersist.push({
                 module: modName,
                 source: String(snap.source || modName),
-                rawResponse: snap.rawResponse ?? snap,
+                rawResponse: snapshotRaw,
                 collectedAt: snap.collectedAt instanceof Date ? snap.collectedAt : undefined,
                 targetUrl: url,
                 observationStatus: res.status,
@@ -1948,7 +1949,7 @@ async function runAuditInternal(auditId: string, signal?: AbortSignal) {
             error: result.error ?? null,
           }])
         );
-        const trustState = assessAuditResult(results, rejectedFindings.length).trustState;
+        let trustState = assessAuditResult(results, rejectedFindings.length).trustState;
 
         const persisted = await persistAuditResult({
           auditId: audit.id,
@@ -1967,8 +1968,18 @@ async function runAuditInternal(auditId: string, signal?: AbortSignal) {
             verticalPlaybookId: verticalPlaybookId !== 'general' ? verticalPlaybookId : undefined,
           },
         });
+        trustState = persisted.trustState;
         if (persisted.rejectedFindings.length > 0) {
-          throw new Error(`AUDIT_INTEGRITY_FAILURE: ${persisted.rejectedFindings.length} finding(s) failed persistence validation`);
+          logger.warn(
+            {
+              event: 'audit.findings_rejected_during_persistence',
+              auditId: audit.id,
+              tenantId: audit.tenantId,
+              rejectedCount: persisted.rejectedFindings.length,
+              rejectedFindings: persisted.rejectedFindings,
+            },
+            'Some invalid module findings were rejected; valid evidence and findings were persisted'
+          );
         }
 
         const duration_ms = Date.now() - startTime;
@@ -2015,7 +2026,7 @@ async function runAuditInternal(auditId: string, signal?: AbortSignal) {
         );
 
         const result = {
-          success: true,
+          success: trustState === 'TRUSTED',
           auditId: audit.id,
           status: finalStatus as AuditRunResult['status'],
           modulesCompleted,

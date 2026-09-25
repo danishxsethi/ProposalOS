@@ -55,4 +55,21 @@ describe('persistAuditResult atomic unit', () => {
     })).rejects.toThrow('AUDIT_EVIDENCE_SECRET_REJECTED');
     expect(mocks.transaction).not.toHaveBeenCalled();
   });
+
+  it('downgrades trust in the transaction if final finding validation rejects a record', async () => {
+    const result = await persistAuditResult({
+      auditId: 'audit-1',
+      tenantId: 'tenant-1',
+      findings: [{ module: 'website', title: 'malformed finding' }],
+      evidence: [],
+      auditUpdate: { status: 'COMPLETE', trustState: 'TRUSTED' },
+    });
+
+    expect(result.rejectedFindings).toHaveLength(1);
+    expect(result.trustState).toBe('DEGRADED_REVIEW_REQUIRED');
+    expect(mocks.auditUpdate).toHaveBeenCalledWith({
+      where: { id: 'audit-1', tenantId: 'tenant-1' },
+      data: { status: 'COMPLETE', trustState: 'DEGRADED_REVIEW_REQUIRED' },
+    });
+  });
 });

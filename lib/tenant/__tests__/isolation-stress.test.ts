@@ -24,9 +24,11 @@ import type { prisma as appPrismaType } from '@/lib/prisma';
 import type { runWithTenantAsync as runWithTenantAsyncType } from '../context';
 
 const TEST_DB = process.env.PROPOSALOS_RLS_TEST_DB || 'proposal_rls_smoke';
-const POSTGRES_PASSWORD = 'password';
-const DIRECT_URL = `postgresql://postgres:${POSTGRES_PASSWORD}@localhost:5435/${TEST_DB}`;
-const POOLED_APP_USER_URL = `postgresql://app_user:${POSTGRES_PASSWORD}@localhost:6432/${TEST_DB}?pgbouncer=true`;
+const POSTGRES_PASSWORD = process.env.PROPOSALOS_TEST_DB_ADMIN_PASSWORD || 'password';
+const DIRECT_URL = process.env.PROPOSALOS_RLS_DIRECT_URL ||
+  `postgresql://postgres:${POSTGRES_PASSWORD}@localhost:5435/${TEST_DB}`;
+const POOLED_APP_USER_URL = process.env.PROPOSALOS_RLS_APP_URL ||
+  `postgresql://app_user:${process.env.PROPOSALOS_TEST_DB_APP_PASSWORD || 'password'}@localhost:6432/${TEST_DB}?pgbouncer=true`;
 
 // Use a test-specific Prisma client running as superuser for setup and teardown
 const prisma = new PrismaClient({
@@ -62,7 +64,7 @@ describe('Multi-Tenant Isolation Stress Test (100 Tenants)', () => {
     // Set database URL to the non-superuser app_user to enforce RLS
     const env = process.env as Record<string, string | undefined>;
     env.DATABASE_URL = process.env.PROPOSALOS_RLS_APP_URL || POOLED_APP_USER_URL;
-    env.DIRECT_URL = DIRECT_URL;
+    env.DIRECT_URL = process.env.PROPOSALOS_RLS_DIRECT_URL || DIRECT_URL;
 
     vi.resetModules();
 

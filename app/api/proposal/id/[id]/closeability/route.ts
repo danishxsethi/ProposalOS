@@ -5,6 +5,7 @@ import { Prisma } from '@prisma/client';
 import { logger } from '@/lib/logger';
 import { withAuth } from '@/lib/middleware/auth';
 import { prisma } from '@/lib/prisma';
+import { invalidatePublicationApproval } from '@/lib/proposal/publication';
 
 interface Params {
   params: Promise<{ id: string }>;
@@ -133,22 +134,24 @@ export const POST = withAuth(async (req: Request, { params }: Params) => {
       return withoutHumanReviewWarning;
     })();
 
-    const updatedQaResults: Record<string, unknown> = {
+    const updatedQaResults: Record<string, unknown> = invalidatePublicationApproval({
       ...qaResults,
       score: blendedScore,
       warnings: nextWarnings,
       needsReview: hardFails.length > 0 || blendedScore < 60,
       clientPerfect: updatedClientScoreResults,
-    };
+    });
 
-    let nextStatus = proposal.status;
-    if (proposal.status === 'DRAFT' || proposal.status === 'READY') {
-      if (hardFails.length > 0) {
-        nextStatus = 'DRAFT';
-      } else {
-        nextStatus = blendedScore >= 60 ? 'READY' : 'DRAFT';
-      }
-    }
+    // Human review changes canonical QA inputs. Any prior approval fingerprint is
+    // stale; a subsequent canonical compilation is required before publication.
+    const nextStatus = 'DRAFT';
+    delete updatedQaResults.publicationFingerprint;
+    updatedQaResults.publicationApproval = {
+      version: 1,
+      decision: 'NOT_APPROVED',
+      proposalVersion: null,
+      qaVersion: 1,
+    };
 
     const updated = await prisma.proposal.update({
       where: { id },

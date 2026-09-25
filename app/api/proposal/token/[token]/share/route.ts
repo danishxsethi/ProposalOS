@@ -10,11 +10,15 @@
 
 import { NextResponse } from 'next/server';
 
-import { generateTraceId, InternalError, NotFoundError, ValidationError } from '@/lib/api/errors';
+import { generateTraceId, InternalError, ValidationError } from '@/lib/api/errors';
 import { proposalShareSchema } from '@/lib/api/schemas/proposal';
-import { RateLimitPresets, withRateLimit } from '@/lib/middleware/rateLimit';
+import { withRateLimit } from '@/lib/middleware/rateLimit';
 import { prisma } from '@/lib/prisma';
-import { assertProposalPublishable } from '@/lib/proposal/publication';
+import {
+  PublicProposalAccessError,
+  resolvePublicProposalAccess,
+} from '@/lib/proposal/publicAccess';
+import { runWithTenantAsync } from '@/lib/tenant/context';
 
 interface RouteContext {
   params: Promise<{ token: string }>;
@@ -46,26 +50,19 @@ async function handleShare(req: Request, context: RouteContext): Promise<NextRes
     const { platform } = result.data;
 
     // Find proposal
-    const proposal = await prisma.proposal.findUnique({
-      where: { webLinkToken: token },
-    });
-
-    if (!proposal) {
-      return NextResponse.json(new NotFoundError('Proposal', token).toEnvelope(req.url, traceId), {
-        status: 404,
-      });
-    }
-    assertProposalPublishable(proposal);
+    const { proposalId, tenantId } = await resolvePublicProposalAccess(token);
 
     // Track share event by incrementing counter
-    await prisma.proposal.update({
-      where: { id: proposal.id },
-      data: {
-        shareCount: {
-          increment: 1,
+    await runWithTenantAsync(tenantId, () =>
+      prisma.proposal.update({
+        where: { id: proposalId },
+        data: {
+          shareCount: {
+            increment: 1,
+          },
         },
-      },
-    });
+      })
+    );
 
     // Optionally: Log to a separate events table for detailed analytics
     // await prisma.proposalEvent.create({
@@ -85,6 +82,9 @@ async function handleShare(req: Request, context: RouteContext): Promise<NextRes
     response.headers.set('X-Trace-Id', traceId);
     return response;
   } catch (error) {
+    if (error instanceof PublicProposalAccessError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
     const internalError = new InternalError('Failed to process share event', {
       originalError: error instanceof Error ? error.message : String(error),
     });

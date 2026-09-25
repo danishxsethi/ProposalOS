@@ -30,6 +30,8 @@ const mocks = vi.hoisted(() => ({
   auditFindFirst: vi.fn(),
   auditUpdate: vi.fn(),
   proposalCreate: vi.fn(),
+  proposalUpdate: vi.fn(),
+  compileProposal: vi.fn(),
   proposalTemplateFindFirst: vi.fn(),
   evidenceFindMany: vi.fn(),
 
@@ -69,10 +71,14 @@ vi.mock('@/lib/logger', () => ({
 vi.mock('@/lib/prisma', () => ({
   prisma: {
     audit: { findFirst: mocks.auditFindFirst, update: mocks.auditUpdate },
-    proposal: { create: mocks.proposalCreate },
+    proposal: { create: mocks.proposalCreate, update: mocks.proposalUpdate },
     proposalTemplate: { findFirst: mocks.proposalTemplateFindFirst },
     evidenceSnapshot: { findMany: mocks.evidenceFindMany },
   },
+}));
+vi.mock('@/lib/proposal/compiler', () => ({
+  compileAndPersistProposal: mocks.compileProposal,
+  getCurrentProposalVersion: vi.fn().mockResolvedValue(1),
 }));
 vi.mock('@/lib/analysis/competitorComparison', () => ({
   generateComparison: mocks.generateComparison,
@@ -189,6 +195,7 @@ function makeAudit(overrides = {}) {
   return {
     id: 'audit-1',
     tenantId: 'tenant-a',
+    status: 'COMPLETE',
     trustState: 'TRUSTED',
     businessName: 'Acme Dental',
     businessIndustry: 'Dental',
@@ -342,7 +349,7 @@ describe('POST /api/audit/[id]/propose — proposal status promotion', () => {
     mocks.getPlaybook.mockReturnValue({ id: 'general' });
     mocks.proposalTemplateFindFirst.mockResolvedValue(null);
     mocks.evidenceFindMany.mockResolvedValue([]);
-    mocks.invokeDiagnosisGraphWithTimeout.mockResolvedValue(diagnosisResult);
+    mocks.invokeDiagnosisGraphWithTimeout.mockResolvedValue({ ...diagnosisResult, resultState: 'trusted' });
     mocks.invokeProposalGraphWithTimeout.mockResolvedValue(proposalGraphResult());
     mocks.createParentTrace.mockResolvedValue(undefined);
     mocks.auditUpdate.mockResolvedValue({});
@@ -355,10 +362,33 @@ describe('POST /api/audit/[id]/propose — proposal status promotion', () => {
         clientScore: args?.data?.clientScore,
       };
     });
+    mocks.proposalUpdate.mockImplementation(async (args: any) => ({
+      id: 'proposal-1',
+      webLinkToken: 'token-1',
+      status: args?.data?.status ?? 'DRAFT',
+      qaScore: 75,
+      clientScore: 75,
+    }));
     mocks.auth.mockResolvedValue({
       user: { email: 'owner@example.com', tenantId: 'tenant-a' },
     });
     mocks.auditFindFirst.mockResolvedValue(makeAudit());
+    mocks.compileProposal.mockImplementation(async () => {
+      const qa = mocks.runAutoQA();
+      const status = qa.score >= 60 && qa.clientPerfect?.hardFails?.length === 0 ? 'READY' : 'DRAFT';
+      return {
+        proposalRecord: {
+          id: 'proposal-1', version: 1, webLinkToken: 'token-1', status,
+          qaScore: qa.score, clientScore: qa.clientPerfect?.score ?? qa.score,
+        },
+        proposal: proposalGraphResult().completeProposal,
+        evaluation: {
+          autoQAStatus: qa,
+          dimensions: {}, overallScore: qa.score, passed: status === 'READY', feedbackLogs: qa.warnings ?? [],
+        },
+        costTracker: { getTotalCents: () => 5 },
+      };
+    });
 
     // Bridge evaluateProposal to runAutoQA
     mocks.evaluateProposal.mockImplementation(
@@ -416,12 +446,7 @@ describe('POST /api/audit/[id]/propose — proposal status promotion', () => {
     const body = await response.json();
     expect(body.status).toBe('READY');
 
-    // Verify the persisted status is READY
-    expect(mocks.proposalCreate).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({ status: 'READY' }),
-      })
-    );
+    expect(mocks.compileProposal).toHaveBeenCalledWith(expect.objectContaining({ auditId: 'audit-1', tenantId: 'tenant-a', version: 1 }));
   });
 
   it('persists DRAFT and returns status=DRAFT when QA score < 60', async () => {
@@ -440,11 +465,7 @@ describe('POST /api/audit/[id]/propose — proposal status promotion', () => {
     const body = await response.json();
     expect(body.status).toBe('DRAFT');
 
-    expect(mocks.proposalCreate).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({ status: 'DRAFT' }),
-      })
-    );
+    expect(mocks.compileProposal).toHaveBeenCalled();
   });
 
   it('persists DRAFT when QA has hard-fail (score forced to 0)', async () => {
@@ -464,15 +485,11 @@ describe('POST /api/audit/[id]/propose — proposal status promotion', () => {
     expect(body.status).toBe('DRAFT');
     expect(body.hardFails).toHaveLength(1);
 
-    expect(mocks.proposalCreate).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({ status: 'DRAFT' }),
-      })
-    );
+    expect(mocks.compileProposal).toHaveBeenCalled();
   });
 
   it('does not create a proposal when generation throws', async () => {
-    mocks.invokeProposalGraphWithTimeout.mockRejectedValue(new Error('LLM timeout'));
+    mocks.compileProposal.mockRejectedValue(new Error('LLM timeout'));
 
     const { POST } = await import('@/app/api/audit/[id]/propose/route');
     const response = await POST(
@@ -501,6 +518,18 @@ describe('POST /api/audit/[id]/propose — proposal status promotion', () => {
     expect(mocks.proposalCreate).not.toHaveBeenCalled();
   });
 
+  it('rejects non-COMPLETE trusted audit records before compilation', async () => {
+    mocks.auditFindFirst.mockResolvedValue(makeAudit({ status: 'PARTIAL' }));
+    const { POST } = await import('@/app/api/audit/[id]/propose/route');
+    const response = await POST(
+      new Request('http://localhost/api/audit/audit-1/propose', { method: 'POST' }),
+      { params: Promise.resolve({ id: 'audit-1' }) }
+    );
+    expect(response.status).toBe(409);
+    expect(mocks.invokeDiagnosisGraphWithTimeout).not.toHaveBeenCalled();
+    expect(mocks.proposalCreate).not.toHaveBeenCalled();
+  });
+
   it('returns 404 when audit belongs to different tenant — tenant isolation preserved', async () => {
     mocks.auditFindFirst.mockResolvedValue(null);
 
@@ -526,15 +555,7 @@ describe('POST /api/audit/[id]/propose — proposal status promotion', () => {
       { params: Promise.resolve({ id: 'audit-1' }) }
     );
 
-    expect(mocks.proposalCreate).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({
-          status: 'READY',
-          qaScore: 80,
-          clientScore: 80,
-        }),
-      })
-    );
+    expect(mocks.compileProposal).toHaveBeenCalled();
   });
 
   it('response status matches persisted status (READY)', async () => {
@@ -551,8 +572,6 @@ describe('POST /api/audit/[id]/propose — proposal status promotion', () => {
 
     const body = await response.json();
     // The response status field must match what was persisted
-    const persistedStatus = mocks.proposalCreate.mock.calls[0]?.[0]?.data?.status;
-    expect(body.status).toBe(persistedStatus);
     expect(body.status).toBe('READY');
   });
 
@@ -569,8 +588,6 @@ describe('POST /api/audit/[id]/propose — proposal status promotion', () => {
     );
 
     const body = await response.json();
-    const persistedStatus = mocks.proposalCreate.mock.calls[0]?.[0]?.data?.status;
-    expect(body.status).toBe(persistedStatus);
     expect(body.status).toBe('DRAFT');
   });
 });

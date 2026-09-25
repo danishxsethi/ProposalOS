@@ -6,10 +6,13 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 
 const REPO_ROOT = process.cwd();
 const TEST_DB = process.env.PROPOSALOS_RLS_TEST_DB || 'proposal_rls_smoke';
-const POSTGRES_PASSWORD = 'password';
-const DIRECT_URL = `postgresql://postgres:${POSTGRES_PASSWORD}@localhost:5435/${TEST_DB}`;
+const POSTGRES_PASSWORD = process.env.PROPOSALOS_TEST_DB_ADMIN_PASSWORD || 'password';
+const APP_PASSWORD = process.env.PROPOSALOS_TEST_DB_APP_PASSWORD || 'password';
+const DIRECT_URL = process.env.PROPOSALOS_RLS_DIRECT_URL ||
+  `postgresql://postgres:${POSTGRES_PASSWORD}@localhost:5435/${TEST_DB}`;
 const POOLED_POSTGRES_URL = `postgresql://postgres:${POSTGRES_PASSWORD}@localhost:6432/${TEST_DB}?pgbouncer=true`;
-const POOLED_APP_USER_URL = `postgresql://app_user:${POSTGRES_PASSWORD}@localhost:6432/${TEST_DB}?pgbouncer=true`;
+const POOLED_APP_USER_URL = process.env.PROPOSALOS_RLS_APP_URL ||
+  `postgresql://app_user:${APP_PASSWORD}@localhost:6432/${TEST_DB}?pgbouncer=true`;
 const RLS_MIGRATION_PATH = resolve(REPO_ROOT, 'prisma/migrations/20260429093000_enable_rls/migration.sql');
 const BYPASS_MIGRATION_PATH = resolve(REPO_ROOT, 'prisma/migrations/20260501014500_rls_bypass_policies/migration.sql');
 

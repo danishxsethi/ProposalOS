@@ -6,7 +6,7 @@ import { processSniperOutreach } from '@/lib/outreach/sprint2/sniperWorker';
 import { FeatureFlagService } from '@/lib/config/FeatureFlagService';
 import { runWithTenantAsync, runWithTenantBypass } from '@/lib/tenant/context';
 import { cleanupDb } from '@/lib/__tests__/utils/cleanup';
-import { OutreachEmailStatus, OutreachLeadStage, ProspectLeadStatus } from '@prisma/client';
+import { OutreachLeadStage, ProspectLeadStatus } from '@prisma/client';
 
 describe('Outreach Sandbox E2E Funnel Tests', () => {
   let testTenantId: string;
@@ -125,33 +125,44 @@ describe('Outreach Sandbox E2E Funnel Tests', () => {
 
     expect(orchestratorResult.processedCount).toBe(1);
     expect(orchestratorResult.auditedCount).toBe(1);
-    expect(orchestratorResult.promotedToOutreach).toBe(1);
+    expect(orchestratorResult.promotedToOutreach).toBe(0);
+    expect(orchestratorResult.droppedCount).toBe(1);
+    expect(orchestratorResult.details[0]?.outcome).toBe('dropped');
 
-    // Verify the lead has been updated to ready_for_outreach and score was evaluated
+    // Sandbox observations are review-only, not qualified for outreach.
     const enrichedLead = await runWithTenantAsync(testTenantId, () =>
       prisma.prospectLead.findFirst({
         where: { decisionMakerEmail: 'dr.john@alphadentistry.com' },
         include: { outreachEmails: true },
       })
     );
-    expect(enrichedLead!.pipelineStatus).toBe('ready_for_outreach');
-    expect(enrichedLead!.status).toBe(ProspectLeadStatus.ENRICHED);
-    expect(enrichedLead!.outreachStage).toBe(OutreachLeadStage.READY);
-    expect(enrichedLead!.proposalId).toBeDefined();
+    expect(enrichedLead!.pipelineStatus).toBe('audit_failed');
+    expect(enrichedLead!.status).not.toBe(ProspectLeadStatus.ENRICHED);
+    expect(enrichedLead!.outreachStage).toBe(OutreachLeadStage.DROPPED);
+    expect(enrichedLead!.proposalId).toBeNull();
+
+    // Simulated evidence must never be treated as a real, trusted audit or a
+    // publishable proposal, and the sandbox must not call a live sender.
+    const auditId = await runWithTenantAsync(testTenantId, async () =>
+      (await prisma.prospectLead.findUnique({ where: { id: lead!.id } }))!.auditId
+    );
+    const sandboxAudit = await runWithTenantAsync(testTenantId, () =>
+      prisma.audit.findFirst({ where: { id: auditId! } })
+    );
+    expect(sandboxAudit?.trustState).not.toBe('TRUSTED');
 
     // =========================================================================
     // PART D: Sniper Sequence Sending & Multi-Domain Rotation Pool (Dry-Run)
     // =========================================================================
 
-    // Process the sniper worker for the first time.
-    // This will compose the 5-email sequence and dry-run send Step 1 (INITIAL).
+    // The sniper worker must ignore a lead that failed trusted audit qualification.
     const sniperResult1 = await processSniperOutreach(testTenantId);
 
-    expect(sniperResult1.processedLeads).toBe(1);
-    expect(sniperResult1.sentEmails).toBe(1); // Step 1 sent
+    expect(sniperResult1.processedLeads).toBe(0);
+    expect(sniperResult1.sentEmails).toBe(0);
     expect(sniperResult1.skipped).toBe(0);
 
-    // Verify the sequence was created and the first email is marked SENT (since dry-run/mock is successful)
+    // No outbound sequence is eligible without trusted audit/publication state.
     const leadAfterSend = await runWithTenantAsync(testTenantId, () =>
       prisma.prospectLead.findUnique({
         where: { id: enrichedLead!.id },
@@ -159,10 +170,8 @@ describe('Outreach Sandbox E2E Funnel Tests', () => {
       })
     );
 
-    expect(leadAfterSend!.outreachEmails).toHaveLength(5);
-    expect(leadAfterSend!.outreachEmails[0].status).toBe(OutreachEmailStatus.SENT);
-    expect(leadAfterSend!.outreachEmails[1].status).toBe(OutreachEmailStatus.PENDING);
-    expect(leadAfterSend!.outreachStage).toBe(OutreachLeadStage.EMAIL_SENT);
+    expect(leadAfterSend!.outreachEmails).toHaveLength(0);
+    expect(leadAfterSend!.outreachStage).toBe(OutreachLeadStage.DROPPED);
 
     // =========================================================================
     // PART C: Warmup Curve Limit Verification
@@ -176,82 +185,33 @@ describe('Outreach Sandbox E2E Funnel Tests', () => {
         where: { tenantId: testTenantId },
       })
     );
-    expect(dailyStats.length).toBeGreaterThan(0);
+    expect(dailyStats.length).toBe(0);
     const totalSent = dailyStats.reduce((sum, s) => sum + s.sentCount, 0);
-    expect(totalSent).toBe(1);
+    expect(totalSent).toBe(0);
 
     // =========================================================================
-    // PART D (Continued): Stop-on-Reply / Stop-on-Bounce / Stop-on-Unsubscribe Behavioral Branching
+    // PART D (Continued): Ineligible simulation must remain blocked on repeat polls
     // =========================================================================
 
-    // Scenario 1: Stop-on-Reply
-    // Simulate prospect reply by incrementing reply count
-    await runWithTenantAsync(testTenantId, async () => {
-      await prisma.prospectLead.update({
-        where: { id: enrichedLead!.id },
-        data: {
-          outreachReplyCount: 1,
-        },
-      });
-      // Force next pending email to be due now
-      await prisma.outreachEmail.updateMany({
-        where: { leadId: enrichedLead!.id, status: OutreachEmailStatus.PENDING },
-        data: { scheduledAt: new Date(Date.now() - 3600000) },
-      });
-    });
-
-    // Trigger sniper - it should pause sequence and cancel pending emails due to reply
+    // A repeat worker poll cannot advance the downgraded lead.
     const sniperResultReply = await processSniperOutreach(testTenantId);
-    expect(sniperResultReply.skipped).toBe(1);
-    expect(sniperResultReply.details[0].outcome).toBe('pause_for_review');
+    expect(sniperResultReply.processedLeads).toBe(0);
 
-    // Verify lead stage updated and pending emails canceled
+    // An untrusted sandbox audit remains ineligible on subsequent worker polls.
     const leadAfterReply = await runWithTenantAsync(testTenantId, () =>
       prisma.prospectLead.findUnique({
         where: { id: enrichedLead!.id },
         include: { outreachEmails: true },
       })
     );
-    expect(leadAfterReply!.outreachStage).toBe(OutreachLeadStage.REPLIED);
-    const pendingEmails = leadAfterReply!.outreachEmails.filter(
-      (e) => e.status === OutreachEmailStatus.PENDING
-    );
-    expect(pendingEmails).toHaveLength(0); // All other pending cancelled/failed
+    expect(leadAfterReply!.outreachStage).toBe(OutreachLeadStage.DROPPED);
+    expect(leadAfterReply!.outreachEmails).toHaveLength(0);
 
-    // Reset lead for next scenarios
-    await runWithTenantAsync(testTenantId, async () => {
-      await prisma.outreachEmail.updateMany({
-        where: { leadId: enrichedLead!.id },
-        data: {
-          status: OutreachEmailStatus.PENDING,
-          scheduledAt: new Date(Date.now() - 3600000), // Force due now
-        },
-      });
-      await prisma.prospectLead.update({
-        where: { id: enrichedLead!.id },
-        data: {
-          outreachStage: OutreachLeadStage.EMAIL_SENT,
-          outreachReplyCount: 0,
-          outreachDropReason: null,
-        },
-      });
-    });
+    // Continue proving the untrusted sandbox lead remains ineligible.
 
-    // Scenario 2: Stop-on-Unsubscribe
-    // Put prospect on suppression blocklist
-    await runWithTenantBypass('test-unsub', () =>
-      prisma.emailBlocklist.create({
-        data: {
-          email: 'dr.john@alphadentistry.com',
-          reason: 'unsubscribed',
-        },
-      })
-    );
-
+    // The public send path is never invoked for an untrusted sandbox audit.
     const sniperResultUnsub = await processSniperOutreach(testTenantId);
-    expect(sniperResultUnsub.skipped).toBe(1);
-    expect(sniperResultUnsub.details[0].outcome).toBe('dropped');
-    expect(sniperResultUnsub.details[0].action).toBe('suppression');
+    expect(sniperResultUnsub.processedLeads).toBe(0);
 
     const leadAfterUnsub = await runWithTenantAsync(testTenantId, () =>
       prisma.prospectLead.findUnique({
@@ -259,48 +219,19 @@ describe('Outreach Sandbox E2E Funnel Tests', () => {
       })
     );
     expect(leadAfterUnsub!.outreachStage).toBe(OutreachLeadStage.DROPPED);
-    expect(leadAfterUnsub!.outreachDropReason).toContain('Suppressed globally');
 
-    // Remove from blocklist and reset lead for next scenarios
-    await runWithTenantBypass('test-unsub-cleanup', () =>
-      prisma.emailBlocklist.delete({
-        where: { email: 'dr.john@alphadentistry.com' },
-      })
-    );
-    await runWithTenantAsync(testTenantId, async () => {
-      await prisma.outreachEmail.updateMany({
-        where: { leadId: enrichedLead!.id },
-        data: {
-          status: OutreachEmailStatus.PENDING,
-          scheduledAt: new Date(Date.now() - 3600000), // Force due now
-        },
-      });
-      await prisma.prospectLead.update({
-        where: { id: enrichedLead!.id },
-        data: {
-          outreachStage: OutreachLeadStage.EMAIL_SENT,
-          outreachDropReason: null,
-        },
-      });
-    });
+    // Continue proving send caps do not promote an ineligible lead.
 
     // Scenario 3: Send Cap Hit (Hard Stop)
     // Set daily cap to 0 to simulate exceeding limits
     process.env.OUTREACH_DAILY_SEND_CAP = '0';
 
     const sniperResultCap = await processSniperOutreach(testTenantId);
-    expect(sniperResultCap.capExceeded).toBe(true);
-    expect(sniperResultCap.details[0].outcome).toBe('blocked');
-    expect(sniperResultCap.details[0].reason).toContain('Daily send limit cap of 0 reached');
+    expect(sniperResultCap.processedLeads).toBe(0);
+    expect(sniperResultCap.sentEmails).toBe(0);
 
-    // Restore daily cap and reset lead
+    // Restore daily cap.
     process.env.OUTREACH_DAILY_SEND_CAP = '100';
-    await runWithTenantAsync(testTenantId, () =>
-      prisma.outreachEmail.updateMany({
-        where: { leadId: enrichedLead!.id, status: OutreachEmailStatus.PENDING },
-        data: { scheduledAt: new Date(Date.now() - 3600000) },
-      })
-    );
 
     // Scenario 4: Kill Switch Halt
     // Set kill switch flag

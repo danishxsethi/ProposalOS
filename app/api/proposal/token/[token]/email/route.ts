@@ -10,12 +10,16 @@
 
 import { NextResponse } from 'next/server';
 
-import { generateTraceId, InternalError, NotFoundError, ValidationError } from '@/lib/api/errors';
+import { generateTraceId, InternalError, ValidationError } from '@/lib/api/errors';
 import { proposalEmailSchema } from '@/lib/api/schemas/proposal';
 import { sendProposalEmail } from '@/lib/email/sender';
-import { RateLimitPresets, withRateLimit } from '@/lib/middleware/rateLimit';
+import { withRateLimit } from '@/lib/middleware/rateLimit';
 import { prisma } from '@/lib/prisma';
-import { assertProposalPublishable } from '@/lib/proposal/publication';
+import {
+  PublicProposalAccessError,
+  resolvePublicProposalAccess,
+} from '@/lib/proposal/publicAccess';
+import { runWithTenantAsync } from '@/lib/tenant/context';
 
 interface Params {
   params: Promise<{ token: string }>;
@@ -47,17 +51,7 @@ async function handleEmail(req: Request, { params }: Params): Promise<NextRespon
     const { email } = result.data;
 
     // Verify proposal exists
-    const proposal = await prisma.proposal.findUnique({
-      where: { webLinkToken: token },
-      include: { audit: true },
-    });
-
-    if (!proposal) {
-      return NextResponse.json(new NotFoundError('Proposal', token).toEnvelope(req.url, traceId), {
-        status: 404,
-      });
-    }
-    assertProposalPublishable(proposal);
+    const { proposal, proposalId, tenantId } = await resolvePublicProposalAccess(token);
 
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
     const proposalUrl = `${baseUrl}/proposal/${token}`;
@@ -82,13 +76,15 @@ async function handleEmail(req: Request, { params }: Params): Promise<NextRespon
     }
 
     // Update proposal status to 'SENT'
-    await prisma.proposal.update({
-      where: { id: proposal.id },
-      data: {
-        status: 'SENT',
-        sentAt: new Date(),
-      },
-    });
+    await runWithTenantAsync(tenantId, () =>
+      prisma.proposal.update({
+        where: { id: proposalId },
+        data: {
+          status: 'SENT',
+          sentAt: new Date(),
+        },
+      })
+    );
 
     const response = NextResponse.json({
       success: true,
@@ -97,6 +93,9 @@ async function handleEmail(req: Request, { params }: Params): Promise<NextRespon
     response.headers.set('X-Trace-Id', traceId);
     return response;
   } catch (error) {
+    if (error instanceof PublicProposalAccessError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
     const internalError = new InternalError('Failed to process email request', {
       originalError: error instanceof Error ? error.message : String(error),
     });

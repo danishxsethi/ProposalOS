@@ -40,6 +40,16 @@ vi.mock('@/lib/api/errors', () => ({
   },
 }));
 
+vi.mock('@/lib/proposal/publicAccess', () => ({
+  PublicProposalAccessError: class PublicProposalAccessError extends Error {
+    constructor(message: string, readonly status: number) { super(message); }
+  },
+  resolvePublicProposalAccess: vi.fn(async (token: string) => {
+    if (token !== 'token-1') throw new Error('unexpected token');
+    return { tenantId: 'tenant-1', proposalId: 'proposal-1' };
+  }),
+}));
+
 import { prisma } from '@/lib/prisma';
 import { getProposalPriceId, stripe } from '@/lib/stripe/stripe';
 

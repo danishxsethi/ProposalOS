@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-24T07:07:06.668Z",
+  "generatedAt": "2026-09-25T03:23:11.157Z",
   "source": "app/api/**/route.ts static scan",
   "routeFileCount": 146,
   "entryCount": 197,
@@ -1470,7 +1470,9 @@
     {
       "path": "/api/presentation/[token]/export",
       "method": "GET",
-      "auth": [],
+      "auth": [
+        "withRateLimit"
+      ],
       "routeClass": "token_gated_public",
       "isPublic": true,
       "isMutation": false,
@@ -1669,7 +1671,7 @@
       "routeClass": "token_gated_public",
       "isPublic": true,
       "isMutation": true,
-      "tenantSource": "tenantId-referenced",
+      "tenantSource": "tenant-context-wrapper|tenantId-referenced",
       "ownerResourceRule": "token-scoped: write bounded to resource resolved by unguessable token"
     },
     {
@@ -1681,7 +1683,7 @@
       "routeClass": "token_gated_public",
       "isPublic": true,
       "isMutation": true,
-      "tenantSource": "tenantId-referenced",
+      "tenantSource": "tenant-context-wrapper|tenantId-referenced",
       "ownerResourceRule": "token-scoped: write bounded to resource resolved by unguessable token"
     },
     {
@@ -1693,7 +1695,7 @@
       "routeClass": "token_gated_public",
       "isPublic": true,
       "isMutation": true,
-      "tenantSource": "token-lookup",
+      "tenantSource": "tenant-context-wrapper|tenantId-referenced",
       "ownerResourceRule": "token-scoped: write bounded to resource resolved by unguessable token"
     },
     {
@@ -1705,7 +1707,7 @@
       "routeClass": "token_gated_public",
       "isPublic": true,
       "isMutation": false,
-      "tenantSource": "tenant-context-wrapper|tenant-bypass(token-lookup)|tenantId-referenced",
+      "tenantSource": "tenant-context-wrapper|tenantId-referenced",
       "ownerResourceRule": "read-only"
     },
     {
@@ -1717,7 +1719,7 @@
       "routeClass": "token_gated_public",
       "isPublic": true,
       "isMutation": false,
-      "tenantSource": "tenant-context(session/api-key)|tenant-context-wrapper|tenant-bypass(token-lookup)|tenantId-referenced",
+      "tenantSource": "tenant-context(session/api-key)|tenantId-referenced",
       "ownerResourceRule": "read-only"
     },
     {
@@ -1729,7 +1731,7 @@
       "routeClass": "token_gated_public",
       "isPublic": true,
       "isMutation": true,
-      "tenantSource": "tenant-context(session/api-key)|tenant-context-wrapper|tenant-bypass(token-lookup)|tenantId-referenced",
+      "tenantSource": "tenant-context(session/api-key)|tenantId-referenced",
       "ownerResourceRule": "token-scoped: write bounded to resource resolved by unguessable token"
     },
     {
@@ -1741,7 +1743,7 @@
       "routeClass": "token_gated_public",
       "isPublic": true,
       "isMutation": true,
-      "tenantSource": "token-lookup",
+      "tenantSource": "tenant-context-wrapper|tenantId-referenced",
       "ownerResourceRule": "token-scoped: write bounded to resource resolved by unguessable token"
     },
     {
@@ -1766,7 +1768,7 @@
       "routeClass": "token_gated_public",
       "isPublic": true,
       "isMutation": true,
-      "tenantSource": "tenant-context-wrapper|tenant-bypass(token-lookup)|tenantId-referenced",
+      "tenantSource": "tenant-context-wrapper|tenantId-referenced",
       "ownerResourceRule": "token-scoped: write bounded to resource resolved by unguessable token"
     },
     {

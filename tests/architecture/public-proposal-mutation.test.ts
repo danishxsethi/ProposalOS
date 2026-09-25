@@ -68,9 +68,9 @@ const FORBIDDEN_PATTERNS: { name: string; regex: RegExp }[] = [
   // writing QA/telemetry authority records.
   { name: 'QA authority', regex: /(humanReview|qaTelemetry|hallucinationTelemetry|modelMetric)\w*\.(create|update|delete|upsert)/i },
   { name: 'pricing/plan authority', regex: /pricingPlan|plan\.update|subscription\.|billing\./i },
-  { name: 'fulfillment/delivery', regex: /delivery|fulfillment|artifact\.create|bundle/i },
+  { name: 'fulfillment/delivery', regex: /(?:delivery|fulfillment|artifact|bundle)\.(?:create|update|delete|upsert)/i },
   { name: 'auth/user authority', regex: /user\.create|user\.update|apiKey|session\./i },
-  { name: 'audit engine authority', regex: /audit\.create|audit\.update|finding\./i },
+  { name: 'audit engine authority', regex: /audit\.(?:create|update)|finding\.(?:create|update|delete|upsert)/i },
 ];
 
 function listFiles(dir: string): string[] {
@@ -271,6 +271,24 @@ describe('Public/tokenized proposal mutation inventory', () => {
     const getBlock = content.split('export const PATCH')[0];
     const writes = extractPrismaWrites(getBlock);
     expect(writes).toEqual([]);
+  });
+
+  it('routes public token artifact reads through the shared proposal access resolver', () => {
+    const publicReads = [
+      'proposal/token/[token]/route.ts',
+      'proposal/token/[token]/accept/route.ts',
+      'proposal/token/[token]/contact/route.ts',
+      'proposal/token/[token]/share/route.ts',
+      'proposal/token/[token]/email/route.ts',
+      'proposal/token/[token]/track/route.ts',
+      'proposal/token/[token]/pdf/route.ts',
+      'presentation/[token]/export/route.ts',
+    ];
+    for (const rel of publicReads) {
+      expect(fs.readFileSync(path.join(apiDir, rel), 'utf8'), rel).toContain(
+        'resolvePublicProposalAccess'
+      );
+    }
   });
 
   it('internal proposal mutation routes stay session-authenticated', () => {

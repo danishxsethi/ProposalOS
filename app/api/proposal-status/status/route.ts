@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 
 import { withAuth } from '@/lib/middleware/auth';
 import { prisma } from '@/lib/prisma';
-import { assertProposalPublishable } from '@/lib/proposal/publication';
+import { PublicProposalAccessError, resolvePublicProposalAccess } from '@/lib/proposal/publicAccess';
 import { getTenantId } from '@/lib/tenant/context';
 
 /**
@@ -46,7 +46,9 @@ async function handleUpdateStatus(request: Request): Promise<NextResponse> {
     if (!proposal) {
       return NextResponse.json({ error: 'Proposal not found' }, { status: 404 });
     }
-    if (status === 'ready' || status === 'sent') assertProposalPublishable(proposal);
+    if (status === 'ready' || status === 'sent' || status === 'viewed') {
+      await resolvePublicProposalAccess(proposal.webLinkToken);
+    }
 
     // Update status and set timestamp if transitioning to 'sent'
     const updateData: Record<string, unknown> = { status };
@@ -68,6 +70,9 @@ async function handleUpdateStatus(request: Request): Promise<NextResponse> {
       },
     });
   } catch (error) {
+    if (error instanceof PublicProposalAccessError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
     return NextResponse.json({ error: 'Failed to update proposal status' }, { status: 500 });
   }
 }

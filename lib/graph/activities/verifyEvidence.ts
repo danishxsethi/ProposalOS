@@ -1,82 +1,68 @@
-import { Finding } from '@/lib/diagnosis/types';
 import { Evidence } from '@/lib/modules/types';
 
+import type { EvidenceSnapshot, Finding as PrismaFinding } from '@prisma/client';
+
 export interface VerifyEvidenceResult {
-  findings: Finding[];
+  findings: Array<PrismaFinding & { unverified?: boolean; stale?: boolean }>;
   staleCount: number;
+  invalidCount: number;
 }
 
-export interface FindingEvidence {
-  pointer?: string;
-  collected_at?: string;
-  module?: string;
-  source?: string;
-  url?: string;
-  screenshot?: string;
-  timestamp?: string;
-  rawHtml?: string;
-  apiResponse?: Record<string, unknown>;
+function snapshotFreshnessBySource(snapshots: EvidenceSnapshot[], maxAgeMs: number, now: number) {
+  const freshness = new Map<string, boolean>();
+  for (const snapshot of snapshots) {
+    const previous = freshness.get(snapshot.module) ?? false;
+    const age = now - snapshot.collectedAt.getTime();
+    const isFresh = age >= 0 && age <= maxAgeMs;
+    freshness.set(snapshot.module, previous || isFresh);
+  }
+  return freshness;
 }
 
 export async function verifyEvidenceActivity(
-  findings: Finding[],
-  maxAgeHours: number = 24
+  findings: PrismaFinding[],
+  maxAgeHours = 24,
+  snapshots: EvidenceSnapshot[] = []
 ): Promise<VerifyEvidenceResult> {
   let staleCount = 0;
+  let invalidCount = 0;
   const now = Date.now();
   const maxAgeMs = maxAgeHours * 60 * 60 * 1000;
+  const sourceFreshness = snapshotFreshnessBySource(snapshots, maxAgeMs, now);
 
   const verifiedFindings = findings.map((finding) => {
-    let isUnverified = false;
+    const findingEvidence = Array.isArray(finding.evidence) ? (finding.evidence as unknown as Evidence[]) : [];
+    let isUnverified = findingEvidence.length === 0;
     let isStale = false;
+    let foundFreshSnapshot = false;
 
-    if (!finding.evidence || !Array.isArray(finding.evidence) || finding.evidence.length === 0) {
-      isUnverified = true;
-    } else {
-      for (const ev of finding.evidence as unknown as FindingEvidence[]) {
-        if (!ev) {
-          isUnverified = true;
-          continue;
-        }
-
-        // 1. Check pointer
-        if (!ev.pointer || typeof ev.pointer !== 'string' || ev.pointer.trim() === '') {
-          isUnverified = true;
-        }
-
-        // 2. Check collected_at or timestamp
-        const timeString = ev.collected_at || ev.timestamp;
-        if (timeString) {
-          const collectedTime = new Date(timeString).getTime();
-          if (isNaN(collectedTime)) {
-            isUnverified = true;
-          } else if (now - collectedTime > maxAgeMs) {
-            isStale = true;
-          }
-        } else {
-          isUnverified = true;
-        }
-
-        // 3. Check module mismatch
-        if (ev.module && ev.module !== finding.module) {
-          isUnverified = true;
-        }
+    for (const evidence of findingEvidence) {
+      if (!evidence || typeof evidence.pointer !== 'string' || !evidence.pointer.trim()) {
+        isUnverified = true;
+        continue;
       }
+      const timestamp = evidence.collected_at ? Date.parse(evidence.collected_at) : Number.NaN;
+      if (!Number.isFinite(timestamp)) {
+        isUnverified = true;
+        continue;
+      }
+      const age = now - timestamp;
+      const fresh = age >= 0 && age <= maxAgeMs;
+      foundFreshSnapshot ||= fresh;
+      isStale ||= !fresh;
     }
 
-    if (isStale) {
-      staleCount++;
-    }
+    const moduleHasFreshSnapshot = sourceFreshness.get(finding.module) === true;
+    if (snapshots.length > 0 && !moduleHasFreshSnapshot) isStale = true;
+    if (isStale) staleCount++;
+    if (isUnverified || isStale || (snapshots.length > 0 && !moduleHasFreshSnapshot)) invalidCount++;
 
     return {
       ...finding,
-      unverified: isUnverified,
-      stale: isStale,
-    } as Finding & { unverified?: boolean; stale?: boolean };
+      unverified: isUnverified || (snapshots.length > 0 && !moduleHasFreshSnapshot),
+      stale: isStale || (!foundFreshSnapshot && snapshots.length > 0),
+    };
   });
 
-  return {
-    findings: verifiedFindings,
-    staleCount,
-  };
+  return { findings: verifiedFindings, staleCount, invalidCount };
 }

@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   auditFindFirst: vi.fn(),
   auditUpdate: vi.fn(),
   proposalCreate: vi.fn(),
+  compileProposal: vi.fn(),
   proposalTemplateFindFirst: vi.fn(),
   evidenceFindMany: vi.fn(),
   invokeDiagnosisGraphWithTimeout: vi.fn(),
@@ -63,6 +64,10 @@ vi.mock('@/lib/prisma', () => ({
       findMany: mocks.evidenceFindMany,
     },
   },
+}));
+vi.mock('@/lib/proposal/compiler', () => ({
+  compileAndPersistProposal: mocks.compileProposal,
+  getCurrentProposalVersion: vi.fn().mockResolvedValue(1),
 }));
 
 vi.mock('@/lib/analysis/competitorComparison', () => ({
@@ -220,6 +225,7 @@ describe('audit propose authorization', () => {
     mocks.proposalTemplateFindFirst.mockResolvedValue(null);
     mocks.evidenceFindMany.mockResolvedValue([]);
     mocks.invokeDiagnosisGraphWithTimeout.mockResolvedValue({
+      resultState: 'trusted',
       clusters: [{ findingIds: ['finding-1'] }],
       validation: { valid: true },
     });
@@ -244,6 +250,12 @@ describe('audit propose authorization', () => {
     mocks.proposalCreate.mockResolvedValue({
       id: 'proposal-1',
       webLinkToken: 'token-1',
+    });
+    mocks.compileProposal.mockResolvedValue({
+      proposalRecord: { id: 'proposal-1', webLinkToken: 'token-1', status: 'READY' },
+      proposal: completeProposal(),
+      evaluation: { autoQAStatus: { score: 95, clientPerfect: { score: 92, hardFails: [], requiresHumanReview: false } }, dimensions: {}, overallScore: 95, passed: true, feedbackLogs: [] },
+      costTracker: { getTotalCents: () => 7 },
     });
   });
 
@@ -283,11 +295,6 @@ describe('audit propose authorization', () => {
           orderBy: { createdAt: 'desc' },
           take: 1,
         },
-        evidence: {
-          where: { module: 'competitor' },
-          orderBy: { collectedAt: 'desc' },
-          take: 1,
-        },
       },
     });
   });
@@ -299,6 +306,7 @@ describe('audit propose authorization', () => {
     mocks.auditFindFirst.mockResolvedValue({
       id: 'audit-1',
       tenantId: 'tenant-a',
+      status: 'COMPLETE',
       trustState: 'TRUSTED',
       businessName: 'Acme Dental',
       businessIndustry: 'Dental',
@@ -326,19 +334,8 @@ describe('audit propose authorization', () => {
       proposalId: 'proposal-1',
       webLinkToken: 'token-1',
     });
-    expect(mocks.proposalCreate).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({
-          auditId: 'audit-1',
-          tenantId: 'tenant-a',
-        }),
-      })
-    );
-    expect(mocks.auditUpdate).toHaveBeenCalledWith({
-      where: { id: 'audit-1' },
-      data: {
-        apiCostCents: { increment: 7 },
-      },
-    });
+    expect(mocks.compileProposal).toHaveBeenCalledWith(expect.objectContaining({
+      auditId: 'audit-1', tenantId: 'tenant-a', version: 1,
+    }));
   });
 });

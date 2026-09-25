@@ -165,6 +165,25 @@ function numericTokens(value: string): string[] {
   return value.match(/[$]?\d+(?:\.\d+)?%?/g) ?? [];
 }
 
+function normalizeNumericToken(value: string): string {
+  return value.replace(/^\$/, '').replace(/%$/, '').replace(/,/g, '').toLowerCase();
+}
+
+function wordNumberTokens(value: string): string[] {
+  const words: Record<string, string> = {
+    zero: '0', one: '1', two: '2', three: '3', four: '4', five: '5', six: '6',
+    seven: '7', eight: '8', nine: '9', ten: '10', eleven: '11', twelve: '12',
+    thirteen: '13', fourteen: '14', fifteen: '15', sixteen: '16', seventeen: '17',
+    eighteen: '18', nineteen: '19', twenty: '20', thirty: '30', forty: '40',
+    fifty: '50', sixty: '60', seventy: '70', eighty: '80', ninety: '90',
+    hundred: '100', thousand: '1000',
+  };
+  return value
+    .toLowerCase()
+    .match(/\b(?:zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred|thousand)\b/g)
+    ?.flatMap((word) => (words[word] ? [words[word]] : [])) ?? [];
+}
+
 function supportTokens(value: string): string[] {
   return [
     ...new Set(
@@ -191,8 +210,17 @@ export function validateClaimSupport(
   const declaredMetrics = comparableText(claim.metricInputs.map((input) => input.value));
   const issues: string[] = [];
 
+  const sourceNumbers = [
+    ...numericTokens(source),
+    ...wordNumberTokens(source),
+  ].map(normalizeNumericToken);
+  const declaredNumbers = [
+    ...numericTokens(declaredMetrics),
+    ...wordNumberTokens(declaredMetrics),
+  ].map(normalizeNumericToken);
   for (const token of numericTokens(claim.text)) {
-    if (!source.includes(token.toLowerCase()) && !declaredMetrics.includes(token.toLowerCase())) {
+    const normalized = normalizeNumericToken(token);
+    if (!sourceNumbers.includes(normalized) && !declaredNumbers.includes(normalized)) {
       issues.push(
         `text: numeric claim '${token}' is not present in cited Findings or metric inputs`
       );

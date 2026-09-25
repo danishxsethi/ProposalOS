@@ -25,6 +25,16 @@ export interface ProposalQAEvaluation {
   autoQAStatus: QAStatus;
 }
 
+export function isProposalQAPublishable(evaluation: ProposalQAEvaluation): boolean {
+  return (
+    evaluation.passed &&
+    evaluation.autoQAStatus.status === 'PASS' &&
+    evaluation.autoQAStatus.hardFailures.length === 0 &&
+    evaluation.autoQAStatus.clientPerfect.hardFails.length === 0 &&
+    !evaluation.autoQAStatus.clientPerfect.requiresHumanReview
+  );
+}
+
 const CTA_PATTERN = /(reply|schedule|book|call|start|get started|send it|approve|accept)/i;
 
 export class ProposalQAService {
@@ -202,7 +212,15 @@ export class ProposalQAService {
       copywritingSafety >= 7.0 &&
       clientReadiness >= 7.0;
 
-    const passed = meetsThresholds && !forceManualMode && autoPromotionEnabled;
+  const passed =
+    meetsThresholds &&
+    grounding.valid &&
+    autoQAStatus.status === 'PASS' &&
+    autoQAStatus.hardFailures.length === 0 &&
+    autoQAStatus.clientPerfect.hardFails.length === 0 &&
+      !autoQAStatus.clientPerfect.requiresHumanReview &&
+      !forceManualMode &&
+      autoPromotionEnabled;
 
     if (forceManualMode) {
       feedbackLogs.push(

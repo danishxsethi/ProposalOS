@@ -4,8 +4,6 @@ import { dispatchAuditExecution } from '@/lib/audit/dispatch';
 import { persistFindings } from '@/lib/audit/findingPersistence';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
-import { buildProposalGrounding } from '@/lib/proposal/grounding';
-import { ProposalQAService } from '@/lib/proposal/ProposalQAService';
 import { generateProposal } from '@/lib/proposal/runner';
 import { processAuditJob } from '@/lib/queue/auditJobWorker';
 import { runWithTenantAsync } from '@/lib/tenant/context';
@@ -97,7 +95,7 @@ export class AutomatedOutreachOrchestrator {
             // Simulated / Sandboxed offline-safe crawling & findings generation
             await prisma.audit.update({
               where: { id: audit.id },
-              data: { status: 'COMPLETE' },
+              data: { status: 'DEGRADED', trustState: 'DEGRADED_REVIEW_REQUIRED' },
             });
 
             // Create mock audit findings so the LangChain proposal graph has input data.
@@ -158,7 +156,10 @@ export class AutomatedOutreachOrchestrator {
               );
             }
 
-            logger.info({ auditId: audit.id }, 'Simulated audit completed successfully');
+            logger.info(
+              { auditId: audit.id, trustState: 'DEGRADED_REVIEW_REQUIRED' },
+              'Sandbox observations persisted; proposal publication is blocked'
+            );
           } else {
             // Execute real crawler
             const job = await dispatchAuditExecution({ tenantId, auditId: audit.id, push: false });
@@ -173,7 +174,8 @@ export class AutomatedOutreachOrchestrator {
 
           if (
             !completedAudit ||
-            completedAudit.status === 'FAILED' ||
+            completedAudit.status !== 'COMPLETE' ||
+            completedAudit.trustState !== 'TRUSTED' ||
             completedAudit.findings.length === 0
           ) {
             // Crawl failed
@@ -198,148 +200,7 @@ export class AutomatedOutreachOrchestrator {
           // 2. Trigger Proposal Generation (internally runs ProposalQAService evaluation loops)
           let proposalResult;
           if (simulate) {
-            // Create a mock proposal and evaluate it to ensure fast, deterministic tests
-            const findingIds = completedAudit?.findings.map((f) => f.id) || [];
-            const cityName = lead.city || 'Unknown';
-            const industryName = lead.vertical || 'Unknown';
-
-            // ROI ratio must equal monthlyValue/price (deterministic commercial
-            // arithmetic is verified by the QA gate).
-            const pricing = {
-              essentials: 999,
-              growth: 1999,
-              premium: 3999,
-              currency: 'USD',
-            };
-            const makeRoi = (monthlyValue: number, price: number) => ({
-              monthlyValue,
-              ratio: Number((monthlyValue / price).toFixed(1)),
-              scenarios: {
-                best: monthlyValue * 2,
-                base: monthlyValue,
-                worst: Math.floor(monthlyValue / 5),
-                assumptions: ['Cooperation', 'Traffic volume stable'],
-              },
-            });
-
-            const mockProposalContent = {
-              executiveSummary: `Highly targeted growth strategy for ${lead.businessName} (Industry: ${industryName}) in ${cityName}. Our audit identified critical issues — Missing Sitemap and Robot.txt and Slow Largest Contentful Paint (LCP) — that are reducing indexation speed and search visibility and driving higher user bounce rates. Fixing these can increase bookings and improve conversion.`,
-              painClusters: [
-                {
-                  id: 'cluster-1',
-                  rootCause:
-                    'Missing Sitemap and Robot.txt and Slow Largest Contentful Paint (LCP) are the root causes suppressing organic visibility.',
-                  severity: 'critical' as const,
-                  findingIds,
-                },
-              ],
-              // Grounding requires at least 2 findings per tier mapping.
-              tiers: {
-                essentials: {
-                  name: 'Essentials',
-                  description:
-                    'Core fixes: Missing Sitemap and Robot.txt plus Slow Largest Contentful Paint (LCP) remediation.',
-                  findingIds: findingIds,
-                  deliveryTime: '5 business days',
-                  price: 999,
-                  recommended: false,
-                  roi: makeRoi(500, 999),
-                },
-                growth: {
-                  name: 'Growth',
-                  description:
-                    'Growth: fixes for Missing Sitemap and Robot.txt and Slow Largest Contentful Paint (LCP) with ongoing monitoring.',
-                  findingIds: findingIds,
-                  deliveryTime: '10 business days',
-                  price: 1999,
-                  recommended: true,
-                  roi: makeRoi(1000, 1999),
-                },
-                premium: {
-                  name: 'Premium',
-                  description:
-                    'Premium: full remediation of Missing Sitemap and Robot.txt and Slow Largest Contentful Paint (LCP) with quarterly reviews.',
-                  findingIds: findingIds,
-                  deliveryTime: '15 business days',
-                  price: 3999,
-                  recommended: false,
-                  roi: makeRoi(2000, 3999),
-                },
-              },
-              // Grounding binds finding-backed top actions (the QA gate checks for
-              // up to 3; fewer findings → fewer actions).
-              topActions: completedAudit!.findings
-                .slice(0, 3)
-                .map((finding, index) => ({
-                  findingId: finding.id,
-                  title: finding.title,
-                  impact: finding.impactScore,
-                  effort: finding.effortEstimate ?? 'MEDIUM',
-                  timeline: `Schedule within ${index + 2} business days`,
-                })),
-              pricing,
-              assumptions: [
-                'Assumes cooperation with technical staff.',
-                'Assumes standard CMS access is provided.',
-              ],
-              disclaimers: ['Estimates only.'],
-              nextSteps: [
-                'Step 1: Setup Sitemap and Robots.txt. Impact: High. Effort: Low. Timeline: 2 days.',
-                'Step 2: Optimize hero banner image delivery. Impact: High. Effort: Medium. Timeline: 3 days.',
-                'Step 3: Schedule review call. Impact: High. Effort: Low. Timeline: 1 day.',
-              ],
-            };
-
-            // Simulated proposals must carry the same canonical claim grounding the
-            // real generator produces — ProposalQAService hard-fails GROUNDING_INVALID
-            // otherwise. Build it via the one production builder (no QA weakening).
-            const grounding = buildProposalGrounding(
-              mockProposalContent as any,
-              {
-                auditId: audit.id,
-                tenantId,
-                findings: completedAudit!.findings,
-              },
-              findingIds
-            );
-            const groundedProposalContent = { ...mockProposalContent, grounding };
-
-            // Run the actual ProposalQAService evaluate method
-            const evaluation = ProposalQAService.evaluateProposal(
-              groundedProposalContent as any,
-              completedAudit.findings,
-              lead.businessName,
-              lead.city,
-              { industry: lead.vertical }
-            );
-
-            // Create proposal record in db
-            const proposal = await prisma.proposal.create({
-              data: {
-                auditId: audit.id,
-                tenantId,
-                version: 1,
-                executiveSummary: mockProposalContent.executiveSummary,
-                painClusters: mockProposalContent.painClusters as any,
-                tierEssentials: mockProposalContent.tiers.essentials as any,
-                tierGrowth: mockProposalContent.tiers.growth as any,
-                tierPremium: mockProposalContent.tiers.premium as any,
-                pricing: mockProposalContent.pricing as any,
-                assumptions: mockProposalContent.assumptions,
-                disclaimers: mockProposalContent.disclaimers,
-                nextSteps: mockProposalContent.nextSteps,
-                status: evaluation.passed ? 'READY' : 'DRAFT',
-                qaScore: evaluation.autoQAStatus.score,
-                qaResults: JSON.parse(JSON.stringify(evaluation)),
-              },
-            });
-
-            proposalResult = {
-              success: true,
-              proposalId: proposal.id,
-              status: proposal.status,
-              evaluation,
-            };
+            proposalResult = await generateProposal(audit.id);
           } else {
             proposalResult = await generateProposal(audit.id);
           }

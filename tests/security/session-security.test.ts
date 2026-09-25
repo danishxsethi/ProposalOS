@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   sessionUpdate: vi.fn(),
   proposalFindUnique: vi.fn(),
   proposalFindFirst: vi.fn(),
+  proposalFindUniqueByToken: vi.fn(),
   evidenceFindMany: vi.fn(),
   rateLimit: vi.fn(),
   apiKeyFindUnique: vi.fn(),
@@ -43,9 +44,10 @@ vi.mock('@/lib/prisma', () => ({
       findUnique: mocks.sessionFindUnique,
       update: mocks.sessionUpdate,
     },
-    proposal: {
-      findUnique: mocks.proposalFindUnique,
-      findFirst: mocks.proposalFindFirst,
+      proposal: {
+        findUnique: mocks.proposalFindUnique,
+        findFirst: mocks.proposalFindFirst,
+        findUniqueByToken: mocks.proposalFindUniqueByToken,
     },
     evidenceSnapshot: { findMany: mocks.evidenceFindMany },
     apiKey: {
@@ -63,6 +65,7 @@ vi.mock('@/lib/tenant/context', () => ({
 
 vi.mock('@/lib/proposal/publication', () => ({
   assertProposalPublishable: vi.fn(),
+  proposalPublicationFingerprint: () => 'matching-fingerprint',
   publicProposalCitations: vi.fn(() => ({ status: 'verified', claims: [] })),
 }));
 vi.mock('@/lib/middleware/rateLimit', () => ({
@@ -324,15 +327,109 @@ describe('Session Security, Device Context & RTR', () => {
     it('allows access to valid, unexpired, and non-rejected proposals', async () => {
       mocks.proposalFindUnique.mockResolvedValue({
         id: 'prop-1',
+        version: 1,
         createdAt: new Date(), // Just created
         status: 'READY',
         executiveSummary: 'Test Summary',
+        tenantId: 'tenant-1',
+        auditId: 'audit-1',
+        publicAccessRevokedAt: null,
+        publicationFingerprint: 'matching-fingerprint',
+        pricing: { essentials: 0, growth: 0, premium: 0 },
+        tierEssentials: { description: 'Essentials', features: [] },
+        tierGrowth: { description: 'Growth', features: [] },
+        tierPremium: { description: 'Premium', features: [] },
+        qaResults: {
+          provenance: {
+            proposalInputVersion: 1,
+            findingIds: ['finding-1'],
+            evidenceIds: ['evidence-1'],
+            findingEvidenceIds: { 'finding-1': ['evidence-1'] },
+          },
+          publicationFingerprint: 'matching-fingerprint',
+          publicationApproval: {
+            decision: 'APPROVED',
+            proposalVersion: 1,
+            fingerprint: 'matching-fingerprint',
+          },
+          status: 'PASS', hardFailures: [], evaluation: { passed: true }, claimPolicy: { valid: true },
+          grounding: {
+            claims: [
+              {
+                claimId: 'finding-claim',
+                claimType: 'DERIVED_FROM_FINDINGS',
+                sourceFindingIds: ['finding-1'],
+              },
+              {
+                claimId: 'ess-desc',
+                text: 'Essentials',
+                claimType: 'RECOMMENDATION',
+                sourceFindingIds: ['finding-1'],
+              },
+              {
+                claimId: 'ess-price',
+                text: 'USD 0',
+                claimType: 'COMMERCIAL_CONFIGURATION',
+                configurationRefs: ['proposal-pricing-v1'],
+                sourceFindingIds: [],
+              },
+              {
+                claimId: 'growth-desc',
+                text: 'Growth',
+                claimType: 'RECOMMENDATION',
+                sourceFindingIds: ['finding-1'],
+              },
+              {
+                claimId: 'growth-price',
+                text: 'USD 0',
+                claimType: 'COMMERCIAL_CONFIGURATION',
+                configurationRefs: ['proposal-pricing-v1'],
+                sourceFindingIds: [],
+              },
+              {
+                claimId: 'premium-desc',
+                text: 'Premium',
+                claimType: 'RECOMMENDATION',
+                sourceFindingIds: ['finding-1'],
+              },
+              {
+                claimId: 'premium-price',
+                text: 'USD 0',
+                claimType: 'COMMERCIAL_CONFIGURATION',
+                configurationRefs: ['proposal-pricing-v1'],
+                sourceFindingIds: [],
+              },
+            ],
+            commercial: { prices: { essentials: 0, growth: 0, premium: 0 } },
+            bindings: {
+              tiers: {
+                essentials: { description: 'ess-desc', price: 'ess-price', features: [] },
+                growth: { description: 'growth-desc', price: 'growth-price', features: [] },
+                premium: { description: 'premium-desc', price: 'premium-price', features: [] },
+              },
+            },
+          },
+        },
         audit: {
+          status: 'COMPLETE',
+          trustState: 'TRUSTED',
           businessName: 'Acme Corp',
           businessCity: 'Denver',
           businessIndustry: 'Tech',
-          findings: [],
-        },
+          evidence: [{ id: 'evidence-1', module: 'seo', collectedAt: new Date() }],
+        findings: [{
+            id: 'finding-1', module: 'seo', category: 'Search', type: 'PAINKILLER',
+            title: 'Slow site', description: 'Observed slow site', impactScore: 8,
+            effortEstimate: 'LOW', recommendedFix: ['Improve site'], metrics: {},
+            evidence: [{ pointer: 'https://acme.test', source: 'test', collected_at: new Date().toISOString() }],
+        }],
+      },
+      });
+      const approvedQa = mocks.proposalFindUnique.mock.results.at(-1)?.value?.qaResults;
+      void approvedQa;
+      mocks.proposalFindUniqueByToken.mockResolvedValue({
+        ...mocks.proposalFindUnique.mock.results.at(-1)?.value,
+        publicationFingerprint: 'matching-fingerprint',
       });
       mocks.evidenceFindMany.mockResolvedValue([]);
 
@@ -350,6 +447,7 @@ describe('Session Security, Device Context & RTR', () => {
     it('rejects access with 410 Gone if proposal status is REJECTED', async () => {
       mocks.proposalFindUnique.mockResolvedValue({
         id: 'prop-1',
+        version: 1,
         createdAt: new Date(),
         status: 'REJECTED',
         audit: {
@@ -373,6 +471,7 @@ describe('Session Security, Device Context & RTR', () => {
 
       mocks.proposalFindUnique.mockResolvedValue({
         id: 'prop-1',
+        version: 1,
         createdAt: ninetyOneDaysAgo,
         status: 'SENT',
         audit: {

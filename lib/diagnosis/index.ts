@@ -49,7 +49,7 @@ export async function runDiagnosisPipeline(
   let evidenceSnapshots: any[] = [];
   if (auditId) {
     evidenceSnapshots = await prisma.evidenceSnapshot.findMany({
-      where: { auditId },
+      where: { auditId, tenantId },
     });
   }
 
@@ -62,6 +62,10 @@ export async function runDiagnosisPipeline(
     mode: 'MULTI_STEP',
     costTracker: tracker,
   });
+
+  if (result.resultState !== 'trusted' || result.validation?.valid !== true || result.errors.length > 0) {
+    throw new Error(`DIAGNOSIS_NOT_TRUSTED: ${result.resultState}`);
+  }
 
   return {
     clusters: result.clusters,

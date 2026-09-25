@@ -9,17 +9,13 @@
  * Requirements: 3.1, 3.2, 3.3, 3.4, 3.5, 3.6
  */
 
-import crypto from 'crypto';
-
 import { z } from 'zod';
 
 import { FEATURE_FLAGS } from '@/lib/config/feature-flags';
 import { aggregateContext } from '@/lib/context/aggregator';
 import { CostTracker } from '@/lib/costs/costTracker';
-import { invokeDiagnosisGraphWithTimeout } from '@/lib/graph/diagnosis-graph';
-import { invokeProposalGraphWithTimeout } from '@/lib/graph/proposal-graph';
 import { prisma } from '@/lib/prisma';
-import { buildProposalGrounding, groundingForPersistence } from '@/lib/proposal/grounding';
+import { compileAndPersistProposal } from '@/lib/proposal/compiler';
 
 import { logStageFailure } from '../metrics';
 import { transition } from '../stateMachine';
@@ -109,31 +105,39 @@ export async function processOneDiagnosisProposal(prospectId: string): Promise<S
   if (!audit) {
     throw new Error(`Audit not found: ${prospect.auditId}`);
   }
-
-  const costTracker = new CostTracker();
-
-  // 2. Run diagnosis pipeline via LangGraph
-  // Build context if Single-Pass is enabled
-  let aggregatedContext;
-  if (FEATURE_FLAGS.SINGLE_PASS_DIAGNOSIS) {
-    aggregatedContext = await aggregateContext(audit as any);
+  if (audit.tenantId !== tenantId) {
+    throw new Error(`Audit ${prospect.auditId} belongs to another tenant`);
+  }
+  if (audit.status !== 'COMPLETE' || audit.trustState !== 'TRUSTED') {
+    throw new Error(
+      `Audit ${prospect.auditId} is not trusted for proposal generation (status=${audit.status}, trustState=${audit.trustState})`
+    );
   }
 
-  const diagnosisResult = await invokeDiagnosisGraphWithTimeout({
-    findings: audit.findings,
-    tenantId,
+  const pipelineConfig = await prisma.pipelineConfig.findUnique({ where: { tenantId } });
+  const pricingMultiplier = z
+    .number()
+    .finite()
+    .min(0.5)
+    .max(2)
+    .parse(pipelineConfig?.pricingMultiplier ?? 1);
+  const costTracker = new CostTracker();
+  const aggregatedContext = FEATURE_FLAGS.SINGLE_PASS_DIAGNOSIS
+    ? await aggregateContext(audit as any)
+    : undefined;
+  const compiled = await compileAndPersistProposal({
     auditId: audit.id,
-    mode: FEATURE_FLAGS.SINGLE_PASS_DIAGNOSIS ? 'SINGLE_PASS' : 'MULTI_STEP',
+    tenantId,
+    pricingMultiplier,
+    costTracker,
+    allowZeroClusters: true,
+    diagnosisMode: FEATURE_FLAGS.SINGLE_PASS_DIAGNOSIS ? 'SINGLE_PASS' : 'MULTI_STEP',
     aggregatedContext,
   });
-
-  const costCents = costTracker.getTotalCents();
-
-  // 3. If zero clusters: transition to "low_value"
-  if (diagnosisResult.clusters.length === 0) {
+  if ('emptyDiagnosis' in compiled) {
+    const costCents = compiled.costTracker.getTotalCents();
     await transition(prospectId, 'low_value', PipelineStage.DIAGNOSIS);
     await recordTenantCost(tenantId, costCents, audit.id);
-
     return {
       success: true,
       prospectId,
@@ -147,97 +151,10 @@ export async function processOneDiagnosisProposal(prospectId: string): Promise<S
       },
     };
   }
+  const diagnosisResult = compiled.diagnosis;
 
-  // 4. Run proposal pipeline via LangGraph
-  const evidenceSnapshots = await prisma.evidenceSnapshot.findMany({
-    where: { auditId: audit.id },
-  });
-
-  const proposalResult = await invokeProposalGraphWithTimeout({
-    businessName: audit.businessName,
-    businessIndustry: audit.businessIndustry ?? undefined,
-    clusters: diagnosisResult.clusters,
-    findings: audit.findings,
-    evidenceSnapshots,
-    tenantId: audit.tenantId,
-    auditId: audit.id,
-  });
-
-  // 5. Get tenant pricing multiplier
-  const pipelineConfig = await prisma.pipelineConfig.findUnique({
-    where: { tenantId },
-  });
-  const pricingMultiplier = z
-    .number()
-    .finite()
-    .min(0.5)
-    .max(2)
-    .parse(pipelineConfig?.pricingMultiplier ?? 1);
-  if (!proposalResult.completeProposal) {
-    throw new Error('Proposal graph did not produce a grounded complete proposal');
-  }
-
-  // Apply pricing multiplier to tier prices
-  const adjustedPricing = {
-    essentials: Math.round(proposalResult.completeProposal.pricing.essentials * pricingMultiplier),
-    growth: Math.round(proposalResult.completeProposal.pricing.growth * pricingMultiplier),
-    premium: Math.round(proposalResult.completeProposal.pricing.premium * pricingMultiplier),
-    currency: proposalResult.completeProposal.pricing.currency,
-  };
-  const finalProposal = {
-    ...proposalResult.completeProposal,
-    pricing: adjustedPricing,
-    tiers: {
-      essentials: {
-        ...proposalResult.completeProposal.tiers.essentials,
-        price: adjustedPricing.essentials,
-      },
-      growth: {
-        ...proposalResult.completeProposal.tiers.growth,
-        price: adjustedPricing.growth,
-      },
-      premium: {
-        ...proposalResult.completeProposal.tiers.premium,
-        price: adjustedPricing.premium,
-      },
-    },
-  };
-  finalProposal.grounding = buildProposalGrounding(
-    finalProposal,
-    { auditId: audit.id, tenantId, findings: audit.findings },
-    audit.findings.map((finding) => finding.id)
-  );
-
-  // 6. Create Proposal record with unique web link token
-  const webLinkToken = crypto.randomUUID();
-
-  const proposal = await prisma.proposal.create({
-    data: {
-      auditId: audit.id,
-      tenantId,
-      status: 'DRAFT',
-      executiveSummary: finalProposal.executiveSummary,
-      painClusters: JSON.parse(JSON.stringify(finalProposal.painClusters)),
-      tierEssentials: JSON.parse(JSON.stringify(finalProposal.tiers.essentials)),
-      tierGrowth: JSON.parse(JSON.stringify(finalProposal.tiers.growth)),
-      tierPremium: JSON.parse(JSON.stringify(finalProposal.tiers.premium)),
-      pricing: JSON.parse(JSON.stringify(adjustedPricing)),
-      assumptions: finalProposal.assumptions,
-      disclaimers: finalProposal.disclaimers,
-      nextSteps: finalProposal.nextSteps,
-      comparisonReport: finalProposal.comparisonReport
-        ? JSON.parse(JSON.stringify(finalProposal.comparisonReport))
-        : undefined,
-      qaResults: JSON.parse(
-        JSON.stringify({
-          evaluation: { passed: false, metadataStatus: 'in_review' },
-          claimPolicy: { version: 1, valid: true, reasons: [] },
-          grounding: groundingForPersistence(finalProposal),
-        })
-      ),
-      webLinkToken,
-    },
-  });
+  const proposal = compiled.proposalRecord;
+  const webLinkToken = proposal.webLinkToken;
 
   // 7. Link proposalId to ProspectLead
   await prisma.prospectLead.update({
@@ -264,7 +181,7 @@ export async function processOneDiagnosisProposal(prospectId: string): Promise<S
       webLinkToken,
       clusterCount: diagnosisResult.clusters.length,
       pricingMultiplier,
-      adjustedPricing,
+      adjustedPricing: compiled.proposal.pricing,
     },
   };
 }

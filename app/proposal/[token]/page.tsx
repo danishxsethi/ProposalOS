@@ -1,8 +1,8 @@
 import { notFound } from 'next/navigation';
 
 import { getBranding } from '@/lib/config/branding';
-import { prisma } from '@/lib/prisma';
-import { runWithTenantAsync, runWithTenantBypass } from '@/lib/tenant/context';
+import { PublicProposalAccessError, resolvePublicProposalAccess } from '@/lib/proposal/publicAccess';
+import { runWithTenantAsync } from '@/lib/tenant/context';
 
 import ProposalPage from './ProposalPage';
 
@@ -12,57 +12,37 @@ interface Props {
   params: Promise<{ token: string }>;
 }
 
-async function getProposal(token: string) {
-  // Proposal links are client-facing and must resolve tenant context from the token itself.
-  return runWithTenantBypass('magic-link-pre-auth:proposal-bootstrap', () =>
-    prisma.proposal.findUnique({
-      where: { webLinkToken: token },
-      include: {
-        audit: {
-          include: {
-            findings: {
-              where: { excluded: false },
-              orderBy: { impactScore: 'desc' },
-            },
-          },
-        },
-      },
-    })
-  );
-}
-
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { token } = await params;
-  // Metadata reads follow the same token-gated bootstrap path as the page render.
-  const proposal = await runWithTenantBypass('magic-link-pre-auth:proposal-metadata', () =>
-    prisma.proposal.findUnique({
-      where: { webLinkToken: token },
-      include: { audit: true },
-    })
-  );
-
-  if (!proposal) {
+  try {
+    const { proposal } = await resolvePublicProposalAccess(token);
+    return {
+      title: `${proposal.audit.businessName} Proposal`,
+      description:
+        proposal.executiveSummary || `Digital growth proposal for ${proposal.audit.businessName}`,
+    };
+  } catch {
     return { title: 'Proposal Not Found' };
   }
-
-  return {
-    title: `${proposal.audit.businessName} Proposal`,
-    description:
-      proposal.executiveSummary || `Digital growth proposal for ${proposal.audit.businessName}`,
-  };
 }
 
 export default async function Page({ params }: Props) {
   const { token } = await params;
-  const proposal = await getProposal(token);
+  let access;
+  try {
+    access = await resolvePublicProposalAccess(token);
+  } catch (error) {
+    if (error instanceof PublicProposalAccessError) notFound();
+    throw error;
+  }
 
-  if (!proposal) {
+  if (!access) {
     notFound();
   }
 
-  const branding = await runWithTenantAsync(proposal.tenantId, () =>
-    getBranding(proposal.tenantId)
+  const branding = await runWithTenantAsync(access.tenantId, () =>
+    getBranding(access.tenantId)
   );
 
-  return <ProposalPage proposal={proposal} branding={branding} />;
+  return <ProposalPage proposal={access.proposal} branding={branding} />;
 }

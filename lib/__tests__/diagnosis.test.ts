@@ -16,6 +16,10 @@ vi.mock('@/lib/graph/diagnosis-graph', () => ({
       },
     ],
     validation: { valid: true },
+    resultState: 'trusted',
+    errors: [],
+    degraded: false,
+    staleFindingsCount: 0,
   }),
 }));
 

@@ -13,13 +13,14 @@ import { createHash } from 'crypto';
 
 import { NextResponse } from 'next/server';
 
-import { generateTraceId, InternalError, NotFoundError, ValidationError } from '@/lib/api/errors';
+import { generateTraceId, InternalError, ValidationError } from '@/lib/api/errors';
 import { proposalTrackSchema } from '@/lib/api/schemas/proposal';
 import { RateLimitPresets, withRateLimit } from '@/lib/middleware/rateLimit';
 import { recordEvent } from '@/lib/pipeline/dealCloser';
 import type { EngagementEvent } from '@/lib/pipeline/types';
 import { prisma } from '@/lib/prisma';
-import { runWithTenantAsync, runWithTenantBypass } from '@/lib/tenant/context';
+import { PublicProposalAccessError, resolvePublicProposalAccess } from '@/lib/proposal/publicAccess';
+import { runWithTenantAsync } from '@/lib/tenant/context';
 
 interface Params {
   params: Promise<{ token: string }>;
@@ -59,20 +60,7 @@ async function handleTrack(req: Request, { params }: Params): Promise<NextRespon
     } = result.data;
 
     // Verify proposal exists
-    const proposal = await runWithTenantBypass('proposal-track-lookup', () =>
-      prisma.proposal.findUnique({
-        where: { webLinkToken: token },
-        include: {
-          audit: true,
-        },
-      })
-    );
-
-    if (!proposal) {
-      return NextResponse.json(new NotFoundError('Proposal', token).toEnvelope(req.url, traceId), {
-        status: 404,
-      });
-    }
+    const access = await resolvePublicProposalAccess(token);
 
     const ip =
       req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
@@ -85,13 +73,13 @@ async function handleTrack(req: Request, { params }: Params): Promise<NextRespon
     // Note: Prospect lead engagement tracking requires prospectLead relation in Audit model
     // Currently tracking via proposalView records only
 
-    return runWithTenantAsync(proposal.tenantId, async () => {
+    return runWithTenantAsync(access.tenantId, async () => {
       if (event === 'view') {
         // First view: create ProposalView record
         await prisma.proposalView.create({
           data: {
-            proposalId: proposal.id,
-            tenantId: proposal.tenantId || 'system',
+            proposalId: access.proposalId,
+            tenantId: access.tenantId,
             sessionId: sessionId || crypto.randomUUID(),
             viewedAt: new Date(),
             scrollDepth: 0,
@@ -118,7 +106,7 @@ async function handleTrack(req: Request, { params }: Params): Promise<NextRespon
       ) {
         // Find existing view by sessionId
         const existing = await prisma.proposalView.findFirst({
-          where: { proposalId: proposal.id, sessionId: body.sessionId },
+          where: { proposalId: access.proposalId, sessionId: body.sessionId },
           orderBy: { viewedAt: 'desc' },
         });
 
@@ -174,6 +162,9 @@ async function handleTrack(req: Request, { params }: Params): Promise<NextRespon
       );
     });
   } catch (error) {
+    if (error instanceof PublicProposalAccessError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
     const internalError = new InternalError('Failed to process tracking event', {
       originalError: error instanceof Error ? error.message : String(error),
     });

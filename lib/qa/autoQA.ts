@@ -61,6 +61,8 @@ export interface QAStatus {
   results: QAResult[];
   warnings: string[];
   needsReview: boolean;
+  status: 'PASS' | 'REVIEW_REQUIRED' | 'FAIL';
+  hardFailures: string[];
   clientPerfect: ClientPerfectStatus;
 }
 
@@ -455,6 +457,8 @@ export function runAutoQA(
     results,
     warnings,
     needsReview,
+    status: hardFails.length > 0 ? 'FAIL' : requiresHumanReview || needsReview ? 'REVIEW_REQUIRED' : 'PASS',
+    hardFailures: hardFails.map((failure) => `${failure.code}: ${failure.details}`),
     clientPerfect: {
       score: weightedScore,
       hardFails,

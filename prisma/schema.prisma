@@ -118,29 +118,31 @@ model Finding {
 }
 
 model Proposal {
-  id                String         @id @default(uuid())
-  auditId           String
-  version           Int            @default(1)
-  status            ProposalStatus @default(DRAFT)
-  prospectEmail     String? // Added for follow-ups
-  executiveSummary  String?
-  painClusters      Json           @default("[]")
-  tierEssentials    Json           @default("{}")
-  tierGrowth        Json           @default("{}")
-  tierPremium       Json           @default("{}")
-  pricing           Json           @default("{}")
-  stripePriceId     String?
-  stripeAmountCents Int?
-  assumptions       String[]       @default([])
-  disclaimers       String[]       @default([])
-  nextSteps         String[]       @default([])
-  comparisonReport  Json? // Competitor comparison (ranking, winning/losing, quick wins)
-  pdfUrl            String?
-  pdfGeneratedAt    DateTime?
-  webLinkToken      String         @unique @default(uuid())
-  sentAt            DateTime?
-  viewedAt          DateTime?
-  createdAt         DateTime       @default(now())
+  id                     String         @id @default(uuid())
+  auditId                String
+  version                Int            @default(1)
+  status                 ProposalStatus @default(DRAFT)
+  prospectEmail          String? // Added for follow-ups
+  executiveSummary       String?
+  painClusters           Json           @default("[]")
+  tierEssentials         Json           @default("{}")
+  tierGrowth             Json           @default("{}")
+  tierPremium            Json           @default("{}")
+  pricing                Json           @default("{}")
+  stripePriceId          String?
+  stripeAmountCents      Int?
+  assumptions            String[]       @default([])
+  disclaimers            String[]       @default([])
+  nextSteps              String[]       @default([])
+  comparisonReport       Json? // Competitor comparison (ranking, winning/losing, quick wins)
+  pdfUrl                 String?
+  pdfGeneratedAt         DateTime?
+  webLinkToken           String         @unique @default(uuid())
+  publicAccessRevokedAt  DateTime?
+  publicationFingerprint String         @default("")
+  sentAt                 DateTime?
+  viewedAt               DateTime?
+  createdAt              DateTime       @default(now())
 
   // Multi-Tenancy
   tenantId String

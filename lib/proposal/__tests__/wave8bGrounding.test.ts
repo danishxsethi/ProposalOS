@@ -8,6 +8,7 @@ import { runProposalPipeline, timelineByEffort } from '../index';
 import { applyAuthorizedDiscount, getDynamicPricing } from '../pricing';
 import {
   buildPersistedQaResults,
+  proposalPublicationFingerprint,
   publicationBlockReasons,
   publicProposalCitations,
 } from '../publication';
@@ -165,22 +166,46 @@ describe('Wave 8B proposal grounding and commercial logic', () => {
       dimensions: {},
       overallScore: qa.score,
       feedbackLogs: [],
-      autoQAStatus: qa,
+      autoQAStatus: { ...qa, status: 'PASS', hardFailures: [] },
     };
-    const qaResults = buildPersistedQaResults(evaluation, proposal);
+    const qaResults = buildPersistedQaResults(evaluation, proposal, 1);
+    const publicationFingerprint = proposalPublicationFingerprint({
+      auditId: 'audit-1',
+      tenantId: 'tenant-1',
+      businessName: 'Acme',
+      businessCity: null,
+      businessIndustry: null,
+      version: 1,
+      executiveSummary: proposal.executiveSummary,
+      painClusters: proposal.painClusters,
+      tiers: proposal.tiers,
+      pricing: proposal.pricing,
+      assumptions: proposal.assumptions,
+      disclaimers: proposal.disclaimers,
+      nextSteps: proposal.nextSteps,
+      grounding: qaResults.grounding,
+      provenance: {},
+    });
+    qaResults.publicationFingerprint = publicationFingerprint;
+    (qaResults.publicationApproval as Record<string, unknown>).fingerprint = publicationFingerprint;
 
     expect(publicProposalCitations(qaResults).status).toBe('verified');
     expect(
       publicationBlockReasons({
         auditId: 'audit-1',
         tenantId: 'tenant-1',
+        version: 1,
+        status: 'READY',
         qaResults,
+        publicationFingerprint,
       })
     ).toEqual([]);
     expect(
       publicationBlockReasons({
         auditId: 'audit-1',
         tenantId: 'tenant-1',
+        version: 1,
+        status: 'READY',
         qaResults: {},
       })
     ).toContain('Proposal is legacy/unverified or has invalid grounding metadata');
@@ -188,6 +213,8 @@ describe('Wave 8B proposal grounding and commercial logic', () => {
       publicationBlockReasons({
         auditId: 'audit-1',
         tenantId: 'tenant-1',
+        version: 1,
+        status: 'READY',
         qaResults: {
           ...qaResults,
           evaluation: { passed: false },

@@ -11,8 +11,11 @@ const mocks = vi.hoisted(() => ({
   auditFindFirst: vi.fn(),
   evidenceFindMany: vi.fn(),
   proposalCreate: vi.fn(),
+  proposalUpdate: vi.fn(),
+  compileProposal: vi.fn(),
   auditUpdate: vi.fn(),
   invokeDiagnosisGraphWithTimeout: vi.fn(),
+  invokeProposalGraphWithTimeout: vi.fn(),
   runProposalPipeline: vi.fn(),
   runAutoQA: vi.fn(),
   evaluateProposal: vi.fn(),
@@ -47,10 +50,12 @@ vi.mock('@/lib/prisma', () => ({
     evidenceSnapshot: {
       findMany: mocks.evidenceFindMany,
     },
-    proposal: {
-      create: mocks.proposalCreate,
-    },
+    proposal: { create: mocks.proposalCreate, update: mocks.proposalUpdate },
   },
+}));
+vi.mock('@/lib/proposal/compiler', () => ({
+  compileAndPersistProposal: mocks.compileProposal,
+  getCurrentProposalVersion: vi.fn().mockResolvedValue(1),
 }));
 
 vi.mock('@/lib/tenant/context', () => ({
@@ -87,6 +92,10 @@ vi.mock('@/lib/middleware/idempotency', () => ({
 
 vi.mock('@/lib/graph/diagnosis-graph', () => ({
   invokeDiagnosisGraphWithTimeout: mocks.invokeDiagnosisGraphWithTimeout,
+}));
+
+vi.mock('@/lib/graph/proposal-graph', () => ({
+  invokeProposalGraphWithTimeout: mocks.invokeProposalGraphWithTimeout,
 }));
 
 vi.mock('@/lib/proposal', () => ({
@@ -202,9 +211,11 @@ describe('audit regenerate authorization', () => {
     mocks.validateApiKey.mockResolvedValue(null);
     mocks.evidenceFindMany.mockResolvedValue([]);
     mocks.invokeDiagnosisGraphWithTimeout.mockResolvedValue({
+      resultState: 'trusted',
       clusters: [{ findingIds: ['finding-1'] }],
     });
     mocks.runProposalPipeline.mockResolvedValue(proposalResult());
+    mocks.invokeProposalGraphWithTimeout.mockResolvedValue({ completeProposal: proposalResult() });
     mocks.runAutoQA.mockReturnValue({
       score: 75,
       passedChecks: 10,
@@ -231,10 +242,24 @@ describe('audit regenerate authorization', () => {
         webLinkToken: 'token-2',
         executiveSummary: args?.data?.executiveSummary ?? 'Updated summary',
         pricing: args?.data?.pricing ?? { essentials: 100 },
-        status: args?.data?.status ?? 'READY',
+        status: args?.data?.status ?? 'DRAFT',
       };
     });
+    mocks.proposalUpdate.mockImplementation(async (args: any) => ({
+      id: 'proposal-2',
+      version: 1,
+      webLinkToken: 'token-2',
+      executiveSummary: 'Updated summary',
+      pricing: { essentials: 100 },
+      status: args?.data?.status ?? 'READY',
+    }));
     mocks.auditUpdate.mockResolvedValue({});
+    mocks.compileProposal.mockResolvedValue({
+      proposalRecord: { id: 'proposal-2', version: 1, webLinkToken: 'token-2', status: 'READY' },
+      proposal: { executiveSummary: 'Compiled proposal', pricing: {} },
+      evaluation: { autoQAStatus: { score: 75 }, dimensions: {}, overallScore: 75, passed: true, feedbackLogs: [] },
+      costTracker: { getTotalCents: () => 11 },
+    });
 
     // Bridge evaluateProposal to runAutoQA
     mocks.evaluateProposal.mockImplementation(
@@ -309,6 +334,8 @@ describe('audit regenerate authorization', () => {
     mocks.auditFindFirst.mockResolvedValue({
       id: 'audit-1',
       tenantId: 'tenant-a',
+      status: 'COMPLETE',
+      trustState: 'TRUSTED',
       businessName: 'Acme Dental',
       businessIndustry: 'Dental',
       businessCity: 'Regina',
@@ -327,18 +354,10 @@ describe('audit regenerate authorization', () => {
       id: 'proposal-2',
       version: 1,
       webLinkToken: 'token-2',
-      status: 'READY', // QA score 75 >= 60 → READY
+      status: 'READY', // QA score 75 and eligible grounding → READY
       regenerationsRemaining: 2,
       costCents: 11,
     });
-    expect(mocks.proposalCreate).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({
-          auditId: 'audit-1',
-          tenantId: 'tenant-a',
-          status: 'READY',
-        }),
-      })
-    );
+    expect(mocks.compileProposal).toHaveBeenCalledWith({ auditId: 'audit-1', tenantId: 'tenant-a', version: 1 });
   });
 });

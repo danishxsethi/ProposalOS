@@ -3,9 +3,8 @@ import { notFound } from 'next/navigation';
 import { Metadata } from 'next';
 
 import { getBranding } from '@/lib/config/branding';
-import { prisma } from '@/lib/prisma';
-import { assertProposalPublishable } from '@/lib/proposal/publication';
-import { runWithTenantAsync, runWithTenantBypass } from '@/lib/tenant/context';
+import { PublicProposalAccessError, resolvePublicProposalAccess } from '@/lib/proposal/publicAccess';
+import { runWithTenantAsync } from '@/lib/tenant/context';
 
 import PresentationClient from './PresentationClient';
 
@@ -15,52 +14,35 @@ interface Props {
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { token } = await params;
-  // Metadata generation starts from a client token before we know the tenant.
-  const proposal = await runWithTenantBypass('magic-link-pre-auth:presentation-metadata', () =>
-    prisma.proposal.findUnique({
-      where: { webLinkToken: token },
-      include: { audit: true },
-    })
-  );
-
-  if (!proposal) {
+  try {
+    const { proposal } = await resolvePublicProposalAccess(token);
+    return {
+      title: `Presentation for ${proposal.audit.businessName}`,
+      description: 'Digital Presence Assessment Presentation',
+    };
+  } catch {
     return { title: 'Presentation Not Found' };
   }
-
-  return {
-    title: `Presentation for ${proposal.audit.businessName}`,
-    description: 'Digital Presence Assessment Presentation',
-  };
 }
 
 export default async function Page({ params }: Props) {
   const { token } = await params;
 
-  // This presentation is token-gated; the first proposal lookup bootstraps tenant context.
-  const proposal = await runWithTenantBypass('magic-link-pre-auth:presentation-bootstrap', () =>
-    prisma.proposal.findUnique({
-      where: { webLinkToken: token },
-      include: {
-        audit: {
-          include: {
-            findings: {
-              where: { excluded: false },
-              orderBy: { impactScore: 'desc' },
-            },
-          },
-        },
-      },
-    })
-  );
+  let access;
+  try {
+    access = await resolvePublicProposalAccess(token);
+  } catch (error) {
+    if (error instanceof PublicProposalAccessError) notFound();
+    throw error;
+  }
 
-  if (!proposal) {
+  if (!access) {
     notFound();
   }
-  assertProposalPublishable(proposal);
 
-  const branding = await runWithTenantAsync(proposal.tenantId, () =>
-    getBranding(proposal.tenantId)
+  const branding = await runWithTenantAsync(access.tenantId, () =>
+    getBranding(access.tenantId)
   );
 
-  return <PresentationClient proposal={proposal} branding={branding} />;
+  return <PresentationClient proposal={access.proposal} branding={branding} />;
 }

@@ -17,7 +17,7 @@ import { withIdempotency } from '@/lib/middleware/idempotency';
 import { withRateLimit } from '@/lib/middleware/rateLimit';
 import { recordAuditTrailEvent } from '@/lib/observability/auditTrail';
 import { prisma } from '@/lib/prisma';
-import { assertProposalPublishable } from '@/lib/proposal/publication';
+import { PublicProposalAccessError, resolvePublicProposalAccess } from '@/lib/proposal/publicAccess';
 import { getTenantId } from '@/lib/tenant/context';
 
 interface Params {
@@ -56,7 +56,12 @@ async function handleStatusUpdate(req: Request, { params }: Params): Promise<Nex
         status: 404,
       });
     }
-    if (normalizedStatus === 'VIEWED') assertProposalPublishable(proposal);
+    if (normalizedStatus === 'READY' || normalizedStatus === 'SENT' || normalizedStatus === 'VIEWED') {
+      const access = await resolvePublicProposalAccess(token);
+      if (access.proposalId !== proposal.id) {
+        return NextResponse.json(new NotFoundError('Proposal', token).toEnvelope(req.url, traceId), { status: 404 });
+      }
+    }
 
     // This route is for authenticated agency operators only. Public recipients use
     // dedicated acceptance/contact endpoints and cannot set internal lifecycle state.
@@ -98,6 +103,9 @@ async function handleStatusUpdate(req: Request, { params }: Params): Promise<Nex
     response.headers.set('X-Trace-Id', traceId);
     return response;
   } catch (error) {
+    if (error instanceof PublicProposalAccessError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
     const internalError = new InternalError('Failed to update proposal status', {
       originalError: error instanceof Error ? error.message : String(error),
     });

@@ -26,6 +26,7 @@ const mocks = vi.hoisted(() => ({
   proposalFindFirst: vi.fn(),
   proposalUpdate: vi.fn(),
   publicationAssertion: vi.fn(),
+  resolvePublicProposalAccess: vi.fn(),
 }));
 
 // withAuth passthrough — the route handler runs directly; tenant context is
@@ -50,6 +51,13 @@ vi.mock('@/lib/prisma', () => ({
 
 vi.mock('@/lib/proposal/publication', () => ({
   assertProposalPublishable: mocks.publicationAssertion,
+  proposalPublicationFingerprint: vi.fn(() => 'status-test-fingerprint'),
+}));
+vi.mock('@/lib/proposal/publicAccess', () => ({
+  PublicProposalAccessError: class PublicProposalAccessError extends Error {
+    constructor(message: string, readonly status: number) { super(message); }
+  },
+  resolvePublicProposalAccess: mocks.resolvePublicProposalAccess,
 }));
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -118,11 +126,13 @@ describe('PATCH /api/proposal-status/status — cross-tenant isolation', () => {
 
   it('succeeds (200) for a proposal owned by the caller tenant', async () => {
     mocks.getTenantId.mockResolvedValue('tenant-A');
+    mocks.resolvePublicProposalAccess.mockResolvedValue({ proposalId: 'prop-1' });
     mocks.proposalFindFirst.mockResolvedValue({
       id: 'prop-1',
       tenantId: 'tenant-A',
       status: 'draft',
       sentAt: null,
+      webLinkToken: 'token-1',
     });
     mocks.proposalUpdate.mockResolvedValue({
       id: 'prop-1',

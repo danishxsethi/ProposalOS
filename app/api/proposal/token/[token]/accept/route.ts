@@ -15,13 +15,16 @@ import {
   ConflictError,
   generateTraceId,
   InternalError,
-  NotFoundError,
   ValidationError,
 } from '@/lib/api/errors';
 import { acceptProposalSchema } from '@/lib/api/schemas/proposal';
 import { FollowUpScheduler } from '@/lib/followup/scheduler';
 import { prisma } from '@/lib/prisma';
-import { assertProposalPublishable } from '@/lib/proposal/publication';
+import {
+  PublicProposalAccessError,
+  resolvePublicProposalAccess,
+} from '@/lib/proposal/publicAccess';
+import { runWithTenantAsync } from '@/lib/tenant/context';
 
 export async function POST(req: Request, { params }: { params: Promise<{ token: string }> }) {
   const traceId = generateTraceId();
@@ -47,20 +50,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
     const { contactName, contactEmail, contactPhone, tier, message } = result.data;
 
     // Find Proposal by Token
-    const proposal = await prisma.proposal.findUnique({
-      where: { webLinkToken: token },
-      include: { audit: true },
-    });
-
-    if (!proposal) {
-      return NextResponse.json(new NotFoundError('Proposal', token).toEnvelope(req.url, traceId), {
-        status: 404,
-      });
-    }
-    assertProposalPublishable(proposal);
+    const access = await resolvePublicProposalAccess(token);
 
     // Check if already accepted (idempotency)
-    if (proposal.status === 'ACCEPTED') {
+    if (access.status === 'ACCEPTED') {
       return NextResponse.json(
         new ConflictError('Proposal already accepted').toEnvelope(req.url, traceId),
         { status: 400 }
@@ -71,37 +64,41 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
     const ip = req.headers.get('x-forwarded-for')?.split(',')[0] || 'unknown';
     const now = new Date();
 
-    await prisma.$transaction(async (tx) => {
-      // Create Acceptance Record
-      await tx.proposalAcceptance.create({
-        data: {
-          proposalId: proposal.id,
-          tenantId: proposal.tenantId,
-          tier: tier,
-          contactName,
-          contactEmail,
-          contactPhone,
-          message,
-          ipAddress: ip,
-        },
-      });
+    await runWithTenantAsync(access.tenantId, () =>
+      prisma.$transaction(async (tx) => {
+        // Create Acceptance Record
+        await tx.proposalAcceptance.create({
+          data: {
+            proposalId: access.proposalId,
+            tenantId: access.tenantId,
+            tier: tier,
+            contactName,
+            contactEmail,
+            contactPhone,
+            message,
+            ipAddress: ip,
+          },
+        });
 
-      // Update Proposal Status
-      await tx.proposal.update({
-        where: { id: proposal.id },
-        data: {
-          status: 'ACCEPTED',
-          outcome: 'WON',
-          closedAt: now,
-          tierChosen: tier,
-          replyReceivedAt: proposal.replyReceivedAt ?? now,
-          meetingBookedAt: proposal.meetingBookedAt ?? now,
-        },
-      });
-    });
+        // Update Proposal Status
+        await tx.proposal.update({
+          where: { id: access.proposalId },
+          data: {
+            status: 'ACCEPTED',
+            outcome: 'WON',
+            closedAt: now,
+            tierChosen: tier,
+            replyReceivedAt: now,
+            meetingBookedAt: now,
+          },
+        });
+      })
+    );
 
     // Trigger Post-Acceptance Actions
-    await FollowUpScheduler.onProposalAccepted(proposal.id);
+    await runWithTenantAsync(access.tenantId, () =>
+      FollowUpScheduler.onProposalAccepted(access.proposalId)
+    );
 
     const response = NextResponse.json({
       success: true,
@@ -112,6 +109,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
     response.headers.set('X-Trace-Id', traceId);
     return response;
   } catch (error) {
+    if (error instanceof PublicProposalAccessError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
     const internalError = new InternalError('Failed to accept proposal', {
       originalError: error instanceof Error ? error.message : String(error),
     });

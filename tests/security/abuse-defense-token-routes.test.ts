@@ -3,6 +3,7 @@ process.env.ENABLE_RATE_LIMIT_TEST = 'true';
 process.env.NODE_ENV = 'test';
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { PublicProposalAccessError } from '@/lib/proposal/publicAccess';
 
 // ---------------------------------------------------------------------------
 // Shared store mock factory
@@ -61,6 +62,8 @@ vi.mock('@/lib/store/shared', () => ({
 // Mock all external dependency libraries to keep tests light & isolated
 const mocks = vi.hoisted(() => ({
   proposalFindUnique: vi.fn(),
+  resolvePublicProposalAccess: vi.fn(),
+  PublicProposalAccessError: vi.fn(),
   auditFindUnique: vi.fn(),
   validateCaseStudyAccess: vi.fn(),
   generateCaseStudyPdf: vi.fn(() => Promise.resolve(Buffer.from('fake pdf content'))),
@@ -79,6 +82,17 @@ vi.mock('@/lib/prisma', () => ({
   },
 }));
 
+vi.mock('@/lib/proposal/publicAccess', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/proposal/publicAccess')>();
+  return {
+    ...actual,
+    resolvePublicProposalAccess: mocks.resolvePublicProposalAccess,
+    PublicProposalAccessError: class PublicProposalAccessError extends Error {
+      constructor(message: string, readonly status: number) { super(message); }
+    },
+  };
+});
+
 vi.mock('@/lib/security/caseStudyAuth', () => ({
   validateCaseStudyAccess: mocks.validateCaseStudyAccess,
 }));
@@ -94,7 +108,11 @@ vi.mock('@/lib/observability/auditTrail', () => ({
 // This suite verifies abuse-rate limits; proposal publication is covered separately.
 vi.mock('@/lib/proposal/publication', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/proposal/publication')>();
-  return { ...actual, assertProposalPublishable: () => undefined };
+  return {
+    ...actual,
+    assertProposalPublishable: () => undefined,
+    proposalPublicationFingerprint: () => 'abuse-test-fingerprint',
+  };
 });
 
 vi.mock('@/lib/auth', () => ({
@@ -129,6 +147,7 @@ describe('Token Routes Abuse Defense Integration Tests', () => {
         id: 'prop-123',
         tenantId: 'tenant-abc',
         webLinkToken: validToken,
+        version: 1,
         createdAt: new Date(),
         status: 'SENT',
         pricing: {},
@@ -144,6 +163,37 @@ describe('Token Routes Abuse Defense Integration Tests', () => {
       };
 
       mocks.proposalFindUnique.mockResolvedValue(fakeProposal);
+      mocks.resolvePublicProposalAccess.mockResolvedValue({
+        proposal: {
+          id: 'prop-123',
+          version: 1,
+          webLinkToken: validToken,
+          executiveSummary: null,
+          pricing: {},
+          tierEssentials: {},
+          tierGrowth: {},
+          tierPremium: {},
+          nextSteps: [],
+          assumptions: [],
+          disclaimers: [],
+          createdAt: new Date(),
+          audit: {
+            businessName: 'Acme',
+            businessCity: 'City',
+            businessIndustry: 'Industry',
+            overallScore: null,
+            startedAt: new Date(),
+            completedAt: null,
+            findings: [],
+          },
+        },
+        proposalId: 'prop-123',
+        tenantId: 'tenant-abc',
+        status: 'SENT',
+        replyReceivedAt: null,
+        outcome: null,
+        tierChosen: null,
+      });
 
       const { GET } = await import('@/app/api/proposal/token/[token]/route');
 
@@ -176,6 +226,37 @@ describe('Token Routes Abuse Defense Integration Tests', () => {
         if (args.where.webLinkToken === otherToken) return otherProposal;
         return fakeProposal;
       });
+      mocks.resolvePublicProposalAccess.mockImplementation(async (token: string) => ({
+        proposal: {
+          id: token === otherToken ? 'prop-456' : 'prop-123',
+          version: 1,
+          webLinkToken: token,
+          executiveSummary: null,
+          pricing: {},
+          tierEssentials: {},
+          tierGrowth: {},
+          tierPremium: {},
+          nextSteps: [],
+          assumptions: [],
+          disclaimers: [],
+          createdAt: new Date(),
+          audit: {
+            businessName: 'Acme',
+            businessCity: 'City',
+            businessIndustry: 'Industry',
+            overallScore: null,
+            startedAt: new Date(),
+            completedAt: null,
+            findings: [],
+          },
+        },
+        proposalId: token === otherToken ? 'prop-456' : 'prop-123',
+        tenantId: 'tenant-abc',
+        status: 'SENT',
+        replyReceivedAt: null,
+        outcome: null,
+        tierChosen: null,
+      }));
 
       const reqOtherToken = makeTokenRouteRequest(
         `http://localhost/api/proposal/token/${otherToken}`,
@@ -190,6 +271,7 @@ describe('Token Routes Abuse Defense Integration Tests', () => {
     it('should strictly limit invalid token attempts by IP and emit an audit event', async () => {
       // Mock proposal not found
       mocks.proposalFindUnique.mockResolvedValue(null);
+      mocks.resolvePublicProposalAccess.mockRejectedValue(new PublicProposalAccessError('Proposal not found', 404));
 
       const { GET } = await import('@/app/api/proposal/token/[token]/route');
 
