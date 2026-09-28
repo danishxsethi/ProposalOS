@@ -1,0 +1,10 @@
+$ npm test -- --reporter=dot (after db push sync)
+Test Files  261 passed | 5 failed (266)
+Tests  2744 passed | 11 failed | 0 skipped flaky? Actually 2755 total: 2744 pass, 11 fail
+Failures:
+ - tests/architecture/auth-session-boundary.test.ts:183 auth helper violation (app/api/outreach/webhook/route.ts)
+ - tests/architecture/ssrf-fetch-boundary.test.ts:574 allowlist + safeFetch import
+ - tests/matrix/module-provider-matrix.test.ts: (3 provider/matrix assertions)
+ - tests/security/public-proposal-access.test.ts
+ - tests/security/stripe-checkout-authz.test.ts (3 cases, error message mismatch)
+Full verbose log in evidence/test-results/

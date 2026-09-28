@@ -1,0 +1,13 @@
+Creating temporary archive of 1889 file(s) totalling 18.3 MiB before compression.
+Uploading tarball of [.] to [gs://proposal-487522_cloudbuild/source/1790572151.332271-d03caa53e98e467e8bc2156f9347e408.tgz]
+Created [https://cloudbuild.googleapis.com/v1/projects/proposal-487522/locations/us-central1/builds/023cbb76-5a09-4c70-864b-53c353d3ab7e].
+Logs are available at [ https://console.cloud.google.com/cloud-build/builds;region=us-central1/023cbb76-5a09-4c70-864b-53c353d3ab7e?project=120416863832 ].
+Waiting for build to complete. Polling interval: 1 second(s).
+ERROR: (gcloud.builds.submit) 
+The build is running, and logs are being written to the default logs bucket.
+This tool can only stream logs if you are Viewer/Owner of the project and, if applicable, allowed by your VPC-SC security policy.
+
+The default logs bucket is always outside any VPC-SC security perimeter.
+If you want your logs saved inside your VPC-SC perimeter, use your own bucket.
+See https://cloud.google.com/build/docs/securing-builds/store-manage-build-logs.
+

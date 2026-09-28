@@ -1,3 +1,4 @@
+import { GEMINI_FLASH, GEMINI_PRO } from '@/lib/config/models';
 import { generateWithGemini } from '@/lib/llm/provider';
 import { logger } from '@/lib/logger';
 import {
@@ -29,7 +30,7 @@ import {
 class GeminiClient {
   async callWithThinkingBudget(prompt: string, thinkingBudget: number = 4096): Promise<string> {
     const response = await generateWithGemini({
-      model: 'gemini-2.0-pro-exp-01-21',
+      model: GEMINI_PRO,
       input: prompt,
       thinkingBudget: thinkingBudget,
       metadata: { node: 'localization_engine' },
@@ -307,7 +308,7 @@ and create a culturally appropriate prompt.`;
 
     try {
       const response = await generateWithGemini({
-        model: process.env.GEMINI_FLASH_MODEL || 'gemini-2.0-flash',
+        model: process.env.GEMINI_FLASH_MODEL || GEMINI_FLASH,
         input: fullPrompt,
         temperature: 0.1, // Low temperature for consistent translations
         maxOutputTokens: 2048,

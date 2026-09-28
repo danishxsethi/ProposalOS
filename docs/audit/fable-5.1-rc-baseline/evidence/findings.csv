@@ -1,0 +1,14 @@
+id,severity,status,title,evidence,owner
+F51-P1-001,P1,BROKEN,migration drift: businessLatitude/Longitude in schema.prisma not in committed migrations; db push dropped locale_configs,prisma/schema.prisma:20|psql \d Audit|npm test 15 failures,backend
+F51-P1-002,P1,BROKEN,11 tests fail on dirty branch including architecture boundaries,tests/architecture/auth-session-boundary.test.ts:183|tests/architecture/ssrf-fetch-boundary.test.ts:574|tests/security/stripe-checkout-authz.test.ts:148,platform
+F51-P1-003,P1,BROKEN,lint import/order 12 errors blocking CI cleanliness,npm run lint | 12 errors,all
+F51-P2-001,P2,PARTIAL,SSRF fetch boundary violation: lib/maps/googleMapsProvider has unallowlisted raw fetch,tests/architecture/ssrf-fetch-boundary.test.ts,security
+F51-P2-002,P2,PARTIAL,outreach webhook flagged by auth boundary test despite Svix verification,app/api/outreach/webhook/route.ts:14|tests/architecture/auth-session-boundary.test.ts,security
+F51-P2-003,P2,PARTIAL,npm moderate vulnerabilities: uuid <11.1.1 / protobufjs / @grpc/proto-loader,npm audit 7 vulns,security
+F51-P2-004,P2,PARTIAL,dual pricing source of truth: PlanCatalogService vs PricingService + metering thresholds misaligned 3 vs 10,lib/stripe/PlanCatalogService.ts:20|lib/stripe/pricingService.ts:88|lib/billing/metering.ts:211,billing
+F51-P2-005,P2,PARTIAL,module provider matrix failures: identity advisory + matrix JSON artifact on dirty branch,tests/matrix/module-provider-matrix.test.ts,core-audit
+F51-P2-006,P2,PARTIAL,2 uncommitted migrations without _prisma_migrations commit; rolled_back entry still present,prisma/migrations/20260926*,backend
+F51-P2-007,P2,PARTIAL,admin/model-metrics has no auth guard - grep shows NONE,app/api/admin/model-metrics/route.ts,security
+F51-P2-008,P2,PARTIAL,billing webhook alias has no signature verify string (only stripe/webhook does),app/api/billing/webhook/route.ts:1,security
+F51-P3-001,P3,PARTIAL,1881 lint warnings (any/no-unused-vars) - noise hides real issues,.eslint output,dx
+F51-P3-002,P3,PARTIAL,coverage sample 0.73% on single-file run - global coverage not measured meaningfully, vitest coverage 0.73%,qa

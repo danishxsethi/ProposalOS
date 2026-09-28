@@ -11,6 +11,7 @@ export interface AuditModuleResult {
   moduleId?: string;
   /** Normalized data for finding generator compatibility (scores, coreWebVitals, finalUrl, schemaAnalysis, conversionAnalysis) */
   data?: {
+    [key: string]: unknown;
     scores?: Record<string, number>;
     coreWebVitals?: any;
     finalUrl?: string;
@@ -222,6 +223,10 @@ export interface GBPModuleInput {
   city: string;
   /** Optional website URL for name/phone consistency checks */
   websiteUrl?: string;
+  phone?: string | null;
+  address?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
 }
 
 export interface CompetitorModuleInput {
@@ -274,6 +279,7 @@ export interface ReputationModuleInput {
 export interface SocialModuleInput {
   websiteUrl: string;
   businessName: string;
+  auditId?: string;
 }
 
 // Result Types for DataBus

@@ -17,6 +17,7 @@ import crypto from 'crypto';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
 import { FEATURE_FLAGS } from '@/lib/config/feature-flags';
+import { GEMINI_PRO } from '@/lib/config/models';
 import { logger } from '@/lib/logger';
 import { MetricsRecorder } from '@/lib/observability/MetricsRecorder';
 import { PiiScrubber } from '@/lib/security/piiScrubber';
@@ -135,12 +136,13 @@ class CircuitBreaker {
 /** Context windows for supported models (tokens). */
 const MODEL_CONTEXT_WINDOWS: Record<string, number> = {
   default: 1_000_000,
-  'gemini-2.0-flash': 1_000_000,
-  'gemini-2.0-pro': 1_000_000,
-  'gemini-2.0-pro-exp-01-21': 1_000_000,
-  'gemini-1.5-pro': 1_000_000,
-  'gemini-1.5-flash': 1_000_000,
-  'gemini-3.1-pro': 1_000_000,
+  'gemini-2.5-flash': 1_048_576,
+  'gemini-2.5-pro': 1_048_576,
+  'gemini-2.5-flash-lite': 1_048_576,
+  'gemini-3': 1_048_576,
+  // retired generations kept so historical telemetry/env overrides still resolve
+  'gemini-2.0': 1_000_000,
+  'gemini-1.5': 1_000_000,
 };
 
 function getContextWindow(model: string): number {
@@ -190,6 +192,29 @@ export interface LLMCallOptions {
     useCache?: boolean; // enable/disable caching for this request
     skipValidation?: boolean; // skip output validation
   };
+}
+
+/** 2.5+ generation (and newer) accept generationConfig.thinkingConfig; 1.x/2.0 reject it. */
+function supportsThinkingConfig(model: string): boolean {
+  return !/gemini-(1\.|2\.0)/.test(model);
+}
+
+/**
+ * THINKING_BUDGETS (lib/config/thinking-budgets.ts) were sized for a Pro-class
+ * model (4k-16k tokens per node). On flash-class models that budget costs 3-17s
+ * per call and the ≤12-call diagnosis graph blows its 90s wall (measured 67-89s
+ * of pure LLM time). Flash gets a small cap; Pro keeps the configured budget;
+ * LLM_THINKING_DISABLED=true forces 0 everywhere (deterministic extraction mode).
+ */
+const FLASH_THINKING_CAP = parseInt(process.env.LLM_FLASH_THINKING_CAP || '512', 10);
+function effectiveThinkingBudget(model: string, requested?: number): number {
+  if (process.env.LLM_THINKING_DISABLED === 'true') return 0;
+  const budget = requested && requested > 0 ? requested : 0;
+  if (budget === 0) return 0;
+  const capped = /flash/i.test(model) ? Math.min(budget, FLASH_THINKING_CAP) : budget;
+  // API contract: thinkingBudget must be 0 or within [128, 32768]; values like
+  // 50 are rejected with 400 (measured — broke every executive summary).
+  return Math.min(32768, Math.max(128, capped));
 }
 
 export interface LLMCallResult {
@@ -277,10 +302,13 @@ export async function generateWithGemini(
     generationConfig.responseMimeType = 'application/json';
   }
 
-  if (opts.thinkingBudget && opts.thinkingBudget > 0 && !opts.model.includes('flash')) {
-    generationConfig.thinkingConfig = {
-      thinkingBudget: opts.thinkingBudget,
-    };
+  // Gemini 2.5+ models (including flash) reason by default; an unset budget means
+  // every extraction/clustering call pays 500-4000 thinking tokens and 3-17s
+  // (measured: 12 diagnosis calls = 67s → graph timeout). Always send an explicit
+  // budget: 0 disables thinking for deterministic JSON tasks, >0 enables it where
+  // a task genuinely benefits (MODEL_CONFIG.thinkingBudget / THINKING_BUDGET_*).
+  if (supportsThinkingConfig(opts.model)) {
+    generationConfig.thinkingConfig = { thinkingBudget: effectiveThinkingBudget(opts.model, opts.thinkingBudget) };
   }
 
   // Format input parts for multimodal
@@ -331,7 +359,7 @@ export async function generateWithGemini(
     const bucket = hashInt % 100;
 
     if (bucket < FEATURE_FLAGS.GEMINI_31_PRO_TRAFFIC_PCT) {
-      targetModel = 'gemini-3.1-pro';
+      targetModel = GEMINI_PRO;
     }
   }
 
@@ -742,10 +770,13 @@ export async function* generateContentStream(
     maxOutputTokens: opts.maxOutputTokens ?? 2048,
   };
 
-  if (opts.thinkingBudget && opts.thinkingBudget > 0 && !opts.model.includes('flash')) {
-    generationConfig.thinkingConfig = {
-      thinkingBudget: opts.thinkingBudget,
-    };
+  // Gemini 2.5+ models (including flash) reason by default; an unset budget means
+  // every extraction/clustering call pays 500-4000 thinking tokens and 3-17s
+  // (measured: 12 diagnosis calls = 67s → graph timeout). Always send an explicit
+  // budget: 0 disables thinking for deterministic JSON tasks, >0 enables it where
+  // a task genuinely benefits (MODEL_CONFIG.thinkingBudget / THINKING_BUDGET_*).
+  if (supportsThinkingConfig(opts.model)) {
+    generationConfig.thinkingConfig = { thinkingBudget: effectiveThinkingBudget(opts.model, opts.thinkingBudget) };
   }
 
   let contents = [];

@@ -25,6 +25,7 @@ export interface PublicProposalDto {
   version: number;
   webLinkToken: string;
   executiveSummary: string | null;
+  prospectEmail: string | null;
   pricing: { essentials?: number; growth?: number; premium?: number };
   tierEssentials: Record<string, unknown>;
   tierGrowth: Record<string, unknown>;
@@ -161,6 +162,7 @@ export async function resolvePublicProposalAccess(token: string): Promise<{
         tierChosen: true,
         createdAt: true,
         executiveSummary: true,
+        prospectEmail: true,
         painClusters: true,
         pricing: true,
         tierEssentials: true,
@@ -451,6 +453,7 @@ export async function resolvePublicProposalAccess(token: string): Promise<{
       version: proposal.version,
       webLinkToken: token,
       executiveSummary: proposal.executiveSummary,
+      prospectEmail: proposal.prospectEmail,
       pricing: publicPricing(proposal.pricing),
       tierEssentials: publicTier(proposal.tierEssentials),
       tierGrowth: publicTier(proposal.tierGrowth),

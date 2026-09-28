@@ -447,7 +447,11 @@ async function degrade_and_continue(state: State): Promise<Partial<State>> {
 
 async function adversarial_qa(state: State): Promise<Partial<State>> {
   try {
-    const content = state.clusters.map((c) => c.rootCause).join('\n');
+    // Check the diagnosis narrative (customer-visible) for hallucination, not the
+    // internal cluster label (internal slug never shown to customers). The prior
+    // content was the label 'Website and Mobile Performance Issues' — flagging it
+    // as unsupported was a tautology that degraded every real audit.
+    const content = state.clusters.map((c) => c.narrative ?? c.rootCause).join('\n');
 
     const qaGraph = createAdversarialQAGraph(state.costTracker);
     const result = await qaGraph.invoke({
@@ -481,7 +485,12 @@ async function adversarial_qa(state: State): Promise<Partial<State>> {
 
     if (retryTriggered) {
       logger.warn(
-        { qaScore, qaRetryCount: state.qaRetryCount },
+        {
+          qaScore,
+          qaRetryCount: state.qaRetryCount,
+          hallucinationFlags: (result.hallucinationFlags ?? []).slice(0, 5),
+          consistencyFlags: (result.consistencyFlags ?? []).slice(0, 5),
+        },
         '[DiagnosisGraph] QA hallucination score > 0.3 — triggering QA retry'
       );
     } else if (result.hallucinationFlags?.length > 0) {

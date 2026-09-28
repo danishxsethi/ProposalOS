@@ -1,0 +1,7 @@
+Commit: 5f66e09347e4314b592f9d008128e3b241e3b84e
+Branch: remediation/proposalos-e2e (dirty, 28 modified, 10 untracked)
+Node: v25.6.0 npm 11.8.0 Prisma 5.22.0
+File counts: 182895 total (next/.git inflated), app 250, lib 811, tests 86
+Docker: postgres:15-alpine healthy on 5435, pgbouncer edoburu/pgbouncer on 6432, redis 7-alpine
+Env templates: .env, .env.example (10603 lines), .env.local, .env.production.example, .env.test
+Lockfile: package-lock.json only (npm ci)

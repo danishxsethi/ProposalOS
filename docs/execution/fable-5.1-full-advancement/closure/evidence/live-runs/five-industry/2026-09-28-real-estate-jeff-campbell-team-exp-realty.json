@@ -1,0 +1,62 @@
+{
+  "business": {
+    "name": "Jeff Campbell Team - EXP Realty",
+    "city": "Regina",
+    "url": "https://www.reginahomesforsale.com/",
+    "industry": "real-estate"
+  },
+  "auditId": "42617da4-3858-4ac1-bc92-43aea2fc7931",
+  "auditStatus": "PARTIAL",
+  "trustState": "DEGRADED_REVIEW_REQUIRED",
+  "overallScore": null,
+  "apiCostCents": 8,
+  "auditWallMs": 97463,
+  "auditError": null,
+  "modulesCompleted": 8,
+  "modulesFailed": 16,
+  "moduleStatusCounts": {
+    "COMPLETE": 8,
+    "UNAVAILABLE": 8,
+    "SKIPPED": 5,
+    "PARTIAL": 3,
+    "FAILED": 3
+  },
+  "moduleTimingsMs": {
+    "gbp": null,
+    "social": null,
+    "vision": null,
+    "gbpDeep": null,
+    "seoDeep": null,
+    "website": null,
+    "mobileUX": null,
+    "security": null,
+    "backlinks": null,
+    "citations": null,
+    "techStack": null,
+    "competitor": null,
+    "conversion": null,
+    "keywordGap": null,
+    "paidSearch": null,
+    "reputation": null,
+    "socialDeep": null,
+    "emailFinder": null,
+    "schemaMarkup": null,
+    "accessibility": null,
+    "coreWebVitals": null,
+    "videoPresence": null,
+    "contentQuality": null,
+    "schemaAnalysis": null,
+    "websiteCrawler": null,
+    "privacyCompliance": null,
+    "competitorStrategy": null
+  },
+  "findings": 12,
+  "findingsByType": {
+    "VITAMIN": 7,
+    "PAINKILLER": 5
+  },
+  "evidenceSnapshots": 9,
+  "proposalWallMs": null,
+  "proposalError": null,
+  "proposal": null
+}

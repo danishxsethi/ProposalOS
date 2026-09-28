@@ -62,12 +62,7 @@ async function handleFollowUpsCron(req: Request): Promise<NextResponse> {
       try {
         const outcome = await runWithTenantAsync(item.tenantId, async () => {
           const followUp = await prisma.proposalFollowUp.findFirst({
-            where: {
-              id: item.id,
-              tenantId: item.tenantId,
-              status: 'pending',
-              scheduledAt: { lte: now },
-            },
+            where: { id: item.id, tenantId: item.tenantId, status: 'pending', scheduledAt: { lte: now } },
             include: {
               proposal: { include: { audit: true } },
             },
@@ -186,11 +181,7 @@ async function handleFollowUpsCron(req: Request): Promise<NextResponse> {
                 where: { id: followUp.id },
                 data: { status: 'failed' },
               });
-              return {
-                id: followUp.id,
-                status: 'failed',
-                reason: error?.message || 'provider_rejected',
-              };
+              return { id: followUp.id, status: 'failed', reason: error?.message || 'provider_rejected' };
             }
 
             await prisma.pipelineErrorLog.create({

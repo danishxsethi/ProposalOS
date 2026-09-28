@@ -13,6 +13,9 @@
     "test:qualified": "bash scripts/bootstrap-test-databases.sh -- npm test -- --reporter=dot",
     "security:audit:prod": "tsx scripts/check-dependency-audits.ts",
     "qualify:proposal-trust": "bash scripts/qualify-proposal-trust.sh",
+    "maps:mcp": "tsx tools/maps-mcp/src/server.ts",
+    "maps:mcp:stdio": "tsx tools/maps-mcp/src/server.ts",
+    "maps:mcp:http": "MAPS_MCP_HTTP_ENABLED=true tsx tools/maps-mcp/src/server.ts",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "e2e:full-audit": "node scripts/e2e-full-audit.js",
@@ -167,6 +170,6 @@
       "undici": "6.28.1"
     },
     "picomatch": "^4.0.7",
-    "protobufjs": "7.6.4"
+    "protobufjs": "7.6.5"
   }
 }

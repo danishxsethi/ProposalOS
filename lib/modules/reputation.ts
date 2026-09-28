@@ -1,20 +1,13 @@
-import { VertexAI } from '@google-cloud/vertexai';
 import { RunTree } from 'langsmith';
 
+import { GEMINI_FLASH, GEMINI_PRO } from '@/lib/config/models';
 import { CostTracker } from '@/lib/costs/costTracker';
+import { generateWithGemini } from '@/lib/llm/provider';
 import { logger } from '@/lib/logger';
 import { traceLlmCall } from '@/lib/tracing';
 
 import { LegacyAuditModuleResult } from './types';
 
-function getVertexAI() {
-  const projectId = process.env.GCP_PROJECT_ID;
-  const location = process.env.GCP_REGION || 'us-central1';
-  if (!projectId) {
-    throw new Error('GCP_PROJECT_ID not found in environment variables');
-  }
-  return new VertexAI({ project: projectId, location });
-}
 
 export interface ReputationModuleInput {
   reviews: any[]; // Reviews from GBP module
@@ -68,17 +61,10 @@ export async function runReputationModule(
   }
 
   try {
-    tracker?.addLlmCall('GEMINI_FLASH', 500, 200); // Estimate ~500 input, 200 output tokens
-
-    const vertexAI = getVertexAI();
-    const model = vertexAI.getGenerativeModel({
-      model: 'gemini-2.0-flash', // Match diagnosis pipeline (llmCluster)
-      generationConfig: {
-        temperature: 0,
-        maxOutputTokens: 2048,
-        responseMimeType: 'application/json',
-      },
-    });
+    // Routed through the canonical LLM façade: API-key or Vertex auth, retry,
+    // circuit breaker, output validation and real token-based cost accounting.
+    // (Previously hardcoded to the Vertex SDK → failed with "GCP_PROJECT_ID not
+    // found" on every API-key deployment.)
 
     // Extract review text for analysis
     const reviewsForAnalysis = input.reviews.slice(0, 5).map((r: any) => ({
@@ -121,10 +107,20 @@ Return JSON in this exact format:
         parent: parentTrace,
       },
       async () => {
-        const result = await model.generateContent(prompt);
-        const response = result.response;
-        const responseText = response.candidates?.[0]?.content?.parts?.[0]?.text || '';
+        const llm = await generateWithGemini({
+          model: GEMINI_FLASH,
+          input: prompt,
+          temperature: 0,
+          maxOutputTokens: 4096,
+          responseModality: 'json',
+          node: 'reputation.review_analysis',
+        } as Parameters<typeof generateWithGemini>[0]);
+        const promptTokens = llm.usageMetadata?.promptTokenCount ?? 500;
+        const completionTokens = llm.usageMetadata?.candidatesTokenCount ?? 200;
+        tracker?.addLlmCall('GEMINI_FLASH', promptTokens, completionTokens);
+        const responseText = String(llm.text ?? '').replace(/^```(?:json)?\s*|\s*```$/g, '').trim();
         const analysis = JSON.parse(responseText);
+        if (!Array.isArray(analysis?.reviews)) throw new Error('Reputation analysis returned no reviews array');
 
         // Calculate metrics
         const negativeCount = analysis.reviews.filter(
@@ -181,7 +177,7 @@ Return JSON in this exact format:
         // which is internal to the `traceLlmCall` closure above. Cost is already
         // tracked via `tracker?.addLlmCall(...)` (fixed estimate) at call start;
         // this callback only supplies the tracing metadata `traceLlmCall` expects.
-        return { prompt: 0, completion: 0, model: 'gemini-2.0-flash' };
+        return { prompt: 0, completion: 0, model: GEMINI_FLASH };
       }
     );
   } catch (error) {

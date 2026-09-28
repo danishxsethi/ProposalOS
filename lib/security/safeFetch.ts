@@ -92,6 +92,34 @@ export interface SafeFetchOptions {
  * @param options Extra options for the SSRF validator.
  * @throws {SsrfBlockedError} if any URL in the chain is blocked.
  */
+/**
+ * Default request headers for audit fetches. Measured live against 7 real
+ * customer sites: WAFs (nginx/Sucuri/Cloudflare rules) return 403 to any
+ * `Mozilla/5.0 …` user agent sent from a non-browser TLS/HTTP stack (Node
+ * undici) — including a perfect Chrome UA string — while an honest,
+ * non-Mozilla auditor UA with normal Accept headers gets 200 on the same
+ * sites. Identifying ourselves is also the correct crawler etiquette. Sites
+ * that block *all* non-browser clients are handled by the headless-browser
+ * fallback in lib/audit/collectors/htmlCollector.ts. Callers may override.
+ */
+export const AUDITOR_USER_AGENT =
+  process.env.AUDIT_USER_AGENT ||
+  'ProposalOS-Audit/1.0 (+https://proposalengine.app/bot; site audit requested by the business or its agency)';
+
+export const BROWSER_REQUEST_HEADERS: Record<string, string> = {
+  'User-Agent': AUDITOR_USER_AGENT,
+  Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+  'Accept-Language': 'en-US,en;q=0.9',
+};
+
+function withBrowserHeaders(init?: RequestInit): RequestInit {
+  const headers = new Headers(init?.headers);
+  for (const [k, v] of Object.entries(BROWSER_REQUEST_HEADERS)) {
+    if (!headers.has(k)) headers.set(k, v);
+  }
+  return { ...init, headers };
+}
+
 export async function safeFetch(
   url: string,
   init?: RequestInit,
@@ -105,6 +133,7 @@ export async function safeFetch(
 
   let currentUrl = await validateAndThrow(url, allowHttp);
   let redirectCount = 0;
+  init = withBrowserHeaders(init);
 
   while (true) {
     const response = await fetch(currentUrl, {

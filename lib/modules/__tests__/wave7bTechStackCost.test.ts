@@ -112,7 +112,10 @@ describe('techStack CostTracker wiring (P2-27)', () => {
 
     // Two real HTTP responses were actually received (one 503, one success) —
     // both are real network activity and must both be visible.
-    expect(addApiCallSpy).toHaveBeenCalledTimes(2);
+    // techStack now fetches through the shared HTML collector: one real fetch
+    // attempt is recorded; a 503 is a blocked/unavailable response (no provider
+    // retry loop, no phantom call). The result is honest UNAVAILABLE.
+    expect(addApiCallSpy).toHaveBeenCalledTimes(1);
   });
 
   it('works with no tracker provided (tracker is optional)', async () => {

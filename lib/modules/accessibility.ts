@@ -236,14 +236,32 @@ export async function runAccessibilityModule(
     browser = acquired.browser;
     browserKey = acquired.key;
     page = await browser.newPage();
+    // axe-core is injected into the audited page via script injection; sites with a
+    // strict Content-Security-Policy block that and @axe-core/puppeteer surfaces it
+    // as "Page/Frame is not ready". Bypassing the *target site's* CSP inside our
+    // sandboxed headless browser is the documented axe/puppeteer approach and has no
+    // effect on ProposalOS's own CSP.
+    await page.setBypassCSP(true);
 
     await safePageGoto(page, url, { waitUntil: 'domcontentloaded', timeout: 20000 }, input.signal);
 
     const custom = await runCustomChecks(page);
 
-    const axeResults = await new AxePuppeteer(page)
-      .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
-      .analyze();
+    // axe injects into every frame; third-party iframes (booking widgets, chat,
+    // maps) still loading at domcontentloaded make @axe-core/puppeteer throw
+    // "Page/Frame is not ready" (reproduced live). Let the network settle
+    // (bounded) and retry once — both bounded well inside the module timeout.
+    await page.waitForNetworkIdle({ idleTime: 500, timeout: 8000 }).catch(() => undefined);
+    const runAxe = () =>
+      new AxePuppeteer(page!).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']).analyze();
+    let axeResults: Awaited<ReturnType<typeof runAxe>>;
+    try {
+      axeResults = await runAxe();
+    } catch (firstError) {
+      if (!/not ready/i.test(firstError instanceof Error ? firstError.message : String(firstError))) throw firstError;
+      await new Promise((r) => setTimeout(r, 2000));
+      axeResults = await runAxe();
+    }
 
     const violations = axeResults.violations || [];
     const scanTimestamp = new Date().toISOString();

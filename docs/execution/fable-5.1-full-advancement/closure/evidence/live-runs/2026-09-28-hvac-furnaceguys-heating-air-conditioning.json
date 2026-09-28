@@ -1,0 +1,25 @@
+{
+  "business": {
+    "name": "Furnaceguys Heating & Air Conditioning",
+    "city": "Saskatoon",
+    "url": "https://www.furnaceguys.com/",
+    "industry": "hvac"
+  },
+  "auditId": "90c473ac-1fe7-45c7-acb8-134ef70712dc",
+  "auditStatus": "FAILED",
+  "trustState": "PENDING",
+  "overallScore": null,
+  "apiCostCents": 0,
+  "auditWallMs": 26,
+  "auditError": null,
+  "modulesCompleted": 0,
+  "modulesFailed": 1,
+  "moduleStatusCounts": {},
+  "moduleTimingsMs": {},
+  "findings": 0,
+  "findingsByType": {},
+  "evidenceSnapshots": 0,
+  "proposalWallMs": null,
+  "proposalError": null,
+  "proposal": null
+}

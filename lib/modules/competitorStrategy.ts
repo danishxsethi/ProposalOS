@@ -1,5 +1,6 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
+import { GEMINI_FLASH, GEMINI_PRO } from '@/lib/config/models';
 import { CostTracker } from '@/lib/costs/costTracker';
 import { logger } from '@/lib/logger';
 
@@ -88,14 +89,20 @@ export async function runCompetitorStrategyModule(
         pages: competitorCrawl.totalPagesFound,
         tech: 'Unknown', // Could run tech stack but keep it simple
       },
-      gbp: competitorGbp
-        ? {
-            rating: competitorGbp.evidenceSnapshots[0].rawResponse.reviews.rating,
-            reviewCount: competitorGbp.evidenceSnapshots[0].rawResponse.reviews.totalCount,
-            velocity: competitorGbp.evidenceSnapshots[0].rawResponse.reviews.velocity,
-            completeness: competitorGbp.evidenceSnapshots[0].rawResponse.completeness.score,
-          }
-        : 'Not found',
+      // gbpDeep returns evidenceSnapshots: [] when the competitor listing could
+      // not be resolved (ambiguous/unavailable) — read defensively, never crash.
+      gbp: (() => {
+        const raw = (competitorGbp?.evidenceSnapshots?.[0] as { rawResponse?: Record<string, unknown> } | undefined)?.rawResponse;
+        const reviews = (raw?.reviews ?? {}) as Record<string, unknown>;
+        const completeness = (raw?.completeness ?? {}) as Record<string, unknown>;
+        if (!raw) return 'Not found';
+        return {
+          rating: reviews.rating ?? null,
+          reviewCount: reviews.totalCount ?? null,
+          velocity: reviews.velocity ?? null,
+          completeness: completeness.score ?? null,
+        };
+      })(),
     };
 
     const ourData = {
@@ -155,7 +162,7 @@ async function generateStrategicAnalysis(
   tracker?: CostTracker
 ): Promise<StrategicAnalysis> {
   const genAI = new GoogleGenerativeAI(process.env.GOOGLE_AI_API_KEY!);
-  const model = genAI.getGenerativeModel({ model: 'gemini-1.5-pro' });
+  const model = genAI.getGenerativeModel({ model: GEMINI_PRO });
 
   tracker?.addApiCall('GEMINI_STRATEGY');
 

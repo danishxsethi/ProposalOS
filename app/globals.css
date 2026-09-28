@@ -310,11 +310,33 @@ h4 {
   }
 }
 
-/* Container */
+/* Container — horizontal padding only; leave vertical spacing to utilities (py-*) */
 .container {
   max-width: 1200px;
-  margin: 0 auto;
-  padding: 0 1.5rem;
+  margin-left: auto;
+  margin-right: auto;
+  padding-left: 1.5rem;
+  padding-right: 1.5rem;
+}
+
+/* Dark form control used across settings surfaces */
+.input-dark {
+  background-color: rgb(15 23 42); /* slate-900 */
+  color: rgb(226 232 240); /* slate-200 */
+  border: 1px solid rgb(51 65 85); /* slate-700 */
+  border-radius: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  outline: none;
+  transition: border-color 150ms, box-shadow 150ms;
+}
+.input-dark::placeholder {
+  color: rgb(100 116 139); /* slate-500 */
+}
+.input-dark:focus-visible {
+  border-color: rgb(99 102 241); /* indigo-500 */
+  box-shadow: 0 0 0 3px rgb(99 102 241 / 0.3);
 }
 
 /* Grid */

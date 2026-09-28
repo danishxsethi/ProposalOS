@@ -1,6 +1,7 @@
 import { withModuleCache } from '@/lib/cache/moduleCache';
 import { CostTracker } from '@/lib/costs/costTracker';
 import { logger } from '@/lib/logger';
+import { mapsIntelligence, normalizeGooglePlaceToLegacy } from '@/lib/maps/googleMapsProvider';
 import { withProviderResilience } from '@/lib/resilience/withProviderResilience';
 
 import {
@@ -12,8 +13,25 @@ import {
 } from './types';
 
 const SERP_API_BASE = 'https://serpapi.com/search';
-const PLACES_API_BASE = 'https://places.googleapis.com/v1';
 const PSI_API_URL = 'https://www.googleapis.com/pagespeedonline/v5/runPagespeed';
+
+/** SerpAPI google_local puts the site under `links.website` (with GBP UTM params). */
+function serpWebsite(r: { website?: string; links?: { website?: string } } | null | undefined): string | undefined {
+  const raw = r?.links?.website ?? r?.website;
+  if (!raw || typeof raw !== 'string') return undefined;
+  try {
+    const u = new URL(raw);
+    for (const k of [...u.searchParams.keys()]) if (/^utm_/i.test(k)) u.searchParams.delete(k);
+    return u.toString().replace(/\?$/, '');
+  } catch {
+    return raw;
+  }
+}
+
+/** Only Places API (New) resource ids (ChIJ…/Eh…) can be fetched via places/{id}; SerpAPI's numeric CID cannot. */
+function placesApiId(id: unknown): string | undefined {
+  return typeof id === 'string' && /^[A-Za-z]/.test(id) ? id : undefined;
+}
 
 export async function runCompetitorModule(
   input: CompetitorModuleInput,
@@ -23,7 +41,6 @@ export async function runCompetitorModule(
 
   if (
     !process.env.SERP_API_KEY ||
-    !process.env.GOOGLE_PLACES_API_KEY ||
     !process.env.GOOGLE_PAGESPEED_API_KEY
   ) {
     return {
@@ -34,7 +51,7 @@ export async function runCompetitorModule(
         competitorSearchStatus: 'not_configured',
         execution: {
           state: 'unavailable',
-          reason: 'Competitor providers are not fully configured (SERP, Places, or PageSpeed)',
+          reason: 'Competitor providers are not fully configured (SERP or PageSpeed)',
         },
       },
     };
@@ -90,41 +107,43 @@ export async function runCompetitorModule(
     const topCompetitors = localResults.slice(0, 3); // Top 3
 
     // Helper to fetch Place Details
-    const fetchPlaceDetails = async (placeId: string, name: string): Promise<any> => {
-      tracker?.addApiCall('PLACES_DETAILS');
+    /**
+     * SerpAPI's local pack frequently omits competitor websites (measured: zero
+     * of four law firms carried `links.website`). Resolve the website via our
+     * own Places text search by name + location (COMPETITOR profile, 1 call,
+     * cached 24h) so competitorStrategy can actually run.
+     */
+    const resolveWebsiteByName = async (name: string): Promise<string | undefined> => {
       try {
-        return await withModuleCache<any>(
-          {
-            module: 'competitor',
-            version: 1,
-            input: { type: 'place_details', placeId },
-          },
-          { ttlSeconds: 7 * 24 * 3600 },
+        const res = await withModuleCache<string | undefined>(
+          { module: 'competitor', version: 1, input: { type: 'website_by_name', name, location: input.location } },
+          { ttlSeconds: 24 * 3600 },
           async () => {
-            return withProviderResilience<any>(
-              {
-                provider: 'google-places',
-                operation: 'competitor:place_details',
-                degrade: true,
-                fallbackValue: {},
-              },
-              async () => {
-                const res = await fetch(`${PLACES_API_BASE}/places/${placeId}`, {
-                  headers: {
-                    'Content-Type': 'application/json',
-                    'X-Goog-Api-Key': process.env.GOOGLE_PLACES_API_KEY as string,
-                    'X-Goog-FieldMask':
-                      'id,displayName,rating,userRatingCount,websiteUri,photos,regularOpeningHours,primaryTypeDisplayName',
-                  },
-                });
-                if (!res.ok) {
-                  throw new Error(`HTTP error ${res.status}: ${res.statusText}`);
-                }
-                return await res.json();
-              }
-            );
+            tracker?.addApiCall('PLACES_TEXT_SEARCH');
+            const found = await mapsIntelligence.searchText({
+              query: `${name} ${input.location}`,
+              city: input.location,
+              maxResults: 3,
+              fieldProfile: 'COMPETITOR',
+            });
+            if (found.status !== 'COMPLETE' || !found.data?.length) return undefined;
+            const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+            const want = norm(name);
+            const match = found.data.find((c) => c.displayName && (norm(c.displayName) === want || norm(c.displayName).includes(want) || want.includes(norm(c.displayName))));
+            return (match ?? found.data[0])?.website ?? undefined;
           }
         );
+        return res;
+      } catch {
+        return undefined;
+      }
+    };
+
+    const fetchPlaceDetails = async (placeId: string, name: string): Promise<any> => {
+      try {
+        const result = await mapsIntelligence.getPlace(placeId, 'COMPETITOR');
+        if (result.status !== 'COMPLETE' || !result.data) return null;
+        return normalizeGooglePlaceToLegacy(result.data);
       } catch (e) {
         logger.warn({ businessName: name }, 'Failed to fetch place details');
         return null;
@@ -156,7 +175,9 @@ export async function runCompetitorModule(
           key: process.env.GOOGLE_PAGESPEED_API_KEY as string,
           strategy: 'mobile',
         });
-        ['performance', 'accessibility', 'seo'].forEach((c) => psParams.append('category', c));
+        // performance only: seo/accessibility double Lighthouse time (measured 20-35s → 45-88s)
+        // and the competitor comparison consumes performance + load time.
+        psParams.append('category', 'performance');
         const psData = await withModuleCache<any>(
           {
             module: 'competitor',
@@ -260,31 +281,16 @@ export async function runCompetitorModule(
     const category = selfResult.type;
     const businessName = input.keyword;
 
-    // Fetch Self Details + Lightweight PageSpeed
+    // Fetch Self Details + Lightweight PageSpeed. The PSI call is slow (20-35s
+    // measured); start it now and await it together with the competitor PSI
+    // calls below so the module wall is max() of the calls, not their sum.
     let selfDetails = null;
-    if (selfResult.place_id) {
-      selfDetails = await fetchPlaceDetails(selfResult.place_id, businessName);
+    const selfPlacesId = placesApiId(selfResult.place_id);
+    if (selfPlacesId) {
+      selfDetails = await fetchPlaceDetails(selfPlacesId, businessName);
     }
-    const selfWebsite = selfDetails?.websiteUri || selfResult.website;
-    const selfPsi = await runLightweightPageSpeed(selfWebsite || '');
-
-    const selfDataStruct: MatchedBusinessData = {
-      name: selfResult.title,
-      rating: selfDetails?.rating || selfResult.rating || 0,
-      reviewCount: selfDetails?.userRatingCount || selfResult.reviews || 0,
-      website: selfWebsite,
-      websiteSpeed: selfPsi.performanceScore,
-      photosCount: selfDetails?.photos ? selfDetails.photos.length : 0,
-      hasHours: !!selfDetails?.regularOpeningHours,
-      inLocalPack: true,
-      placeId: selfResult.place_id,
-      category: selfDetails?.primaryTypeDisplayName?.text || category,
-      performanceScore: selfPsi.performanceScore,
-      seoScore: selfPsi.seoScore,
-      accessibilityScore: selfPsi.accessibilityScore,
-      mobileScore: selfPsi.mobileScore,
-      loadTimeSeconds: selfPsi.loadTimeSeconds,
-    };
+    const selfWebsite = selfDetails?.websiteUri || serpWebsite(selfResult);
+    const selfPsiPromise = runLightweightPageSpeed(selfWebsite || '');
 
     // 2. Find COMPETITORS (if category found) - SECOND PASS
     let competitors: MatchedBusinessData[] = [];
@@ -350,9 +356,10 @@ export async function runCompetitorModule(
       competitors = await Promise.all(
         rawCompetitors.map(async (comp: any) => {
           let d = null;
-          if (comp.place_id) d = await fetchPlaceDetails(comp.place_id, comp.title);
+          const compPlacesId = placesApiId(comp.place_id);
+          if (compPlacesId) d = await fetchPlaceDetails(compPlacesId, comp.title);
 
-          const w = d?.websiteUri || comp.website;
+          const w = d?.websiteUri || serpWebsite(comp) || (await resolveWebsiteByName(comp.title));
           const psi = await runLightweightPageSpeed(w || '');
 
           return {
@@ -375,6 +382,25 @@ export async function runCompetitorModule(
         })
       );
     }
+
+    const selfPsi = await selfPsiPromise;
+    const selfDataStruct: MatchedBusinessData = {
+      name: selfResult.title,
+      rating: selfDetails?.rating || selfResult.rating || 0,
+      reviewCount: selfDetails?.userRatingCount || selfResult.reviews || 0,
+      website: selfWebsite,
+      websiteSpeed: selfPsi.performanceScore,
+      photosCount: selfDetails?.photos ? selfDetails.photos.length : 0,
+      hasHours: !!selfDetails?.regularOpeningHours,
+      inLocalPack: true,
+      placeId: selfResult.place_id,
+      category: selfDetails?.primaryTypeDisplayName?.text || category,
+      performanceScore: selfPsi.performanceScore,
+      seoScore: selfPsi.seoScore,
+      accessibilityScore: selfPsi.accessibilityScore,
+      mobileScore: selfPsi.mobileScore,
+      loadTimeSeconds: selfPsi.loadTimeSeconds,
+    };
 
     // 3. Calculate Gaps
     const gaps: ComparisonGap[] = [];

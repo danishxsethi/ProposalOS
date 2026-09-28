@@ -2,7 +2,7 @@ import type { CostTracker } from '@/lib/costs/costTracker';
 import { logger } from '@/lib/logger';
 
 import { normalizeConfidence } from './findingGenerator';
-import { AuditModuleResult, EvidenceItem, Finding } from './types';
+import { AuditModuleResult, createEvidence, EvidenceItem, Finding } from './types';
 import { CrawlResult, crawlWebsite } from './websiteCrawler';
 import { captureScreenshots } from '../evidence/screenshotCapture';
 
@@ -26,6 +26,20 @@ interface WebsiteCrawlerModuleInput {
  * Generate findings from crawl results
  */
 function generateFindingsFromCrawl(crawlResult: CrawlResult, businessUrl: string): Finding[] {
+  // Every customer-visible finding must carry evidence with a real pointer,
+  // source and collection time (FindingRuntimeSchema) or it is rejected at the
+  // aggregation boundary and silently degrades audit trust. All crawler
+  // observations point at the crawled page (or the site root for aggregates).
+  const collectedAt = new Date().toISOString();
+  const ev = (opts: { pointer?: string; type: 'url' | 'metric' | 'text'; value: string | number; label: string }) =>
+    createEvidence({
+      pointer: opts.pointer ?? businessUrl,
+      source: 'internal_crawl',
+      collected_at: collectedAt,
+      type: opts.type,
+      value: opts.value,
+      label: opts.label,
+    });
   // If crawl result is blocked by anti-bot, generate a specific high-impact finding and exit early
   if (crawlResult.failureClassification === 'ANTI_BOT') {
     return [
@@ -38,11 +52,14 @@ function generateFindingsFromCrawl(crawlResult: CrawlResult, businessUrl: string
         impactScore: 9,
         confidenceScore: normalizeConfidence(95, '0-100'),
         evidence: [
-          {
+          createEvidence({
+            pointer: businessUrl,
+            source: 'internal_crawl',
+            collected_at: new Date().toISOString(),
             type: 'text',
-            value: 'WAF block page detected',
+            value: 'WAF challenge/block page detected on homepage fetch',
             label: 'WAF Status',
-          },
+          }),
         ],
         metrics: {
           failureClassification: 'ANTI_BOT',
@@ -69,13 +86,7 @@ function generateFindingsFromCrawl(crawlResult: CrawlResult, businessUrl: string
           'The scraper encountered extreme response times or artificial connection throttling (timeouts >45s). This indicates poor origin responsiveness, severe hosting constraints, or aggressive rate-limiting.',
         impactScore: 9,
         confidenceScore: normalizeConfidence(95, '0-100'),
-        evidence: [
-          {
-            type: 'text',
-            value: 'Connection timed out after 45000ms',
-            label: 'Timeout Status',
-          },
-        ],
+        evidence: [ev({ type: 'text', value: 'Connection timed out after 45000ms', label: 'Timeout Status' })],
         metrics: {
           failureClassification: 'TIMEOUT',
         },
@@ -101,11 +112,7 @@ function generateFindingsFromCrawl(crawlResult: CrawlResult, businessUrl: string
       description: `Found ${crawlResult.brokenLinks.length} pages returning 4xx or 5xx errors. Broken links damage SEO rankings and user experience.`,
       impactScore: 8,
       confidenceScore: normalizeConfidence(95, '0-100'),
-      evidence: crawlResult.brokenLinks.slice(0, 10).map((url) => ({
-        type: 'url' as const,
-        value: url,
-        label: 'Broken Link',
-      })),
+      evidence: crawlResult.brokenLinks.slice(0, 10).map((url) => ev({ pointer: url, type: 'url', value: url, label: 'Broken Link' })),
       metrics: {
         brokenLinkCount: crawlResult.brokenLinks.length,
         affectedUrls: crawlResult.brokenLinks,
@@ -130,13 +137,7 @@ function generateFindingsFromCrawl(crawlResult: CrawlResult, businessUrl: string
       description: `Homepage only has ${homepage.wordCount} words. Search engines may view this as low-quality content, harming SEO rankings.`,
       impactScore: 7,
       confidenceScore: normalizeConfidence(90, '0-100'),
-      evidence: [
-        {
-          type: 'metric',
-          value: homepage.wordCount,
-          label: 'Homepage Word Count',
-        },
-      ],
+      evidence: [ev({ type: 'metric', value: homepage.wordCount, label: 'Homepage Word Count' })],
       metrics: {
         wordCount: homepage.wordCount,
         recommendedMinimum: 300,
@@ -165,11 +166,7 @@ function generateFindingsFromCrawl(crawlResult: CrawlResult, businessUrl: string
       description: `${crawlResult.pagesMissingTitles.length} out of ${crawlResult.crawledPages.length} pages are missing title tags. This severely impacts SEO visibility.`,
       impactScore: 8,
       confidenceScore: normalizeConfidence(95, '0-100'),
-      evidence: crawlResult.pagesMissingTitles.slice(0, 5).map((url) => ({
-        type: 'url',
-        value: url,
-        label: 'Page Missing Title',
-      })),
+      evidence: crawlResult.pagesMissingTitles.slice(0, 5).map((url) => ev({ pointer: url, type: 'url', value: url, label: 'Page Missing Title' })),
       metrics: {
         pagesMissingTitles: crawlResult.pagesMissingTitles.length,
         totalPages: crawlResult.crawledPages.length,
@@ -201,11 +198,7 @@ function generateFindingsFromCrawl(crawlResult: CrawlResult, businessUrl: string
       confidenceScore: normalizeConfidence(90, '0-100'),
       evidence: Array.from(crawlResult.duplicateTitles.entries())
         .slice(0, 3)
-        .map(([title, urls]) => ({
-          type: 'text',
-          value: `"${title}" (${urls.length} pages)`,
-          label: 'Duplicate Title',
-        })),
+        .map(([title, urls]) => ev({ pointer: urls[0] ?? businessUrl, type: 'text', value: `"${title}" (${urls.length} pages)`, label: 'Duplicate Title' })),
       metrics: {
         duplicateTitleGroups: crawlResult.duplicateTitles.size,
         affectedPages: duplicateCount,
@@ -235,13 +228,7 @@ function generateFindingsFromCrawl(crawlResult: CrawlResult, businessUrl: string
       description: `Average page size is ${avgPageSizeMB.toFixed(2)}MB. Large pages slow down load times and hurt user experience, especially on mobile.`,
       impactScore: 5,
       confidenceScore: normalizeConfidence(85, '0-100'),
-      evidence: [
-        {
-          type: 'metric',
-          value: avgPageSizeMB.toFixed(2),
-          label: 'Average Page Size (MB)',
-        },
-      ],
+      evidence: [ev({ type: 'metric', value: avgPageSizeMB.toFixed(2), label: 'Average Page Size (MB)' })],
       metrics: {
         avgPageSizeMB: parseFloat(avgPageSizeMB.toFixed(2)),
         recommendedMaxMB: 2.0,
@@ -266,13 +253,7 @@ function generateFindingsFromCrawl(crawlResult: CrawlResult, businessUrl: string
       description: `None of the ${crawlResult.crawledPages.length} crawled pages have structured data (Schema.org). This limits rich snippet opportunities in search results.`,
       impactScore: 6,
       confidenceScore: normalizeConfidence(90, '0-100'),
-      evidence: [
-        {
-          type: 'text',
-          value: '0% schema coverage',
-          label: 'Structured Data Coverage',
-        },
-      ],
+      evidence: [ev({ type: 'text', value: '0% schema coverage', label: 'Structured Data Coverage' })],
       metrics: {
         schemaOrgCoverage: 0,
         totalPages: crawlResult.crawledPages.length,
@@ -301,14 +282,9 @@ function generateFindingsFromCrawl(crawlResult: CrawlResult, businessUrl: string
       description: `${totalImages - imagesWithAlt} out of ${totalImages} images lack alt text. This hurts accessibility and image SEO.`,
       impactScore: 4,
       confidenceScore: normalizeConfidence(90, '0-100'),
-      evidence: [
-        {
-          type: 'metric',
-          value: Math.round(missingAltPct),
-          label: 'Images Missing Alt (%)',
-        },
-      ],
+      evidence: [ev({ type: 'metric', value: Math.round(missingAltPct), label: 'Images Missing Alt (%)' })],
       metrics: {
+        schemaFingerprint: 'images:missing-alt',
         totalImages,
         imagesWithAlt,
         imagesMissingAlt: totalImages - imagesWithAlt,
@@ -336,13 +312,7 @@ function generateFindingsFromCrawl(crawlResult: CrawlResult, businessUrl: string
         'Could not retrieve full page content. Analysis uses PageSpeed API data only. Consider adding a sitemap and ensuring critical content is server-rendered.',
       impactScore: 6,
       confidenceScore: normalizeConfidence(75, '0-100'),
-      evidence: [
-        {
-          type: 'text',
-          value: 'Crawler returned no successful pages',
-          label: 'Limited Data',
-        },
-      ],
+      evidence: [ev({ type: 'text', value: 'Crawler returned no successful pages', label: 'Limited Data' })],
       metrics: { pagesAttempted: crawlResult.crawledPages.length },
       effortEstimate: 'MEDIUM',
       recommendedFix: [
@@ -362,13 +332,7 @@ function generateFindingsFromCrawl(crawlResult: CrawlResult, businessUrl: string
       description: `Only ${crawlResult.totalPagesFound} pages found. Search engines favor sites with more comprehensive content.`,
       impactScore: 5,
       confidenceScore: normalizeConfidence(85, '0-100'),
-      evidence: [
-        {
-          type: 'metric',
-          value: crawlResult.totalPagesFound,
-          label: 'Total Pages',
-        },
-      ],
+      evidence: [ev({ type: 'metric', value: crawlResult.totalPagesFound, label: 'Total Pages' })],
       metrics: {
         totalPages: crawlResult.totalPagesFound,
         recommendedMinimum: 10,

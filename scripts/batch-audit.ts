@@ -289,7 +289,7 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  let data = loadTargets();
+  const data = loadTargets();
   let targets = data.targets.filter((t) => {
     if (!t.url) return false;
     if (retry) return t.status === 'error';

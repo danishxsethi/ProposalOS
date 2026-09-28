@@ -97,11 +97,7 @@ export async function resumeHumanHandoff(input: {
         stage: 'human_handoff',
         errorType: 'HANDOFF_RESUMED',
         errorMessage: 'Automation resumed by an authorized administrator',
-        metadata: {
-          proposalId: input.proposalId,
-          actorId: input.actorId,
-          actorRole: input.actorRole,
-        },
+        metadata: { proposalId: input.proposalId, actorId: input.actorId, actorRole: input.actorRole },
       },
     });
   });

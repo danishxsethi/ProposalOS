@@ -2,9 +2,8 @@ name: Test Suite
 
 on:
   push:
-    branches: [main]
+    branches: [main, 'remediation/**', 'execution/**']
   pull_request:
-    branches: [main]
 
 jobs:
   test:
@@ -28,8 +27,27 @@ jobs:
       - name: Generate Prisma Client
         run: npx prisma generate
 
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint (0 errors required)
+        run: npm run lint -- --max-warnings=99999
+
+      - name: Validate Prisma schema
+        run: npx prisma validate
+
       - name: Start canonical local Postgres and PgBouncer stack
         run: docker compose -f docker-compose.yml up -d --wait postgres && docker compose -f docker-compose.pgbouncer.yml up -d --wait pgbouncer
+
+      - name: Empty-database migration replay (drift gate)
+        env:
+          DATABASE_URL: postgresql://postgres:password@localhost:5435/proposal_engine_empty_replay
+        run: |
+          docker exec proposal_engine_db psql -U postgres -d postgres -c 'CREATE DATABASE proposal_engine_empty_replay'
+          npx prisma migrate deploy
+          npx prisma migrate status
+          # Fail if schema.prisma drifts from the committed migration chain
+          npx prisma migrate diff --from-url "$DATABASE_URL" --to-schema-datamodel prisma/schema.prisma --exit-code
 
       - name: Run migrations and deterministic tests
         env:
@@ -44,3 +62,11 @@ jobs:
           PROPOSALOS_TEST_DB_PORT: '5435'
           NODE_ENV: test
         run: bash scripts/bootstrap-test-databases.sh -- npm test -- --reporter=dot
+
+      - name: Upload qualification artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: qualification-artifacts
+          path: docs/audits/2026-09-18-proposal-os-ground-up-ga-audit/artifacts/
+          if-no-files-found: ignore

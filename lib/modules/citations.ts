@@ -6,7 +6,7 @@ import { logger } from '@/lib/logger';
 import { withProviderResilience } from '@/lib/resilience/withProviderResilience';
 
 import { normalizeConfidence } from './findingGenerator';
-import { AuditModuleResult, Finding } from './types';
+import { AuditModuleResult, createEvidence, Finding } from './types';
 
 export interface CitationsModuleInput {
   businessName: string;
@@ -625,6 +625,11 @@ function generateCitationFindings(
   input: CitationsModuleInput
 ): Finding[] {
   const findings: Finding[] = [];
+  // Evidence pointer for directory observations: the listing URL when one was
+  // found, otherwise the directory search the module actually performed.
+  const citationPointer =
+    analysis.listings.find((l) => l.url)?.url ??
+    `https://www.google.com/search?q=${encodeURIComponent(`${input.businessName} ${input.city}`)}`;
 
   const yelpListing = analysis.listings.find((l) => l.directory === 'Yelp');
   const facebookListing = analysis.listings.find((l) => l.directory === 'Facebook');
@@ -642,11 +647,7 @@ function generateCitationFindings(
       impactScore: 7,
       confidenceScore: normalizeConfidence(90, '0-100'),
       evidence: [
-        {
-          type: 'text',
-          value: 'Not found on Yelp',
-          label: 'Yelp Status',
-        },
+        createEvidence({ pointer: citationPointer, source: 'citations', collected_at: new Date().toISOString(), type: 'text', value: 'Not found on Yelp', label: 'Yelp Status' }),
       ],
       metrics: {
         yelpFound: false,
@@ -670,11 +671,7 @@ function generateCitationFindings(
       description: `Found ${analysis.napConsistency.inconsistencies.length} inconsistencies in Name, Address, or Phone across directories. This confuses search engines and damages local SEO rankings.`,
       impactScore: 8,
       confidenceScore: normalizeConfidence(95, '0-100'),
-      evidence: analysis.napConsistency.inconsistencies.slice(0, 5).map((inc) => ({
-        type: 'text',
-        value: inc,
-        label: 'Inconsistency',
-      })),
+      evidence: analysis.napConsistency.inconsistencies.slice(0, 5).map((inc) => (createEvidence({ pointer: citationPointer, source: 'citations', collected_at: new Date().toISOString(), type: 'text', value: inc, label: 'Inconsistency' }))),
       metrics: {
         inconsistencyCount: analysis.napConsistency.inconsistencies.length,
         consistencyScore: analysis.napConsistency.consistencyScore,
@@ -700,11 +697,7 @@ function generateCitationFindings(
       impactScore: 4,
       confidenceScore: normalizeConfidence(85, '0-100'),
       evidence: [
-        {
-          type: 'text',
-          value: 'Not found on BBB',
-          label: 'BBB Status',
-        },
+        createEvidence({ pointer: citationPointer, source: 'citations', collected_at: new Date().toISOString(), type: 'text', value: 'Not found on BBB', label: 'BBB Status' }),
       ],
       metrics: {
         bbbFound: false,
@@ -729,11 +722,7 @@ function generateCitationFindings(
       impactScore: 3,
       confidenceScore: normalizeConfidence(85, '0-100'),
       evidence: [
-        {
-          type: 'text',
-          value: 'Not found on Yellow Pages',
-          label: 'Yellow Pages Status',
-        },
+        createEvidence({ pointer: citationPointer, source: 'citations', collected_at: new Date().toISOString(), type: 'text', value: 'Not found on Yellow Pages', label: 'Yellow Pages Status' }),
       ],
       metrics: {
         yellowPagesFound: false,
@@ -757,11 +746,7 @@ function generateCitationFindings(
       impactScore: 6,
       confidenceScore: normalizeConfidence(90, '0-100'),
       evidence: [
-        {
-          type: 'metric',
-          value: analysis.totalFound,
-          label: 'Directories Found',
-        },
+        createEvidence({ pointer: citationPointer, source: 'citations', collected_at: new Date().toISOString(), type: 'metric', value: analysis.totalFound, label: 'Directories Found' }),
       ],
       metrics: {
         totalFound: analysis.totalFound,
@@ -788,11 +773,7 @@ function generateCitationFindings(
       impactScore: 5,
       confidenceScore: normalizeConfidence(90, '0-100'),
       evidence: [
-        {
-          type: 'text',
-          value: 'Facebook page not found',
-          label: 'Facebook Status',
-        },
+        createEvidence({ pointer: citationPointer, source: 'citations', collected_at: new Date().toISOString(), type: 'text', value: 'Facebook page not found', label: 'Facebook Status' }),
       ],
       metrics: {
         facebookFound: false,
@@ -818,11 +799,7 @@ function generateCitationFindings(
       impactScore: 2,
       confidenceScore: normalizeConfidence(95, '0-100'),
       evidence: [
-        {
-          type: 'metric',
-          value: analysis.napConsistency.consistencyScore,
-          label: 'Consistency Score',
-        },
+        createEvidence({ pointer: citationPointer, source: 'citations', collected_at: new Date().toISOString(), type: 'metric', value: analysis.napConsistency.consistencyScore, label: 'Consistency Score' }),
       ],
       metrics: {
         consistencyScore: analysis.napConsistency.consistencyScore,

@@ -40,6 +40,8 @@ function installPage() {
       hasFocusStyles: true,
     })),
     close: vi.fn(async () => undefined),
+    setBypassCSP: vi.fn(async () => undefined),
+    waitForNetworkIdle: vi.fn(async () => undefined),
   };
   mocks.acquireSharedBrowser.mockResolvedValue({
     key: 'audit-1',

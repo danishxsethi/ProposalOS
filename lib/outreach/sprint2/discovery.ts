@@ -2,6 +2,7 @@ import { createHash } from 'crypto';
 
 import { withModuleCache } from '@/lib/cache/moduleCache';
 import { logger } from '@/lib/logger';
+import { mapsIntelligence } from '@/lib/maps/googleMapsProvider';
 import { withProviderResilience } from '@/lib/resilience/withProviderResilience';
 
 import { normalizeVertical, VERTICAL_SEARCH_QUERIES } from './config';
@@ -38,6 +39,8 @@ export interface DiscoveredBusiness {
   rating?: number | null;
   reviewCount?: number | null;
   raw?: unknown;
+  identityStatus?: string;
+  identityConfidence?: number | null;
 }
 
 interface SourceDiscoveryResult {
@@ -158,11 +161,6 @@ function dedupeBusinesses(candidates: DiscoveredBusiness[]): DiscoveredBusiness[
 }
 
 async function discoverFromGooglePlaces(input: DiscoveryInput): Promise<SourceDiscoveryResult> {
-  const apiKey = process.env.GOOGLE_PLACES_API_KEY;
-  if (!apiKey) {
-    return { businesses: [], queryCount: 0 };
-  }
-
   const vertical = normalizeVertical(input.vertical);
   const queries = getQueriesForVertical(vertical);
   const location = buildLocation(input.city, input.state);
@@ -175,68 +173,16 @@ async function discoverFromGooglePlaces(input: DiscoveryInput): Promise<SourceDi
   let queryCount = 0;
 
   for (const phrase of queries) {
-    const textQuery = `${phrase} in ${location}`;
     queryCount += 1;
+    const response = await mapsIntelligence.searchText({ query: phrase, city: input.city, region: input.state ?? undefined, maxResults: Math.min(20, maxPerQuery), fieldProfile: 'IDENTITY_MINIMAL' });
+    if (response.status !== 'COMPLETE' || !response.data) continue;
 
-    const response = await withModuleCache<{ places?: Array<Record<string, unknown>> }>(
-      {
-        module: 'outreach_discovery',
-        version: 1,
-        input: { type: 'places_search', textQuery, maxPerQuery },
-      },
-      { ttlSeconds: 24 * 3600 },
-      async () => {
-        return withProviderResilience<{ places?: Array<Record<string, unknown>> }>(
-          {
-            provider: 'google-places',
-            operation: 'outreach:places_search',
-            degrade: true,
-            fallbackValue: { places: [] },
-          },
-          async () => {
-            const res = await fetch('https://places.googleapis.com/v1/places:searchText', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'X-Goog-Api-Key': apiKey,
-                'X-Goog-FieldMask': [
-                  'places.id',
-                  'places.displayName',
-                  'places.formattedAddress',
-                  'places.websiteUri',
-                  'places.nationalPhoneNumber',
-                  'places.internationalPhoneNumber',
-                  'places.rating',
-                  'places.userRatingCount',
-                  'places.primaryTypeDisplayName',
-                  'places.googleMapsUri',
-                ].join(','),
-              },
-              body: JSON.stringify({
-                textQuery,
-                maxResultCount: Math.min(20, maxPerQuery),
-              }),
-            });
-
-            if (!res.ok) {
-              const errorText = await res.text();
-              throw new Error(`Places search failed (${res.status}): ${errorText}`);
-            }
-
-            return (await res.json()) as { places?: Array<Record<string, unknown>> };
-          }
-        );
-      }
-    );
-
-    for (const place of response.places ?? []) {
-      const businessName = (place.displayName as { text?: string } | undefined)?.text?.trim();
+    for (const place of response.data) {
+      const businessName = place.displayName?.trim();
       if (!businessName || isLikelyChain(businessName)) continue;
 
-      const placeId =
-        typeof place.id === 'string' && place.id
-          ? place.id.replace(/^places\//, '')
-          : createFallbackId('google_places', [
+      if (place.identityStatus !== 'CONFIRMED') continue;
+      const placeId = place.placeId || createFallbackId('google_places', [
               businessName,
               String(place.formattedAddress ?? ''),
               input.city,
@@ -246,21 +192,20 @@ async function discoverFromGooglePlaces(input: DiscoveryInput): Promise<SourceDi
       businesses.push({
         source: 'google_places',
         sourceExternalId: placeId,
-        sourceUrl: typeof place.googleMapsUri === 'string' ? place.googleMapsUri : undefined,
+        sourceUrl: place.mapsUri ?? undefined,
         businessName,
         city: input.city,
         state: input.state,
         vertical,
-        category: (place.primaryTypeDisplayName as { text?: string } | undefined)?.text ?? null,
-        address: typeof place.formattedAddress === 'string' ? place.formattedAddress : null,
-        phone:
-          (typeof place.nationalPhoneNumber === 'string' && place.nationalPhoneNumber) ||
-          (typeof place.internationalPhoneNumber === 'string' && place.internationalPhoneNumber) ||
-          null,
-        website: normalizeWebsite(typeof place.websiteUri === 'string' ? place.websiteUri : null),
+        category: place.primaryType,
+        address: place.formattedAddress,
+        phone: place.phone,
+        website: normalizeWebsite(place.website),
         rating: toNumber(place.rating),
-        reviewCount: toNumber(place.userRatingCount),
+        reviewCount: toNumber(place.reviewCount),
         raw: place,
+        identityStatus: place.identityStatus,
+        identityConfidence: place.identityConfidence,
       });
     }
   }

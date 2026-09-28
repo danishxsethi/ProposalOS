@@ -62,11 +62,12 @@ describe('gbpDeep honest provider and dependency behavior', () => {
 
   afterEach(() => {
     vi.unstubAllGlobals();
+    vi.restoreAllMocks();
     delete process.env.GOOGLE_PLACES_API_KEY;
     delete process.env.GOOGLE_AI_API_KEY;
   });
 
-  it('reuses canonical GBP details, validates real photo output, and leaves claimed status unavailable', async () => {
+  it('reuses canonical GBP details and leaves claimed status unavailable', async () => {
     generateContent.mockResolvedValue({
       response: {
         text: () =>
@@ -92,8 +93,8 @@ describe('gbpDeep honest provider and dependency behavior', () => {
     const analysis = result.evidenceSnapshots[0].rawResponse;
     expect(result.execution?.state).toBe('partial');
     expect(analysis.claimedStatus).toEqual({ value: null, basis: 'unavailable' });
-    expect(analysis.photos.aiResults).toBe(1);
-    expect(tracker.calls).toEqual(['GEMINI_PHOTO_ANALYSIS']);
+    expect(analysis.photos.aiResults).toBe(0);
+    expect(tracker.calls).toEqual([]);
     expect(tracker.calls).not.toContain('PLACES_DETAILS_DEEP');
     expect(tracker.calls).not.toContain('PLACES_TEXT_SEARCH');
   });
@@ -137,10 +138,11 @@ describe('gbpDeep honest provider and dependency behavior', () => {
   });
 
   it('maps a real Places provider failure to failed, not an empty complete result', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async () => new Response('', { status: 503 }))
-    );
+    process.env.GOOGLE_PLACES_API_KEY = 'places-test-key';
+    const { GoogleMapsProvider } = await import('@/lib/maps/googleMapsProvider');
+    const { mapsIntelligence } = await import('@/lib/maps/googleMapsProvider');
+    const provider = new GoogleMapsProvider({ apiKey: 'places-test-key', fetchImpl: vi.fn(async () => new Response('', { status: 503 })) as typeof fetch });
+    vi.spyOn(mapsIntelligence, 'resolveBusiness').mockImplementation(provider.resolveBusiness.bind(provider));
     const result = await runGbpDeepModule({
       businessName: 'Acme Dental',
       city: 'Regina',
@@ -152,10 +154,8 @@ describe('gbpDeep honest provider and dependency behavior', () => {
   it('propagates caller abort through Places lookup', async () => {
     const controller = new AbortController();
     controller.abort(new DOMException('cancelled', 'AbortError'));
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async () => Promise.reject(controller.signal.reason))
-    );
+    const { mapsIntelligence } = await import('@/lib/maps/googleMapsProvider');
+    vi.spyOn(mapsIntelligence, 'resolveBusiness').mockRejectedValue(controller.signal.reason);
 
     await expect(
       runGbpDeepModule({

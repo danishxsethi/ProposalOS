@@ -1,12 +1,13 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
 import { withModuleCache } from '@/lib/cache/moduleCache';
+import { GEMINI_FLASH, GEMINI_PRO } from '@/lib/config/models';
 import { CostTracker } from '@/lib/costs/costTracker';
 import { logger } from '@/lib/logger';
 import { withProviderResilience } from '@/lib/resilience/withProviderResilience';
 
 import { normalizeConfidence } from './findingGenerator';
-import { AuditModuleResult, Finding } from './types';
+import { AuditModuleResult, createEvidence, Finding } from './types';
 
 export interface KeywordGapInput {
   businessName: string;
@@ -106,7 +107,7 @@ async function generateKeywordList(
   tracker?: CostTracker
 ): Promise<Keyword[]> {
   const genAI = new GoogleGenerativeAI(process.env.GOOGLE_AI_API_KEY!);
-  const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+  const model = genAI.getGenerativeModel({ model: GEMINI_FLASH });
 
   tracker?.addApiCall('GEMINI_KEYWORD_GEN');
 
@@ -331,11 +332,7 @@ function generateKeywordFindings(analysis: KeywordGapAnalysis, input: KeywordGap
       evidence: rankings
         .filter((r) => r.rank === null)
         .slice(0, 3)
-        .map((r) => ({
-          type: 'text',
-          value: r.keyword,
-          label: 'Missed Keyword',
-        })),
+        .map((r) => (createEvidence({ pointer: `https://www.google.com/search?q=${encodeURIComponent(r.keyword + ' ' + input.city)}`, source: 'keyword_gap', collected_at: new Date().toISOString(), type: 'text', value: r.keyword, label: 'Missed Keyword' }))),
       metrics: { gapCount: summary.gaps },
       effortEstimate: 'HIGH',
       recommendedFix: ['Launch SEO content campaign targeting these gaps'],

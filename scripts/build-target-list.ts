@@ -17,13 +17,10 @@ dotenv.config({ path: path.join(process.cwd(), '.env') });
 
 import * as fs from 'fs-extra';
 
-import * as crypto from 'crypto';
+import { mapsIntelligence } from '../lib/maps/googleMapsProvider';
 
-const PLACES_API_BASE = 'https://places.googleapis.com/v1';
 const RATE_LIMIT_MS = 200;
-const CACHE_DIR = path.join(process.cwd(), 'scripts', 'output', 'cache');
 const OUTPUT_DIR = path.join(process.cwd(), 'scripts', 'output');
-const CACHE_TTL_HOURS = 24 * 7; // 7 days
 
 const VERTICALS: { key: string; queries: string[] }[] = [
   { key: 'dentist', queries: ['dentist Saskatoon', 'dental clinic Saskatoon'] },
@@ -136,32 +133,6 @@ function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
 }
 
-function getCacheKey(query: string): string {
-  const hash = crypto.createHash('sha256').update(query).digest('hex');
-  return `places_target_${hash}`;
-}
-
-async function getCached<T>(key: string, fetchFn: () => Promise<T>): Promise<T> {
-  await fs.ensureDir(CACHE_DIR);
-  const filePath = path.join(CACHE_DIR, `${key}.json`);
-  const ttlMs = CACHE_TTL_HOURS * 60 * 60 * 1000;
-
-  if (await fs.pathExists(filePath)) {
-    const entry = await fs.readJson(filePath);
-    if (Date.now() < entry.expiresAt) {
-      return entry.data as T;
-    }
-    await fs.remove(filePath);
-  }
-
-  const data = await fetchFn();
-  await fs.writeJson(filePath, {
-    data,
-    expiresAt: Date.now() + ttlMs,
-  });
-  return data;
-}
-
 function isChain(name: string): boolean {
   const lower = name.toLowerCase();
   return CHAIN_BLOCKLIST.some((chain) => lower.includes(chain));
@@ -183,35 +154,21 @@ function extractDisplayName(place: PlaceResult): string {
 }
 
 async function searchPlaces(query: string, maxResults: number = 10): Promise<PlaceResult[]> {
-  const apiKey = process.env.GOOGLE_PLACES_API_KEY;
-  if (!apiKey) {
-    throw new Error('GOOGLE_PLACES_API_KEY is required. Add it to .env');
-  }
-
-  const cacheKey = getCacheKey(`${query}:${maxResults}`);
-  return getCached(cacheKey, async () => {
-    const res = await fetch(`${PLACES_API_BASE}/places:searchText`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Goog-Api-Key': apiKey,
-        'X-Goog-FieldMask':
-          'places.id,places.name,places.displayName,places.formattedAddress,places.websiteUri,places.nationalPhoneNumber,places.internationalPhoneNumber,places.rating,places.userRatingCount,places.types,places.primaryTypeDisplayName',
-      },
-      body: JSON.stringify({
-        textQuery: query,
-        maxResultCount: maxResults,
-      }),
-    });
-
-    if (!res.ok) {
-      const text = await res.text();
-      throw new Error(`Places API error ${res.status}: ${text}`);
-    }
-
-    const json = await res.json();
-    return json.places ?? [];
-  });
+  const result = await mapsIntelligence.searchText({ query, maxResults, fieldProfile: 'IDENTITY_MINIMAL' });
+  if (result.status === 'FAILED' || result.status === 'UNAVAILABLE') throw new Error(result.error?.message ?? 'Maps provider unavailable');
+  return (result.data ?? []).map((place) => ({
+    id: place.placeId,
+    name: `places/${place.placeId}`,
+    displayName: { text: place.displayName ?? '' },
+    formattedAddress: place.formattedAddress ?? undefined,
+    websiteUri: place.website ?? undefined,
+    nationalPhoneNumber: place.phone ?? undefined,
+    internationalPhoneNumber: place.phone ?? undefined,
+    rating: place.rating ?? undefined,
+    userRatingCount: place.reviewCount ?? undefined,
+    types: place.primaryType ? [place.primaryType] : [],
+    primaryTypeDisplayName: place.primaryType ? { text: place.primaryType } : undefined,
+  }));
 }
 
 function placeToTarget(place: PlaceResult, vertical: string): TargetBusiness | null {

@@ -2,15 +2,17 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   snapshotCreateMany: vi.fn(),
+  snapshotDeleteMany: vi.fn(),
   findingCreateMany: vi.fn(),
+  findingDeleteMany: vi.fn(),
   auditUpdate: vi.fn(),
   transaction: vi.fn(),
 }));
 
 vi.mock('@/lib/prisma', () => ({
   prisma: {
-    evidenceSnapshot: { createMany: mocks.snapshotCreateMany },
-    finding: { createMany: mocks.findingCreateMany },
+    evidenceSnapshot: { createMany: mocks.snapshotCreateMany, deleteMany: mocks.snapshotDeleteMany },
+    finding: { createMany: mocks.findingCreateMany, deleteMany: mocks.findingDeleteMany },
     audit: { update: mocks.auditUpdate },
     $transaction: mocks.transaction,
   },
@@ -23,8 +25,8 @@ describe('persistAuditResult atomic unit', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     const tx = {
-      evidenceSnapshot: { createMany: mocks.snapshotCreateMany },
-      finding: { createMany: mocks.findingCreateMany },
+      evidenceSnapshot: { createMany: mocks.snapshotCreateMany, deleteMany: mocks.snapshotDeleteMany },
+      finding: { createMany: mocks.findingCreateMany, deleteMany: mocks.findingDeleteMany },
       audit: { update: mocks.auditUpdate },
     };
     mocks.transaction.mockImplementation(async (callback: (value: typeof tx) => unknown) => callback(tx));
@@ -42,6 +44,12 @@ describe('persistAuditResult atomic unit', () => {
       auditUpdate: { status: 'COMPLETE', trustState: 'TRUSTED' },
     });
     expect(mocks.transaction).toHaveBeenCalledTimes(1);
+    // Redelivery idempotence: prior machine-generated rows are replaced inside
+    // the same transaction (manually edited/excluded findings preserved).
+    expect(mocks.findingDeleteMany).toHaveBeenCalledWith({
+      where: { auditId: 'audit-1', tenantId: 'tenant-1', manuallyEdited: false, excluded: false },
+    });
+    expect(mocks.snapshotDeleteMany).toHaveBeenCalledWith({ where: { auditId: 'audit-1', tenantId: 'tenant-1' } });
     expect(mocks.snapshotCreateMany).toHaveBeenCalledTimes(1);
     expect(mocks.findingCreateMany).toHaveBeenCalledTimes(1);
     expect(mocks.auditUpdate).toHaveBeenCalledTimes(1);

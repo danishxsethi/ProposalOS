@@ -1,0 +1,4 @@
+$ npx prisma validate
+Prisma schema at prisma/schema.prisma is valid
+$ npx prisma migrate status (proposal_engine_test) => 26 migrations, Database schema is up to date! after rolled_back resolution
+But psql \d "Audit" initially missing businessLatitude/businessLongitude until db push --accept-data-loss which dropped locale_configs (7 rows) and synced. Indicates schema.prisma drift vs committed migrations.

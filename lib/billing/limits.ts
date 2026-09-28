@@ -67,6 +67,10 @@ export async function checkAndDecrementQuota(
   const billingCycleEnd =
     sub?.currentPeriodEnd || new Date(new Date().getFullYear(), new Date().getMonth() + 1, 1);
 
+  // TOCTOU-safe admission: when a transaction client is provided the caller is
+  // expected to have acquired the per-tenant advisory lock (see dispatch path);
+  // the fallback single-statement path below uses a SELECT ... FOR UPDATE on
+  // Tenant to serialize concurrent admissions for the same tenant.
   const count = tx
     ? await tx.audit.count({
         where: {
@@ -78,8 +82,9 @@ export async function checkAndDecrementQuota(
           },
         },
       })
-    : await runWithTenantAsync(tenantId, () =>
-        prisma.audit.count({
+    : await prisma.$transaction(async (inner) => {
+        await inner.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${tenantId}))`;
+        return inner.audit.count({
           where: {
             tenantId,
             status: { not: 'FAILED' },
@@ -88,8 +93,8 @@ export async function checkAndDecrementQuota(
               lte: billingCycleEnd,
             },
           },
-        })
-      );
+        });
+      });
 
   if (count + countRequested > limit) {
     const remaining = Math.max(0, limit - count);

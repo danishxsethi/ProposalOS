@@ -63,6 +63,8 @@ export interface ModuleInput {
   url?: string;
   businessName?: string;
   city?: string;
+  latitude?: number;
+  longitude?: number;
   industry?: string;
   dependencyResults?: Record<string, any>;
   tenantId: string;
@@ -284,7 +286,7 @@ const techStackAdapter = async (
   tracker: CostTracker
 ): Promise<ModuleResult> => {
   if (!input.url) throw new Error('url required');
-  const data = await runTechStackModule({ url: input.url, signal: input.signal }, tracker);
+  const data = await runTechStackModule({ url: input.url, signal: input.signal, auditId: input.auditId }, tracker);
   return adaptLegacyModuleResult(data, 'Accessibility');
 };
 
@@ -306,7 +308,7 @@ const emailFinderAdapter = async (
   tracker: CostTracker
 ): Promise<ModuleResult> => {
   if (!input.url) throw new Error('url required');
-  const data = await runEmailFinderModule(input.url, tracker, input.signal);
+  const data = await runEmailFinderModule(input.url, tracker, input.signal, input.auditId);
   // P2-28 (Wave 5): `findEmails()` (lib/modules/emailFinder.ts) never returns a
   // `status` field — the previous `data.status === 'error'` check was dead code that
   // could never fire, letting a total fetch failure (source: 'failed'/'error', empty
@@ -332,6 +334,9 @@ const reputationAdapter = async (
 ): Promise<ModuleResult> => {
   const gbpData = input.dependencyResults?.gbp;
   if (!gbpData) return { status: 'UNAVAILABLE', data: null, error: 'Business profile result unavailable' };
+  if (gbpData.identityConfidence === 'ambiguous' || gbpData.identityStatus === 'AMBIGUOUS') {
+    return { status: 'PARTIAL', data: null, error: 'GBP identity match ambiguous — reputation analysis withheld' };
+  }
   if (gbpData.reviewsUnavailable === true) return { status: 'UNAVAILABLE', data: null, error: 'Reviews could not be retrieved' };
   if (!gbpData.reviews || gbpData.reviews.length === 0)
     return { status: 'SKIPPED', data: null, error: 'No reviews were available to analyze' };
@@ -346,7 +351,7 @@ const reputationAdapter = async (
 const socialAdapter = async (input: ModuleInput, tracker: CostTracker): Promise<ModuleResult> => {
   if (!input.url || !input.businessName) throw new Error('url and businessName required');
   const data = await runSocialModule(
-    { websiteUrl: input.url, businessName: input.businessName },
+    { websiteUrl: input.url, businessName: input.businessName, auditId: input.auditId },
     tracker
   );
   return adaptLegacyModuleResult(data, 'Social');
@@ -396,7 +401,7 @@ const gbpDeepAdapter = async (input: ModuleInput, tracker: CostTracker): Promise
   // finding (extractFindingsFromRegistryResult) already discloses this to the
   // customer — gbpDeep's deep-analysis findings are withheld here rather than
   // duplicated or presented as definitive.
-  if (gbpData?.identityConfidence === 'ambiguous' && result.status === 'COMPLETE') {
+    if ((gbpData?.identityConfidence === 'ambiguous' || gbpData?.identityStatus === 'AMBIGUOUS') && result.status === 'COMPLETE') {
     return {
       status: 'PARTIAL',
       data: { ...result.data, findings: [] },
@@ -455,9 +460,12 @@ const mobileUXAdapter = async (input: ModuleInput, tracker: CostTracker): Promis
   // a missing-key or fetch-failure fallback — so a missing/failed website PageSpeed
   // check correctly falls through to mobileUX's own independent fetch attempt.
   const websiteData = input.dependencyResults?.website;
+  // dependencyResults holds the module's full AuditModuleResult; the PSI payload
+  // lives under `.data` (see lib/modules/website.ts return shape).
+  const websitePsi = websiteData?.data ?? websiteData;
   const reusedMobileScore =
-    websiteData?.coreWebVitals?.full && typeof websiteData?.scores?.performance === 'number'
-      ? Math.round(websiteData.scores.performance * 100)
+    websitePsi?.coreWebVitals?.full && typeof websitePsi?.scores?.performance === 'number'
+      ? Math.round(websitePsi.scores.performance * 100)
       : null;
   const data = await runMobileUXModule(
     {
@@ -478,7 +486,16 @@ const contentQualityAdapter = async (
 ): Promise<ModuleResult> => {
   if (!input.url) throw new Error('url required');
   const crawlerData = input.dependencyResults?.websiteCrawler;
-  const crawledPages = crawlerData?.evidenceSnapshots?.[0]?.rawResponse?.crawledPages || [];
+  const crawlRaw = crawlerData?.evidenceSnapshots?.[0]?.rawResponse ?? {};
+  // The crawler persists per-page *metrics* (no per-page HTML, by design — 20
+  // pages of HTML per audit is not evidence worth storing) plus the homepage's
+  // raw HTML. Content analysis needs HTML, so analyze the homepage (the highest
+  // value page) with real HTML and keep the other pages as titled metadata.
+  const metricPages: Array<{ url: string; title?: string | null; wordCount?: number }> = Array.isArray(crawlRaw.crawledPages) ? crawlRaw.crawledPages : [];
+  const homepageHtml: string | null = typeof crawlRaw.html === 'string' && crawlRaw.html.length > 0 ? crawlRaw.html : null;
+  const crawledPages = homepageHtml
+    ? [{ url: input.url, html: homepageHtml, title: metricPages[0]?.title ?? undefined }]
+    : [];
   const data = await runContentQualityModule(
     {
       url: input.url,
@@ -582,6 +599,7 @@ const schemaMarkupAdapter = async (input: ModuleInput): Promise<ModuleResult> =>
   const homepageHtml = crawlerData?.evidenceSnapshots?.[0]?.rawResponse?.html ?? null;
   const raw = await runSchemaMarkupModule({
     url: input.url,
+    auditId: input.auditId,
     businessName: input.businessName,
     gbpTypes: gbpData?.types,
     homepageHtml,
@@ -737,10 +755,18 @@ const visionAdapter = async (input: ModuleInput, tracker: CostTracker): Promise<
 const coreWebVitalsAdapter = async (input: ModuleInput): Promise<ModuleResult> => {
   // Reads from the website (PageSpeed) module output which contains Lighthouse audits
   const websiteData = input.dependencyResults?.website;
+  // The website module stores the PageSpeed payload as an evidence snapshot
+  // (source 'PageSpeed Insights API'); read that shape as well as legacy shapes.
+  const psiSnapshot = Array.isArray(websiteData?.evidenceSnapshots)
+    ? websiteData.evidenceSnapshots.find((s: { source?: string; rawResponse?: { lighthouseResult?: unknown } }) =>
+        s?.source === 'PageSpeed Insights API' || s?.rawResponse?.lighthouseResult
+      )
+    : null;
   const lighthouseAudits =
     websiteData?.lighthouseResult?.audits ??
     websiteData?.audits ??
     websiteData?.data?.lighthouseResult?.audits ??
+    psiSnapshot?.rawResponse?.lighthouseResult?.audits ??
     null;
   if (!lighthouseAudits)
     return {
@@ -751,6 +777,21 @@ const coreWebVitalsAdapter = async (input: ModuleInput): Promise<ModuleResult> =
 
   const cwv = extractCoreWebVitalsFromAudits(lighthouseAudits);
 
+  // Evidence for each Core Web Vital: the Lighthouse lab measurement itself,
+  // pointed at the audited URL. Findings without evidence are rejected at the
+  // aggregation boundary and would silently degrade audit trust.
+  const cwvCollectedAt = new Date().toISOString();
+  const cwvEvidence = (label: string, value: string | number) => [
+    createEvidence({
+      pointer: input.url ?? 'https://pagespeed.web.dev',
+      source: 'lighthouse_lab',
+      collected_at: cwvCollectedAt,
+      type: 'metric',
+      value,
+      label,
+    }),
+  ];
+
   // Generate findings based on CWV ratings
   const findings: any[] = [];
   if (cwv.lcp && cwv.lcp.rating !== 'good') {
@@ -759,9 +800,11 @@ const coreWebVitalsAdapter = async (input: ModuleInput): Promise<ModuleResult> =
       category: 'Performance',
       type: cwv.lcp.rating === 'poor' ? 'PAINKILLER' : 'VITAMIN',
       title: `Largest Contentful Paint: ${cwv.lcp.value.toFixed(2)}s`,
-      description: `LCP is ${cwv.lcp.rating} (threshold: good < ${cwv.lcp.thresholdGood}s). Slow LCP hurts SEO rankings and user experience.`,
+      description: `LCP is ${cwv.lcp.rating} (threshold: good < ${cwv.lcp.thresholdGood}s) — visitors wait about ${Math.floor(Number(cwv.lcp.value))}s for content to appear, hurting engagement and SEO.`,
       impactScore: cwv.lcp.rating === 'poor' ? 8 : 5,
-      confidenceScore: 95,
+      confidenceScore: 9,
+      evidence: cwvEvidence('Largest Contentful Paint (s, mobile lab)', Number(cwv.lcp.value.toFixed(2))),
+      metrics: { lcpSeconds: Number(cwv.lcp.value.toFixed(2)), rating: cwv.lcp.rating },
       effortEstimate: 'HIGH',
       recommendedFix: [
         'Optimize images',
@@ -779,7 +822,9 @@ const coreWebVitalsAdapter = async (input: ModuleInput): Promise<ModuleResult> =
       title: `Cumulative Layout Shift: ${cwv.cls.value.toFixed(3)}`,
       description: `CLS is ${cwv.cls.rating} (threshold: good < ${cwv.cls.thresholdGood}). Layout shifts hurt UX and SEO.`,
       impactScore: cwv.cls.rating === 'poor' ? 7 : 4,
-      confidenceScore: 95,
+      confidenceScore: 9,
+      evidence: cwvEvidence('Cumulative Layout Shift (mobile lab)', Number(cwv.cls.value.toFixed(3))),
+      metrics: { cls: Number(cwv.cls.value.toFixed(3)), rating: cwv.cls.rating },
       effortEstimate: 'MEDIUM',
       recommendedFix: [
         'Set explicit width/height on images',
@@ -796,7 +841,9 @@ const coreWebVitalsAdapter = async (input: ModuleInput): Promise<ModuleResult> =
       title: `Total Blocking Time: ${cwv.tbt.value}ms`,
       description: `TBT is ${cwv.tbt.rating} (threshold: good < ${cwv.tbt.thresholdGood}ms). High TBT means the main thread is blocked, delaying user interaction.`,
       impactScore: cwv.tbt.rating === 'poor' ? 7 : 4,
-      confidenceScore: 90,
+      confidenceScore: 9,
+      evidence: cwvEvidence('Total Blocking Time (ms, mobile lab)', cwv.tbt.value),
+      metrics: { tbtMs: cwv.tbt.value, rating: cwv.tbt.rating },
       effortEstimate: 'HIGH',
       recommendedFix: [
         'Break up long tasks',
@@ -882,6 +929,22 @@ const schemaAnalysisAdapter = async (input: ModuleInput): Promise<ModuleResult> 
 
   const analysis = analyzeSchemaMarkup(rawHtml);
   const findings: any[] = [];
+  // Real evidence for each schema observation: the analyzed homepage is the
+  // pointer, the observation is which schema types were / were not present.
+  const schemaCollectedAt = new Date().toISOString();
+  const schemaEvidence = (label: string, value: string) => [
+    createEvidence({
+      pointer: input.url ?? 'https://schema.org',
+      source: 'schema_analysis',
+      collected_at: schemaCollectedAt,
+      type: 'text',
+      value,
+      label,
+    }),
+  ];
+  const detectedTypes = Array.isArray((analysis as { detectedTypes?: unknown }).detectedTypes)
+    ? ((analysis as { detectedTypes?: string[] }).detectedTypes ?? []).join(', ') || 'none'
+    : 'none';
 
   // Generate findings for missing critical schema types
   //
@@ -904,7 +967,8 @@ const schemaAnalysisAdapter = async (input: ModuleInput): Promise<ModuleResult> 
       title: 'Missing LocalBusiness/Organization Schema',
       description: analysis.hasLocalBusinessOrOrganization.recommendation,
       impactScore: 8,
-      confidenceScore: 95,
+      confidenceScore: 9,
+      evidence: schemaEvidence('Structured data detected on homepage', `LocalBusiness/Organization absent; detected: ${detectedTypes}`),
       metrics: { schemaFingerprint: 'schema-missing:LocalBusiness' },
       effortEstimate: 'LOW',
       recommendedFix: [
@@ -920,7 +984,8 @@ const schemaAnalysisAdapter = async (input: ModuleInput): Promise<ModuleResult> 
       title: 'Missing AggregateRating Schema',
       description: analysis.hasReviewAggregateRating.recommendation,
       impactScore: 5,
-      confidenceScore: 90,
+      confidenceScore: 9,
+      evidence: schemaEvidence('Structured data detected on homepage', `AggregateRating absent; detected: ${detectedTypes}`),
       metrics: { schemaFingerprint: 'schema-missing:AggregateRating' },
       effortEstimate: 'LOW',
       recommendedFix: [
@@ -936,7 +1001,9 @@ const schemaAnalysisAdapter = async (input: ModuleInput): Promise<ModuleResult> 
       title: 'No FAQPage Schema Detected',
       description: analysis.hasFaq.recommendation,
       impactScore: 3,
-      confidenceScore: 80,
+      confidenceScore: 8,
+      evidence: schemaEvidence('Structured data detected on homepage', `FAQPage absent; detected: ${detectedTypes}`),
+      metrics: { schemaFingerprint: 'schema-missing:FAQPage' },
       effortEstimate: 'LOW',
       recommendedFix: ['Add FAQPage JSON-LD to any page with Q&A content to unlock rich results'],
     });
@@ -954,10 +1021,10 @@ const schemaAnalysisAdapter = async (input: ModuleInput): Promise<ModuleResult> 
 
 export const MODULE_REGISTRY: ModuleConfig[] = [
   // Phase 1: Foundation (parallel) — no dependencies
-  { name: 'website', phase: 1, run: websiteAdapter, timeoutMs: 30000 },
+  { name: 'website', phase: 1, run: websiteAdapter, timeoutMs: 60000 },
   { name: 'websiteCrawler', phase: 1, run: websiteCrawlerAdapter, timeoutMs: 45000 },
   { name: 'gbp', phase: 1, run: gbpAdapter, timeoutMs: 20000 },
-  { name: 'competitor', phase: 1, run: competitorAdapter, timeoutMs: 25000 },
+  { name: 'competitor', phase: 1, run: competitorAdapter, timeoutMs: 90000 },
   { name: 'techStack', phase: 1, run: techStackAdapter, timeoutMs: 15000 },
   { name: 'security', phase: 1, run: securityAdapter, timeoutMs: 20000 },
   { name: 'emailFinder', phase: 1, run: emailFinderAdapter, timeoutMs: 15000, optional: true },
@@ -1010,7 +1077,7 @@ export const MODULE_REGISTRY: ModuleConfig[] = [
     dependsOn: ['website'],
     timeoutMs: 45000,
   },
-  { name: 'mobileUX', phase: 2, run: mobileUXAdapter, dependsOn: ['website'], timeoutMs: 45000 },
+  { name: 'mobileUX', phase: 2, run: mobileUXAdapter, dependsOn: ['website'], timeoutMs: 60000 },
   {
     name: 'contentQuality',
     phase: 2,
@@ -1108,6 +1175,17 @@ export function extractFindingsFromRegistryResult(
   const findings: any[] = [];
   const snapshots: any[] = [];
 
+  if (moduleName === 'gbp' && rd.identityConfidence === 'ambiguous') {
+    findings.push({
+      module: 'gbp', category: 'Visibility', type: 'VITAMIN', title: 'Google Business Profile Match Needs Manual Confirmation',
+      description: `A possible Google Maps business match was found for ${input.businessName ?? 'this business'}, but identity is ambiguous. Specific profile findings are withheld until the correct listing is confirmed.`,
+      impactScore: 0, confidenceScore: 4, evidence: [], metrics: { identityConfidence: 'ambiguous', identityStatus: rd.identityStatus, candidatesConsidered: rd.candidatesConsidered ?? null },
+      effortEstimate: 'LOW', recommendedFix: ['Confirm the correct business location or Place ID'],
+    });
+    snapshots.push({ source: 'Places API identity observation', rawResponse: { placeId: rd.placeId, identityStatus: rd.identityStatus, identityConfidence: rd.matchConfidenceScore, candidateCount: rd.candidatesConsidered, alternateCandidates: rd.alternateCandidateNames, mapsProvenance: rd.mapsProvenance } });
+    return { findings, snapshots };
+  }
+
   // legacy path
   if (moduleName === 'website') {
     const rawResponse = Array.isArray(rd.findings) ? rd : rd.data || rd;
@@ -1121,7 +1199,7 @@ export function extractFindingsFromRegistryResult(
     // P1-29 (Wave 7): an ambiguous business match (common name, franchise, or a
     // weak candidate) must never produce definitive customer-negative findings
     // about a business we could not confirm is actually the customer's listing.
-    if (rd?.identityConfidence === 'ambiguous') {
+    if (rd?.identityConfidence === 'ambiguous' || rd?.identityStatus === 'AMBIGUOUS') {
       const alternates: string[] = Array.isArray(rd.alternateCandidateNames)
         ? rd.alternateCandidateNames
         : [];
@@ -1206,7 +1284,7 @@ export function extractFindingsFromRegistryResult(
         ),
         metrics: { emailCount: rd.emails.length },
         impactScore: 3,
-        confidenceScore: 90,
+        confidenceScore: 9, // canonical 0-10 scale (FindingRuntimeSchema)
         effortEstimate: 'LOW',
         recommendedFix: ['Use for outreach'],
       });
@@ -1252,10 +1330,21 @@ const REQUIRED_AUDIT_MODULES = new Set([
   'competitorStrategy',
 ]);
 
+/**
+ * Trust policy. A required module counts as *observed* when it is COMPLETE or
+ * PARTIAL: PARTIAL means the module genuinely ran against the customer's assets
+ * and reports exactly which sub-checks were unavailable (e.g. citations: "Yellow
+ * Pages unavailable" with 2 of 3 directories observed). Its findings are already
+ * gated per-finding by evidence at the aggregation boundary, so a single
+ * unavailable directory must not veto the whole audit. UNAVAILABLE / FAILED /
+ * SKIPPED / DISABLED mean nothing was observed and do block TRUSTED.
+ */
+const OBSERVED_STATES = new Set<ModuleResult['status']>(['COMPLETE', 'PARTIAL']);
+
 export function assessAuditResult(results: Map<string, ModuleResult>, rejectedFindingCount: number) {
   const required = [...REQUIRED_AUDIT_MODULES];
-  const completeRequired = required.filter((name) => results.get(name)?.status === 'COMPLETE').length;
-  const failures = required.filter((name) => results.get(name)?.status !== 'COMPLETE');
+  const completeRequired = required.filter((name) => OBSERVED_STATES.has(results.get(name)?.status as ModuleResult['status'])).length;
+  const failures = required.filter((name) => !OBSERVED_STATES.has(results.get(name)?.status as ModuleResult['status']));
   const status = completeRequired === required.length
     ? 'COMPLETE'
     : completeRequired > 0
@@ -1741,6 +1830,8 @@ async function runAuditInternal(auditId: string, signal?: AbortSignal) {
           url: url || undefined,
           businessName: name || undefined,
           city: city || undefined,
+          latitude: audit.businessLatitude ?? undefined,
+          longitude: audit.businessLongitude ?? undefined,
           industry: audit.businessIndustry || undefined,
           tenantId: audit.tenantId,
         };
@@ -1801,6 +1892,7 @@ async function runAuditInternal(auditId: string, signal?: AbortSignal) {
           if (res.status === 'COMPLETE' || res.status === 'PARTIAL') {
             if (res.status === 'COMPLETE') modulesCompleted.push(modName);
             const ext = extractFindingsFromRegistryResult(modName, res, moduleInput);
+            if (modName === 'gbp' && res.status === 'PARTIAL') modulesFailed.push({ module: modName, status: 'PARTIAL', error: res.error ?? 'Business identity is ambiguous' });
 
             // Wave 3 (Step 5): the one shared adapter/aggregation boundary every
             // module's raw finding output must pass through before it can become a
@@ -1816,10 +1908,20 @@ async function runAuditInternal(auditId: string, signal?: AbortSignal) {
 
             for (const snap of ext.snapshots) {
               const snapshotRaw = snap.rawResponse ?? snap;
+              const persistedRaw = modName === 'gbp' && snapshotRaw && typeof snapshotRaw === 'object'
+                ? {
+                    placeId: (snapshotRaw as Record<string, unknown>).placeId ?? null,
+                    identityStatus: (snapshotRaw as Record<string, unknown>).identityStatus ?? null,
+                    identityConfidence: (snapshotRaw as Record<string, unknown>).identityConfidence ?? null,
+                    matchConfidenceScore: (snapshotRaw as Record<string, unknown>).matchConfidenceScore ?? null,
+                    candidatesConsidered: (snapshotRaw as Record<string, unknown>).candidatesConsidered ?? null,
+                    fieldProfile: ((snapshotRaw as Record<string, unknown>).mapsProvenance as Record<string, unknown> | undefined)?.fieldProfile ?? null,
+                  }
+                : snapshotRaw;
               evidenceToPersist.push({
                 module: modName,
                 source: String(snap.source || modName),
-                rawResponse: snapshotRaw,
+                rawResponse: persistedRaw,
                 collectedAt: snap.collectedAt instanceof Date ? snap.collectedAt : undefined,
                 targetUrl: url,
                 observationStatus: res.status,

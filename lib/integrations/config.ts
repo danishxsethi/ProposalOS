@@ -1,3 +1,5 @@
+import { GEMINI_FLASH, GEMINI_PRO } from '@/lib/config/models';
+
 /**
  * External Integration Configuration
  * 
@@ -14,10 +16,10 @@
  */
 export const MODEL_VERSIONS = {
   // Gemini models - pinned to specific versions for stability
-  GEMINI_FLASH: 'gemini-2.0-flash-001',
-  GEMINI_PRO: 'gemini-2.0-pro-exp-02-05',
-  GEMINI_15_PRO: 'gemini-1.5-pro-002',
-  GEMINI_15_FLASH: 'gemini-1.5-flash-002',
+  GEMINI_FLASH: GEMINI_FLASH,
+  GEMINI_PRO: GEMINI_PRO,
+  GEMINI_15_PRO: GEMINI_PRO,
+  GEMINI_15_FLASH: GEMINI_FLASH,
   // Fallback chain: Pro → 1.5 Pro → Flash → 1.5 Flash
 } as const;
 

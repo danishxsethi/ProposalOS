@@ -3,10 +3,10 @@ import { URL } from 'url';
 
 import * as cheerio from 'cheerio';
 
+import { collectHtml } from '@/lib/audit/collectors/htmlCollector';
 import { CostTracker } from '@/lib/costs/costTracker';
 import { logger } from '@/lib/logger';
 import { withProviderResilience } from '@/lib/resilience/withProviderResilience';
-import { safeFetch } from '@/lib/security/safeFetch';
 
 import { normalizeConfidence } from './findingGenerator';
 import { AuditModuleResult, createEvidence, Finding } from './types';
@@ -15,6 +15,7 @@ export interface TechStackModuleInput {
   url: string;
   html?: string; // Optional: reuse HTML from crawler
   signal?: AbortSignal;
+  auditId?: string;
 }
 
 export interface TechStack {
@@ -49,33 +50,14 @@ export async function runTechStackModule(
       if (input.signal?.aborted) {
         throw input.signal.reason ?? new DOMException('Aborted', 'AbortError');
       }
-      const fetchResult = await withProviderResilience<{ text: string; headers: Headers }>(
-        {
-          provider: 'generic',
-          operation: 'tech_stack_fetch_website',
-          signal: input.signal,
-          policy: {
-            timeoutMs: 10000,
-            maxAttempts: 2,
-          },
-        },
-        async ({ signal }) => {
-          const response = await safeFetch(input.url, {
-            signal,
-            headers: {
-              'User-Agent': 'Mozilla/5.0 (compatible; ProposalOS/1.0; +http://proposalos.com)',
-            },
-          });
-          // P2-27: record the real network call (0-cost, but must be visible to
-          // CostTracker's bounds/usage reporting) as soon as a response is
-          // actually received — never before the fetch resolves, and never for
-          // the reused-HTML branch above which makes no network call at all.
-          tracker?.addApiCall('WEBSITE_FETCH');
-          if (!response.ok) throw new Error(`HTTP error ${response.status}`);
-          const text = await response.text();
-          return { text, headers: response.headers };
-        }
-      );
+      const collected = await collectHtml(input.url, {
+        auditId: input.auditId,
+        signal: input.signal,
+        tracker,
+        timeoutMs: 20000,
+      });
+      if (!collected.ok || collected.blocked) throw new Error(`HTTP error ${collected.status || 'blocked'}`);
+      const fetchResult = { text: collected.html, headers: new Headers(collected.headers) };
       html = fetchResult.text;
       headers = fetchResult.headers;
     }

@@ -46,4 +46,20 @@ describe('campaign 1 audit trust contracts', () => {
     expect(assessAuditResult(results, 0).status).toBe('PARTIAL');
     expect(assessAuditResult(results, 0).trustState).toBe('DEGRADED_REVIEW_REQUIRED');
   });
+
+  it('treats an honest PARTIAL observation as observed (does not veto trust), but never SKIPPED/FAILED', () => {
+    const results = new Map<string, ModuleResult>();
+    for (const name of ['website', 'websiteCrawler', 'gbp', 'competitor', 'techStack', 'security', 'coreWebVitals', 'schemaAnalysis', 'reputation', 'social', 'seoDeep', 'accessibility', 'mobileUX', 'contentQuality', 'conversion', 'citations', 'privacyCompliance', 'schemaMarkup', 'keywordGap', 'competitorStrategy']) {
+      results.set(name, result('COMPLETE'));
+    }
+    results.set('citations', { status: 'PARTIAL', data: { findings: [], evidenceSnapshots: [] }, error: 'Unavailable directories: Yellow Pages' });
+    expect(assessAuditResult(results, 0).status).toBe('COMPLETE');
+    expect(assessAuditResult(results, 0).trustState).toBe('TRUSTED');
+    // rejected findings still degrade
+    expect(assessAuditResult(results, 1).trustState).toBe('DEGRADED_REVIEW_REQUIRED');
+    results.set('competitorStrategy', { status: 'SKIPPED', data: null, error: 'Dependencies failed: competitor' });
+    expect(assessAuditResult(results, 0).trustState).toBe('DEGRADED_REVIEW_REQUIRED');
+    results.set('competitorStrategy', result('FAILED'));
+    expect(assessAuditResult(results, 0).trustState).toBe('DEGRADED_REVIEW_REQUIRED');
+  });
 });

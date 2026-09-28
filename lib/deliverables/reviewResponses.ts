@@ -1,5 +1,6 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
+import { GEMINI_FLASH, GEMINI_PRO } from '@/lib/config/models';
 import { CostTracker } from '@/lib/costs/costTracker';
 import { logger } from '@/lib/logger';
 
@@ -38,7 +39,7 @@ export async function generateReviewResponses(
   }
 
   const genAI = new GoogleGenerativeAI(process.env.GOOGLE_AI_API_KEY);
-  const model = genAI.getGenerativeModel({ model: 'gemini-1.5-pro' }); // Pro for high quality writing
+  const model = genAI.getGenerativeModel({ model: GEMINI_PRO }); // Pro for high quality writing
 
   // Filter for unanswered reviews (or those with empty responses)
   // Limit to top 5 most relevant (recent/long) to save costs and focus on impact

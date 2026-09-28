@@ -1,0 +1,5 @@
+$ npm run lint
+12 errors, 1881 warnings
+Errors: import/order violations in lib/maps/googleMapsProvider.ts:1, lib/costs/costTracker.ts:2, app/api/outreach/webhook/route.ts:7, etc.
+Warnings: @typescript-eslint/no-explicit-any 1200+, no-unused-vars 400+.
+Full output preserved in evidence/commands/02_lint_full.txt (truncated 1893 problems)

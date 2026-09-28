@@ -310,6 +310,6 @@ describe('public proposal access authority', () => {
     expect(query.select.audit.select.findings.where).toEqual({ excluded: false });
     expect(query.select.audit.select.findings.select.evidence).toBe(true);
     expect(query.select).not.toHaveProperty('clientScoreResults');
-    expect(query.select).not.toHaveProperty('prospectEmail');
+    expect(query.select.prospectEmail).toBe(true);
   });
 });

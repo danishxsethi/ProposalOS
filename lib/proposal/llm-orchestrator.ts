@@ -2,6 +2,8 @@ import { Finding } from '@prisma/client';
 import { RunTree } from 'langsmith';
 import { z } from 'zod';
 
+import { GEMINI_FLASH, GEMINI_PRO } from '@/lib/config/models';
+
 import { buildProposalGrounding } from './grounding';
 import { getPricing } from './pricing';
 import { validateCompleteProposal } from './schemas';
@@ -46,10 +48,10 @@ export class ProposalLLMOrchestrator {
 
   constructor(options: LLMOrchestrationOptions = {}) {
     this.defaultOptions = {
-      model: process.env.PROPOSAL_MODEL || 'gemini-3.1-pro',
+      model: process.env.PROPOSAL_MODEL || GEMINI_PRO,
       temperature: 0.2,
       maxOutputTokens: 4096,
-      thinkingBudget: 50,
+      thinkingBudget: 128,
       maxRetries: 3,
       timeoutMs: 30000,
       ...options,

@@ -1,4 +1,5 @@
 import { validateFinding } from '@/lib/audit/findingContract';
+import { GEMINI_FLASH, GEMINI_PRO } from '@/lib/config/models';
 
 import type { Audit, EvidenceSnapshot, Finding } from '@prisma/client';
 
@@ -77,6 +78,6 @@ export function buildPublicProposalInputEnvelope(
     qaVersion: 1,
     promptVersion: process.env.PROPOSAL_PROMPT_VERSION ?? 'unversioned',
     modelProvider: 'google-generative-ai',
-    model: process.env.GEMINI_PROPOSAL_MODEL ?? 'gemini-2.0-flash',
+    model: process.env.GEMINI_PROPOSAL_MODEL ?? GEMINI_FLASH,
   };
 }

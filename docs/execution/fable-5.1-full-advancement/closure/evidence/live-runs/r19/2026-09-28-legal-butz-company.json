@@ -1,0 +1,61 @@
+{
+  "business": {
+    "name": "Butz & Company",
+    "city": "Regina",
+    "url": "http://butzlaw.ca/",
+    "industry": "legal"
+  },
+  "auditId": "f8289a5b-4e72-4aa8-b15b-1a4fe943759c",
+  "auditStatus": "COMPLETE",
+  "trustState": "TRUSTED",
+  "overallScore": null,
+  "apiCostCents": 14,
+  "auditWallMs": 72613,
+  "auditError": null,
+  "modulesCompleted": 21,
+  "modulesFailed": 2,
+  "moduleStatusCounts": {
+    "COMPLETE": 21,
+    "SKIPPED": 1,
+    "PARTIAL": 4,
+    "UNAVAILABLE": 1
+  },
+  "moduleTimingsMs": {
+    "gbp": null,
+    "social": null,
+    "vision": null,
+    "gbpDeep": null,
+    "seoDeep": null,
+    "website": null,
+    "mobileUX": null,
+    "security": null,
+    "backlinks": null,
+    "citations": null,
+    "techStack": null,
+    "competitor": null,
+    "conversion": null,
+    "keywordGap": null,
+    "paidSearch": null,
+    "reputation": null,
+    "socialDeep": null,
+    "emailFinder": null,
+    "schemaMarkup": null,
+    "accessibility": null,
+    "coreWebVitals": null,
+    "videoPresence": null,
+    "contentQuality": null,
+    "schemaAnalysis": null,
+    "websiteCrawler": null,
+    "privacyCompliance": null,
+    "competitorStrategy": null
+  },
+  "findings": 43,
+  "findingsByType": {
+    "PAINKILLER": 11,
+    "VITAMIN": 32
+  },
+  "evidenceSnapshots": 22,
+  "proposalWallMs": 7625,
+  "proposalError": "DIAGNOSIS_NOT_TRUSTED: Diagnosis result state is degraded",
+  "proposal": null
+}

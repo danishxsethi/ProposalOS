@@ -204,11 +204,9 @@ export async function checkLimit(
   planTier: string
 ): Promise<{ allowed: boolean; usage: number; limit: number }> {
   const usage = await getUsageStats(tenantId);
-
-  let limit = 10; // Default Free
-  if (planTier === 'starter') limit = 25;
-  if (planTier === 'pro') limit = 100;
-  if (planTier === 'agency') limit = 999999; // Unlimited
+  const { PlanCatalogService } = await import('@/lib/stripe/PlanCatalogService');
+  const plan = PlanCatalogService.getPlanById(planTier);
+  const limit = plan?.limits?.audits ?? 3;
 
   // Free tier blocks; paid tiers allow overage (billed via Stripe metering)
   if (planTier === 'free' && usage >= limit) {

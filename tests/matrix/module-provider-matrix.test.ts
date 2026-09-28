@@ -144,11 +144,11 @@ const MODULE_PROVIDERS: Record<string, string[]> = {
  */
 const MODULE_ALLOWED_RAW_FETCH: Array<{ file: string; line: number; host: string }> = [
   { file: 'lib/modules/seoDeep.ts', line: 297, host: 'serpapi.com' },
-  { file: 'lib/modules/competitor.ts', line: 73, host: 'serpapi.com' },
-  { file: 'lib/modules/competitor.ts', line: 112, host: 'places.googleapis.com' },
-  { file: 'lib/modules/competitor.ts', line: 185, host: 'googleapis.com' },
-  { file: 'lib/modules/competitor.ts', line: 244, host: 'serpapi.com' },
-  { file: 'lib/modules/competitor.ts', line: 326, host: 'serpapi.com' },
+{ file: 'lib/modules/competitor.ts', line: 154, host: 'googleapis.com' },
+  { file: 'lib/modules/competitor.ts', line: 90, host: 'serpapi.com' },
+  { file: 'lib/modules/competitor.ts', line: 172, host: 'googleapis.com' },
+  { file: 'lib/modules/competitor.ts', line: 231, host: 'serpapi.com' },
+  { file: 'lib/modules/competitor.ts', line: 298, host: 'serpapi.com' },
   { file: 'lib/modules/keywordGap.ts', line: 196, host: 'serpapi.com' },
   { file: 'lib/modules/paidSearch.ts', line: 158, host: 'serpapi.com' },
   { file: 'lib/modules/paidSearch.ts', line: 236, host: 'serpapi.com' },

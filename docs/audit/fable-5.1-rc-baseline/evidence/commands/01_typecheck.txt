@@ -1,0 +1,5 @@
+$ npm run typecheck
+> proposal-os@0.1.0 typecheck
+> tsc --noEmit
+(no output — 0 errors)
+Evidence: tsc 5.9.3, exit 0, duration ~8s. Captured 2026-09-27T22:40Z on branch remediation/proposalos-e2e HEAD 5f66e09347e4314b592f9d008128e3b241e3b84e

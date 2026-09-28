@@ -73,6 +73,7 @@ export default function AnalyticsPage() {
         </div>
         <div className="flex gap-3">
           <select
+            aria-label="Date range"
             value={dateRange}
             onChange={(e) => setDateRange(e.target.value)}
             className="bg-slate-800 border border-slate-700 text-slate-300 rounded px-3 py-2 text-sm"
@@ -186,7 +187,7 @@ export default function AnalyticsPage() {
         {/* Module Performance */}
         <div className="bg-slate-800 border border-slate-700 rounded-xl p-6 overflow-hidden">
           <h3 className="text-lg font-bold text-white mb-4">Module Reliability</h3>
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Data table">
             <table className="w-full text-left">
               <thead className="bg-slate-900/50 text-slate-400 text-sm">
                 <tr>
@@ -223,7 +224,7 @@ export default function AnalyticsPage() {
         {/* Top Findings */}
         <div className="bg-slate-800 border border-slate-700 rounded-xl p-6 overflow-hidden">
           <h3 className="text-lg font-bold text-white mb-4">Common Findings</h3>
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Data table">
             <table className="w-full text-left">
               <thead className="bg-slate-900/50 text-slate-400 text-sm">
                 <tr>

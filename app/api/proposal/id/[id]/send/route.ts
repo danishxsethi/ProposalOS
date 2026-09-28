@@ -18,7 +18,7 @@ import { RateLimitPresets, withRateLimit } from '@/lib/middleware/rateLimit';
 import { recordAuditTrailEvent } from '@/lib/observability/auditTrail';
 import { applyObservabilityHeaders, createObservabilityContextFromRequest, runWithObservabilityContext } from '@/lib/observability/context';
 import { MetricsRecorder } from '@/lib/observability/MetricsRecorder';
-import { sendProposalEmail } from '@/lib/outreach/emailSender';
+import { deliverProposalEmail } from '@/lib/outreach/outboundDelivery';
 import { prisma } from '@/lib/prisma';
 import { getTenantId } from '@/lib/tenant/context';
 
@@ -100,15 +100,27 @@ async function handleSendProposal(
       return notImplemented;
     }
 
-    // Send Immediately to all recipients
+    if (!proposal.outboundEnabled) {
+      const awaiting = NextResponse.json({ state: 'AWAITING_APPROVAL', reason: 'Proposal delivery is not enabled by an authorized operator' }, { status: 202 });
+      applyObservabilityHeaders(awaiting);
+      return awaiting;
+    }
+
+    // Delivery is routed through the canonical provider and durable idempotency boundary.
     for (const recipientEmail of recipientEmails) {
-      await sendProposalEmail({
-        proposalId,
-        recipientEmail,
+      const delivery = await deliverProposalEmail({
+        approved: true,
+        mode: 'live',
+        from: process.env.FROM_EMAIL || 'noreply@proposalengine.app',
+        fromName: 'ProposalOS',
+        recipient: recipientEmail,
         subject: subject || '',
-        messageHtml: message || '',
+        html: message || '',
+        proposalId,
+        webLinkToken: proposal.webLinkToken,
         tenantId,
       });
+      if (delivery.state !== 'SENT') throw new Error(`Outbound delivery did not complete: ${delivery.state}`);
     }
 
     MetricsRecorder.proposalGenerated(tenantId, 'SENT');

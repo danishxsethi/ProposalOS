@@ -1,8 +1,8 @@
 {
-  "generatedAt": "2026-09-25T03:23:11.157Z",
+  "generatedAt": "2026-09-28T09:52:27.733Z",
   "source": "app/api/**/route.ts static scan",
-  "routeFileCount": 146,
-  "entryCount": 197,
+  "routeFileCount": 148,
+  "entryCount": 199,
   "entries": [
     {
       "path": "/api/admin/feature-flags",
@@ -1217,6 +1217,16 @@
       "ownerResourceRule": "token-scoped: write bounded to resource resolved by unguessable token"
     },
     {
+      "path": "/api/outreach/webhook",
+      "method": "POST",
+      "auth": [],
+      "routeClass": "webhook",
+      "isPublic": false,
+      "isMutation": true,
+      "tenantSource": "tenant-context-wrapper|tenantId-referenced",
+      "ownerResourceRule": "provider-signature-verified"
+    },
+    {
       "path": "/api/outreach/worker",
       "method": "GET",
       "auth": [
@@ -1695,7 +1705,7 @@
       "routeClass": "token_gated_public",
       "isPublic": true,
       "isMutation": true,
-      "tenantSource": "tenant-context-wrapper|tenantId-referenced",
+      "tenantSource": "tenantId-referenced",
       "ownerResourceRule": "token-scoped: write bounded to resource resolved by unguessable token"
     },
     {
@@ -2034,7 +2044,7 @@
       "routeClass": "public_unauthenticated",
       "isPublic": true,
       "isMutation": true,
-      "tenantSource": "tenantId-referenced",
+      "tenantSource": "tenant-context-wrapper|tenantId-referenced",
       "ownerResourceRule": "tenant-scoped: resource must belong to caller tenant (session/api-key tenantId)"
     },
     {
@@ -2102,6 +2112,18 @@
       "isMutation": true,
       "tenantSource": "tenant-context(session/api-key)|tenant-context-wrapper|tenant-bypass(token-lookup)|tenantId-referenced",
       "ownerResourceRule": "tenant-scoped: resource must belong to caller tenant (session/api-key tenantId)"
+    },
+    {
+      "path": "/api/team",
+      "method": "GET",
+      "auth": [
+        "withAuth"
+      ],
+      "routeClass": "session_authenticated",
+      "isPublic": false,
+      "isMutation": false,
+      "tenantSource": "tenant-context(session/api-key)|tenantId-referenced",
+      "ownerResourceRule": "read-only"
     },
     {
       "path": "/api/templates/[id]",

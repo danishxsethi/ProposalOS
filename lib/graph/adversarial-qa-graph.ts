@@ -1,15 +1,16 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
 import { Annotation, StateGraph } from '@langchain/langgraph';
 import { Finding } from '@prisma/client';
 import { z } from 'zod';
 
+import { GEMINI_FLASH, GEMINI_PRO } from '@/lib/config/models';
 import { CostTracker } from '@/lib/costs/costTracker';
 import { scoreConfidence, softenLanguage } from '@/lib/delivery/confidenceScorer';
+import { generateWithGemini } from '@/lib/llm/provider';
 import { logger } from '@/lib/logger';
 
 // P1-1 fix: Model resolved from env var — no more hardcoded experimental model name.
-// Set ADVERSARIAL_QA_MODEL in .env (default: gemini-2.0-flash — stable + cost-tracked).
-const ADVERSARIAL_QA_MODEL = process.env.ADVERSARIAL_QA_MODEL ?? 'gemini-2.0-flash';
+// Set ADVERSARIAL_QA_MODEL in .env (default: GEMINI_FLASH — stable + cost-tracked).
+const ADVERSARIAL_QA_MODEL = process.env.ADVERSARIAL_QA_MODEL ?? GEMINI_FLASH;
 
 export interface HallucinationFlag {
   claim: string;
@@ -125,9 +126,33 @@ type QAState = typeof AdversarialQAState.State;
 // ─── Helper ───────────────────────────────────────────────────────────────────
 function getModel() {
   const apiKey = process.env.GOOGLE_AI_API_KEY;
-  if (!apiKey) return null;
-  const genAI = new GoogleGenerativeAI(apiKey);
-  return genAI.getGenerativeModel({ model: ADVERSARIAL_QA_MODEL });
+  const hasVertex = !!process.env.GCP_PROJECT_ID && !!process.env.GOOGLE_APPLICATION_CREDENTIALS;
+  if (!apiKey && !hasVertex) return null;
+  // Route through the canonical LLM façade (auth, retry, circuit breaker, output
+  // validation, explicit thinking budget, real cost accounting) instead of the raw
+  // SDK. The raw SDK path let flash reason with an uncapped default budget on
+  // every pass (measured: 3 sequential passes ≈ 40s → proposal graph timeout)
+  // and was invisible to cost/telemetry.
+  return {
+    async generateContent(prompt: string) {
+      const res = await generateWithGemini({
+        model: ADVERSARIAL_QA_MODEL,
+        input: prompt,
+        temperature: 0,
+        maxOutputTokens: 2048,
+        responseModality: 'json',
+        thinkingBudget: 0,
+        metadata: { node: 'adversarial_qa' },
+      } as Parameters<typeof generateWithGemini>[0]);
+      const text = String(res.text ?? '');
+      return {
+        response: {
+          text: () => text,
+          usageMetadata: res.usageMetadata,
+        },
+      };
+    },
+  };
 }
 
 // ─── Nodes (P0-2: all 4 nodes wrapped in try/catch) ────────────────────────────

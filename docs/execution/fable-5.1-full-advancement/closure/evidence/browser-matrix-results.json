@@ -1,0 +1,3271 @@
+{
+  "meta": {
+    "base": "http://localhost:3000",
+    "mode": "as-shipped",
+    "startedAt": "2026-09-28T05:29:13.100Z",
+    "chromePath": "/home/danish/.cache/ms-playwright/chromium-1243/chrome-linux64/chrome",
+    "seeds": {
+      "auditId": "a39a7bc3-45a5-47c4-bb5e-561e8ca7f600",
+      "auditName": "Quick Fix Plumbing",
+      "proposalToken": null,
+      "proposalCount": 0
+    },
+    "viewports": [
+      320,
+      375,
+      768,
+      1024,
+      1440
+    ],
+    "axeViewports": [
+      1440,
+      375
+    ],
+    "finishedAt": "2026-09-28T05:32:30.166Z"
+  },
+  "surfaces": {
+    "root": {
+      "key": "root",
+      "route": "/",
+      "state": "public",
+      "note": null,
+      "viewports": {
+        "320": {
+          "status": 200,
+          "title": "ProposalOS | Automated Local Business Audits",
+          "h1": [
+            "ProposalOS"
+          ],
+          "horizontalOverflow": true,
+          "scrollWidth": 367,
+          "innerWidth": 320,
+          "overflowers": [
+            "div.flex.gap-3",
+            "button.btn.btn-primary",
+            "table.w-full",
+            "thead.border-b.border-[var(--color-border)]",
+            "tr.text-left.text-sm.text-[var(--color-text-secondary)]",
+            "th.pb-3.font-medium",
+            "th.pb-3.font-medium",
+            "th.pb-3.font-medium"
+          ],
+          "technicalLeakage": false,
+          "hydrated": true,
+          "nonceAttrs": 0,
+          "inlineScripts": 2,
+          "cspBlocked": true,
+          "screenshot": "evidence/screenshots/root/320.png"
+        },
+        "375": {
+          "status": 200,
+          "title": "ProposalOS | Automated Local Business Audits",
+          "h1": [
+            "ProposalOS"
+          ],
+          "horizontalOverflow": false,
+          "scrollWidth": 375,
+          "innerWidth": 375,
+          "overflowers": [],
+          "technicalLeakage": false,
+          "hydrated": true,
+          "nonceAttrs": 0,
+          "inlineScripts": 2,
+          "cspBlocked": true,
+          "screenshot": "evidence/screenshots/root/375.png"
+        },
+        "768": {
+          "status": 200,
+          "title": "ProposalOS | Automated Local Business Audits",
+          "h1": [
+            "ProposalOS"
+          ],
+          "horizontalOverflow": false,
+          "scrollWidth": 768,
+          "innerWidth": 768,
+          "overflowers": [],
+          "technicalLeakage": false,
+          "hydrated": true,
+          "nonceAttrs": 0,
+          "inlineScripts": 2,
+          "cspBlocked": true,
+          "screenshot": "evidence/screenshots/root/768.png"
+        },
+        "1024": {
+          "status": 200,
+          "title": "ProposalOS | Automated Local Business Audits",
+          "h1": [
+            "ProposalOS"
+          ],
+          "horizontalOverflow": false,
+          "scrollWidth": 1024,
+          "innerWidth": 1024,
+          "overflowers": [],
+          "technicalLeakage": false,
+          "hydrated": true,
+          "nonceAttrs": 0,
+          "inlineScripts": 2,
+          "cspBlocked": true,
+          "screenshot": "evidence/screenshots/root/1024.png"
+        },
+        "1440": {
+          "status": 200,
+          "title": "ProposalOS | Automated Local Business Audits",
+          "h1": [
+            "ProposalOS"
+          ],
+          "horizontalOverflow": false,
+          "scrollWidth": 1440,
+          "innerWidth": 1440,
+          "overflowers": [],
+          "technicalLeakage": false,
+          "hydrated": true,
+          "nonceAttrs": 0,
+          "inlineScripts": 2,
+          "cspBlocked": true,
+          "screenshot": "evidence/screenshots/root/1440.png"
+        }
+      },
+      "axe": {
+        "375": {
+          "byImpact": {
+            "critical": 1,
+            "serious": 1,
+            "moderate": 2,
+            "minor": 0
+          },
+          "file": "evidence/axe/root-375.json",
+          "violations": [
+            {
+              "id": "landmark-one-main",
+              "impact": "moderate",
+              "help": "Document should have one main landmark",
+              "nodes": 1,
+              "targets": [
+                "html"
+              ]
+            },
+            {
+              "id": "region",
+              "impact": "moderate",
+              "help": "All page content should be contained by landmarks",
+              "nodes": 3,
+              "targets": [
+                ".items-center > div:nth-child(1)",
+                ".grid",
+                ".container > .card"
+              ]
+            },
+            {
+              "id": "scrollable-region-focusable",
+              "impact": "serious",
+              "help": "Scrollable region must have keyboard access",
+              "nodes": 1,
+              "targets": [
+                ".overflow-x-auto"
+              ]
+            },
+            {
+              "id": "select-name",
+              "impact": "critical",
+              "help": "Select element must have an accessible name",
+              "nodes": 1,
+              "targets": [
+                "select"
+              ]
+            }
+          ]
+        },
+        "1440": {
+          "byImpact": {
+            "critical": 1,
+            "serious": 0,
+            "moderate": 2,
+            "minor": 0
+          },
+          "file": "evidence/axe/root-1440.json",
+          "violations": [
+            {
+              "id": "landmark-one-main",
+              "impact": "moderate",
+              "help": "Document should have one main landmark",
+              "nodes": 1,
+              "targets": [
+                "html"
+              ]
+            },
+            {
+              "id": "region",
+              "impact": "moderate",
+              "help": "All page content should be contained by landmarks",
+              "nodes": 3,
+              "targets": [
+                ".items-center > div:nth-child(1)",
+                ".grid",
+                ".container > .card"
+              ]
+            },
+            {
+              "id": "select-name",
+              "impact": "critical",
+              "help": "Select element must have an accessible name",
+              "nodes": 1,
+              "targets": [
+                "select"
+              ]
+            }
+          ]
+        }
+      },
+      "consoleErrors": [
+        {
+          "kind": "console",
+          "text": "Applying inline style violates the following Content Security Policy directive 'style-src 'self' 'nonce-2lhLiNRiDJCTY3oE88gdfg==' https://fonts.googleapis.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-G2bsu3juyuFg2BLB//w2U4hMA58WalQR4o2VpNmINsc='), or a nonce ('nonce-...') is required to enable inline execution. Note that hashes do not apply to event handlers, style attributes and javascript: navigations unless the 'unsafe-hashes' keyword is present. The action has been blocked."
+        },
+        {
+          "kind": "console",
+          "text": "Applying inline style violates the following Content Security Policy directive 'style-src 'self' 'nonce-2lhLiNRiDJCTY3oE88gdfg==' https://fonts.googleapis.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-WsK1RfHeOJdThNaIuktKDlVVL0AOlUDw9MEb1xFUqJE='), or a nonce ('nonce-...') is required to enable inline execution. Note that hashes do not apply to event handlers, style attributes and javascript: navigations unless the 'unsafe-hashes' keyword is present. The action has been blocked."
+        },
+        {
+          "kind": "console",
+          "text": "Applying inline style violates the following Content Security Policy directive 'style-src 'self' 'nonce-2lhLiNRiDJCTY3oE88gdfg==' https://fonts.googleapis.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-1GwgV9KtvvBOecJLfaglHVHoannOtMHCvj4bQFwZ/24='), or a nonce ('nonce-...') is required to enable inline execution. Note that hashes do not apply to event handlers, style attributes and javascript: navigations unless the 'unsafe-hashes' keyword is present. The action has been blocked."
+        },
+        {
+          "kind": "console",
+          "text": "Applying inline style violates the following Content Security Policy directive 'style-src 'self' 'nonce-2lhLiNRiDJCTY3oE88gdfg==' https://fonts.googleapis.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-5vtYEtsQBub9ZZHclnn0vIlrqXQdQgkqnlL+JcN0hl8='), or a nonce ('nonce-...') is required to enable inline execution. Note that hashes do not apply to event handlers, style attributes and javascript: navigations unless the 'unsafe-hashes' keyword is present. The action has been blocked."
+        },
+        {
+          "kind": "console",
+          "text": "Executing inline script violates the following Content Security Policy directive 'script-src 'self' 'nonce-2lhLiNRiDJCTY3oE88gdfg==' https://cdn.jsdelivr.net https://www.googletagmanager.com https://js.posthog.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-OBTN3RiyCV4Bq7dFqZ5a2pAXjnCcCYeTJMO2I/LYKeo='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked."
+        },
+        {
+          "kind": "console",
+          "text": "Executing inline script violates the following Content Security Policy directive 'script-src 'self' 'nonce-2lhLiNRiDJCTY3oE88gdfg==' https://cdn.jsdelivr.net https://www.googletagmanager.com https://js.posthog.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-4y/bxwFclaGWCEzeLHKa9UFd1FCksskiUS2ozjLpHRs='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked."
+        },
+        {
+          "kind": "console",
+          "text": "Applying inline style violates the following Content Security Policy directive 'style-src 'self' 'nonce-jXa8obMIWq6eo6q7HlavOA==' https://fonts.googleapis.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-G2bsu3juyuFg2BLB//w2U4hMA58WalQR4o2VpNmINsc='), or a nonce ('nonce-...') is required to enable inline execution. Note that hashes do not apply to event handlers, style attributes and javascript: navigations unless the 'unsafe-hashes' keyword is present. The action has been blocked."
+        },
+        {
+          "kind": "console",
+          "text": "Applying inline style violates the following Content Security Policy directive 'style-src 'self' 'nonce-jXa8obMIWq6eo6q7HlavOA==' https://fonts.googleapis.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-WsK1RfHeOJdThNaIuktKDlVVL0AOlUDw9MEb1xFUqJE='), or a nonce ('nonce-...') is required to enable inline execution. Note that hashes do not apply to event handlers, style attributes and javascript: navigations unless the 'unsafe-hashes' keyword is present. The action has been blocked."
+        },
+        {
+          "kind": "console",
+          "text": "Applying inline style violates the following Content Security Policy directive 'style-src 'self' 'nonce-jXa8obMIWq6eo6q7HlavOA==' https://fonts.googleapis.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-1GwgV9KtvvBOecJLfaglHVHoannOtMHCvj4bQFwZ/24='), or a nonce ('nonce-...') is required to enable inline execution. Note that hashes do not apply to event handlers, style attributes and javascript: navigations unless the 'unsafe-hashes' keyword is present. The action has been blocked."
+        },
+        {
+          "kind": "console",
+          "text": "Applying inline style violates the following Content Security Policy directive 'style-src 'self' 'nonce-jXa8obMIWq6eo6q7HlavOA==' https://fonts.googleapis.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-5vtYEtsQBub9ZZHclnn0vIlrqXQdQgkqnlL+JcN0hl8='), or a nonce ('nonce-...') is required to enable inline execution. Note that hashes do not apply to event handlers, style attributes and javascript: navigations unless the 'unsafe-hashes' keyword is present. The action has been blocked."
+        },
+        {
+          "kind": "console",
+          "text": "Executing inline script violates the following Content Security Policy directive 'script-src 'self' 'nonce-jXa8obMIWq6eo6q7HlavOA==' https://cdn.jsdelivr.net https://www.googletagmanager.com https://js.posthog.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-OBTN3RiyCV4Bq7dFqZ5a2pAXjnCcCYeTJMO2I/LYKeo='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked."
+        },
+        {
+          "kind": "console",
+          "text": "Executing inline script violates the following Content Security Policy directive 'script-src 'self' 'nonce-jXa8obMIWq6eo6q7HlavOA==' https://cdn.jsdelivr.net https://www.googletagmanager.com https://js.posthog.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-4y/bxwFclaGWCEzeLHKa9UFd1FCksskiUS2ozjLpHRs='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked."
+        },
+        {
+          "kind": "pageerror",
+          "text": "Minified React error #412; visit https://react.dev/errors/412 for the full message or use the non-minified dev environment for full errors and additional helpful warnings."
+        },
+        {
+          "kind": "console",
+          "text": "Applying inline style violates the following Content Security Policy directive 'style-src 'self' 'nonce-1BmbGALgRR8gF6K1oDbxcg==' https://fonts.googleapis.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-G2bsu3juyuFg2BLB//w2U4hMA58WalQR4o2VpNmINsc='), or a nonce ('nonce-...') is required to enable inline execution. Note that hashes do not apply to event handlers, style attributes and javascript: navigations unless the 'unsafe-hashes' keyword is present. The action has been blocked."
+        },
+        {
+          "kind": "console",
+          "text": "Applying inline style violates the following Content Security Policy directive 'style-src 'self' 'nonce-1BmbGALgRR8gF6K1oDbxcg==' https://fonts.googleapis.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-WsK1RfHeOJdThNaIuktKDlVVL0AOlUDw9MEb1xFUqJE='), or a nonce ('nonce-...') is required to enable inline execution. Note that hashes do not apply to event handlers, style attributes and javascript: navigations unless the 'unsafe-hashes' keyword is present. The action has been blocked."
+        },
+        {
+          "kind": "console",
+          "text": "Applying inline style violates the following Content Security Policy directive 'style-src 'self' 'nonce-1BmbGALgRR8gF6K1oDbxcg==' https://fonts.googleapis.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-1GwgV9KtvvBOecJLfaglHVHoannOtMHCvj4bQFwZ/24='), or a nonce ('nonce-...') is required to enable inline execution. Note that hashes do not apply to event handlers, style attributes and javascript: navigations unless the 'unsafe-hashes' keyword is present. The action has been blocked."
+        },
+        {
+          "kind": "console",
+          "text": "Applying inline style violates the following Content Security Policy directive 'style-src 'self' 'nonce-1BmbGALgRR8gF6K1oDbxcg==' https://fonts.googleapis.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-5vtYEtsQBub9ZZHclnn0vIlrqXQdQgkqnlL+JcN0hl8='), or a nonce ('nonce-...') is required to enable inline execution. Note that hashes do not apply to event handlers, style attributes and javascript: navigations unless the 'unsafe-hashes' keyword is present. The action has been blocked."
+        },
+        {
+          "kind": "console",
+          "text": "Executing inline script violates the following Content Security Policy directive 'script-src 'self' 'nonce-1BmbGALgRR8gF6K1oDbxcg==' https://cdn.jsdelivr.net https://www.googletagmanager.com https://js.posthog.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-OBTN3RiyCV4Bq7dFqZ5a2pAXjnCcCYeTJMO2I/LYKeo='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked."
+        },
+        {
+          "kind": "console",
+          "text": "Executing inline script violates the following Content Security Policy directive 'script-src 'self' 'nonce-1BmbGALgRR8gF6K1oDbxcg==' https://cdn.jsdelivr.net https://www.googletagmanager.com https://js.posthog.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-4y/bxwFclaGWCEzeLHKa9UFd1FCksskiUS2ozjLpHRs='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked."
+        },
+        {
+          "kind": "console",
+          "text": "Applying inline style violates the following Content Security Policy directive 'style-src 'self' 'nonce-olpYmNhyUWRDqo7gG+6KUw==' https://fonts.googleapis.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-G2bsu3juyuFg2BLB//w2U4hMA58WalQR4o2VpNmINsc='), or a nonce ('nonce-...') is required to enable inline execution. Note that hashes do not apply to event handlers, style attributes and javascript: navigations unless the 'unsafe-hashes' keyword is present. The action has been blocked."
+        },
+        {
+          "kind": "console",
+          "text": "Applying inline style violates the following Content Security Policy directive 'style-src 'self' 'nonce-olpYmNhyUWRDqo7gG+6KUw==' https://fonts.googleapis.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-WsK1RfHeOJdThNaIuktKDlVVL0AOlUDw9MEb1xFUqJE='), or a nonce ('nonce-...') is required to enable inline execution. Note that hashes do not apply to event handlers, style attributes and javascript: navigations unless the 'unsafe-hashes' keyword is present. The action has been blocked."
+        },
+        {
+          "kind": "console",
+          "text": "Applying inline style violates the following Content Security Policy directive 'style-src 'self' 'nonce-olpYmNhyUWRDqo7gG+6KUw==' https://fonts.googleapis.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-1GwgV9KtvvBOecJLfaglHVHoannOtMHCvj4bQFwZ/24='), or a nonce ('nonce-...') is required to enable inline execution. Note that hashes do not apply to event handlers, style attributes and javascript: navigations unless the 'unsafe-hashes' keyword is present. The action has been blocked."
+        },
+        {
+          "kind": "console",
+          "text": "Applying inline style violates the following Content Security Policy directive 'style-src 'self' 'nonce-olpYmNhyUWRDqo7gG+6KUw==' https://fonts.googleapis.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-5vtYEtsQBub9ZZHclnn0vIlrqXQdQgkqnlL+JcN0hl8='), or a nonce ('nonce-...') is required to enable inline execution. Note that hashes do not apply to event handlers, style attributes and javascript: navigations unless the 'unsafe-hashes' keyword is present. The action has been blocked."
+        },
+        {
+          "kind": "console",
+          "text": "Executing inline script violates the following Content Security Policy directive 'script-src 'self' 'nonce-olpYmNhyUWRDqo7gG+6KUw==' https://cdn.jsdelivr.net https://www.googletagmanager.com https://js.posthog.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-OBTN3RiyCV4Bq7dFqZ5a2pAXjnCcCYeTJMO2I/LYKeo='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked."
+        },
+        {
+          "kind": "console",
+          "text": "Executing inline script violates the following Content Security Policy directive 'script-src 'self' 'nonce-olpYmNhyUWRDqo7gG+6KUw==' https://cdn.jsdelivr.net https://www.googletagmanager.com https://js.posthog.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-4y/bxwFclaGWCEzeLHKa9UFd1FCksskiUS2ozjLpHRs='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked."
+        }
+      ],
+      "skipped": null,
+      "httpStatus": 200,
+      "finalUrl": "http://localhost:3000/",
+      "redirected": false
+    },
+    "login": {
+      "key": "login",
+      "route": "/login",
+      "state": "unauth",
+      "note": null,
+      "viewports": {
+        "320": {
+          "status": 200,
+          "title": "ProposalOS | Automated Local Business Audits",
+          "h1": [
+            "Welcome Back"
+          ],
+          "horizontalOverflow": false,
+          "scrollWidth": 320,
+          "innerWidth": 320,
+          "overflowers": [],
+          "technicalLeakage": false,
+          "hydrated": true,
+          "nonceAttrs": 0,
+          "inlineScripts": 2,
+          "cspBlocked": true,
+          "screenshot": "evidence/screenshots/login/320.png"
+        },
+        "375": {
+          "status": 200,
+          "title": "ProposalOS | Automated Local Business Audits",
+          "h1": [
+            "Welcome Back"
+          ],
+          "horizontalOverflow": false,
+          "scrollWidth": 375,
+          "innerWidth": 375,
+          "overflowers": [],
+          "technicalLeakage": false,
+          "hydrated": true,
+          "nonceAttrs": 0,
+          "inlineScripts": 2,
+          "cspBlocked": true,
+          "screenshot": "evidence/screenshots/login/375.png"
+        },
+        "768": {
+          "status": 200,
+          "title": "ProposalOS | Automated Local Business Audits",
+          "h1": [
+            "Welcome Back"
+          ],
+          "horizontalOverflow": false,
+          "scrollWidth": 768,
+          "innerWidth": 768,
+          "overflowers": [],
+          "technicalLeakage": false,
+          "hydrated": true,
+          "nonceAttrs": 0,
+          "inlineScripts": 2,
+          "cspBlocked": true,
+          "screenshot": "evidence/screenshots/login/768.png"
+        },
+        "1024": {
+          "status": 200,
+          "title": "ProposalOS | Automated Local Business Audits",
+          "h1": [
+            "Welcome Back"
+          ],
+          "horizontalOverflow": false,
+          "scrollWidth": 1024,
+          "innerWidth": 1024,
+          "overflowers": [],
+          "technicalLeakage": false,
+          "hydrated": true,
+          "nonceAttrs": 0,
+          "inlineScripts": 2,
+          "cspBlocked": true,
+          "screenshot": "evidence/screenshots/login/1024.png"
+        },
+        "1440": {
+          "status": 200,
+          "title": "ProposalOS | Automated Local Business Audits",
+          "h1": [
+            "Welcome Back"
+          ],
+          "horizontalOverflow": false,
+          "scrollWidth": 1440,
+          "innerWidth": 1440,
+          "overflowers": [],
+          "technicalLeakage": false,
+          "hydrated": true,
+          "nonceAttrs": 0,
+          "inlineScripts": 2,
+          "cspBlocked": true,
+          "screenshot": "evidence/screenshots/login/1440.png"
+        }
+      },
+      "axe": {
+        "375": {
+          "byImpact": {
+            "critical": 0,
+            "serious": 1,
+            "moderate": 2,
+            "minor": 0
+          },
+          "file": "evidence/axe/login-375.json",
+          "violations": [
+            {
+              "id": "color-contrast",
+              "impact": "serious",
+              "help": "Elements must meet minimum color contrast ratio thresholds",
+              "nodes": 1,
+              "targets": [
+                "span"
+              ]
+            },
+            {
+              "id": "landmark-one-main",
+              "impact": "moderate",
+              "help": "Document should have one main landmark",
+              "nodes": 1,
+              "targets": [
+                "html"
+              ]
+            },
+            {
+              "id": "region",
+              "impact": "moderate",
+              "help": "All page content should be contained by landmarks",
+              "nodes": 5,
+              "targets": [
+                ".mb-8",
+                "form > div:nth-child(1)",
+                "form > div:nth-child(2)",
+                ".space-y-4:nth-child(3) > .relative",
+                ".mt-8"
+              ]
+            }
+          ]
+        },
+        "1440": {
+          "byImpact": {
+            "critical": 0,
+            "serious": 1,
+            "moderate": 2,
+            "minor": 0
+          },
+          "file": "evidence/axe/login-1440.json",
+          "violations": [
+            {
+              "id": "color-contrast",
+              "impact": "serious",
+              "help": "Elements must meet minimum color contrast ratio thresholds",
+              "nodes": 1,
+              "targets": [
+                "span"
+              ]
+            },
+            {
+              "id": "landmark-one-main",
+              "impact": "moderate",
+              "help": "Document should have one main landmark",
+              "nodes": 1,
+              "targets": [
+                "html"
+              ]
+            },
+            {
+              "id": "region",
+              "impact": "moderate",
+              "help": "All page content should be contained by landmarks",
+              "nodes": 5,
+              "targets": [
+                ".mb-8",
+                "form > div:nth-child(1)",
+                "form > div:nth-child(2)",
+                ".space-y-4:nth-child(3) > .relative",
+                ".mt-8"
+              ]
+            }
+          ]
+        }
+      },
+      "consoleErrors": [
+        {
+          "kind": "console",
+          "text": "Executing inline script violates the following Content Security Policy directive 'script-src 'self' 'nonce-irD2X9xXwejFQoxoDd0eQg==' https://cdn.jsdelivr.net https://www.googletagmanager.com https://js.posthog.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-OBTN3RiyCV4Bq7dFqZ5a2pAXjnCcCYeTJMO2I/LYKeo='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked."
+        },
+        {
+          "kind": "console",
+          "text": "Executing inline script violates the following Content Security Policy directive 'script-src 'self' 'nonce-irD2X9xXwejFQoxoDd0eQg==' https://cdn.jsdelivr.net https://www.googletagmanager.com https://js.posthog.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-oxU24zcNDfMZ9V7g8vZ1eT8p7Pf1emJ7brS8TiuI3fg='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked."
+        },
+        {
+          "kind": "console",
+          "text": "Executing inline script violates the following Content Security Policy directive 'script-src 'self' 'nonce-KMO825nbCSjUl+oHJotifA==' https://cdn.jsdelivr.net https://www.googletagmanager.com https://js.posthog.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-OBTN3RiyCV4Bq7dFqZ5a2pAXjnCcCYeTJMO2I/LYKeo='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked."
+        },
+        {
+          "kind": "console",
+          "text": "Executing inline script violates the following Content Security Policy directive 'script-src 'self' 'nonce-KMO825nbCSjUl+oHJotifA==' https://cdn.jsdelivr.net https://www.googletagmanager.com https://js.posthog.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-oxU24zcNDfMZ9V7g8vZ1eT8p7Pf1emJ7brS8TiuI3fg='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked."
+        },
+        {
+          "kind": "pageerror",
+          "text": "Minified React error #412; visit https://react.dev/errors/412 for the full message or use the non-minified dev environment for full errors and additional helpful warnings."
+        },
+        {
+          "kind": "console",
+          "text": "Executing inline script violates the following Content Security Policy directive 'script-src 'self' 'nonce-P681LGcjPgEuuUqFJ4eBXQ==' https://cdn.jsdelivr.net https://www.googletagmanager.com https://js.posthog.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-OBTN3RiyCV4Bq7dFqZ5a2pAXjnCcCYeTJMO2I/LYKeo='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked."
+        },
+        {
+          "kind": "console",
+          "text": "Executing inline script violates the following Content Security Policy directive 'script-src 'self' 'nonce-P681LGcjPgEuuUqFJ4eBXQ==' https://cdn.jsdelivr.net https://www.googletagmanager.com https://js.posthog.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-oxU24zcNDfMZ9V7g8vZ1eT8p7Pf1emJ7brS8TiuI3fg='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked."
+        },
+        {
+          "kind": "console",
+          "text": "Executing inline script violates the following Content Security Policy directive 'script-src 'self' 'nonce-T9DdhLu+mAUjNzggMRcfvQ==' https://cdn.jsdelivr.net https://www.googletagmanager.com https://js.posthog.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-OBTN3RiyCV4Bq7dFqZ5a2pAXjnCcCYeTJMO2I/LYKeo='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked."
+        },
+        {
+          "kind": "console",
+          "text": "Executing inline script violates the following Content Security Policy directive 'script-src 'self' 'nonce-T9DdhLu+mAUjNzggMRcfvQ==' https://cdn.jsdelivr.net https://www.googletagmanager.com https://js.posthog.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-oxU24zcNDfMZ9V7g8vZ1eT8p7Pf1emJ7brS8TiuI3fg='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked."
+        },
+        {
+          "kind": "console",
+          "text": "Executing inline script violates the following Content Security Policy directive 'script-src 'self' 'nonce-UvrbGg59PU1+3jE6YRcDJQ==' https://cdn.jsdelivr.net https://www.googletagmanager.com https://js.posthog.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-OBTN3RiyCV4Bq7dFqZ5a2pAXjnCcCYeTJMO2I/LYKeo='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked."
+        },
+        {
+          "kind": "console",
+          "text": "Executing inline script violates the following Content Security Policy directive 'script-src 'self' 'nonce-UvrbGg59PU1+3jE6YRcDJQ==' https://cdn.jsdelivr.net https://www.googletagmanager.com https://js.posthog.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-oxU24zcNDfMZ9V7g8vZ1eT8p7Pf1emJ7brS8TiuI3fg='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked."
+        },
+        {
+          "kind": "console",
+          "text": "Executing inline script violates the following Content Security Policy directive 'script-src 'self' 'nonce-5FIE87VOf0uFspRBhEY0Mg==' https://cdn.jsdelivr.net https://www.googletagmanager.com https://js.posthog.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-OBTN3RiyCV4Bq7dFqZ5a2pAXjnCcCYeTJMO2I/LYKeo='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked."
+        },
+        {
+          "kind": "console",
+          "text": "Executing inline script violates the following Content Security Policy directive 'script-src 'self' 'nonce-5FIE87VOf0uFspRBhEY0Mg==' https://cdn.jsdelivr.net https://www.googletagmanager.com https://js.posthog.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-oxU24zcNDfMZ9V7g8vZ1eT8p7Pf1emJ7brS8TiuI3fg='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked."
+        },
+        {
+          "kind": "console",
+          "text": "Executing inline script violates the following Content Security Policy directive 'script-src 'self' 'nonce-WzZ4ghEwps7pOa1uuITOsQ==' https://cdn.jsdelivr.net https://www.googletagmanager.com https://js.posthog.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-OBTN3RiyCV4Bq7dFqZ5a2pAXjnCcCYeTJMO2I/LYKeo='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked."
+        },
+        {
+          "kind": "console",
+          "text": "Executing inline script violates the following Content Security Policy directive 'script-src 'self' 'nonce-WzZ4ghEwps7pOa1uuITOsQ==' https://cdn.jsdelivr.net https://www.googletagmanager.com https://js.posthog.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-oxU24zcNDfMZ9V7g8vZ1eT8p7Pf1emJ7brS8TiuI3fg='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked."
+        }
+      ],
+      "skipped": null,
+      "httpStatus": 200,
+      "finalUrl": "http://localhost:3000/login",
+      "redirected": false,
+      "zoom200": {
+        "docScrollWidth": 1440,
+        "innerWidth": 1440,
+        "horizontalOverflow": false,
+        "clippedContainers": [],
+        "truncatedText": [],
+        "screenshot": "evidence/screenshots/login/1440-zoom200.png",
+        "method": "CSS zoom=2 on <html> at 1440x900 (effective 720px layout viewport)"
+      }
+    },
+    "register": {
+      "key": "register",
+      "route": "/register",
+      "state": "unauth",
+      "note": null,
+      "viewports": {
+        "320": {
+          "status": 200,
+          "title": "ProposalOS | Automated Local Business Audits",
+          "h1": [
+            "Create Account"
+          ],
+          "horizontalOverflow": false,
+          "scrollWidth": 320,
+          "innerWidth": 320,
+          "overflowers": [],
+          "technicalLeakage": false,
+          "hydrated": true,
+          "nonceAttrs": 0,
+          "inlineScripts": 2,
+          "cspBlocked": true,
+          "screenshot": "evidence/screenshots/register/320.png"
+        },
+        "375": {
+          "status": 200,
+          "title": "ProposalOS | Automated Local Business Audits",
+          "h1": [
+            "Create Account"
+          ],
+          "horizontalOverflow": false,
+          "scrollWidth": 375,
+          "innerWidth": 375,
+          "overflowers": [],
+          "technicalLeakage": false,
+          "hydrated": true,
+          "nonceAttrs": 0,
+          "inlineScripts": 2,
+          "cspBlocked": true,
+          "screenshot": "evidence/screenshots/register/375.png"
+        },
+        "768": {
+          "status": 200,
+          "title": "ProposalOS | Automated Local Business Audits",
+          "h1": [
+            "Create Account"
+          ],
+          "horizontalOverflow": false,
+          "scrollWidth": 768,
+          "innerWidth": 768,
+          "overflowers": [],
+          "technicalLeakage": false,
+          "hydrated": true,
+          "nonceAttrs": 0,
+          "inlineScripts": 2,
+          "cspBlocked": true,
+          "screenshot": "evidence/screenshots/register/768.png"
+        },
+        "1024": {
+          "status": 200,
+          "title": "ProposalOS | Automated Local Business Audits",
+          "h1": [
+            "Create Account"
+          ],
+          "horizontalOverflow": false,
+          "scrollWidth": 1024,
+          "innerWidth": 1024,
+          "overflowers": [],
+          "technicalLeakage": false,
+          "hydrated": true,
+          "nonceAttrs": 0,
+          "inlineScripts": 2,
+          "cspBlocked": true,
+          "screenshot": "evidence/screenshots/register/1024.png"
+        },
+        "1440": {
+          "status": 200,
+          "title": "ProposalOS | Automated Local Business Audits",
+          "h1": [
+            "Create Account"
+          ],
+          "horizontalOverflow": false,
+          "scrollWidth": 1440,
+          "innerWidth": 1440,
+          "overflowers": [],
+          "technicalLeakage": false,
+          "hydrated": true,
+          "nonceAttrs": 0,
+          "inlineScripts": 2,
+          "cspBlocked": true,
+          "screenshot": "evidence/screenshots/register/1440.png"
+        }
+      },
+      "axe": {
+        "375": {
+          "byImpact": {
+            "critical": 0,
+            "serious": 0,
+            "moderate": 2,
+            "minor": 0
+          },
+          "file": "evidence/axe/register-375.json",
+          "violations": [
+            {
+              "id": "landmark-one-main",
+              "impact": "moderate",
+              "help": "Document should have one main landmark",
+              "nodes": 1,
+              "targets": [
+                "html"
+              ]
+            },
+            {
+              "id": "region",
+              "impact": "moderate",
+              "help": "All page content should be contained by landmarks",
+              "nodes": 6,
+              "targets": [
+                ".mb-8",
+                "form > div:nth-child(1)",
+                "form > div:nth-child(2)",
+                "form > div:nth-child(3)",
+                "div:nth-child(4)"
+              ]
+            }
+          ]
+        },
+        "1440": {
+          "byImpact": {
+            "critical": 0,
+            "serious": 0,
+            "moderate": 2,
+            "minor": 0
+          },
+          "file": "evidence/axe/register-1440.json",
+          "violations": [
+            {
+              "id": "landmark-one-main",
+              "impact": "moderate",
+              "help": "Document should have one main landmark",
+              "nodes": 1,
+              "targets": [
+                "html"
+              ]
+            },
+            {
+              "id": "region",
+              "impact": "moderate",
+              "help": "All page content should be contained by landmarks",
+              "nodes": 6,
+              "targets": [
+                ".mb-8",
+                "form > div:nth-child(1)",
+                "form > div:nth-child(2)",
+                "form > div:nth-child(3)",
+                "div:nth-child(4)"
+              ]
+            }
+          ]
+        }
+      },
+      "consoleErrors": [
+        {
+          "kind": "console",
+          "text": "Executing inline script violates the following Content Security Policy directive 'script-src 'self' 'nonce-6u5OOfksNulR4rW1V3G6Kw==' https://cdn.jsdelivr.net https://www.googletagmanager.com https://js.posthog.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-OBTN3RiyCV4Bq7dFqZ5a2pAXjnCcCYeTJMO2I/LYKeo='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked."
+        },
+        {
+          "kind": "console",
+          "text": "Executing inline script violates the following Content Security Policy directive 'script-src 'self' 'nonce-6u5OOfksNulR4rW1V3G6Kw==' https://cdn.jsdelivr.net https://www.googletagmanager.com https://js.posthog.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-eR8BAm+EZzseiYjW8/k5JhbyBYYstE3lxh2XluyohI4='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked."
+        },
+        {
+          "kind": "pageerror",
+          "text": "Minified React error #412; visit https://react.dev/errors/412 for the full message or use the non-minified dev environment for full errors and additional helpful warnings."
+        },
+        {
+          "kind": "console",
+          "text": "Executing inline script violates the following Content Security Policy directive 'script-src 'self' 'nonce-g2bq3hlIMJMU+rSU/vGq8g==' https://cdn.jsdelivr.net https://www.googletagmanager.com https://js.posthog.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-OBTN3RiyCV4Bq7dFqZ5a2pAXjnCcCYeTJMO2I/LYKeo='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked."
+        },
+        {
+          "kind": "console",
+          "text": "Executing inline script violates the following Content Security Policy directive 'script-src 'self' 'nonce-g2bq3hlIMJMU+rSU/vGq8g==' https://cdn.jsdelivr.net https://www.googletagmanager.com https://js.posthog.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-eR8BAm+EZzseiYjW8/k5JhbyBYYstE3lxh2XluyohI4='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked."
+        },
+        {
+          "kind": "console",
+          "text": "Executing inline script violates the following Content Security Policy directive 'script-src 'self' 'nonce-Yu04YpCMFLCqgHf9aWEd6Q==' https://cdn.jsdelivr.net https://www.googletagmanager.com https://js.posthog.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-OBTN3RiyCV4Bq7dFqZ5a2pAXjnCcCYeTJMO2I/LYKeo='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked."
+        },
+        {
+          "kind": "console",
+          "text": "Executing inline script violates the following Content Security Policy directive 'script-src 'self' 'nonce-Yu04YpCMFLCqgHf9aWEd6Q==' https://cdn.jsdelivr.net https://www.googletagmanager.com https://js.posthog.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-eR8BAm+EZzseiYjW8/k5JhbyBYYstE3lxh2XluyohI4='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked."
+        },
+        {
+          "kind": "console",
+          "text": "Executing inline script violates the following Content Security Policy directive 'script-src 'self' 'nonce-vBTvaR2BZnWZmoe8OPEm9g==' https://cdn.jsdelivr.net https://www.googletagmanager.com https://js.posthog.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-OBTN3RiyCV4Bq7dFqZ5a2pAXjnCcCYeTJMO2I/LYKeo='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked."
+        },
+        {
+          "kind": "console",
+          "text": "Executing inline script violates the following Content Security Policy directive 'script-src 'self' 'nonce-vBTvaR2BZnWZmoe8OPEm9g==' https://cdn.jsdelivr.net https://www.googletagmanager.com https://js.posthog.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-eR8BAm+EZzseiYjW8/k5JhbyBYYstE3lxh2XluyohI4='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked."
+        },
+        {
+          "kind": "console",
+          "text": "Executing inline script violates the following Content Security Policy directive 'script-src 'self' 'nonce-zFpaibdScCn1DBMeBtQDjA==' https://cdn.jsdelivr.net https://www.googletagmanager.com https://js.posthog.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-OBTN3RiyCV4Bq7dFqZ5a2pAXjnCcCYeTJMO2I/LYKeo='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked."
+        },
+        {
+          "kind": "console",
+          "text": "Executing inline script violates the following Content Security Policy directive 'script-src 'self' 'nonce-zFpaibdScCn1DBMeBtQDjA==' https://cdn.jsdelivr.net https://www.googletagmanager.com https://js.posthog.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-eR8BAm+EZzseiYjW8/k5JhbyBYYstE3lxh2XluyohI4='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked."
+        },
+        {
+          "kind": "console",
+          "text": "Executing inline script violates the following Content Security Policy directive 'script-src 'self' 'nonce-r2o3kE7JdzDvb6h7p78zqQ==' https://cdn.jsdelivr.net https://www.googletagmanager.com https://js.posthog.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-OBTN3RiyCV4Bq7dFqZ5a2pAXjnCcCYeTJMO2I/LYKeo='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked."
+        },
+        {
+          "kind": "console",
+          "text": "Executing inline script violates the following Content Security Policy directive 'script-src 'self' 'nonce-r2o3kE7JdzDvb6h7p78zqQ==' https://cdn.jsdelivr.net https://www.googletagmanager.com https://js.posthog.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-eR8BAm+EZzseiYjW8/k5JhbyBYYstE3lxh2XluyohI4='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked."
+        }
+      ],
+      "skipped": null,
+      "httpStatus": 200,
+      "finalUrl": "http://localhost:3000/register",
+      "redirected": false
+    },
+    "dashboard": {
+      "key": "dashboard",
+      "route": "/dashboard",
+      "state": "auth",
+      "note": null,
+      "viewports": {
+        "320": {
+          "status": 200,
+          "title": "ProposalOS | Automated Local Business Audits",
+          "h1": [],
+          "horizontalOverflow": false,
+          "scrollWidth": 320,
+          "innerWidth": 320,
+          "overflowers": [],
+          "technicalLeakage": false,
+          "hydrated": true,
+          "nonceAttrs": 16,
+          "inlineScripts": 5,
+          "cspBlocked": false,
+          "screenshot": "evidence/screenshots/dashboard/320.png"
+        },
+        "375": {
+          "status": 200,
+          "title": "ProposalOS | Automated Local Business Audits",
+          "h1": [],
+          "horizontalOverflow": false,
+          "scrollWidth": 375,
+          "innerWidth": 375,
+          "overflowers": [],
+          "technicalLeakage": false,
+          "hydrated": true,
+          "nonceAttrs": 16,
+          "inlineScripts": 5,
+          "cspBlocked": false,
+          "screenshot": "evidence/screenshots/dashboard/375.png"
+        },
+        "768": {
+          "status": 200,
+          "title": "ProposalOS | Automated Local Business Audits",
+          "h1": [],
+          "horizontalOverflow": false,
+          "scrollWidth": 768,
+          "innerWidth": 768,
+          "overflowers": [],
+          "technicalLeakage": false,
+          "hydrated": true,
+          "nonceAttrs": 16,
+          "inlineScripts": 5,
+          "cspBlocked": false,
+          "screenshot": "evidence/screenshots/dashboard/768.png"
+        },
+        "1024": {
+          "status": 200,
+          "title": "ProposalOS | Automated Local Business Audits",
+          "h1": [],
+          "horizontalOverflow": false,
+          "scrollWidth": 1024,
+          "innerWidth": 1024,
+          "overflowers": [],
+          "technicalLeakage": false,
+          "hydrated": true,
+          "nonceAttrs": 16,
+          "inlineScripts": 5,
+          "cspBlocked": false,
+          "screenshot": "evidence/screenshots/dashboard/1024.png"
+        },
+        "1440": {
+          "status": 200,
+          "title": "ProposalOS | Automated Local Business Audits",
+          "h1": [],
+          "horizontalOverflow": false,
+          "scrollWidth": 1440,
+          "innerWidth": 1440,
+          "overflowers": [],
+          "technicalLeakage": false,
+          "hydrated": true,
+          "nonceAttrs": 16,
+          "inlineScripts": 5,
+          "cspBlocked": false,
+          "screenshot": "evidence/screenshots/dashboard/1440.png"
+        }
+      },
+      "axe": {
+        "375": {
+          "byImpact": {
+            "critical": 0,
+            "serious": 0,
+            "moderate": 3,
+            "minor": 0
+          },
+          "file": "evidence/axe/dashboard-375.json",
+          "violations": [
+            {
+              "id": "landmark-one-main",
+              "impact": "moderate",
+              "help": "Document should have one main landmark",
+              "nodes": 1,
+              "targets": [
+                "html"
+              ]
+            },
+            {
+              "id": "page-has-heading-one",
+              "impact": "moderate",
+              "help": "Page should contain a level-one heading",
+              "nodes": 1,
+              "targets": [
+                "html"
+              ]
+            },
+            {
+              "id": "region",
+              "impact": "moderate",
+              "help": "All page content should be contained by landmarks",
+              "nodes": 3,
+              "targets": [
+                ".mb-2",
+                "h2",
+                ".mb-6"
+              ]
+            }
+          ]
+        },
+        "1440": {
+          "byImpact": {
+            "critical": 0,
+            "serious": 0,
+            "moderate": 3,
+            "minor": 0
+          },
+          "file": "evidence/axe/dashboard-1440.json",
+          "violations": [
+            {
+              "id": "landmark-one-main",
+              "impact": "moderate",
+              "help": "Document should have one main landmark",
+              "nodes": 1,
+              "targets": [
+                "html"
+              ]
+            },
+            {
+              "id": "page-has-heading-one",
+              "impact": "moderate",
+              "help": "Page should contain a level-one heading",
+              "nodes": 1,
+              "targets": [
+                "html"
+              ]
+            },
+            {
+              "id": "region",
+              "impact": "moderate",
+              "help": "All page content should be contained by landmarks",
+              "nodes": 3,
+              "targets": [
+                ".mb-2",
+                "h2",
+                ".mb-6"
+              ]
+            }
+          ]
+        }
+      },
+      "consoleErrors": [
+        {
+          "kind": "console",
+          "text": "Error: Minified React error #441; visit https://react.dev/errors/441 for the full message or use the non-minified dev environment for full errors and additional helpful warnings."
+        }
+      ],
+      "skipped": null,
+      "httpStatus": 200,
+      "finalUrl": "http://localhost:3000/dashboard",
+      "redirected": false,
+      "zoom200": {
+        "docScrollWidth": 1440,
+        "innerWidth": 1440,
+        "horizontalOverflow": false,
+        "clippedContainers": [],
+        "truncatedText": [],
+        "screenshot": "evidence/screenshots/dashboard/1440-zoom200.png",
+        "method": "CSS zoom=2 on <html> at 1440x900 (effective 720px layout viewport)"
+      }
+    },
+    "new-audit": {
+      "key": "new-audit",
+      "route": "/new-audit",
+      "state": "auth",
+      "note": null,
+      "viewports": {
+        "320": {
+          "status": 200,
+          "title": "ProposalOS | Automated Local Business Audits",
+          "h1": [
+            "Create New Audit"
+          ],
+          "horizontalOverflow": false,
+          "scrollWidth": 320,
+          "innerWidth": 320,
+          "overflowers": [],
+          "technicalLeakage": false,
+          "hydrated": true,
+          "nonceAttrs": 0,
+          "inlineScripts": 2,
+          "cspBlocked": true,
+          "screenshot": "evidence/screenshots/new-audit/320.png"
+        },
+        "375": {
+          "status": 200,
+          "title": "ProposalOS | Automated Local Business Audits",
+          "h1": [
+            "Create New Audit"
+          ],
+          "horizontalOverflow": false,
+          "scrollWidth": 375,
+          "innerWidth": 375,
+          "overflowers": [],
+          "technicalLeakage": false,
+          "hydrated": true,
+          "nonceAttrs": 0,
+          "inlineScripts": 2,
+          "cspBlocked": true,
+          "screenshot": "evidence/screenshots/new-audit/375.png"
+        },
+        "768": {
+          "status": 200,
+          "title": "ProposalOS | Automated Local Business Audits",
+          "h1": [
+            "Create New Audit"
+          ],
+          "horizontalOverflow": false,
+          "scrollWidth": 768,
+          "innerWidth": 768,
+          "overflowers": [],
+          "technicalLeakage": false,
+          "hydrated": true,
+          "nonceAttrs": 0,
+          "inlineScripts": 2,
+          "cspBlocked": true,
+          "screenshot": "evidence/screenshots/new-audit/768.png"
+        },
+        "1024": {
+          "status": 200,
+          "title": "ProposalOS | Automated Local Business Audits",
+          "h1": [
+            "Create New Audit"
+          ],
+          "horizontalOverflow": false,
+          "scrollWidth": 1024,
+          "innerWidth": 1024,
+          "overflowers": [],
+          "technicalLeakage": false,
+          "hydrated": true,
+          "nonceAttrs": 0,
+          "inlineScripts": 2,
+          "cspBlocked": true,
+          "screenshot": "evidence/screenshots/new-audit/1024.png"
+        },
+        "1440": {
+          "status": 200,
+          "title": "ProposalOS | Automated Local Business Audits",
+          "h1": [
+            "Create New Audit"
+          ],
+          "horizontalOverflow": false,
+          "scrollWidth": 1440,
+          "innerWidth": 1440,
+          "overflowers": [],
+          "technicalLeakage": false,
+          "hydrated": true,
+          "nonceAttrs": 0,
+          "inlineScripts": 2,
+          "cspBlocked": true,
+          "screenshot": "evidence/screenshots/new-audit/1440.png"
+        }
+      },
+      "axe": {
+        "375": {
+          "byImpact": {
+            "critical": 0,
+            "serious": 1,
+            "moderate": 2,
+            "minor": 0
+          },
+          "file": "evidence/axe/new-audit-375.json",
+          "violations": [
+            {
+              "id": "color-contrast",
+              "impact": "serious",
+              "help": "Elements must meet minimum color contrast ratio thresholds",
+              "nodes": 1,
+              "targets": [
+                ".mt-6"
+              ]
+            },
+            {
+              "id": "landmark-one-main",
+              "impact": "moderate",
+              "help": "Document should have one main landmark",
+              "nodes": 1,
+              "targets": [
+                "html"
+              ]
+            },
+            {
+              "id": "region",
+              "impact": "moderate",
+              "help": "All page content should be contained by landmarks",
+              "nodes": 5,
+              "targets": [
+                "h1",
+                "p:nth-child(2)",
+                ".mb-4",
+                "form > .mb-6",
+                ".mt-6"
+              ]
+            }
+          ]
+        },
+        "1440": {
+          "byImpact": {
+            "critical": 0,
+            "serious": 1,
+            "moderate": 2,
+            "minor": 0
+          },
+          "file": "evidence/axe/new-audit-1440.json",
+          "violations": [
+            {
+              "id": "color-contrast",
+              "impact": "serious",
+              "help": "Elements must meet minimum color contrast ratio thresholds",
+              "nodes": 1,
+              "targets": [
+                ".mt-6"
+              ]
+            },
+            {
+              "id": "landmark-one-main",
+              "impact": "moderate",
+              "help": "Document should have one main landmark",
+              "nodes": 1,
+              "targets": [
+                "html"
+              ]
+            },
+            {
+              "id": "region",
+              "impact": "moderate",
+              "help": "All page content should be contained by landmarks",
+              "nodes": 5,
+              "targets": [
+                "h1",
+                "p:nth-child(2)",
+                ".mb-4",
+                "form > .mb-6",
+                ".mt-6"
+              ]
+            }
+          ]
+        }
+      },
+      "consoleErrors": [
+        {
+          "kind": "console",
+          "text": "Executing inline script violates the following Content Security Policy directive 'script-src 'self' 'nonce-s/LRaxR+OGR06MqrPcax4g==' https://cdn.jsdelivr.net https://www.googletagmanager.com https://js.posthog.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-OBTN3RiyCV4Bq7dFqZ5a2pAXjnCcCYeTJMO2I/LYKeo='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked."
+        },
+        {
+          "kind": "console",
+          "text": "Executing inline script violates the following Content Security Policy directive 'script-src 'self' 'nonce-s/LRaxR+OGR06MqrPcax4g==' https://cdn.jsdelivr.net https://www.googletagmanager.com https://js.posthog.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-5vZEBSyRCO1gOIWVEyC1Lc8Zg1ftSLgrxwaTlT9SZIk='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked."
+        },
+        {
+          "kind": "console",
+          "text": "Executing inline script violates the following Content Security Policy directive 'script-src 'self' 'nonce-mBUoyt3Kl8qPesmLefD8zQ==' https://cdn.jsdelivr.net https://www.googletagmanager.com https://js.posthog.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-OBTN3RiyCV4Bq7dFqZ5a2pAXjnCcCYeTJMO2I/LYKeo='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked."
+        },
+        {
+          "kind": "console",
+          "text": "Executing inline script violates the following Content Security Policy directive 'script-src 'self' 'nonce-mBUoyt3Kl8qPesmLefD8zQ==' https://cdn.jsdelivr.net https://www.googletagmanager.com https://js.posthog.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-5vZEBSyRCO1gOIWVEyC1Lc8Zg1ftSLgrxwaTlT9SZIk='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked."
+        },
+        {
+          "kind": "pageerror",
+          "text": "Minified React error #412; visit https://react.dev/errors/412 for the full message or use the non-minified dev environment for full errors and additional helpful warnings."
+        },
+        {
+          "kind": "console",
+          "text": "Executing inline script violates the following Content Security Policy directive 'script-src 'self' 'nonce-cUkK51oYk0BFQIr1aRIu7A==' https://cdn.jsdelivr.net https://www.googletagmanager.com https://js.posthog.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-OBTN3RiyCV4Bq7dFqZ5a2pAXjnCcCYeTJMO2I/LYKeo='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked."
+        },
+        {
+          "kind": "console",
+          "text": "Executing inline script violates the following Content Security Policy directive 'script-src 'self' 'nonce-cUkK51oYk0BFQIr1aRIu7A==' https://cdn.jsdelivr.net https://www.googletagmanager.com https://js.posthog.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-5vZEBSyRCO1gOIWVEyC1Lc8Zg1ftSLgrxwaTlT9SZIk='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked."
+        },
+        {
+          "kind": "console",
+          "text": "Executing inline script violates the following Content Security Policy directive 'script-src 'self' 'nonce-+GMJSMzpoYNUdzH+VBWnKA==' https://cdn.jsdelivr.net https://www.googletagmanager.com https://js.posthog.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-OBTN3RiyCV4Bq7dFqZ5a2pAXjnCcCYeTJMO2I/LYKeo='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked."
+        },
+        {
+          "kind": "console",
+          "text": "Executing inline script violates the following Content Security Policy directive 'script-src 'self' 'nonce-+GMJSMzpoYNUdzH+VBWnKA==' https://cdn.jsdelivr.net https://www.googletagmanager.com https://js.posthog.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-5vZEBSyRCO1gOIWVEyC1Lc8Zg1ftSLgrxwaTlT9SZIk='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked."
+        },
+        {
+          "kind": "console",
+          "text": "Executing inline script violates the following Content Security Policy directive 'script-src 'self' 'nonce-WN/0lEqfrzudHr06d0CwtQ==' https://cdn.jsdelivr.net https://www.googletagmanager.com https://js.posthog.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-OBTN3RiyCV4Bq7dFqZ5a2pAXjnCcCYeTJMO2I/LYKeo='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked."
+        },
+        {
+          "kind": "console",
+          "text": "Executing inline script violates the following Content Security Policy directive 'script-src 'self' 'nonce-WN/0lEqfrzudHr06d0CwtQ==' https://cdn.jsdelivr.net https://www.googletagmanager.com https://js.posthog.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-5vZEBSyRCO1gOIWVEyC1Lc8Zg1ftSLgrxwaTlT9SZIk='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked."
+        },
+        {
+          "kind": "console",
+          "text": "Executing inline script violates the following Content Security Policy directive 'script-src 'self' 'nonce-tfbrqIPVnYxvSnZblKQTKA==' https://cdn.jsdelivr.net https://www.googletagmanager.com https://js.posthog.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-OBTN3RiyCV4Bq7dFqZ5a2pAXjnCcCYeTJMO2I/LYKeo='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked."
+        },
+        {
+          "kind": "console",
+          "text": "Executing inline script violates the following Content Security Policy directive 'script-src 'self' 'nonce-tfbrqIPVnYxvSnZblKQTKA==' https://cdn.jsdelivr.net https://www.googletagmanager.com https://js.posthog.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-5vZEBSyRCO1gOIWVEyC1Lc8Zg1ftSLgrxwaTlT9SZIk='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked."
+        }
+      ],
+      "skipped": null,
+      "httpStatus": 200,
+      "finalUrl": "http://localhost:3000/new-audit",
+      "redirected": false
+    },
+    "audit-detail": {
+      "key": "audit-detail",
+      "route": "/audit/a39a7bc3-45a5-47c4-bb5e-561e8ca7f600",
+      "state": "auth",
+      "note": "seeded audit \"Quick Fix Plumbing\"",
+      "viewports": {
+        "320": {
+          "status": 200,
+          "title": "ProposalOS | Automated Local Business Audits",
+          "h1": [
+            "Quick Fix Plumbing"
+          ],
+          "horizontalOverflow": false,
+          "scrollWidth": 320,
+          "innerWidth": 320,
+          "overflowers": [],
+          "technicalLeakage": false,
+          "hydrated": true,
+          "nonceAttrs": 16,
+          "inlineScripts": 6,
+          "cspBlocked": true,
+          "screenshot": "evidence/screenshots/audit-detail/320.png"
+        },
+        "375": {
+          "status": 200,
+          "title": "ProposalOS | Automated Local Business Audits",
+          "h1": [
+            "Quick Fix Plumbing"
+          ],
+          "horizontalOverflow": false,
+          "scrollWidth": 375,
+          "innerWidth": 375,
+          "overflowers": [],
+          "technicalLeakage": false,
+          "hydrated": true,
+          "nonceAttrs": 16,
+          "inlineScripts": 6,
+          "cspBlocked": true,
+          "screenshot": "evidence/screenshots/audit-detail/375.png"
+        },
+        "768": {
+          "status": 200,
+          "title": "ProposalOS | Automated Local Business Audits",
+          "h1": [
+            "Quick Fix Plumbing"
+          ],
+          "horizontalOverflow": false,
+          "scrollWidth": 768,
+          "innerWidth": 768,
+          "overflowers": [],
+          "technicalLeakage": false,
+          "hydrated": true,
+          "nonceAttrs": 16,
+          "inlineScripts": 6,
+          "cspBlocked": true,
+          "screenshot": "evidence/screenshots/audit-detail/768.png"
+        },
+        "1024": {
+          "status": 200,
+          "title": "ProposalOS | Automated Local Business Audits",
+          "h1": [
+            "Quick Fix Plumbing"
+          ],
+          "horizontalOverflow": false,
+          "scrollWidth": 1024,
+          "innerWidth": 1024,
+          "overflowers": [],
+          "technicalLeakage": false,
+          "hydrated": true,
+          "nonceAttrs": 16,
+          "inlineScripts": 6,
+          "cspBlocked": true,
+          "screenshot": "evidence/screenshots/audit-detail/1024.png"
+        },
+        "1440": {
+          "status": 200,
+          "title": "ProposalOS | Automated Local Business Audits",
+          "h1": [
+            "Quick Fix Plumbing"
+          ],
+          "horizontalOverflow": false,
+          "scrollWidth": 1440,
+          "innerWidth": 1440,
+          "overflowers": [],
+          "technicalLeakage": false,
+          "hydrated": true,
+          "nonceAttrs": 16,
+          "inlineScripts": 6,
+          "cspBlocked": true,
+          "screenshot": "evidence/screenshots/audit-detail/1440.png"
+        }
+      },
+      "axe": {
+        "375": {
+          "byImpact": {
+            "critical": 0,
+            "serious": 1,
+            "moderate": 2,
+            "minor": 0
+          },
+          "file": "evidence/axe/audit-detail-375.json",
+          "violations": [
+            {
+              "id": "color-contrast",
+              "impact": "serious",
+              "help": "Elements must meet minimum color contrast ratio thresholds",
+              "nodes": 3,
+              "targets": [
+                "div:nth-child(1) > .space-y-3 > .hover\\:bg-\\[var\\(--color-bg-card-hover\\)\\].transition-colors.card:nth-child(1) > .mt-2.text-\\[var\\(--color-text-muted\\)\\].text-xs",
+                ".hover\\:bg-\\[var\\(--color-bg-card-hover\\)\\].transition-colors.card:nth-child(2) > .mt-2.text-\\[var\\(--color-text-muted\\)\\].text-xs",
+                "div:nth-child(2) > .space-y-3 > .hover\\:bg-\\[var\\(--color-bg-card-hover\\)\\].transition-colors.card > .mt-2.text-\\[var\\(--color-text-muted\\)\\].text-xs"
+              ]
+            },
+            {
+              "id": "landmark-one-main",
+              "impact": "moderate",
+              "help": "Document should have one main landmark",
+              "nodes": 1,
+              "targets": [
+                "html"
+              ]
+            },
+            {
+              "id": "region",
+              "impact": "moderate",
+              "help": "All page content should be contained by landmarks",
+              "nodes": 5,
+              "targets": [
+                "a",
+                ".flex-wrap > div:nth-child(1)",
+                ".md\\:grid-cols-4",
+                "h2",
+                ".lg\\:grid-cols-2"
+              ]
+            }
+          ]
+        },
+        "1440": {
+          "byImpact": {
+            "critical": 0,
+            "serious": 1,
+            "moderate": 2,
+            "minor": 0
+          },
+          "file": "evidence/axe/audit-detail-1440.json",
+          "violations": [
+            {
+              "id": "color-contrast",
+              "impact": "serious",
+              "help": "Elements must meet minimum color contrast ratio thresholds",
+              "nodes": 3,
+              "targets": [
+                "div:nth-child(1) > .space-y-3 > .hover\\:bg-\\[var\\(--color-bg-card-hover\\)\\].transition-colors.card:nth-child(1) > .mt-2.text-\\[var\\(--color-text-muted\\)\\].text-xs",
+                ".hover\\:bg-\\[var\\(--color-bg-card-hover\\)\\].transition-colors.card:nth-child(2) > .mt-2.text-\\[var\\(--color-text-muted\\)\\].text-xs",
+                "div:nth-child(2) > .space-y-3 > .hover\\:bg-\\[var\\(--color-bg-card-hover\\)\\].transition-colors.card > .mt-2.text-\\[var\\(--color-text-muted\\)\\].text-xs"
+              ]
+            },
+            {
+              "id": "landmark-one-main",
+              "impact": "moderate",
+              "help": "Document should have one main landmark",
+              "nodes": 1,
+              "targets": [
+                "html"
+              ]
+            },
+            {
+              "id": "region",
+              "impact": "moderate",
+              "help": "All page content should be contained by landmarks",
+              "nodes": 5,
+              "targets": [
+                "a",
+                ".flex-wrap > div:nth-child(1)",
+                ".md\\:grid-cols-4",
+                "h2",
+                ".lg\\:grid-cols-2"
+              ]
+            }
+          ]
+        }
+      },
+      "consoleErrors": [
+        {
+          "kind": "console",
+          "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+        },
+        {
+          "kind": "console",
+          "text": "Applying inline style violates the following Content Security Policy directive 'style-src 'self' 'nonce-RE22T6BQgd/IrPVh+IZNDg==' https://fonts.googleapis.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-B3Jk7Rws8l6DgOhoy0oMP4k8gk16joGygBpDXz05ZXo='), or a nonce ('nonce-...') is required to enable inline execution. Note that hashes do not apply to event handlers, style attributes and javascript: navigations unless the 'unsafe-hashes' keyword is present. The action has been blocked."
+        },
+        {
+          "kind": "console",
+          "text": "Applying inline style violates the following Content Security Policy directive 'style-src 'self' 'nonce-RE22T6BQgd/IrPVh+IZNDg==' https://fonts.googleapis.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-Z5XTK23DFuEMs0PwnyZDO9SWxemQ5HxcpVaBNuUJyWY='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked."
+        },
+        {
+          "kind": "console",
+          "text": "Applying inline style violates the following Content Security Policy directive 'style-src 'self' 'nonce-RE22T6BQgd/IrPVh+IZNDg==' https://fonts.googleapis.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-62bzXi2UhdWpYgtGCqraCZs6PtBsZ0N+iYsYwCmJyFM='), or a nonce ('nonce-...') is required to enable inline execution. Note that hashes do not apply to event handlers, style attributes and javascript: navigations unless the 'unsafe-hashes' keyword is present. The action has been blocked."
+        },
+        {
+          "kind": "console",
+          "text": "Applying inline style violates the following Content Security Policy directive 'style-src 'self' 'nonce-RE22T6BQgd/IrPVh+IZNDg==' https://fonts.googleapis.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-jKE6QZqne5OsrfemNvuLSNoud++NsCOiSlGuIsQns5o='), or a nonce ('nonce-...') is required to enable inline execution. Note that hashes do not apply to event handlers, style attributes and javascript: navigations unless the 'unsafe-hashes' keyword is present. The action has been blocked."
+        },
+        {
+          "kind": "console",
+          "text": "Applying inline style violates the following Content Security Policy directive 'style-src 'self' 'nonce-RE22T6BQgd/IrPVh+IZNDg==' https://fonts.googleapis.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-tdnkoSkLUgRhOgw6H8vgY/Cqyq1n8ju33p/Pple8Dyg='), or a nonce ('nonce-...') is required to enable inline execution. Note that hashes do not apply to event handlers, style attributes and javascript: navigations unless the 'unsafe-hashes' keyword is present. The action has been blocked."
+        },
+        {
+          "kind": "console",
+          "text": "Executing inline script violates the following Content Security Policy directive 'script-src 'self' 'nonce-RE22T6BQgd/IrPVh+IZNDg==' https://cdn.jsdelivr.net https://www.googletagmanager.com https://js.posthog.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-OBTN3RiyCV4Bq7dFqZ5a2pAXjnCcCYeTJMO2I/LYKeo='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked."
+        },
+        {
+          "kind": "console",
+          "text": "Executing inline script violates the following Content Security Policy directive 'script-src 'self' 'nonce-RE22T6BQgd/IrPVh+IZNDg==' https://cdn.jsdelivr.net https://www.googletagmanager.com https://js.posthog.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-M5Iq1hord47Q/LJo4NOELI4cJFtjvSBM681FEZmeaPc='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked."
+        },
+        {
+          "kind": "pageerror",
+          "text": "Minified React error #412; visit https://react.dev/errors/412 for the full message or use the non-minified dev environment for full errors and additional helpful warnings."
+        },
+        {
+          "kind": "console",
+          "text": "Applying inline style violates the following Content Security Policy directive 'style-src 'self' 'nonce-xodsjBcXcvjalLDWHUqcag==' https://fonts.googleapis.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-0giAGxHOeS3CJUROB/PBKZMfK66jzrQftPB8xaUnKOE='), or a nonce ('nonce-...') is required to enable inline execution. Note that hashes do not apply to event handlers, style attributes and javascript: navigations unless the 'unsafe-hashes' keyword is present. The action has been blocked."
+        },
+        {
+          "kind": "console",
+          "text": "Applying inline style violates the following Content Security Policy directive 'style-src 'self' 'nonce-l/wzAacbB9zhxGCscbn6kg==' https://fonts.googleapis.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-0giAGxHOeS3CJUROB/PBKZMfK66jzrQftPB8xaUnKOE='), or a nonce ('nonce-...') is required to enable inline execution. Note that hashes do not apply to event handlers, style attributes and javascript: navigations unless the 'unsafe-hashes' keyword is present. The action has been blocked."
+        },
+        {
+          "kind": "console",
+          "text": "Applying inline style violates the following Content Security Policy directive 'style-src 'self' 'nonce-T6peWHR6dMZbta5FRwevng==' https://fonts.googleapis.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-0giAGxHOeS3CJUROB/PBKZMfK66jzrQftPB8xaUnKOE='), or a nonce ('nonce-...') is required to enable inline execution. Note that hashes do not apply to event handlers, style attributes and javascript: navigations unless the 'unsafe-hashes' keyword is present. The action has been blocked."
+        },
+        {
+          "kind": "console",
+          "text": "Applying inline style violates the following Content Security Policy directive 'style-src 'self' 'nonce-B5Y0qQOCBLRZ2FH2OzZbqQ==' https://fonts.googleapis.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-0giAGxHOeS3CJUROB/PBKZMfK66jzrQftPB8xaUnKOE='), or a nonce ('nonce-...') is required to enable inline execution. Note that hashes do not apply to event handlers, style attributes and javascript: navigations unless the 'unsafe-hashes' keyword is present. The action has been blocked."
+        },
+        {
+          "kind": "console",
+          "text": "Applying inline style violates the following Content Security Policy directive 'style-src 'self' 'nonce-GT9w3AQZQE2uqxDm3L3p/A==' https://fonts.googleapis.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-0giAGxHOeS3CJUROB/PBKZMfK66jzrQftPB8xaUnKOE='), or a nonce ('nonce-...') is required to enable inline execution. Note that hashes do not apply to event handlers, style attributes and javascript: navigations unless the 'unsafe-hashes' keyword is present. The action has been blocked."
+        },
+        {
+          "kind": "console",
+          "text": "Applying inline style violates the following Content Security Policy directive 'style-src 'self' 'nonce-ub9mhyxtWBJAtRC2Tvc2Sg==' https://fonts.googleapis.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-0giAGxHOeS3CJUROB/PBKZMfK66jzrQftPB8xaUnKOE='), or a nonce ('nonce-...') is required to enable inline execution. Note that hashes do not apply to event handlers, style attributes and javascript: navigations unless the 'unsafe-hashes' keyword is present. The action has been blocked."
+        }
+      ],
+      "skipped": null,
+      "httpStatus": 200,
+      "finalUrl": "http://localhost:3000/audit/a39a7bc3-45a5-47c4-bb5e-561e8ca7f600",
+      "redirected": false
+    },
+    "proposals": {
+      "key": "proposals",
+      "route": "/proposals",
+      "state": "auth",
+      "note": null,
+      "viewports": {
+        "320": {
+          "status": 200,
+          "title": "ProposalOS | Automated Local Business Audits",
+          "h1": [
+            "Proposals"
+          ],
+          "horizontalOverflow": false,
+          "scrollWidth": 320,
+          "innerWidth": 320,
+          "overflowers": [],
+          "technicalLeakage": false,
+          "hydrated": true,
+          "nonceAttrs": 0,
+          "inlineScripts": 2,
+          "cspBlocked": true,
+          "screenshot": "evidence/screenshots/proposals/320.png"
+        },
+        "375": {
+          "status": 200,
+          "title": "ProposalOS | Automated Local Business Audits",
+          "h1": [
+            "Proposals"
+          ],
+          "horizontalOverflow": false,
+          "scrollWidth": 375,
+          "innerWidth": 375,
+          "overflowers": [],
+          "technicalLeakage": false,
+          "hydrated": true,
+          "nonceAttrs": 0,
+          "inlineScripts": 2,
+          "cspBlocked": true,
+          "screenshot": "evidence/screenshots/proposals/375.png"
+        },
+        "768": {
+          "status": 200,
+          "title": "ProposalOS | Automated Local Business Audits",
+          "h1": [
+            "Proposals"
+          ],
+          "horizontalOverflow": false,
+          "scrollWidth": 768,
+          "innerWidth": 768,
+          "overflowers": [],
+          "technicalLeakage": false,
+          "hydrated": true,
+          "nonceAttrs": 0,
+          "inlineScripts": 2,
+          "cspBlocked": true,
+          "screenshot": "evidence/screenshots/proposals/768.png"
+        },
+        "1024": {
+          "status": 200,
+          "title": "ProposalOS | Automated Local Business Audits",
+          "h1": [
+            "Proposals"
+          ],
+          "horizontalOverflow": false,
+          "scrollWidth": 1024,
+          "innerWidth": 1024,
+          "overflowers": [],
+          "technicalLeakage": false,
+          "hydrated": true,
+          "nonceAttrs": 0,
+          "inlineScripts": 2,
+          "cspBlocked": true,
+          "screenshot": "evidence/screenshots/proposals/1024.png"
+        },
+        "1440": {
+          "status": 200,
+          "title": "ProposalOS | Automated Local Business Audits",
+          "h1": [
+            "Proposals"
+          ],
+          "horizontalOverflow": false,
+          "scrollWidth": 1440,
+          "innerWidth": 1440,
+          "overflowers": [],
+          "technicalLeakage": false,
+          "hydrated": true,
+          "nonceAttrs": 0,
+          "inlineScripts": 2,
+          "cspBlocked": true,
+          "screenshot": "evidence/screenshots/proposals/1440.png"
+        }
+      },
+      "axe": {
+        "375": {
+          "byImpact": {
+            "critical": 0,
+            "serious": 0,
+            "moderate": 2,
+            "minor": 0
+          },
+          "file": "evidence/axe/proposals-375.json",
+          "violations": [
+            {
+              "id": "landmark-one-main",
+              "impact": "moderate",
+              "help": "Document should have one main landmark",
+              "nodes": 1,
+              "targets": [
+                "html"
+              ]
+            },
+            {
+              "id": "region",
+              "impact": "moderate",
+              "help": "All page content should be contained by landmarks",
+              "nodes": 1,
+              "targets": [
+                ".container"
+              ]
+            }
+          ]
+        },
+        "1440": {
+          "byImpact": {
+            "critical": 0,
+            "serious": 0,
+            "moderate": 2,
+            "minor": 0
+          },
+          "file": "evidence/axe/proposals-1440.json",
+          "violations": [
+            {
+              "id": "landmark-one-main",
+              "impact": "moderate",
+              "help": "Document should have one main landmark",
+              "nodes": 1,
+              "targets": [
+                "html"
+              ]
+            },
+            {
+              "id": "region",
+              "impact": "moderate",
+              "help": "All page content should be contained by landmarks",
+              "nodes": 1,
+              "targets": [
+                ".container"
+              ]
+            }
+          ]
+        }
+      },
+      "consoleErrors": [
+        {
+          "kind": "console",
+          "text": "Executing inline script violates the following Content Security Policy directive 'script-src 'self' 'nonce-nt6PHepu73PO/cpJTAlmvQ==' https://cdn.jsdelivr.net https://www.googletagmanager.com https://js.posthog.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-OBTN3RiyCV4Bq7dFqZ5a2pAXjnCcCYeTJMO2I/LYKeo='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked."
+        },
+        {
+          "kind": "console",
+          "text": "Executing inline script violates the following Content Security Policy directive 'script-src 'self' 'nonce-nt6PHepu73PO/cpJTAlmvQ==' https://cdn.jsdelivr.net https://www.googletagmanager.com https://js.posthog.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-Gt1ekhfeMC06u9zwd+aWy7ZDno1/2TbexTG6Rhhl2Eg='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked."
+        },
+        {
+          "kind": "console",
+          "text": "Executing inline script violates the following Content Security Policy directive 'script-src 'self' 'nonce-edmtgxNm9vHUUYz8ikA4AQ==' https://cdn.jsdelivr.net https://www.googletagmanager.com https://js.posthog.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-OBTN3RiyCV4Bq7dFqZ5a2pAXjnCcCYeTJMO2I/LYKeo='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked."
+        },
+        {
+          "kind": "console",
+          "text": "Executing inline script violates the following Content Security Policy directive 'script-src 'self' 'nonce-edmtgxNm9vHUUYz8ikA4AQ==' https://cdn.jsdelivr.net https://www.googletagmanager.com https://js.posthog.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-Gt1ekhfeMC06u9zwd+aWy7ZDno1/2TbexTG6Rhhl2Eg='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked."
+        },
+        {
+          "kind": "pageerror",
+          "text": "Minified React error #412; visit https://react.dev/errors/412 for the full message or use the non-minified dev environment for full errors and additional helpful warnings."
+        },
+        {
+          "kind": "console",
+          "text": "Executing inline script violates the following Content Security Policy directive 'script-src 'self' 'nonce-OpZQRpGh3q2iDAj+R7f2Xg==' https://cdn.jsdelivr.net https://www.googletagmanager.com https://js.posthog.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-OBTN3RiyCV4Bq7dFqZ5a2pAXjnCcCYeTJMO2I/LYKeo='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked."
+        },
+        {
+          "kind": "console",
+          "text": "Executing inline script violates the following Content Security Policy directive 'script-src 'self' 'nonce-OpZQRpGh3q2iDAj+R7f2Xg==' https://cdn.jsdelivr.net https://www.googletagmanager.com https://js.posthog.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-Gt1ekhfeMC06u9zwd+aWy7ZDno1/2TbexTG6Rhhl2Eg='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked."
+        },
+        {
+          "kind": "console",
+          "text": "Executing inline script violates the following Content Security Policy directive 'script-src 'self' 'nonce-atov0C7zrRYnQLWpgiJGvQ==' https://cdn.jsdelivr.net https://www.googletagmanager.com https://js.posthog.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-OBTN3RiyCV4Bq7dFqZ5a2pAXjnCcCYeTJMO2I/LYKeo='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked."
+        },
+        {
+          "kind": "console",
+          "text": "Executing inline script violates the following Content Security Policy directive 'script-src 'self' 'nonce-atov0C7zrRYnQLWpgiJGvQ==' https://cdn.jsdelivr.net https://www.googletagmanager.com https://js.posthog.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-Gt1ekhfeMC06u9zwd+aWy7ZDno1/2TbexTG6Rhhl2Eg='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked."
+        },
+        {
+          "kind": "console",
+          "text": "Executing inline script violates the following Content Security Policy directive 'script-src 'self' 'nonce-4dpyl/pUhchxyfaaXwaKFg==' https://cdn.jsdelivr.net https://www.googletagmanager.com https://js.posthog.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-OBTN3RiyCV4Bq7dFqZ5a2pAXjnCcCYeTJMO2I/LYKeo='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked."
+        },
+        {
+          "kind": "console",
+          "text": "Executing inline script violates the following Content Security Policy directive 'script-src 'self' 'nonce-4dpyl/pUhchxyfaaXwaKFg==' https://cdn.jsdelivr.net https://www.googletagmanager.com https://js.posthog.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-Gt1ekhfeMC06u9zwd+aWy7ZDno1/2TbexTG6Rhhl2Eg='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked."
+        },
+        {
+          "kind": "console",
+          "text": "Executing inline script violates the following Content Security Policy directive 'script-src 'self' 'nonce-1z/aw4wyvzOqK0tsi3SGuA==' https://cdn.jsdelivr.net https://www.googletagmanager.com https://js.posthog.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-OBTN3RiyCV4Bq7dFqZ5a2pAXjnCcCYeTJMO2I/LYKeo='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked."
+        },
+        {
+          "kind": "console",
+          "text": "Executing inline script violates the following Content Security Policy directive 'script-src 'self' 'nonce-1z/aw4wyvzOqK0tsi3SGuA==' https://cdn.jsdelivr.net https://www.googletagmanager.com https://js.posthog.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-Gt1ekhfeMC06u9zwd+aWy7ZDno1/2TbexTG6Rhhl2Eg='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked."
+        }
+      ],
+      "skipped": null,
+      "httpStatus": 200,
+      "finalUrl": "http://localhost:3000/proposals",
+      "redirected": false
+    },
+    "settings-billing": {
+      "key": "settings-billing",
+      "route": "/settings/billing",
+      "state": "auth",
+      "note": null,
+      "viewports": {
+        "320": {
+          "status": 200,
+          "title": "ProposalOS | Automated Local Business Audits",
+          "h1": [
+            "Something went wrong"
+          ],
+          "horizontalOverflow": false,
+          "scrollWidth": 320,
+          "innerWidth": 320,
+          "overflowers": [],
+          "technicalLeakage": false,
+          "hydrated": true,
+          "nonceAttrs": 14,
+          "inlineScripts": 5,
+          "cspBlocked": false,
+          "screenshot": "evidence/screenshots/settings-billing/320.png"
+        },
+        "375": {
+          "status": 200,
+          "title": "ProposalOS | Automated Local Business Audits",
+          "h1": [
+            "Something went wrong"
+          ],
+          "horizontalOverflow": false,
+          "scrollWidth": 375,
+          "innerWidth": 375,
+          "overflowers": [],
+          "technicalLeakage": false,
+          "hydrated": true,
+          "nonceAttrs": 14,
+          "inlineScripts": 5,
+          "cspBlocked": false,
+          "screenshot": "evidence/screenshots/settings-billing/375.png"
+        },
+        "768": {
+          "status": 200,
+          "title": "ProposalOS | Automated Local Business Audits",
+          "h1": [
+            "Something went wrong"
+          ],
+          "horizontalOverflow": false,
+          "scrollWidth": 768,
+          "innerWidth": 768,
+          "overflowers": [],
+          "technicalLeakage": false,
+          "hydrated": true,
+          "nonceAttrs": 14,
+          "inlineScripts": 5,
+          "cspBlocked": false,
+          "screenshot": "evidence/screenshots/settings-billing/768.png"
+        },
+        "1024": {
+          "status": 200,
+          "title": "ProposalOS | Automated Local Business Audits",
+          "h1": [
+            "Something went wrong"
+          ],
+          "horizontalOverflow": false,
+          "scrollWidth": 1024,
+          "innerWidth": 1024,
+          "overflowers": [],
+          "technicalLeakage": false,
+          "hydrated": true,
+          "nonceAttrs": 14,
+          "inlineScripts": 5,
+          "cspBlocked": false,
+          "screenshot": "evidence/screenshots/settings-billing/1024.png"
+        },
+        "1440": {
+          "status": 200,
+          "title": "ProposalOS | Automated Local Business Audits",
+          "h1": [
+            "Something went wrong"
+          ],
+          "horizontalOverflow": false,
+          "scrollWidth": 1440,
+          "innerWidth": 1440,
+          "overflowers": [],
+          "technicalLeakage": false,
+          "hydrated": true,
+          "nonceAttrs": 14,
+          "inlineScripts": 5,
+          "cspBlocked": false,
+          "screenshot": "evidence/screenshots/settings-billing/1440.png"
+        }
+      },
+      "axe": {
+        "375": {
+          "byImpact": {
+            "critical": 0,
+            "serious": 0,
+            "moderate": 2,
+            "minor": 0
+          },
+          "file": "evidence/axe/settings-billing-375.json",
+          "violations": [
+            {
+              "id": "landmark-one-main",
+              "impact": "moderate",
+              "help": "Document should have one main landmark",
+              "nodes": 1,
+              "targets": [
+                "html"
+              ]
+            },
+            {
+              "id": "region",
+              "impact": "moderate",
+              "help": "All page content should be contained by landmarks",
+              "nodes": 4,
+              "targets": [
+                ".mb-3",
+                "h1",
+                ".mb-6",
+                "a"
+              ]
+            }
+          ]
+        },
+        "1440": {
+          "byImpact": {
+            "critical": 0,
+            "serious": 0,
+            "moderate": 2,
+            "minor": 0
+          },
+          "file": "evidence/axe/settings-billing-1440.json",
+          "violations": [
+            {
+              "id": "landmark-one-main",
+              "impact": "moderate",
+              "help": "Document should have one main landmark",
+              "nodes": 1,
+              "targets": [
+                "html"
+              ]
+            },
+            {
+              "id": "region",
+              "impact": "moderate",
+              "help": "All page content should be contained by landmarks",
+              "nodes": 4,
+              "targets": [
+                ".mb-3",
+                "h1",
+                ".mb-6",
+                "a"
+              ]
+            }
+          ]
+        }
+      },
+      "consoleErrors": [
+        {
+          "kind": "console",
+          "text": "Error: Minified React error #441; visit https://react.dev/errors/441 for the full message or use the non-minified dev environment for full errors and additional helpful warnings."
+        }
+      ],
+      "skipped": null,
+      "httpStatus": 200,
+      "finalUrl": "http://localhost:3000/settings/billing",
+      "redirected": false
+    },
+    "settings-branding": {
+      "key": "settings-branding",
+      "route": "/settings/branding",
+      "state": "auth",
+      "note": null,
+      "viewports": {
+        "320": {
+          "status": 200,
+          "title": "ProposalOS | Automated Local Business Audits",
+          "h1": [
+            "Branding & Customization",
+            "Digital Audit: Client Business"
+          ],
+          "horizontalOverflow": true,
+          "scrollWidth": 383,
+          "innerWidth": 320,
+          "overflowers": [
+            "div.space-y-8",
+            "div.bg-slate-800/50.p-6.rounded-xl",
+            "h3.text-lg.font-semibold.text-white",
+            "div.space-y-4",
+            "div.",
+            "label.block.text-sm.font-medium",
+            "input.input-dark.w-full",
+            "div."
+          ],
+          "technicalLeakage": false,
+          "hydrated": true,
+          "nonceAttrs": 0,
+          "inlineScripts": 2,
+          "cspBlocked": true,
+          "screenshot": "evidence/screenshots/settings-branding/320.png"
+        },
+        "375": {
+          "status": 200,
+          "title": "ProposalOS | Automated Local Business Audits",
+          "h1": [
+            "Branding & Customization",
+            "Digital Audit: Client Business"
+          ],
+          "horizontalOverflow": true,
+          "scrollWidth": 383,
+          "innerWidth": 375,
+          "overflowers": [
+            "div.space-y-8",
+            "div.bg-slate-800/50.p-6.rounded-xl",
+            "div.bg-slate-800/50.p-6.rounded-xl",
+            "div.bg-slate-800/50.p-6.rounded-xl",
+            "div.bg-slate-800/50.p-6.rounded-xl",
+            "div.pt-4",
+            "button.btn.btn-primary.w-full",
+            "div.sticky.top-10"
+          ],
+          "technicalLeakage": false,
+          "hydrated": true,
+          "nonceAttrs": 0,
+          "inlineScripts": 2,
+          "cspBlocked": true,
+          "screenshot": "evidence/screenshots/settings-branding/375.png"
+        },
+        "768": {
+          "status": 200,
+          "title": "ProposalOS | Automated Local Business Audits",
+          "h1": [
+            "Branding & Customization",
+            "Digital Audit: Client Business"
+          ],
+          "horizontalOverflow": false,
+          "scrollWidth": 768,
+          "innerWidth": 768,
+          "overflowers": [],
+          "technicalLeakage": false,
+          "hydrated": true,
+          "nonceAttrs": 0,
+          "inlineScripts": 2,
+          "cspBlocked": true,
+          "screenshot": "evidence/screenshots/settings-branding/768.png"
+        },
+        "1024": {
+          "status": 200,
+          "title": "ProposalOS | Automated Local Business Audits",
+          "h1": [
+            "Branding & Customization",
+            "Digital Audit: Client Business"
+          ],
+          "horizontalOverflow": false,
+          "scrollWidth": 1024,
+          "innerWidth": 1024,
+          "overflowers": [],
+          "technicalLeakage": false,
+          "hydrated": true,
+          "nonceAttrs": 0,
+          "inlineScripts": 2,
+          "cspBlocked": true,
+          "screenshot": "evidence/screenshots/settings-branding/1024.png"
+        },
+        "1440": {
+          "status": 200,
+          "title": "ProposalOS | Automated Local Business Audits",
+          "h1": [
+            "Branding & Customization",
+            "Digital Audit: Client Business"
+          ],
+          "horizontalOverflow": false,
+          "scrollWidth": 1440,
+          "innerWidth": 1440,
+          "overflowers": [],
+          "technicalLeakage": false,
+          "hydrated": true,
+          "nonceAttrs": 0,
+          "inlineScripts": 2,
+          "cspBlocked": true,
+          "screenshot": "evidence/screenshots/settings-branding/1440.png"
+        }
+      },
+      "axe": {
+        "375": {
+          "byImpact": {
+            "critical": 1,
+            "serious": 1,
+            "moderate": 3,
+            "minor": 0
+          },
+          "file": "evidence/axe/settings-branding-375.json",
+          "violations": [
+            {
+              "id": "color-contrast",
+              "impact": "serious",
+              "help": "Elements must meet minimum color contrast ratio thresholds",
+              "nodes": 2,
+              "targets": [
+                ".text-slate-500",
+                ".opacity-50"
+              ]
+            },
+            {
+              "id": "heading-order",
+              "impact": "moderate",
+              "help": "Heading levels should only increase by one",
+              "nodes": 1,
+              "targets": [
+                ".bg-slate-800\\/50.rounded-xl.border-slate-700:nth-child(1) > .font-semibold"
+              ]
+            },
+            {
+              "id": "label",
+              "impact": "critical",
+              "help": "Form elements must have labels",
+              "nodes": 7,
+              "targets": [
+                "input[name=\"primaryColor\"][value=\"#8B5CF6\"][type=\"color\"]",
+                ".font-mono[name=\"primaryColor\"][value=\"#8B5CF6\"]",
+                "input[name=\"secondaryColor\"][value=\"#38BDF8\"][type=\"color\"]",
+                ".font-mono[name=\"secondaryColor\"][value=\"#38BDF8\"]",
+                "input[name=\"accentColor\"][value=\"#F59E0B\"][type=\"color\"]"
+              ]
+            },
+            {
+              "id": "landmark-one-main",
+              "impact": "moderate",
+              "help": "Document should have one main landmark",
+              "nodes": 1,
+              "targets": [
+                "html"
+              ]
+            },
+            {
+              "id": "region",
+              "impact": "moderate",
+              "help": "All page content should be contained by landmarks",
+              "nodes": 9,
+              "targets": [
+                ".text-slate-100",
+                ".bg-slate-800\\/50.rounded-xl.border-slate-700:nth-child(1) > .font-semibold",
+                ".bg-slate-800\\/50.rounded-xl.border-slate-700:nth-child(1) > .space-y-4 > div:nth-child(1)",
+                ".space-y-4 > div:nth-child(2)",
+                ".space-y-4 > div:nth-child(3) > .block.font-medium.mb-1"
+              ]
+            }
+          ]
+        },
+        "1440": {
+          "byImpact": {
+            "critical": 1,
+            "serious": 1,
+            "moderate": 3,
+            "minor": 0
+          },
+          "file": "evidence/axe/settings-branding-1440.json",
+          "violations": [
+            {
+              "id": "color-contrast",
+              "impact": "serious",
+              "help": "Elements must meet minimum color contrast ratio thresholds",
+              "nodes": 2,
+              "targets": [
+                ".text-slate-500",
+                ".opacity-50"
+              ]
+            },
+            {
+              "id": "heading-order",
+              "impact": "moderate",
+              "help": "Heading levels should only increase by one",
+              "nodes": 1,
+              "targets": [
+                ".bg-slate-800\\/50.rounded-xl.border-slate-700:nth-child(1) > .font-semibold"
+              ]
+            },
+            {
+              "id": "label",
+              "impact": "critical",
+              "help": "Form elements must have labels",
+              "nodes": 7,
+              "targets": [
+                "input[name=\"primaryColor\"][value=\"#8B5CF6\"][type=\"color\"]",
+                ".font-mono[name=\"primaryColor\"][value=\"#8B5CF6\"]",
+                "input[name=\"secondaryColor\"][value=\"#38BDF8\"][type=\"color\"]",
+                ".font-mono[name=\"secondaryColor\"][value=\"#38BDF8\"]",
+                "input[name=\"accentColor\"][value=\"#F59E0B\"][type=\"color\"]"
+              ]
+            },
+            {
+              "id": "landmark-one-main",
+              "impact": "moderate",
+              "help": "Document should have one main landmark",
+              "nodes": 1,
+              "targets": [
+                "html"
+              ]
+            },
+            {
+              "id": "region",
+              "impact": "moderate",
+              "help": "All page content should be contained by landmarks",
+              "nodes": 9,
+              "targets": [
+                ".text-slate-100",
+                ".bg-slate-800\\/50.rounded-xl.border-slate-700:nth-child(1) > .font-semibold",
+                ".bg-slate-800\\/50.rounded-xl.border-slate-700:nth-child(1) > .space-y-4 > div:nth-child(1)",
+                ".space-y-4 > div:nth-child(2)",
+                ".space-y-4 > div:nth-child(3) > .block.font-medium.mb-1"
+              ]
+            }
+          ]
+        }
+      },
+      "consoleErrors": [
+        {
+          "kind": "console",
+          "text": "Applying inline style violates the following Content Security Policy directive 'style-src 'self' 'nonce-63/FmykQ6eGCted3YzZxPg==' https://fonts.googleapis.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-tWs2xsaOVgDyJVajJSGgIuu2mxPvrz+18b+KvF9dlm4='), or a nonce ('nonce-...') is required to enable inline execution. Note that hashes do not apply to event handlers, style attributes and javascript: navigations unless the 'unsafe-hashes' keyword is present. The action has been blocked."
+        },
+        {
+          "kind": "console",
+          "text": "Applying inline style violates the following Content Security Policy directive 'style-src 'self' 'nonce-63/FmykQ6eGCted3YzZxPg==' https://fonts.googleapis.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-k03oHi/Oz9g04aBJzqFEpbE3jltvgIqFoygD4OZ9KEY='), or a nonce ('nonce-...') is required to enable inline execution. Note that hashes do not apply to event handlers, style attributes and javascript: navigations unless the 'unsafe-hashes' keyword is present. The action has been blocked."
+        },
+        {
+          "kind": "console",
+          "text": "Executing inline script violates the following Content Security Policy directive 'script-src 'self' 'nonce-63/FmykQ6eGCted3YzZxPg==' https://cdn.jsdelivr.net https://www.googletagmanager.com https://js.posthog.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-OBTN3RiyCV4Bq7dFqZ5a2pAXjnCcCYeTJMO2I/LYKeo='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked."
+        },
+        {
+          "kind": "console",
+          "text": "Executing inline script violates the following Content Security Policy directive 'script-src 'self' 'nonce-63/FmykQ6eGCted3YzZxPg==' https://cdn.jsdelivr.net https://www.googletagmanager.com https://js.posthog.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-b61Bh6e+ZlCzuhXxcqVfWwJMIHzDHpLf0KTlFfq48Is='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked."
+        },
+        {
+          "kind": "console",
+          "text": "Applying inline style violates the following Content Security Policy directive 'style-src 'self' 'nonce-mTlsmicSp9sSAifBtP0TUA==' https://fonts.googleapis.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-tWs2xsaOVgDyJVajJSGgIuu2mxPvrz+18b+KvF9dlm4='), or a nonce ('nonce-...') is required to enable inline execution. Note that hashes do not apply to event handlers, style attributes and javascript: navigations unless the 'unsafe-hashes' keyword is present. The action has been blocked."
+        },
+        {
+          "kind": "console",
+          "text": "Applying inline style violates the following Content Security Policy directive 'style-src 'self' 'nonce-mTlsmicSp9sSAifBtP0TUA==' https://fonts.googleapis.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-k03oHi/Oz9g04aBJzqFEpbE3jltvgIqFoygD4OZ9KEY='), or a nonce ('nonce-...') is required to enable inline execution. Note that hashes do not apply to event handlers, style attributes and javascript: navigations unless the 'unsafe-hashes' keyword is present. The action has been blocked."
+        },
+        {
+          "kind": "console",
+          "text": "Executing inline script violates the following Content Security Policy directive 'script-src 'self' 'nonce-mTlsmicSp9sSAifBtP0TUA==' https://cdn.jsdelivr.net https://www.googletagmanager.com https://js.posthog.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-OBTN3RiyCV4Bq7dFqZ5a2pAXjnCcCYeTJMO2I/LYKeo='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked."
+        },
+        {
+          "kind": "console",
+          "text": "Executing inline script violates the following Content Security Policy directive 'script-src 'self' 'nonce-mTlsmicSp9sSAifBtP0TUA==' https://cdn.jsdelivr.net https://www.googletagmanager.com https://js.posthog.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-b61Bh6e+ZlCzuhXxcqVfWwJMIHzDHpLf0KTlFfq48Is='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked."
+        },
+        {
+          "kind": "pageerror",
+          "text": "Minified React error #412; visit https://react.dev/errors/412 for the full message or use the non-minified dev environment for full errors and additional helpful warnings."
+        },
+        {
+          "kind": "console",
+          "text": "Applying inline style violates the following Content Security Policy directive 'style-src 'self' 'nonce-DTwiaaeOn0lG4CymE+q9aw==' https://fonts.googleapis.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-tWs2xsaOVgDyJVajJSGgIuu2mxPvrz+18b+KvF9dlm4='), or a nonce ('nonce-...') is required to enable inline execution. Note that hashes do not apply to event handlers, style attributes and javascript: navigations unless the 'unsafe-hashes' keyword is present. The action has been blocked."
+        },
+        {
+          "kind": "console",
+          "text": "Applying inline style violates the following Content Security Policy directive 'style-src 'self' 'nonce-DTwiaaeOn0lG4CymE+q9aw==' https://fonts.googleapis.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-k03oHi/Oz9g04aBJzqFEpbE3jltvgIqFoygD4OZ9KEY='), or a nonce ('nonce-...') is required to enable inline execution. Note that hashes do not apply to event handlers, style attributes and javascript: navigations unless the 'unsafe-hashes' keyword is present. The action has been blocked."
+        },
+        {
+          "kind": "console",
+          "text": "Executing inline script violates the following Content Security Policy directive 'script-src 'self' 'nonce-DTwiaaeOn0lG4CymE+q9aw==' https://cdn.jsdelivr.net https://www.googletagmanager.com https://js.posthog.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-OBTN3RiyCV4Bq7dFqZ5a2pAXjnCcCYeTJMO2I/LYKeo='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked."
+        },
+        {
+          "kind": "console",
+          "text": "Executing inline script violates the following Content Security Policy directive 'script-src 'self' 'nonce-DTwiaaeOn0lG4CymE+q9aw==' https://cdn.jsdelivr.net https://www.googletagmanager.com https://js.posthog.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-b61Bh6e+ZlCzuhXxcqVfWwJMIHzDHpLf0KTlFfq48Is='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked."
+        },
+        {
+          "kind": "console",
+          "text": "Applying inline style violates the following Content Security Policy directive 'style-src 'self' 'nonce-qjqvwJZTo9IX+Q+xUSO7ZA==' https://fonts.googleapis.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-tWs2xsaOVgDyJVajJSGgIuu2mxPvrz+18b+KvF9dlm4='), or a nonce ('nonce-...') is required to enable inline execution. Note that hashes do not apply to event handlers, style attributes and javascript: navigations unless the 'unsafe-hashes' keyword is present. The action has been blocked."
+        },
+        {
+          "kind": "console",
+          "text": "Applying inline style violates the following Content Security Policy directive 'style-src 'self' 'nonce-qjqvwJZTo9IX+Q+xUSO7ZA==' https://fonts.googleapis.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-k03oHi/Oz9g04aBJzqFEpbE3jltvgIqFoygD4OZ9KEY='), or a nonce ('nonce-...') is required to enable inline execution. Note that hashes do not apply to event handlers, style attributes and javascript: navigations unless the 'unsafe-hashes' keyword is present. The action has been blocked."
+        },
+        {
+          "kind": "console",
+          "text": "Executing inline script violates the following Content Security Policy directive 'script-src 'self' 'nonce-qjqvwJZTo9IX+Q+xUSO7ZA==' https://cdn.jsdelivr.net https://www.googletagmanager.com https://js.posthog.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-OBTN3RiyCV4Bq7dFqZ5a2pAXjnCcCYeTJMO2I/LYKeo='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked."
+        },
+        {
+          "kind": "console",
+          "text": "Executing inline script violates the following Content Security Policy directive 'script-src 'self' 'nonce-qjqvwJZTo9IX+Q+xUSO7ZA==' https://cdn.jsdelivr.net https://www.googletagmanager.com https://js.posthog.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-b61Bh6e+ZlCzuhXxcqVfWwJMIHzDHpLf0KTlFfq48Is='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked."
+        },
+        {
+          "kind": "console",
+          "text": "Applying inline style violates the following Content Security Policy directive 'style-src 'self' 'nonce-tyfcdPNs6w4+LlDNl+YVhA==' https://fonts.googleapis.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-tWs2xsaOVgDyJVajJSGgIuu2mxPvrz+18b+KvF9dlm4='), or a nonce ('nonce-...') is required to enable inline execution. Note that hashes do not apply to event handlers, style attributes and javascript: navigations unless the 'unsafe-hashes' keyword is present. The action has been blocked."
+        },
+        {
+          "kind": "console",
+          "text": "Applying inline style violates the following Content Security Policy directive 'style-src 'self' 'nonce-tyfcdPNs6w4+LlDNl+YVhA==' https://fonts.googleapis.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-k03oHi/Oz9g04aBJzqFEpbE3jltvgIqFoygD4OZ9KEY='), or a nonce ('nonce-...') is required to enable inline execution. Note that hashes do not apply to event handlers, style attributes and javascript: navigations unless the 'unsafe-hashes' keyword is present. The action has been blocked."
+        },
+        {
+          "kind": "console",
+          "text": "Executing inline script violates the following Content Security Policy directive 'script-src 'self' 'nonce-tyfcdPNs6w4+LlDNl+YVhA==' https://cdn.jsdelivr.net https://www.googletagmanager.com https://js.posthog.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-OBTN3RiyCV4Bq7dFqZ5a2pAXjnCcCYeTJMO2I/LYKeo='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked."
+        },
+        {
+          "kind": "console",
+          "text": "Executing inline script violates the following Content Security Policy directive 'script-src 'self' 'nonce-tyfcdPNs6w4+LlDNl+YVhA==' https://cdn.jsdelivr.net https://www.googletagmanager.com https://js.posthog.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-b61Bh6e+ZlCzuhXxcqVfWwJMIHzDHpLf0KTlFfq48Is='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked."
+        },
+        {
+          "kind": "console",
+          "text": "Applying inline style violates the following Content Security Policy directive 'style-src 'self' 'nonce-SayGioP8R78ElpRg5HqQLw==' https://fonts.googleapis.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-tWs2xsaOVgDyJVajJSGgIuu2mxPvrz+18b+KvF9dlm4='), or a nonce ('nonce-...') is required to enable inline execution. Note that hashes do not apply to event handlers, style attributes and javascript: navigations unless the 'unsafe-hashes' keyword is present. The action has been blocked."
+        },
+        {
+          "kind": "console",
+          "text": "Applying inline style violates the following Content Security Policy directive 'style-src 'self' 'nonce-SayGioP8R78ElpRg5HqQLw==' https://fonts.googleapis.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-k03oHi/Oz9g04aBJzqFEpbE3jltvgIqFoygD4OZ9KEY='), or a nonce ('nonce-...') is required to enable inline execution. Note that hashes do not apply to event handlers, style attributes and javascript: navigations unless the 'unsafe-hashes' keyword is present. The action has been blocked."
+        },
+        {
+          "kind": "console",
+          "text": "Executing inline script violates the following Content Security Policy directive 'script-src 'self' 'nonce-SayGioP8R78ElpRg5HqQLw==' https://cdn.jsdelivr.net https://www.googletagmanager.com https://js.posthog.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-OBTN3RiyCV4Bq7dFqZ5a2pAXjnCcCYeTJMO2I/LYKeo='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked."
+        },
+        {
+          "kind": "console",
+          "text": "Executing inline script violates the following Content Security Policy directive 'script-src 'self' 'nonce-SayGioP8R78ElpRg5HqQLw==' https://cdn.jsdelivr.net https://www.googletagmanager.com https://js.posthog.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-b61Bh6e+ZlCzuhXxcqVfWwJMIHzDHpLf0KTlFfq48Is='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked."
+        }
+      ],
+      "skipped": null,
+      "httpStatus": 200,
+      "finalUrl": "http://localhost:3000/settings/branding",
+      "redirected": false
+    },
+    "settings-team": {
+      "key": "settings-team",
+      "route": "/settings/team",
+      "state": "auth",
+      "note": null,
+      "viewports": {
+        "320": {
+          "status": 200,
+          "title": "ProposalOS | Automated Local Business Audits",
+          "h1": [
+            "Team Management"
+          ],
+          "horizontalOverflow": false,
+          "scrollWidth": 320,
+          "innerWidth": 320,
+          "overflowers": [],
+          "technicalLeakage": false,
+          "hydrated": true,
+          "nonceAttrs": 0,
+          "inlineScripts": 2,
+          "cspBlocked": true,
+          "screenshot": "evidence/screenshots/settings-team/320.png"
+        },
+        "375": {
+          "status": 200,
+          "title": "ProposalOS | Automated Local Business Audits",
+          "h1": [
+            "Team Management"
+          ],
+          "horizontalOverflow": false,
+          "scrollWidth": 375,
+          "innerWidth": 375,
+          "overflowers": [],
+          "technicalLeakage": false,
+          "hydrated": true,
+          "nonceAttrs": 0,
+          "inlineScripts": 2,
+          "cspBlocked": true,
+          "screenshot": "evidence/screenshots/settings-team/375.png"
+        },
+        "768": {
+          "status": 200,
+          "title": "ProposalOS | Automated Local Business Audits",
+          "h1": [
+            "Team Management"
+          ],
+          "horizontalOverflow": false,
+          "scrollWidth": 768,
+          "innerWidth": 768,
+          "overflowers": [],
+          "technicalLeakage": false,
+          "hydrated": true,
+          "nonceAttrs": 0,
+          "inlineScripts": 2,
+          "cspBlocked": true,
+          "screenshot": "evidence/screenshots/settings-team/768.png"
+        },
+        "1024": {
+          "status": 200,
+          "title": "ProposalOS | Automated Local Business Audits",
+          "h1": [
+            "Team Management"
+          ],
+          "horizontalOverflow": false,
+          "scrollWidth": 1024,
+          "innerWidth": 1024,
+          "overflowers": [],
+          "technicalLeakage": false,
+          "hydrated": true,
+          "nonceAttrs": 0,
+          "inlineScripts": 2,
+          "cspBlocked": true,
+          "screenshot": "evidence/screenshots/settings-team/1024.png"
+        },
+        "1440": {
+          "status": 200,
+          "title": "ProposalOS | Automated Local Business Audits",
+          "h1": [
+            "Team Management"
+          ],
+          "horizontalOverflow": false,
+          "scrollWidth": 1440,
+          "innerWidth": 1440,
+          "overflowers": [],
+          "technicalLeakage": false,
+          "hydrated": true,
+          "nonceAttrs": 0,
+          "inlineScripts": 2,
+          "cspBlocked": true,
+          "screenshot": "evidence/screenshots/settings-team/1440.png"
+        }
+      },
+      "axe": {
+        "375": {
+          "byImpact": {
+            "critical": 0,
+            "serious": 0,
+            "moderate": 2,
+            "minor": 0
+          },
+          "file": "evidence/axe/settings-team-375.json",
+          "violations": [
+            {
+              "id": "landmark-one-main",
+              "impact": "moderate",
+              "help": "Document should have one main landmark",
+              "nodes": 1,
+              "targets": [
+                "html"
+              ]
+            },
+            {
+              "id": "region",
+              "impact": "moderate",
+              "help": "All page content should be contained by landmarks",
+              "nodes": 2,
+              "targets": [
+                ".flex > div",
+                ".bg-slate-800"
+              ]
+            }
+          ]
+        },
+        "1440": {
+          "byImpact": {
+            "critical": 0,
+            "serious": 0,
+            "moderate": 2,
+            "minor": 0
+          },
+          "file": "evidence/axe/settings-team-1440.json",
+          "violations": [
+            {
+              "id": "landmark-one-main",
+              "impact": "moderate",
+              "help": "Document should have one main landmark",
+              "nodes": 1,
+              "targets": [
+                "html"
+              ]
+            },
+            {
+              "id": "region",
+              "impact": "moderate",
+              "help": "All page content should be contained by landmarks",
+              "nodes": 2,
+              "targets": [
+                ".flex > div",
+                ".bg-slate-800"
+              ]
+            }
+          ]
+        }
+      },
+      "consoleErrors": [
+        {
+          "kind": "console",
+          "text": "Executing inline script violates the following Content Security Policy directive 'script-src 'self' 'nonce-tpwKHOILdpx6KoJx2Sha2w==' https://cdn.jsdelivr.net https://www.googletagmanager.com https://js.posthog.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-OBTN3RiyCV4Bq7dFqZ5a2pAXjnCcCYeTJMO2I/LYKeo='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked."
+        },
+        {
+          "kind": "console",
+          "text": "Executing inline script violates the following Content Security Policy directive 'script-src 'self' 'nonce-tpwKHOILdpx6KoJx2Sha2w==' https://cdn.jsdelivr.net https://www.googletagmanager.com https://js.posthog.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-A1HOko9+QmO5X6qsNgOTKa43j6wONtksPkEMS0N1Y9A='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked."
+        },
+        {
+          "kind": "pageerror",
+          "text": "Minified React error #412; visit https://react.dev/errors/412 for the full message or use the non-minified dev environment for full errors and additional helpful warnings."
+        },
+        {
+          "kind": "console",
+          "text": "Executing inline script violates the following Content Security Policy directive 'script-src 'self' 'nonce-ovpf0P1/BvG4k3xaheLIZQ==' https://cdn.jsdelivr.net https://www.googletagmanager.com https://js.posthog.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-OBTN3RiyCV4Bq7dFqZ5a2pAXjnCcCYeTJMO2I/LYKeo='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked."
+        },
+        {
+          "kind": "console",
+          "text": "Executing inline script violates the following Content Security Policy directive 'script-src 'self' 'nonce-ovpf0P1/BvG4k3xaheLIZQ==' https://cdn.jsdelivr.net https://www.googletagmanager.com https://js.posthog.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-A1HOko9+QmO5X6qsNgOTKa43j6wONtksPkEMS0N1Y9A='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked."
+        },
+        {
+          "kind": "console",
+          "text": "Executing inline script violates the following Content Security Policy directive 'script-src 'self' 'nonce-XGtkxq+8dBU6h79oErIRDg==' https://cdn.jsdelivr.net https://www.googletagmanager.com https://js.posthog.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-OBTN3RiyCV4Bq7dFqZ5a2pAXjnCcCYeTJMO2I/LYKeo='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked."
+        },
+        {
+          "kind": "console",
+          "text": "Executing inline script violates the following Content Security Policy directive 'script-src 'self' 'nonce-XGtkxq+8dBU6h79oErIRDg==' https://cdn.jsdelivr.net https://www.googletagmanager.com https://js.posthog.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-A1HOko9+QmO5X6qsNgOTKa43j6wONtksPkEMS0N1Y9A='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked."
+        },
+        {
+          "kind": "console",
+          "text": "Executing inline script violates the following Content Security Policy directive 'script-src 'self' 'nonce-Loh1gQw5xO+tYfruTaf0MA==' https://cdn.jsdelivr.net https://www.googletagmanager.com https://js.posthog.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-OBTN3RiyCV4Bq7dFqZ5a2pAXjnCcCYeTJMO2I/LYKeo='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked."
+        },
+        {
+          "kind": "console",
+          "text": "Executing inline script violates the following Content Security Policy directive 'script-src 'self' 'nonce-Loh1gQw5xO+tYfruTaf0MA==' https://cdn.jsdelivr.net https://www.googletagmanager.com https://js.posthog.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-A1HOko9+QmO5X6qsNgOTKa43j6wONtksPkEMS0N1Y9A='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked."
+        },
+        {
+          "kind": "console",
+          "text": "Executing inline script violates the following Content Security Policy directive 'script-src 'self' 'nonce-xJPEkS7DthkLMrnz8eIV9A==' https://cdn.jsdelivr.net https://www.googletagmanager.com https://js.posthog.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-OBTN3RiyCV4Bq7dFqZ5a2pAXjnCcCYeTJMO2I/LYKeo='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked."
+        },
+        {
+          "kind": "console",
+          "text": "Executing inline script violates the following Content Security Policy directive 'script-src 'self' 'nonce-xJPEkS7DthkLMrnz8eIV9A==' https://cdn.jsdelivr.net https://www.googletagmanager.com https://js.posthog.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-A1HOko9+QmO5X6qsNgOTKa43j6wONtksPkEMS0N1Y9A='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked."
+        },
+        {
+          "kind": "console",
+          "text": "Executing inline script violates the following Content Security Policy directive 'script-src 'self' 'nonce-R+anxiis6ZTYwicw0yWJMQ==' https://cdn.jsdelivr.net https://www.googletagmanager.com https://js.posthog.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-OBTN3RiyCV4Bq7dFqZ5a2pAXjnCcCYeTJMO2I/LYKeo='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked."
+        },
+        {
+          "kind": "console",
+          "text": "Executing inline script violates the following Content Security Policy directive 'script-src 'self' 'nonce-R+anxiis6ZTYwicw0yWJMQ==' https://cdn.jsdelivr.net https://www.googletagmanager.com https://js.posthog.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-A1HOko9+QmO5X6qsNgOTKa43j6wONtksPkEMS0N1Y9A='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked."
+        }
+      ],
+      "skipped": null,
+      "httpStatus": 200,
+      "finalUrl": "http://localhost:3000/settings/team",
+      "redirected": false
+    },
+    "pricing": {
+      "key": "pricing",
+      "route": "/pricing",
+      "state": "public",
+      "note": null,
+      "viewports": {
+        "320": {
+          "status": 200,
+          "title": "ProposalOS - AI Audit Engine for Agencies",
+          "h1": [
+            "Self-serve plans for audit-led agencies."
+          ],
+          "horizontalOverflow": false,
+          "scrollWidth": 320,
+          "innerWidth": 320,
+          "overflowers": [],
+          "technicalLeakage": false,
+          "hydrated": true,
+          "nonceAttrs": 0,
+          "inlineScripts": 2,
+          "cspBlocked": true,
+          "screenshot": "evidence/screenshots/pricing/320.png"
+        },
+        "375": {
+          "status": 200,
+          "title": "ProposalOS - AI Audit Engine for Agencies",
+          "h1": [
+            "Self-serve plans for audit-led agencies."
+          ],
+          "horizontalOverflow": false,
+          "scrollWidth": 375,
+          "innerWidth": 375,
+          "overflowers": [],
+          "technicalLeakage": false,
+          "hydrated": true,
+          "nonceAttrs": 0,
+          "inlineScripts": 2,
+          "cspBlocked": true,
+          "screenshot": "evidence/screenshots/pricing/375.png"
+        },
+        "768": {
+          "status": 200,
+          "title": "ProposalOS - AI Audit Engine for Agencies",
+          "h1": [
+            "Self-serve plans for audit-led agencies."
+          ],
+          "horizontalOverflow": false,
+          "scrollWidth": 768,
+          "innerWidth": 768,
+          "overflowers": [],
+          "technicalLeakage": false,
+          "hydrated": true,
+          "nonceAttrs": 0,
+          "inlineScripts": 2,
+          "cspBlocked": true,
+          "screenshot": "evidence/screenshots/pricing/768.png"
+        },
+        "1024": {
+          "status": 200,
+          "title": "ProposalOS - AI Audit Engine for Agencies",
+          "h1": [
+            "Self-serve plans for audit-led agencies."
+          ],
+          "horizontalOverflow": false,
+          "scrollWidth": 1024,
+          "innerWidth": 1024,
+          "overflowers": [],
+          "technicalLeakage": false,
+          "hydrated": true,
+          "nonceAttrs": 0,
+          "inlineScripts": 2,
+          "cspBlocked": true,
+          "screenshot": "evidence/screenshots/pricing/1024.png"
+        },
+        "1440": {
+          "status": 200,
+          "title": "ProposalOS - AI Audit Engine for Agencies",
+          "h1": [
+            "Self-serve plans for audit-led agencies."
+          ],
+          "horizontalOverflow": false,
+          "scrollWidth": 1440,
+          "innerWidth": 1440,
+          "overflowers": [],
+          "technicalLeakage": false,
+          "hydrated": true,
+          "nonceAttrs": 0,
+          "inlineScripts": 2,
+          "cspBlocked": true,
+          "screenshot": "evidence/screenshots/pricing/1440.png"
+        }
+      },
+      "axe": {
+        "375": {
+          "byImpact": {
+            "critical": 0,
+            "serious": 1,
+            "moderate": 1,
+            "minor": 0
+          },
+          "file": "evidence/axe/pricing-375.json",
+          "violations": [
+            {
+              "id": "color-contrast",
+              "impact": "serious",
+              "help": "Elements must meet minimum color contrast ratio thresholds",
+              "nodes": 10,
+              "targets": [
+                ".space-y-4 > .text-slate-500",
+                ".hover\\:text-indigo-400[href$=\"for-agencies\"]",
+                ".hover\\:text-indigo-400[href$=\"sample-report\"]",
+                ".hover\\:text-indigo-400[href$=\"api\"]",
+                "a[href$=\"blog\"]"
+              ]
+            },
+            {
+              "id": "heading-order",
+              "impact": "moderate",
+              "help": "Heading levels should only increase by one",
+              "nodes": 1,
+              "targets": [
+                ".rounded-2xl.border.border-slate-800:nth-child(1) > h3"
+              ]
+            }
+          ]
+        },
+        "1440": {
+          "byImpact": {
+            "critical": 0,
+            "serious": 1,
+            "moderate": 1,
+            "minor": 0
+          },
+          "file": "evidence/axe/pricing-1440.json",
+          "violations": [
+            {
+              "id": "color-contrast",
+              "impact": "serious",
+              "help": "Elements must meet minimum color contrast ratio thresholds",
+              "nodes": 10,
+              "targets": [
+                ".space-y-4 > .text-slate-500",
+                ".hover\\:text-indigo-400[href$=\"for-agencies\"]",
+                ".hover\\:text-indigo-400[href$=\"sample-report\"]",
+                ".hover\\:text-indigo-400[href$=\"api\"]",
+                "a[href$=\"blog\"]"
+              ]
+            },
+            {
+              "id": "heading-order",
+              "impact": "moderate",
+              "help": "Heading levels should only increase by one",
+              "nodes": 1,
+              "targets": [
+                ".rounded-2xl.border.border-slate-800:nth-child(1) > h3"
+              ]
+            }
+          ]
+        }
+      },
+      "consoleErrors": [
+        {
+          "kind": "console",
+          "text": "Executing inline script violates the following Content Security Policy directive 'script-src 'self' 'nonce-hz8w56zbS7SRD8D3awz98A==' https://cdn.jsdelivr.net https://www.googletagmanager.com https://js.posthog.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-OBTN3RiyCV4Bq7dFqZ5a2pAXjnCcCYeTJMO2I/LYKeo='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked."
+        },
+        {
+          "kind": "console",
+          "text": "Executing inline script violates the following Content Security Policy directive 'script-src 'self' 'nonce-hz8w56zbS7SRD8D3awz98A==' https://cdn.jsdelivr.net https://www.googletagmanager.com https://js.posthog.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-4I6r0QiK+9Z32RKpnPQAOcaZCh6Pou5mw70KJQpzAP0='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked."
+        },
+        {
+          "kind": "pageerror",
+          "text": "Minified React error #412; visit https://react.dev/errors/412 for the full message or use the non-minified dev environment for full errors and additional helpful warnings."
+        },
+        {
+          "kind": "console",
+          "text": "Executing inline script violates the following Content Security Policy directive 'script-src 'self' 'nonce-10vfGbbxHJ5JSWQjZzJpmg==' https://cdn.jsdelivr.net https://www.googletagmanager.com https://js.posthog.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-OBTN3RiyCV4Bq7dFqZ5a2pAXjnCcCYeTJMO2I/LYKeo='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked."
+        },
+        {
+          "kind": "console",
+          "text": "Executing inline script violates the following Content Security Policy directive 'script-src 'self' 'nonce-10vfGbbxHJ5JSWQjZzJpmg==' https://cdn.jsdelivr.net https://www.googletagmanager.com https://js.posthog.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-4I6r0QiK+9Z32RKpnPQAOcaZCh6Pou5mw70KJQpzAP0='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked."
+        },
+        {
+          "kind": "console",
+          "text": "Executing inline script violates the following Content Security Policy directive 'script-src 'self' 'nonce-t6ih+W4cMmwC+VD+V+k66A==' https://cdn.jsdelivr.net https://www.googletagmanager.com https://js.posthog.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-OBTN3RiyCV4Bq7dFqZ5a2pAXjnCcCYeTJMO2I/LYKeo='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked."
+        },
+        {
+          "kind": "console",
+          "text": "Executing inline script violates the following Content Security Policy directive 'script-src 'self' 'nonce-t6ih+W4cMmwC+VD+V+k66A==' https://cdn.jsdelivr.net https://www.googletagmanager.com https://js.posthog.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-4I6r0QiK+9Z32RKpnPQAOcaZCh6Pou5mw70KJQpzAP0='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked."
+        },
+        {
+          "kind": "console",
+          "text": "Executing inline script violates the following Content Security Policy directive 'script-src 'self' 'nonce-QoufDw5+iw0WWxYTwo7mNQ==' https://cdn.jsdelivr.net https://www.googletagmanager.com https://js.posthog.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-OBTN3RiyCV4Bq7dFqZ5a2pAXjnCcCYeTJMO2I/LYKeo='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked."
+        },
+        {
+          "kind": "console",
+          "text": "Executing inline script violates the following Content Security Policy directive 'script-src 'self' 'nonce-QoufDw5+iw0WWxYTwo7mNQ==' https://cdn.jsdelivr.net https://www.googletagmanager.com https://js.posthog.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-4I6r0QiK+9Z32RKpnPQAOcaZCh6Pou5mw70KJQpzAP0='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked."
+        },
+        {
+          "kind": "console",
+          "text": "Executing inline script violates the following Content Security Policy directive 'script-src 'self' 'nonce-xFSArvWg8tH2NpmCJu2Zcw==' https://cdn.jsdelivr.net https://www.googletagmanager.com https://js.posthog.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-OBTN3RiyCV4Bq7dFqZ5a2pAXjnCcCYeTJMO2I/LYKeo='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked."
+        },
+        {
+          "kind": "console",
+          "text": "Executing inline script violates the following Content Security Policy directive 'script-src 'self' 'nonce-xFSArvWg8tH2NpmCJu2Zcw==' https://cdn.jsdelivr.net https://www.googletagmanager.com https://js.posthog.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-4I6r0QiK+9Z32RKpnPQAOcaZCh6Pou5mw70KJQpzAP0='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked."
+        },
+        {
+          "kind": "console",
+          "text": "Executing inline script violates the following Content Security Policy directive 'script-src 'self' 'nonce-Pck5D/L2AUWS5coiGP7z8A==' https://cdn.jsdelivr.net https://www.googletagmanager.com https://js.posthog.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-OBTN3RiyCV4Bq7dFqZ5a2pAXjnCcCYeTJMO2I/LYKeo='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked."
+        },
+        {
+          "kind": "console",
+          "text": "Executing inline script violates the following Content Security Policy directive 'script-src 'self' 'nonce-Pck5D/L2AUWS5coiGP7z8A==' https://cdn.jsdelivr.net https://www.googletagmanager.com https://js.posthog.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-4I6r0QiK+9Z32RKpnPQAOcaZCh6Pou5mw70KJQpzAP0='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked."
+        }
+      ],
+      "skipped": null,
+      "httpStatus": 200,
+      "finalUrl": "http://localhost:3000/pricing",
+      "redirected": false
+    },
+    "free-audit": {
+      "key": "free-audit",
+      "route": "/free-audit",
+      "state": "public",
+      "note": null,
+      "viewports": {
+        "320": {
+          "status": 200,
+          "title": "ProposalOS | Automated Local Business Audits",
+          "h1": [
+            "How does your business score?"
+          ],
+          "horizontalOverflow": false,
+          "scrollWidth": 320,
+          "innerWidth": 320,
+          "overflowers": [],
+          "technicalLeakage": false,
+          "hydrated": true,
+          "nonceAttrs": 0,
+          "inlineScripts": 2,
+          "cspBlocked": true,
+          "screenshot": "evidence/screenshots/free-audit/320.png"
+        },
+        "375": {
+          "status": 200,
+          "title": "ProposalOS | Automated Local Business Audits",
+          "h1": [
+            "How does your business score?"
+          ],
+          "horizontalOverflow": false,
+          "scrollWidth": 375,
+          "innerWidth": 375,
+          "overflowers": [],
+          "technicalLeakage": false,
+          "hydrated": true,
+          "nonceAttrs": 0,
+          "inlineScripts": 2,
+          "cspBlocked": true,
+          "screenshot": "evidence/screenshots/free-audit/375.png"
+        },
+        "768": {
+          "status": 200,
+          "title": "ProposalOS | Automated Local Business Audits",
+          "h1": [
+            "How does your business score?"
+          ],
+          "horizontalOverflow": false,
+          "scrollWidth": 768,
+          "innerWidth": 768,
+          "overflowers": [],
+          "technicalLeakage": false,
+          "hydrated": true,
+          "nonceAttrs": 0,
+          "inlineScripts": 2,
+          "cspBlocked": true,
+          "screenshot": "evidence/screenshots/free-audit/768.png"
+        },
+        "1024": {
+          "status": 200,
+          "title": "ProposalOS | Automated Local Business Audits",
+          "h1": [
+            "How does your business score?"
+          ],
+          "horizontalOverflow": false,
+          "scrollWidth": 1024,
+          "innerWidth": 1024,
+          "overflowers": [],
+          "technicalLeakage": false,
+          "hydrated": true,
+          "nonceAttrs": 0,
+          "inlineScripts": 2,
+          "cspBlocked": true,
+          "screenshot": "evidence/screenshots/free-audit/1024.png"
+        },
+        "1440": {
+          "status": 200,
+          "title": "ProposalOS | Automated Local Business Audits",
+          "h1": [
+            "How does your business score?"
+          ],
+          "horizontalOverflow": false,
+          "scrollWidth": 1440,
+          "innerWidth": 1440,
+          "overflowers": [],
+          "technicalLeakage": false,
+          "hydrated": true,
+          "nonceAttrs": 0,
+          "inlineScripts": 2,
+          "cspBlocked": true,
+          "screenshot": "evidence/screenshots/free-audit/1440.png"
+        }
+      },
+      "axe": {
+        "375": {
+          "byImpact": {
+            "critical": 0,
+            "serious": 1,
+            "moderate": 2,
+            "minor": 0
+          },
+          "file": "evidence/axe/free-audit-375.json",
+          "violations": [
+            {
+              "id": "color-contrast",
+              "impact": "serious",
+              "help": "Elements must meet minimum color contrast ratio thresholds",
+              "nodes": 1,
+              "targets": [
+                ".mt-4"
+              ]
+            },
+            {
+              "id": "landmark-one-main",
+              "impact": "moderate",
+              "help": "Document should have one main landmark",
+              "nodes": 1,
+              "targets": [
+                "html"
+              ]
+            },
+            {
+              "id": "region",
+              "impact": "moderate",
+              "help": "All page content should be contained by landmarks",
+              "nodes": 5,
+              "targets": [
+                "h1",
+                ".text-slate-400",
+                "input[type=\"text\"]",
+                "input[type=\"url\"]",
+                ".mt-4"
+              ]
+            }
+          ]
+        },
+        "1440": {
+          "byImpact": {
+            "critical": 0,
+            "serious": 1,
+            "moderate": 2,
+            "minor": 0
+          },
+          "file": "evidence/axe/free-audit-1440.json",
+          "violations": [
+            {
+              "id": "color-contrast",
+              "impact": "serious",
+              "help": "Elements must meet minimum color contrast ratio thresholds",
+              "nodes": 1,
+              "targets": [
+                ".mt-4"
+              ]
+            },
+            {
+              "id": "landmark-one-main",
+              "impact": "moderate",
+              "help": "Document should have one main landmark",
+              "nodes": 1,
+              "targets": [
+                "html"
+              ]
+            },
+            {
+              "id": "region",
+              "impact": "moderate",
+              "help": "All page content should be contained by landmarks",
+              "nodes": 5,
+              "targets": [
+                "h1",
+                ".text-slate-400",
+                "input[type=\"text\"]",
+                "input[type=\"url\"]",
+                ".mt-4"
+              ]
+            }
+          ]
+        }
+      },
+      "consoleErrors": [
+        {
+          "kind": "console",
+          "text": "Executing inline script violates the following Content Security Policy directive 'script-src 'self' 'nonce-hnhppz3YfdGdKnMbahLoWQ==' https://cdn.jsdelivr.net https://www.googletagmanager.com https://js.posthog.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-OBTN3RiyCV4Bq7dFqZ5a2pAXjnCcCYeTJMO2I/LYKeo='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked."
+        },
+        {
+          "kind": "console",
+          "text": "Executing inline script violates the following Content Security Policy directive 'script-src 'self' 'nonce-hnhppz3YfdGdKnMbahLoWQ==' https://cdn.jsdelivr.net https://www.googletagmanager.com https://js.posthog.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-Ip+SSSTjSyNUCHeJ8ykW7CBHYVNU1nFwIViUwNbxqIg='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked."
+        },
+        {
+          "kind": "pageerror",
+          "text": "Minified React error #412; visit https://react.dev/errors/412 for the full message or use the non-minified dev environment for full errors and additional helpful warnings."
+        },
+        {
+          "kind": "console",
+          "text": "Executing inline script violates the following Content Security Policy directive 'script-src 'self' 'nonce-Rj/kXtzToVNo7Ya3uZPeSQ==' https://cdn.jsdelivr.net https://www.googletagmanager.com https://js.posthog.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-OBTN3RiyCV4Bq7dFqZ5a2pAXjnCcCYeTJMO2I/LYKeo='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked."
+        },
+        {
+          "kind": "console",
+          "text": "Executing inline script violates the following Content Security Policy directive 'script-src 'self' 'nonce-Rj/kXtzToVNo7Ya3uZPeSQ==' https://cdn.jsdelivr.net https://www.googletagmanager.com https://js.posthog.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-Ip+SSSTjSyNUCHeJ8ykW7CBHYVNU1nFwIViUwNbxqIg='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked."
+        },
+        {
+          "kind": "console",
+          "text": "Executing inline script violates the following Content Security Policy directive 'script-src 'self' 'nonce-23x02rGpB2c6QJ7Iw3Mayg==' https://cdn.jsdelivr.net https://www.googletagmanager.com https://js.posthog.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-OBTN3RiyCV4Bq7dFqZ5a2pAXjnCcCYeTJMO2I/LYKeo='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked."
+        },
+        {
+          "kind": "console",
+          "text": "Executing inline script violates the following Content Security Policy directive 'script-src 'self' 'nonce-23x02rGpB2c6QJ7Iw3Mayg==' https://cdn.jsdelivr.net https://www.googletagmanager.com https://js.posthog.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-Ip+SSSTjSyNUCHeJ8ykW7CBHYVNU1nFwIViUwNbxqIg='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked."
+        },
+        {
+          "kind": "console",
+          "text": "Executing inline script violates the following Content Security Policy directive 'script-src 'self' 'nonce-3fb/FITYIHKZgdzSZV5fJg==' https://cdn.jsdelivr.net https://www.googletagmanager.com https://js.posthog.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-OBTN3RiyCV4Bq7dFqZ5a2pAXjnCcCYeTJMO2I/LYKeo='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked."
+        },
+        {
+          "kind": "console",
+          "text": "Executing inline script violates the following Content Security Policy directive 'script-src 'self' 'nonce-3fb/FITYIHKZgdzSZV5fJg==' https://cdn.jsdelivr.net https://www.googletagmanager.com https://js.posthog.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-Ip+SSSTjSyNUCHeJ8ykW7CBHYVNU1nFwIViUwNbxqIg='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked."
+        },
+        {
+          "kind": "console",
+          "text": "Executing inline script violates the following Content Security Policy directive 'script-src 'self' 'nonce-wdWFCw7G2a7YqfQsltS6lg==' https://cdn.jsdelivr.net https://www.googletagmanager.com https://js.posthog.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-OBTN3RiyCV4Bq7dFqZ5a2pAXjnCcCYeTJMO2I/LYKeo='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked."
+        },
+        {
+          "kind": "console",
+          "text": "Executing inline script violates the following Content Security Policy directive 'script-src 'self' 'nonce-wdWFCw7G2a7YqfQsltS6lg==' https://cdn.jsdelivr.net https://www.googletagmanager.com https://js.posthog.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-Ip+SSSTjSyNUCHeJ8ykW7CBHYVNU1nFwIViUwNbxqIg='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked."
+        },
+        {
+          "kind": "console",
+          "text": "Executing inline script violates the following Content Security Policy directive 'script-src 'self' 'nonce-t2kbLRchj3idxudLy9RCOw==' https://cdn.jsdelivr.net https://www.googletagmanager.com https://js.posthog.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-OBTN3RiyCV4Bq7dFqZ5a2pAXjnCcCYeTJMO2I/LYKeo='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked."
+        },
+        {
+          "kind": "console",
+          "text": "Executing inline script violates the following Content Security Policy directive 'script-src 'self' 'nonce-t2kbLRchj3idxudLy9RCOw==' https://cdn.jsdelivr.net https://www.googletagmanager.com https://js.posthog.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-Ip+SSSTjSyNUCHeJ8ykW7CBHYVNU1nFwIViUwNbxqIg='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked."
+        }
+      ],
+      "skipped": null,
+      "httpStatus": 200,
+      "finalUrl": "http://localhost:3000/free-audit",
+      "redirected": false
+    },
+    "public-proposal": {
+      "key": "public-proposal",
+      "route": null,
+      "state": "public",
+      "note": null,
+      "viewports": {},
+      "axe": {},
+      "consoleErrors": [],
+      "skipped": "no proposal seeded (Proposal count=0)"
+    }
+  },
+  "checks": {
+    "unauthRedirect": {
+      "pass": true,
+      "finalUrl": "http://localhost:3000/login?callbackUrl=%2Fdashboard",
+      "callbackUrl": "/dashboard",
+      "redirectChain": [
+        "http://localhost:3000/dashboard -> 307"
+      ],
+      "finalStatus": 200
+    },
+    "invalidLogin": {
+      "pass": false,
+      "errorText": null,
+      "stillOnLogin": true,
+      "errorElement": null,
+      "note": null,
+      "consoleErrors": [
+        {
+          "kind": "console",
+          "text": "Executing inline script violates the following Content Security Policy directive 'script-src 'self' 'nonce-+WUpnnDA1qJ8WfqMyim/bg==' https://cdn.jsdelivr.net https://www.googletagmanager.com https://js.posthog.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-OBTN3RiyCV4Bq7dFqZ5a2pAXjnCcCYeTJMO2I/LYKeo='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked."
+        },
+        {
+          "kind": "console",
+          "text": "Executing inline script violates the following Content Security Policy directive 'script-src 'self' 'nonce-+WUpnnDA1qJ8WfqMyim/bg==' https://cdn.jsdelivr.net https://www.googletagmanager.com https://js.posthog.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-oxU24zcNDfMZ9V7g8vZ1eT8p7Pf1emJ7brS8TiuI3fg='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked."
+        },
+        {
+          "kind": "pageerror",
+          "text": "Minified React error #412; visit https://react.dev/errors/412 for the full message or use the non-minified dev environment for full errors and additional helpful warnings."
+        },
+        {
+          "kind": "console",
+          "text": "Executing inline script violates the following Content Security Policy directive 'script-src 'self' 'nonce-U/VpXeRx03W9X72JP9dJ2Q==' https://cdn.jsdelivr.net https://www.googletagmanager.com https://js.posthog.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-OBTN3RiyCV4Bq7dFqZ5a2pAXjnCcCYeTJMO2I/LYKeo='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked."
+        },
+        {
+          "kind": "console",
+          "text": "Executing inline script violates the following Content Security Policy directive 'script-src 'self' 'nonce-U/VpXeRx03W9X72JP9dJ2Q==' https://cdn.jsdelivr.net https://www.googletagmanager.com https://js.posthog.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-oxU24zcNDfMZ9V7g8vZ1eT8p7Pf1emJ7brS8TiuI3fg='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked."
+        },
+        {
+          "kind": "pageerror",
+          "text": "Minified React error #412; visit https://react.dev/errors/412 for the full message or use the non-minified dev environment for full errors and additional helpful warnings."
+        }
+      ]
+    },
+    "keyboardLogin": {
+      "pass": false,
+      "tabOrderOk": true,
+      "tabTrail": [
+        {
+          "tag": "input",
+          "name": "email",
+          "text": "",
+          "href": null,
+          "role": null,
+          "inNav": false,
+          "outline": "rgba(0, 0, 0, 0) solid 2px",
+          "boxShadow": "rgb(255, 255, 255) 0px 0px 0px 0px, rgb(59, 130, 246) 0px 0px 0px 2px, rgba(0, 0, 0, 0) 0px 0px 0px 0px",
+          "focusVisible": true,
+          "onScreen": true
+        },
+        {
+          "tag": "input",
+          "name": "password",
+          "text": "",
+          "href": null,
+          "role": null,
+          "inNav": false,
+          "outline": "rgba(0, 0, 0, 0) solid 2px",
+          "boxShadow": "rgb(255, 255, 255) 0px 0px 0px 0px, rgb(59, 130, 246) 0px 0px 0px 2px, rgba(0, 0, 0, 0) 0px 0px 0px 0px",
+          "focusVisible": true,
+          "onScreen": true
+        },
+        {
+          "tag": "button",
+          "name": "",
+          "text": "Sign In",
+          "href": null,
+          "role": null,
+          "inNav": false,
+          "outline": "rgb(89, 89, 89) auto 1px",
+          "boxShadow": "none",
+          "focusVisible": true,
+          "onScreen": true
+        },
+        {
+          "tag": "button",
+          "name": "",
+          "text": "Google",
+          "href": null,
+          "role": null,
+          "inNav": false,
+          "outline": "rgb(146, 146, 146) auto 2px",
+          "boxShadow": "none",
+          "focusVisible": true,
+          "onScreen": true
+        },
+        {
+          "tag": "a",
+          "name": "",
+          "text": "Create an account",
+          "href": "/register",
+          "role": null,
+          "inNav": false,
+          "outline": "rgb(16, 16, 16) auto 1px",
+          "boxShadow": "none",
+          "focusVisible": true,
+          "onScreen": true
+        }
+      ],
+      "focusedAfterTabFromEmail": "password",
+      "enterSubmitted": false,
+      "landedUrl": "http://localhost:3000/login?email=demo%40acme.com&password=<redacted>",
+      "nativeGetSubmitLeak": true,
+      "note": "Enter triggered a native GET form submit (React onSubmit never attached => page not hydrated). Email+password appear in the URL/query string.",
+      "focusVisibleOnControls": [
+        {
+          "el": "input[email]",
+          "focusVisible": true,
+          "outline": "rgba(0, 0, 0, 0) solid 2px",
+          "boxShadow": "rgb(255, 255, 255) 0px 0px 0px 0px, rgb(59, 130, 246) 0px 0px 0px 2px, rgba(0, 0, 0, 0) 0px 0px 0px 0px"
+        },
+        {
+          "el": "input[password]",
+          "focusVisible": true,
+          "outline": "rgba(0, 0, 0, 0) solid 2px",
+          "boxShadow": "rgb(255, 255, 255) 0px 0px 0px 0px, rgb(59, 130, 246) 0px 0px 0px 2px, rgba(0, 0, 0, 0) 0px 0px 0px 0px"
+        },
+        {
+          "el": "button[Sign In]",
+          "focusVisible": true,
+          "outline": "rgb(89, 89, 89) auto 1px",
+          "boxShadow": "none"
+        },
+        {
+          "el": "button[Google]",
+          "focusVisible": true,
+          "outline": "rgb(146, 146, 146) auto 2px",
+          "boxShadow": "none"
+        },
+        {
+          "el": "a[Create an account]",
+          "focusVisible": true,
+          "outline": "rgb(16, 16, 16) auto 1px",
+          "boxShadow": "none"
+        }
+      ]
+    },
+    "login": {
+      "pass": true,
+      "formLogin": {
+        "pass": false,
+        "landedUrl": "http://localhost:3000/login?email=demo%40acme.com&password=<redacted>"
+      },
+      "apiLoginFallback": {
+        "status": 0,
+        "type": "opaqueredirect",
+        "hasUser": true,
+        "user": "demo@acme.com"
+      },
+      "method": "in-page fetch to /api/auth/callback/credentials (form submit did not hydrate)",
+      "sessionCookie": [
+        "__Host-next-auth.session-token (secure=true, httpOnly=true, sameSite=Strict)"
+      ]
+    },
+    "keyboardDashboard": {
+      "pass": false,
+      "reachedNav": false,
+      "firstNavAtTab": null,
+      "landmarks": {
+        "nav": 0,
+        "main": 0,
+        "skipLink": false,
+        "navLinks": []
+      },
+      "tabsSampled": 25,
+      "focusVisibleCount": 14,
+      "focusVisibleRatio": 0.56,
+      "trail": [
+        {
+          "el": "button",
+          "text": "Retry dashboard",
+          "inNav": false,
+          "focusVisible": true,
+          "outline": "rgb(16, 16, 16) auto 1px",
+          "boxShadow": "none"
+        },
+        {
+          "el": "body",
+          "text": "requestAnimationFrame(function(){$RT=performance.now()});(se",
+          "inNav": false,
+          "focusVisible": false,
+          "outline": "rgb(255, 255, 255) none 3px",
+          "boxShadow": "none"
+        },
+        {
+          "el": "button",
+          "text": "Retry dashboard",
+          "inNav": false,
+          "focusVisible": true,
+          "outline": "rgb(16, 16, 16) auto 1px",
+          "boxShadow": "none"
+        },
+        {
+          "el": "body",
+          "text": "requestAnimationFrame(function(){$RT=performance.now()});(se",
+          "inNav": false,
+          "focusVisible": false,
+          "outline": "rgb(255, 255, 255) none 3px",
+          "boxShadow": "none"
+        },
+        {
+          "el": "button",
+          "text": "Retry dashboard",
+          "inNav": false,
+          "focusVisible": true,
+          "outline": "rgb(16, 16, 16) auto 1px",
+          "boxShadow": "none"
+        },
+        {
+          "el": "body",
+          "text": "requestAnimationFrame(function(){$RT=performance.now()});(se",
+          "inNav": false,
+          "focusVisible": false,
+          "outline": "rgb(255, 255, 255) none 3px",
+          "boxShadow": "none"
+        },
+        {
+          "el": "button",
+          "text": "Retry dashboard",
+          "inNav": false,
+          "focusVisible": true,
+          "outline": "rgb(16, 16, 16) auto 1px",
+          "boxShadow": "none"
+        },
+        {
+          "el": "body",
+          "text": "requestAnimationFrame(function(){$RT=performance.now()});(se",
+          "inNav": false,
+          "focusVisible": false,
+          "outline": "rgb(255, 255, 255) none 3px",
+          "boxShadow": "none"
+        },
+        {
+          "el": "button",
+          "text": "Retry dashboard",
+          "inNav": false,
+          "focusVisible": true,
+          "outline": "rgb(16, 16, 16) auto 1px",
+          "boxShadow": "none"
+        },
+        {
+          "el": "button",
+          "text": "Retry dashboard",
+          "inNav": false,
+          "focusVisible": true,
+          "outline": "rgb(16, 16, 16) auto 1px",
+          "boxShadow": "none"
+        },
+        {
+          "el": "body",
+          "text": "requestAnimationFrame(function(){$RT=performance.now()});(se",
+          "inNav": false,
+          "focusVisible": false,
+          "outline": "rgb(255, 255, 255) none 3px",
+          "boxShadow": "none"
+        },
+        {
+          "el": "button",
+          "text": "Retry dashboard",
+          "inNav": false,
+          "focusVisible": true,
+          "outline": "rgb(16, 16, 16) auto 1px",
+          "boxShadow": "none"
+        },
+        {
+          "el": "body",
+          "text": "requestAnimationFrame(function(){$RT=performance.now()});(se",
+          "inNav": false,
+          "focusVisible": false,
+          "outline": "rgb(255, 255, 255) none 3px",
+          "boxShadow": "none"
+        },
+        {
+          "el": "button",
+          "text": "Retry dashboard",
+          "inNav": false,
+          "focusVisible": true,
+          "outline": "rgb(16, 16, 16) auto 1px",
+          "boxShadow": "none"
+        },
+        {
+          "el": "body",
+          "text": "requestAnimationFrame(function(){$RT=performance.now()});(se",
+          "inNav": false,
+          "focusVisible": false,
+          "outline": "rgb(255, 255, 255) none 3px",
+          "boxShadow": "none"
+        },
+        {
+          "el": "button",
+          "text": "Retry dashboard",
+          "inNav": false,
+          "focusVisible": true,
+          "outline": "rgb(16, 16, 16) auto 1px",
+          "boxShadow": "none"
+        },
+        {
+          "el": "body",
+          "text": "requestAnimationFrame(function(){$RT=performance.now()});(se",
+          "inNav": false,
+          "focusVisible": false,
+          "outline": "rgb(255, 255, 255) none 3px",
+          "boxShadow": "none"
+        },
+        {
+          "el": "button",
+          "text": "Retry dashboard",
+          "inNav": false,
+          "focusVisible": true,
+          "outline": "rgb(16, 16, 16) auto 1px",
+          "boxShadow": "none"
+        },
+        {
+          "el": "button",
+          "text": "Retry dashboard",
+          "inNav": false,
+          "focusVisible": true,
+          "outline": "rgb(16, 16, 16) auto 1px",
+          "boxShadow": "none"
+        },
+        {
+          "el": "body",
+          "text": "requestAnimationFrame(function(){$RT=performance.now()});(se",
+          "inNav": false,
+          "focusVisible": false,
+          "outline": "rgb(255, 255, 255) none 3px",
+          "boxShadow": "none"
+        },
+        {
+          "el": "button",
+          "text": "Retry dashboard",
+          "inNav": false,
+          "focusVisible": true,
+          "outline": "rgb(16, 16, 16) auto 1px",
+          "boxShadow": "none"
+        },
+        {
+          "el": "body",
+          "text": "requestAnimationFrame(function(){$RT=performance.now()});(se",
+          "inNav": false,
+          "focusVisible": false,
+          "outline": "rgb(255, 255, 255) none 3px",
+          "boxShadow": "none"
+        },
+        {
+          "el": "button",
+          "text": "Retry dashboard",
+          "inNav": false,
+          "focusVisible": true,
+          "outline": "rgb(16, 16, 16) auto 1px",
+          "boxShadow": "none"
+        },
+        {
+          "el": "body",
+          "text": "requestAnimationFrame(function(){$RT=performance.now()});(se",
+          "inNav": false,
+          "focusVisible": false,
+          "outline": "rgb(255, 255, 255) none 3px",
+          "boxShadow": "none"
+        },
+        {
+          "el": "button",
+          "text": "Retry dashboard",
+          "inNav": false,
+          "focusVisible": true,
+          "outline": "rgb(16, 16, 16) auto 1px",
+          "boxShadow": "none"
+        }
+      ]
+    }
+  },
+  "screenshotsCaptured": 63,
+  "axeTotals": {
+    "critical": 4,
+    "serious": 13,
+    "moderate": 50,
+    "minor": 0
+  },
+  "scriptErrors": []
+}

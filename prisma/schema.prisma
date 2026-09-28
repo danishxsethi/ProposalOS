@@ -17,6 +17,8 @@ model Audit {
   businessCity       String?
   businessUrl        String?
   placeId            String?
+  businessLatitude   Float?
+  businessLongitude  Float?
   businessIndustry   String?
   verticalPlaybookId String? // e.g., 'dentist', 'law-firm' — from playbook detection
   status             AuditStatus     @default(QUEUED)
@@ -140,6 +142,7 @@ model Proposal {
   webLinkToken           String         @unique @default(uuid())
   publicAccessRevokedAt  DateTime?
   publicationFingerprint String         @default("")
+  outboundEnabled        Boolean        @default(false)
   sentAt                 DateTime?
   viewedAt               DateTime?
   createdAt              DateTime       @default(now())
@@ -175,6 +178,8 @@ model Proposal {
   followUps       ProposalFollowUp[]
   outreach        ProposalOutreach[]
   acceptance      ProposalAcceptance? // One acceptance per proposal
+  orders          Order[]
+  payments        Payment[]
   views           ProposalView[]
   contactRequests ContactRequest[]
   project         Project?
@@ -194,9 +199,12 @@ model Proposal {
 }
 
 model ProposalAcceptance {
-  id         String @id @default(uuid())
-  proposalId String @unique
-  tier       String // essentials, growth, premium
+  id                    String @id @default(uuid())
+  proposalId            String @unique
+  tier                  String // essentials, growth, premium
+  proposalVersion       Int    @default(1)
+  commercialFingerprint String @default("")
+  commercialSnapshot    Json   @default("{}")
 
   contactName  String
   contactEmail String
@@ -204,13 +212,16 @@ model ProposalAcceptance {
   message      String?
   ipAddress    String?
 
-  acceptedAt DateTime @default(now())
+  acceptedAt           DateTime  @default(now())
+  paymentTermsLockedAt DateTime?
 
   // Multi-Tenancy
   tenantId String
 
-  proposal Proposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)
-  tenant   Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  proposal Proposal  @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+  tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  orders   Order[]
+  payments Payment[]
 
   @@index([tenantId])
 }
@@ -305,6 +316,7 @@ model EvidenceSnapshot {
 
   @@index([auditId])
   @@index([tenantId])
+  @@index([tenantId, auditId, module, collectedAt])
 }
 
 model ProposalTemplate {
@@ -427,6 +439,9 @@ model Tenant {
   outreachEmailEvents          OutreachEmailEvent[]
   pipelineConfig               PipelineConfig?
   projects                     Project[]
+  orders                       Order[]
+  fulfillmentTasks             FulfillmentTask[]
+  businessPlaceIdentities      BusinessPlaceIdentity[]
   contactRequests              ContactRequest[]
   proposalFollowUps            ProposalFollowUp[]
   findingStatuses              FindingStatus[]
@@ -769,8 +784,15 @@ model OutreachEmail {
   trackingPixelUrl     String?
   trackingClickBaseUrl String?
 
-  providerMessageId String?
-  errorMessage      String?
+  providerMessageId    String?
+  providerName         String?
+  idempotencyKey       String?   @unique
+  approvedAt           DateTime?
+  suppressedAt         DateTime?
+  unsubscribeTokenHash String?
+  lastAttemptAt        DateTime?
+  attemptCount         Int       @default(0)
+  errorMessage         String?
 
   sentAt           DateTime?
   openedAt         DateTime?
@@ -789,6 +811,8 @@ model OutreachEmail {
   @@index([domainId, createdAt])
   @@index([type, status])
   @@index([scheduledAt, status])
+  @@index([tenantId, idempotencyKey])
+  @@index([unsubscribeTokenHash])
 }
 
 model OutreachEmailEvent {
@@ -1300,16 +1324,26 @@ enum OutreachEmailType {
 
 enum OutreachEmailStatus {
   PENDING
+  AWAITING_APPROVAL
+  SIMULATED
+  QUEUED
+  SENDING
   SENT
+  DELIVERED
   OPENED
   CLICKED
   REPLIED
   FAILED
+  BOUNCED
+  COMPLAINED
   SUPPRESSED
 }
 
 enum OutreachEventType {
   EMAIL_SENT
+  DELIVERED
+  BOUNCED
+  COMPLAINED
   EMAIL_OPEN
   EMAIL_CLICK
   SCORECARD_VIEW
@@ -1322,12 +1356,16 @@ enum OutreachEventType {
 }
 
 model ProposalOutreach {
-  id             String   @id @default(uuid())
-  proposalId     String
-  recipientEmail String
-  emailSubject   String
-  emailBody      String   @db.Text
-  sentAt         DateTime @default(now())
+  id                String    @id @default(uuid())
+  proposalId        String
+  recipientEmail    String
+  emailSubject      String
+  emailBody         String    @db.Text
+  sentAt            DateTime?
+  idempotencyKey    String?   @unique
+  providerMessageId String?
+  providerName      String?
+  errorMessage      String?
 
   // Engagement
   openedAt  DateTime?
@@ -1342,6 +1380,7 @@ model ProposalOutreach {
   @@index([proposalId])
   @@index([recipientEmail])
   @@index([tenantId])
+  @@index([tenantId, idempotencyKey])
 }
 
 // Follow-up email sequence (post-meeting: Day 0, Day 3, Day 7)
@@ -1492,18 +1531,27 @@ model Subscription {
 }
 
 model Payment {
-  id              String    @id @default(cuid())
-  tenantId        String
-  stripeInvoiceId String?   @unique
-  stripeChargeId  String?
-  amountCents     Int
-  currency        String    @default("usd")
-  status          String
-  paidAt          DateTime?
-  createdAt       DateTime  @default(now())
-  tenant          Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  id                    String              @id @default(cuid())
+  tenantId              String
+  proposalId            String?
+  acceptanceId          String?
+  stripeSessionId       String?             @unique
+  stripePaymentIntentId String?             @unique
+  stripeInvoiceId       String?             @unique
+  stripeChargeId        String?
+  amountCents           Int
+  currency              String              @default("usd")
+  status                String
+  paidAt                DateTime?
+  createdAt             DateTime            @default(now())
+  tenant                Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  proposal              Proposal?           @relation(fields: [proposalId], references: [id], onDelete: SetNull)
+  acceptance            ProposalAcceptance? @relation(fields: [acceptanceId], references: [id], onDelete: SetNull)
+  order                 Order?
 
   @@index([tenantId])
+  @@index([proposalId])
+  @@index([acceptanceId])
   @@map("payments")
 }
 
@@ -1513,6 +1561,10 @@ model CheckoutAttempt {
   tenantId        String // Made required for RLS consistency
   proposalId      String?
   type            String
+  status          String    @default("PENDING")
+  idempotencyKey  String?   @unique
+  acceptanceId    String?
+  paymentIntentId String?
   completedAt     DateTime?
   createdAt       DateTime  @default(now())
 
@@ -1714,6 +1766,38 @@ model GeneratedArtifact {
   @@index([status])
 }
 
+model BusinessPlaceIdentity {
+  id                 String   @id @default(uuid())
+  tenantId           String
+  placeId            String
+  locationGroupId    String?
+  businessName       String
+  identityStatus     String
+  identityConfidence Int?
+  candidateCount     Int      @default(1)
+  fieldProfile       String
+  lastObservedAt     DateTime
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, placeId])
+  @@index([tenantId, identityStatus])
+  @@index([locationGroupId])
+}
+
+model ProcessedOutboundWebhook {
+  id          String   @id
+  provider    String
+  eventType   String
+  processedAt DateTime @default(now())
+  tenantId    String?
+
+  @@index([provider, processedAt])
+  @@index([tenantId, processedAt])
+}
+
 model DeliveryBundle {
   id            String   @id @default(uuid())
   tenantId      String
@@ -1792,17 +1876,68 @@ model Project {
   id          String        @id @default(uuid())
   proposalId  String        @unique
   tenantId    String
+  orderId     String?       @unique
   status      ProjectStatus @default(KICKOFF)
   completedAt DateTime?
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
 
-  proposal   Proposal    @relation(fields: [proposalId], references: [id], onDelete: Cascade)
-  tenant     Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  npsSurveys NPSSurvey[]
+  proposal         Proposal          @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+  tenant           Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  npsSurveys       NPSSurvey[]
+  order            Order?            @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  fulfillmentTasks FulfillmentTask[]
 
   @@index([tenantId])
   @@index([status])
+}
+
+model Order {
+  id                    String   @id @default(uuid())
+  tenantId              String
+  proposalId            String
+  acceptanceId          String   @unique
+  paymentId             String   @unique
+  commercialFingerprint String
+  commercialSnapshot    Json
+  status                String   @default("PAID")
+  paidAt                DateTime
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  tenant           Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  proposal         Proposal           @relation(fields: [proposalId], references: [id], onDelete: Restrict)
+  acceptance       ProposalAcceptance @relation(fields: [acceptanceId], references: [id], onDelete: Restrict)
+  payment          Payment            @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+  project          Project?
+  fulfillmentTasks FulfillmentTask[]
+
+  @@index([tenantId, status, createdAt])
+  @@index([proposalId])
+}
+
+model FulfillmentTask {
+  id           String    @id @default(uuid())
+  tenantId     String
+  projectId    String
+  orderId      String
+  status       String    @default("AWAITING_OPERATOR")
+  scope        Json
+  executorType String    @default("OPERATOR")
+  ownerId      String?
+  createdAt    DateTime  @default(now())
+  startedAt    DateTime?
+  completedAt  DateTime?
+  verification Json?
+  lastError    String?
+  updatedAt    DateTime  @updatedAt
+
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  order   Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, orderId])
+  @@index([tenantId, status, createdAt])
 }
 
 // Task 4: NPS Automation

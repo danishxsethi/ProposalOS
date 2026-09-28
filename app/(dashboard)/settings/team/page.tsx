@@ -7,17 +7,23 @@ export default function TeamSettingsPage() {
   const [invites, setInvites] = useState<any[]>([]);
   const [showInviteModal, setShowInviteModal] = useState(false);
 
-  // Fetch Team & Invites
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  const loadTeam = async () => {
+    try {
+      const res = await fetch('/api/team');
+      if (!res.ok) throw new Error(`Could not load team (${res.status})`);
+      const data = await res.json();
+      setTeam(data.team ?? []);
+      setInvites(data.invites ?? []);
+      setLoadError(null);
+    } catch (error) {
+      setLoadError(error instanceof Error ? error.message : 'Could not load team');
+    }
+  };
+
   useEffect(() => {
-    // Mock fetch for now, replace with actual API
-    // const res = await fetch('/api/team');
-    // setTeam(res.team);
-    // setInvites(res.invites);
-    setTeam([
-      { id: '1', name: 'Alice Owner', email: 'alice@example.com', role: 'owner', status: 'active' },
-      { id: '2', name: 'Bob Admin', email: 'bob@example.com', role: 'admin', status: 'active' },
-    ]);
-    setInvites([]);
+    void loadTeam();
   }, []);
 
   const handleInvite = async (e: React.FormEvent) => {
@@ -34,9 +40,8 @@ export default function TeamSettingsPage() {
       });
       const data = await res.json();
       if (res.ok) {
-        alert('Invite sent!');
         setShowInviteModal(false);
-        // Refresh list
+        await loadTeam();
       } else {
         alert(data.error);
       }
@@ -61,34 +66,63 @@ export default function TeamSettingsPage() {
         </button>
       </div>
 
+      {loadError && (
+        <div role="alert" className="mb-6 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200">
+          {loadError}
+        </div>
+      )}
+
       {/* Team List */}
       <div className="bg-slate-800 rounded-lg border border-slate-700 overflow-hidden mb-8">
         <div className="px-6 py-4 border-b border-slate-700 font-semibold text-slate-300">
-          Active Members
+          Members <span className="ml-2 text-xs font-normal text-slate-500">{team.length}</span>
         </div>
-        <div className="divide-y divide-slate-700">
-          {team.map((member) => (
-            <div key={member.id} className="px-6 py-4 flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <div className="w-10 h-10 rounded-full bg-blue-900 text-blue-200 flex items-center justify-center font-bold">
-                  {member.name.substring(0, 2).toUpperCase()}
+        <ul className="divide-y divide-slate-700">
+          {team.map((member) => {
+            const display = member.name || member.email || 'Member';
+            return (
+              <li key={member.id} className="px-6 py-4 flex flex-wrap items-center justify-between gap-3">
+                <div className="flex min-w-0 items-center gap-4">
+                  <div aria-hidden="true" className="w-10 h-10 shrink-0 rounded-full bg-blue-900 text-blue-200 flex items-center justify-center font-bold">
+                    {display.substring(0, 2).toUpperCase()}
+                  </div>
+                  <div className="min-w-0">
+                    <div className="text-white font-medium truncate">{display}</div>
+                    <div className="text-slate-400 text-sm truncate">{member.email}</div>
+                  </div>
                 </div>
-                <div>
-                  <div className="text-white font-medium">{member.name}</div>
-                  <div className="text-slate-400 text-sm">{member.email}</div>
+                <div className="flex items-center gap-3">
+                  {member.status !== 'active' && (
+                    <span className="text-xs text-amber-300">Unverified</span>
+                  )}
+                  <span className="bg-slate-700 text-slate-300 text-xs px-2 py-1 rounded capitalize">
+                    {member.role}
+                  </span>
                 </div>
-              </div>
-              <div className="flex items-center gap-4">
-                <span className="bg-slate-700 text-slate-300 text-xs px-2 py-1 rounded capitalize">
-                  {member.role}
-                </span>
-                {/* Owner can remove non-owners */}
-                <button className="text-red-400 hover:text-red-300 text-sm">Remove</button>
-              </div>
-            </div>
-          ))}
-        </div>
+              </li>
+            );
+          })}
+          {team.length === 0 && !loadError && (
+            <li className="px-6 py-8 text-sm text-slate-400">No members yet.</li>
+          )}
+        </ul>
       </div>
+
+      {invites.length > 0 && (
+        <div className="bg-slate-800 rounded-lg border border-slate-700 overflow-hidden mb-8">
+          <div className="px-6 py-4 border-b border-slate-700 font-semibold text-slate-300">Pending invitations</div>
+          <ul className="divide-y divide-slate-700">
+            {invites.map((invite) => (
+              <li key={invite.id} className="px-6 py-4 flex flex-wrap items-center justify-between gap-3 text-sm">
+                <span className="text-slate-200 truncate">{invite.email}</span>
+                <span className="text-slate-400">
+                  {invite.role} · expires {new Date(invite.expiresAt).toLocaleDateString()}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {/* Invite Modal */}
       {showInviteModal && (
