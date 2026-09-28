@@ -106,6 +106,7 @@ vi.mock('@/lib/prisma', () => {
     audit: mockAudit,
     tenant: mockTenant,
     subscription: mockSubscription,
+    $executeRaw: vi.fn(() => Promise.resolve()),
     $transaction: vi.fn(async (cb) => {
       return cb(mockPrisma);
     }),

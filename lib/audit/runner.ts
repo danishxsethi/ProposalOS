@@ -63,6 +63,8 @@ export interface ModuleInput {
   url?: string;
   businessName?: string;
   city?: string;
+  latitude?: number;
+  longitude?: number;
   industry?: string;
   dependencyResults?: Record<string, any>;
   tenantId: string;
@@ -332,6 +334,9 @@ const reputationAdapter = async (
 ): Promise<ModuleResult> => {
   const gbpData = input.dependencyResults?.gbp;
   if (!gbpData) return { status: 'UNAVAILABLE', data: null, error: 'Business profile result unavailable' };
+  if (gbpData.identityConfidence === 'ambiguous' || gbpData.identityStatus === 'AMBIGUOUS') {
+    return { status: 'PARTIAL', data: null, error: 'GBP identity match ambiguous — reputation analysis withheld' };
+  }
   if (gbpData.reviewsUnavailable === true) return { status: 'UNAVAILABLE', data: null, error: 'Reviews could not be retrieved' };
   if (!gbpData.reviews || gbpData.reviews.length === 0)
     return { status: 'SKIPPED', data: null, error: 'No reviews were available to analyze' };
@@ -396,7 +401,7 @@ const gbpDeepAdapter = async (input: ModuleInput, tracker: CostTracker): Promise
   // finding (extractFindingsFromRegistryResult) already discloses this to the
   // customer — gbpDeep's deep-analysis findings are withheld here rather than
   // duplicated or presented as definitive.
-  if (gbpData?.identityConfidence === 'ambiguous' && result.status === 'COMPLETE') {
+    if ((gbpData?.identityConfidence === 'ambiguous' || gbpData?.identityStatus === 'AMBIGUOUS') && result.status === 'COMPLETE') {
     return {
       status: 'PARTIAL',
       data: { ...result.data, findings: [] },
@@ -1108,6 +1113,17 @@ export function extractFindingsFromRegistryResult(
   const findings: any[] = [];
   const snapshots: any[] = [];
 
+  if (moduleName === 'gbp' && rd.identityConfidence === 'ambiguous') {
+    findings.push({
+      module: 'gbp', category: 'Visibility', type: 'VITAMIN', title: 'Google Business Profile Match Needs Manual Confirmation',
+      description: `A possible Google Maps business match was found for ${input.businessName ?? 'this business'}, but identity is ambiguous. Specific profile findings are withheld until the correct listing is confirmed.`,
+      impactScore: 0, confidenceScore: 4, evidence: [], metrics: { identityConfidence: 'ambiguous', identityStatus: rd.identityStatus, candidatesConsidered: rd.candidatesConsidered ?? null },
+      effortEstimate: 'LOW', recommendedFix: ['Confirm the correct business location or Place ID'],
+    });
+    snapshots.push({ source: 'Places API identity observation', rawResponse: { placeId: rd.placeId, identityStatus: rd.identityStatus, identityConfidence: rd.matchConfidenceScore, candidateCount: rd.candidatesConsidered, alternateCandidates: rd.alternateCandidateNames, mapsProvenance: rd.mapsProvenance } });
+    return { findings, snapshots };
+  }
+
   // legacy path
   if (moduleName === 'website') {
     const rawResponse = Array.isArray(rd.findings) ? rd : rd.data || rd;
@@ -1121,7 +1137,7 @@ export function extractFindingsFromRegistryResult(
     // P1-29 (Wave 7): an ambiguous business match (common name, franchise, or a
     // weak candidate) must never produce definitive customer-negative findings
     // about a business we could not confirm is actually the customer's listing.
-    if (rd?.identityConfidence === 'ambiguous') {
+    if (rd?.identityConfidence === 'ambiguous' || rd?.identityStatus === 'AMBIGUOUS') {
       const alternates: string[] = Array.isArray(rd.alternateCandidateNames)
         ? rd.alternateCandidateNames
         : [];
@@ -1741,6 +1757,8 @@ async function runAuditInternal(auditId: string, signal?: AbortSignal) {
           url: url || undefined,
           businessName: name || undefined,
           city: city || undefined,
+          latitude: audit.businessLatitude ?? undefined,
+          longitude: audit.businessLongitude ?? undefined,
           industry: audit.businessIndustry || undefined,
           tenantId: audit.tenantId,
         };
@@ -1801,6 +1819,7 @@ async function runAuditInternal(auditId: string, signal?: AbortSignal) {
           if (res.status === 'COMPLETE' || res.status === 'PARTIAL') {
             if (res.status === 'COMPLETE') modulesCompleted.push(modName);
             const ext = extractFindingsFromRegistryResult(modName, res, moduleInput);
+            if (modName === 'gbp' && res.status === 'PARTIAL') modulesFailed.push({ module: modName, status: 'PARTIAL', error: res.error ?? 'Business identity is ambiguous' });
 
             // Wave 3 (Step 5): the one shared adapter/aggregation boundary every
             // module's raw finding output must pass through before it can become a
@@ -1816,10 +1835,20 @@ async function runAuditInternal(auditId: string, signal?: AbortSignal) {
 
             for (const snap of ext.snapshots) {
               const snapshotRaw = snap.rawResponse ?? snap;
+              const persistedRaw = modName === 'gbp' && snapshotRaw && typeof snapshotRaw === 'object'
+                ? {
+                    placeId: (snapshotRaw as Record<string, unknown>).placeId ?? null,
+                    identityStatus: (snapshotRaw as Record<string, unknown>).identityStatus ?? null,
+                    identityConfidence: (snapshotRaw as Record<string, unknown>).identityConfidence ?? null,
+                    matchConfidenceScore: (snapshotRaw as Record<string, unknown>).matchConfidenceScore ?? null,
+                    candidatesConsidered: (snapshotRaw as Record<string, unknown>).candidatesConsidered ?? null,
+                    fieldProfile: ((snapshotRaw as Record<string, unknown>).mapsProvenance as Record<string, unknown> | undefined)?.fieldProfile ?? null,
+                  }
+                : snapshotRaw;
               evidenceToPersist.push({
                 module: modName,
                 source: String(snap.source || modName),
-                rawResponse: snapshotRaw,
+                rawResponse: persistedRaw,
                 collectedAt: snap.collectedAt instanceof Date ? snap.collectedAt : undefined,
                 targetUrl: url,
                 observationStatus: res.status,

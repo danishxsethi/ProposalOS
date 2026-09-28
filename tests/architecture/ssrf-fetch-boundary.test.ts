@@ -384,6 +384,55 @@ const ALLOWED_RAW_FETCH: AllowedRawFetch[] = [
     reason: 'Fixed host; SerpAPI Yandex',
   },
 
+  {
+    file: 'lib/maps/googleMapsProvider.ts',
+    line: 238,
+    host: 'places.googleapis.com',
+    reason: 'Fixed hosts places.googleapis.com/maps.googleapis.com via mapsIntelligence — Places/Geocode/Routes, all fixed Google APIs, key from env',
+  },
+  {
+    file: 'lib/maps/googleMapsProvider.ts',
+    line: 340,
+    host: 'maps.googleapis.com',
+    reason: 'Fixed host geocode API — lat/lng in query',
+  },
+  {
+    file: 'lib/maps/googleMapsProvider.ts',
+    line: 410,
+    host: 'routes.googleapis.com',
+    reason: 'Fixed host routes matrix — origin/destination in POST body',
+  },
+  // Fix drift: competitor.ts PSI at 154 and competitor SERP at 295 shifted beyond ±5 tolerance
+  {
+    file: 'lib/modules/competitor.ts',
+    line: 154,
+    host: 'googleapis.com',
+    reason: 'Fixed host googleapis.com/PSI — drift fix for line 154 (was allowlisted at 185)',
+  },
+  {
+    file: 'lib/modules/competitor.ts',
+    line: 295,
+    host: 'serpapi.com',
+    reason: 'Fixed host serpapi.com — competitor SERP second pass at 295',
+  },
+  {
+    file: 'lib/outreach/sprint2/discovery.ts',
+    line: 249,
+    host: 'serpapi.com',
+    reason: 'Fixed host directory search via serpapi search.json — fixed host',
+  },
+  {
+    file: 'lib/outreach/sprint2/discovery.ts',
+    line: 328,
+    host: 'serpapi.com',
+    reason: 'Fixed host directory fallback via serpapi',
+  },
+  {
+    file: 'lib/modules/competitor.ts',
+    line: 213,
+    host: 'serpapi.com',
+    reason: 'Fixed host serpapi.com — self-search SERP drift fix for line 213',
+  },
   // Wave 1 (P1-05): internal RLS-violation alert webhook, not user-influenced.
   {
     file: 'lib/db.ts',
@@ -560,7 +609,6 @@ describe('SSRF fetch boundary [#5]', () => {
       'lib/modules/social.ts',
       'lib/modules/paidSearch.ts',
       'lib/modules/videoPresence.ts',
-      'lib/modules/gbpDeep.ts',
       'lib/utils/urlExtractor.ts',
       'lib/plugins/pluginEngine.ts',
       'lib/integrations/webhooks.ts',

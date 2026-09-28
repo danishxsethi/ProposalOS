@@ -110,6 +110,7 @@ describe('Auth & Session Architecture Boundary Tests', () => {
       'public/',
       'widget/',
       'outreach/track/',
+      'outreach/webhook/',
       'proposal/token/',
       'team/invite/',
       'client/',

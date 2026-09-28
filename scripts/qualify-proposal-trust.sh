@@ -2,6 +2,9 @@
 set -euo pipefail
 
 npm run security:audit:prod
+npx vitest run tests/security/maps-provider.test.ts tests/security/commercial-lifecycle.test.ts tests/security/outbound-delivery.test.ts tests/security/image-size-advisory-regression.test.ts tests/security/presentation-export-boundary.test.ts --reporter=dot
+npx vitest run lib/modules/__tests__/gbpIdentityMatch.test.ts lib/modules/__tests__/gbpDeepImplementation.test.ts --reporter=dot
+npm run typecheck
 npm run test:qualified
 npx vitest run tests/security --reporter=dot
 bash scripts/bootstrap-test-databases.sh -- npx vitest run \

@@ -8,6 +8,17 @@ import { withProviderResilience } from '@/lib/resilience/withProviderResilience'
 import { getPlanTierFromPriceId, stripe, stripeSecretKey } from '@/lib/stripe/stripe';
 import { runWithTenantAsync, runWithTenantBypass } from '@/lib/tenant/context';
 
+type LifecycleStore = {
+  processedWebhookEvent: { createMany: (...args: any[]) => Promise<{ count: number }> };
+  checkoutAttempt: { updateMany: (...args: any[]) => Promise<unknown>; findUnique?: (...args: any[]) => Promise<any> };
+  proposalAcceptance: { findUnique?: (...args: any[]) => Promise<any> };
+  proposal: { updateMany?: (...args: any[]) => Promise<{ count: number }>; findUnique?: (...args: any[]) => Promise<any> };
+  payment: { findUnique?: (...args: any[]) => Promise<any>; create?: (...args: any[]) => Promise<any> };
+  order?: { upsert: (...args: any[]) => Promise<any> };
+  project: { upsert: (...args: any[]) => Promise<any> };
+  fulfillmentTask?: { upsert: (...args: any[]) => Promise<any> };
+};
+
 type HardenedSubscription = Stripe.Subscription & {
   current_period_start: number;
   current_period_end: number;
@@ -89,7 +100,6 @@ export async function handleStripeWebhookEvent(
 ): Promise<WebhookResult> {
   const recordFailures = options?.recordFailures !== false;
   let tenantId: string | null = null;
-  let triggerDelivery: { proposalId: string; tenantId: string } | null = null;
 
   // Global Kill Switch: Freeze all mutations
   const { assertBillingNotFrozen } = await import('@/lib/stripe/stripe');
@@ -122,7 +132,9 @@ export async function handleStripeWebhookEvent(
 
     // 2. Resolve tenantId under narrow bypass context based on event type
     switch (event.type) {
-      case 'checkout.session.completed': {
+      case 'checkout.session.completed':
+      case 'checkout.session.async_payment_succeeded':
+      case 'checkout.session.expired': {
         const session = event.data.object as Stripe.Checkout.Session;
         if (session.metadata?.proposalId) {
           const proposal = await runWithTenantBypass('stripe-webhook-proposal-lookup', () =>
@@ -173,6 +185,8 @@ export async function handleStripeWebhookEvent(
     // we fail with a clear, safe configuration error.
     const knownEvents = [
       'checkout.session.completed',
+      'checkout.session.async_payment_succeeded',
+      'checkout.session.expired',
       'customer.subscription.updated',
       'customer.subscription.deleted',
       'invoice.payment_failed',
@@ -197,55 +211,92 @@ export async function handleStripeWebhookEvent(
       : (fn: () => Promise<void>) => runWithTenantBypass('stripe-webhook-system-event', fn);
 
     await contextRunner(async () => {
-      await prisma.$transaction(async (tx) => {
-        // Safely insert processedWebhookEvent within the transaction to enforce "effectively once" semantics
-        try {
-          await tx.processedWebhookEvent.create({
-            data: { id: event.id, type: event.type },
-          });
-        } catch (err: any) {
-          // Handle P2002 Unique Constraint violation safely (concurrent race condition)
-          if (err.code === 'P2002') {
-            logger.info(
-              { eventId: event.id },
-              'Deduplicated concurrent Stripe webhook event transaction'
-            );
-            return;
-          }
-          throw err;
-        }
-
+      await prisma.$transaction(async (transaction) => {
+        const tx = transaction as unknown as typeof transaction & LifecycleStore;
+        const reservation = await tx.processedWebhookEvent.createMany({ data: [{ id: event.id, type: event.type }], skipDuplicates: true });
+        if (reservation.count === 0) return;
         switch (event.type) {
-          case 'checkout.session.completed': {
+          case 'checkout.session.completed':
+          case 'checkout.session.async_payment_succeeded': {
             const session = event.data.object as Stripe.Checkout.Session;
 
             await tx.checkoutAttempt.updateMany({
               where: { stripeSessionId: session.id },
-              data: { completedAt: new Date() },
+              data: { completedAt: new Date(), status: session.payment_status === 'paid' ? 'PAID' : 'PAYMENT_PENDING', paymentIntentId: typeof session.payment_intent === 'string' ? session.payment_intent : null },
             });
 
             if (session.metadata?.proposalId) {
               const proposalId = session.metadata.proposalId;
-              const tierId = session.metadata.tierId;
-
-              const proposal = await tx.proposal.update({
-                where: { id: proposalId },
-                data: { status: ProposalStatus.PAID, tierChosen: tierId },
-              });
-
-              await tx.project.upsert({
-                where: { proposalId },
+              if (session.payment_status !== 'paid') {
+                await tx.checkoutAttempt.updateMany({ where: { stripeSessionId: session.id }, data: { completedAt: null } });
+                break;
+              }
+              const paymentIntentId = typeof session.payment_intent === 'string' ? session.payment_intent : null;
+              const attempt = await tx.checkoutAttempt.findUnique({ where: { stripeSessionId: session.id } });
+              if (!attempt?.acceptanceId) throw new Error('Proposal checkout has no durable accepted commercial snapshot');
+              const acceptance = await tx.proposalAcceptance.findUnique({ where: { id: attempt.acceptanceId } });
+              if (!acceptance || acceptance.proposalId !== proposalId) throw new Error('Proposal checkout acceptance does not match proposal');
+              const proposal = await tx.proposal.findUnique({ where: { id: proposalId }, select: { tenantId: true, status: true } });
+              if (!proposal || proposal.tenantId !== tenantId) throw new Error('Proposal tenant does not match checkout tenant');
+              if (acceptance.commercialFingerprint !== attempt.idempotencyKey?.replace(/^proposal-checkout:/, '')) {
+                throw new Error('Accepted commercial fingerprint does not match checkout attempt');
+              }
+              const amountCents = session.amount_total ?? 0;
+              const currency = session.currency ?? 'usd';
+              let payment = paymentIntentId
+                ? await tx.payment.findUnique({ where: { stripePaymentIntentId: paymentIntentId } })
+                : await tx.payment.findUnique({ where: { stripeSessionId: session.id } });
+              if (!payment) {
+                payment = await tx.payment.create({
+                  data: {
+                    tenantId: proposal.tenantId,
+                    proposalId,
+                    acceptanceId: acceptance.id,
+                    stripeSessionId: session.id,
+                    stripePaymentIntentId: paymentIntentId,
+                    amountCents,
+                    currency,
+                    status: 'paid',
+                    paidAt: new Date((event.created ?? Math.floor(Date.now() / 1000)) * 1000),
+                  },
+                });
+              }
+              const snapshot = acceptance.commercialSnapshot as Record<string, unknown>;
+              const tierId = acceptance.tier;
+              const order = await tx.order.upsert({
+                where: { acceptanceId: acceptance.id },
                 create: {
-                  proposalId,
                   tenantId: proposal.tenantId,
-                  status: ProjectStatus.KICKOFF,
+                  proposalId,
+                  acceptanceId: acceptance.id,
+                  paymentId: payment.id,
+                  commercialFingerprint: acceptance.commercialFingerprint,
+                  commercialSnapshot: acceptance.commercialSnapshot as import('@prisma/client').Prisma.InputJsonValue,
+                  status: 'PAID',
+                  paidAt: payment.paidAt ?? new Date(),
                 },
-                update: {
-                  status: ProjectStatus.KICKOFF,
-                },
+                update: {},
               });
-
-              triggerDelivery = { proposalId, tenantId: proposal.tenantId };
+              const project = await tx.project.upsert({
+                where: { proposalId },
+                create: { proposalId, tenantId: proposal.tenantId, orderId: order.id, status: ProjectStatus.KICKOFF },
+                update: { orderId: order.id },
+              });
+              await tx.fulfillmentTask.upsert({
+                where: { projectId_orderId: { projectId: project.id, orderId: order.id } },
+                create: {
+                  tenantId: proposal.tenantId,
+                  projectId: project.id,
+                  orderId: order.id,
+                  status: 'AWAITING_OPERATOR',
+                  executorType: 'OPERATOR',
+                  scope: snapshot as import('@prisma/client').Prisma.InputJsonValue,
+                },
+                update: {},
+              });
+              if (proposal.status !== ProposalStatus.PAID) {
+                await tx.proposal.updateMany({ where: { id: proposalId, tenantId, status: { in: ['ACCEPTED', 'SENT', 'VIEWED'] } }, data: { status: ProposalStatus.PAID, tierChosen: tierId } });
+              }
 
               // Emit stripe.billing_paid for proposal checkout
               await recordAuditTrailEvent({
@@ -307,6 +358,11 @@ export async function handleStripeWebhookEvent(
                 },
               });
             }
+            break;
+          }
+          case 'checkout.session.expired': {
+            const session = event.data.object as Stripe.Checkout.Session;
+            await tx.checkoutAttempt.updateMany({ where: { stripeSessionId: session.id, status: { not: 'PAID' } }, data: { status: 'EXPIRED', completedAt: new Date() } });
             break;
           }
 
@@ -522,19 +578,6 @@ export async function handleStripeWebhookEvent(
         }
       });
     });
-
-    if (triggerDelivery) {
-      try {
-        const deliveryGraph = await import('@/lib/graph/delivery-graph');
-        const runFn = (deliveryGraph as any).runDeliveryAgent;
-        if (typeof runFn === 'function') {
-          const { proposalId, tenantId: proposalTenantId } = triggerDelivery;
-          await runFn(proposalId, proposalTenantId);
-        }
-      } catch (error) {
-        logger.error({ error }, 'Failed to trigger delivery graph on checkout');
-      }
-    }
 
     return { received: true, eventId: event.id };
   } catch (error: any) {

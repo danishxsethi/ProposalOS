@@ -153,6 +153,18 @@ export function proposalPublicationFingerprint(state: unknown): string {
   return createHash('sha256').update(canonicalJson(state)).digest('hex');
 }
 
+/** Canonicalizes the exact selected commercial offer for acceptance/payment linkage. */
+export function acceptedCommercialFingerprint(input: {
+  proposalId: string;
+  proposalVersion: number;
+  tier: string;
+  amountCents: number;
+  currency: string;
+  tierContent: unknown;
+}): string {
+  return createHash('sha256').update(canonicalJson(input)).digest('hex');
+}
+
 export function publicProposalCitations(qaResults: unknown) {
   const qa =
     qaResults && typeof qaResults === 'object' ? (qaResults as Record<string, unknown>) : null;

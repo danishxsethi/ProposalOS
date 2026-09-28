@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-25T03:23:55.017Z",
+  "generatedAt": "2026-09-28T04:20:36.721Z",
   "scope": "app/api/proposal/token/** public/tokenized proposal surfaces",
   "forbiddenAuthorities": [
     "payment/stripe",
@@ -40,7 +40,7 @@
         "POST"
       ],
       "writes": [
-        "proposal.update",
+        "proposal.updateMany",
         "proposalAcceptance.create"
       ],
       "guard": "inline",
@@ -65,9 +65,7 @@
       "methods": [
         "POST"
       ],
-      "writes": [
-        "proposal.update"
-      ],
+      "writes": [],
       "guard": "rateLimit",
       "violations": []
     },

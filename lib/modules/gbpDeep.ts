@@ -1,11 +1,6 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
-import { z } from 'zod';
-
-import { withModuleCache } from '@/lib/cache/moduleCache';
 import { CostTracker } from '@/lib/costs/costTracker';
 import { logger } from '@/lib/logger';
-import { withProviderResilience } from '@/lib/resilience/withProviderResilience';
-import { safeFetchResponseDerived } from '@/lib/security/safeFetch';
+import { mapsIntelligence, normalizeGooglePlaceToLegacy } from '@/lib/maps/googleMapsProvider';
 
 import { normalizeConfidence } from './findingGenerator';
 import { scorePlaceCandidate } from './gbp';
@@ -68,18 +63,6 @@ export interface GbpDeepAnalysis {
   secondaryCategories: string[];
 }
 
-const PhotoAnalysisSchema = z
-  .object({
-    scores: z.object({
-      quality: z.number().min(1).max(10),
-      relevance: z.number().min(1).max(10),
-      professionalism: z.number().min(1).max(10),
-    }),
-    type: z.enum(['Exterior', 'Interior', 'Team', 'Product', 'Other']),
-    flags: z.array(z.enum(['Blurry', 'Dark', 'TextHeavy', 'Irrelevant'])).max(4),
-  })
-  .strict();
-
 /**
  * Run Deep GBP Analysis Module
  */
@@ -89,6 +72,7 @@ export async function runGbpDeepModule(
 ): Promise<AuditModuleResult> {
   logger.info({ businessName: input.businessName }, '[GBPDeep] Starting deep analysis');
 
+  if (input.signal?.aborted) throw input.signal.reason ?? new Error('Places lookup cancelled');
   if (!input.placeData && !process.env.GOOGLE_PLACES_API_KEY) {
     return {
       findings: [],
@@ -101,114 +85,30 @@ export async function runGbpDeepModule(
     let placeId = input.placeId || input.placeData?.placeId;
     let details = input.placeData ? dependencyPlaceToApiShape(input.placeData) : null;
 
-    // 1. Resolve Place ID if not provided
-    if (!placeId && !details) {
-      const searchRes = await withModuleCache<any>(
-        {
-          module: 'gbp_deep',
-          version: 2,
-          input: { type: 'places_text_search', businessName: input.businessName, city: input.city },
-        },
-        { ttlSeconds: 24 * 60 * 60 },
-        async () => {
-          return withProviderResilience<any>(
-            {
-              provider: 'google-places',
-              operation: 'gbp_deep:places_text_search',
-              signal: input.signal,
-              degrade: false,
-            },
-            async ({ signal }) => {
-              tracker?.addApiCall('PLACES_TEXT_SEARCH');
-              const res = await fetch(`${PLACES_API_BASE}/places:searchText`, {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  'X-Goog-Api-Key': process.env.GOOGLE_PLACES_API_KEY!,
-                  // P1-29 (Wave 7): displayName/formattedAddress are required to
-                  // disambiguate multiple candidates — the previous 'places.id'-only
-                  // field mask made scoring impossible and always trusted index 0.
-                  'X-Goog-FieldMask': 'places.displayName,places.id,places.formattedAddress',
-                },
-                body: JSON.stringify({
-                  textQuery: `${input.businessName} in ${input.city}`,
-                  maxResultCount: 5,
-                }),
-                signal,
-              });
-              if (!res.ok) throw new Error(`Place search failed: ${res.statusText}`);
-              return res.json();
-            }
-          );
-        }
-      );
-
-      if (!searchRes.places?.length) throw new Error('Business not found in Maps');
-      const scored = searchRes.places
-        .map((candidate: any) => ({
-          candidate,
-          score: scorePlaceCandidate(candidate, input.businessName, input.city),
-        }))
-        .sort((a: { score: number }, b: { score: number }) => b.score - a.score);
-      placeId = scored[0].candidate.id;
-    }
-
-    // 2. Fetch Deep Details
-    // Extended FieldMask for deep analysis
-    const fieldMask = [
-      'id',
-      'displayName',
-      'formattedAddress',
-      'websiteUri',
-      'rating',
-      'userRatingCount',
-      'photos',
-      'reviews',
-      'primaryType',
-      'primaryTypeDisplayName',
-      'editorialSummary', // Description
-      'paymentOptions',
-      'accessibilityOptions',
-      'amenities', // Attributes
-      // Note: openingDate is explicitly requested via 'businessStatus' usually or specific fields
-      'regularOpeningHours',
-      'types',
-    ]
-      .map((f) => (f.startsWith('places.') ? f : f))
-      .join(',');
-
     if (!details) {
-      details = await withModuleCache<any>(
-        {
-          module: 'gbp_deep',
-          version: 2,
-          input: { type: 'places_details_deep', placeId },
-        },
-        { ttlSeconds: 7 * 24 * 60 * 60 },
-        async () => {
-          return withProviderResilience<any>(
-            {
-              provider: 'google-places',
-              operation: 'gbp_deep:places_details_deep',
-              signal: input.signal,
-              degrade: false,
-            },
-            async ({ signal }) => {
-              tracker?.addApiCall('PLACES_DETAILS_DEEP');
-              const res = await fetch(`${PLACES_API_BASE}/places/${placeId}?languageCode=en`, {
-                headers: {
-                  'Content-Type': 'application/json',
-                  'X-Goog-Api-Key': process.env.GOOGLE_PLACES_API_KEY!,
-                  'X-Goog-FieldMask': fieldMask,
-                },
-                signal,
-              });
-              if (!res.ok) throw new Error(`Places details deep failed: ${res.statusText}`);
-              return res.json();
-            }
-          );
-        }
-      );
+      const resolution = await mapsIntelligence.resolveBusiness({
+        businessName: input.businessName,
+        city: input.city,
+        domain: input.websiteUrl,
+        placeId,
+        fieldProfile: 'GBP_DEEP',
+      });
+      if (resolution.status === 'FAILED' || resolution.status === 'UNAVAILABLE') {
+        if (input.signal?.aborted) throw input.signal.reason ?? new Error('Places lookup cancelled');
+        return { findings: [], evidenceSnapshots: [], execution: { state: resolution.status === 'FAILED' ? 'failed' : 'unavailable', reason: resolution.error?.message ?? 'Maps provider unavailable' } };
+      }
+      if (!resolution.data) return { findings: [], evidenceSnapshots: [], execution: { state: 'partial', reason: 'No place candidate found' } };
+      placeId = resolution.data.placeId;
+      details = normalizeGooglePlaceToLegacy(resolution.data);
+      details.id = resolution.data.placeId;
+      details.websiteUri = resolution.data.website;
+      details.userRatingCount = resolution.data.reviewCount;
+      details.displayName = resolution.data.displayName ? { text: resolution.data.displayName } : undefined;
+      details.formattedAddress = resolution.data.formattedAddress;
+      details.primaryTypeDisplayName = resolution.data.primaryType ? { text: resolution.data.primaryType } : undefined;
+      details.identityConfidence = resolution.data.identityStatus === 'CONFIRMED' ? 'high' : 'ambiguous';
+      details.identityStatus = resolution.data.identityStatus;
+      details.mapsProvenance = resolution.provenance;
     }
 
     if (!details) {
@@ -261,6 +161,22 @@ export async function runGbpDeepModule(
     return {
       findings,
       evidenceSnapshots: [evidenceSnapshot],
+      data: {
+        scores: {},
+        coreWebVitals: undefined,
+        finalUrl: undefined,
+        schemaAnalysis: undefined,
+        conversionAnalysis: undefined,
+        placeId: resolvedPlaceId,
+        placeData: details,
+        identityConfidence: input.placeData?.identityConfidence ?? 'high',
+        identityStatus: input.placeData?.identityStatus ?? 'CONFIRMED',
+        mapsProvenance: input.placeData?.mapsProvenance ?? null,
+        primaryType: analysis.primaryCategory,
+        types: analysis.secondaryCategories,
+        rating: analysis.reviews.rating,
+        reviewCount: analysis.reviews.totalCount,
+      },
       execution:
         photoAnalysisUnavailable || analysis.claimedStatus.basis === 'unavailable'
           ? {
@@ -284,6 +200,7 @@ export async function runGbpDeepModule(
 }
 
 function dependencyPlaceToApiShape(place: Record<string, any>): Record<string, any> {
+  if (place.provider === 'google_maps_platform') return normalizeGooglePlaceToLegacy(place as any);
   return {
     id: place.placeId,
     displayName: place.name ? { text: place.name } : undefined,
@@ -342,15 +259,10 @@ async function analyzeGbpData(
 
   // AI Photo Scoring
   if (photos.length > 0 && process.env.GOOGLE_AI_API_KEY) {
-    const photoUrls = photos
-      .slice(0, 5)
-      .filter((photo: any) => typeof photo?.name === 'string' && photo.name.length > 0)
-      .map((photo: any) => ({
-        evidenceUrl: `${PLACES_API_BASE}/${photo.name}/media`,
-        fetchUrl: `${PLACES_API_BASE}/${photo.name}/media?key=${process.env.GOOGLE_PLACES_API_KEY}&maxHeightPx=400&maxWidthPx=400`,
-      }));
-
-    photoAnalysis.aiAnalysis = await analyzePhotosWithGemini(photoUrls, tracker, signal);
+    // Places photo media requires the secret-bearing media URL; it is not sent
+    // through generic derived-URL fetches. Photo interpretation stays unavailable
+    // until it can be fetched through an explicit credential-safe client path.
+    photoAnalysis.aiAnalysis = [];
   }
 
   // C. Review Analysis
@@ -406,101 +318,6 @@ async function analyzeGbpData(
 /**
  * AI Photo Analysis with Gemini
  */
-async function analyzePhotosWithGemini(
-  urls: Array<{ fetchUrl: string; evidenceUrl: string }>,
-  tracker?: CostTracker,
-  signal?: AbortSignal
-): Promise<NonNullable<PhotoAnalysis['aiAnalysis']>> {
-  if (!process.env.GOOGLE_AI_API_KEY) return [];
-
-  try {
-    const genAI = new GoogleGenerativeAI(process.env.GOOGLE_AI_API_KEY);
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
-
-    // We cannot pass URLs directly to Gemini 1.5 Flash in this manner usually (needs base64 or file/URI in storage).
-    // However, standard fetch + base64 convert works.
-
-    const results = [];
-
-    // Analyze up to 3 photos to save time/cost
-    for (const url of urls.slice(0, 3)) {
-      try {
-        // Fetch image buffer with resilience
-        const imgRes = await withProviderResilience<Response>(
-          {
-            provider: 'crawler',
-            operation: 'gbp_deep:fetch_photo',
-            signal,
-            degrade: false,
-            policy: { timeoutMs: 8000, maxAttempts: 2 },
-          },
-          async ({ signal: providerSignal }) => {
-            const res = await safeFetchResponseDerived(
-              url.fetchUrl,
-              { signal: providerSignal },
-              { maxResponseBytes: 2 * 1024 * 1024 }
-            );
-            if (!res.ok) throw new Error(`Fetch photo failed: ${res.statusText}`);
-            const contentType = res.headers.get('content-type') || '';
-            if (!contentType.startsWith('image/')) {
-              throw new Error(`Unexpected photo content type: ${contentType || 'missing'}`);
-            }
-            return res;
-          }
-        );
-
-        const arrayBuffer = await imgRes.arrayBuffer();
-        const base64Img = Buffer.from(arrayBuffer).toString('base64');
-
-        const prompt = `Analyze this business photo for a GBP audit.
-              Rate 1-10 on: Quality, Relevance, Professionalism.
-              Identify Type: Exterior, Interior, Team, Product, or Other.
-              Flag issues: Blurry, Dark, TextHeavy, Irrelevant.
-              Return JSON: { scores: { quality: number, relevance: number, professionalism: number }, type: string, flags: string[] }`;
-
-        const result = await withProviderResilience<any>(
-          {
-            provider: 'gemini',
-            operation: 'gbp_deep:photo_analysis_gemini',
-            signal,
-            degrade: false,
-            policy: { timeoutMs: 15000, maxAttempts: 2 },
-          },
-          async () => {
-            tracker?.addApiCall('GEMINI_PHOTO_ANALYSIS');
-            return await model.generateContent([
-              prompt,
-              { inlineData: { data: base64Img, mimeType: 'image/jpeg' } },
-            ]);
-          }
-        );
-
-        const text = result.response.text();
-        // Simple JSON parse (cleanup markdown if needed)
-        const cleanText = text.replace(/```json|```/g, '').trim();
-        const analysis = PhotoAnalysisSchema.parse(JSON.parse(cleanText));
-
-        results.push({
-          photoUrl: url.evidenceUrl,
-          ...analysis,
-        });
-      } catch (err) {
-        if (signal?.aborted) throw signal.reason ?? err;
-        logger.warn(
-          { error: err, url: url.evidenceUrl },
-          '[GBPDeep] Failed to analyze photo, skipping'
-        );
-      }
-    }
-
-    return results;
-  } catch (e) {
-    if (signal?.aborted) throw signal.reason ?? e;
-    logger.warn({ error: e }, '[GBPDeep] Photo analysis failed');
-    return [];
-  }
-}
-
 /**
  * Generate Findings.
  *

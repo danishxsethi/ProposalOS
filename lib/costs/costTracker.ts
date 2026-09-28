@@ -303,6 +303,15 @@ export class CostTracker {
     this.alertThresholdCents = (this.capCents * alertPercent) / 100;
   }
 
+  hasBudgetForApiCall(api: ApiType, count: number = 1): boolean {
+    const costPerCall = api === 'PLACES_TEXT_SEARCH'
+      ? COSTS.PLACES_TEXT_SEARCH_CENTS
+      : api === 'PLACES_DETAILS'
+        ? COSTS.PLACES_DETAILS_CENTS
+        : 0;
+    return this.totalCents + costPerCall * count <= this.capCents;
+  }
+
   /**
    * Add cost for standard API calls
    */

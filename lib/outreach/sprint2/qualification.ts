@@ -1,5 +1,6 @@
 import { withModuleCache } from '@/lib/cache/moduleCache';
 import { logger } from '@/lib/logger';
+import { mapsIntelligence } from '@/lib/maps/googleMapsProvider';
 import { runSocialModule } from '@/lib/modules/social';
 import { withProviderResilience } from '@/lib/resilience/withProviderResilience';
 
@@ -24,6 +25,7 @@ interface WebsiteSignals {
 
 interface GbpSignals {
   found: boolean;
+  status: 'COMPLETE' | 'PARTIAL' | 'UNAVAILABLE' | 'FAILED';
   placeId?: string;
   rating: number | null;
   reviewCount: number;
@@ -56,6 +58,7 @@ export interface PainScoreComponent {
 export interface QualificationResult {
   painScore: number;
   qualified: boolean;
+  qualificationStatus: 'COMPLETE' | 'PARTIAL' | 'UNAVAILABLE' | 'FAILED';
   threshold: number;
   breakdown: {
     websiteSpeed: PainScoreComponent;
@@ -173,148 +176,15 @@ async function fetchWebsiteSignals(website: string | null | undefined): Promise<
 }
 
 async function fetchGbpSignals(input: QualifiableLeadInput): Promise<GbpSignals> {
-  const placesKey = process.env.GOOGLE_PLACES_API_KEY;
-  if (!placesKey) {
-    return {
-      found: false,
-      rating: null,
-      reviewCount: 0,
-      photoCount: 0,
-      hasHours: false,
-      ownerResponseRate: null,
-      ownerResponseConfidence: 'unknown',
-    };
-  }
-
-  const location = toLocation(input.city, input.state);
-  const searchData = await withModuleCache<{ places?: Array<{ id?: string }> }>(
-    {
-      module: 'outreach_qualification',
-      version: 1,
-      input: { type: 'places_text_search', businessName: input.businessName, location },
-    },
-    { ttlSeconds: 24 * 3600 },
-    async () => {
-      return withProviderResilience<{ places?: Array<{ id?: string }> }>(
-        {
-          provider: 'google-places',
-          operation: 'outreach_qualification:places_text_search',
-          degrade: true,
-          fallbackValue: { places: [] },
-        },
-        async () => {
-          const res = await fetch('https://places.googleapis.com/v1/places:searchText', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'X-Goog-Api-Key': placesKey,
-              'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress',
-            },
-            body: JSON.stringify({
-              textQuery: `${input.businessName} in ${location}`,
-              maxResultCount: 1,
-            }),
-          });
-          if (!res.ok) {
-            const text = await res.text();
-            throw new Error(`Places search failed (${res.status}): ${text}`);
-          }
-          return (await res.json()) as { places?: Array<{ id?: string }> };
-        }
-      );
-    }
-  );
-
-  const placeId = searchData.places?.[0]?.id;
-  if (!placeId) {
-    return {
-      found: false,
-      rating: input.rating ?? null,
-      reviewCount: input.reviewCount ?? 0,
-      photoCount: 0,
-      hasHours: false,
-      ownerResponseRate: null,
-      ownerResponseConfidence: 'unknown',
-    };
-  }
-
-  const details = await withModuleCache<Record<string, unknown>>(
-    {
-      module: 'outreach_qualification',
-      version: 1,
-      input: { type: 'places_details', placeId },
-    },
-    { ttlSeconds: 7 * 24 * 3600 },
-    async () => {
-      return withProviderResilience<Record<string, unknown>>(
-        {
-          provider: 'google-places',
-          operation: 'outreach_qualification:places_details',
-          degrade: true,
-          fallbackValue: {},
-        },
-        async () => {
-          const res = await fetch(
-            `https://places.googleapis.com/v1/places/${placeId.replace(/^places\//, '')}`,
-            {
-              headers: {
-                'Content-Type': 'application/json',
-                'X-Goog-Api-Key': placesKey,
-                'X-Goog-FieldMask': [
-                  'id',
-                  'rating',
-                  'userRatingCount',
-                  'photos',
-                  'reviews',
-                  'regularOpeningHours',
-                  'websiteUri',
-                ].join(','),
-              },
-            }
-          );
-          if (!res.ok) {
-            const text = await res.text();
-            throw new Error(`Places details failed (${res.status}): ${text}`);
-          }
-          return (await res.json()) as Record<string, unknown>;
-        }
-      );
-    }
-  );
-
-  const reviews = Array.isArray(details.reviews)
-    ? (details.reviews as Array<Record<string, unknown>>)
-    : [];
-  const photoCount = Array.isArray(details.photos) ? details.photos.length : 0;
-  const reviewCount = toNumber(details.userRatingCount) ?? input.reviewCount ?? 0;
-  const rating = toNumber(details.rating) ?? input.rating ?? null;
-  const hasHours = !!details.regularOpeningHours;
-
-  const directResponseSignals = reviews.filter((review) =>
-    Boolean(review.reviewReply || review.ownerResponse || review.response)
-  ).length;
-
-  let ownerResponseRate: number | null = null;
-  let confidence: GbpSignals['ownerResponseConfidence'] = 'unknown';
-  if (reviews.length > 0) {
-    if (directResponseSignals > 0) {
-      ownerResponseRate = directResponseSignals / reviews.length;
-      confidence = 'direct';
-    } else {
-      ownerResponseRate = 0;
-      confidence = 'inferred';
-    }
-  }
-
+  const result = await mapsIntelligence.resolveBusiness({ businessName: input.businessName, city: toLocation(input.city, input.state), domain: input.website, fieldProfile: 'GBP_DEEP' });
+  const blank = (status: GbpSignals['status'], found = false): GbpSignals => ({ status, found, rating: null, reviewCount: 0, photoCount: 0, hasHours: false, ownerResponseRate: null, ownerResponseConfidence: 'unknown' });
+  if (result.status !== 'COMPLETE' || !result.data) return blank(result.status, false);
+  if (result.data.identityStatus !== 'CONFIRMED') return blank('PARTIAL');
   return {
-    found: true,
-    placeId: placeId.replace(/^places\//, ''),
-    rating,
-    reviewCount,
-    photoCount,
-    hasHours,
-    ownerResponseRate,
-    ownerResponseConfidence: confidence,
+    status: 'COMPLETE', found: true, placeId: result.data.placeId,
+    rating: result.data.rating, reviewCount: result.data.reviewCount ?? input.reviewCount ?? 0,
+    photoCount: result.data.photos.length, hasHours: !!result.data.openingHours,
+    ownerResponseRate: null, ownerResponseConfidence: 'unknown',
   };
 }
 
@@ -551,7 +421,9 @@ export async function qualifyLead(
           ? 8
           : 0;
 
-  const gbpNeglectedScore = !gbpSignals.found
+  const gbpNeglectedScore = gbpSignals.status !== 'COMPLETE'
+    ? 0
+    : !gbpSignals.found
     ? 15
     : Math.min(
         15,
@@ -562,7 +434,9 @@ export async function qualifyLead(
 
   const noSslScore = websiteSignals.isHttps ? 0 : 10;
 
-  const zeroReviewResponseScore = !gbpSignals.found
+  const zeroReviewResponseScore = gbpSignals.status !== 'COMPLETE'
+    ? 0
+    : !gbpSignals.found
     ? 5
     : gbpSignals.reviewCount === 0
       ? 10
@@ -657,6 +531,9 @@ export async function qualifyLead(
     socialSignals,
     competitorSignals
   );
+  if (gbpSignals.status !== 'COMPLETE') {
+    topFindings.splice(0, topFindings.length, 'Local business profile could not be confidently checked; manual review required');
+  }
   const summarySnippet = buildSummarySnippet(painScore, topFindings);
 
   logger.info(
@@ -674,7 +551,8 @@ export async function qualifyLead(
 
   return {
     painScore,
-    qualified: painScore >= threshold,
+    qualified: gbpSignals.status === 'COMPLETE' && painScore >= threshold,
+    qualificationStatus: gbpSignals.status === 'COMPLETE' ? 'COMPLETE' : 'PARTIAL',
     threshold,
     breakdown,
     topFindings,

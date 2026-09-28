@@ -571,8 +571,8 @@ export async function processSniperOutreach(
       let capCheckPassed = false;
       try {
         await prisma.$transaction(async (tx) => {
-          // Enforce concurrency safe locking
-          await tx.$executeRawUnsafe(`SELECT id FROM "Tenant" WHERE id = $1 FOR UPDATE`, tenantId);
+          // Enforce concurrency safe locking via typed parameter
+          await tx.$queryRaw`SELECT id FROM "Tenant" WHERE id = ${tenantId} FOR UPDATE`;
 
           const startOfToday = new Date();
           startOfToday.setHours(0, 0, 0, 0);

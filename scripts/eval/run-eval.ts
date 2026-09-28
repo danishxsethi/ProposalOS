@@ -26,7 +26,7 @@ async function main() {
         // Pipeline injection
         console.log(`Running example ${ex.id}...`);
 
-        let success = true;
+        const success = true;
         // Example assertion (in real implementation, call diagnosisGraph or runDiagnosisPipeline)
 
         if (success) passes++;

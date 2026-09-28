@@ -1,115 +1,40 @@
-/**
- * POST /api/proposal/token/[token]/email
- * Send proposal via email
- *
- * Features:
- * - Zod validation
- * - Rate limiting
- * - Standardized error responses
- */
-
 import { NextResponse } from 'next/server';
 
-import { generateTraceId, InternalError, ValidationError } from '@/lib/api/errors';
-import { proposalEmailSchema } from '@/lib/api/schemas/proposal';
-import { sendProposalEmail } from '@/lib/email/sender';
+import { z } from 'zod';
+
+import { generateTraceId, InternalError } from '@/lib/api/errors';
 import { withRateLimit } from '@/lib/middleware/rateLimit';
-import { prisma } from '@/lib/prisma';
-import {
-  PublicProposalAccessError,
-  resolvePublicProposalAccess,
-} from '@/lib/proposal/publicAccess';
-import { runWithTenantAsync } from '@/lib/tenant/context';
+import { deliverProposalEmail } from '@/lib/outreach/outboundDelivery';
+import { PublicProposalAccessError, resolvePublicProposalAccess } from '@/lib/proposal/publicAccess';
 
-interface Params {
-  params: Promise<{ token: string }>;
-}
+interface Params { params: Promise<{ token: string }> }
+const Input = z.object({ email: z.string().email().max(254) });
 
-/**
- * Inner handler for sending proposal via email
- */
-async function handleEmail(req: Request, { params }: Params): Promise<NextResponse> {
+async function handleEmail(request: Request, { params }: Params): Promise<NextResponse> {
   const traceId = generateTraceId();
-
   try {
     const { token } = await params;
-    const body = await req.json();
-
-    // Validate request body
-    const result = proposalEmailSchema.safeParse(body);
-    if (!result.success) {
-      const errorDetails = result.error.errors.map((e) => ({
-        field: e.path.join('.'),
-        message: e.message,
-      }));
-      return NextResponse.json(
-        new ValidationError('Invalid email data', errorDetails).toEnvelope(req.url, traceId),
-        { status: 400 }
-      );
-    }
-
-    const { email } = result.data;
-
-    // Verify proposal exists
-    const { proposal, proposalId, tenantId } = await resolvePublicProposalAccess(token);
-
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
-    const proposalUrl = `${baseUrl}/proposal/${token}`;
-    const pdfUrl = `${baseUrl}/api/proposal/token/${token}/pdf`;
-
-    // Send email
-    const sendResult = await sendProposalEmail({
-      to: email,
-      businessName: proposal.audit.businessName,
-      proposalUrl,
-      pdfUrl,
+    const input = Input.safeParse(await request.json());
+    if (!input.success) return NextResponse.json({ error: 'A valid recipient email and approval are required' }, { status: 400 });
+    const access = await resolvePublicProposalAccess(token);
+    const base = process.env.NEXT_PUBLIC_APP_URL ?? process.env.NEXT_PUBLIC_BASE_URL ?? '';
+    const delivery = await deliverProposalEmail({
+      tenantId: access.tenantId,
+      proposalId: access.proposalId,
+      webLinkToken: token,
+      recipient: input.data.email,
+      from: process.env.FROM_EMAIL ?? 'noreply@proposalengine.app',
+      fromName: 'ProposalOS',
+      subject: `Proposal for ${access.proposal.audit.businessName}`,
+      html: `<p>Your proposal is ready for review.</p><p><a href="${base}/proposal/${encodeURIComponent(token)}">View proposal</a></p><p><a href="${base}/api/proposal/token/${encodeURIComponent(token)}/pdf">Download PDF</a></p>`,
+      approved: false,
     });
-
-    if (!sendResult.success) {
-      return NextResponse.json(
-        new InternalError('Failed to send email', { reason: sendResult.error }).toEnvelope(
-          req.url,
-          traceId
-        ),
-        { status: 500 }
-      );
-    }
-
-    // Update proposal status to 'SENT'
-    await runWithTenantAsync(tenantId, () =>
-      prisma.proposal.update({
-        where: { id: proposalId },
-        data: {
-          status: 'SENT',
-          sentAt: new Date(),
-        },
-      })
-    );
-
-    const response = NextResponse.json({
-      success: true,
-      sentAt: new Date().toISOString(),
-    });
-    response.headers.set('X-Trace-Id', traceId);
-    return response;
+    if (delivery.state !== 'SENT') return NextResponse.json({ state: delivery.state, reason: delivery.reason }, { status: delivery.state === 'AWAITING_APPROVAL' ? 202 : delivery.state === 'SIMULATED' ? 200 : 409 });
+    return NextResponse.json({ success: true, state: delivery.state, sentAt: new Date().toISOString() }, { headers: { 'X-Trace-Id': traceId } });
   } catch (error) {
-    if (error instanceof PublicProposalAccessError) {
-      return NextResponse.json({ error: error.message }, { status: error.status });
-    }
-    const internalError = new InternalError('Failed to process email request', {
-      originalError: error instanceof Error ? error.message : String(error),
-    });
-
-    return NextResponse.json(internalError.toEnvelope(req.url, traceId), { status: 500 });
+    if (error instanceof PublicProposalAccessError) return NextResponse.json({ error: error.message }, { status: error.status });
+    return NextResponse.json(new InternalError('Failed to process email request').toEnvelope(request.url, traceId), { status: 500 });
   }
 }
 
-// Apply rate limiting (3 requests per minute for email sending)
-const rateLimitedHandler = (req: Request, params: Params) =>
-  withRateLimit({
-    windowMs: 60 * 1000,
-    max: 3,
-    message: 'Too many email requests. Please wait before trying again.',
-  })(req, () => handleEmail(req, params));
-
-export const POST = (req: Request, params: Params) => rateLimitedHandler(req, params);
+export const POST = (request: Request, params: Params) => withRateLimit({ windowMs: 60_000, max: 3, message: 'Too many email requests' })(request, () => handleEmail(request, params));

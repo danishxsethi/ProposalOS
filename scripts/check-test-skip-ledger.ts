@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 const root = process.cwd();
-const testRoots = ['app', 'components', 'lib', 'tests', 'scripts'];
+const testRoots = ['app', 'components', 'lib', 'tests', 'scripts', 'tools'];
 const skipPattern = /\b(?:describe|it|test)\s*\.\s*(?:skip|todo)\s*\(|\bskipIf\s*\(/g;
 const files: string[] = [];
 

@@ -1,3 +1,5 @@
+import { createHmac, timingSafeEqual } from 'node:crypto';
+
 import { Resend } from 'resend';
 
 import { withProviderResilience } from '@/lib/resilience/withProviderResilience';
@@ -18,6 +20,7 @@ export interface SendProviderInput {
 export interface SendProviderResult {
   messageId: string;
   provider: OutreachProviderName;
+  state: 'ACCEPTED_BY_PROVIDER';
 }
 
 export interface SendProvider {
@@ -48,6 +51,7 @@ function getResendProvider(): SendProvider {
   return {
     name: 'resend',
     async send(input) {
+      assertLiveProviderReady();
       const key = process.env.RESEND_API_KEY;
       if (!key) throw new Error('RESEND_API_KEY is required for the Resend provider');
       const resend = new Resend(key);
@@ -68,7 +72,7 @@ function getResendProvider(): SendProvider {
           return response.data.id;
         }
       );
-      return { messageId, provider: 'resend' };
+      return { messageId, provider: 'resend', state: 'ACCEPTED_BY_PROVIDER' };
     },
   };
 }
@@ -77,6 +81,7 @@ function getZohoProvider(): SendProvider {
   return {
     name: 'zoho_smtp',
     async send(input) {
+      assertLiveProviderReady();
       const host = process.env.ZOHO_SMTP_HOST || 'smtp.zoho.com';
       const port = Number(process.env.ZOHO_SMTP_PORT || 465);
       const user = process.env.ZOHO_SMTP_USER;
@@ -107,7 +112,7 @@ function getZohoProvider(): SendProvider {
       });
       await transport.close();
       if (!info.messageId) throw new Error('Zoho SMTP returned no message ID');
-      return { messageId: info.messageId, provider: 'zoho_smtp' };
+      return { messageId: info.messageId, provider: 'zoho_smtp', state: 'ACCEPTED_BY_PROVIDER' };
     },
   };
 }
@@ -122,4 +127,23 @@ export function assertLiveProviderReady(): void {
       'Outbound delivery refused: OUTREACH_LIVE_SENDING and OUTBOUND_DELIVERY_ENABLED must both be true'
     );
   }
+}
+
+/** Fail-safe Resend inbound webhook authentication; returns no body on failure. */
+export function verifyResendWebhook(rawBody: string, webhookId: string, timestamp: string, signatureHeader: string, secret: string): boolean {
+  if (!webhookId || !timestamp || !signatureHeader || !/^\d+$/.test(timestamp)) return false;
+  const ts = Number(timestamp);
+  if (!Number.isSafeInteger(ts) || Math.abs(Date.now() / 1000 - ts) > 300) return false;
+  const encodedSecret = secret.startsWith('whsec_') ? secret.slice('whsec_'.length) : secret;
+  let key: Buffer;
+  try { key = Buffer.from(encodedSecret, 'base64'); } catch { return false; }
+  const expected = createHmac('sha256', key).update(`${webhookId}.${timestamp}.${rawBody}`).digest();
+  return signatureHeader.split(' ').some((entry) => {
+    const value = entry.split(',')[1];
+    if (!value) return false;
+    try {
+      const provided = Buffer.from(value, 'base64');
+      return expected.length === provided.length && timingSafeEqual(expected, provided);
+    } catch { return false; }
+  });
 }

@@ -24,7 +24,7 @@ export const proposalStatusSchema = z.enum([
 /**
  * Proposal tier/plan schema
  */
-export const proposalTierSchema = z.enum(['starter', 'professional', 'enterprise', 'custom']);
+export const proposalTierSchema = z.enum(['essentials', 'growth', 'premium']);
 
 /**
  * Send proposal request schema (POST /api/proposal/[id]/send)

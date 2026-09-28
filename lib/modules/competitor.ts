@@ -1,6 +1,7 @@
 import { withModuleCache } from '@/lib/cache/moduleCache';
 import { CostTracker } from '@/lib/costs/costTracker';
 import { logger } from '@/lib/logger';
+import { mapsIntelligence, normalizeGooglePlaceToLegacy } from '@/lib/maps/googleMapsProvider';
 import { withProviderResilience } from '@/lib/resilience/withProviderResilience';
 
 import {
@@ -12,7 +13,6 @@ import {
 } from './types';
 
 const SERP_API_BASE = 'https://serpapi.com/search';
-const PLACES_API_BASE = 'https://places.googleapis.com/v1';
 const PSI_API_URL = 'https://www.googleapis.com/pagespeedonline/v5/runPagespeed';
 
 export async function runCompetitorModule(
@@ -23,7 +23,6 @@ export async function runCompetitorModule(
 
   if (
     !process.env.SERP_API_KEY ||
-    !process.env.GOOGLE_PLACES_API_KEY ||
     !process.env.GOOGLE_PAGESPEED_API_KEY
   ) {
     return {
@@ -34,7 +33,7 @@ export async function runCompetitorModule(
         competitorSearchStatus: 'not_configured',
         execution: {
           state: 'unavailable',
-          reason: 'Competitor providers are not fully configured (SERP, Places, or PageSpeed)',
+          reason: 'Competitor providers are not fully configured (SERP or PageSpeed)',
         },
       },
     };
@@ -91,40 +90,10 @@ export async function runCompetitorModule(
 
     // Helper to fetch Place Details
     const fetchPlaceDetails = async (placeId: string, name: string): Promise<any> => {
-      tracker?.addApiCall('PLACES_DETAILS');
       try {
-        return await withModuleCache<any>(
-          {
-            module: 'competitor',
-            version: 1,
-            input: { type: 'place_details', placeId },
-          },
-          { ttlSeconds: 7 * 24 * 3600 },
-          async () => {
-            return withProviderResilience<any>(
-              {
-                provider: 'google-places',
-                operation: 'competitor:place_details',
-                degrade: true,
-                fallbackValue: {},
-              },
-              async () => {
-                const res = await fetch(`${PLACES_API_BASE}/places/${placeId}`, {
-                  headers: {
-                    'Content-Type': 'application/json',
-                    'X-Goog-Api-Key': process.env.GOOGLE_PLACES_API_KEY as string,
-                    'X-Goog-FieldMask':
-                      'id,displayName,rating,userRatingCount,websiteUri,photos,regularOpeningHours,primaryTypeDisplayName',
-                  },
-                });
-                if (!res.ok) {
-                  throw new Error(`HTTP error ${res.status}: ${res.statusText}`);
-                }
-                return await res.json();
-              }
-            );
-          }
-        );
+        const result = await mapsIntelligence.getPlace(placeId, 'COMPETITOR');
+        if (result.status !== 'COMPLETE' || !result.data) return null;
+        return normalizeGooglePlaceToLegacy(result.data);
       } catch (e) {
         logger.warn({ businessName: name }, 'Failed to fetch place details');
         return null;
