@@ -4,9 +4,9 @@
  */
 import * as cheerio from 'cheerio';
 
+import { collectHtml } from '@/lib/audit/collectors/htmlCollector';
 import type { CostTracker } from '@/lib/costs/costTracker';
 import { withProviderResilience } from '@/lib/resilience/withProviderResilience';
-import { safeFetch } from '@/lib/security/safeFetch';
 
 import { normalizeConfidence } from './findingGenerator';
 import { createEvidence, Finding, LegacyAuditModuleResult } from './types';
@@ -107,6 +107,7 @@ const CATEGORY_TO_VERTICAL: Record<string, string> = {
 export interface SchemaMarkupModuleInput {
   url: string;
   businessName?: string;
+  auditId?: string;
   /** GBP types/categories for vertical detection */
   gbpTypes?: string[];
   /**
@@ -386,28 +387,11 @@ export async function runSchemaMarkupModule(
     const html =
       homepageHtml && homepageHtml.length > 0
         ? homepageHtml
-        : await withProviderResilience<string>(
-            {
-              provider: 'generic',
-              operation: 'schema_markup_fetch',
-              policy: {
-                timeoutMs: 15000,
-                maxAttempts: 2,
-              },
-            },
-            async ({ signal }) => {
-              const response = await safeFetch(url, {
-                signal,
-                headers: {
-                  'User-Agent': 'Mozilla/5.0 (compatible; ProposalOS-SchemaBot/1.0)',
-                },
-              });
-              if (!response.ok) {
-                throw new Error(`HTTP ${response.status}`);
-              }
-              return await response.text();
-            }
-          );
+        : await (async () => {
+            const collected = await collectHtml(url, { auditId: input.auditId, timeoutMs: 20000 });
+            if (!collected.ok || collected.blocked) throw new Error(`HTTP ${collected.status || 'blocked'}`);
+            return collected.html;
+          })();
 
     const jsonLdItems = parseJsonLd(html);
     const microdataItems = parseMicrodata(html);

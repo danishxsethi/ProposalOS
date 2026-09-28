@@ -1,8 +1,8 @@
 {
-  "generatedAt": "2026-09-28T04:19:59.631Z",
+  "generatedAt": "2026-09-28T09:52:27.733Z",
   "source": "app/api/**/route.ts static scan",
-  "routeFileCount": 147,
-  "entryCount": 198,
+  "routeFileCount": 148,
+  "entryCount": 199,
   "entries": [
     {
       "path": "/api/admin/feature-flags",
@@ -2112,6 +2112,18 @@
       "isMutation": true,
       "tenantSource": "tenant-context(session/api-key)|tenant-context-wrapper|tenant-bypass(token-lookup)|tenantId-referenced",
       "ownerResourceRule": "tenant-scoped: resource must belong to caller tenant (session/api-key tenantId)"
+    },
+    {
+      "path": "/api/team",
+      "method": "GET",
+      "auth": [
+        "withAuth"
+      ],
+      "routeClass": "session_authenticated",
+      "isPublic": false,
+      "isMutation": false,
+      "tenantSource": "tenant-context(session/api-key)|tenantId-referenced",
+      "ownerResourceRule": "read-only"
     },
     {
       "path": "/api/templates/[id]",

@@ -1,13 +1,14 @@
+import { collectHtml } from '@/lib/audit/collectors/htmlCollector';
 import { CostTracker } from '@/lib/costs/costTracker';
 import { logger } from '@/lib/logger';
 import { withProviderResilience } from '@/lib/resilience/withProviderResilience';
-import { safeFetch } from '@/lib/security/safeFetch';
 
 import { LegacyAuditModuleResult } from './types';
 
 export interface SocialModuleInput {
   websiteUrl: string;
   businessName: string;
+  auditId?: string;
 }
 
 interface SocialPlatform {
@@ -89,28 +90,15 @@ export async function runSocialModule(
   }
 
   try {
-    const html = await withProviderResilience<string>(
-      {
-        provider: 'generic',
-        operation: 'social_fetch_website',
-        policy: {
-          timeoutMs: 3000,
-          maxAttempts: 2,
-        },
-      },
-      async ({ signal }) => {
-        const response = await safeFetch(input.websiteUrl, {
-          signal,
-          headers: {
-            'User-Agent': 'Mozilla/5.0 (compatible; ProposalEngine/1.0)',
-          },
-        });
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}`);
-        }
-        return await response.text();
-      }
-    );
+    const collected = await collectHtml(input.websiteUrl, {
+      auditId: input.auditId,
+      tracker,
+      timeoutMs: 20000,
+    });
+    if (!collected.ok || collected.blocked) {
+      throw new Error(`HTTP ${collected.status || 'blocked'}`);
+    }
+    const html = collected.html;
 
     // Parse for social media links
     const foundPlatforms: SocialPlatform[] = [];

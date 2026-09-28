@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-28T04:20:36.721Z",
+  "generatedAt": "2026-09-28T09:52:33.372Z",
   "scope": "app/api/proposal/token/** public/tokenized proposal surfaces",
   "forbiddenAuthorities": [
     "payment/stripe",

@@ -82,8 +82,8 @@ describe('P2-27 websiteCrawler tracker wiring', () => {
     });
 
     expect(result.crawledPages).toHaveLength(1);
-    // robots.txt, page analysis, and link extraction are separate completed fetches.
-    expect(tracker.getReport().usage.WEBSITE_FETCH).toBe(3);
+    // robots.txt + one page fetch (link extraction reuses the page HTML — no second fetch).
+    expect(tracker.getReport().usage.WEBSITE_FETCH).toBe(2);
     expect(tracker.getTotalCents()).toBe(0);
   });
 

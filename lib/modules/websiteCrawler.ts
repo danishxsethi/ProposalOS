@@ -1,6 +1,7 @@
 import * as cheerio from 'cheerio';
 import robotsParser from 'robots-parser';
 
+import { type CollectedHtml, collectHtml } from '@/lib/audit/collectors/htmlCollector';
 import { withModuleCache } from '@/lib/cache/moduleCache';
 import type { CostTracker } from '@/lib/costs/costTracker';
 import { logger } from '@/lib/logger';
@@ -58,6 +59,8 @@ interface WebsiteCrawlerInput {
   businessName: string;
   tracker?: CostTracker;
   signal?: AbortSignal;
+  /** Scopes the shared HTML collector cache so dependent modules reuse this crawl's fetches. */
+  auditId?: string;
 }
 
 // Leave capacity in the shared crawler rate-limit budget for dependent modules.
@@ -243,12 +246,16 @@ export function classifyFailure(
 async function analyzePage(
   url: string,
   tracker?: CostTracker,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  opts: { auditId?: string; browserFallback?: boolean } = {}
 ): Promise<{ metrics: PageMetrics; html: string | null }> {
   const startTime = Date.now();
 
   try {
-    const response = await withProviderResilience<Response>(
+    // Shared HTML collector: honest auditor UA first; for the homepage (the page
+    // every dependent module needs) fall back to the shared headless browser
+    // when the site blocks non-browser clients (measured 403s on real customers).
+    const collected = await withProviderResilience<CollectedHtml>(
       {
         provider: 'crawler',
         operation: 'websiteCrawler:analyzePage',
@@ -256,33 +263,28 @@ async function analyzePage(
         degrade: false,
       },
       async ({ signal }) => {
-        const res = await safeFetch(url, {
+        const res = await collectHtml(url, {
+          auditId: opts.auditId,
           signal,
-          headers: {
-            'User-Agent':
-              'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-            'Accept-Language': 'en-US,en;q=0.9',
-          },
+          tracker,
+          allowBrowserFallback: opts.browserFallback === true,
         });
-        tracker?.addApiCall('WEBSITE_FETCH');
-        if (!res.ok && res.status !== 404) {
-          throw new Error(`HTTP error ${res.status}: ${res.statusText}`);
+        if (!res.ok && res.status !== 404 && !res.blocked) {
+          throw new Error(`HTTP error ${res.status}`);
         }
         return res;
       }
     );
 
-    const loadTimeMs = Date.now() - startTime;
-    const html = await response.text();
+    const loadTimeMs = collected.durationMs || Date.now() - startTime;
+    const html = collected.html;
     const pageSizeKB = Math.round(Buffer.byteLength(html, 'utf8') / 1024);
+    const headers: Record<string, string> = collected.headers;
+    const response = { status: collected.status } as { status: number };
 
-    const headers: Record<string, string> = {};
-    response.headers.forEach((value, key) => {
-      headers[key] = value;
-    });
-
-    const classification = classifyFailure(response.status, html, headers);
+    const classification = collected.blocked
+      ? 'ANTI_BOT'
+      : classifyFailure(collected.status, html, headers);
 
     if (classification !== 'NONE') {
       return {
@@ -487,7 +489,10 @@ export async function crawlWebsite(input: WebsiteCrawlerInput): Promise<CrawlRes
 
     // Crawl the page
     visited.add(url);
-    const { metrics, html: pageHtml } = await analyzePage(url, input.tracker, input.signal);
+    const { metrics, html: pageHtml } = await analyzePage(url, input.tracker, input.signal, {
+      auditId: input.auditId,
+      browserFallback: url === input.url || depth === 0,
+    });
     crawledPages.push(metrics);
     if (url === input.url) {
       homepageHtml = pageHtml;
@@ -506,29 +511,9 @@ export async function crawlWebsite(input: WebsiteCrawlerInput): Promise<CrawlRes
     // Extract links only from successful pages
     if (metrics.status === 200 && depth < MAX_DEPTH) {
       try {
-        const html = await withProviderResilience<string>(
-          {
-            provider: 'crawler',
-            operation: 'websiteCrawler:extractLinks',
-            signal: input.signal,
-            degrade: true,
-            fallbackValue: '',
-          },
-          async ({ signal }) => {
-            const response = await safeFetch(url, {
-              signal,
-              headers: {
-                'User-Agent':
-                  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-              },
-            });
-            input.tracker?.addApiCall('WEBSITE_FETCH');
-            if (!response.ok) {
-              throw new Error(`HTTP error ${response.status}: ${response.statusText}`);
-            }
-            return await response.text();
-          }
-        );
+        // Reuse the HTML analyzePage already fetched instead of re-fetching the
+        // same page (previously every crawled page was fetched twice).
+        const html = pageHtml ?? '';
         const links = extractInternalLinks(html, baseUrl);
 
         for (const link of links) {

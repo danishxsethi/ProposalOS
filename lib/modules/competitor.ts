@@ -107,6 +107,38 @@ export async function runCompetitorModule(
     const topCompetitors = localResults.slice(0, 3); // Top 3
 
     // Helper to fetch Place Details
+    /**
+     * SerpAPI's local pack frequently omits competitor websites (measured: zero
+     * of four law firms carried `links.website`). Resolve the website via our
+     * own Places text search by name + location (COMPETITOR profile, 1 call,
+     * cached 24h) so competitorStrategy can actually run.
+     */
+    const resolveWebsiteByName = async (name: string): Promise<string | undefined> => {
+      try {
+        const res = await withModuleCache<string | undefined>(
+          { module: 'competitor', version: 1, input: { type: 'website_by_name', name, location: input.location } },
+          { ttlSeconds: 24 * 3600 },
+          async () => {
+            tracker?.addApiCall('PLACES_TEXT_SEARCH');
+            const found = await mapsIntelligence.searchText({
+              query: `${name} ${input.location}`,
+              city: input.location,
+              maxResults: 3,
+              fieldProfile: 'COMPETITOR',
+            });
+            if (found.status !== 'COMPLETE' || !found.data?.length) return undefined;
+            const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+            const want = norm(name);
+            const match = found.data.find((c) => c.displayName && (norm(c.displayName) === want || norm(c.displayName).includes(want) || want.includes(norm(c.displayName))));
+            return (match ?? found.data[0])?.website ?? undefined;
+          }
+        );
+        return res;
+      } catch {
+        return undefined;
+      }
+    };
+
     const fetchPlaceDetails = async (placeId: string, name: string): Promise<any> => {
       try {
         const result = await mapsIntelligence.getPlace(placeId, 'COMPETITOR');
@@ -143,7 +175,9 @@ export async function runCompetitorModule(
           key: process.env.GOOGLE_PAGESPEED_API_KEY as string,
           strategy: 'mobile',
         });
-        ['performance', 'accessibility', 'seo'].forEach((c) => psParams.append('category', c));
+        // performance only: seo/accessibility double Lighthouse time (measured 20-35s → 45-88s)
+        // and the competitor comparison consumes performance + load time.
+        psParams.append('category', 'performance');
         const psData = await withModuleCache<any>(
           {
             module: 'competitor',
@@ -325,7 +359,7 @@ export async function runCompetitorModule(
           const compPlacesId = placesApiId(comp.place_id);
           if (compPlacesId) d = await fetchPlaceDetails(compPlacesId, comp.title);
 
-          const w = d?.websiteUri || serpWebsite(comp);
+          const w = d?.websiteUri || serpWebsite(comp) || (await resolveWebsiteByName(comp.title));
           const psi = await runLightweightPageSpeed(w || '');
 
           return {

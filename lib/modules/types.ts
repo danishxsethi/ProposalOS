@@ -279,6 +279,7 @@ export interface ReputationModuleInput {
 export interface SocialModuleInput {
   websiteUrl: string;
   businessName: string;
+  auditId?: string;
 }
 
 // Result Types for DataBus

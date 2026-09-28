@@ -7,7 +7,7 @@ import { CostTracker } from '@/lib/costs/costTracker';
 import { logger } from '@/lib/logger';
 
 import { normalizeConfidence } from './findingGenerator';
-import { AuditModuleResult, Finding } from './types';
+import { AuditModuleResult, createEvidence, Finding } from './types';
 
 export interface ContentQualityModuleInput {
   url: string;
@@ -426,16 +426,8 @@ export function generateContentFindings(
       impactScore: 8,
       confidenceScore: normalizeConfidence(90, '0-100'),
       evidence: [
-        {
-          type: 'text',
-          value: `AI-detected value prop: "${analysis.primaryValueProp}"`,
-          label: 'Value Proposition',
-        },
-        {
-          type: 'metric',
-          value: homepageAnalysis.clarity,
-          label: 'Clarity Score',
-        },
+        createEvidence({ pointer: input.url, source: 'content_quality', collected_at: new Date().toISOString(), type: 'text', value: `AI-detected value prop: "${analysis.primaryValueProp}"`, label: 'Value Proposition' }),
+        createEvidence({ pointer: input.url, source: 'content_quality', collected_at: new Date().toISOString(), type: 'metric', value: homepageAnalysis.clarity, label: 'Clarity Score' }),
       ],
       metrics: {
         clarityScore: homepageAnalysis.clarity,
@@ -460,11 +452,7 @@ export function generateContentFindings(
       impactScore: 7,
       confidenceScore: normalizeConfidence(100, '0-100'),
       evidence: [
-        {
-          type: 'metric',
-          value: homepage.text.split(/\s+/).length,
-          label: 'Homepage Word Count',
-        },
+        createEvidence({ pointer: input.url, source: 'content_quality', collected_at: new Date().toISOString(), type: 'metric', value: homepage.text.split(/\s+/).length, label: 'Homepage Word Count' }),
       ],
       metrics: {
         homepageWordCount: homepage.text.split(/\s+/).length,
@@ -489,11 +477,7 @@ export function generateContentFindings(
       impactScore: 7,
       confidenceScore: normalizeConfidence(90, '0-100'),
       evidence: [
-        {
-          type: 'metric',
-          value: homepageAnalysis.localRelevance,
-          label: 'Local Relevance Score',
-        },
+        createEvidence({ pointer: input.url, source: 'content_quality', collected_at: new Date().toISOString(), type: 'metric', value: homepageAnalysis.localRelevance, label: 'Local Relevance Score' }),
       ],
       metrics: {
         localRelevanceScore: homepageAnalysis.localRelevance,
@@ -525,21 +509,9 @@ export function generateContentFindings(
       impactScore: 5,
       confidenceScore: normalizeConfidence(95, '0-100'),
       evidence: [
-        {
-          type: 'metric',
-          value: analysis.readabilityMetrics.fleschKincaidGrade,
-          label: 'Flesch-Kincaid Grade',
-        },
-        {
-          type: 'metric',
-          value: analysis.readabilityMetrics.avgSentenceLength,
-          label: 'Avg Sentence Length',
-        },
-        {
-          type: 'text',
-          value: `${analysis.detectedLanguage.code} (source: ${analysis.detectedLanguage.source})`,
-          label: 'Detected Content Language',
-        },
+        createEvidence({ pointer: input.url, source: 'content_quality', collected_at: new Date().toISOString(), type: 'metric', value: analysis.readabilityMetrics.fleschKincaidGrade, label: 'Flesch-Kincaid Grade' }),
+        createEvidence({ pointer: input.url, source: 'content_quality', collected_at: new Date().toISOString(), type: 'metric', value: analysis.readabilityMetrics.avgSentenceLength, label: 'Avg Sentence Length' }),
+        createEvidence({ pointer: input.url, source: 'content_quality', collected_at: new Date().toISOString(), type: 'text', value: `${analysis.detectedLanguage.code} (source: ${analysis.detectedLanguage.source})`, label: 'Detected Content Language' }),
       ],
       metrics: {
         readingGrade: analysis.readabilityMetrics.fleschKincaidGrade,
@@ -576,11 +548,7 @@ export function generateContentFindings(
       evidence: analysis.contentGaps
         .filter((g) => g.toLowerCase().includes('service'))
         .slice(0, 2)
-        .map((gap) => ({
-          type: 'text',
-          value: gap,
-          label: 'Content Gap',
-        })),
+        .map((gap) => (createEvidence({ pointer: input.url, source: 'content_quality', collected_at: new Date().toISOString(), type: 'text', value: gap, label: 'Content Gap' }))),
       metrics: {
         hasServicesPage,
       },
@@ -609,11 +577,7 @@ export function generateContentFindings(
       impactScore: 4,
       confidenceScore: normalizeConfidence(90, '0-100'),
       evidence: [
-        {
-          type: 'text',
-          value: 'No About/Team page detected',
-          label: 'About Page',
-        },
+        createEvidence({ pointer: input.url, source: 'content_quality', collected_at: new Date().toISOString(), type: 'text', value: 'No About/Team page detected', label: 'About Page' }),
       ],
       metrics: {
         hasAboutPage: false,
@@ -642,11 +606,7 @@ export function generateContentFindings(
       impactScore: 5,
       confidenceScore: normalizeConfidence(85, '0-100'),
       evidence: [
-        {
-          type: 'metric',
-          value: Math.round(avgTrustScore),
-          label: 'Average Trust Score',
-        },
+        createEvidence({ pointer: input.url, source: 'content_quality', collected_at: new Date().toISOString(), type: 'metric', value: Math.round(avgTrustScore), label: 'Average Trust Score' }),
       ],
       metrics: {
         avgTrustScore: Math.round(avgTrustScore),
@@ -673,11 +633,7 @@ export function generateContentFindings(
       description: `AI identified ${analysis.contentGaps.length} important content gaps. Customers can't find key information they need to make a decision.`,
       impactScore: analysis.contentGaps.length > 3 ? 6 : 4,
       confidenceScore: normalizeConfidence(85, '0-100'),
-      evidence: topGaps.map((gap) => ({
-        type: 'text',
-        value: gap,
-        label: 'Content Gap',
-      })),
+      evidence: topGaps.map((gap) => (createEvidence({ pointer: input.url, source: 'content_quality', collected_at: new Date().toISOString(), type: 'text', value: gap, label: 'Content Gap' }))),
       metrics: {
         contentGapCount: analysis.contentGaps.length,
         contentGaps: topGaps,

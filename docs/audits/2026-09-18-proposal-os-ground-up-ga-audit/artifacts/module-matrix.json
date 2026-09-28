@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-28T04:31:49.980Z",
+  "generatedAt": "2026-09-28T09:52:29.146Z",
   "audit": "2026-09-18-proposal-os-ground-up-ga-audit",
   "source": "lib/audit/runner.ts::MODULE_REGISTRY",
   "expectedModuleCount": 27,
@@ -10,7 +10,7 @@
       "name": "website",
       "phase": 1,
       "optional": false,
-      "timeoutMs": 30000,
+      "timeoutMs": 60000,
       "dependsOn": [],
       "featureFlag": null,
       "sourceFiles": [
@@ -97,7 +97,7 @@
       "name": "competitor",
       "phase": 1,
       "optional": false,
-      "timeoutMs": 25000,
+      "timeoutMs": 90000,
       "dependsOn": [],
       "featureFlag": null,
       "sourceFiles": [
@@ -466,7 +466,7 @@
       "name": "mobileUX",
       "phase": 2,
       "optional": false,
-      "timeoutMs": 45000,
+      "timeoutMs": 60000,
       "dependsOn": [
         "website"
       ],

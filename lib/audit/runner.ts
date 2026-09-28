@@ -286,7 +286,7 @@ const techStackAdapter = async (
   tracker: CostTracker
 ): Promise<ModuleResult> => {
   if (!input.url) throw new Error('url required');
-  const data = await runTechStackModule({ url: input.url, signal: input.signal }, tracker);
+  const data = await runTechStackModule({ url: input.url, signal: input.signal, auditId: input.auditId }, tracker);
   return adaptLegacyModuleResult(data, 'Accessibility');
 };
 
@@ -308,7 +308,7 @@ const emailFinderAdapter = async (
   tracker: CostTracker
 ): Promise<ModuleResult> => {
   if (!input.url) throw new Error('url required');
-  const data = await runEmailFinderModule(input.url, tracker, input.signal);
+  const data = await runEmailFinderModule(input.url, tracker, input.signal, input.auditId);
   // P2-28 (Wave 5): `findEmails()` (lib/modules/emailFinder.ts) never returns a
   // `status` field — the previous `data.status === 'error'` check was dead code that
   // could never fire, letting a total fetch failure (source: 'failed'/'error', empty
@@ -351,7 +351,7 @@ const reputationAdapter = async (
 const socialAdapter = async (input: ModuleInput, tracker: CostTracker): Promise<ModuleResult> => {
   if (!input.url || !input.businessName) throw new Error('url and businessName required');
   const data = await runSocialModule(
-    { websiteUrl: input.url, businessName: input.businessName },
+    { websiteUrl: input.url, businessName: input.businessName, auditId: input.auditId },
     tracker
   );
   return adaptLegacyModuleResult(data, 'Social');
@@ -599,6 +599,7 @@ const schemaMarkupAdapter = async (input: ModuleInput): Promise<ModuleResult> =>
   const homepageHtml = crawlerData?.evidenceSnapshots?.[0]?.rawResponse?.html ?? null;
   const raw = await runSchemaMarkupModule({
     url: input.url,
+    auditId: input.auditId,
     businessName: input.businessName,
     gbpTypes: gbpData?.types,
     homepageHtml,
@@ -776,6 +777,21 @@ const coreWebVitalsAdapter = async (input: ModuleInput): Promise<ModuleResult> =
 
   const cwv = extractCoreWebVitalsFromAudits(lighthouseAudits);
 
+  // Evidence for each Core Web Vital: the Lighthouse lab measurement itself,
+  // pointed at the audited URL. Findings without evidence are rejected at the
+  // aggregation boundary and would silently degrade audit trust.
+  const cwvCollectedAt = new Date().toISOString();
+  const cwvEvidence = (label: string, value: string | number) => [
+    createEvidence({
+      pointer: input.url ?? 'https://pagespeed.web.dev',
+      source: 'lighthouse_lab',
+      collected_at: cwvCollectedAt,
+      type: 'metric',
+      value,
+      label,
+    }),
+  ];
+
   // Generate findings based on CWV ratings
   const findings: any[] = [];
   if (cwv.lcp && cwv.lcp.rating !== 'good') {
@@ -787,6 +803,8 @@ const coreWebVitalsAdapter = async (input: ModuleInput): Promise<ModuleResult> =
       description: `LCP is ${cwv.lcp.rating} (threshold: good < ${cwv.lcp.thresholdGood}s). Slow LCP hurts SEO rankings and user experience.`,
       impactScore: cwv.lcp.rating === 'poor' ? 8 : 5,
       confidenceScore: 9,
+      evidence: cwvEvidence('Largest Contentful Paint (s, mobile lab)', Number(cwv.lcp.value.toFixed(2))),
+      metrics: { lcpSeconds: Number(cwv.lcp.value.toFixed(2)), rating: cwv.lcp.rating },
       effortEstimate: 'HIGH',
       recommendedFix: [
         'Optimize images',
@@ -805,6 +823,8 @@ const coreWebVitalsAdapter = async (input: ModuleInput): Promise<ModuleResult> =
       description: `CLS is ${cwv.cls.rating} (threshold: good < ${cwv.cls.thresholdGood}). Layout shifts hurt UX and SEO.`,
       impactScore: cwv.cls.rating === 'poor' ? 7 : 4,
       confidenceScore: 9,
+      evidence: cwvEvidence('Cumulative Layout Shift (mobile lab)', Number(cwv.cls.value.toFixed(3))),
+      metrics: { cls: Number(cwv.cls.value.toFixed(3)), rating: cwv.cls.rating },
       effortEstimate: 'MEDIUM',
       recommendedFix: [
         'Set explicit width/height on images',
@@ -822,6 +842,8 @@ const coreWebVitalsAdapter = async (input: ModuleInput): Promise<ModuleResult> =
       description: `TBT is ${cwv.tbt.rating} (threshold: good < ${cwv.tbt.thresholdGood}ms). High TBT means the main thread is blocked, delaying user interaction.`,
       impactScore: cwv.tbt.rating === 'poor' ? 7 : 4,
       confidenceScore: 9,
+      evidence: cwvEvidence('Total Blocking Time (ms, mobile lab)', cwv.tbt.value),
+      metrics: { tbtMs: cwv.tbt.value, rating: cwv.tbt.rating },
       effortEstimate: 'HIGH',
       recommendedFix: [
         'Break up long tasks',
@@ -907,6 +929,22 @@ const schemaAnalysisAdapter = async (input: ModuleInput): Promise<ModuleResult> 
 
   const analysis = analyzeSchemaMarkup(rawHtml);
   const findings: any[] = [];
+  // Real evidence for each schema observation: the analyzed homepage is the
+  // pointer, the observation is which schema types were / were not present.
+  const schemaCollectedAt = new Date().toISOString();
+  const schemaEvidence = (label: string, value: string) => [
+    createEvidence({
+      pointer: input.url ?? 'https://schema.org',
+      source: 'schema_analysis',
+      collected_at: schemaCollectedAt,
+      type: 'text',
+      value,
+      label,
+    }),
+  ];
+  const detectedTypes = Array.isArray((analysis as { detectedTypes?: unknown }).detectedTypes)
+    ? ((analysis as { detectedTypes?: string[] }).detectedTypes ?? []).join(', ') || 'none'
+    : 'none';
 
   // Generate findings for missing critical schema types
   //
@@ -930,6 +968,7 @@ const schemaAnalysisAdapter = async (input: ModuleInput): Promise<ModuleResult> 
       description: analysis.hasLocalBusinessOrOrganization.recommendation,
       impactScore: 8,
       confidenceScore: 9,
+      evidence: schemaEvidence('Structured data detected on homepage', `LocalBusiness/Organization absent; detected: ${detectedTypes}`),
       metrics: { schemaFingerprint: 'schema-missing:LocalBusiness' },
       effortEstimate: 'LOW',
       recommendedFix: [
@@ -946,6 +985,7 @@ const schemaAnalysisAdapter = async (input: ModuleInput): Promise<ModuleResult> 
       description: analysis.hasReviewAggregateRating.recommendation,
       impactScore: 5,
       confidenceScore: 9,
+      evidence: schemaEvidence('Structured data detected on homepage', `AggregateRating absent; detected: ${detectedTypes}`),
       metrics: { schemaFingerprint: 'schema-missing:AggregateRating' },
       effortEstimate: 'LOW',
       recommendedFix: [
@@ -962,6 +1002,8 @@ const schemaAnalysisAdapter = async (input: ModuleInput): Promise<ModuleResult> 
       description: analysis.hasFaq.recommendation,
       impactScore: 3,
       confidenceScore: 8,
+      evidence: schemaEvidence('Structured data detected on homepage', `FAQPage absent; detected: ${detectedTypes}`),
+      metrics: { schemaFingerprint: 'schema-missing:FAQPage' },
       effortEstimate: 'LOW',
       recommendedFix: ['Add FAQPage JSON-LD to any page with Q&A content to unlock rich results'],
     });
@@ -982,7 +1024,7 @@ export const MODULE_REGISTRY: ModuleConfig[] = [
   { name: 'website', phase: 1, run: websiteAdapter, timeoutMs: 60000 },
   { name: 'websiteCrawler', phase: 1, run: websiteCrawlerAdapter, timeoutMs: 45000 },
   { name: 'gbp', phase: 1, run: gbpAdapter, timeoutMs: 20000 },
-  { name: 'competitor', phase: 1, run: competitorAdapter, timeoutMs: 60000 },
+  { name: 'competitor', phase: 1, run: competitorAdapter, timeoutMs: 90000 },
   { name: 'techStack', phase: 1, run: techStackAdapter, timeoutMs: 15000 },
   { name: 'security', phase: 1, run: securityAdapter, timeoutMs: 20000 },
   { name: 'emailFinder', phase: 1, run: emailFinderAdapter, timeoutMs: 15000, optional: true },

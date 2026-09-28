@@ -7,7 +7,7 @@ import { logger } from '@/lib/logger';
 import { withProviderResilience } from '@/lib/resilience/withProviderResilience';
 
 import { normalizeConfidence } from './findingGenerator';
-import { AuditModuleResult, Finding } from './types';
+import { AuditModuleResult, createEvidence, Finding } from './types';
 
 export interface KeywordGapInput {
   businessName: string;
@@ -332,11 +332,7 @@ function generateKeywordFindings(analysis: KeywordGapAnalysis, input: KeywordGap
       evidence: rankings
         .filter((r) => r.rank === null)
         .slice(0, 3)
-        .map((r) => ({
-          type: 'text',
-          value: r.keyword,
-          label: 'Missed Keyword',
-        })),
+        .map((r) => (createEvidence({ pointer: `https://www.google.com/search?q=${encodeURIComponent(r.keyword + ' ' + input.city)}`, source: 'keyword_gap', collected_at: new Date().toISOString(), type: 'text', value: r.keyword, label: 'Missed Keyword' }))),
       metrics: { gapCount: summary.gaps },
       effortEstimate: 'HIGH',
       recommendedFix: ['Launch SEO content campaign targeting these gaps'],

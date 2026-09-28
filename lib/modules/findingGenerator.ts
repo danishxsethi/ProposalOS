@@ -160,7 +160,7 @@ function generateCwvFindingsFromFull(cwvFull: CoreWebVitalsFull, pointer: string
     if (cwvFull.lcp.rating === 'poor') {
       addCwv(
         `LCP is ${(lcpSec * 1000).toFixed(0)}ms (Poor)`,
-        `Your LCP is ${lcpSec.toFixed(1)}s — visitors see a blank or loading screen for over ${Math.ceil(lcpSec)} seconds before main content appears. This loses conversions and hurts SEO.`,
+        `Your LCP is ${lcpSec.toFixed(1)}s — visitors see a blank or loading screen for over ${Math.floor(lcpSec)} seconds before main content appears. This loses conversions and hurts SEO.`,
         Math.round(lcpSec * 1000),
         'LCP (ms)',
         [
@@ -787,7 +787,7 @@ function generateConversionFindingsFromAnalysis(
           label: 'tel: link',
         }),
       ],
-      metrics: { element: 'phone' },
+      metrics: { schemaFingerprint: 'contact:click-to-call', element: 'phone' },
       impactScore: 8,
       confidenceScore: normalizeConfidence(95, '0-100'),
       effortEstimate: 'LOW',
@@ -880,7 +880,7 @@ export function generateConversionFindings(
           label: 'tel: link',
         }),
       ],
-      metrics: { element: 'phone' },
+      metrics: { schemaFingerprint: 'contact:click-to-call', element: 'phone' },
       impactScore: 8,
       confidenceScore: normalizeConfidence(95, '0-100'),
       effortEstimate: 'LOW',

@@ -605,6 +605,7 @@ function generateMobileFindings(analysis: MobileAnalysis, url: string): Finding[
       confidenceScore: normalizeConfidence(95, '0-100'),
       evidence: [evidence(`${url}#a[href^=tel]`, 'No tel: links detected', 'Click-to-Call')],
       metrics: {
+        schemaFingerprint: 'contact:click-to-call',
         hasClickToCall: false,
       },
       effortEstimate: 'LOW',
