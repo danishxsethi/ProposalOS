@@ -187,6 +187,7 @@ export default function BrandingPage() {
           <Section title="Contact Info">
             <Field label="Public Email">
               <input
+                id="field-public-email"
                 name="contactEmail"
                 value={config.contactEmail}
                 onChange={handleChange}

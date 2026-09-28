@@ -57,8 +57,8 @@ export default function AuditDetailClient({ audit }: { audit: any }) {
       : null;
 
   return (
-    <div className="min-h-screen py-8">
-      <div className="container max-w-6xl">
+    <div className="min-w-0">
+      <div className="mx-auto max-w-6xl min-w-0">
         {/* Back button */}
         <Link
           href="/dashboard"

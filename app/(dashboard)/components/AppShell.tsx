@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -42,6 +42,25 @@ export function AppShell({
   const pathname = usePathname() ?? '';
   const [open, setOpen] = useState(false);
   const inSettings = pathname.startsWith('/settings');
+  const mobileNavRef = useRef<HTMLElement>(null);
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    mobileNavRef.current?.querySelector<HTMLAnchorElement>('a')?.focus();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setOpen(false);
+        menuButtonRef.current?.focus();
+      }
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [open]);
+
+  useEffect(() => {
+    setOpen(false);
+  }, [pathname]);
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-200 selection:bg-indigo-500/30">
@@ -62,10 +81,10 @@ export function AppShell({
               <span aria-hidden="true" className="grid h-7 w-7 place-items-center rounded-md bg-indigo-600 text-xs font-bold">
                 P
               </span>
-              <span className="hidden sm:inline">ProposalOS</span>
+              <span className="sr-only sm:not-sr-only">ProposalOS</span>
             </Link>
 
-            <nav aria-label="Primary" className="hidden md:flex items-center gap-1">
+            <nav aria-label="Primary" className="hidden lg:flex items-center gap-1">
               {PRIMARY.map((item) => {
                 const active = isActive(item, pathname);
                 return (
@@ -100,7 +119,7 @@ export function AppShell({
             >
               New audit
             </Link>
-            <div className="hidden lg:flex flex-col items-end leading-tight">
+            <div className="hidden xl:flex flex-col items-end leading-tight">
               <span className="max-w-[180px] truncate text-xs font-medium text-slate-200" title={tenantName}>
                 {tenantName}
               </span>
@@ -116,12 +135,13 @@ export function AppShell({
               Sign out
             </button>
             <button
+              ref={menuButtonRef}
               type="button"
               aria-label={open ? 'Close menu' : 'Open menu'}
               aria-expanded={open}
               aria-controls="mobile-nav"
               onClick={() => setOpen((v) => !v)}
-              className="md:hidden rounded-md border border-white/10 p-2 text-slate-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+              className="lg:hidden rounded-md border border-white/10 p-2 text-slate-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
             >
               <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 {open ? <path d="M6 6l12 12M18 6L6 18" /> : <path d="M4 7h16M4 12h16M4 17h16" />}
@@ -131,7 +151,11 @@ export function AppShell({
         </div>
 
         {open && (
-          <nav id="mobile-nav" aria-label="Primary" className="md:hidden border-t border-white/5 bg-slate-950 px-4 py-3">
+          <nav ref={mobileNavRef} id="mobile-nav" aria-label="Mobile" className="lg:hidden border-t border-white/5 bg-slate-950 px-4 py-3">
+            <div className="mb-3 px-3 text-xs text-slate-400">
+              <div className="truncate font-medium text-slate-200">{tenantName}</div>
+              <div className="truncate">{user.email}</div>
+            </div>
             <ul className="flex flex-col gap-1">
               {[...PRIMARY, { href: '/new-audit', label: 'New audit' }, ...SETTINGS].map((item) => (
                 <li key={item.href}>
