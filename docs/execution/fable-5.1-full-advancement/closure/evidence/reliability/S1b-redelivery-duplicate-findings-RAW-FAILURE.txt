@@ -1,0 +1,194 @@
+
+> proposal-os@0.1.0 test
+> vitest run tests/reliability/queue-worker-death-poison.test.ts --reporter=verbose
+
+
+ RUN  v4.1.11 /home/danish/workspace/ProposalOS
+
+(node:1171051) Warning: `--localstorage-file` was provided without a valid path
+(Use `node --trace-warnings ...` to show where the warning was created)
+[2026-09-28 05:59:05.034 +0000] WARN <Error:>: RLS bypass invoked
+[2026-09-28 05:59:05.090 +0000] WARN <Error:>: RLS bypass invoked
+[2026-09-28 05:59:05.109 +0000] INFO: AuditJob: enqueued
+[2026-09-28 05:59:05.121 +0000] WARN <Error:>: RLS bypass invoked
+[2026-09-28 05:59:05.131 +0000] INFO: Starting stale jobs and audits cleanup cron...
+[2026-09-28 05:59:05.132 +0000] WARN <Error:>: RLS bypass invoked
+[2026-09-28 05:59:05.137 +0000] INFO: Found stale RUNNING audits.
+[2026-09-28 05:59:05.140 +0000] INFO: Found stale QUEUED/RUNNING audit jobs.
+[2026-09-28 05:59:05.142 +0000] WARN <Error:>: RLS bypass invoked
+[2026-09-28 05:59:05.186 +0000] WARN: AuditJob: heartbeat rejected — lease no longer owned (expired/reclaimed)
+[2026-09-28 05:59:05.188 +0000] WARN: AuditJob: stale/reclaimed worker attempted to mark job SUCCEEDED — rejected
+[2026-09-28 05:59:05.194 +0000] WARN: AuditJob: stale/reclaimed worker attempted to mark job failed — rejected
+[2026-09-28 05:59:05.194 +0000] WARN <Error:>: RLS bypass invoked
+[2026-09-28 05:59:05.200 +0000] WARN <Error:>: RLS bypass invoked
+[2026-09-28 05:59:05.206 +0000] WARN: AuditJob: stale/reclaimed worker attempted to mark job SUCCEEDED — rejected
+[2026-09-28 05:59:05.211 +0000] WARN: AuditJob: stale/reclaimed worker attempted to mark job failed — rejected
+[2026-09-28 05:59:05.211 +0000] WARN <Error:>: RLS bypass invoked
+[2026-09-28 05:59:05.214 +0000] WARN <Error:>: RLS bypass invoked
+[2026-09-28 05:59:05.216 +0000] WARN <Error:>: RLS bypass invoked
+[2026-09-28 05:59:05.220 +0000] WARN <Error:>: RLS bypass invoked
+[2026-09-28 05:59:05.236 +0000] INFO: AuditJob: enqueued
+[2026-09-28 05:59:05.244 +0000] WARN <Error:>: RLS bypass invoked
+[2026-09-28 05:59:05.250 +0000] WARN <Error:>: RLS bypass invoked
+[2026-09-28 05:59:05.253 +0000] WARN <Error:>: RLS bypass invoked
+[2026-09-28 05:59:05.260 +0000] INFO: Worker: processing job
+[2026-09-28 05:59:05.264 +0000] WARN: Worker: skipping proposal generation — audit is not trusted or proposal generation was disabled
+    auditStatus: "QUEUED"
+    trustState: "PENDING"
+[2026-09-28 05:59:05.268 +0000] INFO: Worker: job succeeded
+[2026-09-28 05:59:05.269 +0000] WARN <Error:>: RLS bypass invoked
+[2026-09-28 05:59:05.274 +0000] WARN: AuditJob: stale/reclaimed worker attempted to mark job SUCCEEDED — rejected
+[2026-09-28 05:59:05.280 +0000] WARN: AuditJob: stale/reclaimed worker attempted to mark job failed — rejected
+[2026-09-28 05:59:05.280 +0000] WARN <Error:>: RLS bypass invoked
+[2026-09-28 05:59:05.283 +0000] WARN <Error:>: RLS bypass invoked
+ ✓ tests/reliability/queue-worker-death-poison.test.ts > Stream D — AuditJob queue failure injection (real PostgreSQL) > S1: dead worker A is reclaimed by worker B with a new lease; A stale completion is rejected and does not overwrite B 131ms
+[2026-09-28 05:59:05.285 +0000] WARN <Error:>: RLS bypass invoked
+[2026-09-28 05:59:05.297 +0000] INFO: AuditJob: enqueued
+[2026-09-28 05:59:05.305 +0000] WARN <Error:>: RLS bypass invoked
+[2026-09-28 05:59:05.310 +0000] WARN <Error:>: RLS bypass invoked
+[2026-09-28 05:59:05.317 +0000] INFO: Starting stale jobs and audits cleanup cron...
+[2026-09-28 05:59:05.317 +0000] WARN <Error:>: RLS bypass invoked
+[2026-09-28 05:59:05.322 +0000] INFO: Found stale RUNNING audits.
+[2026-09-28 05:59:05.331 +0000] INFO: Found stale QUEUED/RUNNING audit jobs.
+[2026-09-28 05:59:05.339 +0000] WARN <Error:>: RLS bypass invoked
+[2026-09-28 05:59:05.343 +0000] WARN <Error:>: RLS bypass invoked
+[2026-09-28 05:59:05.346 +0000] WARN <Error:>: RLS bypass invoked
+[2026-09-28 05:59:05.349 +0000] INFO: Worker: lock contention — skipping
+[2026-09-28 05:59:05.350 +0000] WARN <Error:>: RLS bypass invoked
+[2026-09-28 05:59:05.399 +0000] INFO: AuditJob: enqueued
+[2026-09-28 05:59:05.543 +0000] WARN <Error:>: RLS bypass invoked
+[2026-09-28 05:59:05.548 +0000] WARN <Error:>: RLS bypass invoked
+[2026-09-28 05:59:05.555 +0000] WARN <Error:>: RLS bypass invoked
+[2026-09-28 05:59:05.558 +0000] WARN <Error:>: RLS bypass invoked
+[2026-09-28 05:59:05.565 +0000] INFO: Worker: processing job
+[2026-09-28 05:59:05.582 +0000] INFO: Worker: job succeeded
+[2026-09-28 05:59:05.583 +0000] WARN <Error:>: RLS bypass invoked
+[2026-09-28 05:59:05.586 +0000] WARN <Error:>: RLS bypass invoked
+[2026-09-28 05:59:05.589 +0000] WARN <Error:>: RLS bypass invoked
+ ✓ tests/reliability/queue-worker-death-poison.test.ts > Stream D — AuditJob queue failure injection (real PostgreSQL) > S1 (end-to-end): worker B runs processAuditJob after A dies; A stale finalization rejected; single Audit row 65ms
+ ✓ tests/reliability/queue-worker-death-poison.test.ts > Stream D — AuditJob queue failure injection (real PostgreSQL) > S1 (cron): cleanup-stale-jobs only terminates jobs older than the 2 h TTL, and marks them FAILED (not requeued) 64ms
+[2026-09-28 05:59:05.598 +0000] WARN <Error:>: RLS bypass invoked
+[2026-09-28 05:59:05.628 +0000] INFO: AuditJob: enqueued
+[2026-09-28 05:59:05.634 +0000] WARN <Error:>: RLS bypass invoked
+stdout | tests/reliability/queue-worker-death-poison.test.ts > Stream D — AuditJob queue failure injection (real PostgreSQL) > S2: concurrent enqueue with the same idempotencyKey yields exactly one AuditJob row
+[S2] 3/4 concurrent enqueue caller(s) received a unique-violation instead of the existing row: [ '', '', '' ]
+
+[2026-09-28 05:59:05.639 +0000] WARN <Error:>: RLS bypass invoked
+[2026-09-28 05:59:05.653 +0000] INFO: AuditJob: enqueued
+[2026-09-28 05:59:05.653 +0000] WARN <Error:>: RLS bypass invoked
+[2026-09-28 05:59:05.656 +0000] WARN <Error:>: RLS bypass invoked
+[2026-09-28 05:59:05.665 +0000] INFO: Worker: processing job
+[2026-09-28 05:59:05.665 +0000] ERROR: Worker: job failed
+[2026-09-28 05:59:05.673 +0000] WARN: AuditJob: failed — requeued for retry
+    attempts: 1
+[2026-09-28 05:59:05.680 +0000] WARN <Error:>: RLS bypass invoked
+[2026-09-28 05:59:05.682 +0000] WARN <Error:>: RLS bypass invoked
+[2026-09-28 05:59:05.684 +0000] WARN <Error:>: RLS bypass invoked
+[2026-09-28 05:59:05.692 +0000] INFO: Worker: processing job
+[2026-09-28 05:59:05.692 +0000] ERROR: Worker: job failed
+[2026-09-28 05:59:05.698 +0000] WARN: AuditJob: failed — requeued for retry
+    attempts: 2
+[2026-09-28 05:59:05.703 +0000] WARN <Error:>: RLS bypass invoked
+[2026-09-28 05:59:05.706 +0000] WARN <Error:>: RLS bypass invoked
+[2026-09-28 05:59:05.709 +0000] WARN <Error:>: RLS bypass invoked
+[2026-09-28 05:59:05.715 +0000] INFO: Worker: processing job
+[2026-09-28 05:59:05.715 +0000] ERROR: Worker: job failed
+[2026-09-28 05:59:05.725 +0000] WARN: AuditJob: exhausted retries — moved to DEAD
+    attempts: 3
+[2026-09-28 05:59:05.730 +0000] WARN <Error:>: RLS bypass invoked
+[2026-09-28 05:59:05.733 +0000] WARN <Error:>: RLS bypass invoked
+[2026-09-28 05:59:05.737 +0000] WARN <Error:>: RLS bypass invoked
+[2026-09-28 05:59:05.751 +0000] WARN <Error:>: RLS bypass invoked
+[2026-09-28 05:59:05.754 +0000] INFO: Worker: job already in terminal state — skipping
+[2026-09-28 05:59:05.754 +0000] WARN <Error:>: RLS bypass invoked
+stdout | tests/reliability/queue-worker-death-poison.test.ts > Stream D — AuditJob queue failure injection (real PostgreSQL) > S3: poison job (throws every attempt) is DEAD after MAX_RETRIES attempts and never left RUNNING
+[S3] poison job reached DEAD after 3 attempts (MAX_RETRIES=3)
+
+ × tests/reliability/queue-worker-death-poison.test.ts > Stream D — AuditJob queue failure injection (real PostgreSQL) > S1b: worker A persists audit results then dies before SUCCEEDED; B re-runs — Finding/Evidence rows must not duplicate 248ms
+   → expected { findings: 2, evidence: 2 } to deeply equal { findings: 1, evidence: 1 }
+ × tests/reliability/queue-worker-death-poison.test.ts > Stream D — AuditJob queue failure injection (real PostgreSQL) > S2: concurrent enqueue with the same idempotencyKey yields exactly one AuditJob row 41ms
+   → expected 3 to be +0 // Object.is equality
+[2026-09-28 05:59:05.771 +0000] WARN <Error:>: RLS bypass invoked
+[2026-09-28 05:59:05.785 +0000] INFO: AuditJob: enqueued
+[2026-09-28 05:59:05.786 +0000] INFO: Worker: dispatching job
+[2026-09-28 05:59:05.787 +0000] WARN <Error:>: RLS bypass invoked
+[2026-09-28 05:59:05.789 +0000] WARN <Error:>: RLS bypass invoked
+[2026-09-28 05:59:05.797 +0000] INFO: Worker: processing job
+[2026-09-28 05:59:05.797 +0000] ERROR: Worker: job failed
+[2026-09-28 05:59:05.803 +0000] WARN: AuditJob: failed — requeued for retry
+    attempts: 1
+[2026-09-28 05:59:05.808 +0000] INFO: Worker: job complete
+[2026-09-28 05:59:05.809 +0000] INFO: Worker: dispatching job
+[2026-09-28 05:59:05.809 +0000] WARN <Error:>: RLS bypass invoked
+[2026-09-28 05:59:05.811 +0000] WARN <Error:>: RLS bypass invoked
+[2026-09-28 05:59:05.818 +0000] INFO: Worker: processing job
+[2026-09-28 05:59:05.818 +0000] ERROR: Worker: job failed
+[2026-09-28 05:59:05.825 +0000] WARN: AuditJob: failed — requeued for retry
+    attempts: 2
+[2026-09-28 05:59:05.829 +0000] INFO: Worker: job complete
+[2026-09-28 05:59:05.829 +0000] INFO: Worker: dispatching job
+[2026-09-28 05:59:05.830 +0000] WARN <Error:>: RLS bypass invoked
+[2026-09-28 05:59:05.833 +0000] WARN <Error:>: RLS bypass invoked
+[2026-09-28 05:59:05.839 +0000] INFO: Worker: processing job
+[2026-09-28 05:59:05.840 +0000] ERROR: Worker: job failed
+[2026-09-28 05:59:05.846 +0000] WARN: AuditJob: exhausted retries — moved to DEAD
+    attempts: 3
+[2026-09-28 05:59:05.851 +0000] INFO: Worker: job complete
+[2026-09-28 05:59:05.851 +0000] WARN <Error:>: RLS bypass invoked
+[2026-09-28 05:59:05.854 +0000] INFO: Worker: dispatching job
+[2026-09-28 05:59:05.854 +0000] WARN <Error:>: RLS bypass invoked
+[2026-09-28 05:59:05.856 +0000] INFO: Worker: job already in terminal state — skipping
+[2026-09-28 05:59:05.856 +0000] INFO: Worker: job complete
+ ✓ tests/reliability/queue-worker-death-poison.test.ts > Stream D — AuditJob queue failure injection (real PostgreSQL) > S3: poison job (throws every attempt) is DEAD after MAX_RETRIES attempts and never left RUNNING 119ms
+ ✓ tests/reliability/queue-worker-death-poison.test.ts > Stream D — AuditJob queue failure injection (real PostgreSQL) > S3 (worker route): a poison job dispatched via the HTTP worker returns 500 (retry signal) and 200 SKIPPED once DEAD 100ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/reliability/queue-worker-death-poison.test.ts > Stream D — AuditJob queue failure injection (real PostgreSQL) > S1b: worker A persists audit results then dies before SUCCEEDED; B re-runs — Finding/Evidence rows must not duplicate
+AssertionError: expected { findings: 2, evidence: 2 } to deeply equal { findings: 1, evidence: 1 }
+
+- Expected
++ Received
+
+  {
+-   "evidence": 1,
+-   "findings": 1,
++   "evidence": 2,
++   "findings": 2,
+  }
+
+ ❯ tests/reliability/queue-worker-death-poison.test.ts:324:19
+    322|     // CONTRACT: redelivery must not duplicate persisted audit output.
+    323|     const after = await countRows();
+    324|     expect(after).toEqual({ findings: 1, evidence: 1 });
+       |                   ^
+    325|   });
+    326|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  tests/reliability/queue-worker-death-poison.test.ts > Stream D — AuditJob queue failure injection (real PostgreSQL) > S2: concurrent enqueue with the same idempotencyKey yields exactly one AuditJob row
+AssertionError: expected 3 to be +0 // Object.is equality
+
+- Expected
++ Received
+
+- 0
++ 3
+
+ ❯ tests/reliability/queue-worker-death-poison.test.ts:361:29
+    359|       );
+    360|     }
+    361|     expect(rejected.length).toBe(0);
+       |                             ^
+    362|   });
+    363|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 5 passed (7)
+   Start at  05:58:58
+   Duration  7.66s (transform 224ms, setup 172ms, import 6.36s, tests 961ms, environment 0ms)
+

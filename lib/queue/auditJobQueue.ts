@@ -104,18 +104,38 @@ export async function enqueueAuditJob(input: EnqueueJobInput): Promise<AuditJobR
     return existing as AuditJobRecord;
   }
 
-  const job = await prisma.auditJob.create({
-    data: {
-      tenantId: input.tenantId,
-      batchId: input.batchId,
-      auditId: input.auditId,
-      generateProposal: input.generateProposal ?? true,
-      idempotencyKey: input.idempotencyKey,
-      status: 'QUEUED',
-      attempts: 0,
-      maxAttempts: MAX_RETRIES,
-    },
-  });
+  let job: AuditJobRecord;
+  try {
+    job = (await prisma.auditJob.create({
+      data: {
+        tenantId: input.tenantId,
+        batchId: input.batchId,
+        auditId: input.auditId,
+        generateProposal: input.generateProposal ?? true,
+        idempotencyKey: input.idempotencyKey,
+        status: 'QUEUED',
+        attempts: 0,
+        maxAttempts: MAX_RETRIES,
+      },
+    })) as AuditJobRecord;
+  } catch (error) {
+    // Concurrent callers with the same idempotencyKey race past the findUnique
+    // above; the unique constraint is the real guard. Honor the documented
+    // contract (return the existing row) instead of leaking P2002.
+    if ((error as { code?: string })?.code === 'P2002') {
+      const raced = await prisma.auditJob.findUnique({
+        where: { idempotencyKey: input.idempotencyKey },
+      });
+      if (raced) {
+        logger.info(
+          { event: 'audit_job.enqueue_raced', jobId: raced.id, idempotencyKey: input.idempotencyKey },
+          'AuditJob: concurrent duplicate enqueue resolved to existing row'
+        );
+        return raced as AuditJobRecord;
+      }
+    }
+    throw error;
+  }
 
   logger.info(
     {

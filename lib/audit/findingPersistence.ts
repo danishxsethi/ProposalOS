@@ -99,6 +99,17 @@ export async function persistAuditResult(input: PersistAuditResultInput): Promis
   for (const evidence of input.evidence) validateSnapshotPayload(evidence.rawResponse);
 
   await prisma.$transaction(async (tx) => {
+    // Idempotent re-run (worker crash → lease reclaim → redelivery): an audit's
+    // machine-generated findings and evidence are replaced, never appended, so a
+    // redelivered job cannot double the customer-visible finding set. Findings a
+    // human has edited or excluded are preserved.
+    await tx.finding.deleteMany({
+      where: { auditId: input.auditId, tenantId: input.tenantId, manuallyEdited: false, excluded: false },
+    });
+    await tx.evidenceSnapshot.deleteMany({
+      where: { auditId: input.auditId, tenantId: input.tenantId },
+    });
+
     if (input.evidence.length > 0) {
       await tx.evidenceSnapshot.createMany({
         data: input.evidence.map((snapshot) => ({

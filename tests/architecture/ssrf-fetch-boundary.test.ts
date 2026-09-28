@@ -194,7 +194,7 @@ const ALLOWED_RAW_FETCH: AllowedRawFetch[] = [
   // System-internal / fixed-host calls outside lib/modules/
   {
     file: 'lib/queue/auditJobQueue.ts',
-    line: 447,
+    line: 467,
     host: 'internal (env)',
     reason: 'workerUrl from process.env — system-configured, not user-influenced',
   },
