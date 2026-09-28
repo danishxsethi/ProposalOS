@@ -70,7 +70,7 @@ describe('P0-27 / Wave 9B Closing-Agent Authority', () => {
   // Test 4: Cross-tenant conversation access is rejected
   it('should reject cross-tenant access', async () => {
     const proposalId = 'prop-1';
-
+    
     vi.mocked(prisma.conversationState.findUnique).mockResolvedValue(null);
 
     const result = await prisma.conversationState.findUnique({
@@ -179,15 +179,7 @@ describe('P0-27 / Wave 9B Closing-Agent Authority', () => {
   // Test 16: Model cannot invoke removed/unauthorized mutation tools
   it('should have no mutation tools in schema', async () => {
     // Verifies the allowed output schema contains no tool invocation fields
-    const allowedFields = [
-      'reply',
-      'intent',
-      'confidence',
-      'factual',
-      'sourceClaimIds',
-      'escalation',
-      'proposedAction',
-    ];
+    const allowedFields = ['reply', 'intent', 'confidence', 'factual', 'sourceClaimIds', 'escalation', 'proposedAction'];
     const forbiddenFields = ['price', 'discount', 'tier', 'timeline', 'roi', 'accept'];
 
     for (const field of forbiddenFields) {
@@ -228,14 +220,7 @@ describe('P0-27 / Wave 9B Closing-Agent Authority', () => {
 
     await prisma.conversationState.upsert({
       where: { proposalId: 'prop-1' },
-      create: {
-        tenantId: 'tenant-1',
-        proposalId: 'prop-1',
-        escalated: true,
-        sessionId: 'sess-1',
-        history: [],
-        objectionsRaised: [],
-      },
+      create: { tenantId: 'tenant-1', proposalId: 'prop-1', escalated: true, sessionId: 'sess-1', history: [], objectionsRaised: [] },
       update: { escalated: true },
     });
 

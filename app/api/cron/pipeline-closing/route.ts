@@ -65,101 +65,97 @@ export async function GET(req: Request) {
           };
 
           const activeProspects = await prisma.prospectLead.findMany({
-            where: {
-              tenantId: tenant.id,
-              pipelineStatus: 'outreach_sent',
-              lastEngagementAt: {
-                gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000), // Last 7 days
-              },
+          where: {
+            tenantId: tenant.id,
+            pipelineStatus: 'outreach_sent',
+            lastEngagementAt: {
+              gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000), // Last 7 days
             },
-            take: config.batchSize,
-          });
+          },
+          take: config.batchSize,
+        });
 
           logger.info(
-            {
-              event: 'pipeline_closing.prospects_found',
-              tenantId: tenant.id,
-              count: activeProspects.length,
-            },
-            'Active prospects found'
-          );
+          {
+            event: 'pipeline_closing.prospects_found',
+            tenantId: tenant.id,
+            count: activeProspects.length,
+          },
+          'Active prospects found'
+        );
 
           for (const prospect of activeProspects) {
-            try {
-              // Compute engagement score
-              const score = await computeEngagementScore(prospect.id);
-              results.prospectsScored++;
+          try {
+            // Compute engagement score
+            const score = await computeEngagementScore(prospect.id);
+            results.prospectsScored++;
 
+            logger.info(
+              {
+                event: 'pipeline_closing.prospect_scored',
+                prospectId: prospect.id,
+                score: score.total,
+              },
+              'Prospect scored'
+            );
+
+            // Check if hot lead
+            const isHot = isHotLead(score, config);
+
+            if (isHot) {
               logger.info(
-                {
-                  event: 'pipeline_closing.prospect_scored',
-                  prospectId: prospect.id,
-                  score: score.total,
-                },
-                'Prospect scored'
+                { event: 'pipeline_closing.hot_lead', prospectId: prospect.id, score: score.total },
+                'Hot lead identified'
               );
+              results.hotLeadsIdentified++;
 
-              // Check if hot lead
-              const isHot = isHotLead(score, config);
+              // Transition to hot_lead status
+              await prisma.prospectLead.update({
+                where: { id: prospect.id },
+                data: {
+                  pipelineStatus: 'hot_lead',
+                },
+              });
 
-              if (isHot) {
+              // Check if in top 5% for human review
+              const topPercentile = config.hotLeadPercentile || 95;
+              if (topPercentile >= 95 && score.total >= 150) {
+                // Route to Human Review Queue
+                // In production, this would create a notification or queue entry
                 logger.info(
                   {
-                    event: 'pipeline_closing.hot_lead',
+                    event: 'pipeline_closing.human_review_routed',
                     prospectId: prospect.id,
                     score: score.total,
                   },
-                  'Hot lead identified'
+                  'Routing to Human Review Queue'
                 );
-                results.hotLeadsIdentified++;
 
-                // Transition to hot_lead status
-                await prisma.prospectLead.update({
-                  where: { id: prospect.id },
+                await prisma.pipelineErrorLog.create({
                   data: {
-                    pipelineStatus: 'hot_lead',
+                    tenantId: tenant.id,
+                    stage: 'human_handoff',
+                    prospectId: prospect.id,
+                    errorType: 'HANDOFF_NOTIFICATION_PENDING',
+                    errorMessage: 'High engagement lead requires human review',
+                    metadata: { reason: 'high_engagement_score_hot_lead', score: score.total },
                   },
                 });
-
-                // Check if in top 5% for human review
-                const topPercentile = config.hotLeadPercentile || 95;
-                if (topPercentile >= 95 && score.total >= 150) {
-                  // Route to Human Review Queue
-                  // In production, this would create a notification or queue entry
-                  logger.info(
-                    {
-                      event: 'pipeline_closing.human_review_routed',
-                      prospectId: prospect.id,
-                      score: score.total,
-                    },
-                    'Routing to Human Review Queue'
-                  );
-
-                  await prisma.pipelineErrorLog.create({
-                    data: {
-                      tenantId: tenant.id,
-                      stage: 'human_handoff',
-                      prospectId: prospect.id,
-                      errorType: 'HANDOFF_NOTIFICATION_PENDING',
-                      errorMessage: 'High engagement lead requires human review',
-                      metadata: { reason: 'high_engagement_score_hot_lead', score: score.total },
-                    },
-                  });
-                }
-
-                // Send automated follow-up
-                // Future: Integrate with outreach system for personalized follow-up sequences
-                logger.info(
-                  { event: 'pipeline_closing.followup_eligible', prospectId: prospect.id },
-                  'Follow-up eligibility recorded; dispatch remains in the durable outbound worker'
-                );
               }
-            } catch (error) {
-              logger.error(`[Pipeline Closing] Error processing prospect ${prospect.id}:`, error);
-              results.errors.push(
-                `Prospect ${prospect.id}: ${error instanceof Error ? error.message : 'Unknown error'}`
+
+              // Send automated follow-up
+              // Future: Integrate with outreach system for personalized follow-up sequences
+              logger.info(
+                { event: 'pipeline_closing.followup_eligible', prospectId: prospect.id },
+                'Follow-up eligibility recorded; dispatch remains in the durable outbound worker'
               );
             }
+          } catch (error) {
+            logger.error(`[Pipeline Closing] Error processing prospect ${prospect.id}:`, error);
+            results.errors.push(
+              `Prospect ${prospect.id}: ${error instanceof Error ? error.message : 'Unknown error'}`
+            );
+          }
           }
 
           results.tenantsProcessed++;

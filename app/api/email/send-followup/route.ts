@@ -96,7 +96,7 @@ export const POST = withAuth(async (req: Request) => {
     const baseUrl =
       process.env.BASE_URL || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
     const proposalUrl = `${baseUrl}/proposal/${proposal.webLinkToken}`;
-    const unsubscribeUrl = `${baseUrl}/api/email/unsubscribe?email=${encodeURIComponent(recipientEmail)}`;
+    const unsubscribeUrl = `${baseUrl}/unsubscribe?email=${encodeURIComponent(recipientEmail)}`;
 
     const topFinding = audit.findings[0];
     if (!topFinding) {
@@ -158,10 +158,7 @@ export const POST = withAuth(async (req: Request) => {
       'Follow-up email queued for durable dispatch'
     );
 
-    return NextResponse.json(
-      { accepted: true, followUpId: followUp.id, status: 'pending' },
-      { status: 202 }
-    );
+    return NextResponse.json({ accepted: true, followUpId: followUp.id, status: 'pending' }, { status: 202 });
   } catch (err) {
     logger.error(
       { event: 'followup_email_error', error: err instanceof Error ? err.message : String(err) },

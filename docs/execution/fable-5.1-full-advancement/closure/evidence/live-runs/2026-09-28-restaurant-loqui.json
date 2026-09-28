@@ -1,0 +1,25 @@
+{
+  "business": {
+    "name": "Loqui",
+    "city": "Saskatoon",
+    "url": "http://www.loqui.ca/",
+    "industry": "restaurant"
+  },
+  "auditId": "8752fc8b-1f1a-4ad8-9315-26f6e1f3fbad",
+  "auditStatus": "FAILED",
+  "trustState": "PENDING",
+  "overallScore": null,
+  "apiCostCents": 0,
+  "auditWallMs": 72,
+  "auditError": null,
+  "modulesCompleted": 0,
+  "modulesFailed": 1,
+  "moduleStatusCounts": {},
+  "moduleTimingsMs": {},
+  "findings": 0,
+  "findingsByType": {},
+  "evidenceSnapshots": 0,
+  "proposalWallMs": null,
+  "proposalError": null,
+  "proposal": null
+}

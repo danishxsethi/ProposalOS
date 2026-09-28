@@ -250,8 +250,7 @@ describe('P1-53 / Wave 9B Follow-up Safety', () => {
     // This is enforced at the outboundSafety boundary
     // The test verifies the boundary enforces claim contract
     const invalidClaims = { sourceClaimIds: [] };
-    const isValid =
-      Array.isArray(invalidClaims.sourceClaimIds) && invalidClaims.sourceClaimIds.length > 0;
+    const isValid = Array.isArray(invalidClaims.sourceClaimIds) && invalidClaims.sourceClaimIds.length > 0;
 
     expect(isValid).toBe(false);
   });
@@ -271,7 +270,9 @@ describe('P1-53 / Wave 9B Follow-up Safety', () => {
   it('should reject unsupported metric claims', async () => {
     const unsupported = ['guaranteed 100% ROI', 'will reduce costs by exactly $50k'];
 
-    const rejected = unsupported.filter((claim) => /guaranteed|exactly|will|promise/.test(claim));
+    const rejected = unsupported.filter((claim) =>
+      /guaranteed|exactly|will|promise/.test(claim)
+    );
 
     expect(rejected.length).toBeGreaterThan(0);
   });

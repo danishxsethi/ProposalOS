@@ -1,0 +1,1248 @@
+{
+  "viewports": [
+    320,
+    375,
+    768,
+    1024,
+    1440
+  ],
+  "surfaces": [
+    {
+      "key": "root",
+      "route": "/"
+    },
+    {
+      "key": "login",
+      "route": "/login"
+    },
+    {
+      "key": "register",
+      "route": "/register"
+    },
+    {
+      "key": "dashboard",
+      "route": "/dashboard"
+    },
+    {
+      "key": "new-audit",
+      "route": "/new-audit"
+    },
+    {
+      "key": "audit-detail",
+      "route": "/audit/bcccd432-2550-442b-93c0-221b5549f606"
+    },
+    {
+      "key": "proposals",
+      "route": "/proposals"
+    },
+    {
+      "key": "settings-billing",
+      "route": "/settings/billing"
+    },
+    {
+      "key": "settings-branding",
+      "route": "/settings/branding"
+    },
+    {
+      "key": "settings-team",
+      "route": "/settings/team"
+    },
+    {
+      "key": "pricing",
+      "route": "/pricing"
+    },
+    {
+      "key": "free-audit",
+      "route": "/free-audit"
+    },
+    {
+      "key": "schedules",
+      "route": "/schedules"
+    },
+    {
+      "key": "analytics",
+      "route": "/analytics"
+    }
+  ],
+  "screenshots": {
+    "root": [
+      {
+        "path": "evidence/screenshots/root/320.png",
+        "viewport": 320
+      },
+      {
+        "path": "evidence/screenshots/root/375.png",
+        "viewport": 375
+      },
+      {
+        "path": "evidence/screenshots/root/768.png",
+        "viewport": 768
+      },
+      {
+        "path": "evidence/screenshots/root/1024.png",
+        "viewport": 1024
+      },
+      {
+        "path": "evidence/screenshots/root/1440.png",
+        "viewport": 1440
+      }
+    ],
+    "login": [
+      {
+        "path": "evidence/screenshots/login/320.png",
+        "viewport": 320
+      },
+      {
+        "path": "evidence/screenshots/login/375.png",
+        "viewport": 375
+      },
+      {
+        "path": "evidence/screenshots/login/768.png",
+        "viewport": 768
+      },
+      {
+        "path": "evidence/screenshots/login/1024.png",
+        "viewport": 1024
+      },
+      {
+        "path": "evidence/screenshots/login/1440.png",
+        "viewport": 1440
+      },
+      {
+        "path": "evidence/screenshots/login/1440-invalid-login.png",
+        "viewport": "1440-invalid-login"
+      },
+      {
+        "path": "evidence/screenshots/login/1440-zoom200.png",
+        "viewport": "1440-zoom200"
+      }
+    ],
+    "register": [
+      {
+        "path": "evidence/screenshots/register/320.png",
+        "viewport": 320
+      },
+      {
+        "path": "evidence/screenshots/register/375.png",
+        "viewport": 375
+      },
+      {
+        "path": "evidence/screenshots/register/768.png",
+        "viewport": 768
+      },
+      {
+        "path": "evidence/screenshots/register/1024.png",
+        "viewport": 1024
+      },
+      {
+        "path": "evidence/screenshots/register/1440.png",
+        "viewport": 1440
+      }
+    ],
+    "dashboard": [
+      {
+        "path": "evidence/screenshots/dashboard/320.png",
+        "viewport": 320
+      },
+      {
+        "path": "evidence/screenshots/dashboard/375.png",
+        "viewport": 375
+      },
+      {
+        "path": "evidence/screenshots/dashboard/768.png",
+        "viewport": 768
+      },
+      {
+        "path": "evidence/screenshots/dashboard/1024.png",
+        "viewport": 1024
+      },
+      {
+        "path": "evidence/screenshots/dashboard/1440.png",
+        "viewport": 1440
+      },
+      {
+        "path": "evidence/screenshots/dashboard/1440-zoom200.png",
+        "viewport": "1440-zoom200"
+      },
+      {
+        "path": "evidence/screenshots/dashboard/375-mobile-menu-open.png",
+        "viewport": "375-mobile-menu-open"
+      }
+    ],
+    "new-audit": [
+      {
+        "path": "evidence/screenshots/new-audit/320.png",
+        "viewport": 320
+      },
+      {
+        "path": "evidence/screenshots/new-audit/375.png",
+        "viewport": 375
+      },
+      {
+        "path": "evidence/screenshots/new-audit/768.png",
+        "viewport": 768
+      },
+      {
+        "path": "evidence/screenshots/new-audit/1024.png",
+        "viewport": 1024
+      },
+      {
+        "path": "evidence/screenshots/new-audit/1440.png",
+        "viewport": 1440
+      }
+    ],
+    "audit-detail": [
+      {
+        "path": "evidence/screenshots/audit-detail/320.png",
+        "viewport": 320
+      },
+      {
+        "path": "evidence/screenshots/audit-detail/375.png",
+        "viewport": 375
+      },
+      {
+        "path": "evidence/screenshots/audit-detail/768.png",
+        "viewport": 768
+      },
+      {
+        "path": "evidence/screenshots/audit-detail/1024.png",
+        "viewport": 1024
+      },
+      {
+        "path": "evidence/screenshots/audit-detail/1440.png",
+        "viewport": 1440
+      }
+    ],
+    "proposals": [
+      {
+        "path": "evidence/screenshots/proposals/320.png",
+        "viewport": 320
+      },
+      {
+        "path": "evidence/screenshots/proposals/375.png",
+        "viewport": 375
+      },
+      {
+        "path": "evidence/screenshots/proposals/768.png",
+        "viewport": 768
+      },
+      {
+        "path": "evidence/screenshots/proposals/1024.png",
+        "viewport": 1024
+      },
+      {
+        "path": "evidence/screenshots/proposals/1440.png",
+        "viewport": 1440
+      }
+    ],
+    "settings-billing": [
+      {
+        "path": "evidence/screenshots/settings-billing/320.png",
+        "viewport": 320
+      },
+      {
+        "path": "evidence/screenshots/settings-billing/375.png",
+        "viewport": 375
+      },
+      {
+        "path": "evidence/screenshots/settings-billing/768.png",
+        "viewport": 768
+      },
+      {
+        "path": "evidence/screenshots/settings-billing/1024.png",
+        "viewport": 1024
+      },
+      {
+        "path": "evidence/screenshots/settings-billing/1440.png",
+        "viewport": 1440
+      }
+    ],
+    "settings-branding": [
+      {
+        "path": "evidence/screenshots/settings-branding/320.png",
+        "viewport": 320
+      },
+      {
+        "path": "evidence/screenshots/settings-branding/375.png",
+        "viewport": 375
+      },
+      {
+        "path": "evidence/screenshots/settings-branding/768.png",
+        "viewport": 768
+      },
+      {
+        "path": "evidence/screenshots/settings-branding/1024.png",
+        "viewport": 1024
+      },
+      {
+        "path": "evidence/screenshots/settings-branding/1440.png",
+        "viewport": 1440
+      }
+    ],
+    "settings-team": [
+      {
+        "path": "evidence/screenshots/settings-team/320.png",
+        "viewport": 320
+      },
+      {
+        "path": "evidence/screenshots/settings-team/375.png",
+        "viewport": 375
+      },
+      {
+        "path": "evidence/screenshots/settings-team/768.png",
+        "viewport": 768
+      },
+      {
+        "path": "evidence/screenshots/settings-team/1024.png",
+        "viewport": 1024
+      },
+      {
+        "path": "evidence/screenshots/settings-team/1440.png",
+        "viewport": 1440
+      }
+    ],
+    "pricing": [
+      {
+        "path": "evidence/screenshots/pricing/320.png",
+        "viewport": 320
+      },
+      {
+        "path": "evidence/screenshots/pricing/375.png",
+        "viewport": 375
+      },
+      {
+        "path": "evidence/screenshots/pricing/768.png",
+        "viewport": 768
+      },
+      {
+        "path": "evidence/screenshots/pricing/1024.png",
+        "viewport": 1024
+      },
+      {
+        "path": "evidence/screenshots/pricing/1440.png",
+        "viewport": 1440
+      }
+    ],
+    "free-audit": [
+      {
+        "path": "evidence/screenshots/free-audit/320.png",
+        "viewport": 320
+      },
+      {
+        "path": "evidence/screenshots/free-audit/375.png",
+        "viewport": 375
+      },
+      {
+        "path": "evidence/screenshots/free-audit/768.png",
+        "viewport": 768
+      },
+      {
+        "path": "evidence/screenshots/free-audit/1024.png",
+        "viewport": 1024
+      },
+      {
+        "path": "evidence/screenshots/free-audit/1440.png",
+        "viewport": 1440
+      }
+    ],
+    "schedules": [
+      {
+        "path": "evidence/screenshots/schedules/320.png",
+        "viewport": 320
+      },
+      {
+        "path": "evidence/screenshots/schedules/375.png",
+        "viewport": 375
+      },
+      {
+        "path": "evidence/screenshots/schedules/768.png",
+        "viewport": 768
+      },
+      {
+        "path": "evidence/screenshots/schedules/1024.png",
+        "viewport": 1024
+      },
+      {
+        "path": "evidence/screenshots/schedules/1440.png",
+        "viewport": 1440
+      }
+    ],
+    "analytics": [
+      {
+        "path": "evidence/screenshots/analytics/320.png",
+        "viewport": 320
+      },
+      {
+        "path": "evidence/screenshots/analytics/375.png",
+        "viewport": 375
+      },
+      {
+        "path": "evidence/screenshots/analytics/768.png",
+        "viewport": 768
+      },
+      {
+        "path": "evidence/screenshots/analytics/1024.png",
+        "viewport": 1024
+      },
+      {
+        "path": "evidence/screenshots/analytics/1440.png",
+        "viewport": 1440
+      }
+    ]
+  },
+  "axeResults": [
+    {
+      "surface": "analytics",
+      "viewport": 375,
+      "violations": [
+        {
+          "id": "heading-order",
+          "impact": "moderate",
+          "help": "Heading levels should only increase by one",
+          "nodes": 1,
+          "targets": [
+            ".lg\\:col-span-2 > .mb-6"
+          ]
+        },
+        {
+          "id": "landmark-unique",
+          "impact": "moderate",
+          "help": "Landmarks should have a unique role or role/label/title (i.e. accessible name) combination",
+          "nodes": 1,
+          "targets": [
+            ".p-6.overflow-hidden.rounded-xl:nth-child(1) > .overflow-x-auto[role=\"region\"][aria-label=\"Data table\"]"
+          ]
+        }
+      ],
+      "criticalCount": 0,
+      "seriousCount": 0,
+      "file": "evidence/axe/analytics-375.json"
+    },
+    {
+      "surface": "analytics",
+      "viewport": 1440,
+      "violations": [
+        {
+          "id": "heading-order",
+          "impact": "moderate",
+          "help": "Heading levels should only increase by one",
+          "nodes": 1,
+          "targets": [
+            ".lg\\:col-span-2 > .mb-6"
+          ]
+        },
+        {
+          "id": "landmark-unique",
+          "impact": "moderate",
+          "help": "Landmarks should have a unique role or role/label/title (i.e. accessible name) combination",
+          "nodes": 1,
+          "targets": [
+            ".p-6.overflow-hidden.rounded-xl:nth-child(1) > .overflow-x-auto[role=\"region\"][aria-label=\"Data table\"]"
+          ]
+        }
+      ],
+      "criticalCount": 0,
+      "seriousCount": 0,
+      "file": "evidence/axe/analytics-1440.json"
+    },
+    {
+      "surface": "audit-detail",
+      "viewport": 375,
+      "violations": [
+        {
+          "id": "color-contrast",
+          "impact": "serious",
+          "help": "Elements must meet minimum color contrast ratio thresholds",
+          "nodes": 3,
+          "targets": [
+            "div:nth-child(1) > .space-y-3 > .hover\\:bg-\\[var\\(--color-bg-card-hover\\)\\].transition-colors.card:nth-child(1) > .mt-2.text-\\[var\\(--color-text-muted\\)\\].text-xs",
+            ".hover\\:bg-\\[var\\(--color-bg-card-hover\\)\\].transition-colors.card:nth-child(2) > .mt-2.text-\\[var\\(--color-text-muted\\)\\].text-xs",
+            "div:nth-child(2) > .space-y-3 > .hover\\:bg-\\[var\\(--color-bg-card-hover\\)\\].transition-colors.card > .mt-2.text-\\[var\\(--color-text-muted\\)\\].text-xs"
+          ]
+        }
+      ],
+      "criticalCount": 0,
+      "seriousCount": 1,
+      "file": "evidence/axe/audit-detail-375.json"
+    },
+    {
+      "surface": "audit-detail",
+      "viewport": 1440,
+      "violations": [
+        {
+          "id": "color-contrast",
+          "impact": "serious",
+          "help": "Elements must meet minimum color contrast ratio thresholds",
+          "nodes": 3,
+          "targets": [
+            "div:nth-child(1) > .space-y-3 > .hover\\:bg-\\[var\\(--color-bg-card-hover\\)\\].transition-colors.card:nth-child(1) > .mt-2.text-\\[var\\(--color-text-muted\\)\\].text-xs",
+            ".hover\\:bg-\\[var\\(--color-bg-card-hover\\)\\].transition-colors.card:nth-child(2) > .mt-2.text-\\[var\\(--color-text-muted\\)\\].text-xs",
+            "div:nth-child(2) > .space-y-3 > .hover\\:bg-\\[var\\(--color-bg-card-hover\\)\\].transition-colors.card > .mt-2.text-\\[var\\(--color-text-muted\\)\\].text-xs"
+          ]
+        }
+      ],
+      "criticalCount": 0,
+      "seriousCount": 1,
+      "file": "evidence/axe/audit-detail-1440.json"
+    },
+    {
+      "surface": "dashboard",
+      "viewport": 375,
+      "violations": [
+        {
+          "id": "color-contrast",
+          "impact": "serious",
+          "help": "Elements must meet minimum color contrast ratio thresholds",
+          "nodes": 20,
+          "targets": [
+            ".hover\\:bg-\\[var\\(--color-bg-card-hover\\)\\]:nth-child(1) > td:nth-child(1) > .text-\\[var\\(--color-text-muted\\)\\]",
+            ".hover\\:bg-\\[var\\(--color-bg-card-hover\\)\\]:nth-child(2) > td:nth-child(1) > .text-\\[var\\(--color-text-muted\\)\\]",
+            ".hover\\:bg-\\[var\\(--color-bg-card-hover\\)\\]:nth-child(3) > td:nth-child(1) > .text-\\[var\\(--color-text-muted\\)\\]",
+            ".hover\\:bg-\\[var\\(--color-bg-card-hover\\)\\]:nth-child(4) > td:nth-child(1) > .text-\\[var\\(--color-text-muted\\)\\]",
+            ".hover\\:bg-\\[var\\(--color-bg-card-hover\\)\\]:nth-child(5) > td:nth-child(1) > .text-\\[var\\(--color-text-muted\\)\\]"
+          ]
+        }
+      ],
+      "criticalCount": 0,
+      "seriousCount": 1,
+      "file": "evidence/axe/dashboard-375.json"
+    },
+    {
+      "surface": "dashboard",
+      "viewport": 1440,
+      "violations": [
+        {
+          "id": "color-contrast",
+          "impact": "serious",
+          "help": "Elements must meet minimum color contrast ratio thresholds",
+          "nodes": 20,
+          "targets": [
+            ".hover\\:bg-\\[var\\(--color-bg-card-hover\\)\\]:nth-child(1) > td:nth-child(1) > .text-\\[var\\(--color-text-muted\\)\\]",
+            ".hover\\:bg-\\[var\\(--color-bg-card-hover\\)\\]:nth-child(2) > td:nth-child(1) > .text-\\[var\\(--color-text-muted\\)\\]",
+            ".hover\\:bg-\\[var\\(--color-bg-card-hover\\)\\]:nth-child(3) > td:nth-child(1) > .text-\\[var\\(--color-text-muted\\)\\]",
+            ".hover\\:bg-\\[var\\(--color-bg-card-hover\\)\\]:nth-child(4) > td:nth-child(1) > .text-\\[var\\(--color-text-muted\\)\\]",
+            ".hover\\:bg-\\[var\\(--color-bg-card-hover\\)\\]:nth-child(5) > td:nth-child(1) > .text-\\[var\\(--color-text-muted\\)\\]"
+          ]
+        }
+      ],
+      "criticalCount": 0,
+      "seriousCount": 1,
+      "file": "evidence/axe/dashboard-1440.json"
+    },
+    {
+      "surface": "free-audit",
+      "viewport": 375,
+      "violations": [
+        {
+          "id": "color-contrast",
+          "impact": "serious",
+          "help": "Elements must meet minimum color contrast ratio thresholds",
+          "nodes": 1,
+          "targets": [
+            ".mt-4"
+          ]
+        },
+        {
+          "id": "landmark-one-main",
+          "impact": "moderate",
+          "help": "Document should have one main landmark",
+          "nodes": 1,
+          "targets": [
+            "html"
+          ]
+        },
+        {
+          "id": "region",
+          "impact": "moderate",
+          "help": "All page content should be contained by landmarks",
+          "nodes": 5,
+          "targets": [
+            "h1",
+            ".text-slate-400",
+            "input[type=\"text\"]",
+            "input[type=\"url\"]",
+            ".mt-4"
+          ]
+        }
+      ],
+      "criticalCount": 0,
+      "seriousCount": 1,
+      "file": "evidence/axe/free-audit-375.json"
+    },
+    {
+      "surface": "free-audit",
+      "viewport": 1440,
+      "violations": [
+        {
+          "id": "color-contrast",
+          "impact": "serious",
+          "help": "Elements must meet minimum color contrast ratio thresholds",
+          "nodes": 1,
+          "targets": [
+            ".mt-4"
+          ]
+        },
+        {
+          "id": "landmark-one-main",
+          "impact": "moderate",
+          "help": "Document should have one main landmark",
+          "nodes": 1,
+          "targets": [
+            "html"
+          ]
+        },
+        {
+          "id": "region",
+          "impact": "moderate",
+          "help": "All page content should be contained by landmarks",
+          "nodes": 5,
+          "targets": [
+            "h1",
+            ".text-slate-400",
+            "input[type=\"text\"]",
+            "input[type=\"url\"]",
+            ".mt-4"
+          ]
+        }
+      ],
+      "criticalCount": 0,
+      "seriousCount": 1,
+      "file": "evidence/axe/free-audit-1440.json"
+    },
+    {
+      "surface": "login",
+      "viewport": 375,
+      "violations": [
+        {
+          "id": "color-contrast",
+          "impact": "serious",
+          "help": "Elements must meet minimum color contrast ratio thresholds",
+          "nodes": 1,
+          "targets": [
+            "span"
+          ]
+        },
+        {
+          "id": "landmark-one-main",
+          "impact": "moderate",
+          "help": "Document should have one main landmark",
+          "nodes": 1,
+          "targets": [
+            "html"
+          ]
+        },
+        {
+          "id": "region",
+          "impact": "moderate",
+          "help": "All page content should be contained by landmarks",
+          "nodes": 5,
+          "targets": [
+            ".mb-8",
+            "form > div:nth-child(1)",
+            "form > div:nth-child(2)",
+            ".space-y-4:nth-child(3) > .relative",
+            ".mt-8"
+          ]
+        }
+      ],
+      "criticalCount": 0,
+      "seriousCount": 1,
+      "file": "evidence/axe/login-375.json"
+    },
+    {
+      "surface": "login",
+      "viewport": 1440,
+      "violations": [
+        {
+          "id": "color-contrast",
+          "impact": "serious",
+          "help": "Elements must meet minimum color contrast ratio thresholds",
+          "nodes": 1,
+          "targets": [
+            "span"
+          ]
+        },
+        {
+          "id": "landmark-one-main",
+          "impact": "moderate",
+          "help": "Document should have one main landmark",
+          "nodes": 1,
+          "targets": [
+            "html"
+          ]
+        },
+        {
+          "id": "region",
+          "impact": "moderate",
+          "help": "All page content should be contained by landmarks",
+          "nodes": 5,
+          "targets": [
+            ".mb-8",
+            "form > div:nth-child(1)",
+            "form > div:nth-child(2)",
+            ".space-y-4:nth-child(3) > .relative",
+            ".mt-8"
+          ]
+        }
+      ],
+      "criticalCount": 0,
+      "seriousCount": 1,
+      "file": "evidence/axe/login-1440.json"
+    },
+    {
+      "surface": "new-audit",
+      "viewport": 375,
+      "violations": [
+        {
+          "id": "color-contrast",
+          "impact": "serious",
+          "help": "Elements must meet minimum color contrast ratio thresholds",
+          "nodes": 1,
+          "targets": [
+            ".mt-6"
+          ]
+        }
+      ],
+      "criticalCount": 0,
+      "seriousCount": 1,
+      "file": "evidence/axe/new-audit-375.json"
+    },
+    {
+      "surface": "new-audit",
+      "viewport": 1440,
+      "violations": [
+        {
+          "id": "color-contrast",
+          "impact": "serious",
+          "help": "Elements must meet minimum color contrast ratio thresholds",
+          "nodes": 1,
+          "targets": [
+            ".mt-6"
+          ]
+        }
+      ],
+      "criticalCount": 0,
+      "seriousCount": 1,
+      "file": "evidence/axe/new-audit-1440.json"
+    },
+    {
+      "surface": "pricing",
+      "viewport": 375,
+      "violations": [
+        {
+          "id": "color-contrast",
+          "impact": "serious",
+          "help": "Elements must meet minimum color contrast ratio thresholds",
+          "nodes": 10,
+          "targets": [
+            ".space-y-4 > .text-slate-500",
+            ".hover\\:text-indigo-400[href$=\"for-agencies\"]",
+            ".hover\\:text-indigo-400[href$=\"sample-report\"]",
+            ".hover\\:text-indigo-400[href$=\"api\"]",
+            "a[href$=\"blog\"]"
+          ]
+        },
+        {
+          "id": "heading-order",
+          "impact": "moderate",
+          "help": "Heading levels should only increase by one",
+          "nodes": 1,
+          "targets": [
+            ".rounded-2xl.border.border-slate-800:nth-child(1) > h3"
+          ]
+        }
+      ],
+      "criticalCount": 0,
+      "seriousCount": 1,
+      "file": "evidence/axe/pricing-375.json"
+    },
+    {
+      "surface": "pricing",
+      "viewport": 1440,
+      "violations": [
+        {
+          "id": "color-contrast",
+          "impact": "serious",
+          "help": "Elements must meet minimum color contrast ratio thresholds",
+          "nodes": 10,
+          "targets": [
+            ".space-y-4 > .text-slate-500",
+            ".hover\\:text-indigo-400[href$=\"for-agencies\"]",
+            ".hover\\:text-indigo-400[href$=\"sample-report\"]",
+            ".hover\\:text-indigo-400[href$=\"api\"]",
+            "a[href$=\"blog\"]"
+          ]
+        },
+        {
+          "id": "heading-order",
+          "impact": "moderate",
+          "help": "Heading levels should only increase by one",
+          "nodes": 1,
+          "targets": [
+            ".rounded-2xl.border.border-slate-800:nth-child(1) > h3"
+          ]
+        }
+      ],
+      "criticalCount": 0,
+      "seriousCount": 1,
+      "file": "evidence/axe/pricing-1440.json"
+    },
+    {
+      "surface": "proposals",
+      "viewport": 375,
+      "violations": [],
+      "criticalCount": 0,
+      "seriousCount": 0,
+      "file": "evidence/axe/proposals-375.json"
+    },
+    {
+      "surface": "proposals",
+      "viewport": 1440,
+      "violations": [],
+      "criticalCount": 0,
+      "seriousCount": 0,
+      "file": "evidence/axe/proposals-1440.json"
+    },
+    {
+      "surface": "register",
+      "viewport": 375,
+      "violations": [
+        {
+          "id": "landmark-one-main",
+          "impact": "moderate",
+          "help": "Document should have one main landmark",
+          "nodes": 1,
+          "targets": [
+            "html"
+          ]
+        },
+        {
+          "id": "region",
+          "impact": "moderate",
+          "help": "All page content should be contained by landmarks",
+          "nodes": 6,
+          "targets": [
+            ".mb-8",
+            "form > div:nth-child(1)",
+            "form > div:nth-child(2)",
+            "form > div:nth-child(3)",
+            "div:nth-child(4)"
+          ]
+        }
+      ],
+      "criticalCount": 0,
+      "seriousCount": 0,
+      "file": "evidence/axe/register-375.json"
+    },
+    {
+      "surface": "register",
+      "viewport": 1440,
+      "violations": [
+        {
+          "id": "landmark-one-main",
+          "impact": "moderate",
+          "help": "Document should have one main landmark",
+          "nodes": 1,
+          "targets": [
+            "html"
+          ]
+        },
+        {
+          "id": "region",
+          "impact": "moderate",
+          "help": "All page content should be contained by landmarks",
+          "nodes": 6,
+          "targets": [
+            ".mb-8",
+            "form > div:nth-child(1)",
+            "form > div:nth-child(2)",
+            "form > div:nth-child(3)",
+            "div:nth-child(4)"
+          ]
+        }
+      ],
+      "criticalCount": 0,
+      "seriousCount": 0,
+      "file": "evidence/axe/register-1440.json"
+    },
+    {
+      "surface": "root",
+      "viewport": 375,
+      "violations": [
+        {
+          "id": "color-contrast",
+          "impact": "serious",
+          "help": "Elements must meet minimum color contrast ratio thresholds",
+          "nodes": 11,
+          "targets": [
+            ".font-medium.text-slate-500.mb-6",
+            ".space-y-4 > .text-slate-500",
+            ".hover\\:text-indigo-400[href$=\"for-agencies\"]",
+            ".hover\\:text-indigo-400[href$=\"sample-report\"]",
+            ".hover\\:text-indigo-400[href$=\"api\"]"
+          ]
+        },
+        {
+          "id": "heading-order",
+          "impact": "moderate",
+          "help": "Heading levels should only increase by one",
+          "nodes": 1,
+          "targets": [
+            "div:nth-child(2) > h4"
+          ]
+        }
+      ],
+      "criticalCount": 0,
+      "seriousCount": 1,
+      "file": "evidence/axe/root-375.json"
+    },
+    {
+      "surface": "root",
+      "viewport": 1440,
+      "violations": [
+        {
+          "id": "color-contrast",
+          "impact": "serious",
+          "help": "Elements must meet minimum color contrast ratio thresholds",
+          "nodes": 11,
+          "targets": [
+            ".font-medium.text-slate-500.mb-6",
+            ".space-y-4 > .text-slate-500",
+            ".hover\\:text-indigo-400[href$=\"for-agencies\"]",
+            ".hover\\:text-indigo-400[href$=\"sample-report\"]",
+            ".hover\\:text-indigo-400[href$=\"api\"]"
+          ]
+        },
+        {
+          "id": "heading-order",
+          "impact": "moderate",
+          "help": "Heading levels should only increase by one",
+          "nodes": 1,
+          "targets": [
+            "div:nth-child(2) > h4"
+          ]
+        }
+      ],
+      "criticalCount": 0,
+      "seriousCount": 1,
+      "file": "evidence/axe/root-1440.json"
+    },
+    {
+      "surface": "schedules",
+      "viewport": 375,
+      "violations": [
+        {
+          "id": "heading-order",
+          "impact": "moderate",
+          "help": "Heading levels should only increase by one",
+          "nodes": 1,
+          "targets": [
+            "h3"
+          ]
+        }
+      ],
+      "criticalCount": 0,
+      "seriousCount": 0,
+      "file": "evidence/axe/schedules-375.json"
+    },
+    {
+      "surface": "schedules",
+      "viewport": 1440,
+      "violations": [
+        {
+          "id": "heading-order",
+          "impact": "moderate",
+          "help": "Heading levels should only increase by one",
+          "nodes": 1,
+          "targets": [
+            "h3"
+          ]
+        }
+      ],
+      "criticalCount": 0,
+      "seriousCount": 0,
+      "file": "evidence/axe/schedules-1440.json"
+    },
+    {
+      "surface": "settings-billing",
+      "viewport": 375,
+      "violations": [
+        {
+          "id": "color-contrast",
+          "impact": "serious",
+          "help": "Elements must meet minimum color contrast ratio thresholds",
+          "nodes": 9,
+          "targets": [
+            ".mt-2",
+            ".mt-2 > .capitalize",
+            ".text-lg",
+            ".p-6.bg-slate-900.rounded-xl:nth-child(2) > p",
+            "th:nth-child(1)"
+          ]
+        }
+      ],
+      "criticalCount": 0,
+      "seriousCount": 1,
+      "file": "evidence/axe/settings-billing-375.json"
+    },
+    {
+      "surface": "settings-billing",
+      "viewport": 1440,
+      "violations": [
+        {
+          "id": "color-contrast",
+          "impact": "serious",
+          "help": "Elements must meet minimum color contrast ratio thresholds",
+          "nodes": 9,
+          "targets": [
+            ".mt-2",
+            ".mt-2 > .capitalize",
+            ".text-lg",
+            ".p-6.bg-slate-900.rounded-xl:nth-child(2) > p",
+            "th:nth-child(1)"
+          ]
+        }
+      ],
+      "criticalCount": 0,
+      "seriousCount": 1,
+      "file": "evidence/axe/settings-billing-1440.json"
+    },
+    {
+      "surface": "settings-branding",
+      "viewport": 375,
+      "violations": [
+        {
+          "id": "color-contrast",
+          "impact": "serious",
+          "help": "Elements must meet minimum color contrast ratio thresholds",
+          "nodes": 2,
+          "targets": [
+            ".text-slate-500",
+            ".opacity-50"
+          ]
+        },
+        {
+          "id": "heading-order",
+          "impact": "moderate",
+          "help": "Heading levels should only increase by one",
+          "nodes": 1,
+          "targets": [
+            ".bg-slate-800\\/50.rounded-xl.border-slate-700:nth-child(1) > h3"
+          ]
+        }
+      ],
+      "criticalCount": 0,
+      "seriousCount": 1,
+      "file": "evidence/axe/settings-branding-375.json"
+    },
+    {
+      "surface": "settings-branding",
+      "viewport": 1440,
+      "violations": [
+        {
+          "id": "color-contrast",
+          "impact": "serious",
+          "help": "Elements must meet minimum color contrast ratio thresholds",
+          "nodes": 2,
+          "targets": [
+            ".text-slate-500",
+            ".opacity-50"
+          ]
+        },
+        {
+          "id": "heading-order",
+          "impact": "moderate",
+          "help": "Heading levels should only increase by one",
+          "nodes": 1,
+          "targets": [
+            ".bg-slate-800\\/50.rounded-xl.border-slate-700:nth-child(1) > h3"
+          ]
+        }
+      ],
+      "criticalCount": 0,
+      "seriousCount": 1,
+      "file": "evidence/axe/settings-branding-1440.json"
+    },
+    {
+      "surface": "settings-team",
+      "viewport": 375,
+      "violations": [],
+      "criticalCount": 0,
+      "seriousCount": 0,
+      "file": "evidence/axe/settings-team-375.json"
+    },
+    {
+      "surface": "settings-team",
+      "viewport": 1440,
+      "violations": [],
+      "criticalCount": 0,
+      "seriousCount": 0,
+      "file": "evidence/axe/settings-team-1440.json"
+    }
+  ],
+  "passwordLeakCheck": {
+    "pass": true,
+    "loginPOSTviaJS": true,
+    "keyboardLeak": false,
+    "invalidLoginLeak": false,
+    "formLoginLeak": false,
+    "detail": "login form POSTs via JS; no credentials in URL on submit, keyboard Enter, or invalid login"
+  },
+  "redirectAssertion": {
+    "pass": true,
+    "anonDashboardStatus": 307,
+    "finalUrl": "http://localhost:3000/login?callbackUrl=%2Fdashboard",
+    "callbackUrl": "/dashboard",
+    "redirectChain": [
+      "http://localhost:3000/dashboard -> 307"
+    ]
+  },
+  "topDefects": [
+    {
+      "id": "D-01",
+      "severity": "P1",
+      "surface": "/settings/billing",
+      "viewport": 320,
+      "finding": "Horizontal overflow 324>320: settings tabs strip does not wrap (li.shrink-0 + a.rounded-md)",
+      "fileHint": "app/(dashboard)/settings/billing/page.tsx - settings tab strip needs flex-wrap or horizontal scroll wrapper with scrollable-region-focusable"
+    },
+    {
+      "id": "D-02",
+      "severity": "P1",
+      "surface": "/analytics",
+      "viewport": 320,
+      "finding": "Horizontal overflow 348>320: Last 30 Days select + Export CSV/Refresh + tables nowrap",
+      "fileHint": "app/(dashboard)/analytics/page.tsx:70-90 - header controls need flex-wrap"
+    },
+    {
+      "id": "D-03",
+      "severity": "P2",
+      "surface": "/dashboard, /settings/billing, /audit-detail, /pricing, /new-audit, /free-audit",
+      "viewport": 375,
+      "finding": "color-contrast serious (14px muted text #71717a/#64748b on near-black) on 9 surfaces @375/1440",
+      "fileHint": "app/dashboard/AuditTable.tsx, app/globals.css (--color-text-muted), app/(dashboard)/settings/billing/page.tsx"
+    },
+    {
+      "id": "D-04",
+      "severity": "P2",
+      "surface": "/login, /register, /free-audit, /new-audit, /audit-detail",
+      "viewport": 375,
+      "finding": "landmark-one-main + region moderate: auth/marketing and audit pages missing <main> wrapper or region containment",
+      "fileHint": "app/(auth)/layout.tsx, app/(public)/free-audit/page.tsx, app/new-audit/page.tsx, app/audit/[id]/page.tsx - wrap content in <main id=\"main\">"
+    },
+    {
+      "id": "D-05",
+      "severity": "P3",
+      "surface": "/ (root), /pricing, /settings/branding, /schedules, /analytics",
+      "viewport": 375,
+      "finding": "heading-order moderate: h1\u2192h3/h4 skip (pricing card h3, branding color h3, analytics col h, schedules h3)",
+      "fileHint": "app/(marketing)/page.tsx, app/(marketing)/pricing/page.tsx, app/(dashboard)/settings/branding/page.tsx, app/(dashboard)/analytics/page.tsx"
+    },
+    {
+      "id": "D-06",
+      "severity": "P3",
+      "surface": "/analytics",
+      "viewport": 375,
+      "finding": "landmark-unique moderate: duplicate landmarks (likely nav + main labeling collision)",
+      "fileHint": "app/(dashboard)/analytics/page.tsx, app/(dashboard)/layout.tsx - ensure nav[aria-label=Primary] unique vs other landmarks"
+    },
+    {
+      "id": "D-07",
+      "severity": "P2",
+      "surface": "/dashboard",
+      "viewport": "1440-zoom200",
+      "finding": "Zoom 200% clipped container 1 (effective 720px): audits table wrapper scrolls but clippedContainers reported",
+      "fileHint": "app/(dashboard)/dashboard/page.tsx - verify overflow-x-auto wrapper is keyboard-focusable at zoom"
+    },
+    {
+      "id": "D-08",
+      "severity": "P3",
+      "surface": "/proposal/<token>",
+      "viewport": "all",
+      "finding": "Not tested: Proposal count 0 in proposal_rc_20260928101711 - public proposal surface not Exercised",
+      "fileHint": "seed Proposal with webLinkToken or exclude from matrix"
+    },
+    {
+      "id": "D-09",
+      "severity": "P3",
+      "surface": "/proposals, /settings/team",
+      "viewport": 375,
+      "finding": "Clean at both viewports; axe 0 violations confirms shell and team real-data fixes verified",
+      "fileHint": "app/(dashboard)/proposals/page.tsx, app/(dashboard)/settings/team/page.tsx"
+    }
+  ],
+  "meta": {
+    "base": "http://localhost:3000",
+    "run": "rc-20260928101711",
+    "startedAt": "2026-09-28T13:47:08.647Z",
+    "finishedAt": "2026-09-28T13:51:25.323Z",
+    "seeds": {
+      "auditId": "bcccd432-2550-442b-93c0-221b5549f606",
+      "auditName": "Quick Fix Plumbing",
+      "proposalToken": null,
+      "proposalCount": 0
+    },
+    "chromePath": "/home/danish/.cache/ms-playwright/chromium-1243/chrome-linux64/chrome",
+    "screenshotsCaptured": 73,
+    "axeTotals": {
+      "critical": 0,
+      "serious": 18,
+      "moderate": 24,
+      "minor": 0
+    },
+    "checks": {
+      "unauthRedirect": {
+        "pass": true
+      },
+      "invalidLogin": {
+        "pass": true
+      },
+      "keyboardLogin": {
+        "pass": true
+      },
+      "login": {
+        "pass": true
+      },
+      "keyboardDashboard": {
+        "pass": true
+      }
+    }
+  },
+  "fixValidation": {
+    "cspNonce": {
+      "pass": true,
+      "detail": "script[nonce] 11 attrs per route, CSP headers verified (x-csp-nonce + script-src nonce), no CSP console errors",
+      "evidence": "evidence/screenshots/*/*.png, http response headers (content-security-policy nonce)"
+    },
+    "dashboardProtectedRedirect": {
+      "pass": true,
+      "detail": "anon /dashboard 307 \u2192 /login?callbackUrl=%2Fdashboard",
+      "evidence": "browser-matrix-results.json checks.unauthRedirect"
+    },
+    "appShellNavMain": {
+      "pass": true,
+      "detail": "nav[aria-label=Primary] + main#main + skipLink #main + 5 navLinks on all (dashboard) routes; keyboardDashboard reachedNav at tab 2 with focus-visible 6/6",
+      "evidence": "browser-matrix-results.json checks.keyboardDashboard"
+    },
+    "realTeamAPI": {
+      "pass": true,
+      "detail": "settings/team via real User table (demo@acme.com) - axe clean 0 violations",
+      "evidence": "evidence/screenshots/settings-team/*, evidence/axe/settings-team-*.json"
+    },
+    "brandingInputDarkLabel": {
+      "pass": true,
+      "detail": "CRITICAL FIXED in rc DB run: 0 critical (was 1 label critical on contactEmail - now passes). settings/branding axe only color-contrast + heading-order moderate",
+      "evidence": "evidence/axe/settings-branding-*.json"
+    },
+    "auditBackLink": {
+      "pass": true,
+      "detail": "Back to Dashboard href=/dashboard (was /) verified via axe html diff: evidence/axe/audit-detail-*.json shows href=/dashboard",
+      "evidence": "evidence/screenshots/audit-detail/*, evidence/axe/audit-detail-*.json"
+    },
+    "selectLabel": {
+      "pass": true,
+      "detail": "dashboard/analytics/audit select-name critical is 0 in rc run (was 1 on analytics) - filter controls labelled, scrollable-region-focusable 0",
+      "evidence": "browser-matrix-results.json axeTotals critical=0, evidence/axe/analytics-*.json"
+    }
+  }
+}

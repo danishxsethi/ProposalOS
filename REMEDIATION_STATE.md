@@ -1891,29 +1891,29 @@ chains and require red/green coverage before they can be verified:
   and a simulated audit ID. `app/api/delivery/[proposalId]/bundle/route.ts:55-95` allows any
   authenticated user to run delivery without tenant/acceptance/idempotency checks.
 
-| Work item | Requirement / executable path                                                  | Boundary and expected result                                                                                                                                              | Verification                                                                           | Status      |
-| --------- | ------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- | ----------- |
-| W9-V04b   | `ProposalFollowUp`, follow-up cron, manual follow-up route                     | Reuse `outboundSafety`; tenant context; suppress before dispatch; persist intent before provider; stable `followup:<proposalId>:<step>` key; failed/unknown never sent    | fixture route/service tests for disabled, suppression, replay, ambiguity, cancellation | in progress |
-| W9-V05    | Follow-up cancellation                                                         | Reply, meeting, accepted, active human handoff, and terminal deal state cancel pending follow-ups                                                                         | fake-time cancellation and duplicate-cron tests                                        | in progress |
-| W9-V06    | `app/api/pipeline/chat`, `app/api/proposal/[id]/chat`, `app/api/chat/proposal` | Server-resolved proposal/token/tenant context, bounded input/history, strict reply schema, no client history authority                                                    | token, cross-proposal, duplicate, injection, malformed-output tests                    | in progress |
-| W9-V07    | `lib/closing/agent.ts`                                                         | Model may propose an action only; server-side action handler requires scoped actor, accepted tier/configuration, confirmation, and idempotency                            | forged proposal, price/timeline override, excessive discount, replay tests             | in progress |
-| W9-V08    | meeting capability inventory                                                   | No calendar/free-busy/create-event provider exists. Classify `MISSING_PROVIDER`; return `SCHEDULING_UNAVAILABLE` and create durable handoff, never a booking confirmation | static inventory and unavailable/handoff tests                                         | in progress |
-| W9-V09    | chat escalation and human review                                               | Persist one active handoff before notification, stop automation, durable retryable notification record, authorized resume only                                            | duplicate, notification failure, cross-tenant, resume tests                            | in progress |
-| W9-V10    | delivery trigger and task execution                                            | Authorized accepted proposal only; accepted tier version is the source of scope; one durable task per finding/tier; no simulated completion                               | accepted/wrong-tenant/duplicate/unavailable execution tests                            | in progress |
-| W9-V11    | artifact/package/access                                                        | Validate artifacts before package, tenant-scoped reads, no public default storage, complete/partial/failed are truthful                                                   | artifact validation, partial package, access, notification idempotency tests           | in progress |
-| W9-V14b   | active 9B cron recovery                                                        | Atomic task claim/owner completion, unknown provider outcomes remain reconciling, no stale worker terminal overwrite                                                      | concurrency and replay tests                                                           | in progress |
-| W9-V15b   | active 9B tenant isolation                                                     | Chat, handoff, follow-up, and delivery resolve tenant server-side and scope every persistence/read path                                                                   | cross-tenant tests                                                                     | in progress |
-| W9-V16b   | active 9B observability                                                        | Persisted attempt/error/idempotency/provider outcomes and structured audit/error events                                                                                   | failure-path tests                                                                     | in progress |
+| Work item | Requirement / executable path | Boundary and expected result | Verification | Status |
+| --- | --- | --- | --- | --- |
+| W9-V04b | `ProposalFollowUp`, follow-up cron, manual follow-up route | Reuse `outboundSafety`; tenant context; suppress before dispatch; persist intent before provider; stable `followup:<proposalId>:<step>` key; failed/unknown never sent | fixture route/service tests for disabled, suppression, replay, ambiguity, cancellation | in progress |
+| W9-V05 | Follow-up cancellation | Reply, meeting, accepted, active human handoff, and terminal deal state cancel pending follow-ups | fake-time cancellation and duplicate-cron tests | in progress |
+| W9-V06 | `app/api/pipeline/chat`, `app/api/proposal/[id]/chat`, `app/api/chat/proposal` | Server-resolved proposal/token/tenant context, bounded input/history, strict reply schema, no client history authority | token, cross-proposal, duplicate, injection, malformed-output tests | in progress |
+| W9-V07 | `lib/closing/agent.ts` | Model may propose an action only; server-side action handler requires scoped actor, accepted tier/configuration, confirmation, and idempotency | forged proposal, price/timeline override, excessive discount, replay tests | in progress |
+| W9-V08 | meeting capability inventory | No calendar/free-busy/create-event provider exists. Classify `MISSING_PROVIDER`; return `SCHEDULING_UNAVAILABLE` and create durable handoff, never a booking confirmation | static inventory and unavailable/handoff tests | in progress |
+| W9-V09 | chat escalation and human review | Persist one active handoff before notification, stop automation, durable retryable notification record, authorized resume only | duplicate, notification failure, cross-tenant, resume tests | in progress |
+| W9-V10 | delivery trigger and task execution | Authorized accepted proposal only; accepted tier version is the source of scope; one durable task per finding/tier; no simulated completion | accepted/wrong-tenant/duplicate/unavailable execution tests | in progress |
+| W9-V11 | artifact/package/access | Validate artifacts before package, tenant-scoped reads, no public default storage, complete/partial/failed are truthful | artifact validation, partial package, access, notification idempotency tests | in progress |
+| W9-V14b | active 9B cron recovery | Atomic task claim/owner completion, unknown provider outcomes remain reconciling, no stale worker terminal overwrite | concurrency and replay tests | in progress |
+| W9-V15b | active 9B tenant isolation | Chat, handoff, follow-up, and delivery resolve tenant server-side and scope every persistence/read path | cross-tenant tests | in progress |
+| W9-V16b | active 9B observability | Persisted attempt/error/idempotency/provider outcomes and structured audit/error events | failure-path tests | in progress |
 
 ### Wave 9B state-machine contract
 
-| Current state              | Authorized trigger                                                                                     | Preconditions / side effect                                                                              | Next state                                          | Idempotency / failure                                                                          |
-| -------------------------- | ------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------- | --------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
-| `ProposalFollowUp.pending` | authenticated cron after tenant enumeration                                                            | due, not suppressed/cancelled, outbound claim acquired, PENDING intent persisted before provider         | `sent`, `unknown`, `failed`, or `cancelled`         | `followup:<proposalId>:<step>`; timeout becomes `unknown`/reconciliation, not retry-send       |
-| public chat active         | token scoped to proposal                                                                               | server loads proposal/audit/validated claims; untrusted user text is delimited                           | response or handoff                                 | request key prevents duplicate messages; invalid model output escalates                        |
-| active conversation        | explicit human request, low confidence, unsupported/legal/commercial boundary, tool/scheduling failure | durable tenant/proposal handoff record before notification; automation is paused                         | handoff active                                      | one active handoff per proposal/conversation reason; notification retry does not erase handoff |
-| accepted proposal          | authorized internal delivery trigger                                                                   | acceptance tier and tenant resolve server-side; task scope derives from accepted tier and valid Findings | queued / execution-unavailable / partial / complete | deterministic proposal/finding task key; unimplemented executor cannot become completed        |
-| queued delivery task       | durable cron owner                                                                                     | atomic claim and execution boundary                                                                      | running / awaiting_human / failed                   | stale/replay owner cannot overwrite terminal state                                             |
+| Current state | Authorized trigger | Preconditions / side effect | Next state | Idempotency / failure |
+| --- | --- | --- | --- | --- |
+| `ProposalFollowUp.pending` | authenticated cron after tenant enumeration | due, not suppressed/cancelled, outbound claim acquired, PENDING intent persisted before provider | `sent`, `unknown`, `failed`, or `cancelled` | `followup:<proposalId>:<step>`; timeout becomes `unknown`/reconciliation, not retry-send |
+| public chat active | token scoped to proposal | server loads proposal/audit/validated claims; untrusted user text is delimited | response or handoff | request key prevents duplicate messages; invalid model output escalates |
+| active conversation | explicit human request, low confidence, unsupported/legal/commercial boundary, tool/scheduling failure | durable tenant/proposal handoff record before notification; automation is paused | handoff active | one active handoff per proposal/conversation reason; notification retry does not erase handoff |
+| accepted proposal | authorized internal delivery trigger | acceptance tier and tenant resolve server-side; task scope derives from accepted tier and valid Findings | queued / execution-unavailable / partial / complete | deterministic proposal/finding task key; unimplemented executor cannot become completed |
+| queued delivery task | durable cron owner | atomic claim and execution boundary | running / awaiting_human / failed | stale/replay owner cannot overwrite terminal state |
 
 ### Wave 9B product/provider decision
 
@@ -1930,11 +1930,11 @@ Entry checkpoint: `361d82c` (`chore(remediation): checkpoint wave 9a`). Wave 9A 
 
 Three P0/P1 findings created from executable evidence at Wave 9B entry, requiring fixture-backed fixture tests before verification:
 
-| Finding | Severity | Theme                                                                                                                         | Intended fix                                                                                                                                                   | Current verification status           |
-| ------- | -------- | ----------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------- |
-| P1-53   | P1       | Legacy follow-up routes bypass outbound delivery safety and emit unsupported customer copy                                    | Enqueue through outboundSafety with tenant context, suppression, durable intent, provider reconciliation, Wave 8 claim grounding                               | **Missing fixture tests (STEP 3)**    |
-| P0-27   | P0       | Closing-agent model tools could mutate proposal state/pricing/discounts without server authorization or prospect confirmation | Remove model mutation tools; strict schema validation; fallback to human handoff on unsupported requests; no non-durable webhook                               | **Missing fixture tests (STEP 4)**    |
-| P0-28   | P0       | Delivery engine fabricated task completion and verification results for unimplemented execution; routes bypass authorization  | Reject before accepted proposal; escalate unimplemented execution visibly; no simulated verification; tenant-scoped bundle access; durable artifact validation | **Missing fixture tests (STEPS 6-7)** |
+| Finding | Severity | Theme                                                                                                                      | Intended fix                                                                                                                                                              | Current verification status          |
+| ------- | -------- | -------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------ |
+| P1-53   | P1       | Legacy follow-up routes bypass outbound delivery safety and emit unsupported customer copy                                  | Enqueue through outboundSafety with tenant context, suppression, durable intent, provider reconciliation, Wave 8 claim grounding                                           | **Missing fixture tests (STEP 3)**   |
+| P0-27   | P0       | Closing-agent model tools could mutate proposal state/pricing/discounts without server authorization or prospect confirmation | Remove model mutation tools; strict schema validation; fallback to human handoff on unsupported requests; no non-durable webhook                                          | **Missing fixture tests (STEP 4)**   |
+| P0-28   | P0       | Delivery engine fabricated task completion and verification results for unimplemented execution; routes bypass authorization | Reject before accepted proposal; escalate unimplemented execution visibly; no simulated verification; tenant-scoped bundle access; durable artifact validation              | **Missing fixture tests (STEPS 6-7)** |
 
 ### Wave 9B Implementation Status
 
@@ -1970,162 +1970,9 @@ Three P0/P1 findings created from executable evidence at Wave 9B entry, requirin
 
 ### Wave 9B Verification Matrix
 
-| Finding | Required tests                                                                                | Existing tests          | Missing tests (STEP #)                                                         | Status      |
-| ------- | --------------------------------------------------------------------------------------------- | ----------------------- | ------------------------------------------------------------------------------ | ----------- |
-| P1-53   | follow-up cron/route auth, dispatch, suppression, replay, cancellation, provider outcomes     | 39 property tests green | cron-auth, suppression, replay, ambiguous-outcome, cancellation tests (STEP 3) | **PENDING** |
-| P0-27   | chat token-auth, cross-proposal rejection, schema validation, handoff creation, resumption    | 39 property tests green | token-auth, injection, duplicate-handoff, unauthorized-resume tests (STEP 4)   | **PENDING** |
-| P0-28   | delivery auth, accepted-proposal gate, artifact validation, tenant-scoped access, idempotency | 66 property tests green | accepted-gate, artifact-validation, cross-tenant-rejection tests (STEPS 6-7)   | **PENDING** |
+| Finding | Required tests                                                                           | Existing tests           | Missing tests (STEP #)                                                            | Status        |
+| ------- | ---------------------------------------------------------------------------------------- | ------------------------ | ------------------------------------------------------------------------------- | ------------- |
+| P1-53   | follow-up cron/route auth, dispatch, suppression, replay, cancellation, provider outcomes | 39 property tests green  | cron-auth, suppression, replay, ambiguous-outcome, cancellation tests (STEP 3)  | **PENDING**   |
+| P0-27   | chat token-auth, cross-proposal rejection, schema validation, handoff creation, resumption | 39 property tests green  | token-auth, injection, duplicate-handoff, unauthorized-resume tests (STEP 4)   | **PENDING**   |
+| P0-28   | delivery auth, accepted-proposal gate, artifact validation, tenant-scoped access, idempotency | 66 property tests green | accepted-gate, artifact-validation, cross-tenant-rejection tests (STEPS 6-7)   | **PENDING**   |
 
-## Wave 9C result (2026-07-12)
-
-### Entry state
-
-Branch `remediation/proposalos-e2e`; HEAD at entry `32a0240` (`chore(remediation): checkpoint
-wave 9b`), immediately preceded by the Wave 9B code commit. Wave 0-9B commits present; stash
-empty; dirty tree matched the documented preserved baseline exactly (AUDIT_REPORT.md,
-logger-typing route group, `lib/logger.ts`, `prompt-performance.ts`,
-`app/api/cron/metering-sweep/route.ts`, untracked `scripts/show-leaks.js`). Entry
-`./node_modules/.bin/tsc --noEmit --pretty false --incremental false` -> exit 0.
-
-### Re-audit execution and before/after comparison
-
-Both already sound from Wave 2/3 — re-verified, not re-implemented.
-`lib/retention/scheduled-audit-runner.ts::processScheduledAudits()` remains the single
-shared owner (called by both `app/api/cron/scheduled-audits/route.ts` and
-`lib/graph/retention-graph.ts`'s `run_scheduled_audits` node); dispatch is via the canonical
-`dispatchAuditExecution()` durable queue; `finalizeCompletedScheduledRuns()` only generates a
-comparison report and evaluates the upsell trigger after the new audit reaches a
-`TERMINAL_AUDIT_STATUSES` state (`COMPLETE | PARTIAL | DEGRADED | FAILED`), gated further by
-`isSuccess = status IN (COMPLETE, PARTIAL)` before comparison/upsell logic runs. No fabricated
-completion, no premature comparison against a still-running audit.
-
-### Evidence-backed finding: P1-54 (verified)
-
-Static evidence: `grep -rn "runWithTenantAsync|withSystemDbBypass|claimOutboundSend" lib/retention`
-returned **zero matches** across `nps.ts`, `win-back.ts`, `re-engagement.ts`, `upsellTrigger.ts`
-before this fix — every recurring lifecycle sender bypassed both Wave 1 tenant isolation and
-Wave 9A outbound safety entirely. `upsellTrigger.ts`'s `triggerUpsellProposal` used
-`prisma.audit.findUnique` (no tenant filter) and created a new `Proposal` row on every call
-with no duplicate check.
-
-Fix: new shared `lib/retention/lifecycleSafety.ts` wraps the existing Wave 9A
-`lib/outreach/outboundSafety.ts` primitives (`claimOutboundSend`/`completeOutboundSend`/
-`markOutboundSendUnknown`) — no second outbound framework. `guardLifecycleSend()` is the one
-recheck point every lifecycle sender must call immediately before a provider call: it enforces
-`OUTBOUND_DELIVERY_ENABLED === 'true'`, an `EmailBlocklist` suppression check, and a stable
-idempotency claim.
-
-- **nps.ts**: `sendNPSSurvey`/`handleNPSResponse` now resolve tenant via `runWithTenantAsync`
-  (system-enumeration boundary is a head-only `project.findUnique` for `tenantId` before entering
-  tenant context); reject a duplicate survey per `(project, surveyDay)`; validate score is an
-  integer 0-10 (throws otherwise); ignore a second response on an already-terminal survey
-  (idempotent); bound free-text feedback to 2000 chars (untrusted input); gate the referral email
-  and the initial survey send through `guardLifecycleSend`; mark ambiguous provider outcomes
-  `UNKNOWN` via `markLifecycleSendUnknown` instead of silently losing the PENDING state.
-- **win-back.ts / re-engagement.ts**: per-recipient send loop now runs inside
-  `runWithTenantAsync(client.tenantId, ...)`; `guardLifecycleSend` gates the send with keys
-  `winback:<tenantId>:<step>` / `reengage:<proposalId>:<step>`; campaign-status `updateMany` calls
-  are now tenant-scoped (`where: { ..., tenantId: client.tenantId }`) instead of matching any
-  tenant's campaign row with the same former-tenant/proposal id + step.
-- **upsellTrigger.ts**: `triggerUpsellProposal` now uses `prisma.audit.findFirst({ where: { id:
-auditId, tenantId } })` (cross-tenant audit access rejected — returns `null`); scans existing
-  `Proposal` rows for the same `(auditId, tenantId)` for one already tagged `[upsell:true]` before
-  creating a new one (idempotent; reuses the existing proposal id instead of duplicating).
-
-New tests: `lib/retention/__tests__/wave9cNps.test.ts` (12/12 — score bounds, duplicate-response
-idempotency, promoter/detractor/passive classification, tenant-scoped update, guard-blocked
-referral, feedback truncation), `lib/retention/__tests__/wave9cUpsell.test.ts` (6/6 — cross-tenant
-rejection, valid creation, idempotent reuse, non-upsell-proposal non-interference, DB-error
-safety, tenant-scoped duplicate query).
-
-### Evidence-backed finding: P2-62 (verified)
-
-Static evidence: `win-back.ts` contained "3x faster issue detection", "Average 40% improvement
-in audit scores within 30 days", "Automated competitor monitoring saves 10+ hours/week", "Client
-retention increases by 25% with our tracking tools"; `re-engagement.ts` contained "Average site
-speeds improving by 25%" — none cited a Finding, a measured result, or any real source. Fixed:
-replaced with qualitative, unquantified feature descriptions. Verified by
-`wave9cArchitectureGuards.test.ts` regex assertions proving none of the fabricated phrases
-remain.
-
-### Competitor monitoring, NPS survey token, and remaining lifecycle scope
-
-`lib/retention/competitor-monitor.ts` exists and was inventoried but not modified this session —
-no concrete defect was proven against it within this session's context budget, and per campaign
-instruction a finding requires proof, not inference by similarity to sibling modules. It is
-carried forward as unverified-but-uninvestigated, not as a fixed or open finding (no ledger row
-created without evidence).
-
-NPS survey token scoping (P1-53-class token hardening: high-entropy, expiring, one-customer/
-tenant) was not independently re-verified this session beyond the tenant-context fix above —
-`survey.id` (a UUID) is the token; no separate signed/expiring token layer exists. This matches
-the existing `webLinkToken` pattern used elsewhere in the codebase and was not flagged as a new
-defect without evidence of actual exploitability within scope.
-
-Full cancellation matrix (Step 10), competitor-monitor hardening (Step 9), and Step 12
-observability/recovery instrumentation beyond what Wave 9A/9B already provide via the shared
-`outboundSafety` claim store were not implemented this session due to context budget — carried
-forward explicitly to a Wave 9D or Wave 10 continuation if the campaign requires them before
-Wave 10 (billing) begins Do not treat any of these as silently resolved.
-
-### Tests and gates
-
-- New Wave 9C tests: 27/27 (`wave9cNps.test.ts` 12, `wave9cUpsell.test.ts` 6,
-  `wave9cArchitectureGuards.test.ts` 9).
-- Combined with Wave 9A/9B regressions + canonical manifest guard: 60/60 assertions pass
-  (1 documented pre-existing Prisma darwin-arm64 Gatekeeper unhandled rejection after the
-  canonical-manifest test's own 7/7 assertions already passed — same class of environment block
-  documented since Wave 2).
-- TypeScript: `./node_modules/.bin/tsc --noEmit --pretty false --incremental false` -> exit 0.
-- ESLint on all Wave 9C changed files: fixed one real `import/order` error in
-  `lifecycleSafety.ts` and removed one unused import in `nps.ts`; final result 0 errors, 37
-  pre-existing warning-class instances (`no-explicit-any`, `sort-imports`).
-- `git diff --check` on `lib/retention/`: clean.
-- Bounded searches confirm: upsell only triggers from a successful terminal audit (`isSuccess`
-  gate, unchanged from Wave 2/3); all three lifecycle senders call `guardLifecycleSend`;
-  `OUTBOUND_DELIVERY_ENABLED` gate is enforced via `outboundDeliveryEnabled()`.
-
-### Environment block (unchanged)
-
-PostgreSQL ports 5435/5444 unavailable; Prisma darwin-arm64 query engine blocked by macOS
-Gatekeeper/code-signing. Full DB-backed suite not run (documented since Wave 1/2). No live
-provider/network/LLM/customer call was made this session.
-
-### Known unrelated failures (unchanged, not touched)
-
-Seven pre-existing SSRF architecture-guard violations outside Wave 9C scope; deprecated
-`AuditOrchestrator` 30s test timeout.
-
-### Wave 9C code files changed
-
-`lib/retention/lifecycleSafety.ts` (new), `lib/retention/nps.ts`, `lib/retention/win-back.ts`,
-`lib/retention/re-engagement.ts`, `lib/retention/upsellTrigger.ts`.
-
-### Wave 9C test files added
-
-`lib/retention/__tests__/wave9cNps.test.ts`, `lib/retention/__tests__/wave9cUpsell.test.ts`,
-`lib/retention/__tests__/wave9cArchitectureGuards.test.ts`.
-
-## Next wave
-
-**Wave 10 — Stripe checkout, portal, webhooks, subscriptions/payments, usage metering,
-reconciliation, billing idempotency.** See the exact continuation prompt in the final chat
-response of this session. Wave 9D (remaining Wave 9C scope: competitor-monitor hardening,
-full cancellation matrix, NPS token hardening, Step 12 observability) is optional and may be
-folded into a future wave if the campaign requires it before Wave 10 begins.
-
-## Wave 9D — Deferred lifecycle residuals (partial checkpoint, 2026-07-13)
-
-`W9-V15` and `W9-V16` were already assigned to historical Wave 9 work items, so this checkpoint
-uses collision-free `W9D-*` IDs and does not rewrite prior entries.
-
-| Work item | Entry point | Model/state | Tenant source / owner | Idempotency | Cancellation / provider boundary | Evidence and status |
-| --- | --- | --- | --- | --- | --- | --- |
-| W9D-V15 | `competitor-monitor.ts`, scheduled audit comparison | Explicit `NOT_CONFIGURED` / `UNAVAILABLE`; evidence snapshots only | Named `runWithTenantBypass` enumeration, then `runWithTenantAsync` per target | No customer alert path exists until an approved provider/Evidence contract exists | No LLM/email/provider fallback; incompatible/missing snapshots are not unchanged | **verified** by Wave 9D fixtures and architecture guard |
-| W9D-V16 | `lifecycleSafety.ts`, NPS/win-back/re-engagement senders, unsubscribe | `LifecycleOccurrence`: QUEUED, RUNNING, SENT, RECONCILING, RETRY_SCHEDULED, DEAD, CANCELLED, SUPPRESSED, MANUAL_REVIEW | Tenant-scoped occurrence with hashed recipient and current outbound claim owner | Existing stable lifecycle keys retained | Recheck before provider call; terminal completion rejects cancelled occurrence; unsubscribe cancels future occurrence work | **partially verified**: recurring lifecycle senders only; broader existing follow-up/delivery matrix remains in W9A/W9B |
-| W9D-V17 | `nps.ts`, `app/api/nps/respond` | SHA-256 token hash, expiry and consumed marker | Survey tenant/project binding; raw token only in email URL | Existing survey response policy remains idempotent | Public route rate-limited and generic; score/feedback bounds retained | **verified** by Wave 9D fixtures and Prisma schema validation |
-| W9D-V18 | `lifecycleControl.ts` | Durable status, attempts, next attempt, error, cancellation, lease fields | Tenant-scoped occurrence; authorized replay API requires explicit authorization | Original occurrence/idempotency key retained on replay | Reconciliation, bounded retry scheduling, DEAD and MANUAL_REVIEW states are durable; audit event on replay | **partially verified**: helper contract is fixture-tested; no production recovery worker/authorized route is wired |
-
-Findings created from red-before evidence: `P1-55` and `P1-56`, both fixed in code and fixture-tested.
-Wave 9 is **not re-closed by this partial checkpoint**: W9D-V16 and W9D-V18 need the remaining
-cross-workflow cancellation/recovery integration before a truthful final Wave 9 closure.

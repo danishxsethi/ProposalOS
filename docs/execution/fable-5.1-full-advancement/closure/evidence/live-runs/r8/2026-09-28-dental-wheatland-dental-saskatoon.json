@@ -1,0 +1,61 @@
+{
+  "business": {
+    "name": "Wheatland Dental Saskatoon",
+    "city": "Saskatoon",
+    "url": "https://wheatlandsaskatoon.ca/",
+    "industry": "dental"
+  },
+  "auditId": "860bd328-e129-4fdc-ab1a-95543a9a07b3",
+  "auditStatus": "COMPLETE",
+  "trustState": "DEGRADED_REVIEW_REQUIRED",
+  "overallScore": null,
+  "apiCostCents": 14,
+  "auditWallMs": 98056,
+  "auditError": null,
+  "modulesCompleted": 22,
+  "modulesFailed": 2,
+  "moduleStatusCounts": {
+    "COMPLETE": 22,
+    "SKIPPED": 1,
+    "PARTIAL": 3,
+    "UNAVAILABLE": 1
+  },
+  "moduleTimingsMs": {
+    "gbp": null,
+    "social": null,
+    "vision": null,
+    "gbpDeep": null,
+    "seoDeep": null,
+    "website": null,
+    "mobileUX": null,
+    "security": null,
+    "backlinks": null,
+    "citations": null,
+    "techStack": null,
+    "competitor": null,
+    "conversion": null,
+    "keywordGap": null,
+    "paidSearch": null,
+    "reputation": null,
+    "socialDeep": null,
+    "emailFinder": null,
+    "schemaMarkup": null,
+    "accessibility": null,
+    "coreWebVitals": null,
+    "videoPresence": null,
+    "contentQuality": null,
+    "schemaAnalysis": null,
+    "websiteCrawler": null,
+    "privacyCompliance": null,
+    "competitorStrategy": null
+  },
+  "findings": 29,
+  "findingsByType": {
+    "PAINKILLER": 6,
+    "VITAMIN": 23
+  },
+  "evidenceSnapshots": 22,
+  "proposalWallMs": null,
+  "proposalError": null,
+  "proposal": null
+}

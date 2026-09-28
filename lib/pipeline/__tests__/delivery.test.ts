@@ -299,10 +299,7 @@ describe('Delivery Engine Unit Tests', () => {
         estimatedCompletionDate: new Date(),
       };
 
-      (prisma.deliveryTask.update as any).mockResolvedValue({
-        ...deliverable,
-        status: 'in_progress',
-      });
+      (prisma.deliveryTask.update as any).mockResolvedValue({ ...deliverable, status: 'in_progress' });
       (prisma.deliveryTask.findUnique as any).mockResolvedValue({
         tenantId: 'tenant-123',
       });

@@ -1,0 +1,61 @@
+{
+  "business": {
+    "name": "Butz & Company",
+    "city": "Regina",
+    "url": "http://butzlaw.ca/",
+    "industry": "legal"
+  },
+  "auditId": "475595a5-6fbb-4028-a138-c1940ae970cd",
+  "auditStatus": "COMPLETE",
+  "trustState": "DEGRADED_REVIEW_REQUIRED",
+  "overallScore": null,
+  "apiCostCents": 14,
+  "auditWallMs": 70578,
+  "auditError": null,
+  "modulesCompleted": 21,
+  "modulesFailed": 2,
+  "moduleStatusCounts": {
+    "COMPLETE": 21,
+    "SKIPPED": 1,
+    "PARTIAL": 4,
+    "UNAVAILABLE": 1
+  },
+  "moduleTimingsMs": {
+    "gbp": null,
+    "social": null,
+    "vision": null,
+    "gbpDeep": null,
+    "seoDeep": null,
+    "website": null,
+    "mobileUX": null,
+    "security": null,
+    "backlinks": null,
+    "citations": null,
+    "techStack": null,
+    "competitor": null,
+    "conversion": null,
+    "keywordGap": null,
+    "paidSearch": null,
+    "reputation": null,
+    "socialDeep": null,
+    "emailFinder": null,
+    "schemaMarkup": null,
+    "accessibility": null,
+    "coreWebVitals": null,
+    "videoPresence": null,
+    "contentQuality": null,
+    "schemaAnalysis": null,
+    "websiteCrawler": null,
+    "privacyCompliance": null,
+    "competitorStrategy": null
+  },
+  "findings": 31,
+  "findingsByType": {
+    "VITAMIN": 22,
+    "PAINKILLER": 9
+  },
+  "evidenceSnapshots": 22,
+  "proposalWallMs": null,
+  "proposalError": null,
+  "proposal": null
+}
