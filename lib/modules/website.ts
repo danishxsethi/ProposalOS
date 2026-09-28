@@ -26,30 +26,34 @@ export async function runWebsiteModule(
     // exact same function for this exact same audit — passing `auditId` through
     // lets `runWebsiteCrawlerModule`'s single-flight coalescing recognize the two
     // calls as one logical crawl instead of performing the real 20-page crawl twice.
-    const crawlerResult = await runWebsiteCrawlerModule(
-      {
-        url: input.url,
-        businessName: input.businessName || 'Website',
-        auditId: input.auditId,
-      },
-      tracker
-    );
-
+    // The crawl (≤45s) and the PageSpeed run (20-35s measured) are independent
+    // network collectors; running them serially routinely exceeded the module
+    // budget. Run concurrently — the module wall becomes max(), not sum().
     // PageSpeed is useful but external-provider failure must not poison the
     // crawler data and skip every module that depends on website.
     tracker?.addApiCall('PAGESPEED');
-    const psiResult: PageSpeedResult = await getPageSpeedFindings(input.url).catch((error) => {
-      logger.warn({ error }, '[WebsiteModule] PageSpeed unavailable; preserving crawler findings only');
-      unavailableChecks.push('pagespeed');
-      return {
-        findings: [],
-        coreWebVitals: { fcp: null, lcp: null, cls: null, tbt: null },
-        scores: null,
-        finalUrl: input.url,
-        rawResponse: null,
-        execution: { state: 'unavailable' as const, reason: String(error) },
-      };
-    });
+    const [crawlerResult, psiResult] = await Promise.all([
+      runWebsiteCrawlerModule(
+        {
+          url: input.url,
+          businessName: input.businessName || 'Website',
+          auditId: input.auditId,
+        },
+        tracker
+      ),
+      getPageSpeedFindings(input.url).catch((error): PageSpeedResult => {
+        logger.warn({ error }, '[WebsiteModule] PageSpeed unavailable; preserving crawler findings only');
+        unavailableChecks.push('pagespeed');
+        return {
+          findings: [],
+          coreWebVitals: { fcp: null, lcp: null, cls: null, tbt: null },
+          scores: null,
+          finalUrl: input.url,
+          rawResponse: null,
+          execution: { state: 'unavailable' as const, reason: String(error) },
+        };
+      }),
+    ]);
     if (psiResult.execution?.state === 'unavailable' && !unavailableChecks.includes('pagespeed')) {
       unavailableChecks.push('pagespeed');
     }
@@ -356,9 +360,9 @@ async function getPageSpeedFindings(url: string): Promise<PageSpeedResult> {
     params.append('url', url);
     params.append('key', process.env.GOOGLE_PAGESPEED_API_KEY);
     params.append('strategy', 'mobile');
-    ['performance', 'accessibility', 'best-practices', 'seo'].forEach((c) =>
-      params.append('category', c)
-    );
+    // accessibility has its own axe-core module; best-practices adds ~2x latency
+    // for low customer value. performance + seo is what findings/CWV consume.
+    ['performance', 'seo'].forEach((c) => params.append('category', c));
 
     const data = await withModuleCache<any>(
       {

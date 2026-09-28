@@ -2,7 +2,7 @@ import type { CostTracker } from '@/lib/costs/costTracker';
 import { logger } from '@/lib/logger';
 
 import { normalizeConfidence } from './findingGenerator';
-import { AuditModuleResult, EvidenceItem, Finding } from './types';
+import { AuditModuleResult, createEvidence, EvidenceItem, Finding } from './types';
 import { CrawlResult, crawlWebsite } from './websiteCrawler';
 import { captureScreenshots } from '../evidence/screenshotCapture';
 
@@ -38,11 +38,14 @@ function generateFindingsFromCrawl(crawlResult: CrawlResult, businessUrl: string
         impactScore: 9,
         confidenceScore: normalizeConfidence(95, '0-100'),
         evidence: [
-          {
+          createEvidence({
+            pointer: businessUrl,
+            source: 'internal_crawl',
+            collected_at: new Date().toISOString(),
             type: 'text',
-            value: 'WAF block page detected',
+            value: 'WAF challenge/block page detected on homepage fetch',
             label: 'WAF Status',
-          },
+          }),
         ],
         metrics: {
           failureClassification: 'ANTI_BOT',

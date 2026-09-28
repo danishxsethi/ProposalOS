@@ -132,7 +132,7 @@ describe('Stream D — S5 LLM provider resilience (fake SDK, bounded retries)', 
 
     expect(sdk.generateContent).toHaveBeenCalledTimes(MAX_RETRIES + 1);
     expect(elapsed).toBeLessThan(2_000);
-    // eslint-disable-next-line no-console
+     
     console.info(`[S5a] 429: attempts=${sdk.generateContent.mock.calls.length} (max ${MAX_RETRIES + 1}) elapsed=${elapsed}ms`);
   });
 
@@ -158,7 +158,7 @@ describe('Stream D — S5 LLM provider resilience (fake SDK, bounded retries)', 
 
     await expect(generateWithGemini({ ...baseCall })).rejects.toMatchObject({ status: 503 });
     expect(sdk.generateContent).toHaveBeenCalledTimes(MAX_RETRIES + 1);
-    // eslint-disable-next-line no-console
+     
     console.info(`[S5b] 5xx: attempts=${sdk.generateContent.mock.calls.length} (max ${MAX_RETRIES + 1})`);
   });
 
@@ -198,7 +198,7 @@ describe('Stream D — S5 LLM provider resilience (fake SDK, bounded retries)', 
     }
     // 3 attempts × 60 ms + tiny backoff — must stay far below a "hung forever".
     expect(elapsed).toBeLessThan((MAX_RETRIES + 1) * TIMEOUT_MS + 500);
-    // eslint-disable-next-line no-console
+     
     console.info(`[S5c] timeout: attempts=${abortedAt.length} abort latencies=${abortedAt.join(',')}ms total=${elapsed}ms`);
   });
 

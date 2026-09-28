@@ -178,30 +178,49 @@ export function classifyFailure(
     return 'TIMEOUT';
   }
 
-  // 2. ANTI_BOT check
-  const serverHeader = (headers['server'] || headers['Server'] || '').toLowerCase();
-  const hasCfRay = !!(headers['cf-ray'] || headers['CF-Ray']);
+  // 2. ANTI_BOT check — must be evidence of an actual challenge/block *page*,
+  // not merely that the site sits behind a CDN/WAF. Cloudflare fronts a large
+  // share of the web (`server: cloudflare`, `cf-ray` on every normal response)
+  // and the bare word "captcha" appears on any contact form using reCAPTCHA;
+  // treating those as bot walls discarded full 200 OK pages (measured: 160KB
+  // real homepages classified ANTI_BOT) and starved every HTML-dependent module.
   const lowerHtml = html.toLowerCase();
-  const antiBotKeywords = [
+  const challengePageMarkers = [
     'cf-challenge',
     'challenge-platform',
-    'incapsula',
-    'recaptcha',
+    '/cdn-cgi/challenge-platform',
+    'cf-browser-verification',
     'just a moment...',
+    'checking your browser before accessing',
     'one more step',
     'ddos-guard',
-    'captcha',
+    'incapsula_resource',
+    '_incapsula_',
+    'perimeterx',
+    'px-captcha',
+    'attention required! | cloudflare',
+    'access denied',
+    'verify you are human',
+    'are you a human',
   ];
-  const hasAntiBotKeyword = antiBotKeywords.some((keyword) => lowerHtml.includes(keyword));
+  const hasChallengeMarker = challengePageMarkers.some((marker) => lowerHtml.includes(marker));
+  // A genuine challenge page is small and has no meaningful body content.
+  const titleMatch = lowerHtml.match(/<title[^>]*>([^<]*)<\/title>/);
+  const title = titleMatch?.[1]?.trim() ?? '';
+  const challengeTitle =
+    title.includes('just a moment') ||
+    title.includes('attention required') ||
+    title.includes('access denied') ||
+    title.includes('security check') ||
+    title.includes('bot verification');
+  const tinyBody = html.length > 0 && html.length < 6_000;
 
   if (
     status === 403 ||
     status === 429 ||
-    serverHeader.includes('cloudflare') ||
-    serverHeader.includes('sucuri') ||
-    serverHeader.includes('imperva') ||
-    hasCfRay ||
-    hasAntiBotKeyword
+    status === 503 && (hasChallengeMarker || challengeTitle) ||
+    challengeTitle ||
+    (hasChallengeMarker && tinyBody)
   ) {
     return 'ANTI_BOT';
   }

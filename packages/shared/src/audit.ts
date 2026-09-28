@@ -117,10 +117,10 @@ export const CANONICAL_AUDIT_MODULE_IDS = [
 export type CanonicalAuditModuleId = (typeof CANONICAL_AUDIT_MODULE_IDS)[number];
 
 export const CANONICAL_AUDIT_MODULES: readonly CanonicalAuditModuleDefinition[] = [
-  { id: 'website', phase: 1, timeoutMs: 30000 },
+  { id: 'website', phase: 1, timeoutMs: 60000 },
   { id: 'websiteCrawler', phase: 1, timeoutMs: 45000 },
   { id: 'gbp', phase: 1, timeoutMs: 20000 },
-  { id: 'competitor', phase: 1, timeoutMs: 25000 },
+  { id: 'competitor', phase: 1, timeoutMs: 60000 },
   { id: 'techStack', phase: 1, timeoutMs: 15000 },
   { id: 'security', phase: 1, timeoutMs: 20000, rolloutFlag: 'ENABLE_SECURITY_AUDIT_MODULE' },
   { id: 'emailFinder', phase: 1, optional: true, timeoutMs: 15000 },
@@ -150,7 +150,7 @@ export const CANONICAL_AUDIT_MODULES: readonly CanonicalAuditModuleDefinition[] 
     timeoutMs: 45000,
     rolloutFlag: 'ENABLE_ACCESSIBILITY_AUDIT_MODULE',
   },
-  { id: 'mobileUX', phase: 2, dependsOn: ['website'], timeoutMs: 45000 },
+  { id: 'mobileUX', phase: 2, dependsOn: ['website'], timeoutMs: 60000 },
   { id: 'contentQuality', phase: 2, dependsOn: ['websiteCrawler'], timeoutMs: 60000 },
   { id: 'conversion', phase: 2, dependsOn: ['website'], timeoutMs: 45000 },
   { id: 'citations', phase: 2, dependsOn: ['gbp'], timeoutMs: 30000 },

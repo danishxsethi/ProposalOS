@@ -372,7 +372,7 @@ describe('Stream D — AuditJob queue failure injection (real PostgreSQL)', () =
 
   it('S2a (invariant): concurrent enqueue with the same idempotencyKey never creates more than one AuditJob row', async () => {
     const { rejected, totalCallers, codes } = await concurrentEnqueueRounds();
-    // eslint-disable-next-line no-console
+     
     console.info(
       `[S2] ${rejected}/${totalCallers} concurrent enqueue caller(s) received an exception instead of the existing row; error codes:`,
       codes
@@ -446,7 +446,7 @@ describe('Stream D — AuditJob queue failure injection (real PostgreSQL)', () =
     await expect(processAuditJob(job.id)).resolves.toMatchObject({ outcome: 'SKIPPED' });
     expect((await jobRow(job.id)).attempts).toBe(MAX_RETRIES);
 
-    // eslint-disable-next-line no-console
+     
     console.info(`[S3] poison job reached DEAD after ${final.attempts} attempts (MAX_RETRIES=${MAX_RETRIES})`);
 
     runAuditMock.mockReset();

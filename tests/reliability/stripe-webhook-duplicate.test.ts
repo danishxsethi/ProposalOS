@@ -175,7 +175,7 @@ describe('Stream D — S4 duplicate Stripe webhook (real PostgreSQL)', () => {
     // WITHOUT deduplicated:true. The route layer returns 200 for both shapes,
     // so Stripe stops retrying either way.
     const dedupFlagged = fulfilled.filter((r) => r.deduplicated === true).length;
-    // eslint-disable-next-line no-console
+     
     console.info(
       `[S4b] concurrent deliveries=${fulfilled.length}; results with deduplicated:true=${dedupFlagged}; ` +
         `results with received:true only=${fulfilled.length - dedupFlagged}`

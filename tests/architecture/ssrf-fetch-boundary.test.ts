@@ -47,24 +47,6 @@ const ALLOWED_RAW_FETCH: AllowedRawFetch[] = [
     reason: 'Fixed host; businessName/city in query params',
   },
   {
-    file: 'lib/modules/competitor.ts',
-    line: 73,
-    host: 'serpapi.com',
-    reason: 'Fixed host; keyword/location in query params',
-  },
-  {
-    file: 'lib/modules/competitor.ts',
-    line: 244,
-    host: 'serpapi.com',
-    reason: 'Fixed host; keyword in query params',
-  },
-  {
-    file: 'lib/modules/competitor.ts',
-    line: 326,
-    host: 'serpapi.com',
-    reason: 'Fixed host; category/location in params',
-  },
-  {
     file: 'lib/modules/keywordGap.ts',
     line: 196,
     host: 'serpapi.com',
@@ -113,6 +95,30 @@ const ALLOWED_RAW_FETCH: AllowedRawFetch[] = [
     reason: 'Fixed host; searchQuery in query param',
   },
 
+  {
+    file: 'lib/modules/competitor.ts',
+    line: 90,
+    host: 'serpapi.com',
+    reason: 'Fixed host; keyword/location in query params',
+  },
+  {
+    file: 'lib/modules/competitor.ts',
+    line: 172,
+    host: 'googleapis.com',
+    reason: 'Fixed host PSI; competitor URL from SerpAPI/Places in ?url= param',
+  },
+  {
+    file: 'lib/modules/competitor.ts',
+    line: 231,
+    host: 'serpapi.com',
+    reason: 'Fixed host; self-search keyword in query params',
+  },
+  {
+    file: 'lib/modules/competitor.ts',
+    line: 298,
+    host: 'serpapi.com',
+    reason: 'Fixed host; category/location in params (competitor second pass)',
+  },
   // Google Places API (fixed host: places.googleapis.com)
   {
     file: 'lib/modules/gbp.ts',
@@ -138,12 +144,6 @@ const ALLOWED_RAW_FETCH: AllowedRawFetch[] = [
     host: 'places.googleapis.com',
     reason: 'Fixed host; placeId from Google response (template literal path)',
   },
-  {
-    file: 'lib/modules/competitor.ts',
-    line: 112,
-    host: 'places.googleapis.com',
-    reason: 'Fixed host; placeId from SerpAPI response (template literal path)',
-  },
 
   // Google PageSpeed Insights (fixed host: googleapis.com)
   {
@@ -151,12 +151,6 @@ const ALLOWED_RAW_FETCH: AllowedRawFetch[] = [
     line: 378,
     host: 'googleapis.com',
     reason: 'Fixed host; user URL in ?url= param only (Google validates)',
-  },
-  {
-    file: 'lib/modules/competitor.ts',
-    line: 185,
-    host: 'googleapis.com',
-    reason: 'Fixed host; competitor URL from Places response in ?url= param',
   },
   {
     file: 'lib/modules/mobileUX.ts',
@@ -404,18 +398,6 @@ const ALLOWED_RAW_FETCH: AllowedRawFetch[] = [
   },
   // Fix drift: competitor.ts PSI at 154 and competitor SERP at 295 shifted beyond ±5 tolerance
   {
-    file: 'lib/modules/competitor.ts',
-    line: 154,
-    host: 'googleapis.com',
-    reason: 'Fixed host googleapis.com/PSI — drift fix for line 154 (was allowlisted at 185)',
-  },
-  {
-    file: 'lib/modules/competitor.ts',
-    line: 295,
-    host: 'serpapi.com',
-    reason: 'Fixed host serpapi.com — competitor SERP second pass at 295',
-  },
-  {
     file: 'lib/outreach/sprint2/discovery.ts',
     line: 249,
     host: 'serpapi.com',
@@ -426,12 +408,6 @@ const ALLOWED_RAW_FETCH: AllowedRawFetch[] = [
     line: 328,
     host: 'serpapi.com',
     reason: 'Fixed host directory fallback via serpapi',
-  },
-  {
-    file: 'lib/modules/competitor.ts',
-    line: 213,
-    host: 'serpapi.com',
-    reason: 'Fixed host serpapi.com — self-search SERP drift fix for line 213',
   },
   // Wave 1 (P1-05): internal RLS-violation alert webhook, not user-influenced.
   {

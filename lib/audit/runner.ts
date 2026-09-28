@@ -460,9 +460,12 @@ const mobileUXAdapter = async (input: ModuleInput, tracker: CostTracker): Promis
   // a missing-key or fetch-failure fallback — so a missing/failed website PageSpeed
   // check correctly falls through to mobileUX's own independent fetch attempt.
   const websiteData = input.dependencyResults?.website;
+  // dependencyResults holds the module's full AuditModuleResult; the PSI payload
+  // lives under `.data` (see lib/modules/website.ts return shape).
+  const websitePsi = websiteData?.data ?? websiteData;
   const reusedMobileScore =
-    websiteData?.coreWebVitals?.full && typeof websiteData?.scores?.performance === 'number'
-      ? Math.round(websiteData.scores.performance * 100)
+    websitePsi?.coreWebVitals?.full && typeof websitePsi?.scores?.performance === 'number'
+      ? Math.round(websitePsi.scores.performance * 100)
       : null;
   const data = await runMobileUXModule(
     {
@@ -483,7 +486,16 @@ const contentQualityAdapter = async (
 ): Promise<ModuleResult> => {
   if (!input.url) throw new Error('url required');
   const crawlerData = input.dependencyResults?.websiteCrawler;
-  const crawledPages = crawlerData?.evidenceSnapshots?.[0]?.rawResponse?.crawledPages || [];
+  const crawlRaw = crawlerData?.evidenceSnapshots?.[0]?.rawResponse ?? {};
+  // The crawler persists per-page *metrics* (no per-page HTML, by design — 20
+  // pages of HTML per audit is not evidence worth storing) plus the homepage's
+  // raw HTML. Content analysis needs HTML, so analyze the homepage (the highest
+  // value page) with real HTML and keep the other pages as titled metadata.
+  const metricPages: Array<{ url: string; title?: string | null; wordCount?: number }> = Array.isArray(crawlRaw.crawledPages) ? crawlRaw.crawledPages : [];
+  const homepageHtml: string | null = typeof crawlRaw.html === 'string' && crawlRaw.html.length > 0 ? crawlRaw.html : null;
+  const crawledPages = homepageHtml
+    ? [{ url: input.url, html: homepageHtml, title: metricPages[0]?.title ?? undefined }]
+    : [];
   const data = await runContentQualityModule(
     {
       url: input.url,
@@ -742,10 +754,18 @@ const visionAdapter = async (input: ModuleInput, tracker: CostTracker): Promise<
 const coreWebVitalsAdapter = async (input: ModuleInput): Promise<ModuleResult> => {
   // Reads from the website (PageSpeed) module output which contains Lighthouse audits
   const websiteData = input.dependencyResults?.website;
+  // The website module stores the PageSpeed payload as an evidence snapshot
+  // (source 'PageSpeed Insights API'); read that shape as well as legacy shapes.
+  const psiSnapshot = Array.isArray(websiteData?.evidenceSnapshots)
+    ? websiteData.evidenceSnapshots.find((s: { source?: string; rawResponse?: { lighthouseResult?: unknown } }) =>
+        s?.source === 'PageSpeed Insights API' || s?.rawResponse?.lighthouseResult
+      )
+    : null;
   const lighthouseAudits =
     websiteData?.lighthouseResult?.audits ??
     websiteData?.audits ??
     websiteData?.data?.lighthouseResult?.audits ??
+    psiSnapshot?.rawResponse?.lighthouseResult?.audits ??
     null;
   if (!lighthouseAudits)
     return {
@@ -766,7 +786,7 @@ const coreWebVitalsAdapter = async (input: ModuleInput): Promise<ModuleResult> =
       title: `Largest Contentful Paint: ${cwv.lcp.value.toFixed(2)}s`,
       description: `LCP is ${cwv.lcp.rating} (threshold: good < ${cwv.lcp.thresholdGood}s). Slow LCP hurts SEO rankings and user experience.`,
       impactScore: cwv.lcp.rating === 'poor' ? 8 : 5,
-      confidenceScore: 95,
+      confidenceScore: 9,
       effortEstimate: 'HIGH',
       recommendedFix: [
         'Optimize images',
@@ -784,7 +804,7 @@ const coreWebVitalsAdapter = async (input: ModuleInput): Promise<ModuleResult> =
       title: `Cumulative Layout Shift: ${cwv.cls.value.toFixed(3)}`,
       description: `CLS is ${cwv.cls.rating} (threshold: good < ${cwv.cls.thresholdGood}). Layout shifts hurt UX and SEO.`,
       impactScore: cwv.cls.rating === 'poor' ? 7 : 4,
-      confidenceScore: 95,
+      confidenceScore: 9,
       effortEstimate: 'MEDIUM',
       recommendedFix: [
         'Set explicit width/height on images',
@@ -801,7 +821,7 @@ const coreWebVitalsAdapter = async (input: ModuleInput): Promise<ModuleResult> =
       title: `Total Blocking Time: ${cwv.tbt.value}ms`,
       description: `TBT is ${cwv.tbt.rating} (threshold: good < ${cwv.tbt.thresholdGood}ms). High TBT means the main thread is blocked, delaying user interaction.`,
       impactScore: cwv.tbt.rating === 'poor' ? 7 : 4,
-      confidenceScore: 90,
+      confidenceScore: 9,
       effortEstimate: 'HIGH',
       recommendedFix: [
         'Break up long tasks',
@@ -909,7 +929,7 @@ const schemaAnalysisAdapter = async (input: ModuleInput): Promise<ModuleResult> 
       title: 'Missing LocalBusiness/Organization Schema',
       description: analysis.hasLocalBusinessOrOrganization.recommendation,
       impactScore: 8,
-      confidenceScore: 95,
+      confidenceScore: 9,
       metrics: { schemaFingerprint: 'schema-missing:LocalBusiness' },
       effortEstimate: 'LOW',
       recommendedFix: [
@@ -925,7 +945,7 @@ const schemaAnalysisAdapter = async (input: ModuleInput): Promise<ModuleResult> 
       title: 'Missing AggregateRating Schema',
       description: analysis.hasReviewAggregateRating.recommendation,
       impactScore: 5,
-      confidenceScore: 90,
+      confidenceScore: 9,
       metrics: { schemaFingerprint: 'schema-missing:AggregateRating' },
       effortEstimate: 'LOW',
       recommendedFix: [
@@ -941,7 +961,7 @@ const schemaAnalysisAdapter = async (input: ModuleInput): Promise<ModuleResult> 
       title: 'No FAQPage Schema Detected',
       description: analysis.hasFaq.recommendation,
       impactScore: 3,
-      confidenceScore: 80,
+      confidenceScore: 8,
       effortEstimate: 'LOW',
       recommendedFix: ['Add FAQPage JSON-LD to any page with Q&A content to unlock rich results'],
     });
@@ -959,10 +979,10 @@ const schemaAnalysisAdapter = async (input: ModuleInput): Promise<ModuleResult> 
 
 export const MODULE_REGISTRY: ModuleConfig[] = [
   // Phase 1: Foundation (parallel) — no dependencies
-  { name: 'website', phase: 1, run: websiteAdapter, timeoutMs: 30000 },
+  { name: 'website', phase: 1, run: websiteAdapter, timeoutMs: 60000 },
   { name: 'websiteCrawler', phase: 1, run: websiteCrawlerAdapter, timeoutMs: 45000 },
   { name: 'gbp', phase: 1, run: gbpAdapter, timeoutMs: 20000 },
-  { name: 'competitor', phase: 1, run: competitorAdapter, timeoutMs: 25000 },
+  { name: 'competitor', phase: 1, run: competitorAdapter, timeoutMs: 60000 },
   { name: 'techStack', phase: 1, run: techStackAdapter, timeoutMs: 15000 },
   { name: 'security', phase: 1, run: securityAdapter, timeoutMs: 20000 },
   { name: 'emailFinder', phase: 1, run: emailFinderAdapter, timeoutMs: 15000, optional: true },
@@ -1015,7 +1035,7 @@ export const MODULE_REGISTRY: ModuleConfig[] = [
     dependsOn: ['website'],
     timeoutMs: 45000,
   },
-  { name: 'mobileUX', phase: 2, run: mobileUXAdapter, dependsOn: ['website'], timeoutMs: 45000 },
+  { name: 'mobileUX', phase: 2, run: mobileUXAdapter, dependsOn: ['website'], timeoutMs: 60000 },
   {
     name: 'contentQuality',
     phase: 2,
@@ -1222,7 +1242,7 @@ export function extractFindingsFromRegistryResult(
         ),
         metrics: { emailCount: rd.emails.length },
         impactScore: 3,
-        confidenceScore: 90,
+        confidenceScore: 9, // canonical 0-10 scale (FindingRuntimeSchema)
         effortEstimate: 'LOW',
         recommendedFix: ['Use for outreach'],
       });
@@ -1268,10 +1288,21 @@ const REQUIRED_AUDIT_MODULES = new Set([
   'competitorStrategy',
 ]);
 
+/**
+ * Trust policy. A required module counts as *observed* when it is COMPLETE or
+ * PARTIAL: PARTIAL means the module genuinely ran against the customer's assets
+ * and reports exactly which sub-checks were unavailable (e.g. citations: "Yellow
+ * Pages unavailable" with 2 of 3 directories observed). Its findings are already
+ * gated per-finding by evidence at the aggregation boundary, so a single
+ * unavailable directory must not veto the whole audit. UNAVAILABLE / FAILED /
+ * SKIPPED / DISABLED mean nothing was observed and do block TRUSTED.
+ */
+const OBSERVED_STATES = new Set<ModuleResult['status']>(['COMPLETE', 'PARTIAL']);
+
 export function assessAuditResult(results: Map<string, ModuleResult>, rejectedFindingCount: number) {
   const required = [...REQUIRED_AUDIT_MODULES];
-  const completeRequired = required.filter((name) => results.get(name)?.status === 'COMPLETE').length;
-  const failures = required.filter((name) => results.get(name)?.status !== 'COMPLETE');
+  const completeRequired = required.filter((name) => OBSERVED_STATES.has(results.get(name)?.status as ModuleResult['status'])).length;
+  const failures = required.filter((name) => !OBSERVED_STATES.has(results.get(name)?.status as ModuleResult['status']));
   const status = completeRequired === required.length
     ? 'COMPLETE'
     : completeRequired > 0

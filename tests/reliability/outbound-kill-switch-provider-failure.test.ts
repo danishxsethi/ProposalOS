@@ -270,7 +270,7 @@ describe('Stream D — S7/S8 outbound kill switch & provider failure (real Postg
     // Observation O-7 for the closure doc: the sandbox mock is persisted with
     // status SENT (not the available SIMULATED enum value). Recorded, not asserted
     // as a failure.
-    // eslint-disable-next-line no-console
+     
     console.info(`[S7a] sandbox mock persisted as status=${row.status} providerMessageId=${row.providerMessageId}`);
     expect(['SENT', 'SIMULATED']).toContain(row.status);
   });

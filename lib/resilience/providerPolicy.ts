@@ -8,9 +8,12 @@ import { ProviderName, ProviderPolicy } from './types';
 
 export const PROVIDER_POLICIES: Record<ProviderName, ProviderPolicy> = {
   pagespeed: {
-    // PageSpeed is supplemental to crawler evidence. It must not consume the
-    // entire phase-one budget and prevent dependent browser modules from running.
-    timeoutMs: 8000,
+    // Lighthouse mobile runs measured live at 20-35s (perf+seo) and up to 88s
+    // with all four categories; an 8s cap made PSI fail on 100% of audits
+    // (no Core Web Vitals, no performance findings). Phase-1 modules run in
+    // parallel so this does not serialize the phase; the website module's own
+    // timeout (60s) remains the hard ceiling.
+    timeoutMs: 45000,
     maxAttempts: 1,
     baseDelayMs: 500,
     maxDelayMs: 10000,

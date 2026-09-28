@@ -31,6 +31,19 @@ const FIELD_PROFILES = {
   MULTI_LOCATION: 'id,displayName,formattedAddress,location,websiteUri,nationalPhoneNumber,primaryType,primaryTypeDisplayName,types,googleMapsUri',
 } as const;
 
+/**
+ * Places API (New) field masks for list endpoints must prefix EVERY field with
+ * `places.`; prefixing only the first item of the comma list yields
+ * `places.id,displayName,...` which Google rejects with 400 INVALID_ARGUMENT.
+ */
+function placesListMask(profileName: keyof typeof FIELD_PROFILES): string {
+  return FIELD_PROFILES[profileName]
+    .split(',')
+    .map((f) => `places.${f.trim()}`)
+    .concat('places.attributions')
+    .join(',');
+}
+
 type RawPlace = {
   id?: string;
   displayName?: { text?: string };
@@ -285,7 +298,7 @@ export class GoogleMapsProvider implements MapsIntelligenceProvider {
     return this.searchPlaces(request, 'searchText', profileName, async () => {
       const result = await this.requestJson<{ places?: RawPlace[] }>(`${BASE}/places:searchText`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Goog-Api-Key': this.key!, 'X-Goog-FieldMask': `places.${FIELD_PROFILES[profileName]},places.attributions` },
+        headers: { 'Content-Type': 'application/json', 'X-Goog-Api-Key': this.key!, 'X-Goog-FieldMask': placesListMask(profileName) },
         body: JSON.stringify({ textQuery: query, maxResultCount: maxResults, regionCode: input.countryCode }),
       }, 'searchText', request, profileName, 'PLACES_TEXT_SEARCH');
       return result;
@@ -301,7 +314,7 @@ export class GoogleMapsProvider implements MapsIntelligenceProvider {
     return this.searchPlaces(request, 'searchNearby', profileName, async () => {
       const result = await this.requestJson<{ places?: RawPlace[] }>(`${BASE}/places:searchNearby`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Goog-Api-Key': this.key!, 'X-Goog-FieldMask': `places.${FIELD_PROFILES[profileName]},places.attributions` },
+        headers: { 'Content-Type': 'application/json', 'X-Goog-Api-Key': this.key!, 'X-Goog-FieldMask': placesListMask(profileName) },
         body: JSON.stringify({
           includedTypes: input.includedTypes?.slice(0, 20), maxResultCount: maxResults,
           locationRestriction: { circle: { center: { latitude: input.latitude, longitude: input.longitude }, radius: radiusMeters } },

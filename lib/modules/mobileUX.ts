@@ -436,7 +436,7 @@ async function fetchPageSpeedMobile(
           operation: 'mobileUX:fetchPageSpeedMobile:mobile',
           signal,
           degrade: false,
-          policy: { timeoutMs: 10000, maxAttempts: 2 },
+          policy: { timeoutMs: 45000, maxAttempts: 1 },
         },
         async ({ signal: providerSignal }) => {
           tracker?.addApiCall('PAGESPEED');
@@ -460,7 +460,7 @@ async function fetchPageSpeedMobile(
           operation: 'mobileUX:fetchPageSpeedMobile:desktop',
           signal,
           degrade: false,
-          policy: { timeoutMs: 10000, maxAttempts: 1 },
+          policy: { timeoutMs: 45000, maxAttempts: 1 },
         },
         async ({ signal: providerSignal }) => {
           tracker?.addApiCall('PAGESPEED');

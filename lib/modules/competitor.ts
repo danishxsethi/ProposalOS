@@ -15,6 +15,24 @@ import {
 const SERP_API_BASE = 'https://serpapi.com/search';
 const PSI_API_URL = 'https://www.googleapis.com/pagespeedonline/v5/runPagespeed';
 
+/** SerpAPI google_local puts the site under `links.website` (with GBP UTM params). */
+function serpWebsite(r: { website?: string; links?: { website?: string } } | null | undefined): string | undefined {
+  const raw = r?.links?.website ?? r?.website;
+  if (!raw || typeof raw !== 'string') return undefined;
+  try {
+    const u = new URL(raw);
+    for (const k of [...u.searchParams.keys()]) if (/^utm_/i.test(k)) u.searchParams.delete(k);
+    return u.toString().replace(/\?$/, '');
+  } catch {
+    return raw;
+  }
+}
+
+/** Only Places API (New) resource ids (ChIJ…/Eh…) can be fetched via places/{id}; SerpAPI's numeric CID cannot. */
+function placesApiId(id: unknown): string | undefined {
+  return typeof id === 'string' && /^[A-Za-z]/.test(id) ? id : undefined;
+}
+
 export async function runCompetitorModule(
   input: CompetitorModuleInput,
   tracker?: CostTracker
@@ -229,31 +247,16 @@ export async function runCompetitorModule(
     const category = selfResult.type;
     const businessName = input.keyword;
 
-    // Fetch Self Details + Lightweight PageSpeed
+    // Fetch Self Details + Lightweight PageSpeed. The PSI call is slow (20-35s
+    // measured); start it now and await it together with the competitor PSI
+    // calls below so the module wall is max() of the calls, not their sum.
     let selfDetails = null;
-    if (selfResult.place_id) {
-      selfDetails = await fetchPlaceDetails(selfResult.place_id, businessName);
+    const selfPlacesId = placesApiId(selfResult.place_id);
+    if (selfPlacesId) {
+      selfDetails = await fetchPlaceDetails(selfPlacesId, businessName);
     }
-    const selfWebsite = selfDetails?.websiteUri || selfResult.website;
-    const selfPsi = await runLightweightPageSpeed(selfWebsite || '');
-
-    const selfDataStruct: MatchedBusinessData = {
-      name: selfResult.title,
-      rating: selfDetails?.rating || selfResult.rating || 0,
-      reviewCount: selfDetails?.userRatingCount || selfResult.reviews || 0,
-      website: selfWebsite,
-      websiteSpeed: selfPsi.performanceScore,
-      photosCount: selfDetails?.photos ? selfDetails.photos.length : 0,
-      hasHours: !!selfDetails?.regularOpeningHours,
-      inLocalPack: true,
-      placeId: selfResult.place_id,
-      category: selfDetails?.primaryTypeDisplayName?.text || category,
-      performanceScore: selfPsi.performanceScore,
-      seoScore: selfPsi.seoScore,
-      accessibilityScore: selfPsi.accessibilityScore,
-      mobileScore: selfPsi.mobileScore,
-      loadTimeSeconds: selfPsi.loadTimeSeconds,
-    };
+    const selfWebsite = selfDetails?.websiteUri || serpWebsite(selfResult);
+    const selfPsiPromise = runLightweightPageSpeed(selfWebsite || '');
 
     // 2. Find COMPETITORS (if category found) - SECOND PASS
     let competitors: MatchedBusinessData[] = [];
@@ -319,9 +322,10 @@ export async function runCompetitorModule(
       competitors = await Promise.all(
         rawCompetitors.map(async (comp: any) => {
           let d = null;
-          if (comp.place_id) d = await fetchPlaceDetails(comp.place_id, comp.title);
+          const compPlacesId = placesApiId(comp.place_id);
+          if (compPlacesId) d = await fetchPlaceDetails(compPlacesId, comp.title);
 
-          const w = d?.websiteUri || comp.website;
+          const w = d?.websiteUri || serpWebsite(comp);
           const psi = await runLightweightPageSpeed(w || '');
 
           return {
@@ -344,6 +348,25 @@ export async function runCompetitorModule(
         })
       );
     }
+
+    const selfPsi = await selfPsiPromise;
+    const selfDataStruct: MatchedBusinessData = {
+      name: selfResult.title,
+      rating: selfDetails?.rating || selfResult.rating || 0,
+      reviewCount: selfDetails?.userRatingCount || selfResult.reviews || 0,
+      website: selfWebsite,
+      websiteSpeed: selfPsi.performanceScore,
+      photosCount: selfDetails?.photos ? selfDetails.photos.length : 0,
+      hasHours: !!selfDetails?.regularOpeningHours,
+      inLocalPack: true,
+      placeId: selfResult.place_id,
+      category: selfDetails?.primaryTypeDisplayName?.text || category,
+      performanceScore: selfPsi.performanceScore,
+      seoScore: selfPsi.seoScore,
+      accessibilityScore: selfPsi.accessibilityScore,
+      mobileScore: selfPsi.mobileScore,
+      loadTimeSeconds: selfPsi.loadTimeSeconds,
+    };
 
     // 3. Calculate Gaps
     const gaps: ComparisonGap[] = [];
