@@ -800,7 +800,7 @@ const coreWebVitalsAdapter = async (input: ModuleInput): Promise<ModuleResult> =
       category: 'Performance',
       type: cwv.lcp.rating === 'poor' ? 'PAINKILLER' : 'VITAMIN',
       title: `Largest Contentful Paint: ${cwv.lcp.value.toFixed(2)}s`,
-      description: `LCP is ${cwv.lcp.rating} (threshold: good < ${cwv.lcp.thresholdGood}s). Slow LCP hurts SEO rankings and user experience.`,
+      description: `LCP is ${cwv.lcp.rating} (threshold: good < ${cwv.lcp.thresholdGood}s) — visitors wait about ${Math.floor(Number(cwv.lcp.value))}s for content to appear, hurting engagement and SEO.`,
       impactScore: cwv.lcp.rating === 'poor' ? 8 : 5,
       confidenceScore: 9,
       evidence: cwvEvidence('Largest Contentful Paint (s, mobile lab)', Number(cwv.lcp.value.toFixed(2))),
