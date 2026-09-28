@@ -316,6 +316,7 @@ model EvidenceSnapshot {
 
   @@index([auditId])
   @@index([tenantId])
+  @@index([tenantId, auditId, module, collectedAt])
 }
 
 model ProposalTemplate {
@@ -1549,6 +1550,8 @@ model Payment {
   order                 Order?
 
   @@index([tenantId])
+  @@index([proposalId])
+  @@index([acceptanceId])
   @@map("payments")
 }
 
