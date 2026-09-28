@@ -83,6 +83,18 @@ export default function ProposalsPage() {
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-700">
+            {!loading && proposals.length === 0 && (
+              <tr>
+                <td colSpan={4} className="px-6 py-12 text-center text-sm text-slate-400">
+                  No proposals yet. Complete an audit, then generate a proposal from its results page.
+                </td>
+              </tr>
+            )}
+            {loading && (
+              <tr>
+                <td colSpan={4} className="px-6 py-12 text-center text-sm text-slate-500">Loading proposals…</td>
+              </tr>
+            )}
             {proposals.map((p) => (
               <tr key={p.id} className="hover:bg-slate-700/30">
                 <td className="px-6 py-4 text-white font-medium">{p.audit.businessName}</td>

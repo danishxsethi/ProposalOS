@@ -3,6 +3,7 @@ import Link from 'next/link';
 import DashboardClient from '@/app/dashboard/DashboardClient';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { runWithTenantAsync } from '@/lib/tenant/context';
 
 export default async function DashboardPage() {
   const session = await auth();
@@ -14,13 +15,14 @@ export default async function DashboardPage() {
     return <div className="p-8 text-white">Auth required</div>;
   }
 
-  const [tenant, subscription] = await Promise.all([
+  const [tenant, subscription] = await runWithTenantAsync(tenantId, () =>
+    Promise.all([
     prisma.tenant.findUnique({ where: { id: tenantId } }),
     prisma.subscription.findFirst({
       where: { tenantId },
       orderBy: { currentPeriodEnd: 'desc' },
     }),
-  ]);
+  ]));
 
   const isPastDue = tenant?.subscriptionStatus === 'past_due';
   const graceEndsAt = subscription

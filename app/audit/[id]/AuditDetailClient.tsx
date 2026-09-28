@@ -61,7 +61,7 @@ export default function AuditDetailClient({ audit }: { audit: any }) {
       <div className="container max-w-6xl">
         {/* Back button */}
         <Link
-          href="/"
+          href="/dashboard"
           className="inline-flex items-center gap-2 text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] mb-6"
         >
           ← Back to Dashboard

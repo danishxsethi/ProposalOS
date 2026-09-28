@@ -1,0 +1,2640 @@
+{
+  "meta": {
+    "base": "http://localhost:3000",
+    "mode": "csp-bypass (diagnostic)",
+    "startedAt": "2026-09-28T05:32:36.195Z",
+    "chromePath": "/home/danish/.cache/ms-playwright/chromium-1243/chrome-linux64/chrome",
+    "seeds": {
+      "auditId": "a39a7bc3-45a5-47c4-bb5e-561e8ca7f600",
+      "auditName": "Quick Fix Plumbing",
+      "proposalToken": null,
+      "proposalCount": 0
+    },
+    "viewports": [
+      320,
+      375,
+      768,
+      1024,
+      1440
+    ],
+    "axeViewports": [
+      1440,
+      375
+    ],
+    "finishedAt": "2026-09-28T05:34:56.998Z"
+  },
+  "surfaces": {
+    "root": {
+      "key": "root",
+      "route": "/",
+      "state": "public",
+      "note": null,
+      "viewports": {
+        "320": {
+          "status": 200,
+          "title": "ProposalOS | Automated Local Business Audits",
+          "h1": [
+            "ProposalOS"
+          ],
+          "horizontalOverflow": true,
+          "scrollWidth": 367,
+          "innerWidth": 320,
+          "overflowers": [
+            "div.flex.gap-3",
+            "button.btn.btn-primary",
+            "table.w-full",
+            "thead.border-b.border-[var(--color-border)]",
+            "tr.text-left.text-sm.text-[var(--color-text-secondary)]",
+            "th.pb-3.font-medium",
+            "th.pb-3.font-medium",
+            "th.pb-3.font-medium"
+          ],
+          "technicalLeakage": false,
+          "hydrated": true,
+          "nonceAttrs": 0,
+          "inlineScripts": 2,
+          "cspBlocked": false,
+          "screenshot": "evidence-csp-bypass/screenshots/root/320.png"
+        },
+        "375": {
+          "status": 200,
+          "title": "ProposalOS | Automated Local Business Audits",
+          "h1": [
+            "ProposalOS"
+          ],
+          "horizontalOverflow": false,
+          "scrollWidth": 375,
+          "innerWidth": 375,
+          "overflowers": [],
+          "technicalLeakage": false,
+          "hydrated": true,
+          "nonceAttrs": 0,
+          "inlineScripts": 2,
+          "cspBlocked": false,
+          "screenshot": "evidence-csp-bypass/screenshots/root/375.png"
+        },
+        "768": {
+          "status": 200,
+          "title": "ProposalOS | Automated Local Business Audits",
+          "h1": [
+            "ProposalOS"
+          ],
+          "horizontalOverflow": false,
+          "scrollWidth": 768,
+          "innerWidth": 768,
+          "overflowers": [],
+          "technicalLeakage": false,
+          "hydrated": true,
+          "nonceAttrs": 0,
+          "inlineScripts": 2,
+          "cspBlocked": false,
+          "screenshot": "evidence-csp-bypass/screenshots/root/768.png"
+        },
+        "1024": {
+          "status": 200,
+          "title": "ProposalOS | Automated Local Business Audits",
+          "h1": [
+            "ProposalOS"
+          ],
+          "horizontalOverflow": false,
+          "scrollWidth": 1024,
+          "innerWidth": 1024,
+          "overflowers": [],
+          "technicalLeakage": false,
+          "hydrated": true,
+          "nonceAttrs": 0,
+          "inlineScripts": 2,
+          "cspBlocked": false,
+          "screenshot": "evidence-csp-bypass/screenshots/root/1024.png"
+        },
+        "1440": {
+          "status": 200,
+          "title": "ProposalOS | Automated Local Business Audits",
+          "h1": [
+            "ProposalOS"
+          ],
+          "horizontalOverflow": false,
+          "scrollWidth": 1440,
+          "innerWidth": 1440,
+          "overflowers": [],
+          "technicalLeakage": false,
+          "hydrated": true,
+          "nonceAttrs": 0,
+          "inlineScripts": 2,
+          "cspBlocked": false,
+          "screenshot": "evidence-csp-bypass/screenshots/root/1440.png"
+        }
+      },
+      "axe": {
+        "375": {
+          "byImpact": {
+            "critical": 1,
+            "serious": 1,
+            "moderate": 2,
+            "minor": 0
+          },
+          "file": "evidence-csp-bypass/axe/root-375.json",
+          "violations": [
+            {
+              "id": "color-contrast",
+              "impact": "serious",
+              "help": "Elements must meet minimum color contrast ratio thresholds",
+              "nodes": 20,
+              "targets": [
+                ".hover\\:bg-\\[var\\(--color-bg-card-hover\\)\\]:nth-child(1) > td:nth-child(1) > .text-\\[var\\(--color-text-muted\\)\\]",
+                ".hover\\:bg-\\[var\\(--color-bg-card-hover\\)\\]:nth-child(2) > td:nth-child(1) > .text-\\[var\\(--color-text-muted\\)\\]",
+                ".hover\\:bg-\\[var\\(--color-bg-card-hover\\)\\]:nth-child(3) > td:nth-child(1) > .text-\\[var\\(--color-text-muted\\)\\]",
+                ".hover\\:bg-\\[var\\(--color-bg-card-hover\\)\\]:nth-child(4) > td:nth-child(1) > .text-\\[var\\(--color-text-muted\\)\\]",
+                ".hover\\:bg-\\[var\\(--color-bg-card-hover\\)\\]:nth-child(5) > td:nth-child(1) > .text-\\[var\\(--color-text-muted\\)\\]"
+              ]
+            },
+            {
+              "id": "landmark-one-main",
+              "impact": "moderate",
+              "help": "Document should have one main landmark",
+              "nodes": 1,
+              "targets": [
+                "html"
+              ]
+            },
+            {
+              "id": "region",
+              "impact": "moderate",
+              "help": "All page content should be contained by landmarks",
+              "nodes": 5,
+              "targets": [
+                ".justify-between.mb-8.items-center > div:nth-child(1)",
+                ".grid",
+                ".mb-6",
+                ".overflow-x-auto",
+                ".mt-6 > .text-\\[var\\(--color-text-secondary\\)\\]"
+              ]
+            },
+            {
+              "id": "select-name",
+              "impact": "critical",
+              "help": "Select element must have an accessible name",
+              "nodes": 1,
+              "targets": [
+                "select"
+              ]
+            }
+          ]
+        },
+        "1440": {
+          "byImpact": {
+            "critical": 1,
+            "serious": 1,
+            "moderate": 2,
+            "minor": 0
+          },
+          "file": "evidence-csp-bypass/axe/root-1440.json",
+          "violations": [
+            {
+              "id": "color-contrast",
+              "impact": "serious",
+              "help": "Elements must meet minimum color contrast ratio thresholds",
+              "nodes": 20,
+              "targets": [
+                ".hover\\:bg-\\[var\\(--color-bg-card-hover\\)\\]:nth-child(1) > td:nth-child(1) > .text-\\[var\\(--color-text-muted\\)\\]",
+                ".hover\\:bg-\\[var\\(--color-bg-card-hover\\)\\]:nth-child(2) > td:nth-child(1) > .text-\\[var\\(--color-text-muted\\)\\]",
+                ".hover\\:bg-\\[var\\(--color-bg-card-hover\\)\\]:nth-child(3) > td:nth-child(1) > .text-\\[var\\(--color-text-muted\\)\\]",
+                ".hover\\:bg-\\[var\\(--color-bg-card-hover\\)\\]:nth-child(4) > td:nth-child(1) > .text-\\[var\\(--color-text-muted\\)\\]",
+                ".hover\\:bg-\\[var\\(--color-bg-card-hover\\)\\]:nth-child(5) > td:nth-child(1) > .text-\\[var\\(--color-text-muted\\)\\]"
+              ]
+            },
+            {
+              "id": "landmark-one-main",
+              "impact": "moderate",
+              "help": "Document should have one main landmark",
+              "nodes": 1,
+              "targets": [
+                "html"
+              ]
+            },
+            {
+              "id": "region",
+              "impact": "moderate",
+              "help": "All page content should be contained by landmarks",
+              "nodes": 5,
+              "targets": [
+                ".justify-between.mb-8.items-center > div:nth-child(1)",
+                ".grid",
+                ".mb-6",
+                ".overflow-x-auto",
+                ".mt-6 > .text-\\[var\\(--color-text-secondary\\)\\]"
+              ]
+            },
+            {
+              "id": "select-name",
+              "impact": "critical",
+              "help": "Select element must have an accessible name",
+              "nodes": 1,
+              "targets": [
+                "select"
+              ]
+            }
+          ]
+        }
+      },
+      "consoleErrors": [],
+      "skipped": null,
+      "httpStatus": 200,
+      "finalUrl": "http://localhost:3000/",
+      "redirected": false
+    },
+    "login": {
+      "key": "login",
+      "route": "/login",
+      "state": "unauth",
+      "note": null,
+      "viewports": {
+        "320": {
+          "status": 200,
+          "title": "ProposalOS | Automated Local Business Audits",
+          "h1": [
+            "Welcome Back"
+          ],
+          "horizontalOverflow": false,
+          "scrollWidth": 320,
+          "innerWidth": 320,
+          "overflowers": [],
+          "technicalLeakage": false,
+          "hydrated": true,
+          "nonceAttrs": 0,
+          "inlineScripts": 2,
+          "cspBlocked": false,
+          "screenshot": "evidence-csp-bypass/screenshots/login/320.png"
+        },
+        "375": {
+          "status": 200,
+          "title": "ProposalOS | Automated Local Business Audits",
+          "h1": [
+            "Welcome Back"
+          ],
+          "horizontalOverflow": false,
+          "scrollWidth": 375,
+          "innerWidth": 375,
+          "overflowers": [],
+          "technicalLeakage": false,
+          "hydrated": true,
+          "nonceAttrs": 0,
+          "inlineScripts": 2,
+          "cspBlocked": false,
+          "screenshot": "evidence-csp-bypass/screenshots/login/375.png"
+        },
+        "768": {
+          "status": 200,
+          "title": "ProposalOS | Automated Local Business Audits",
+          "h1": [
+            "Welcome Back"
+          ],
+          "horizontalOverflow": false,
+          "scrollWidth": 768,
+          "innerWidth": 768,
+          "overflowers": [],
+          "technicalLeakage": false,
+          "hydrated": true,
+          "nonceAttrs": 0,
+          "inlineScripts": 2,
+          "cspBlocked": false,
+          "screenshot": "evidence-csp-bypass/screenshots/login/768.png"
+        },
+        "1024": {
+          "status": 200,
+          "title": "ProposalOS | Automated Local Business Audits",
+          "h1": [
+            "Welcome Back"
+          ],
+          "horizontalOverflow": false,
+          "scrollWidth": 1024,
+          "innerWidth": 1024,
+          "overflowers": [],
+          "technicalLeakage": false,
+          "hydrated": true,
+          "nonceAttrs": 0,
+          "inlineScripts": 2,
+          "cspBlocked": false,
+          "screenshot": "evidence-csp-bypass/screenshots/login/1024.png"
+        },
+        "1440": {
+          "status": 200,
+          "title": "ProposalOS | Automated Local Business Audits",
+          "h1": [
+            "Welcome Back"
+          ],
+          "horizontalOverflow": false,
+          "scrollWidth": 1440,
+          "innerWidth": 1440,
+          "overflowers": [],
+          "technicalLeakage": false,
+          "hydrated": true,
+          "nonceAttrs": 0,
+          "inlineScripts": 2,
+          "cspBlocked": false,
+          "screenshot": "evidence-csp-bypass/screenshots/login/1440.png"
+        }
+      },
+      "axe": {
+        "375": {
+          "byImpact": {
+            "critical": 0,
+            "serious": 1,
+            "moderate": 2,
+            "minor": 0
+          },
+          "file": "evidence-csp-bypass/axe/login-375.json",
+          "violations": [
+            {
+              "id": "color-contrast",
+              "impact": "serious",
+              "help": "Elements must meet minimum color contrast ratio thresholds",
+              "nodes": 1,
+              "targets": [
+                "span"
+              ]
+            },
+            {
+              "id": "landmark-one-main",
+              "impact": "moderate",
+              "help": "Document should have one main landmark",
+              "nodes": 1,
+              "targets": [
+                "html"
+              ]
+            },
+            {
+              "id": "region",
+              "impact": "moderate",
+              "help": "All page content should be contained by landmarks",
+              "nodes": 5,
+              "targets": [
+                ".mb-8",
+                "form > div:nth-child(1)",
+                "form > div:nth-child(2)",
+                ".space-y-4:nth-child(3) > .relative",
+                ".mt-8"
+              ]
+            }
+          ]
+        },
+        "1440": {
+          "byImpact": {
+            "critical": 0,
+            "serious": 1,
+            "moderate": 2,
+            "minor": 0
+          },
+          "file": "evidence-csp-bypass/axe/login-1440.json",
+          "violations": [
+            {
+              "id": "color-contrast",
+              "impact": "serious",
+              "help": "Elements must meet minimum color contrast ratio thresholds",
+              "nodes": 1,
+              "targets": [
+                "span"
+              ]
+            },
+            {
+              "id": "landmark-one-main",
+              "impact": "moderate",
+              "help": "Document should have one main landmark",
+              "nodes": 1,
+              "targets": [
+                "html"
+              ]
+            },
+            {
+              "id": "region",
+              "impact": "moderate",
+              "help": "All page content should be contained by landmarks",
+              "nodes": 5,
+              "targets": [
+                ".mb-8",
+                "form > div:nth-child(1)",
+                "form > div:nth-child(2)",
+                ".space-y-4:nth-child(3) > .relative",
+                ".mt-8"
+              ]
+            }
+          ]
+        }
+      },
+      "consoleErrors": [],
+      "skipped": null,
+      "httpStatus": 200,
+      "finalUrl": "http://localhost:3000/login",
+      "redirected": false,
+      "zoom200": {
+        "docScrollWidth": 1440,
+        "innerWidth": 1440,
+        "horizontalOverflow": false,
+        "clippedContainers": [],
+        "truncatedText": [],
+        "screenshot": "evidence-csp-bypass/screenshots/login/1440-zoom200.png",
+        "method": "CSS zoom=2 on <html> at 1440x900 (effective 720px layout viewport)"
+      }
+    },
+    "register": {
+      "key": "register",
+      "route": "/register",
+      "state": "unauth",
+      "note": null,
+      "viewports": {
+        "320": {
+          "status": 200,
+          "title": "ProposalOS | Automated Local Business Audits",
+          "h1": [
+            "Create Account"
+          ],
+          "horizontalOverflow": false,
+          "scrollWidth": 320,
+          "innerWidth": 320,
+          "overflowers": [],
+          "technicalLeakage": false,
+          "hydrated": true,
+          "nonceAttrs": 0,
+          "inlineScripts": 2,
+          "cspBlocked": false,
+          "screenshot": "evidence-csp-bypass/screenshots/register/320.png"
+        },
+        "375": {
+          "status": 200,
+          "title": "ProposalOS | Automated Local Business Audits",
+          "h1": [
+            "Create Account"
+          ],
+          "horizontalOverflow": false,
+          "scrollWidth": 375,
+          "innerWidth": 375,
+          "overflowers": [],
+          "technicalLeakage": false,
+          "hydrated": true,
+          "nonceAttrs": 0,
+          "inlineScripts": 2,
+          "cspBlocked": false,
+          "screenshot": "evidence-csp-bypass/screenshots/register/375.png"
+        },
+        "768": {
+          "status": 200,
+          "title": "ProposalOS | Automated Local Business Audits",
+          "h1": [
+            "Create Account"
+          ],
+          "horizontalOverflow": false,
+          "scrollWidth": 768,
+          "innerWidth": 768,
+          "overflowers": [],
+          "technicalLeakage": false,
+          "hydrated": true,
+          "nonceAttrs": 0,
+          "inlineScripts": 2,
+          "cspBlocked": false,
+          "screenshot": "evidence-csp-bypass/screenshots/register/768.png"
+        },
+        "1024": {
+          "status": 200,
+          "title": "ProposalOS | Automated Local Business Audits",
+          "h1": [
+            "Create Account"
+          ],
+          "horizontalOverflow": false,
+          "scrollWidth": 1024,
+          "innerWidth": 1024,
+          "overflowers": [],
+          "technicalLeakage": false,
+          "hydrated": true,
+          "nonceAttrs": 0,
+          "inlineScripts": 2,
+          "cspBlocked": false,
+          "screenshot": "evidence-csp-bypass/screenshots/register/1024.png"
+        },
+        "1440": {
+          "status": 200,
+          "title": "ProposalOS | Automated Local Business Audits",
+          "h1": [
+            "Create Account"
+          ],
+          "horizontalOverflow": false,
+          "scrollWidth": 1440,
+          "innerWidth": 1440,
+          "overflowers": [],
+          "technicalLeakage": false,
+          "hydrated": true,
+          "nonceAttrs": 0,
+          "inlineScripts": 2,
+          "cspBlocked": false,
+          "screenshot": "evidence-csp-bypass/screenshots/register/1440.png"
+        }
+      },
+      "axe": {
+        "375": {
+          "byImpact": {
+            "critical": 0,
+            "serious": 0,
+            "moderate": 2,
+            "minor": 0
+          },
+          "file": "evidence-csp-bypass/axe/register-375.json",
+          "violations": [
+            {
+              "id": "landmark-one-main",
+              "impact": "moderate",
+              "help": "Document should have one main landmark",
+              "nodes": 1,
+              "targets": [
+                "html"
+              ]
+            },
+            {
+              "id": "region",
+              "impact": "moderate",
+              "help": "All page content should be contained by landmarks",
+              "nodes": 6,
+              "targets": [
+                ".mb-8",
+                "form > div:nth-child(1)",
+                "form > div:nth-child(2)",
+                "form > div:nth-child(3)",
+                "div:nth-child(4)"
+              ]
+            }
+          ]
+        },
+        "1440": {
+          "byImpact": {
+            "critical": 0,
+            "serious": 0,
+            "moderate": 2,
+            "minor": 0
+          },
+          "file": "evidence-csp-bypass/axe/register-1440.json",
+          "violations": [
+            {
+              "id": "landmark-one-main",
+              "impact": "moderate",
+              "help": "Document should have one main landmark",
+              "nodes": 1,
+              "targets": [
+                "html"
+              ]
+            },
+            {
+              "id": "region",
+              "impact": "moderate",
+              "help": "All page content should be contained by landmarks",
+              "nodes": 6,
+              "targets": [
+                ".mb-8",
+                "form > div:nth-child(1)",
+                "form > div:nth-child(2)",
+                "form > div:nth-child(3)",
+                "div:nth-child(4)"
+              ]
+            }
+          ]
+        }
+      },
+      "consoleErrors": [],
+      "skipped": null,
+      "httpStatus": 200,
+      "finalUrl": "http://localhost:3000/register",
+      "redirected": false
+    },
+    "dashboard": {
+      "key": "dashboard",
+      "route": "/dashboard",
+      "state": "auth",
+      "note": null,
+      "viewports": {
+        "320": {
+          "status": 200,
+          "title": "ProposalOS | Automated Local Business Audits",
+          "h1": [],
+          "horizontalOverflow": false,
+          "scrollWidth": 320,
+          "innerWidth": 320,
+          "overflowers": [],
+          "technicalLeakage": false,
+          "hydrated": true,
+          "nonceAttrs": 16,
+          "inlineScripts": 5,
+          "cspBlocked": false,
+          "screenshot": "evidence-csp-bypass/screenshots/dashboard/320.png"
+        },
+        "375": {
+          "status": 200,
+          "title": "ProposalOS | Automated Local Business Audits",
+          "h1": [],
+          "horizontalOverflow": false,
+          "scrollWidth": 375,
+          "innerWidth": 375,
+          "overflowers": [],
+          "technicalLeakage": false,
+          "hydrated": true,
+          "nonceAttrs": 16,
+          "inlineScripts": 5,
+          "cspBlocked": false,
+          "screenshot": "evidence-csp-bypass/screenshots/dashboard/375.png"
+        },
+        "768": {
+          "status": 200,
+          "title": "ProposalOS | Automated Local Business Audits",
+          "h1": [],
+          "horizontalOverflow": false,
+          "scrollWidth": 768,
+          "innerWidth": 768,
+          "overflowers": [],
+          "technicalLeakage": false,
+          "hydrated": true,
+          "nonceAttrs": 16,
+          "inlineScripts": 5,
+          "cspBlocked": false,
+          "screenshot": "evidence-csp-bypass/screenshots/dashboard/768.png"
+        },
+        "1024": {
+          "status": 200,
+          "title": "ProposalOS | Automated Local Business Audits",
+          "h1": [],
+          "horizontalOverflow": false,
+          "scrollWidth": 1024,
+          "innerWidth": 1024,
+          "overflowers": [],
+          "technicalLeakage": false,
+          "hydrated": true,
+          "nonceAttrs": 16,
+          "inlineScripts": 5,
+          "cspBlocked": false,
+          "screenshot": "evidence-csp-bypass/screenshots/dashboard/1024.png"
+        },
+        "1440": {
+          "status": 200,
+          "title": "ProposalOS | Automated Local Business Audits",
+          "h1": [],
+          "horizontalOverflow": false,
+          "scrollWidth": 1440,
+          "innerWidth": 1440,
+          "overflowers": [],
+          "technicalLeakage": false,
+          "hydrated": true,
+          "nonceAttrs": 16,
+          "inlineScripts": 5,
+          "cspBlocked": false,
+          "screenshot": "evidence-csp-bypass/screenshots/dashboard/1440.png"
+        }
+      },
+      "axe": {
+        "375": {
+          "byImpact": {
+            "critical": 0,
+            "serious": 0,
+            "moderate": 3,
+            "minor": 0
+          },
+          "file": "evidence-csp-bypass/axe/dashboard-375.json",
+          "violations": [
+            {
+              "id": "landmark-one-main",
+              "impact": "moderate",
+              "help": "Document should have one main landmark",
+              "nodes": 1,
+              "targets": [
+                "html"
+              ]
+            },
+            {
+              "id": "page-has-heading-one",
+              "impact": "moderate",
+              "help": "Page should contain a level-one heading",
+              "nodes": 1,
+              "targets": [
+                "html"
+              ]
+            },
+            {
+              "id": "region",
+              "impact": "moderate",
+              "help": "All page content should be contained by landmarks",
+              "nodes": 3,
+              "targets": [
+                ".mb-2",
+                "h2",
+                ".mb-6"
+              ]
+            }
+          ]
+        },
+        "1440": {
+          "byImpact": {
+            "critical": 0,
+            "serious": 0,
+            "moderate": 3,
+            "minor": 0
+          },
+          "file": "evidence-csp-bypass/axe/dashboard-1440.json",
+          "violations": [
+            {
+              "id": "landmark-one-main",
+              "impact": "moderate",
+              "help": "Document should have one main landmark",
+              "nodes": 1,
+              "targets": [
+                "html"
+              ]
+            },
+            {
+              "id": "page-has-heading-one",
+              "impact": "moderate",
+              "help": "Page should contain a level-one heading",
+              "nodes": 1,
+              "targets": [
+                "html"
+              ]
+            },
+            {
+              "id": "region",
+              "impact": "moderate",
+              "help": "All page content should be contained by landmarks",
+              "nodes": 3,
+              "targets": [
+                ".mb-2",
+                "h2",
+                ".mb-6"
+              ]
+            }
+          ]
+        }
+      },
+      "consoleErrors": [
+        {
+          "kind": "console",
+          "text": "Error: Minified React error #441; visit https://react.dev/errors/441 for the full message or use the non-minified dev environment for full errors and additional helpful warnings."
+        }
+      ],
+      "skipped": null,
+      "httpStatus": 200,
+      "finalUrl": "http://localhost:3000/dashboard",
+      "redirected": false,
+      "zoom200": {
+        "docScrollWidth": 1440,
+        "innerWidth": 1440,
+        "horizontalOverflow": false,
+        "clippedContainers": [],
+        "truncatedText": [],
+        "screenshot": "evidence-csp-bypass/screenshots/dashboard/1440-zoom200.png",
+        "method": "CSS zoom=2 on <html> at 1440x900 (effective 720px layout viewport)"
+      }
+    },
+    "new-audit": {
+      "key": "new-audit",
+      "route": "/new-audit",
+      "state": "auth",
+      "note": null,
+      "viewports": {
+        "320": {
+          "status": 200,
+          "title": "ProposalOS | Automated Local Business Audits",
+          "h1": [
+            "Create New Audit"
+          ],
+          "horizontalOverflow": false,
+          "scrollWidth": 320,
+          "innerWidth": 320,
+          "overflowers": [],
+          "technicalLeakage": false,
+          "hydrated": true,
+          "nonceAttrs": 0,
+          "inlineScripts": 2,
+          "cspBlocked": false,
+          "screenshot": "evidence-csp-bypass/screenshots/new-audit/320.png"
+        },
+        "375": {
+          "status": 200,
+          "title": "ProposalOS | Automated Local Business Audits",
+          "h1": [
+            "Create New Audit"
+          ],
+          "horizontalOverflow": false,
+          "scrollWidth": 375,
+          "innerWidth": 375,
+          "overflowers": [],
+          "technicalLeakage": false,
+          "hydrated": true,
+          "nonceAttrs": 0,
+          "inlineScripts": 2,
+          "cspBlocked": false,
+          "screenshot": "evidence-csp-bypass/screenshots/new-audit/375.png"
+        },
+        "768": {
+          "status": 200,
+          "title": "ProposalOS | Automated Local Business Audits",
+          "h1": [
+            "Create New Audit"
+          ],
+          "horizontalOverflow": false,
+          "scrollWidth": 768,
+          "innerWidth": 768,
+          "overflowers": [],
+          "technicalLeakage": false,
+          "hydrated": true,
+          "nonceAttrs": 0,
+          "inlineScripts": 2,
+          "cspBlocked": false,
+          "screenshot": "evidence-csp-bypass/screenshots/new-audit/768.png"
+        },
+        "1024": {
+          "status": 200,
+          "title": "ProposalOS | Automated Local Business Audits",
+          "h1": [
+            "Create New Audit"
+          ],
+          "horizontalOverflow": false,
+          "scrollWidth": 1024,
+          "innerWidth": 1024,
+          "overflowers": [],
+          "technicalLeakage": false,
+          "hydrated": true,
+          "nonceAttrs": 0,
+          "inlineScripts": 2,
+          "cspBlocked": false,
+          "screenshot": "evidence-csp-bypass/screenshots/new-audit/1024.png"
+        },
+        "1440": {
+          "status": 200,
+          "title": "ProposalOS | Automated Local Business Audits",
+          "h1": [
+            "Create New Audit"
+          ],
+          "horizontalOverflow": false,
+          "scrollWidth": 1440,
+          "innerWidth": 1440,
+          "overflowers": [],
+          "technicalLeakage": false,
+          "hydrated": true,
+          "nonceAttrs": 0,
+          "inlineScripts": 2,
+          "cspBlocked": false,
+          "screenshot": "evidence-csp-bypass/screenshots/new-audit/1440.png"
+        }
+      },
+      "axe": {
+        "375": {
+          "byImpact": {
+            "critical": 0,
+            "serious": 1,
+            "moderate": 2,
+            "minor": 0
+          },
+          "file": "evidence-csp-bypass/axe/new-audit-375.json",
+          "violations": [
+            {
+              "id": "color-contrast",
+              "impact": "serious",
+              "help": "Elements must meet minimum color contrast ratio thresholds",
+              "nodes": 1,
+              "targets": [
+                ".mt-6"
+              ]
+            },
+            {
+              "id": "landmark-one-main",
+              "impact": "moderate",
+              "help": "Document should have one main landmark",
+              "nodes": 1,
+              "targets": [
+                "html"
+              ]
+            },
+            {
+              "id": "region",
+              "impact": "moderate",
+              "help": "All page content should be contained by landmarks",
+              "nodes": 5,
+              "targets": [
+                "h1",
+                "p:nth-child(2)",
+                ".mb-4",
+                "form > .mb-6",
+                ".mt-6"
+              ]
+            }
+          ]
+        },
+        "1440": {
+          "byImpact": {
+            "critical": 0,
+            "serious": 1,
+            "moderate": 2,
+            "minor": 0
+          },
+          "file": "evidence-csp-bypass/axe/new-audit-1440.json",
+          "violations": [
+            {
+              "id": "color-contrast",
+              "impact": "serious",
+              "help": "Elements must meet minimum color contrast ratio thresholds",
+              "nodes": 1,
+              "targets": [
+                ".mt-6"
+              ]
+            },
+            {
+              "id": "landmark-one-main",
+              "impact": "moderate",
+              "help": "Document should have one main landmark",
+              "nodes": 1,
+              "targets": [
+                "html"
+              ]
+            },
+            {
+              "id": "region",
+              "impact": "moderate",
+              "help": "All page content should be contained by landmarks",
+              "nodes": 5,
+              "targets": [
+                "h1",
+                "p:nth-child(2)",
+                ".mb-4",
+                "form > .mb-6",
+                ".mt-6"
+              ]
+            }
+          ]
+        }
+      },
+      "consoleErrors": [],
+      "skipped": null,
+      "httpStatus": 200,
+      "finalUrl": "http://localhost:3000/new-audit",
+      "redirected": false
+    },
+    "audit-detail": {
+      "key": "audit-detail",
+      "route": "/audit/a39a7bc3-45a5-47c4-bb5e-561e8ca7f600",
+      "state": "auth",
+      "note": "seeded audit \"Quick Fix Plumbing\"",
+      "viewports": {
+        "320": {
+          "status": 200,
+          "title": "ProposalOS | Automated Local Business Audits",
+          "h1": [
+            "Quick Fix Plumbing"
+          ],
+          "horizontalOverflow": false,
+          "scrollWidth": 320,
+          "innerWidth": 320,
+          "overflowers": [],
+          "technicalLeakage": false,
+          "hydrated": true,
+          "nonceAttrs": 16,
+          "inlineScripts": 6,
+          "cspBlocked": false,
+          "screenshot": "evidence-csp-bypass/screenshots/audit-detail/320.png"
+        },
+        "375": {
+          "status": 200,
+          "title": "ProposalOS | Automated Local Business Audits",
+          "h1": [
+            "Quick Fix Plumbing"
+          ],
+          "horizontalOverflow": false,
+          "scrollWidth": 375,
+          "innerWidth": 375,
+          "overflowers": [],
+          "technicalLeakage": false,
+          "hydrated": true,
+          "nonceAttrs": 16,
+          "inlineScripts": 6,
+          "cspBlocked": false,
+          "screenshot": "evidence-csp-bypass/screenshots/audit-detail/375.png"
+        },
+        "768": {
+          "status": 200,
+          "title": "ProposalOS | Automated Local Business Audits",
+          "h1": [
+            "Quick Fix Plumbing"
+          ],
+          "horizontalOverflow": false,
+          "scrollWidth": 768,
+          "innerWidth": 768,
+          "overflowers": [],
+          "technicalLeakage": false,
+          "hydrated": true,
+          "nonceAttrs": 16,
+          "inlineScripts": 6,
+          "cspBlocked": false,
+          "screenshot": "evidence-csp-bypass/screenshots/audit-detail/768.png"
+        },
+        "1024": {
+          "status": 200,
+          "title": "ProposalOS | Automated Local Business Audits",
+          "h1": [
+            "Quick Fix Plumbing"
+          ],
+          "horizontalOverflow": false,
+          "scrollWidth": 1024,
+          "innerWidth": 1024,
+          "overflowers": [],
+          "technicalLeakage": false,
+          "hydrated": true,
+          "nonceAttrs": 16,
+          "inlineScripts": 6,
+          "cspBlocked": false,
+          "screenshot": "evidence-csp-bypass/screenshots/audit-detail/1024.png"
+        },
+        "1440": {
+          "status": 200,
+          "title": "ProposalOS | Automated Local Business Audits",
+          "h1": [
+            "Quick Fix Plumbing"
+          ],
+          "horizontalOverflow": false,
+          "scrollWidth": 1440,
+          "innerWidth": 1440,
+          "overflowers": [],
+          "technicalLeakage": false,
+          "hydrated": true,
+          "nonceAttrs": 16,
+          "inlineScripts": 6,
+          "cspBlocked": false,
+          "screenshot": "evidence-csp-bypass/screenshots/audit-detail/1440.png"
+        }
+      },
+      "axe": {
+        "375": {
+          "byImpact": {
+            "critical": 0,
+            "serious": 1,
+            "moderate": 2,
+            "minor": 0
+          },
+          "file": "evidence-csp-bypass/axe/audit-detail-375.json",
+          "violations": [
+            {
+              "id": "color-contrast",
+              "impact": "serious",
+              "help": "Elements must meet minimum color contrast ratio thresholds",
+              "nodes": 3,
+              "targets": [
+                "div:nth-child(1) > .space-y-3 > .hover\\:bg-\\[var\\(--color-bg-card-hover\\)\\].transition-colors.card:nth-child(1) > .mt-2.text-\\[var\\(--color-text-muted\\)\\].text-xs",
+                ".hover\\:bg-\\[var\\(--color-bg-card-hover\\)\\].transition-colors.card:nth-child(2) > .mt-2.text-\\[var\\(--color-text-muted\\)\\].text-xs",
+                "div:nth-child(2) > .space-y-3 > .hover\\:bg-\\[var\\(--color-bg-card-hover\\)\\].transition-colors.card > .mt-2.text-\\[var\\(--color-text-muted\\)\\].text-xs"
+              ]
+            },
+            {
+              "id": "landmark-one-main",
+              "impact": "moderate",
+              "help": "Document should have one main landmark",
+              "nodes": 1,
+              "targets": [
+                "html"
+              ]
+            },
+            {
+              "id": "region",
+              "impact": "moderate",
+              "help": "All page content should be contained by landmarks",
+              "nodes": 5,
+              "targets": [
+                "a",
+                ".flex-wrap > div:nth-child(1)",
+                ".md\\:grid-cols-4",
+                "h2",
+                ".lg\\:grid-cols-2"
+              ]
+            }
+          ]
+        },
+        "1440": {
+          "byImpact": {
+            "critical": 0,
+            "serious": 1,
+            "moderate": 2,
+            "minor": 0
+          },
+          "file": "evidence-csp-bypass/axe/audit-detail-1440.json",
+          "violations": [
+            {
+              "id": "color-contrast",
+              "impact": "serious",
+              "help": "Elements must meet minimum color contrast ratio thresholds",
+              "nodes": 3,
+              "targets": [
+                "div:nth-child(1) > .space-y-3 > .hover\\:bg-\\[var\\(--color-bg-card-hover\\)\\].transition-colors.card:nth-child(1) > .mt-2.text-\\[var\\(--color-text-muted\\)\\].text-xs",
+                ".hover\\:bg-\\[var\\(--color-bg-card-hover\\)\\].transition-colors.card:nth-child(2) > .mt-2.text-\\[var\\(--color-text-muted\\)\\].text-xs",
+                "div:nth-child(2) > .space-y-3 > .hover\\:bg-\\[var\\(--color-bg-card-hover\\)\\].transition-colors.card > .mt-2.text-\\[var\\(--color-text-muted\\)\\].text-xs"
+              ]
+            },
+            {
+              "id": "landmark-one-main",
+              "impact": "moderate",
+              "help": "Document should have one main landmark",
+              "nodes": 1,
+              "targets": [
+                "html"
+              ]
+            },
+            {
+              "id": "region",
+              "impact": "moderate",
+              "help": "All page content should be contained by landmarks",
+              "nodes": 5,
+              "targets": [
+                "a",
+                ".flex-wrap > div:nth-child(1)",
+                ".md\\:grid-cols-4",
+                "h2",
+                ".lg\\:grid-cols-2"
+              ]
+            }
+          ]
+        }
+      },
+      "consoleErrors": [
+        {
+          "kind": "console",
+          "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+        }
+      ],
+      "skipped": null,
+      "httpStatus": 200,
+      "finalUrl": "http://localhost:3000/audit/a39a7bc3-45a5-47c4-bb5e-561e8ca7f600",
+      "redirected": false
+    },
+    "proposals": {
+      "key": "proposals",
+      "route": "/proposals",
+      "state": "auth",
+      "note": null,
+      "viewports": {
+        "320": {
+          "status": 200,
+          "title": "ProposalOS | Automated Local Business Audits",
+          "h1": [
+            "Proposals"
+          ],
+          "horizontalOverflow": false,
+          "scrollWidth": 320,
+          "innerWidth": 320,
+          "overflowers": [],
+          "technicalLeakage": false,
+          "hydrated": true,
+          "nonceAttrs": 0,
+          "inlineScripts": 2,
+          "cspBlocked": false,
+          "screenshot": "evidence-csp-bypass/screenshots/proposals/320.png"
+        },
+        "375": {
+          "status": 200,
+          "title": "ProposalOS | Automated Local Business Audits",
+          "h1": [
+            "Proposals"
+          ],
+          "horizontalOverflow": false,
+          "scrollWidth": 375,
+          "innerWidth": 375,
+          "overflowers": [],
+          "technicalLeakage": false,
+          "hydrated": true,
+          "nonceAttrs": 0,
+          "inlineScripts": 2,
+          "cspBlocked": false,
+          "screenshot": "evidence-csp-bypass/screenshots/proposals/375.png"
+        },
+        "768": {
+          "status": 200,
+          "title": "ProposalOS | Automated Local Business Audits",
+          "h1": [
+            "Proposals"
+          ],
+          "horizontalOverflow": false,
+          "scrollWidth": 768,
+          "innerWidth": 768,
+          "overflowers": [],
+          "technicalLeakage": false,
+          "hydrated": true,
+          "nonceAttrs": 0,
+          "inlineScripts": 2,
+          "cspBlocked": false,
+          "screenshot": "evidence-csp-bypass/screenshots/proposals/768.png"
+        },
+        "1024": {
+          "status": 200,
+          "title": "ProposalOS | Automated Local Business Audits",
+          "h1": [
+            "Proposals"
+          ],
+          "horizontalOverflow": false,
+          "scrollWidth": 1024,
+          "innerWidth": 1024,
+          "overflowers": [],
+          "technicalLeakage": false,
+          "hydrated": true,
+          "nonceAttrs": 0,
+          "inlineScripts": 2,
+          "cspBlocked": false,
+          "screenshot": "evidence-csp-bypass/screenshots/proposals/1024.png"
+        },
+        "1440": {
+          "status": 200,
+          "title": "ProposalOS | Automated Local Business Audits",
+          "h1": [
+            "Proposals"
+          ],
+          "horizontalOverflow": false,
+          "scrollWidth": 1440,
+          "innerWidth": 1440,
+          "overflowers": [],
+          "technicalLeakage": false,
+          "hydrated": true,
+          "nonceAttrs": 0,
+          "inlineScripts": 2,
+          "cspBlocked": false,
+          "screenshot": "evidence-csp-bypass/screenshots/proposals/1440.png"
+        }
+      },
+      "axe": {
+        "375": {
+          "byImpact": {
+            "critical": 0,
+            "serious": 0,
+            "moderate": 2,
+            "minor": 0
+          },
+          "file": "evidence-csp-bypass/axe/proposals-375.json",
+          "violations": [
+            {
+              "id": "landmark-one-main",
+              "impact": "moderate",
+              "help": "Document should have one main landmark",
+              "nodes": 1,
+              "targets": [
+                "html"
+              ]
+            },
+            {
+              "id": "region",
+              "impact": "moderate",
+              "help": "All page content should be contained by landmarks",
+              "nodes": 1,
+              "targets": [
+                ".container"
+              ]
+            }
+          ]
+        },
+        "1440": {
+          "byImpact": {
+            "critical": 0,
+            "serious": 0,
+            "moderate": 2,
+            "minor": 0
+          },
+          "file": "evidence-csp-bypass/axe/proposals-1440.json",
+          "violations": [
+            {
+              "id": "landmark-one-main",
+              "impact": "moderate",
+              "help": "Document should have one main landmark",
+              "nodes": 1,
+              "targets": [
+                "html"
+              ]
+            },
+            {
+              "id": "region",
+              "impact": "moderate",
+              "help": "All page content should be contained by landmarks",
+              "nodes": 1,
+              "targets": [
+                ".container"
+              ]
+            }
+          ]
+        }
+      },
+      "consoleErrors": [],
+      "skipped": null,
+      "httpStatus": 200,
+      "finalUrl": "http://localhost:3000/proposals",
+      "redirected": false
+    },
+    "settings-billing": {
+      "key": "settings-billing",
+      "route": "/settings/billing",
+      "state": "auth",
+      "note": null,
+      "viewports": {
+        "320": {
+          "status": 200,
+          "title": "ProposalOS | Automated Local Business Audits",
+          "h1": [
+            "Something went wrong"
+          ],
+          "horizontalOverflow": false,
+          "scrollWidth": 320,
+          "innerWidth": 320,
+          "overflowers": [],
+          "technicalLeakage": false,
+          "hydrated": true,
+          "nonceAttrs": 14,
+          "inlineScripts": 5,
+          "cspBlocked": false,
+          "screenshot": "evidence-csp-bypass/screenshots/settings-billing/320.png"
+        },
+        "375": {
+          "status": 200,
+          "title": "ProposalOS | Automated Local Business Audits",
+          "h1": [
+            "Something went wrong"
+          ],
+          "horizontalOverflow": false,
+          "scrollWidth": 375,
+          "innerWidth": 375,
+          "overflowers": [],
+          "technicalLeakage": false,
+          "hydrated": true,
+          "nonceAttrs": 14,
+          "inlineScripts": 5,
+          "cspBlocked": false,
+          "screenshot": "evidence-csp-bypass/screenshots/settings-billing/375.png"
+        },
+        "768": {
+          "status": 200,
+          "title": "ProposalOS | Automated Local Business Audits",
+          "h1": [
+            "Something went wrong"
+          ],
+          "horizontalOverflow": false,
+          "scrollWidth": 768,
+          "innerWidth": 768,
+          "overflowers": [],
+          "technicalLeakage": false,
+          "hydrated": true,
+          "nonceAttrs": 14,
+          "inlineScripts": 5,
+          "cspBlocked": false,
+          "screenshot": "evidence-csp-bypass/screenshots/settings-billing/768.png"
+        },
+        "1024": {
+          "status": 200,
+          "title": "ProposalOS | Automated Local Business Audits",
+          "h1": [
+            "Something went wrong"
+          ],
+          "horizontalOverflow": false,
+          "scrollWidth": 1024,
+          "innerWidth": 1024,
+          "overflowers": [],
+          "technicalLeakage": false,
+          "hydrated": true,
+          "nonceAttrs": 14,
+          "inlineScripts": 5,
+          "cspBlocked": false,
+          "screenshot": "evidence-csp-bypass/screenshots/settings-billing/1024.png"
+        },
+        "1440": {
+          "status": 200,
+          "title": "ProposalOS | Automated Local Business Audits",
+          "h1": [
+            "Something went wrong"
+          ],
+          "horizontalOverflow": false,
+          "scrollWidth": 1440,
+          "innerWidth": 1440,
+          "overflowers": [],
+          "technicalLeakage": false,
+          "hydrated": true,
+          "nonceAttrs": 14,
+          "inlineScripts": 5,
+          "cspBlocked": false,
+          "screenshot": "evidence-csp-bypass/screenshots/settings-billing/1440.png"
+        }
+      },
+      "axe": {
+        "375": {
+          "byImpact": {
+            "critical": 0,
+            "serious": 0,
+            "moderate": 2,
+            "minor": 0
+          },
+          "file": "evidence-csp-bypass/axe/settings-billing-375.json",
+          "violations": [
+            {
+              "id": "landmark-one-main",
+              "impact": "moderate",
+              "help": "Document should have one main landmark",
+              "nodes": 1,
+              "targets": [
+                "html"
+              ]
+            },
+            {
+              "id": "region",
+              "impact": "moderate",
+              "help": "All page content should be contained by landmarks",
+              "nodes": 4,
+              "targets": [
+                ".mb-3",
+                "h1",
+                ".mb-6",
+                "a"
+              ]
+            }
+          ]
+        },
+        "1440": {
+          "byImpact": {
+            "critical": 0,
+            "serious": 0,
+            "moderate": 2,
+            "minor": 0
+          },
+          "file": "evidence-csp-bypass/axe/settings-billing-1440.json",
+          "violations": [
+            {
+              "id": "landmark-one-main",
+              "impact": "moderate",
+              "help": "Document should have one main landmark",
+              "nodes": 1,
+              "targets": [
+                "html"
+              ]
+            },
+            {
+              "id": "region",
+              "impact": "moderate",
+              "help": "All page content should be contained by landmarks",
+              "nodes": 4,
+              "targets": [
+                ".mb-3",
+                "h1",
+                ".mb-6",
+                "a"
+              ]
+            }
+          ]
+        }
+      },
+      "consoleErrors": [
+        {
+          "kind": "console",
+          "text": "Error: Minified React error #441; visit https://react.dev/errors/441 for the full message or use the non-minified dev environment for full errors and additional helpful warnings."
+        }
+      ],
+      "skipped": null,
+      "httpStatus": 200,
+      "finalUrl": "http://localhost:3000/settings/billing",
+      "redirected": false
+    },
+    "settings-branding": {
+      "key": "settings-branding",
+      "route": "/settings/branding",
+      "state": "auth",
+      "note": null,
+      "viewports": {
+        "320": {
+          "status": 200,
+          "title": "ProposalOS | Automated Local Business Audits",
+          "h1": [
+            "Branding & Customization",
+            "Digital Audit: Client Business"
+          ],
+          "horizontalOverflow": true,
+          "scrollWidth": 383,
+          "innerWidth": 320,
+          "overflowers": [
+            "div.space-y-8",
+            "div.bg-slate-800/50.p-6.rounded-xl",
+            "h3.text-lg.font-semibold.text-white",
+            "div.space-y-4",
+            "div.",
+            "label.block.text-sm.font-medium",
+            "input.input-dark.w-full",
+            "div."
+          ],
+          "technicalLeakage": false,
+          "hydrated": true,
+          "nonceAttrs": 0,
+          "inlineScripts": 2,
+          "cspBlocked": false,
+          "screenshot": "evidence-csp-bypass/screenshots/settings-branding/320.png"
+        },
+        "375": {
+          "status": 200,
+          "title": "ProposalOS | Automated Local Business Audits",
+          "h1": [
+            "Branding & Customization",
+            "Digital Audit: Client Business"
+          ],
+          "horizontalOverflow": true,
+          "scrollWidth": 383,
+          "innerWidth": 375,
+          "overflowers": [
+            "div.space-y-8",
+            "div.bg-slate-800/50.p-6.rounded-xl",
+            "div.bg-slate-800/50.p-6.rounded-xl",
+            "div.bg-slate-800/50.p-6.rounded-xl",
+            "div.bg-slate-800/50.p-6.rounded-xl",
+            "div.pt-4",
+            "button.btn.btn-primary.w-full",
+            "div.sticky.top-10"
+          ],
+          "technicalLeakage": false,
+          "hydrated": true,
+          "nonceAttrs": 0,
+          "inlineScripts": 2,
+          "cspBlocked": false,
+          "screenshot": "evidence-csp-bypass/screenshots/settings-branding/375.png"
+        },
+        "768": {
+          "status": 200,
+          "title": "ProposalOS | Automated Local Business Audits",
+          "h1": [
+            "Branding & Customization",
+            "Digital Audit: Client Business"
+          ],
+          "horizontalOverflow": false,
+          "scrollWidth": 768,
+          "innerWidth": 768,
+          "overflowers": [],
+          "technicalLeakage": false,
+          "hydrated": true,
+          "nonceAttrs": 0,
+          "inlineScripts": 2,
+          "cspBlocked": false,
+          "screenshot": "evidence-csp-bypass/screenshots/settings-branding/768.png"
+        },
+        "1024": {
+          "status": 200,
+          "title": "ProposalOS | Automated Local Business Audits",
+          "h1": [
+            "Branding & Customization",
+            "Digital Audit: Client Business"
+          ],
+          "horizontalOverflow": false,
+          "scrollWidth": 1024,
+          "innerWidth": 1024,
+          "overflowers": [],
+          "technicalLeakage": false,
+          "hydrated": true,
+          "nonceAttrs": 0,
+          "inlineScripts": 2,
+          "cspBlocked": false,
+          "screenshot": "evidence-csp-bypass/screenshots/settings-branding/1024.png"
+        },
+        "1440": {
+          "status": 200,
+          "title": "ProposalOS | Automated Local Business Audits",
+          "h1": [
+            "Branding & Customization",
+            "Digital Audit: Client Business"
+          ],
+          "horizontalOverflow": false,
+          "scrollWidth": 1440,
+          "innerWidth": 1440,
+          "overflowers": [],
+          "technicalLeakage": false,
+          "hydrated": true,
+          "nonceAttrs": 0,
+          "inlineScripts": 2,
+          "cspBlocked": false,
+          "screenshot": "evidence-csp-bypass/screenshots/settings-branding/1440.png"
+        }
+      },
+      "axe": {
+        "375": {
+          "byImpact": {
+            "critical": 1,
+            "serious": 1,
+            "moderate": 3,
+            "minor": 0
+          },
+          "file": "evidence-csp-bypass/axe/settings-branding-375.json",
+          "violations": [
+            {
+              "id": "color-contrast",
+              "impact": "serious",
+              "help": "Elements must meet minimum color contrast ratio thresholds",
+              "nodes": 2,
+              "targets": [
+                ".text-slate-500",
+                ".opacity-50"
+              ]
+            },
+            {
+              "id": "heading-order",
+              "impact": "moderate",
+              "help": "Heading levels should only increase by one",
+              "nodes": 1,
+              "targets": [
+                ".bg-slate-800\\/50.rounded-xl.border-slate-700:nth-child(1) > .font-semibold"
+              ]
+            },
+            {
+              "id": "label",
+              "impact": "critical",
+              "help": "Form elements must have labels",
+              "nodes": 7,
+              "targets": [
+                "input[name=\"primaryColor\"][value=\"#8B5CF6\"][type=\"color\"]",
+                ".font-mono[name=\"primaryColor\"][value=\"#8B5CF6\"]",
+                "input[name=\"secondaryColor\"][value=\"#38BDF8\"][type=\"color\"]",
+                ".font-mono[name=\"secondaryColor\"][value=\"#38BDF8\"]",
+                "input[name=\"accentColor\"][value=\"#F59E0B\"][type=\"color\"]"
+              ]
+            },
+            {
+              "id": "landmark-one-main",
+              "impact": "moderate",
+              "help": "Document should have one main landmark",
+              "nodes": 1,
+              "targets": [
+                "html"
+              ]
+            },
+            {
+              "id": "region",
+              "impact": "moderate",
+              "help": "All page content should be contained by landmarks",
+              "nodes": 9,
+              "targets": [
+                ".text-slate-100",
+                ".bg-slate-800\\/50.rounded-xl.border-slate-700:nth-child(1) > .font-semibold",
+                ".bg-slate-800\\/50.rounded-xl.border-slate-700:nth-child(1) > .space-y-4 > div:nth-child(1)",
+                ".space-y-4 > div:nth-child(2)",
+                ".space-y-4 > div:nth-child(3) > .block.font-medium.mb-1"
+              ]
+            }
+          ]
+        },
+        "1440": {
+          "byImpact": {
+            "critical": 1,
+            "serious": 1,
+            "moderate": 3,
+            "minor": 0
+          },
+          "file": "evidence-csp-bypass/axe/settings-branding-1440.json",
+          "violations": [
+            {
+              "id": "color-contrast",
+              "impact": "serious",
+              "help": "Elements must meet minimum color contrast ratio thresholds",
+              "nodes": 2,
+              "targets": [
+                ".text-slate-500",
+                ".opacity-50"
+              ]
+            },
+            {
+              "id": "heading-order",
+              "impact": "moderate",
+              "help": "Heading levels should only increase by one",
+              "nodes": 1,
+              "targets": [
+                ".bg-slate-800\\/50.rounded-xl.border-slate-700:nth-child(1) > .font-semibold"
+              ]
+            },
+            {
+              "id": "label",
+              "impact": "critical",
+              "help": "Form elements must have labels",
+              "nodes": 7,
+              "targets": [
+                "input[name=\"primaryColor\"][value=\"#8B5CF6\"][type=\"color\"]",
+                ".font-mono[name=\"primaryColor\"][value=\"#8B5CF6\"]",
+                "input[name=\"secondaryColor\"][value=\"#38BDF8\"][type=\"color\"]",
+                ".font-mono[name=\"secondaryColor\"][value=\"#38BDF8\"]",
+                "input[name=\"accentColor\"][value=\"#F59E0B\"][type=\"color\"]"
+              ]
+            },
+            {
+              "id": "landmark-one-main",
+              "impact": "moderate",
+              "help": "Document should have one main landmark",
+              "nodes": 1,
+              "targets": [
+                "html"
+              ]
+            },
+            {
+              "id": "region",
+              "impact": "moderate",
+              "help": "All page content should be contained by landmarks",
+              "nodes": 9,
+              "targets": [
+                ".text-slate-100",
+                ".bg-slate-800\\/50.rounded-xl.border-slate-700:nth-child(1) > .font-semibold",
+                ".bg-slate-800\\/50.rounded-xl.border-slate-700:nth-child(1) > .space-y-4 > div:nth-child(1)",
+                ".space-y-4 > div:nth-child(2)",
+                ".space-y-4 > div:nth-child(3) > .block.font-medium.mb-1"
+              ]
+            }
+          ]
+        }
+      },
+      "consoleErrors": [],
+      "skipped": null,
+      "httpStatus": 200,
+      "finalUrl": "http://localhost:3000/settings/branding",
+      "redirected": false
+    },
+    "settings-team": {
+      "key": "settings-team",
+      "route": "/settings/team",
+      "state": "auth",
+      "note": null,
+      "viewports": {
+        "320": {
+          "status": 200,
+          "title": "ProposalOS | Automated Local Business Audits",
+          "h1": [
+            "Team Management"
+          ],
+          "horizontalOverflow": false,
+          "scrollWidth": 320,
+          "innerWidth": 320,
+          "overflowers": [],
+          "technicalLeakage": false,
+          "hydrated": true,
+          "nonceAttrs": 0,
+          "inlineScripts": 2,
+          "cspBlocked": false,
+          "screenshot": "evidence-csp-bypass/screenshots/settings-team/320.png"
+        },
+        "375": {
+          "status": 200,
+          "title": "ProposalOS | Automated Local Business Audits",
+          "h1": [
+            "Team Management"
+          ],
+          "horizontalOverflow": false,
+          "scrollWidth": 375,
+          "innerWidth": 375,
+          "overflowers": [],
+          "technicalLeakage": false,
+          "hydrated": true,
+          "nonceAttrs": 0,
+          "inlineScripts": 2,
+          "cspBlocked": false,
+          "screenshot": "evidence-csp-bypass/screenshots/settings-team/375.png"
+        },
+        "768": {
+          "status": 200,
+          "title": "ProposalOS | Automated Local Business Audits",
+          "h1": [
+            "Team Management"
+          ],
+          "horizontalOverflow": false,
+          "scrollWidth": 768,
+          "innerWidth": 768,
+          "overflowers": [],
+          "technicalLeakage": false,
+          "hydrated": true,
+          "nonceAttrs": 0,
+          "inlineScripts": 2,
+          "cspBlocked": false,
+          "screenshot": "evidence-csp-bypass/screenshots/settings-team/768.png"
+        },
+        "1024": {
+          "status": 200,
+          "title": "ProposalOS | Automated Local Business Audits",
+          "h1": [
+            "Team Management"
+          ],
+          "horizontalOverflow": false,
+          "scrollWidth": 1024,
+          "innerWidth": 1024,
+          "overflowers": [],
+          "technicalLeakage": false,
+          "hydrated": true,
+          "nonceAttrs": 0,
+          "inlineScripts": 2,
+          "cspBlocked": false,
+          "screenshot": "evidence-csp-bypass/screenshots/settings-team/1024.png"
+        },
+        "1440": {
+          "status": 200,
+          "title": "ProposalOS | Automated Local Business Audits",
+          "h1": [
+            "Team Management"
+          ],
+          "horizontalOverflow": false,
+          "scrollWidth": 1440,
+          "innerWidth": 1440,
+          "overflowers": [],
+          "technicalLeakage": false,
+          "hydrated": true,
+          "nonceAttrs": 0,
+          "inlineScripts": 2,
+          "cspBlocked": false,
+          "screenshot": "evidence-csp-bypass/screenshots/settings-team/1440.png"
+        }
+      },
+      "axe": {
+        "375": {
+          "byImpact": {
+            "critical": 0,
+            "serious": 0,
+            "moderate": 2,
+            "minor": 0
+          },
+          "file": "evidence-csp-bypass/axe/settings-team-375.json",
+          "violations": [
+            {
+              "id": "landmark-one-main",
+              "impact": "moderate",
+              "help": "Document should have one main landmark",
+              "nodes": 1,
+              "targets": [
+                "html"
+              ]
+            },
+            {
+              "id": "region",
+              "impact": "moderate",
+              "help": "All page content should be contained by landmarks",
+              "nodes": 6,
+              "targets": [
+                ".mb-8.justify-between.flex > div",
+                ".border-b",
+                ".px-6.py-4.justify-between:nth-child(1) > .gap-4.flex.items-center:nth-child(1)",
+                ".px-6.py-4.justify-between:nth-child(1) > .gap-4.flex.items-center:nth-child(2) > span",
+                ".px-6.py-4.justify-between:nth-child(2) > .gap-4.flex.items-center:nth-child(1)"
+              ]
+            }
+          ]
+        },
+        "1440": {
+          "byImpact": {
+            "critical": 0,
+            "serious": 0,
+            "moderate": 2,
+            "minor": 0
+          },
+          "file": "evidence-csp-bypass/axe/settings-team-1440.json",
+          "violations": [
+            {
+              "id": "landmark-one-main",
+              "impact": "moderate",
+              "help": "Document should have one main landmark",
+              "nodes": 1,
+              "targets": [
+                "html"
+              ]
+            },
+            {
+              "id": "region",
+              "impact": "moderate",
+              "help": "All page content should be contained by landmarks",
+              "nodes": 6,
+              "targets": [
+                ".mb-8.justify-between.flex > div",
+                ".border-b",
+                ".px-6.py-4.justify-between:nth-child(1) > .gap-4.flex.items-center:nth-child(1)",
+                ".px-6.py-4.justify-between:nth-child(1) > .gap-4.flex.items-center:nth-child(2) > span",
+                ".px-6.py-4.justify-between:nth-child(2) > .gap-4.flex.items-center:nth-child(1)"
+              ]
+            }
+          ]
+        }
+      },
+      "consoleErrors": [],
+      "skipped": null,
+      "httpStatus": 200,
+      "finalUrl": "http://localhost:3000/settings/team",
+      "redirected": false
+    },
+    "pricing": {
+      "key": "pricing",
+      "route": "/pricing",
+      "state": "public",
+      "note": null,
+      "viewports": {
+        "320": {
+          "status": 200,
+          "title": "ProposalOS - AI Audit Engine for Agencies",
+          "h1": [
+            "Self-serve plans for audit-led agencies."
+          ],
+          "horizontalOverflow": false,
+          "scrollWidth": 320,
+          "innerWidth": 320,
+          "overflowers": [],
+          "technicalLeakage": false,
+          "hydrated": true,
+          "nonceAttrs": 0,
+          "inlineScripts": 2,
+          "cspBlocked": false,
+          "screenshot": "evidence-csp-bypass/screenshots/pricing/320.png"
+        },
+        "375": {
+          "status": 200,
+          "title": "ProposalOS - AI Audit Engine for Agencies",
+          "h1": [
+            "Self-serve plans for audit-led agencies."
+          ],
+          "horizontalOverflow": false,
+          "scrollWidth": 375,
+          "innerWidth": 375,
+          "overflowers": [],
+          "technicalLeakage": false,
+          "hydrated": true,
+          "nonceAttrs": 0,
+          "inlineScripts": 2,
+          "cspBlocked": false,
+          "screenshot": "evidence-csp-bypass/screenshots/pricing/375.png"
+        },
+        "768": {
+          "status": 200,
+          "title": "ProposalOS - AI Audit Engine for Agencies",
+          "h1": [
+            "Self-serve plans for audit-led agencies."
+          ],
+          "horizontalOverflow": false,
+          "scrollWidth": 768,
+          "innerWidth": 768,
+          "overflowers": [],
+          "technicalLeakage": false,
+          "hydrated": true,
+          "nonceAttrs": 0,
+          "inlineScripts": 2,
+          "cspBlocked": false,
+          "screenshot": "evidence-csp-bypass/screenshots/pricing/768.png"
+        },
+        "1024": {
+          "status": 200,
+          "title": "ProposalOS - AI Audit Engine for Agencies",
+          "h1": [
+            "Self-serve plans for audit-led agencies."
+          ],
+          "horizontalOverflow": false,
+          "scrollWidth": 1024,
+          "innerWidth": 1024,
+          "overflowers": [],
+          "technicalLeakage": false,
+          "hydrated": true,
+          "nonceAttrs": 0,
+          "inlineScripts": 2,
+          "cspBlocked": false,
+          "screenshot": "evidence-csp-bypass/screenshots/pricing/1024.png"
+        },
+        "1440": {
+          "status": 200,
+          "title": "ProposalOS - AI Audit Engine for Agencies",
+          "h1": [
+            "Self-serve plans for audit-led agencies."
+          ],
+          "horizontalOverflow": false,
+          "scrollWidth": 1440,
+          "innerWidth": 1440,
+          "overflowers": [],
+          "technicalLeakage": false,
+          "hydrated": true,
+          "nonceAttrs": 0,
+          "inlineScripts": 2,
+          "cspBlocked": false,
+          "screenshot": "evidence-csp-bypass/screenshots/pricing/1440.png"
+        }
+      },
+      "axe": {
+        "375": {
+          "byImpact": {
+            "critical": 0,
+            "serious": 1,
+            "moderate": 1,
+            "minor": 0
+          },
+          "file": "evidence-csp-bypass/axe/pricing-375.json",
+          "violations": [
+            {
+              "id": "color-contrast",
+              "impact": "serious",
+              "help": "Elements must meet minimum color contrast ratio thresholds",
+              "nodes": 10,
+              "targets": [
+                ".space-y-4 > .text-slate-500",
+                ".hover\\:text-indigo-400[href$=\"for-agencies\"]",
+                ".hover\\:text-indigo-400[href$=\"sample-report\"]",
+                ".hover\\:text-indigo-400[href$=\"api\"]",
+                "a[href$=\"blog\"]"
+              ]
+            },
+            {
+              "id": "heading-order",
+              "impact": "moderate",
+              "help": "Heading levels should only increase by one",
+              "nodes": 1,
+              "targets": [
+                ".rounded-2xl.border.border-slate-800:nth-child(1) > h3"
+              ]
+            }
+          ]
+        },
+        "1440": {
+          "byImpact": {
+            "critical": 0,
+            "serious": 1,
+            "moderate": 1,
+            "minor": 0
+          },
+          "file": "evidence-csp-bypass/axe/pricing-1440.json",
+          "violations": [
+            {
+              "id": "color-contrast",
+              "impact": "serious",
+              "help": "Elements must meet minimum color contrast ratio thresholds",
+              "nodes": 10,
+              "targets": [
+                ".space-y-4 > .text-slate-500",
+                ".hover\\:text-indigo-400[href$=\"for-agencies\"]",
+                ".hover\\:text-indigo-400[href$=\"sample-report\"]",
+                ".hover\\:text-indigo-400[href$=\"api\"]",
+                "a[href$=\"blog\"]"
+              ]
+            },
+            {
+              "id": "heading-order",
+              "impact": "moderate",
+              "help": "Heading levels should only increase by one",
+              "nodes": 1,
+              "targets": [
+                ".rounded-2xl.border.border-slate-800:nth-child(1) > h3"
+              ]
+            }
+          ]
+        }
+      },
+      "consoleErrors": [
+        {
+          "kind": "console",
+          "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+        }
+      ],
+      "skipped": null,
+      "httpStatus": 200,
+      "finalUrl": "http://localhost:3000/pricing",
+      "redirected": false
+    },
+    "free-audit": {
+      "key": "free-audit",
+      "route": "/free-audit",
+      "state": "public",
+      "note": null,
+      "viewports": {
+        "320": {
+          "status": 200,
+          "title": "ProposalOS | Automated Local Business Audits",
+          "h1": [
+            "How does your business score?"
+          ],
+          "horizontalOverflow": false,
+          "scrollWidth": 320,
+          "innerWidth": 320,
+          "overflowers": [],
+          "technicalLeakage": false,
+          "hydrated": true,
+          "nonceAttrs": 0,
+          "inlineScripts": 2,
+          "cspBlocked": false,
+          "screenshot": "evidence-csp-bypass/screenshots/free-audit/320.png"
+        },
+        "375": {
+          "status": 200,
+          "title": "ProposalOS | Automated Local Business Audits",
+          "h1": [
+            "How does your business score?"
+          ],
+          "horizontalOverflow": false,
+          "scrollWidth": 375,
+          "innerWidth": 375,
+          "overflowers": [],
+          "technicalLeakage": false,
+          "hydrated": true,
+          "nonceAttrs": 0,
+          "inlineScripts": 2,
+          "cspBlocked": false,
+          "screenshot": "evidence-csp-bypass/screenshots/free-audit/375.png"
+        },
+        "768": {
+          "status": 200,
+          "title": "ProposalOS | Automated Local Business Audits",
+          "h1": [
+            "How does your business score?"
+          ],
+          "horizontalOverflow": false,
+          "scrollWidth": 768,
+          "innerWidth": 768,
+          "overflowers": [],
+          "technicalLeakage": false,
+          "hydrated": true,
+          "nonceAttrs": 0,
+          "inlineScripts": 2,
+          "cspBlocked": false,
+          "screenshot": "evidence-csp-bypass/screenshots/free-audit/768.png"
+        },
+        "1024": {
+          "status": 200,
+          "title": "ProposalOS | Automated Local Business Audits",
+          "h1": [
+            "How does your business score?"
+          ],
+          "horizontalOverflow": false,
+          "scrollWidth": 1024,
+          "innerWidth": 1024,
+          "overflowers": [],
+          "technicalLeakage": false,
+          "hydrated": true,
+          "nonceAttrs": 0,
+          "inlineScripts": 2,
+          "cspBlocked": false,
+          "screenshot": "evidence-csp-bypass/screenshots/free-audit/1024.png"
+        },
+        "1440": {
+          "status": 200,
+          "title": "ProposalOS | Automated Local Business Audits",
+          "h1": [
+            "How does your business score?"
+          ],
+          "horizontalOverflow": false,
+          "scrollWidth": 1440,
+          "innerWidth": 1440,
+          "overflowers": [],
+          "technicalLeakage": false,
+          "hydrated": true,
+          "nonceAttrs": 0,
+          "inlineScripts": 2,
+          "cspBlocked": false,
+          "screenshot": "evidence-csp-bypass/screenshots/free-audit/1440.png"
+        }
+      },
+      "axe": {
+        "375": {
+          "byImpact": {
+            "critical": 0,
+            "serious": 1,
+            "moderate": 2,
+            "minor": 0
+          },
+          "file": "evidence-csp-bypass/axe/free-audit-375.json",
+          "violations": [
+            {
+              "id": "color-contrast",
+              "impact": "serious",
+              "help": "Elements must meet minimum color contrast ratio thresholds",
+              "nodes": 1,
+              "targets": [
+                ".mt-4"
+              ]
+            },
+            {
+              "id": "landmark-one-main",
+              "impact": "moderate",
+              "help": "Document should have one main landmark",
+              "nodes": 1,
+              "targets": [
+                "html"
+              ]
+            },
+            {
+              "id": "region",
+              "impact": "moderate",
+              "help": "All page content should be contained by landmarks",
+              "nodes": 5,
+              "targets": [
+                "h1",
+                ".text-slate-400",
+                "input[type=\"text\"]",
+                "input[type=\"url\"]",
+                ".mt-4"
+              ]
+            }
+          ]
+        },
+        "1440": {
+          "byImpact": {
+            "critical": 0,
+            "serious": 1,
+            "moderate": 2,
+            "minor": 0
+          },
+          "file": "evidence-csp-bypass/axe/free-audit-1440.json",
+          "violations": [
+            {
+              "id": "color-contrast",
+              "impact": "serious",
+              "help": "Elements must meet minimum color contrast ratio thresholds",
+              "nodes": 1,
+              "targets": [
+                ".mt-4"
+              ]
+            },
+            {
+              "id": "landmark-one-main",
+              "impact": "moderate",
+              "help": "Document should have one main landmark",
+              "nodes": 1,
+              "targets": [
+                "html"
+              ]
+            },
+            {
+              "id": "region",
+              "impact": "moderate",
+              "help": "All page content should be contained by landmarks",
+              "nodes": 5,
+              "targets": [
+                "h1",
+                ".text-slate-400",
+                "input[type=\"text\"]",
+                "input[type=\"url\"]",
+                ".mt-4"
+              ]
+            }
+          ]
+        }
+      },
+      "consoleErrors": [],
+      "skipped": null,
+      "httpStatus": 200,
+      "finalUrl": "http://localhost:3000/free-audit",
+      "redirected": false
+    },
+    "public-proposal": {
+      "key": "public-proposal",
+      "route": null,
+      "state": "public",
+      "note": null,
+      "viewports": {},
+      "axe": {},
+      "consoleErrors": [],
+      "skipped": "no proposal seeded (Proposal count=0)"
+    }
+  },
+  "checks": {
+    "unauthRedirect": {
+      "pass": true,
+      "finalUrl": "http://localhost:3000/login?callbackUrl=%2Fdashboard",
+      "callbackUrl": "/dashboard",
+      "redirectChain": [
+        "http://localhost:3000/dashboard -> 307"
+      ],
+      "finalStatus": 200
+    },
+    "invalidLogin": {
+      "pass": true,
+      "errorText": "Invalid email or password",
+      "stillOnLogin": true,
+      "errorElement": {
+        "role": null,
+        "ariaLive": null,
+        "text": "Invalid email or password"
+      },
+      "note": "Error container has no role=\"alert\"/aria-live — not announced to screen readers",
+      "consoleErrors": []
+    },
+    "keyboardLogin": {
+      "pass": true,
+      "tabOrderOk": true,
+      "tabTrail": [
+        {
+          "tag": "input",
+          "name": "email",
+          "text": "",
+          "href": null,
+          "role": null,
+          "inNav": false,
+          "outline": "rgba(0, 0, 0, 0) solid 2px",
+          "boxShadow": "rgb(255, 255, 255) 0px 0px 0px 0px, rgb(59, 130, 246) 0px 0px 0px 2px, rgba(0, 0, 0, 0) 0px 0px 0px 0px",
+          "focusVisible": true,
+          "onScreen": true
+        },
+        {
+          "tag": "input",
+          "name": "password",
+          "text": "",
+          "href": null,
+          "role": null,
+          "inNav": false,
+          "outline": "rgba(0, 0, 0, 0) solid 2px",
+          "boxShadow": "rgb(255, 255, 255) 0px 0px 0px 0px, rgb(59, 130, 246) 0px 0px 0px 2px, rgba(0, 0, 0, 0) 0px 0px 0px 0px",
+          "focusVisible": true,
+          "onScreen": true
+        },
+        {
+          "tag": "button",
+          "name": "",
+          "text": "Sign In",
+          "href": null,
+          "role": null,
+          "inNav": false,
+          "outline": "rgb(89, 89, 89) auto 1px",
+          "boxShadow": "none",
+          "focusVisible": true,
+          "onScreen": true
+        },
+        {
+          "tag": "button",
+          "name": "",
+          "text": "Google",
+          "href": null,
+          "role": null,
+          "inNav": false,
+          "outline": "rgb(213, 213, 213) auto 2px",
+          "boxShadow": "none",
+          "focusVisible": true,
+          "onScreen": true
+        },
+        {
+          "tag": "a",
+          "name": "",
+          "text": "Create an account",
+          "href": "/register",
+          "role": null,
+          "inNav": false,
+          "outline": "rgb(16, 16, 16) auto 1px",
+          "boxShadow": "none",
+          "focusVisible": true,
+          "onScreen": true
+        }
+      ],
+      "focusedAfterTabFromEmail": "password",
+      "enterSubmitted": true,
+      "landedUrl": "http://localhost:3000/dashboard",
+      "nativeGetSubmitLeak": false,
+      "note": null,
+      "focusVisibleOnControls": [
+        {
+          "el": "input[email]",
+          "focusVisible": true,
+          "outline": "rgba(0, 0, 0, 0) solid 2px",
+          "boxShadow": "rgb(255, 255, 255) 0px 0px 0px 0px, rgb(59, 130, 246) 0px 0px 0px 2px, rgba(0, 0, 0, 0) 0px 0px 0px 0px"
+        },
+        {
+          "el": "input[password]",
+          "focusVisible": true,
+          "outline": "rgba(0, 0, 0, 0) solid 2px",
+          "boxShadow": "rgb(255, 255, 255) 0px 0px 0px 0px, rgb(59, 130, 246) 0px 0px 0px 2px, rgba(0, 0, 0, 0) 0px 0px 0px 0px"
+        },
+        {
+          "el": "button[Sign In]",
+          "focusVisible": true,
+          "outline": "rgb(89, 89, 89) auto 1px",
+          "boxShadow": "none"
+        },
+        {
+          "el": "button[Google]",
+          "focusVisible": true,
+          "outline": "rgb(213, 213, 213) auto 2px",
+          "boxShadow": "none"
+        },
+        {
+          "el": "a[Create an account]",
+          "focusVisible": true,
+          "outline": "rgb(16, 16, 16) auto 1px",
+          "boxShadow": "none"
+        }
+      ]
+    },
+    "login": {
+      "pass": true,
+      "formLogin": {
+        "pass": true,
+        "landedUrl": "http://localhost:3000/dashboard"
+      },
+      "apiLoginFallback": null,
+      "method": "browser form",
+      "sessionCookie": [
+        "__Host-next-auth.session-token (secure=true, httpOnly=true, sameSite=Strict)"
+      ]
+    },
+    "keyboardDashboard": {
+      "pass": false,
+      "reachedNav": false,
+      "firstNavAtTab": null,
+      "landmarks": {
+        "nav": 0,
+        "main": 0,
+        "skipLink": false,
+        "navLinks": []
+      },
+      "tabsSampled": 25,
+      "focusVisibleCount": 14,
+      "focusVisibleRatio": 0.56,
+      "trail": [
+        {
+          "el": "button",
+          "text": "Retry dashboard",
+          "inNav": false,
+          "focusVisible": true,
+          "outline": "rgb(16, 16, 16) auto 1px",
+          "boxShadow": "none"
+        },
+        {
+          "el": "body",
+          "text": "requestAnimationFrame(function(){$RT=performance.now()});(se",
+          "inNav": false,
+          "focusVisible": false,
+          "outline": "rgb(255, 255, 255) none 3px",
+          "boxShadow": "none"
+        },
+        {
+          "el": "button",
+          "text": "Retry dashboard",
+          "inNav": false,
+          "focusVisible": true,
+          "outline": "rgb(16, 16, 16) auto 1px",
+          "boxShadow": "none"
+        },
+        {
+          "el": "body",
+          "text": "requestAnimationFrame(function(){$RT=performance.now()});(se",
+          "inNav": false,
+          "focusVisible": false,
+          "outline": "rgb(255, 255, 255) none 3px",
+          "boxShadow": "none"
+        },
+        {
+          "el": "button",
+          "text": "Retry dashboard",
+          "inNav": false,
+          "focusVisible": true,
+          "outline": "rgb(16, 16, 16) auto 1px",
+          "boxShadow": "none"
+        },
+        {
+          "el": "body",
+          "text": "requestAnimationFrame(function(){$RT=performance.now()});(se",
+          "inNav": false,
+          "focusVisible": false,
+          "outline": "rgb(255, 255, 255) none 3px",
+          "boxShadow": "none"
+        },
+        {
+          "el": "button",
+          "text": "Retry dashboard",
+          "inNav": false,
+          "focusVisible": true,
+          "outline": "rgb(16, 16, 16) auto 1px",
+          "boxShadow": "none"
+        },
+        {
+          "el": "body",
+          "text": "requestAnimationFrame(function(){$RT=performance.now()});(se",
+          "inNav": false,
+          "focusVisible": false,
+          "outline": "rgb(255, 255, 255) none 3px",
+          "boxShadow": "none"
+        },
+        {
+          "el": "button",
+          "text": "Retry dashboard",
+          "inNav": false,
+          "focusVisible": true,
+          "outline": "rgb(16, 16, 16) auto 1px",
+          "boxShadow": "none"
+        },
+        {
+          "el": "button",
+          "text": "Retry dashboard",
+          "inNav": false,
+          "focusVisible": true,
+          "outline": "rgb(16, 16, 16) auto 1px",
+          "boxShadow": "none"
+        },
+        {
+          "el": "body",
+          "text": "requestAnimationFrame(function(){$RT=performance.now()});(se",
+          "inNav": false,
+          "focusVisible": false,
+          "outline": "rgb(255, 255, 255) none 3px",
+          "boxShadow": "none"
+        },
+        {
+          "el": "button",
+          "text": "Retry dashboard",
+          "inNav": false,
+          "focusVisible": true,
+          "outline": "rgb(16, 16, 16) auto 1px",
+          "boxShadow": "none"
+        },
+        {
+          "el": "body",
+          "text": "requestAnimationFrame(function(){$RT=performance.now()});(se",
+          "inNav": false,
+          "focusVisible": false,
+          "outline": "rgb(255, 255, 255) none 3px",
+          "boxShadow": "none"
+        },
+        {
+          "el": "button",
+          "text": "Retry dashboard",
+          "inNav": false,
+          "focusVisible": true,
+          "outline": "rgb(16, 16, 16) auto 1px",
+          "boxShadow": "none"
+        },
+        {
+          "el": "body",
+          "text": "requestAnimationFrame(function(){$RT=performance.now()});(se",
+          "inNav": false,
+          "focusVisible": false,
+          "outline": "rgb(255, 255, 255) none 3px",
+          "boxShadow": "none"
+        },
+        {
+          "el": "button",
+          "text": "Retry dashboard",
+          "inNav": false,
+          "focusVisible": true,
+          "outline": "rgb(16, 16, 16) auto 1px",
+          "boxShadow": "none"
+        },
+        {
+          "el": "body",
+          "text": "requestAnimationFrame(function(){$RT=performance.now()});(se",
+          "inNav": false,
+          "focusVisible": false,
+          "outline": "rgb(255, 255, 255) none 3px",
+          "boxShadow": "none"
+        },
+        {
+          "el": "button",
+          "text": "Retry dashboard",
+          "inNav": false,
+          "focusVisible": true,
+          "outline": "rgb(16, 16, 16) auto 1px",
+          "boxShadow": "none"
+        },
+        {
+          "el": "button",
+          "text": "Retry dashboard",
+          "inNav": false,
+          "focusVisible": true,
+          "outline": "rgb(16, 16, 16) auto 1px",
+          "boxShadow": "none"
+        },
+        {
+          "el": "body",
+          "text": "requestAnimationFrame(function(){$RT=performance.now()});(se",
+          "inNav": false,
+          "focusVisible": false,
+          "outline": "rgb(255, 255, 255) none 3px",
+          "boxShadow": "none"
+        },
+        {
+          "el": "button",
+          "text": "Retry dashboard",
+          "inNav": false,
+          "focusVisible": true,
+          "outline": "rgb(16, 16, 16) auto 1px",
+          "boxShadow": "none"
+        },
+        {
+          "el": "body",
+          "text": "requestAnimationFrame(function(){$RT=performance.now()});(se",
+          "inNav": false,
+          "focusVisible": false,
+          "outline": "rgb(255, 255, 255) none 3px",
+          "boxShadow": "none"
+        },
+        {
+          "el": "button",
+          "text": "Retry dashboard",
+          "inNav": false,
+          "focusVisible": true,
+          "outline": "rgb(16, 16, 16) auto 1px",
+          "boxShadow": "none"
+        },
+        {
+          "el": "body",
+          "text": "requestAnimationFrame(function(){$RT=performance.now()});(se",
+          "inNav": false,
+          "focusVisible": false,
+          "outline": "rgb(255, 255, 255) none 3px",
+          "boxShadow": "none"
+        },
+        {
+          "el": "button",
+          "text": "Retry dashboard",
+          "inNav": false,
+          "focusVisible": true,
+          "outline": "rgb(16, 16, 16) auto 1px",
+          "boxShadow": "none"
+        }
+      ]
+    }
+  },
+  "screenshotsCaptured": 63,
+  "axeTotals": {
+    "critical": 4,
+    "serious": 14,
+    "moderate": 50,
+    "minor": 0
+  },
+  "scriptErrors": []
+}

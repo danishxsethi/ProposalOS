@@ -55,8 +55,14 @@ export default NextAuth(authConfig).auth((req) => {
     !hostname.endsWith('.vercel.app') &&
     !hostname.includes('localhost');
 
-  // Generate CSP nonce for this request
+  // Generate CSP nonce for this request. Next.js reads the nonce from the
+  // *request* Content-Security-Policy header and stamps it onto every framework
+  // bootstrap/inline script, so it must be set on requestHeaders (not only on the
+  // response) or hydration is blocked and every form degrades to a native GET.
   const nonce = generateNonce();
+  const cspHeader = buildCspHeader(nonce);
+  requestHeaders.set('Content-Security-Policy', cspHeader);
+  requestHeaders.set('x-nonce', nonce);
 
   // Create response
   const response = NextResponse.next({
@@ -72,8 +78,7 @@ export default NextAuth(authConfig).auth((req) => {
   // SECURITY HEADERS
   // ==========================================
 
-  // Content Security Policy with nonce
-  const cspHeader = buildCspHeader(nonce);
+  // Content Security Policy with nonce (same value as the request header above)
   response.headers.set('Content-Security-Policy', cspHeader);
   
   // Store nonce for use in components (via header for server components)

@@ -11,6 +11,10 @@ if (
   validateEnv();
 }
 
+// Per-request CSP nonce (middleware) requires dynamic rendering; static
+// prerender would ship nonce-less scripts that the browser then blocks.
+export const dynamic = 'force-dynamic';
+
 export const metadata: Metadata = {
   title: 'ProposalOS | Automated Local Business Audits',
   description: 'Generate data-driven proposals for local businesses in minutes, not hours.',
