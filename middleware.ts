@@ -8,6 +8,30 @@ import { resolveTracingHeaders } from '@/lib/observability/ids';
 
 export default NextAuth(authConfig).auth((req) => {
   const url = req.nextUrl;
+
+  // Auth.js v5: when `.auth(handler)` wraps a custom middleware, a `false` from
+  // callbacks.authorized is NOT turned into a redirect — the handler runs anyway.
+  // Enforce the protected-route contract explicitly here so unauthenticated
+  // visitors never land on a dead-end "Auth required" page.
+  const isLoggedIn = !!req.auth?.user;
+  const isProtectedPage =
+    url.pathname.startsWith('/dashboard') ||
+    url.pathname.startsWith('/onboarding') ||
+    url.pathname.startsWith('/new-audit') ||
+    url.pathname.startsWith('/proposals') ||
+    url.pathname.startsWith('/audits') ||
+    url.pathname.startsWith('/schedules') ||
+    url.pathname.startsWith('/settings');
+  const isAuthPage = url.pathname.startsWith('/login') || url.pathname.startsWith('/register');
+  if (isProtectedPage && !isLoggedIn) {
+    const signIn = new URL('/login', url);
+    signIn.searchParams.set('callbackUrl', url.pathname + url.search);
+    return NextResponse.redirect(signIn);
+  }
+  if (isAuthPage && isLoggedIn) {
+    return NextResponse.redirect(new URL('/dashboard', url));
+  }
+
   const hostname = req.headers.get('host') || '';
   const origin = req.headers.get('origin');
   const tracing = resolveTracingHeaders({
