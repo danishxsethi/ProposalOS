@@ -5,6 +5,7 @@
  * Automatically falls back to alternative providers on failure.
  */
 
+import { GEMINI_FLASH, GEMINI_PRO } from '@/lib/config/models';
 import { logger } from '@/lib/logger';
 
 import {
@@ -316,13 +317,13 @@ export class ProviderRegistry {
     switch (provider) {
       case LLMProvider.GOOGLE_AI:
       case LLMProvider.GOOGLE_VERTEX:
-        return process.env.LLM_MODEL_FLASH || 'gemini-2.0-flash';
+        return process.env.LLM_MODEL_FLASH || GEMINI_FLASH;
       case LLMProvider.OPENAI:
         return 'gpt-3.5-turbo';
       case LLMProvider.ANTHROPIC:
         return 'claude-3-haiku-20240307';
       default:
-        return 'gemini-2.0-flash';
+        return GEMINI_FLASH;
     }
   }
 

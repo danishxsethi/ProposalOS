@@ -17,6 +17,7 @@ import crypto from 'crypto';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
 import { FEATURE_FLAGS } from '@/lib/config/feature-flags';
+import { GEMINI_PRO } from '@/lib/config/models';
 import { logger } from '@/lib/logger';
 import { MetricsRecorder } from '@/lib/observability/MetricsRecorder';
 import { PiiScrubber } from '@/lib/security/piiScrubber';
@@ -135,12 +136,13 @@ class CircuitBreaker {
 /** Context windows for supported models (tokens). */
 const MODEL_CONTEXT_WINDOWS: Record<string, number> = {
   default: 1_000_000,
-  'gemini-2.0-flash': 1_000_000,
-  'gemini-2.0-pro': 1_000_000,
-  'gemini-2.0-pro-exp-01-21': 1_000_000,
-  'gemini-1.5-pro': 1_000_000,
-  'gemini-1.5-flash': 1_000_000,
-  'gemini-3.1-pro': 1_000_000,
+  'gemini-2.5-flash': 1_048_576,
+  'gemini-2.5-pro': 1_048_576,
+  'gemini-2.5-flash-lite': 1_048_576,
+  'gemini-3': 1_048_576,
+  // retired generations kept so historical telemetry/env overrides still resolve
+  'gemini-2.0': 1_000_000,
+  'gemini-1.5': 1_000_000,
 };
 
 function getContextWindow(model: string): number {
@@ -331,7 +333,7 @@ export async function generateWithGemini(
     const bucket = hashInt % 100;
 
     if (bucket < FEATURE_FLAGS.GEMINI_31_PRO_TRAFFIC_PCT) {
-      targetModel = 'gemini-3.1-pro';
+      targetModel = GEMINI_PRO;
     }
   }
 

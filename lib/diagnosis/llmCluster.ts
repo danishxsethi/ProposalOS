@@ -3,6 +3,7 @@ import { z } from 'zod';
 
 import { validateCustomerClaim } from '@/lib/claims/claimContract';
 import { MODEL_CONFIG } from '@/lib/config/models';
+import { GEMINI_FLASH, GEMINI_PRO } from '@/lib/config/models';
 import { getThinkingBudgetForNode } from '@/lib/config/thinking-budgets';
 import { CostTracker } from '@/lib/costs/costTracker';
 import { generateWithGemini } from '@/lib/llm/provider';
@@ -206,7 +207,7 @@ ${JSON.stringify(preClustersJson)}
     },
     (result) => {
       // Simple token usage logging not implemented for Flash in this wrapper yet
-      return { prompt: 0, completion: 0, model: 'gemini-2.0-flash' };
+      return { prompt: 0, completion: 0, model: GEMINI_FLASH };
     }
   );
 }

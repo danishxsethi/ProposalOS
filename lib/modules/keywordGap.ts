@@ -1,6 +1,7 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
 import { withModuleCache } from '@/lib/cache/moduleCache';
+import { GEMINI_FLASH, GEMINI_PRO } from '@/lib/config/models';
 import { CostTracker } from '@/lib/costs/costTracker';
 import { logger } from '@/lib/logger';
 import { withProviderResilience } from '@/lib/resilience/withProviderResilience';
@@ -106,7 +107,7 @@ async function generateKeywordList(
   tracker?: CostTracker
 ): Promise<Keyword[]> {
   const genAI = new GoogleGenerativeAI(process.env.GOOGLE_AI_API_KEY!);
-  const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+  const model = genAI.getGenerativeModel({ model: GEMINI_FLASH });
 
   tracker?.addApiCall('GEMINI_KEYWORD_GEN');
 

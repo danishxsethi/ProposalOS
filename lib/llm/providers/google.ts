@@ -5,6 +5,7 @@
  * Wraps the existing generateWithGemini function for provider abstraction.
  */
 
+import { GEMINI_FLASH, GEMINI_FLASH_LITE, GEMINI_PRO } from '@/lib/config/models';
 import { logger } from '@/lib/logger';
 
 import { MultimodalContent, generateWithGemini as originalGenerateWithGemini } from '../provider';
@@ -20,33 +21,26 @@ import {
 
 // Google model configurations
 const GOOGLE_MODELS: Record<string, ProviderModel> = {
-  'gemini-2.0-flash': {
+  [GEMINI_FLASH]: {
     provider: LLMProvider.GOOGLE_AI,
-    modelName: 'gemini-2.0-flash',
-    contextWindow: 1000000,
+    modelName: GEMINI_FLASH,
+    contextWindow: 1048576,
+    inputCostPer1k: 0.0003,
+    outputCostPer1k: 0.0025,
+  },
+  [GEMINI_PRO]: {
+    provider: LLMProvider.GOOGLE_AI,
+    modelName: GEMINI_PRO,
+    contextWindow: 1048576,
+    inputCostPer1k: 0.00125,
+    outputCostPer1k: 0.01,
+  },
+  [GEMINI_FLASH_LITE]: {
+    provider: LLMProvider.GOOGLE_AI,
+    modelName: GEMINI_FLASH_LITE,
+    contextWindow: 1048576,
     inputCostPer1k: 0.0001,
-    outputCostPer1k: 0.0003,
-  },
-  'gemini-2.0-pro': {
-    provider: LLMProvider.GOOGLE_AI,
-    modelName: 'gemini-2.0-pro',
-    contextWindow: 1000000,
-    inputCostPer1k: 0.00125,
-    outputCostPer1k: 0.00375,
-  },
-  'gemini-1.5-pro': {
-    provider: LLMProvider.GOOGLE_AI,
-    modelName: 'gemini-1.5-pro',
-    contextWindow: 1000000,
-    inputCostPer1k: 0.00125,
-    outputCostPer1k: 0.00375,
-  },
-  'gemini-1.5-flash': {
-    provider: LLMProvider.GOOGLE_AI,
-    modelName: 'gemini-1.5-flash',
-    contextWindow: 1000000,
-    inputCostPer1k: 0.000075,
-    outputCostPer1k: 0.0003,
+    outputCostPer1k: 0.0004,
   },
 };
 
@@ -58,7 +52,7 @@ export class GoogleProvider implements LLMProviderInterface {
   }
 
   getModelInfo(modelName: string): ProviderModel {
-    return GOOGLE_MODELS[modelName] ?? GOOGLE_MODELS['gemini-2.0-flash']!;
+    return GOOGLE_MODELS[modelName] ?? GOOGLE_MODELS[GEMINI_FLASH]!;
   }
 
   async generateContent(options: ProviderCallOptions): Promise<ProviderResponse> {

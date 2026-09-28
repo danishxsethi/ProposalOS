@@ -1,5 +1,6 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
+import { GEMINI_FLASH, GEMINI_PRO } from '@/lib/config/models';
 import { logger } from '@/lib/logger';
 
 import { getGenerator } from './generators';
@@ -102,7 +103,7 @@ Provide concise, numbered steps that a non-technical person can follow.`;
     }
 
     const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    const model = genAI.getGenerativeModel({ model: GEMINI_FLASH });
     const result = await model.generateContent(prompt);
     const response = result.response.text();
 

@@ -1,5 +1,6 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
+import { GEMINI_FLASH, GEMINI_PRO } from '@/lib/config/models';
 import { CostTracker } from '@/lib/costs/costTracker';
 import { logger } from '@/lib/logger';
 
@@ -155,7 +156,7 @@ async function generateStrategicAnalysis(
   tracker?: CostTracker
 ): Promise<StrategicAnalysis> {
   const genAI = new GoogleGenerativeAI(process.env.GOOGLE_AI_API_KEY!);
-  const model = genAI.getGenerativeModel({ model: 'gemini-1.5-pro' });
+  const model = genAI.getGenerativeModel({ model: GEMINI_PRO });
 
   tracker?.addApiCall('GEMINI_STRATEGY');
 

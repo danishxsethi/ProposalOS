@@ -1,6 +1,7 @@
 import { VertexAI } from '@google-cloud/vertexai';
 import { RunTree } from 'langsmith';
 
+import { GEMINI_FLASH, GEMINI_PRO } from '@/lib/config/models';
 import { CostTracker } from '@/lib/costs/costTracker';
 import { logger } from '@/lib/logger';
 import { traceLlmCall } from '@/lib/tracing';
@@ -72,7 +73,7 @@ export async function runReputationModule(
 
     const vertexAI = getVertexAI();
     const model = vertexAI.getGenerativeModel({
-      model: 'gemini-2.0-flash', // Match diagnosis pipeline (llmCluster)
+      model: GEMINI_FLASH, // Match diagnosis pipeline (llmCluster)
       generationConfig: {
         temperature: 0,
         maxOutputTokens: 2048,
@@ -181,7 +182,7 @@ Return JSON in this exact format:
         // which is internal to the `traceLlmCall` closure above. Cost is already
         // tracked via `tracker?.addLlmCall(...)` (fixed estimate) at call start;
         // this callback only supplies the tracing metadata `traceLlmCall` expects.
-        return { prompt: 0, completion: 0, model: 'gemini-2.0-flash' };
+        return { prompt: 0, completion: 0, model: GEMINI_FLASH };
       }
     );
   } catch (error) {

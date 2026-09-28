@@ -2,6 +2,7 @@
  * Cold email generation pipeline — personalized outreach from audit data.
  * Uses Gemini to generate 3 variants, scores them, rejects <70.
  */
+import { GEMINI_FLASH, GEMINI_PRO } from '@/lib/config/models';
 import { type EmailScoreBreakdown, isEmailAcceptable, scoreEmail } from '@/lib/email/score';
 import { fillEmailTemplate, getEmailTemplate } from '@/lib/email-templates';
 import { generateWithGemini } from '@/lib/llm/provider';
@@ -149,7 +150,7 @@ Return JSON only:
   ]
 }`;
 
-  const { text } = await generateWithGemini('gemini-1.5-flash', prompt, {
+  const { text } = await generateWithGemini(GEMINI_FLASH, prompt, {
     temperature: 0.7,
     maxOutputTokens: 1024,
   });
@@ -192,7 +193,7 @@ Return JSON only:
     attempts < MAX_REGENERATE_ATTEMPTS &&
     results.every((r) => !isEmailAcceptable(r.breakdown))
   ) {
-    const { text: retryText } = await generateWithGemini('gemini-1.5-flash', prompt, {
+    const { text: retryText } = await generateWithGemini(GEMINI_FLASH, prompt, {
       temperature: 0.8,
       maxOutputTokens: 1024,
     });

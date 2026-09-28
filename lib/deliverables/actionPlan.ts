@@ -1,6 +1,7 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { traceable } from 'langsmith/traceable';
 
+import { GEMINI_FLASH, GEMINI_PRO } from '@/lib/config/models';
 import { CostTracker } from '@/lib/costs/costTracker';
 import { logger } from '@/lib/logger';
 import { Finding } from '@/lib/modules/types';
@@ -48,7 +49,7 @@ export async function generateActionPlan(
   }
 
   const genAI = new GoogleGenerativeAI(process.env.GOOGLE_AI_API_KEY);
-  const model = genAI.getGenerativeModel({ model: 'gemini-1.5-pro' }); // Pro for complex logic
+  const model = genAI.getGenerativeModel({ model: GEMINI_PRO }); // Pro for complex logic
 
   tracker?.addApiCall('GEMINI_ACTION_PLAN');
 

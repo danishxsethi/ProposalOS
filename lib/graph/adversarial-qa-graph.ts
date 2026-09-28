@@ -3,13 +3,14 @@ import { Annotation, StateGraph } from '@langchain/langgraph';
 import { Finding } from '@prisma/client';
 import { z } from 'zod';
 
+import { GEMINI_FLASH, GEMINI_PRO } from '@/lib/config/models';
 import { CostTracker } from '@/lib/costs/costTracker';
 import { scoreConfidence, softenLanguage } from '@/lib/delivery/confidenceScorer';
 import { logger } from '@/lib/logger';
 
 // P1-1 fix: Model resolved from env var — no more hardcoded experimental model name.
-// Set ADVERSARIAL_QA_MODEL in .env (default: gemini-2.0-flash — stable + cost-tracked).
-const ADVERSARIAL_QA_MODEL = process.env.ADVERSARIAL_QA_MODEL ?? 'gemini-2.0-flash';
+// Set ADVERSARIAL_QA_MODEL in .env (default: GEMINI_FLASH — stable + cost-tracked).
+const ADVERSARIAL_QA_MODEL = process.env.ADVERSARIAL_QA_MODEL ?? GEMINI_FLASH;
 
 export interface HallucinationFlag {
   claim: string;

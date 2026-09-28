@@ -3,6 +3,7 @@ import path from 'path';
 
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
+import { GEMINI_FLASH, GEMINI_PRO } from '@/lib/config/models';
 import { logger } from '@/lib/logger';
 import { Finding } from '@/lib/modules/types';
 
@@ -48,7 +49,7 @@ export async function generateConsultingNarrative(
   }
 
   const genAI = new GoogleGenerativeAI(apiKey);
-  const model = genAI.getGenerativeModel({ model: 'gemini-1.5-pro' }); // Pro for quality
+  const model = genAI.getGenerativeModel({ model: GEMINI_PRO }); // Pro for quality
 
   // Generate executive overview
   const executiveOverview = await generateExecutiveOverview(model, input);
