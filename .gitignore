@@ -107,3 +107,7 @@ lib/raos/
 
 # Generated batch audit reports
 /audit/reports/
+
+# harness cruft (never commit; regenerated per run)
+scripts/_proposalSmoke.ts
+scripts/_freshProposal.ts
