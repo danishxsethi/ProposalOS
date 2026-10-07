@@ -1,3 +1,5 @@
+import { z } from 'zod';
+
 import { OrganizationSegment } from './types';
 
 // Fixed pricing tiers — distinct positioning, Growth as recommended
@@ -99,6 +101,26 @@ export interface DynamicPricingInput {
   segment?: OrganizationSegment;
 }
 
+const DynamicPricingInputSchema = z
+  .object({
+    industry: z.string().trim().max(100).nullable(),
+    businessSize: z.enum(['small', 'medium', 'large', 'enterprise', 'unknown']).optional(),
+    employeeCount: z.number().int().nonnegative().max(1_000_000).optional(),
+    revenue: z.enum(['0-100k', '100k-500k', '500k-1m', '1m-5m', '5m+', 'unknown']).optional(),
+    location: z.string().trim().max(200).optional(),
+    segment: z
+      .enum([
+        'smb_local',
+        'nonprofit',
+        'technical_community',
+        'enterprise',
+        'healthcare',
+        'baseline_unknown',
+      ])
+      .optional(),
+  })
+  .strict();
+
 /**
  * Calculate dynamic pricing based on industry, business size, and market factors
  * Floors/Ceilings enforced:
@@ -107,7 +129,8 @@ export interface DynamicPricingInput {
  * Premium: $1997-$4997
  */
 export function getDynamicPricing(input: DynamicPricingInput): ProposalPricingTiers {
-  const { industry, businessSize, employeeCount, revenue, location, segment } = input;
+  const { industry, businessSize, employeeCount, revenue, location, segment } =
+    DynamicPricingInputSchema.parse(input);
 
   // Custom Industry Multipliers from Requirements
   const customIndustryMultipliers: Record<string, number> = {
@@ -193,9 +216,6 @@ export function getDynamicPricing(input: DynamicPricingInput): ProposalPricingTi
     premium: [1997, 4997],
   };
 
-  // Calculate final prices and clamp to boundaries, rounding to nearest $10
-  const roundToNearest10 = (val: number) => Math.round(val / 10) * 10 - 3; // e.g. 500 -> 497
-
   const calcBoundedPrice = (base: number, [min, max]: [number, number]) => {
     let raw = base * multiplier;
     raw = Math.max(min, Math.min(raw, max));
@@ -262,3 +282,19 @@ export function getIndustryPricing(input?: string | null | DynamicPricingInput):
 }
 
 export const getPricing = getIndustryPricing;
+
+const DiscountInputSchema = z
+  .object({
+    price: z.number().finite().nonnegative(),
+    discountPercent: z.number().finite().min(0).max(100),
+    authorizedMaxPercent: z.number().finite().min(0).max(100),
+  })
+  .strict();
+
+export function applyAuthorizedDiscount(input: z.input<typeof DiscountInputSchema>): number {
+  const parsed = DiscountInputSchema.parse(input);
+  if (parsed.discountPercent > parsed.authorizedMaxPercent) {
+    throw new Error('Discount exceeds the authorized maximum');
+  }
+  return Math.round(parsed.price * (1 - parsed.discountPercent / 100) * 100) / 100;
+}

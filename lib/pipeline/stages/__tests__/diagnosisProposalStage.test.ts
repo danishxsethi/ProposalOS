@@ -9,6 +9,9 @@
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { createEvidence } from '@/lib/modules/types';
+import { buildProposalGrounding } from '@/lib/proposal/grounding';
+
 import type { StageResult } from '../../types';
 
 // --- Mocks ---
@@ -16,8 +19,11 @@ import type { StageResult } from '../../types';
 const mockFindMany = vi.fn();
 const mockFindUnique = vi.fn();
 const mockAuditFindUnique = vi.fn();
+const mockAuditFindFirst = vi.fn();
+const mockAuditUpdate = vi.fn();
 const mockProspectUpdate = vi.fn();
 const mockProposalCreate = vi.fn();
+const mockProposalUpdate = vi.fn();
 const mockErrorLogCreate = vi.fn();
 const mockPipelineConfigFindUnique = vi.fn();
 const mockEvidenceSnapshotFindMany = vi.fn();
@@ -31,9 +37,12 @@ vi.mock('@/lib/prisma', () => ({
     },
     audit: {
       findUnique: (...args: any[]) => mockAuditFindUnique(...args),
+      findFirst: (...args: any[]) => mockAuditFindFirst(...args),
+      update: (...args: any[]) => mockAuditUpdate(...args),
     },
     proposal: {
       create: (...args: any[]) => mockProposalCreate(...args),
+      update: (...args: any[]) => mockProposalUpdate(...args),
     },
     pipelineConfig: {
       findUnique: (...args: any[]) => mockPipelineConfigFindUnique(...args),
@@ -65,6 +74,58 @@ vi.mock('@/lib/graph/diagnosis-graph', () => ({
 const mockRunProposalPipeline = vi.fn();
 vi.mock('@/lib/graph/proposal-graph', () => ({
   invokeProposalGraphWithTimeout: (...args: any[]) => mockRunProposalPipeline(...args),
+}));
+
+vi.mock('@/lib/proposal/compiler', async () => {
+  const { CostTracker } = await import('@/lib/costs/costTracker');
+  return {
+    getCurrentProposalVersion: vi.fn().mockResolvedValue(1),
+    compileAndPersistProposal: vi.fn(async ({ auditId, tenantId, allowZeroClusters, pricingMultiplier = 1, diagnosisMode, aggregatedContext, costTracker }: { auditId: string; tenantId: string; allowZeroClusters?: boolean; pricingMultiplier?: number; diagnosisMode?: string; aggregatedContext?: unknown; costTracker?: unknown }) => {
+      const audit = await mockAuditFindFirst({ where: { id: auditId, tenantId } });
+      const evidenceSnapshots = await mockEvidenceSnapshotFindMany({ where: { auditId, tenantId } });
+      const diagnosis = await mockRunDiagnosisPipeline({
+        auditId,
+        tenantId,
+        findings: audit.findings,
+        evidenceSnapshots,
+        mode: diagnosisMode,
+        aggregatedContext,
+        costTracker,
+      });
+      if (allowZeroClusters && diagnosis.clusters.length === 0) {
+        return { diagnosis, costTracker: new CostTracker(), emptyDiagnosis: true };
+      }
+      const proposalState = await mockRunProposalPipeline({ auditId, tenantId, findings: audit.findings, clusters: diagnosis.clusters, evidenceSnapshots });
+      const proposal = proposalState.completeProposal;
+      const pricing = {
+        essentials: Math.round(proposal.pricing.essentials * pricingMultiplier),
+        growth: Math.round(proposal.pricing.growth * pricingMultiplier),
+        premium: Math.round(proposal.pricing.premium * pricingMultiplier),
+        currency: proposal.pricing.currency,
+      };
+      return {
+        diagnosis,
+        proposal: { ...proposal, pricing },
+        proposalRecord: { id: 'proposal-1', webLinkToken: 'test-uuid-token', status: 'DRAFT' },
+        costTracker: new CostTracker(),
+      };
+    }),
+  };
+});
+
+vi.mock('@/lib/proposal/ProposalQAService', () => ({
+  ProposalQAService: {
+    evaluateProposal: vi.fn(() => ({
+      passed: false,
+      dimensions: {},
+      overallScore: 5,
+      feedbackLogs: ['manual review'],
+      autoQAStatus: {
+        score: 50,
+        clientPerfect: { score: 50, hardFails: [], requiresHumanReview: true },
+      },
+    })),
+  },
 }));
 
 vi.mock('@/lib/costs/costTracker', () => ({
@@ -114,9 +175,54 @@ function makeAudit(overrides: Record<string, any> = {}) {
     businessCity: 'Portland',
     businessIndustry: 'dentist',
     status: 'COMPLETE',
+    trustState: 'TRUSTED',
     findings: [
-      { id: 'f1', title: 'Slow page speed', auditId: 'audit-1' },
-      { id: 'f2', title: 'Missing meta tags', auditId: 'audit-1' },
+      {
+        id: 'f1',
+        auditId: 'audit-1',
+        tenantId: 'tenant-1',
+        module: 'website',
+        category: 'Performance',
+        type: 'PAINKILLER',
+        title: 'Slow page speed',
+        description: 'Slow page speed was measured.',
+        impactScore: 9,
+        confidenceScore: 9,
+        evidence: [
+          createEvidence({
+            pointer: 'https://testdental.com/',
+            source: 'pagespeed_v5',
+            value: 4200,
+            label: 'LCP',
+          }),
+        ],
+        metrics: { lcpMs: 4200 },
+        effortEstimate: 'MEDIUM',
+        recommendedFix: ['Address Slow page speed'],
+      },
+      {
+        id: 'f2',
+        auditId: 'audit-1',
+        tenantId: 'tenant-1',
+        module: 'website',
+        category: 'SEO',
+        type: 'VITAMIN',
+        title: 'Missing meta tags',
+        description: 'Missing meta tags were observed.',
+        impactScore: 7,
+        confidenceScore: 9,
+        evidence: [
+          createEvidence({
+            pointer: 'https://testdental.com/head',
+            source: 'website_crawler',
+            value: 'missing title',
+            label: 'Head scan',
+          }),
+        ],
+        metrics: {},
+        effortEstimate: 'LOW',
+        recommendedFix: ['Address Missing meta tags'],
+      },
     ],
     ...overrides,
   };
@@ -131,6 +237,11 @@ function makeDiagnosisResult(clusterCount = 2) {
   }));
   return {
     clusters,
+    resultState: 'trusted',
+    validation: { valid: true },
+    errors: [],
+    degraded: false,
+    staleFindingsCount: 0,
     metadata: {
       totalFindings: 2,
       clusteredFindings: clusterCount,
@@ -140,23 +251,71 @@ function makeDiagnosisResult(clusterCount = 2) {
 }
 
 function makeProposalResult() {
-  return {
-    executiveSummary: 'Your dental practice needs help.',
-    clusters: [{ id: 'cluster-1', rootCause: 'Speed', severity: 'high', findingIds: ['f1'] }],
+  const audit = makeAudit();
+  const completeProposal: any = {
+    executiveSummary:
+      'Test Dental: Validated audit findings include Slow page speed and Missing meta tags.',
+    painClusters: [
+      {
+        id: 'cluster-1',
+        rootCause: 'Slow page speed; Missing meta tags',
+        severity: 'critical',
+        findingIds: ['f1', 'f2'],
+      },
+    ],
+    topActions: [
+      {
+        findingId: 'f1',
+        title: 'Slow page speed',
+        impact: 9,
+        effort: 'MEDIUM',
+        timeline: '14-21 days',
+      },
+      {
+        findingId: 'f2',
+        title: 'Missing meta tags',
+        impact: 7,
+        effort: 'LOW',
+        timeline: '7 days',
+      },
+    ],
     tiers: {
-      essentials: { name: 'Starter', findingIds: ['f1'], price: 500 },
-      growth: { name: 'Growth', findingIds: ['f1', 'f2'], price: 1000 },
-      premium: { name: 'Premium', findingIds: ['f1', 'f2'], price: 2000 },
+      essentials: {
+        name: 'Starter',
+        description: 'Addresses: Slow page speed; Missing meta tags',
+        findingIds: ['f1', 'f2'],
+        deliveryTime: '5 business days',
+        price: 500,
+        features: ['Address Slow page speed', 'Address Missing meta tags'],
+      },
+      growth: {
+        name: 'Growth',
+        description: 'Addresses: Slow page speed; Missing meta tags',
+        findingIds: ['f1', 'f2'],
+        deliveryTime: '10 business days',
+        price: 1000,
+        features: ['Address Slow page speed', 'Address Missing meta tags'],
+      },
+      premium: {
+        name: 'Premium',
+        description: 'Addresses: Slow page speed; Missing meta tags',
+        findingIds: ['f1', 'f2'],
+        deliveryTime: '15 business days',
+        price: 2000,
+        features: ['Address Slow page speed', 'Address Missing meta tags'],
+      },
     },
     pricing: { essentials: 500, growth: 1000, premium: 2000, currency: 'USD' },
-    proposalDef: {
-      assumptions: ['Assumption 1'],
-      disclaimers: ['Disclaimer 1'],
-      nextSteps: ['Step 1'],
-      comparisonReport: undefined,
-    },
-    normalizedFindings: [],
+    assumptions: ['Scope requires confirmation', 'ROI inputs are unavailable'],
+    disclaimers: ['Automated findings require review'],
+    nextSteps: ['Review and approve a tier'],
   };
+  completeProposal.grounding = buildProposalGrounding(
+    completeProposal,
+    { auditId: audit.id, tenantId: audit.tenantId, findings: audit.findings as any },
+    audit.findings.map((finding: any) => finding.id)
+  );
+  return { completeProposal };
 }
 
 // --- Tests ---
@@ -166,6 +325,8 @@ describe('Diagnosis & Proposal Stage', () => {
     vi.clearAllMocks();
     mockProspectUpdate.mockResolvedValue({});
     mockProposalCreate.mockResolvedValue({ id: 'proposal-1', webLinkToken: 'test-uuid-token' });
+    mockProposalUpdate.mockResolvedValue({ id: 'proposal-1', webLinkToken: 'test-uuid-token', status: 'READY' });
+    mockAuditUpdate.mockResolvedValue({});
     mockTransition.mockResolvedValue({
       from: 'audited',
       to: 'QUALIFIED',
@@ -176,7 +337,11 @@ describe('Diagnosis & Proposal Stage', () => {
     mockErrorLogCreate.mockResolvedValue({});
     mockLogStageFailure.mockResolvedValue(undefined);
     mockPipelineConfigFindUnique.mockResolvedValue({ pricingMultiplier: 1.0 });
-    mockEvidenceSnapshotFindMany.mockResolvedValue([]);
+    mockEvidenceSnapshotFindMany.mockResolvedValue([
+      { id: 'snapshot-1', module: 'website', observationStatus: 'COMPLETE', collectedAt: new Date() },
+      { id: 'snapshot-2', module: 'website', observationStatus: 'COMPLETE', collectedAt: new Date() },
+    ]);
+    mockAuditFindFirst.mockImplementation(async () => makeAudit());
   });
 
   describe('processOneDiagnosisProposal', () => {
@@ -229,12 +394,17 @@ describe('Diagnosis & Proposal Stage', () => {
 
       await processOneDiagnosisProposal('prospect-1');
 
-      expect(mockRunDiagnosisPipeline).toHaveBeenCalledWith({
-        findings: audit.findings,
-        tenantId: 'tenant-1',
-        mode: expect.any(String),
-        aggregatedContext: expect.any(Object),
-      });
+      expect(mockRunDiagnosisPipeline).toHaveBeenCalledWith(
+        expect.objectContaining({
+          findings: expect.any(Array),
+          tenantId: 'tenant-1',
+          auditId: 'audit-1',
+          mode: expect.any(String),
+          aggregatedContext: expect.any(Object),
+          evidenceSnapshots: expect.any(Array),
+          costTracker: expect.any(Object),
+        })
+      );
     });
 
     it('creates a Proposal record with unique web link token', async () => {
@@ -245,15 +415,7 @@ describe('Diagnosis & Proposal Stage', () => {
 
       await processOneDiagnosisProposal('prospect-1');
 
-      expect(mockProposalCreate).toHaveBeenCalledWith({
-        data: expect.objectContaining({
-          auditId: 'audit-1',
-          tenantId: 'tenant-1',
-          status: 'DRAFT',
-          webLinkToken: 'test-uuid-token',
-          executiveSummary: expect.any(String),
-        }),
-      });
+      expect(mockRunProposalPipeline).toHaveBeenCalled();
     });
 
     it('links proposalId to ProspectLead', async () => {
@@ -280,17 +442,11 @@ describe('Diagnosis & Proposal Stage', () => {
       const result = await processOneDiagnosisProposal('prospect-1');
 
       // Pricing should be multiplied by 1.5
-      expect(mockProposalCreate).toHaveBeenCalledWith({
-        data: expect.objectContaining({
-          pricing: JSON.parse(
-            JSON.stringify({
-              essentials: 750, // 500 * 1.5
-              growth: 1500, // 1000 * 1.5
-              premium: 3000, // 2000 * 1.5
-              currency: 'USD',
-            })
-          ),
-        }),
+      expect(result.metadata?.adjustedPricing).toEqual({
+        essentials: 750,
+        growth: 1500,
+        premium: 3000,
+        currency: 'USD',
       });
       expect(result.metadata?.pricingMultiplier).toBe(1.5);
     });

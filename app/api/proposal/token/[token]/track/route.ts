@@ -13,12 +13,14 @@ import { createHash } from 'crypto';
 
 import { NextResponse } from 'next/server';
 
-import { generateTraceId, InternalError, NotFoundError, ValidationError } from '@/lib/api/errors';
+import { generateTraceId, InternalError, ValidationError } from '@/lib/api/errors';
 import { proposalTrackSchema } from '@/lib/api/schemas/proposal';
 import { RateLimitPresets, withRateLimit } from '@/lib/middleware/rateLimit';
 import { recordEvent } from '@/lib/pipeline/dealCloser';
 import type { EngagementEvent } from '@/lib/pipeline/types';
 import { prisma } from '@/lib/prisma';
+import { PublicProposalAccessError, resolvePublicProposalAccess } from '@/lib/proposal/publicAccess';
+import { runWithTenantAsync } from '@/lib/tenant/context';
 
 interface Params {
   params: Promise<{ token: string }>;
@@ -58,18 +60,7 @@ async function handleTrack(req: Request, { params }: Params): Promise<NextRespon
     } = result.data;
 
     // Verify proposal exists
-    const proposal = await prisma.proposal.findUnique({
-      where: { webLinkToken: token },
-      include: {
-        audit: true,
-      },
-    });
-
-    if (!proposal) {
-      return NextResponse.json(new NotFoundError('Proposal', token).toEnvelope(req.url, traceId), {
-        status: 404,
-      });
-    }
+    const access = await resolvePublicProposalAccess(token);
 
     const ip =
       req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
@@ -82,98 +73,98 @@ async function handleTrack(req: Request, { params }: Params): Promise<NextRespon
     // Note: Prospect lead engagement tracking requires prospectLead relation in Audit model
     // Currently tracking via proposalView records only
 
-    if (event === 'view') {
-      // First view: create ProposalView record
-      await prisma.proposalView.create({
-        data: {
-          proposalId: proposal.id,
-          tenantId: proposal.audit.tenantId || 'system',
-          sessionId: sessionId || crypto.randomUUID(),
-          viewedAt: new Date(),
-          scrollDepth: 0,
-          timeOnPageSeconds: 0,
-          ctaClicked: false,
-          expandedSections: [],
-          userAgent,
-          referrer,
-          ipHash,
-        },
-      });
-
-      // Future: Record engagement event in Deal Closer when prospectLead relation is available
-
-      const response = NextResponse.json({ success: true });
-      response.headers.set('X-Trace-Id', traceId);
-      return response;
-    }
-
-    if (
-      event === 'scroll' ||
-      event === 'time' ||
-      event === 'cta' ||
-      event === 'expand' ||
-      event === 'presentation_slide'
-    ) {
-      // Find existing view by sessionId
-      const existing = await prisma.proposalView.findFirst({
-        where: { proposalId: proposal.id, sessionId: body.sessionId },
-        orderBy: { viewedAt: 'desc' },
-      });
-
-      if (!existing) {
-        return NextResponse.json(
-          new ValidationError('Session not found', [
-            { field: 'sessionId', message: 'No tracking session found for this ID' },
-          ]).toEnvelope(req.url, traceId),
-          { status: 400 }
-        );
-      }
-
-      const updates: Record<string, unknown> = {};
-
-      if (event === 'scroll' && typeof scrollDepth === 'number') {
-        if (scrollDepth > existing.scrollDepth) {
-          updates.scrollDepth = scrollDepth;
-        }
-      }
-      if (event === 'time' && typeof timeOnPageSeconds === 'number') {
-        updates.timeOnPageSeconds = Math.max(existing.timeOnPageSeconds, timeOnPageSeconds);
-      }
-      if (event === 'cta') {
-        updates.ctaClicked = true;
-        // Future: Record tier interaction in Deal Closer when prospectLead relation is available
-      }
-      if (event === 'expand' && Array.isArray(expandedSections)) {
-        const merged = [
-          ...new Set([...(existing.expandedSections as string[]), ...expandedSections]),
-        ];
-        updates.expandedSections = merged;
-      }
-      if (event === 'presentation_slide' && typeof slideIndex === 'number') {
-        updates.lastPresentationSlide = slideIndex;
-      }
-
-      if (Object.keys(updates).length > 0) {
-        await prisma.proposalView.update({
-          where: { id: existing.id },
-          data: updates,
+    return runWithTenantAsync(access.tenantId, async () => {
+      if (event === 'view') {
+        // First view: create ProposalView record
+        await prisma.proposalView.create({
+          data: {
+            proposalId: access.proposalId,
+            tenantId: access.tenantId,
+            sessionId: sessionId || crypto.randomUUID(),
+            viewedAt: new Date(),
+            scrollDepth: 0,
+            timeOnPageSeconds: 0,
+            ctaClicked: false,
+            expandedSections: [],
+            userAgent,
+            referrer,
+            ipHash,
+          },
         });
+
+        const response = NextResponse.json({ success: true });
+        response.headers.set('X-Trace-Id', traceId);
+        return response;
       }
 
-      // Future: Record dwell time and scroll depth in Deal Closer when prospectLead relation is available
+      if (
+        event === 'scroll' ||
+        event === 'time' ||
+        event === 'cta' ||
+        event === 'expand' ||
+        event === 'presentation_slide'
+      ) {
+        // Find existing view by sessionId
+        const existing = await prisma.proposalView.findFirst({
+          where: { proposalId: access.proposalId, sessionId: body.sessionId },
+          orderBy: { viewedAt: 'desc' },
+        });
 
-      const response = NextResponse.json({ success: true });
-      response.headers.set('X-Trace-Id', traceId);
-      return response;
-    }
+        if (!existing) {
+          return NextResponse.json(
+            new ValidationError('Session not found', [
+              { field: 'sessionId', message: 'No tracking session found for this ID' },
+            ]).toEnvelope(req.url, traceId),
+            { status: 400 }
+          );
+        }
 
-    return NextResponse.json(
-      new ValidationError('Invalid event type', [
-        { field: 'event', message: `Event '${event}' is not supported` },
-      ]).toEnvelope(req.url, traceId),
-      { status: 400 }
-    );
+        const updates: Record<string, unknown> = {};
+
+        if (event === 'scroll' && typeof scrollDepth === 'number') {
+          if (scrollDepth > existing.scrollDepth) {
+            updates.scrollDepth = scrollDepth;
+          }
+        }
+        if (event === 'time' && typeof timeOnPageSeconds === 'number') {
+          updates.timeOnPageSeconds = Math.max(existing.timeOnPageSeconds, timeOnPageSeconds);
+        }
+        if (event === 'cta') {
+          updates.ctaClicked = true;
+        }
+        if (event === 'expand' && Array.isArray(expandedSections)) {
+          const merged = [
+            ...new Set([...(existing.expandedSections as string[]), ...expandedSections]),
+          ];
+          updates.expandedSections = merged;
+        }
+        if (event === 'presentation_slide' && typeof slideIndex === 'number') {
+          updates.lastPresentationSlide = slideIndex;
+        }
+
+        if (Object.keys(updates).length > 0) {
+          await prisma.proposalView.update({
+            where: { id: existing.id },
+            data: updates,
+          });
+        }
+
+        const response = NextResponse.json({ success: true });
+        response.headers.set('X-Trace-Id', traceId);
+        return response;
+      }
+
+      return NextResponse.json(
+        new ValidationError('Invalid event type', [
+          { field: 'event', message: `Event '${event}' is not supported` },
+        ]).toEnvelope(req.url, traceId),
+        { status: 400 }
+      );
+    });
   } catch (error) {
+    if (error instanceof PublicProposalAccessError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
     const internalError = new InternalError('Failed to process tracking event', {
       originalError: error instanceof Error ? error.message : String(error),
     });

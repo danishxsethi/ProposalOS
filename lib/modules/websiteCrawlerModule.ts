@@ -1,18 +1,45 @@
+import type { CostTracker } from '@/lib/costs/costTracker';
 import { logger } from '@/lib/logger';
 
 import { normalizeConfidence } from './findingGenerator';
-import { AuditModuleResult, EvidenceItem, Finding } from './types';
+import { AuditModuleResult, createEvidence, EvidenceItem, Finding } from './types';
 import { CrawlResult, crawlWebsite } from './websiteCrawler';
+import { captureScreenshots } from '../evidence/screenshotCapture';
 
 interface WebsiteCrawlerModuleInput {
   url: string;
   businessName: string;
+  /**
+   * When provided, a real homepage screenshot is captured and attached as a
+   * `type: 'screenshot'` evidence snapshot so the canonical `vision` module
+   * (dependsOn: ['websiteCrawler']) can run (P1-43, Wave 5). Optional because this
+   * module is also called from a non-canonical path (`lib/modules/website.ts`,
+   * pre-existing duplicate invocation — P1-27, Wave 7) that has no auditId and must
+   * not have a fabricated one used for GCS screenshot storage paths; that caller
+   * simply gets no screenshot, which is correct (its result never feeds `vision`).
+   */
+  auditId?: string;
+  signal?: AbortSignal;
 }
 
 /**
  * Generate findings from crawl results
  */
 function generateFindingsFromCrawl(crawlResult: CrawlResult, businessUrl: string): Finding[] {
+  // Every customer-visible finding must carry evidence with a real pointer,
+  // source and collection time (FindingRuntimeSchema) or it is rejected at the
+  // aggregation boundary and silently degrades audit trust. All crawler
+  // observations point at the crawled page (or the site root for aggregates).
+  const collectedAt = new Date().toISOString();
+  const ev = (opts: { pointer?: string; type: 'url' | 'metric' | 'text'; value: string | number; label: string }) =>
+    createEvidence({
+      pointer: opts.pointer ?? businessUrl,
+      source: 'internal_crawl',
+      collected_at: collectedAt,
+      type: opts.type,
+      value: opts.value,
+      label: opts.label,
+    });
   // If crawl result is blocked by anti-bot, generate a specific high-impact finding and exit early
   if (crawlResult.failureClassification === 'ANTI_BOT') {
     return [
@@ -25,11 +52,14 @@ function generateFindingsFromCrawl(crawlResult: CrawlResult, businessUrl: string
         impactScore: 9,
         confidenceScore: normalizeConfidence(95, '0-100'),
         evidence: [
-          {
+          createEvidence({
+            pointer: businessUrl,
+            source: 'internal_crawl',
+            collected_at: new Date().toISOString(),
             type: 'text',
-            value: 'WAF block page detected',
+            value: 'WAF challenge/block page detected on homepage fetch',
             label: 'WAF Status',
-          },
+          }),
         ],
         metrics: {
           failureClassification: 'ANTI_BOT',
@@ -56,13 +86,7 @@ function generateFindingsFromCrawl(crawlResult: CrawlResult, businessUrl: string
           'The scraper encountered extreme response times or artificial connection throttling (timeouts >45s). This indicates poor origin responsiveness, severe hosting constraints, or aggressive rate-limiting.',
         impactScore: 9,
         confidenceScore: normalizeConfidence(95, '0-100'),
-        evidence: [
-          {
-            type: 'text',
-            value: 'Connection timed out after 45000ms',
-            label: 'Timeout Status',
-          },
-        ],
+        evidence: [ev({ type: 'text', value: 'Connection timed out after 45000ms', label: 'Timeout Status' })],
         metrics: {
           failureClassification: 'TIMEOUT',
         },
@@ -88,11 +112,7 @@ function generateFindingsFromCrawl(crawlResult: CrawlResult, businessUrl: string
       description: `Found ${crawlResult.brokenLinks.length} pages returning 4xx or 5xx errors. Broken links damage SEO rankings and user experience.`,
       impactScore: 8,
       confidenceScore: normalizeConfidence(95, '0-100'),
-      evidence: crawlResult.brokenLinks.slice(0, 10).map((url) => ({
-        type: 'url' as const,
-        value: url,
-        label: 'Broken Link',
-      })),
+      evidence: crawlResult.brokenLinks.slice(0, 10).map((url) => ev({ pointer: url, type: 'url', value: url, label: 'Broken Link' })),
       metrics: {
         brokenLinkCount: crawlResult.brokenLinks.length,
         affectedUrls: crawlResult.brokenLinks,
@@ -117,13 +137,7 @@ function generateFindingsFromCrawl(crawlResult: CrawlResult, businessUrl: string
       description: `Homepage only has ${homepage.wordCount} words. Search engines may view this as low-quality content, harming SEO rankings.`,
       impactScore: 7,
       confidenceScore: normalizeConfidence(90, '0-100'),
-      evidence: [
-        {
-          type: 'metric',
-          value: homepage.wordCount,
-          label: 'Homepage Word Count',
-        },
-      ],
+      evidence: [ev({ type: 'metric', value: homepage.wordCount, label: 'Homepage Word Count' })],
       metrics: {
         wordCount: homepage.wordCount,
         recommendedMinimum: 300,
@@ -152,11 +166,7 @@ function generateFindingsFromCrawl(crawlResult: CrawlResult, businessUrl: string
       description: `${crawlResult.pagesMissingTitles.length} out of ${crawlResult.crawledPages.length} pages are missing title tags. This severely impacts SEO visibility.`,
       impactScore: 8,
       confidenceScore: normalizeConfidence(95, '0-100'),
-      evidence: crawlResult.pagesMissingTitles.slice(0, 5).map((url) => ({
-        type: 'url',
-        value: url,
-        label: 'Page Missing Title',
-      })),
+      evidence: crawlResult.pagesMissingTitles.slice(0, 5).map((url) => ev({ pointer: url, type: 'url', value: url, label: 'Page Missing Title' })),
       metrics: {
         pagesMissingTitles: crawlResult.pagesMissingTitles.length,
         totalPages: crawlResult.crawledPages.length,
@@ -188,11 +198,7 @@ function generateFindingsFromCrawl(crawlResult: CrawlResult, businessUrl: string
       confidenceScore: normalizeConfidence(90, '0-100'),
       evidence: Array.from(crawlResult.duplicateTitles.entries())
         .slice(0, 3)
-        .map(([title, urls]) => ({
-          type: 'text',
-          value: `"${title}" (${urls.length} pages)`,
-          label: 'Duplicate Title',
-        })),
+        .map(([title, urls]) => ev({ pointer: urls[0] ?? businessUrl, type: 'text', value: `"${title}" (${urls.length} pages)`, label: 'Duplicate Title' })),
       metrics: {
         duplicateTitleGroups: crawlResult.duplicateTitles.size,
         affectedPages: duplicateCount,
@@ -222,13 +228,7 @@ function generateFindingsFromCrawl(crawlResult: CrawlResult, businessUrl: string
       description: `Average page size is ${avgPageSizeMB.toFixed(2)}MB. Large pages slow down load times and hurt user experience, especially on mobile.`,
       impactScore: 5,
       confidenceScore: normalizeConfidence(85, '0-100'),
-      evidence: [
-        {
-          type: 'metric',
-          value: avgPageSizeMB.toFixed(2),
-          label: 'Average Page Size (MB)',
-        },
-      ],
+      evidence: [ev({ type: 'metric', value: avgPageSizeMB.toFixed(2), label: 'Average Page Size (MB)' })],
       metrics: {
         avgPageSizeMB: parseFloat(avgPageSizeMB.toFixed(2)),
         recommendedMaxMB: 2.0,
@@ -253,13 +253,7 @@ function generateFindingsFromCrawl(crawlResult: CrawlResult, businessUrl: string
       description: `None of the ${crawlResult.crawledPages.length} crawled pages have structured data (Schema.org). This limits rich snippet opportunities in search results.`,
       impactScore: 6,
       confidenceScore: normalizeConfidence(90, '0-100'),
-      evidence: [
-        {
-          type: 'text',
-          value: '0% schema coverage',
-          label: 'Structured Data Coverage',
-        },
-      ],
+      evidence: [ev({ type: 'text', value: '0% schema coverage', label: 'Structured Data Coverage' })],
       metrics: {
         schemaOrgCoverage: 0,
         totalPages: crawlResult.crawledPages.length,
@@ -288,14 +282,9 @@ function generateFindingsFromCrawl(crawlResult: CrawlResult, businessUrl: string
       description: `${totalImages - imagesWithAlt} out of ${totalImages} images lack alt text. This hurts accessibility and image SEO.`,
       impactScore: 4,
       confidenceScore: normalizeConfidence(90, '0-100'),
-      evidence: [
-        {
-          type: 'metric',
-          value: Math.round(missingAltPct),
-          label: 'Images Missing Alt (%)',
-        },
-      ],
+      evidence: [ev({ type: 'metric', value: Math.round(missingAltPct), label: 'Images Missing Alt (%)' })],
       metrics: {
+        schemaFingerprint: 'images:missing-alt',
         totalImages,
         imagesWithAlt,
         imagesMissingAlt: totalImages - imagesWithAlt,
@@ -323,13 +312,7 @@ function generateFindingsFromCrawl(crawlResult: CrawlResult, businessUrl: string
         'Could not retrieve full page content. Analysis uses PageSpeed API data only. Consider adding a sitemap and ensuring critical content is server-rendered.',
       impactScore: 6,
       confidenceScore: normalizeConfidence(75, '0-100'),
-      evidence: [
-        {
-          type: 'text',
-          value: 'Crawler returned no successful pages',
-          label: 'Limited Data',
-        },
-      ],
+      evidence: [ev({ type: 'text', value: 'Crawler returned no successful pages', label: 'Limited Data' })],
       metrics: { pagesAttempted: crawlResult.crawledPages.length },
       effortEstimate: 'MEDIUM',
       recommendedFix: [
@@ -349,13 +332,7 @@ function generateFindingsFromCrawl(crawlResult: CrawlResult, businessUrl: string
       description: `Only ${crawlResult.totalPagesFound} pages found. Search engines favor sites with more comprehensive content.`,
       impactScore: 5,
       confidenceScore: normalizeConfidence(85, '0-100'),
-      evidence: [
-        {
-          type: 'metric',
-          value: crawlResult.totalPagesFound,
-          label: 'Total Pages',
-        },
-      ],
+      evidence: [ev({ type: 'metric', value: crawlResult.totalPagesFound, label: 'Total Pages' })],
       metrics: {
         totalPages: crawlResult.totalPagesFound,
         recommendedMinimum: 10,
@@ -375,10 +352,49 @@ function generateFindingsFromCrawl(crawlResult: CrawlResult, businessUrl: string
 }
 
 /**
+ * P1-27 (Wave 7): `lib/modules/website.ts`'s own internal crawl call and the
+ * canonical `websiteCrawler` registry module (lib/audit/runner.ts) both call this
+ * exact function for the exact same audit/URL, previously performing two full
+ * (up to 20-page) real crawls of the same site per audit. This in-flight,
+ * per-process map coalesces concurrent calls with the same (auditId, url) into a
+ * single real crawl — the second caller awaits the first caller's in-flight
+ * promise instead of starting a duplicate crawl. Entries are removed once the
+ * crawl settles, so a later, non-concurrent call (e.g. a genuine re-audit) still
+ * performs a fresh crawl rather than being permanently cached.
+ */
+const inFlightCrawls = new Map<string, Promise<AuditModuleResult>>();
+
+function crawlCoalesceKey(input: WebsiteCrawlerModuleInput): string {
+  return `${input.auditId ?? 'no-audit'}::${input.url}`;
+}
+
+/**
  * Run website crawler module
  */
 export async function runWebsiteCrawlerModule(
-  input: WebsiteCrawlerModuleInput
+  input: WebsiteCrawlerModuleInput,
+  tracker?: CostTracker
+): Promise<AuditModuleResult> {
+  const key = crawlCoalesceKey(input);
+  const existing = inFlightCrawls.get(key);
+  if (existing) {
+    logger.info(
+      { businessName: input.businessName, url: input.url },
+      '[WebsiteCrawler] Reusing in-flight crawl for this audit (P1-27 dedup)'
+    );
+    return existing;
+  }
+
+  const promise = executeCrawl(input, tracker).finally(() => {
+    inFlightCrawls.delete(key);
+  });
+  inFlightCrawls.set(key, promise);
+  return promise;
+}
+
+async function executeCrawl(
+  input: WebsiteCrawlerModuleInput,
+  tracker?: CostTracker
 ): Promise<AuditModuleResult> {
   logger.info(
     { businessName: input.businessName, url: input.url },
@@ -387,7 +403,7 @@ export async function runWebsiteCrawlerModule(
 
   try {
     // Run the crawl
-    const crawlResult = await crawlWebsite(input);
+    const crawlResult = await crawlWebsite({ ...input, tracker });
 
     // Generate findings
     const findings = generateFindingsFromCrawl(crawlResult, input.url);
@@ -409,6 +425,12 @@ export async function runWebsiteCrawlerModule(
         duplicateTitles: Array.from(crawlResult.duplicateTitles.entries()),
         pagesMissingTitles: crawlResult.pagesMissingTitles,
         pagesMissingDescriptions: crawlResult.pagesMissingDescriptions,
+        // P1-35 (Wave 7): the homepage's real raw HTML, already fetched/parsed by
+        // this crawl, so `schemaMarkup`/`seoDeep`/`schemaAnalysis` (all
+        // dependsOn: ['websiteCrawler']) can reuse it instead of re-fetching the
+        // same homepage independently. `schemaAnalysisAdapter` (lib/audit/runner.ts)
+        // already reads this exact `evidenceSnapshots[0].rawResponse.html` path.
+        html: crawlResult.homepageHtml,
       },
       collectedAt: new Date(),
     };
@@ -422,40 +444,58 @@ export async function runWebsiteCrawlerModule(
       '[WebsiteCrawler] Crawl complete'
     );
 
+    // P1-43 (Wave 5): capture a real homepage screenshot as part of this module's
+    // existing work, using the same shared Wave 4 browser boundary
+    // (`captureScreenshots` → `safePageGoto`) the deprecated AuditOrchestrator called
+    // inline. Screenshot capture is intentionally NOT a 28th canonical module — see
+    // packages/shared/src/audit.ts's comment above `CANONICAL_AUDIT_MODULE_IDS` — it
+    // is shared input-acquisition infrastructure for `vision`, which already declares
+    // `dependsOn: ['websiteCrawler']`. Feeding it here (rather than adding a new
+    // registry entry) makes `vision` reachable in the canonical engine without
+    // changing the 27-module manifest. Best-effort: a screenshot failure must not fail
+    // the crawl itself (which already produced real, independent findings); `vision`
+    // simply reports SKIPPED (no screenshots captured) when this yields nothing,
+    // exactly like any other genuinely-unavailable optional dependency.
+    let screenshotSnapshot: Record<string, unknown> | null = null;
+    if (input.auditId) {
+      try {
+        const [screenshot] = await captureScreenshots([
+          {
+            auditId: input.auditId,
+            options: { url: input.url, name: 'homepage-desktop', device: 'desktop' },
+          },
+        ]);
+        if (screenshot) {
+          screenshotSnapshot = {
+            module: 'website_crawler',
+            source: 'homepage_screenshot',
+            type: 'screenshot',
+            ...screenshot,
+            rawResponse: { name: screenshot.name, url: screenshot.url },
+            collectedAt: screenshot.capturedAt,
+          };
+        }
+      } catch (screenshotError) {
+        logger.warn(
+          { error: screenshotError, businessName: input.businessName },
+          '[WebsiteCrawler] Homepage screenshot capture failed (non-fatal, vision will report unavailable)'
+        );
+      }
+    }
+
     return {
       findings,
-      evidenceSnapshots: [evidenceSnapshot],
+      evidenceSnapshots: screenshotSnapshot
+        ? [evidenceSnapshot, screenshotSnapshot]
+        : [evidenceSnapshot],
     };
   } catch (error) {
     logger.error({ error, businessName: input.businessName }, '[WebsiteCrawler] Crawl failed');
 
-    // Return error as a finding
     return {
-      findings: [
-        {
-          type: 'PAINKILLER',
-          category: 'Technical SEO',
-          title: 'Website Crawl Failed',
-          description: `Unable to crawl website: ${error instanceof Error ? error.message : 'Unknown error'}`,
-          impactScore: 3,
-          confidenceScore: normalizeConfidence(50, '0-100'),
-          evidence: [
-            {
-              type: 'text',
-              value: error instanceof Error ? error.message : 'Unknown error',
-              label: 'Error',
-            },
-          ],
-          metrics: {},
-          effortEstimate: 'LOW',
-          recommendedFix: [
-            'Verify website URL is accessible',
-            'Check if site is blocking crawlers',
-            'Ensure no server firewall issues',
-          ],
-        },
-      ],
+      findings: [],
       evidenceSnapshots: [],
+      execution: { state: 'unavailable', reason: error instanceof Error ? error.message : 'Website crawl failed' },
     };
   }
 }

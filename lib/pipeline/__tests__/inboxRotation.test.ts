@@ -9,10 +9,11 @@
  * Requirements: 4.6, 4.9
  */
 
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { prisma } from '@/lib/prisma';
 
+import { sendEmail } from '../../outreach/emailSender';
 import {
   getDomainSentCount,
   handleReply,
@@ -30,6 +31,7 @@ vi.mock('@/lib/prisma', () => ({
       findUnique: vi.fn().mockResolvedValue({
         decisionMakerEmail: 'owner@business.com',
         businessName: 'Business Name',
+        tenantId: 'tenant-1',
       }),
     },
     outreachSendingDomain: {
@@ -44,11 +46,62 @@ vi.mock('@/lib/prisma', () => ({
     outreachEmail: {
       create: vi.fn(),
       findUnique: vi.fn(),
+      findFirst: vi.fn().mockResolvedValue(null),
+      update: vi.fn(),
       updateMany: vi.fn(),
+    },
+    emailBlocklist: {
+      findUnique: vi.fn().mockResolvedValue(null),
     },
     outreachEmailEvent: {
       create: vi.fn(),
       findFirst: vi.fn(),
+    },
+    finding: {
+      findMany: vi.fn().mockResolvedValue([
+        {
+          id: 'finding-1',
+          auditId: 'audit-1',
+          tenantId: 'tenant-1',
+          module: 'pagespeed',
+          category: 'performance',
+          type: 'PAINKILLER',
+          title: 'Slow page speed',
+          description: 'The page loaded in 8 seconds.',
+          impactScore: 8,
+          confidenceScore: 9,
+          evidence: [
+            {
+              pointer: 'https://example.com/',
+              source: 'pagespeed',
+              collected_at: '2026-07-01T00:00:00.000Z',
+            },
+          ],
+          metrics: {},
+          excluded: false,
+        },
+        {
+          id: 'finding-2',
+          auditId: 'audit-1',
+          tenantId: 'tenant-1',
+          module: 'mobileUX',
+          category: 'mobile',
+          type: 'PAINKILLER',
+          title: 'Mobile layout issue',
+          description: 'The tested mobile page did not fit the viewport.',
+          impactScore: 7,
+          confidenceScore: 9,
+          evidence: [
+            {
+              pointer: 'https://example.com/',
+              source: 'mobile-test',
+              collected_at: '2026-07-01T00:00:00.000Z',
+            },
+          ],
+          metrics: {},
+          excluded: false,
+        },
+      ]),
     },
   },
 }));
@@ -60,6 +113,14 @@ vi.mock('../../outreach/emailSender', () => ({
 describe('Inbox Rotation Manager', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    process.env.OUTBOUND_DELIVERY_ENABLED = 'true';
+    vi.mocked(prisma.emailBlocklist.findUnique).mockResolvedValue(null);
+    vi.mocked(prisma.outreachEmail.findUnique).mockResolvedValue(null);
+    vi.mocked(prisma.outreachEmail.findFirst).mockResolvedValue(null);
+  });
+
+  afterEach(() => {
+    delete process.env.OUTBOUND_DELIVERY_ENABLED;
   });
 
   describe('selectSendingDomain', () => {
@@ -238,10 +299,12 @@ describe('Inbox Rotation Manager', () => {
       const tenantId = 'tenant-1';
       const email: GeneratedEmail = {
         id: 'email-1',
+        auditId: 'audit-1',
         subject: 'Test Subject',
         body: 'Test Body',
         prospectId: 'prospect-1',
         proposalId: 'proposal-1',
+        findingIds: ['finding-1', 'finding-2'],
         findingReferences: ['finding-1', 'finding-2'],
         scorecardUrl: '/preview/token-123',
         generatedAt: new Date(),
@@ -264,6 +327,7 @@ describe('Inbox Rotation Manager', () => {
         domain: 'mail1.example.com',
         fromEmail: 'sales@mail1.example.com',
         fromName: 'Sales Team',
+        dailyLimit: 50,
       } as any);
 
       const createdEmail = {
@@ -280,7 +344,11 @@ describe('Inbox Rotation Manager', () => {
         sentAt: new Date(),
       };
 
-      vi.mocked(prisma.outreachEmail.create).mockResolvedValue(createdEmail as any);
+      vi.mocked(prisma.outreachEmail.create).mockResolvedValue({
+        ...createdEmail,
+        status: 'PENDING',
+      } as any);
+      vi.mocked(prisma.outreachEmail.update).mockResolvedValue(createdEmail as any);
       vi.mocked(prisma.outreachDomainDailyStat.upsert).mockResolvedValue({} as any);
 
       const result = await sendWithRotation(email, tenantId);
@@ -294,7 +362,7 @@ describe('Inbox Rotation Manager', () => {
           leadId: email.prospectId,
           domainId: 'domain-1',
           type: 'INITIAL',
-          status: 'SENT',
+          status: 'PENDING',
           subject: email.subject,
           body: email.body,
           qualityScore: 100,
@@ -307,10 +375,12 @@ describe('Inbox Rotation Manager', () => {
       const tenantId = 'tenant-1';
       const email: GeneratedEmail = {
         id: 'email-1',
+        auditId: 'audit-1',
         subject: 'Test Subject',
         body: 'Test Body',
         prospectId: 'prospect-1',
         proposalId: 'proposal-1',
+        findingIds: ['finding-1', 'finding-2'],
         findingReferences: ['finding-1', 'finding-2'],
         scorecardUrl: '/preview/token-123',
         generatedAt: new Date(),
@@ -336,14 +406,133 @@ describe('Inbox Rotation Manager', () => {
       expect(result.error).toContain('No available sending domain');
     });
 
-    it('should increment domain sent count after sending', async () => {
-      const tenantId = 'tenant-1';
+    it('does not call the provider for a suppressed recipient', async () => {
       const email: GeneratedEmail = {
-        id: 'email-1',
+        id: 'email-suppressed',
+        auditId: 'audit-1',
         subject: 'Test Subject',
         body: 'Test Body',
         prospectId: 'prospect-1',
-        proposalId: 'proposal-1',
+        proposalId: 'proposal-suppressed',
+        findingIds: ['finding-1', 'finding-2'],
+        findingReferences: ['finding-1', 'finding-2'],
+        scorecardUrl: '/preview/token-123',
+        generatedAt: new Date(),
+      };
+      vi.mocked(prisma.outreachSendingDomain.findMany).mockResolvedValue([
+        {
+          id: 'domain-1',
+          domain: 'mail1.example.com',
+          fromEmail: 'sales@mail1.example.com',
+          dailyLimit: 50,
+        },
+      ] as any);
+      vi.mocked(prisma.outreachDomainDailyStat.findMany).mockResolvedValue([]);
+      vi.mocked(prisma.outreachSendingDomain.findUnique).mockResolvedValue({
+        domain: 'mail1.example.com',
+        fromEmail: 'sales@mail1.example.com',
+        dailyLimit: 50,
+      } as any);
+      vi.mocked(prisma.emailBlocklist.findUnique).mockResolvedValue({ id: 'block-1' } as any);
+
+      await expect(sendWithRotation(email, 'tenant-1')).resolves.toMatchObject({
+        status: 'failed',
+        error: 'Recipient is suppressed',
+      });
+      expect(sendEmail).not.toHaveBeenCalled();
+    });
+
+    it('fails closed when cited Findings do not resolve for the tenant audit', async () => {
+      const email: GeneratedEmail = {
+        id: 'email-invalid-findings',
+        auditId: 'audit-1',
+        subject: 'Test Subject',
+        body: 'Test Body',
+        prospectId: 'prospect-1',
+        proposalId: 'proposal-invalid',
+        findingIds: ['finding-1', 'unknown'],
+        findingReferences: ['finding-1', 'unknown'],
+        scorecardUrl: '/preview/token-123',
+        generatedAt: new Date(),
+      };
+      vi.mocked(prisma.finding.findMany).mockResolvedValueOnce([
+        {
+          id: 'finding-1',
+          auditId: 'audit-1',
+          tenantId: 'tenant-1',
+          module: 'pagespeed',
+          category: 'performance',
+          type: 'PAINKILLER',
+          title: 'Slow page speed',
+          impactScore: 8,
+          confidenceScore: 9,
+          evidence: [
+            {
+              pointer: 'https://example.com/',
+              source: 'pagespeed',
+              collected_at: '2026-07-01T00:00:00.000Z',
+            },
+          ],
+          metrics: {},
+          excluded: false,
+        },
+      ] as any);
+
+      await expect(sendWithRotation(email, 'tenant-1')).resolves.toMatchObject({
+        status: 'failed',
+        error: 'Outbound Finding citations are missing, cross-tenant, or invalid',
+      });
+      expect(sendEmail).not.toHaveBeenCalled();
+    });
+
+    it('does not call the provider when durable intent persistence fails', async () => {
+      const email: GeneratedEmail = {
+        id: 'email-persist-failure',
+        auditId: 'audit-1',
+        subject: 'Test Subject',
+        body: 'Test Body',
+        prospectId: 'prospect-1',
+        proposalId: 'proposal-persist-failure',
+        findingIds: ['finding-1', 'finding-2'],
+        findingReferences: ['finding-1', 'finding-2'],
+        scorecardUrl: '/preview/token-123',
+        generatedAt: new Date(),
+      };
+      vi.mocked(prisma.outreachSendingDomain.findMany).mockResolvedValue([
+        {
+          id: 'domain-1',
+          domain: 'mail1.example.com',
+          fromEmail: 'sales@mail1.example.com',
+          dailyLimit: 50,
+        },
+      ] as any);
+      vi.mocked(prisma.outreachDomainDailyStat.findMany).mockResolvedValue([]);
+      vi.mocked(prisma.outreachSendingDomain.findUnique).mockResolvedValue({
+        domain: 'mail1.example.com',
+        fromEmail: 'sales@mail1.example.com',
+        dailyLimit: 50,
+      } as any);
+      vi.mocked(prisma.outreachEmail.create).mockRejectedValueOnce(
+        new Error('database unavailable')
+      );
+
+      await expect(sendWithRotation(email, 'tenant-1')).resolves.toMatchObject({
+        status: 'failed',
+        error: 'database unavailable',
+      });
+      expect(sendEmail).not.toHaveBeenCalled();
+    });
+
+    it('should increment domain sent count after sending', async () => {
+      const tenantId = 'tenant-1';
+      const email: GeneratedEmail = {
+        id: 'email-2',
+        auditId: 'audit-1',
+        subject: 'Test Subject',
+        body: 'Test Body',
+        prospectId: 'prospect-1',
+        proposalId: 'proposal-2',
+        findingIds: ['finding-1', 'finding-2'],
         findingReferences: ['finding-1', 'finding-2'],
         scorecardUrl: '/preview/token-123',
         generatedAt: new Date(),
@@ -365,9 +554,15 @@ describe('Inbox Rotation Manager', () => {
         domain: 'mail1.example.com',
         fromEmail: 'sales@mail1.example.com',
         fromName: 'Sales Team',
+        dailyLimit: 50,
       } as any);
       vi.mocked(prisma.outreachEmail.create).mockResolvedValue({
         id: 'outreach-email-1',
+        status: 'PENDING',
+      } as any);
+      vi.mocked(prisma.outreachEmail.update).mockResolvedValue({
+        id: 'outreach-email-1',
+        status: 'SENT',
       } as any);
       vi.mocked(prisma.outreachDomainDailyStat.upsert).mockResolvedValue({} as any);
 

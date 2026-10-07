@@ -1,0 +1,61 @@
+{
+  "business": {
+    "name": "Cuelenaere LLP",
+    "city": "Saskatoon",
+    "url": "https://cuelenaere.com/",
+    "industry": "legal"
+  },
+  "auditId": "67e22bee-8d7f-43bf-8c83-ffcd832faad1",
+  "auditStatus": "PARTIAL",
+  "trustState": "DEGRADED_REVIEW_REQUIRED",
+  "overallScore": null,
+  "apiCostCents": 15,
+  "auditWallMs": 64812,
+  "auditError": null,
+  "modulesCompleted": 6,
+  "modulesFailed": 19,
+  "moduleStatusCounts": {
+    "FAILED": 2,
+    "SKIPPED": 14,
+    "UNAVAILABLE": 3,
+    "COMPLETE": 6,
+    "PARTIAL": 2
+  },
+  "moduleTimingsMs": {
+    "gbp": null,
+    "social": null,
+    "vision": null,
+    "gbpDeep": null,
+    "seoDeep": null,
+    "website": null,
+    "mobileUX": null,
+    "security": null,
+    "backlinks": null,
+    "citations": null,
+    "techStack": null,
+    "competitor": null,
+    "conversion": null,
+    "keywordGap": null,
+    "paidSearch": null,
+    "reputation": null,
+    "socialDeep": null,
+    "emailFinder": null,
+    "schemaMarkup": null,
+    "accessibility": null,
+    "coreWebVitals": null,
+    "videoPresence": null,
+    "contentQuality": null,
+    "schemaAnalysis": null,
+    "websiteCrawler": null,
+    "privacyCompliance": null,
+    "competitorStrategy": null
+  },
+  "findings": 6,
+  "findingsByType": {
+    "VITAMIN": 6
+  },
+  "evidenceSnapshots": 7,
+  "proposalWallMs": null,
+  "proposalError": null,
+  "proposal": null
+}

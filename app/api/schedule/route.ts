@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 
+import { logger } from '@/lib/logger';
 import { withAuth } from '@/lib/middleware/auth';
 import { prisma } from '@/lib/prisma';
 import { getTenantId } from '@/lib/tenant/context';
@@ -50,7 +51,7 @@ export const POST = withAuth(async (req: Request) => {
 
     return NextResponse.json(schedule);
   } catch (error) {
-    console.error(error);
+    logger.error(error);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 });

@@ -21,7 +21,9 @@ import {
   RateLimitError,
   ValidationError,
 } from '@/lib/api/errors';
+import { dispatchAuditExecution } from '@/lib/audit/dispatch';
 import { logger } from '@/lib/logger';
+import { withAuth } from '@/lib/middleware/auth';
 import { withRateLimit } from '@/lib/middleware/rateLimit';
 import { prisma } from '@/lib/prisma';
 
@@ -69,6 +71,8 @@ async function handlePostScan(req: Request): Promise<NextResponse> {
     }
 
     const { token, auditId, url, businessName, email } = result.data;
+    const authenticatedTenantId = await import('@/lib/tenant/context').then(({ getTenantId }) => getTenantId());
+    if (!authenticatedTenantId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     if (!token && !auditId) {
       return NextResponse.json(
@@ -85,8 +89,8 @@ async function handlePostScan(req: Request): Promise<NextResponse> {
     let businessUrl: string | null;
 
     if (token) {
-      const proposal = await prisma.proposal.findUnique({
-        where: { webLinkToken: token },
+      const proposal = await prisma.proposal.findFirst({
+        where: { webLinkToken: token, tenantId: authenticatedTenantId },
         include: {
           audit: {
             select: { id: true, tenantId: true, businessUrl: true },
@@ -105,15 +109,18 @@ async function handlePostScan(req: Request): Promise<NextResponse> {
       tenantId = proposal.audit.tenantId;
       businessUrl = proposal.audit.businessUrl;
     } else if (auditId) {
-      const audit = await prisma.audit.findUnique({
-        where: { id: auditId ?? undefined },
+      const audit = await prisma.audit.findFirst({
+        where: { id: auditId ?? undefined, tenantId: authenticatedTenantId },
         select: { tenantId: true, businessUrl: true },
       });
 
       if (!audit) {
-        return NextResponse.json(new NotFoundError('Audit', auditId || 'unknown').toEnvelope(req.url, traceId), {
-          status: 404,
-        });
+        return NextResponse.json(
+          new NotFoundError('Audit', auditId || 'unknown').toEnvelope(req.url, traceId),
+          {
+            status: 404,
+          }
+        );
       }
 
       tenantId = audit.tenantId;
@@ -180,8 +187,8 @@ async function handlePostScan(req: Request): Promise<NextResponse> {
     }
 
     // Get the original audit for business details
-    const originalAudit = await prisma.audit.findUnique({
-      where: { id: targetAuditId },
+    const originalAudit = await prisma.audit.findFirst({
+      where: { id: targetAuditId, tenantId },
       select: {
         businessName: true,
         businessCity: true,
@@ -211,6 +218,29 @@ async function handlePostScan(req: Request): Promise<NextResponse> {
       },
     });
 
+    // P0-22: previously the audit record was created and left QUEUED forever — no
+    // execution mechanism was ever invoked. Enqueue via the durable job queue
+    // (canonical engine, same mechanism as /api/audit/batch).
+    try {
+      await dispatchAuditExecution({ tenantId, auditId: newAudit.id });
+    } catch (enqueueError) {
+      logger.error(
+        { error: enqueueError, auditId: newAudit.id },
+        'Failed to enqueue client scan audit for execution'
+      );
+      await prisma.audit
+        .update({
+          where: { id: newAudit.id },
+          data: { status: 'FAILED', completedAt: new Date() },
+        })
+        .catch(() => {});
+
+      const internalError = new InternalError('Failed to queue scan for execution', {
+        originalError: enqueueError instanceof Error ? enqueueError.message : String(enqueueError),
+      });
+      return NextResponse.json(internalError.toEnvelope(req.url, traceId), { status: 500 });
+    }
+
     logger.info(
       {
         newAuditId: newAudit.id,
@@ -224,7 +254,10 @@ async function handlePostScan(req: Request): Promise<NextResponse> {
       success: true,
       auditId: newAudit.id,
       status: newAudit.status,
-      message: 'Scan initiated. You will be notified when complete.',
+      // No completion notification is wired for this path — poll GET
+      // /api/client/scan?auditId=... for status instead of promising a push
+      // notification that does not exist (Wave 2 / P0-22 Step 6 requirement 6).
+      message: 'Scan queued. Poll status using auditId.',
       estimatedCompletion: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
     });
 
@@ -262,19 +295,24 @@ async function handleGetScanStatus(req: Request): Promise<NextResponse> {
       );
     }
 
-    const audit = await prisma.audit.findUnique({
-      where: { id: auditId ?? undefined },
+    const tenantId = await import('@/lib/tenant/context').then(({ getTenantId }) => getTenantId());
+    if (!tenantId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const audit = await prisma.audit.findFirst({
+      where: { id: auditId ?? undefined, tenantId },
     });
 
     if (!audit) {
-      return NextResponse.json(new NotFoundError('Audit', auditId || 'unknown').toEnvelope(req.url, traceId), {
-        status: 404,
-      });
+      return NextResponse.json(
+        new NotFoundError('Audit', auditId || 'unknown').toEnvelope(req.url, traceId),
+        {
+          status: 404,
+        }
+      );
     }
 
     // Get findings count separately
     const findingsCount = await prisma.finding.count({
-      where: { auditId: auditId ?? undefined },
+      where: { auditId: auditId ?? undefined, tenantId },
     });
 
     const response = NextResponse.json({
@@ -329,5 +367,5 @@ const rateLimitedGet = (req: Request) =>
     message: 'Too many status requests. Please wait before trying again.',
   })(req, () => handleGetScanStatus(req));
 
-export const POST = rateLimitedPost;
-export const GET = rateLimitedGet;
+export const POST = withAuth(rateLimitedPost);
+export const GET = withAuth(rateLimitedGet);

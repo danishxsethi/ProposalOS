@@ -1,9 +1,12 @@
 import * as cheerio from 'cheerio';
 import robotsParser from 'robots-parser';
 
+import { type CollectedHtml, collectHtml } from '@/lib/audit/collectors/htmlCollector';
 import { withModuleCache } from '@/lib/cache/moduleCache';
+import type { CostTracker } from '@/lib/costs/costTracker';
 import { logger } from '@/lib/logger';
 import { withProviderResilience } from '@/lib/resilience/withProviderResilience';
+import { safeFetch } from '@/lib/security/safeFetch';
 
 interface PageMetrics {
   url: string;
@@ -18,6 +21,10 @@ interface PageMetrics {
   internalLinks: number;
   externalLinks: number;
   hasStructuredData: boolean;
+  /** P1-35 (Wave 7): real, already-parsed mobile-viewport-meta presence, so
+   * downstream modules (seoDeep) can reuse this instead of re-fetching/re-parsing
+   * the same page. */
+  hasViewportMeta: boolean;
   loadTimeMs: number;
   pageSizeKB: number;
   error?: string;
@@ -36,14 +43,28 @@ export interface CrawlResult {
   schemaOrgCoverage: number;
   duplicateTitles: Map<string, string[]>;
   failureClassification: 'ANTI_BOT' | 'TIMEOUT' | 'HTTP_ERROR' | 'NONE';
+  /**
+   * P1-35 (Wave 7): the homepage's real raw HTML, captured once during the crawl
+   * that already fetched and parsed it, so `schemaMarkup`/`seoDeep`/`schemaAnalysis`
+   * (all `dependsOn: ['websiteCrawler']`) can reuse it instead of independently
+   * re-fetching the same homepage. Deliberately homepage-only (not every crawled
+   * page) to avoid bloating the stored crawl-evidence snapshot with up to 20 pages
+   * of raw HTML.
+   */
+  homepageHtml: string | null;
 }
 
 interface WebsiteCrawlerInput {
   url: string;
   businessName: string;
+  tracker?: CostTracker;
+  signal?: AbortSignal;
+  /** Scopes the shared HTML collector cache so dependent modules reuse this crawl's fetches. */
+  auditId?: string;
 }
 
-const MAX_PAGES = 20;
+// Leave capacity in the shared crawler rate-limit budget for dependent modules.
+const MAX_PAGES = 8;
 const MAX_DEPTH = 3;
 const PAGE_TIMEOUT_MS = 45000;
 const TOTAL_TIMEOUT_MS = 45000;
@@ -89,7 +110,12 @@ function isInternalUrl(url: string, baseDomain: string): boolean {
 /**
  * Fetch robots.txt and check if URL is allowed
  */
-async function isAllowedByRobots(url: string, baseUrl: URL): Promise<boolean> {
+async function isAllowedByRobots(
+  url: string,
+  baseUrl: URL,
+  tracker?: CostTracker,
+  signal?: AbortSignal
+): Promise<boolean> {
   try {
     const robotsUrl = `${baseUrl.protocol}//${baseUrl.hostname}/robots.txt`;
     const robotsTxt = await withModuleCache<string>(
@@ -104,11 +130,13 @@ async function isAllowedByRobots(url: string, baseUrl: URL): Promise<boolean> {
           {
             provider: 'crawler',
             operation: 'websiteCrawler:robots_txt',
+            signal,
             degrade: true,
             fallbackValue: '',
           },
           async ({ signal }) => {
-            const res = await fetch(robotsUrl, { signal });
+            const res = await safeFetch(robotsUrl, { signal });
+            tracker?.addApiCall('WEBSITE_FETCH');
             if (!res.ok) return '';
             return await res.text();
           }
@@ -153,30 +181,49 @@ export function classifyFailure(
     return 'TIMEOUT';
   }
 
-  // 2. ANTI_BOT check
-  const serverHeader = (headers['server'] || headers['Server'] || '').toLowerCase();
-  const hasCfRay = !!(headers['cf-ray'] || headers['CF-Ray']);
+  // 2. ANTI_BOT check — must be evidence of an actual challenge/block *page*,
+  // not merely that the site sits behind a CDN/WAF. Cloudflare fronts a large
+  // share of the web (`server: cloudflare`, `cf-ray` on every normal response)
+  // and the bare word "captcha" appears on any contact form using reCAPTCHA;
+  // treating those as bot walls discarded full 200 OK pages (measured: 160KB
+  // real homepages classified ANTI_BOT) and starved every HTML-dependent module.
   const lowerHtml = html.toLowerCase();
-  const antiBotKeywords = [
+  const challengePageMarkers = [
     'cf-challenge',
     'challenge-platform',
-    'incapsula',
-    'recaptcha',
+    '/cdn-cgi/challenge-platform',
+    'cf-browser-verification',
     'just a moment...',
+    'checking your browser before accessing',
     'one more step',
     'ddos-guard',
-    'captcha',
+    'incapsula_resource',
+    '_incapsula_',
+    'perimeterx',
+    'px-captcha',
+    'attention required! | cloudflare',
+    'access denied',
+    'verify you are human',
+    'are you a human',
   ];
-  const hasAntiBotKeyword = antiBotKeywords.some((keyword) => lowerHtml.includes(keyword));
+  const hasChallengeMarker = challengePageMarkers.some((marker) => lowerHtml.includes(marker));
+  // A genuine challenge page is small and has no meaningful body content.
+  const titleMatch = lowerHtml.match(/<title[^>]*>([^<]*)<\/title>/);
+  const title = titleMatch?.[1]?.trim() ?? '';
+  const challengeTitle =
+    title.includes('just a moment') ||
+    title.includes('attention required') ||
+    title.includes('access denied') ||
+    title.includes('security check') ||
+    title.includes('bot verification');
+  const tinyBody = html.length > 0 && html.length < 6_000;
 
   if (
     status === 403 ||
     status === 429 ||
-    serverHeader.includes('cloudflare') ||
-    serverHeader.includes('sucuri') ||
-    serverHeader.includes('imperva') ||
-    hasCfRay ||
-    hasAntiBotKeyword
+    status === 503 && (hasChallengeMarker || challengeTitle) ||
+    challengeTitle ||
+    (hasChallengeMarker && tinyBody)
   ) {
     return 'ANTI_BOT';
   }
@@ -196,62 +243,71 @@ export function classifyFailure(
 /**
  * Fetch and analyze a single page
  */
-async function analyzePage(url: string): Promise<PageMetrics> {
+async function analyzePage(
+  url: string,
+  tracker?: CostTracker,
+  signal?: AbortSignal,
+  opts: { auditId?: string; browserFallback?: boolean } = {}
+): Promise<{ metrics: PageMetrics; html: string | null }> {
   const startTime = Date.now();
 
   try {
-    const response = await withProviderResilience<Response>(
+    // Shared HTML collector: honest auditor UA first; for the homepage (the page
+    // every dependent module needs) fall back to the shared headless browser
+    // when the site blocks non-browser clients (measured 403s on real customers).
+    const collected = await withProviderResilience<CollectedHtml>(
       {
         provider: 'crawler',
         operation: 'websiteCrawler:analyzePage',
+        signal,
         degrade: false,
       },
       async ({ signal }) => {
-        const res = await fetch(url, {
+        const res = await collectHtml(url, {
+          auditId: opts.auditId,
           signal,
-          headers: {
-            'User-Agent':
-              'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-            'Accept-Language': 'en-US,en;q=0.9',
-          },
+          tracker,
+          allowBrowserFallback: opts.browserFallback === true,
         });
-        if (!res.ok && res.status !== 404) {
-          throw new Error(`HTTP error ${res.status}: ${res.statusText}`);
+        if (!res.ok && res.status !== 404 && !res.blocked) {
+          throw new Error(`HTTP error ${res.status}`);
         }
         return res;
       }
     );
 
-    const loadTimeMs = Date.now() - startTime;
-    const html = await response.text();
+    const loadTimeMs = collected.durationMs || Date.now() - startTime;
+    const html = collected.html;
     const pageSizeKB = Math.round(Buffer.byteLength(html, 'utf8') / 1024);
+    const headers: Record<string, string> = collected.headers;
+    const response = { status: collected.status } as { status: number };
 
-    const headers: Record<string, string> = {};
-    response.headers.forEach((value, key) => {
-      headers[key] = value;
-    });
-
-    const classification = classifyFailure(response.status, html, headers);
+    const classification = collected.blocked
+      ? 'ANTI_BOT'
+      : classifyFailure(collected.status, html, headers);
 
     if (classification !== 'NONE') {
       return {
-        url,
-        status: response.status,
-        title: null,
-        metaDescription: null,
-        h1Count: 0,
-        h1Contents: [],
-        wordCount: 0,
-        imageCount: 0,
-        imagesWithAlt: 0,
-        internalLinks: 0,
-        externalLinks: 0,
-        hasStructuredData: false,
-        loadTimeMs,
-        pageSizeKB,
-        failureClassification: classification,
-        error: classification === 'ANTI_BOT' ? 'WAF challenge/block page detected' : undefined,
+        metrics: {
+          url,
+          status: response.status,
+          title: null,
+          metaDescription: null,
+          h1Count: 0,
+          h1Contents: [],
+          wordCount: 0,
+          imageCount: 0,
+          imagesWithAlt: 0,
+          internalLinks: 0,
+          externalLinks: 0,
+          hasStructuredData: false,
+          hasViewportMeta: false,
+          loadTimeMs,
+          pageSizeKB,
+          failureClassification: classification,
+          error: classification === 'ANTI_BOT' ? 'WAF challenge/block page detected' : undefined,
+        },
+        html: null,
       };
     }
 
@@ -298,22 +354,31 @@ async function analyzePage(url: string): Promise<PageMetrics> {
     const hasStructuredData =
       $('script[type="application/ld+json"]').length > 0 || $('[itemscope]').length > 0;
 
+    // Mobile viewport meta — P1-35 (Wave 7): computed here as a free byproduct of
+    // the parse this page already does, so seoDeep can reuse it via
+    // dependencyResults instead of re-fetching the page to check for it.
+    const hasViewportMeta = !!$('meta[name="viewport"]').attr('content');
+
     return {
-      url,
-      status: response.status,
-      title,
-      metaDescription,
-      h1Count,
-      h1Contents,
-      wordCount,
-      imageCount,
-      imagesWithAlt,
-      internalLinks,
-      externalLinks,
-      hasStructuredData,
-      loadTimeMs,
-      pageSizeKB,
-      failureClassification: 'NONE',
+      metrics: {
+        url,
+        status: response.status,
+        title,
+        metaDescription,
+        h1Count,
+        h1Contents,
+        wordCount,
+        imageCount,
+        imagesWithAlt,
+        internalLinks,
+        externalLinks,
+        hasStructuredData,
+        hasViewportMeta,
+        loadTimeMs,
+        pageSizeKB,
+        failureClassification: 'NONE',
+      },
+      html,
     };
   } catch (error) {
     const loadTimeMs = Date.now() - startTime;
@@ -336,22 +401,26 @@ async function analyzePage(url: string): Promise<PageMetrics> {
     const classification = classifyFailure(status, '', {}, errorMsg, errorName);
 
     return {
-      url,
-      status,
-      title: null,
-      metaDescription: null,
-      h1Count: 0,
-      h1Contents: [],
-      wordCount: 0,
-      imageCount: 0,
-      imagesWithAlt: 0,
-      internalLinks: 0,
-      externalLinks: 0,
-      hasStructuredData: false,
-      loadTimeMs,
-      pageSizeKB: 0,
-      error: errorMsg,
-      failureClassification: classification,
+      metrics: {
+        url,
+        status,
+        title: null,
+        metaDescription: null,
+        h1Count: 0,
+        h1Contents: [],
+        wordCount: 0,
+        imageCount: 0,
+        imagesWithAlt: 0,
+        internalLinks: 0,
+        externalLinks: 0,
+        hasStructuredData: false,
+        hasViewportMeta: false,
+        loadTimeMs,
+        pageSizeKB: 0,
+        error: errorMsg,
+        failureClassification: classification,
+      },
+      html: null,
     };
   }
 }
@@ -387,10 +456,15 @@ export async function crawlWebsite(input: WebsiteCrawlerInput): Promise<CrawlRes
   const queue: { url: string; depth: number }[] = [{ url: input.url, depth: 0 }];
   const crawledPages: PageMetrics[] = [];
   const allFoundUrls = new Set<string>([input.url]);
+  let homepageHtml: string | null = null;
 
   logger.info({ businessName: input.businessName, url: input.url }, 'Starting website crawl');
 
   while (queue.length > 0 && crawledPages.length < MAX_PAGES) {
+    if (input.signal?.aborted) {
+      throw input.signal.reason ?? new DOMException('Website crawl aborted', 'AbortError');
+    }
+
     // Check total timeout
     if (Date.now() - startTime > TOTAL_TIMEOUT_MS) {
       logger.warn('Website crawl timeout reached, stopping');
@@ -406,7 +480,7 @@ export async function crawlWebsite(input: WebsiteCrawlerInput): Promise<CrawlRes
     }
 
     // Check robots.txt
-    const allowed = await isAllowedByRobots(url, baseUrl);
+    const allowed = await isAllowedByRobots(url, baseUrl, input.tracker, input.signal);
     if (!allowed) {
       logger.info({ url }, 'URL disallowed by robots.txt, skipping');
       visited.add(url);
@@ -415,8 +489,14 @@ export async function crawlWebsite(input: WebsiteCrawlerInput): Promise<CrawlRes
 
     // Crawl the page
     visited.add(url);
-    const metrics = await analyzePage(url);
+    const { metrics, html: pageHtml } = await analyzePage(url, input.tracker, input.signal, {
+      auditId: input.auditId,
+      browserFallback: url === input.url || depth === 0,
+    });
     crawledPages.push(metrics);
+    if (url === input.url) {
+      homepageHtml = pageHtml;
+    }
 
     logger.info(
       {
@@ -431,27 +511,9 @@ export async function crawlWebsite(input: WebsiteCrawlerInput): Promise<CrawlRes
     // Extract links only from successful pages
     if (metrics.status === 200 && depth < MAX_DEPTH) {
       try {
-        const html = await withProviderResilience<string>(
-          {
-            provider: 'crawler',
-            operation: 'websiteCrawler:extractLinks',
-            degrade: true,
-            fallbackValue: '',
-          },
-          async ({ signal }) => {
-            const response = await fetch(url, {
-              signal,
-              headers: {
-                'User-Agent':
-                  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-              },
-            });
-            if (!response.ok) {
-              throw new Error(`HTTP error ${response.status}: ${response.statusText}`);
-            }
-            return await response.text();
-          }
-        );
+        // Reuse the HTML analyzePage already fetched instead of re-fetching the
+        // same page (previously every crawled page was fetched twice).
+        const html = pageHtml ?? '';
         const links = extractInternalLinks(html, baseUrl);
 
         for (const link of links) {
@@ -554,5 +616,6 @@ export async function crawlWebsite(input: WebsiteCrawlerInput): Promise<CrawlRes
     schemaOrgCoverage,
     duplicateTitles,
     failureClassification: overallClassification,
+    homepageHtml,
   };
 }

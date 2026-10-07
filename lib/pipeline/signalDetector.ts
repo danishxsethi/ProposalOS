@@ -10,9 +10,19 @@
  * Requirements: 14.1, 14.2, 14.3, 14.4, 14.5, 14.6
  */
 
-import { prisma } from '@/lib/db';
+import { prisma as scopedPrisma } from '@/lib/prisma';
+import { runScopedToOwnerTenant, runWithTenantAsync } from '@/lib/tenant/context';
 
 import type { DetectedSignal, SignalType } from './types';
+
+// ponytail: this module has pre-existing field/enum mismatches against the real Prisma
+// schema (status casing, gbpPlaceId/websiteUrl/industry select fields) that were silently
+// masked by lib/db.ts's `prisma: any` typing before Wave 1 (P1-05) replaced it with the
+// real scoped client. Casting back to `any` here preserves the exact prior runtime
+// behavior (unchanged) while still gaining real tenant-scoping/RLS enforcement — fixing
+// the underlying field/enum bugs is out of Wave 1's scope. Tracked as new findings for a
+// future wave (see REMEDIATION_FINDINGS.json P2-56).
+const prisma = scopedPrisma as any;
 
 /**
  * Signal detection schedule (cron expressions)
@@ -41,20 +51,22 @@ export async function runDetection(
   tenantId: string,
   signalType: SignalType
 ): Promise<DetectedSignal[]> {
-  switch (signalType) {
-    case 'bad_review':
-      return detectBadReviews(tenantId);
-    case 'website_change':
-      return detectWebsiteChanges(tenantId);
-    case 'competitor_upgrade':
-      return detectCompetitorUpgrades(tenantId);
-    case 'new_business_license':
-      return detectNewBusinessLicenses(tenantId);
-    case 'hiring_spike':
-      return detectHiringSpikes(tenantId);
-    default:
-      throw new Error(`Unknown signal type: ${signalType}`);
-  }
+  return runWithTenantAsync(tenantId, () => {
+    switch (signalType) {
+      case 'bad_review':
+        return detectBadReviews(tenantId);
+      case 'website_change':
+        return detectWebsiteChanges(tenantId);
+      case 'competitor_upgrade':
+        return detectCompetitorUpgrades(tenantId);
+      case 'new_business_license':
+        return detectNewBusinessLicenses(tenantId);
+      case 'hiring_spike':
+        return detectHiringSpikes(tenantId);
+      default:
+        throw new Error(`Unknown signal type: ${signalType}`);
+    }
+  });
 }
 
 /**
@@ -313,45 +325,52 @@ export function deduplicateSignals(signals: DetectedSignal[]): DetectedSignal[] 
  * @param signal - Detected signal to trigger outreach for
  */
 export async function triggerSignalOutreach(signal: DetectedSignal): Promise<void> {
-  // Persist the signal to the database
-  await prisma.detectedSignal.create({
-    data: {
-      tenantId: signal.leadId
-        ? (
-            await prisma.prospectLead.findUnique({
-              where: { id: signal.leadId },
-              select: { tenantId: true },
-            })
-          )?.tenantId || ''
-        : '',
-      leadId: signal.leadId,
-      signalType: signal.signalType,
-      priority: signal.priority,
-      sourceData: signal.sourceData,
-      outreachTriggered: false,
-      detectedAt: signal.detectedAt,
+  await runScopedToOwnerTenant(
+    'pipeline:signal-outreach:resolve-lead-tenant',
+    async () => {
+      if (!signal.leadId) return null;
+      const lead = await prisma.prospectLead.findUnique({
+        where: { id: signal.leadId },
+        select: { tenantId: true },
+      });
+      return lead?.tenantId ?? null;
     },
-  });
+    async (tenantId) => {
+      // Persist the signal to the database
+      await prisma.detectedSignal.create({
+        data: {
+          tenantId,
+          leadId: signal.leadId,
+          signalType: signal.signalType,
+          priority: signal.priority,
+          sourceData: signal.sourceData,
+          outreachTriggered: false,
+          detectedAt: signal.detectedAt,
+        },
+      });
 
-  // Generate signal-specific outreach email
-  const emailBody = generateSignalEmail(signal);
+      // Generate signal-specific outreach email
+      const emailBody = generateSignalEmail(signal);
+      void emailBody;
 
-  // In a real implementation, this would:
-  // 1. Create an outreach email record
-  // 2. Queue it for sending via the outreach agent
-  // 3. Mark the signal as outreachTriggered
+      // In a real implementation, this would:
+      // 1. Create an outreach email record
+      // 2. Queue it for sending via the outreach agent
+      // 3. Mark the signal as outreachTriggered
 
-  // For now, we'll just mark it as triggered
-  await prisma.detectedSignal.updateMany({
-    where: {
-      leadId: signal.leadId,
-      signalType: signal.signalType,
-      detectedAt: signal.detectedAt,
-    },
-    data: {
-      outreachTriggered: true,
-    },
-  });
+      // For now, we'll just mark it as triggered
+      await prisma.detectedSignal.updateMany({
+        where: {
+          leadId: signal.leadId,
+          signalType: signal.signalType,
+          detectedAt: signal.detectedAt,
+        },
+        data: {
+          outreachTriggered: true,
+        },
+      });
+    }
+  );
 }
 
 /**
@@ -399,14 +418,16 @@ export async function signalExists(
 ): Promise<boolean> {
   const windowStart = new Date(Date.now() - windowHours * 60 * 60 * 1000);
 
-  const existing = await prisma.detectedSignal.findFirst({
-    where: {
-      tenantId,
-      leadId: leadId || null,
-      signalType,
-      detectedAt: { gte: windowStart },
-    },
-  });
+  const existing = await runWithTenantAsync(tenantId, () =>
+    prisma.detectedSignal.findFirst({
+      where: {
+        tenantId,
+        leadId: leadId || null,
+        signalType,
+        detectedAt: { gte: windowStart },
+      },
+    })
+  );
 
   return existing !== null;
 }

@@ -94,3 +94,34 @@ reconcile-billing:
   endpoint: '/api/cron/reconcile-billing'
   description: 'Reconcile Stripe subscriptions, payments, and abandoned checkouts'
   timezone: 'America/New_York'
+
+
+# 12. Metering Sweep - Every 5 minutes
+# Reports unreported UsageRecords to Stripe via Meter Events API.
+# Durable delivery guarantee for billing (inline reporting is best-effort in serverless).
+# Handles poison records: marks NOT_BILLABLE (no stripeCustomerId) or EXPIRED_UNDELIVERED (>34 days).
+metering-sweep:
+  schedule: '*/5 * * * *'
+  endpoint: '/api/cron/metering-sweep'
+  description: 'Sweep unreported usage records to Stripe (billing delivery guarantee)'
+  timezone: 'UTC'
+
+# 13. Audit Job Sweep - Every minute (P1-24)
+# Durable fallback poller for the AuditJob queue (lib/queue/auditJobQueue.ts).
+# Claims and processes up to WORKER_POLL_BATCH_SIZE (default 5) QUEUED jobs per tick.
+# This is the safety net for every audit-execution entry point that now enqueues via
+# the durable queue instead of firing-and-forgetting runAudit() in-process — without
+# this poller (or WORKER_DISPATCH_URL configured for push-dispatch), jobs would sit in
+# QUEUED indefinitely.
+#
+# IMPORTANT: unlike the other cron jobs above (which use CRON_SECRET), this endpoint
+# authenticates with WORKER_SECRET — a distinct secret (see .env.example). Deploy with:
+#   gcloud scheduler jobs create http audit-job-sweep --location=[REGION] \
+#     --schedule="* * * * *" --uri="[URL]/api/worker/audit-job" --http-method=POST \
+#     --headers="Authorization=Bearer [WORKER_SECRET]" --message-body="{}"
+audit-job-sweep:
+  schedule: '* * * * *'
+  endpoint: '/api/worker/audit-job'
+  description: 'Durable fallback poller for the AuditJob queue (uses WORKER_SECRET, not CRON_SECRET)'
+  timezone: 'UTC'
+

@@ -13,6 +13,7 @@
 import { NextResponse } from 'next/server';
 
 import { generateTraceId, InternalError } from '@/lib/api/errors';
+import { logger } from '@/lib/logger';
 import { verifyCronAuth } from '@/lib/middleware/cronAuth';
 import { withRateLimit } from '@/lib/middleware/rateLimit';
 import { reconcileSubscriptions } from '@/lib/stripe/reconcile';
@@ -35,7 +36,7 @@ async function handleReconcileBilling(req: Request): Promise<NextResponse> {
     response.headers.set('X-Trace-Id', traceId);
     return response;
   } catch (error) {
-    console.error('Billing reconciliation cron error:', error);
+    logger.error('Billing reconciliation cron error:', error);
     const internalError = new InternalError('Billing reconciliation cron failed', {
       originalError: error instanceof Error ? error.message : String(error),
     });

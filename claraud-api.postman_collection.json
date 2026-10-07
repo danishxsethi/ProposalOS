@@ -1,0 +1,773 @@
+{
+  "info": {
+    "name": "Claraud API",
+    "description": "Full API collection for the Claraud autonomous delivery engine. Covers health probes, auth, audits, proposals, pipeline, billing, and admin endpoints.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "base_url", "value": "http://localhost:3000", "type": "string" },
+    { "key": "api_key", "value": "", "type": "string" },
+    { "key": "audit_id", "value": "{{audit_id}}", "type": "string" },
+    { "key": "proposal_id", "value": "{{proposal_id}}", "type": "string" },
+    { "key": "prospect_id", "value": "{{prospect_id}}", "type": "string" },
+    { "key": "plan_id", "value": "{{plan_id}}", "type": "string" },
+    { "key": "tenant_id", "value": "{{tenant_id}}", "type": "string" }
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "description": "Liveness, readiness, and full health check probes.",
+      "item": [
+        {
+          "name": "GET /api/health/live",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/health/live",
+            "description": "Lightweight liveness probe. Does NOT query the DB. Returns 200 + {status:'alive'} when the Node process is up."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Body has status:alive', () => {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json.status).to.eql('alive');",
+                  "  pm.expect(json.timestamp).to.be.a('string');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /api/health/ready",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/health/ready",
+            "description": "Readiness probe. Checks DB connectivity. Returns 200 when ready, 503 when not."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200 or 503', () => {",
+                  "  pm.expect([200, 503]).to.include(pm.response.code);",
+                  "});",
+                  "pm.test('Body has ready field', () => {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json).to.have.property('ready');",
+                  "  pm.expect(json).to.have.property('status');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /api/health",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/health",
+            "description": "Full health check: DB, cron, queue, external APIs. Returns 200 (healthy), 503 (degraded/unhealthy)."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200 or 503', () => {",
+                  "  pm.expect([200, 503]).to.include(pm.response.code);",
+                  "});",
+                  "pm.test('Response has checks object', () => {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json).to.have.property('status');",
+                  "  pm.expect(json).to.have.property('checks');",
+                  "  pm.expect(json.checks).to.have.all.keys('database','cron','queue','externalApis');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Auth",
+      "description": "Registration and NextAuth session endpoints.",
+      "item": [
+        {
+          "name": "POST /api/auth/register",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/api/auth/register",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Jane Doe\",\n  \"email\": \"jane@example.com\",\n  \"password\": \"securepass123\",\n  \"companyName\": \"Acme Agency\"\n}"
+            },
+            "description": "Register a new user + tenant. Rate-limited to 10 attempts per 15 min per IP."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200 or 400', () => {",
+                  "  pm.expect([200, 400]).to.include(pm.response.code);",
+                  "});",
+                  "if (pm.response.code === 200) {",
+                  "  pm.test('Returns user object', () => {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json.user).to.have.all.keys('id','name','email');",
+                  "  });",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Audits",
+      "description": "Create and retrieve audits.",
+      "item": [
+        {
+          "name": "POST /api/audit",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/api/audit",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Idempotency-Key", "value": "{{$guid}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"url\": \"https://example.com\",\n  \"industry\": \"Restaurant\",\n  \"businessName\": \"Example Bistro\",\n  \"businessCity\": \"New York\"\n}"
+            },
+            "description": "Create and queue a new audit. Requires auth + agency_member role. Rate-limited to 5/min."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200 or 401 or 429', () => {",
+                  "  pm.expect([200, 401, 429]).to.include(pm.response.code);",
+                  "});",
+                  "if (pm.response.code === 200) {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json.auditId).to.be.a('string');",
+                  "  pm.collectionVariables.set('audit_id', json.auditId);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /api/audit/:id",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/audit/{{audit_id}}",
+            "description": "Retrieve a single audit by ID. Tenant-scoped. Includes findings and proposal stubs."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200 or 401 or 404', () => {",
+                  "  pm.expect([200, 401, 404]).to.include(pm.response.code);",
+                  "});",
+                  "if (pm.response.code === 200) {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json).to.have.property('id');",
+                  "  pm.expect(json).to.have.property('status');",
+                  "  pm.expect(json).to.have.property('findings');",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /api/audits",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/audits",
+              "host": ["{{base_url}}"],
+              "path": ["api", "audits"]
+            },
+            "description": "List all audits for the authenticated tenant."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200 or 401', () => {",
+                  "  pm.expect([200, 401]).to.include(pm.response.code);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /api/audit/:id/diagnose",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/api/audit/{{audit_id}}/diagnose",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{}" },
+            "description": "Run diagnosis on a completed audit."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200 or 401 or 404', () => {",
+                  "  pm.expect([200, 401, 404]).to.include(pm.response.code);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /api/audit/:id/propose",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/api/audit/{{audit_id}}/propose",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{}" },
+            "description": "Generate a proposal from a diagnosed audit."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200 or 401 or 404', () => {",
+                  "  pm.expect([200, 401, 404]).to.include(pm.response.code);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Proposals",
+      "description": "List and manage proposals.",
+      "item": [
+        {
+          "name": "GET /api/proposals",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/proposals?page=1&limit=20",
+              "host": ["{{base_url}}"],
+              "path": ["api", "proposals"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "20" },
+                { "key": "status", "value": "", "disabled": true },
+                { "key": "cursor", "value": "", "disabled": true }
+              ]
+            },
+            "description": "List proposals with cursor-based pagination. Supports ?status, ?cursor, ?page, ?limit (max 100)."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200 or 401', () => {",
+                  "  pm.expect([200, 401]).to.include(pm.response.code);",
+                  "});",
+                  "if (pm.response.code === 200) {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json).to.have.property('proposals');",
+                  "  pm.expect(json).to.have.property('pagination');",
+                  "  pm.expect(json.pagination).to.have.all.keys('cursor','page','limit','total','totalPages','hasMore');",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Pipeline",
+      "description": "Human review queue, prospect details, metrics, and engagement tracking.",
+      "item": [
+        {
+          "name": "GET /api/pipeline/metrics",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/pipeline/metrics?days=7",
+              "host": ["{{base_url}}"],
+              "path": ["api", "pipeline", "metrics"],
+              "query": [{ "key": "days", "value": "7" }]
+            },
+            "description": "Real-time pipeline metrics for the authenticated tenant. Default: last 7 days."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200 or 401', () => {",
+                  "  pm.expect([200, 401]).to.include(pm.response.code);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /api/pipeline/review",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/pipeline/review?sortBy=engagementScore&sortOrder=desc&page=1&pageSize=20",
+              "host": ["{{base_url}}"],
+              "path": ["api", "pipeline", "review"],
+              "query": [
+                { "key": "status", "value": "hot_lead", "disabled": true },
+                { "key": "vertical", "value": "", "disabled": true },
+                { "key": "minPainScore", "value": "", "disabled": true },
+                { "key": "maxPainScore", "value": "", "disabled": true },
+                { "key": "minEngagementScore", "value": "", "disabled": true },
+                { "key": "sortBy", "value": "engagementScore" },
+                { "key": "sortOrder", "value": "desc" },
+                { "key": "page", "value": "1" },
+                { "key": "pageSize", "value": "20" }
+              ]
+            },
+            "description": "Get the human review queue. Supports filtering by status, vertical, pain/engagement scores. Requires auth."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200 or 401', () => {",
+                  "  pm.expect([200, 401]).to.include(pm.response.code);",
+                  "});",
+                  "if (pm.response.code === 200) {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json).to.have.property('items');",
+                  "  pm.expect(json).to.have.property('total');",
+                  "  pm.expect(json).to.have.property('page');",
+                  "  pm.expect(json).to.have.property('pageSize');",
+                  "  pm.expect(json).to.have.property('totalPages');",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /api/pipeline/review — Approve",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/api/pipeline/review",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"prospectId\": \"{{prospect_id}}\",\n  \"action\": \"approve\",\n  \"notes\": \"Strong fit, high pain score.\"\n}"
+            },
+            "description": "Approve a prospect in the review queue. Requires ADMIN or OWNER role."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200 or 401 or 403 or 400', () => {",
+                  "  pm.expect([200, 400, 401, 403]).to.include(pm.response.code);",
+                  "});",
+                  "if (pm.response.code === 200) {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json.success).to.be.true;",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /api/pipeline/review — Reject",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/api/pipeline/review",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"prospectId\": \"{{prospect_id}}\",\n  \"action\": \"reject\",\n  \"reason\": \"Not a good fit at this time.\",\n  \"notes\": \"Revisit in Q3.\"\n}"
+            },
+            "description": "Reject a prospect in the review queue. Requires ADMIN or OWNER role."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200 or 401 or 403 or 400', () => {",
+                  "  pm.expect([200, 400, 401, 403]).to.include(pm.response.code);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /api/pipeline/prospects/:id",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/pipeline/prospects/{{prospect_id}}",
+            "description": "Get full prospect context: audit, proposal, engagement score, pain score, state history."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200 or 401 or 404', () => {",
+                  "  pm.expect([200, 401, 404]).to.include(pm.response.code);",
+                  "});",
+                  "if (pm.response.code === 200) {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json).to.have.all.keys('prospect','painScore','painBreakdown','engagementScore','stateHistory');",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /api/pipeline/engagement",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/pipeline/engagement",
+            "description": "Health check for the engagement tracking service."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Service operational', () => {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json.status).to.eql('operational');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /api/pipeline/engagement",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/api/pipeline/engagement",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "x-webhook-signature", "value": "{{webhook_signature}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"leadId\": \"{{prospect_id}}\",\n  \"eventType\": \"proposal_view\",\n  \"timestamp\": \"2026-04-15T10:00:00.000Z\",\n  \"metadata\": { \"scrollDepth\": 0.75 }\n}"
+            },
+            "description": "Record an engagement event (email_open, email_click, proposal_view, tier_interaction). Requires HMAC webhook signature."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200 or 401 or 400', () => {",
+                  "  pm.expect([200, 400, 401]).to.include(pm.response.code);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Pricing",
+      "description": "Pricing plan management with multi-currency Stripe integration.",
+      "item": [
+        {
+          "name": "GET /api/pricing/plans — All",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/pricing/plans",
+            "description": "Get all active pricing plans (saas + proposal)."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Has saas and proposal keys', () => {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json).to.have.all.keys('saas','proposal');",
+                  "  pm.expect(json.saas).to.be.an('array');",
+                  "  pm.expect(json.proposal).to.be.an('array');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /api/pricing/plans?type=saas",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/pricing/plans?type=saas",
+              "host": ["{{base_url}}"],
+              "path": ["api", "pricing", "plans"],
+              "query": [{ "key": "type", "value": "saas" }]
+            },
+            "description": "Get active SaaS pricing plans."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Returns array', () => {",
+                  "  pm.expect(pm.response.json()).to.be.an('array');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /api/pricing/plans?id=:planId",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/pricing/plans?id={{plan_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "pricing", "plans"],
+              "query": [{ "key": "id", "value": "{{plan_id}}" }]
+            },
+            "description": "Get a specific pricing plan by ID."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200 or 404', () => {",
+                  "  pm.expect([200, 404]).to.include(pm.response.code);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "PATCH /api/pricing/plans — Sync Stripe",
+          "request": {
+            "method": "PATCH",
+            "url": {
+              "raw": "{{base_url}}/api/pricing/plans?id={{plan_id}}&action=sync-stripe",
+              "host": ["{{base_url}}"],
+              "path": ["api", "pricing", "plans"],
+              "query": [
+                { "key": "id", "value": "{{plan_id}}" },
+                { "key": "action", "value": "sync-stripe" }
+              ]
+            },
+            "description": "Sync a pricing plan's prices with Stripe for all supported currencies. Requires auth."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200 or 401 or 400', () => {",
+                  "  pm.expect([200, 400, 401]).to.include(pm.response.code);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Billing",
+      "description": "Stripe checkout and billing portal.",
+      "item": [
+        {
+          "name": "POST /api/stripe/checkout-saas",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/api/stripe/checkout-saas",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Idempotency-Key", "value": "{{$guid}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"planId\": \"starter\"\n}"
+            },
+            "description": "Create a Stripe checkout session for a SaaS plan. Returns {url} to redirect to. Includes 14-day trial."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200 or 400 or 401', () => {",
+                  "  pm.expect([200, 400, 401]).to.include(pm.response.code);",
+                  "});",
+                  "if (pm.response.code === 200) {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json.url).to.be.a('string').and.include('stripe.com');",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /api/billing/portal",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/api/billing/portal",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{}" },
+            "description": "Create a Stripe billing portal session for the authenticated tenant."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200 or 401', () => {",
+                  "  pm.expect([200, 401]).to.include(pm.response.code);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Admin",
+      "description": "Admin-only endpoints for feature flags, metrics, and telemetry.",
+      "item": [
+        {
+          "name": "GET /api/admin/metrics",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/admin/metrics",
+            "description": "Admin metrics dashboard data."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200 or 401 or 403', () => {",
+                  "  pm.expect([200, 401, 403]).to.include(pm.response.code);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /api/admin/feature-flags",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/admin/feature-flags",
+            "description": "List all feature flags."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200 or 401 or 403', () => {",
+                  "  pm.expect([200, 401, 403]).to.include(pm.response.code);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /api/admin/human-review",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/admin/human-review",
+            "description": "Admin view of the human review queue across all tenants."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200 or 401 or 403', () => {",
+                  "  pm.expect([200, 401, 403]).to.include(pm.response.code);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

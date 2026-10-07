@@ -1,0 +1,9 @@
+$ npm audit --json
+vulnerabilities: {info:0, low:1, moderate:6, high:0, critical:0, total:7}
+ - uuid <11.1.1 (moderate, buffer bounds check, GHSA-w5hq-g745-h8pq) — isDirect, fix uuid@14.0.2 breaking
+ - @google-cloud/storage 2.2.0-2.5.0 ||5.19.0-8.0.0 depends on teeny-request+uuid
+ - teeny-request 3.9.1-9.0.0 depends on uuid
+ - gaxios 6.4.0-6.7.1 depends on uuid
+ - protobufjs 7.5.0-7.6.4 DoS infinite loop (GHSA-j3f2-48v5-ccww)
+ - @grpc/proto-loader via protobufjs
+ - esbuild 0.27.3-0.28.0 low (dev server file read, Windows)

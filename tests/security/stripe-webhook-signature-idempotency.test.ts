@@ -8,13 +8,20 @@ const mocks = vi.hoisted(() => ({
 
   processedWebhookFindUnique: vi.fn(),
   processedWebhookCreate: vi.fn(),
+  processedWebhookCreateMany: vi.fn().mockResolvedValue({ count: 1 }),
   failedWebhookUpsert: vi.fn(),
   proposalFindUnique: vi.fn(),
+  proposalAcceptanceFindUnique: vi.fn(),
   proposalUpdate: vi.fn(),
+  proposalUpdateMany: vi.fn(),
   tenantFindFirst: vi.fn(),
   tenantUpdate: vi.fn(),
   checkoutAttemptUpdateMany: vi.fn(),
+  checkoutAttemptFindUnique: vi.fn(),
   projectUpsert: vi.fn(),
+  paymentCreate: vi.fn(),
+  orderUpsert: vi.fn(),
+  fulfillmentTaskUpsert: vi.fn(),
   subscriptionFindUnique: vi.fn(),
   subscriptionUpsert: vi.fn(),
   subscriptionUpdateMany: vi.fn(),
@@ -50,6 +57,7 @@ vi.mock('@/lib/prisma', () => ({
     processedWebhookEvent: {
       findUnique: mocks.processedWebhookFindUnique,
       create: mocks.processedWebhookCreate,
+      createMany: mocks.processedWebhookCreateMany,
     },
     failedWebhookEvent: {
       upsert: mocks.failedWebhookUpsert,
@@ -57,6 +65,10 @@ vi.mock('@/lib/prisma', () => ({
     proposal: {
       findUnique: mocks.proposalFindUnique,
       update: mocks.proposalUpdate,
+      updateMany: mocks.proposalUpdateMany,
+    },
+    proposalAcceptance: {
+      findUnique: mocks.proposalAcceptanceFindUnique,
     },
     tenant: {
       findFirst: mocks.tenantFindFirst,
@@ -64,10 +76,13 @@ vi.mock('@/lib/prisma', () => ({
     },
     checkoutAttempt: {
       updateMany: mocks.checkoutAttemptUpdateMany,
+      findUnique: mocks.checkoutAttemptFindUnique,
     },
     project: {
       upsert: mocks.projectUpsert,
     },
+    order: { upsert: mocks.orderUpsert },
+    fulfillmentTask: { upsert: mocks.fulfillmentTaskUpsert },
     subscription: {
       findUnique: mocks.subscriptionFindUnique,
       upsert: mocks.subscriptionUpsert,
@@ -81,6 +96,7 @@ vi.mock('@/lib/prisma', () => ({
       return await cb({
         processedWebhookEvent: {
           create: mocks.processedWebhookCreate,
+          createMany: mocks.processedWebhookCreateMany,
         },
         failedWebhookEvent: {
           upsert: mocks.failedWebhookUpsert,
@@ -88,17 +104,22 @@ vi.mock('@/lib/prisma', () => ({
         proposal: {
           findUnique: mocks.proposalFindUnique,
           update: mocks.proposalUpdate,
+          updateMany: mocks.proposalUpdateMany,
         },
+        proposalAcceptance: { findUnique: mocks.proposalAcceptanceFindUnique },
         tenant: {
           findFirst: mocks.tenantFindFirst,
           update: mocks.tenantUpdate,
         },
         checkoutAttempt: {
           updateMany: mocks.checkoutAttemptUpdateMany,
+          findUnique: mocks.checkoutAttemptFindUnique,
         },
         project: {
           upsert: mocks.projectUpsert,
         },
+        order: { upsert: mocks.orderUpsert },
+        fulfillmentTask: { upsert: mocks.fulfillmentTaskUpsert },
         subscription: {
           findUnique: mocks.subscriptionFindUnique,
           upsert: mocks.subscriptionUpsert,
@@ -107,6 +128,7 @@ vi.mock('@/lib/prisma', () => ({
         payment: {
           findUnique: mocks.paymentFindUnique,
           upsert: mocks.paymentUpsert,
+          create: mocks.paymentCreate,
         },
       });
     }),
@@ -231,6 +253,7 @@ describe('Stripe webhook security & idempotency suite', () => {
     });
 
     mocks.processedWebhookFindUnique.mockResolvedValue(null);
+    mocks.processedWebhookCreateMany.mockResolvedValue({ count: 1 });
 
     const res = await POST(makeRequest(body, sig));
     expect(res.status).toBe(500);
@@ -250,9 +273,15 @@ describe('Stripe webhook security & idempotency suite', () => {
       data: {
         object: {
           id: 'cs_123',
+          payment_status: 'paid',
+          amount_total: 55000,
+          currency: 'usd',
+          payment_intent: 'pi_123',
           metadata: {
             proposalId: 'prop_abc',
             tierId: 'growth',
+            acceptanceId: 'accept_1',
+            commercialFingerprint: 'fingerprint-1',
           },
         },
       },
@@ -264,10 +293,17 @@ describe('Stripe webhook security & idempotency suite', () => {
     });
 
     mocks.processedWebhookFindUnique.mockResolvedValue(null);
-    mocks.processedWebhookCreate.mockResolvedValue({});
+    mocks.processedWebhookCreateMany.mockResolvedValue({ count: 1 });
     mocks.proposalFindUnique.mockResolvedValue({ id: 'prop_abc', tenantId: 'tenant_xyz' });
+    mocks.proposalUpdateMany.mockResolvedValue({ count: 1 });
+    mocks.checkoutAttemptFindUnique.mockResolvedValue({ stripeSessionId: 'cs_123', acceptanceId: 'accept_1', idempotencyKey: 'proposal-checkout:fingerprint-1' });
+    mocks.proposalAcceptanceFindUnique.mockResolvedValue({ id: 'accept_1', proposalId: 'prop_abc', tier: 'growth', commercialFingerprint: 'fingerprint-1', commercialSnapshot: { amountCents: 55000 } });
+    mocks.paymentFindUnique.mockResolvedValue(null);
+    mocks.paymentCreate.mockResolvedValue({ id: 'payment-1', tenantId: 'tenant_xyz', paidAt: new Date() });
+    mocks.orderUpsert.mockResolvedValue({ id: 'order-1' });
     mocks.proposalUpdate.mockResolvedValue({ id: 'prop_abc', tenantId: 'tenant_xyz' });
     mocks.projectUpsert.mockResolvedValue({});
+    mocks.fulfillmentTaskUpsert.mockResolvedValue({ id: 'fulfillment-1' });
 
     const res = await POST(makeRequest(body, sig));
     expect(res.status).toBe(200);
@@ -277,12 +313,10 @@ describe('Stripe webhook security & idempotency suite', () => {
 
     // Tenant isolation verification:
     expect(mocks.runWithTenantAsync).toHaveBeenCalledWith('tenant_xyz', expect.any(Function));
-    expect(mocks.proposalUpdate).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: { id: 'prop_abc' },
-        data: expect.objectContaining({ status: 'PAID' }),
-      })
-    );
+    expect(mocks.paymentCreate).toHaveBeenCalled();
+    expect(mocks.orderUpsert).toHaveBeenCalled();
+    expect(mocks.projectUpsert).toHaveBeenCalled();
+    expect(mocks.fulfillmentTaskUpsert).toHaveBeenCalledWith(expect.objectContaining({ create: expect.objectContaining({ status: 'AWAITING_OPERATOR', executorType: 'OPERATOR' }) }));
   });
 
   it('safely handles invoice.paid events under the correct resolved tenant context', async () => {
@@ -306,7 +340,7 @@ describe('Stripe webhook security & idempotency suite', () => {
     });
 
     mocks.processedWebhookFindUnique.mockResolvedValue(null);
-    mocks.processedWebhookCreate.mockResolvedValue({});
+    mocks.processedWebhookCreateMany.mockResolvedValue({ count: 1 });
     mocks.tenantFindFirst.mockResolvedValue({ id: 'tenant_xyz' });
     mocks.tenantUpdate.mockResolvedValue({});
     mocks.subscriptionUpdateMany.mockResolvedValue({});
@@ -351,7 +385,7 @@ describe('Stripe webhook security & idempotency suite', () => {
     });
 
     mocks.processedWebhookFindUnique.mockResolvedValue(null);
-    mocks.processedWebhookCreate.mockResolvedValue({});
+    mocks.processedWebhookCreateMany.mockResolvedValue({ count: 1 });
     mocks.tenantFindFirst.mockResolvedValue({ id: 'tenant_xyz' });
     mocks.paymentFindUnique.mockResolvedValue({ status: 'paid' }); // Already paid in DB
 
@@ -391,7 +425,7 @@ describe('Stripe webhook security & idempotency suite', () => {
     });
 
     mocks.processedWebhookFindUnique.mockResolvedValue(null);
-    mocks.processedWebhookCreate.mockResolvedValue({});
+    mocks.processedWebhookCreateMany.mockResolvedValue({ count: 1 });
     mocks.tenantFindFirst.mockResolvedValue({ id: 'tenant_xyz' });
     mocks.subscriptionFindUnique.mockResolvedValue({
       currentPeriodEnd: new Date(200000000 * 1000), // DB has newer currentPeriodEnd
@@ -429,7 +463,7 @@ describe('Stripe webhook security & idempotency suite', () => {
     mocks.processedWebhookFindUnique.mockResolvedValue(null);
     mocks.tenantFindFirst.mockResolvedValue({ id: 'tenant_xyz' });
     // Force write operation to fail (simulate DB connection drop)
-    mocks.processedWebhookCreate.mockRejectedValue(new Error('DB connection drop'));
+    mocks.processedWebhookCreateMany.mockRejectedValue(new Error('DB connection drop'));
 
     const res = await POST(makeRequest(body, sig));
     expect(res.status).toBe(500);
@@ -463,7 +497,7 @@ describe('Stripe webhook security & idempotency suite', () => {
     });
 
     mocks.processedWebhookFindUnique.mockResolvedValue(null);
-    mocks.processedWebhookCreate.mockResolvedValue({});
+    mocks.processedWebhookCreateMany.mockResolvedValue({ count: 1 });
 
     const res = await POST(makeRequest(body, sig));
     expect(res.status).toBe(200);
@@ -473,9 +507,10 @@ describe('Stripe webhook security & idempotency suite', () => {
       'stripe-webhook-system-event',
       expect.any(Function)
     );
-    expect(mocks.processedWebhookCreate).toHaveBeenCalledWith(
+    expect(mocks.processedWebhookCreateMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: { id: 'evt_unsupported', type: 'charge.dispute.created' },
+        data: [{ id: 'evt_unsupported', type: 'charge.dispute.created' }],
+        skipDuplicates: true,
       })
     );
   });

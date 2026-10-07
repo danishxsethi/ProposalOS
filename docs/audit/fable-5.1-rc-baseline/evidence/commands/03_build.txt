@@ -1,0 +1,3 @@
+$ npm run build (next build)
+Build succeeded, standalone output. Rendered 147 API routes + 58 pages + middleware.
+No build errors. Static prerender for marketing pages. No type errors.

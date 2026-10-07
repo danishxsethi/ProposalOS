@@ -9,6 +9,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 import { authOptions, getServerSession } from '@/lib/auth';
+import { logger } from '@/lib/logger';
 import {
   getVerticalInsights,
   type PricingCalibration,
@@ -69,7 +70,7 @@ export async function GET(request: NextRequest) {
       );
     }
   } catch (error) {
-    console.error('[API] Pipeline learning error:', error);
+    logger.error('[API] Pipeline learning error:', error);
     return NextResponse.json(
       {
         error: 'Internal server error',
@@ -117,7 +118,7 @@ export async function POST(request: NextRequest) {
       calibration,
     });
   } catch (error) {
-    console.error('[API] Pipeline learning POST error:', error);
+    logger.error('[API] Pipeline learning POST error:', error);
     return NextResponse.json(
       {
         error: 'Internal server error',

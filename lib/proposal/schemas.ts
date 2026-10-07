@@ -1,7 +1,7 @@
-import { FindingType, Finding as PrismaFinding } from '@prisma/client';
+import { FindingType } from '@prisma/client';
 import { z } from 'zod';
 
-import { PainCluster } from '../diagnosis/types';
+import { ProposalGroundingSchema, validateProposalGrounding } from './grounding';
 
 // Runtime Finding type - extends Prisma Finding with relaxed types for runtime flexibility
 // The metrics field uses Record<string, unknown> instead of JsonValue for easier runtime access
@@ -191,6 +191,7 @@ export const ProposalResultSchema = z.object({
   assumptions: z.array(z.string()).min(1),
   disclaimers: z.array(z.string()).min(1),
   nextSteps: z.array(z.string()).min(1),
+  grounding: ProposalGroundingSchema.optional(),
 });
 
 // Validation result schema
@@ -274,52 +275,21 @@ export function validateCitations(
   proposal: ProposalResult,
   findings: FindingRuntime[]
 ): CitationValidation {
-  const errors: string[] = [];
-  const missingCitations: string[] = [];
-  const orphanedCitations: string[] = [];
-
-  const findingIds = new Set(findings.map((f) => f.id));
-
-  // Check tier citations
-  for (const [tierName, tier] of Object.entries(proposal.tiers)) {
-    for (const id of tier.findingIds) {
-      if (!findingIds.has(id)) {
-        missingCitations.push(`${tierName} tier references non-existent finding: ${id}`);
-      }
-    }
-  }
-
-  // Check pain clusters
-  for (const cluster of proposal.painClusters) {
-    for (const id of cluster.findingIds) {
-      if (!findingIds.has(id)) {
-        missingCitations.push(
-          `Cluster "${cluster.rootCause}" references non-existent finding: ${id}`
-        );
-      }
-    }
-  }
-
-  // Find orphaned findings (findings not referenced anywhere)
-  const referencedIds = new Set<string>();
-  Object.values(proposal.tiers).forEach((tier) => {
-    tier.findingIds.forEach((id: string) => referencedIds.add(id));
-  });
-  proposal.painClusters.forEach((cluster) => {
-    cluster.findingIds.forEach((id: string) => referencedIds.add(id));
-  });
-
-  findings.forEach((f) => {
-    if (!referencedIds.has(f.id)) {
-      orphanedCitations.push(`Finding "${f.title}" is not referenced in proposal`);
-    }
-  });
+  const first = findings[0];
+  const validation = first
+    ? validateProposalGrounding(proposal as unknown as import('./types').ProposalResult, {
+        auditId: first.auditId,
+        tenantId: first.tenantId,
+        findings: findings as unknown as import('@prisma/client').Finding[],
+      })
+    : { valid: false, errors: ['Proposal requires at least one validated Finding'] };
+  const missingCitations = validation.errors;
 
   return {
-    valid: missingCitations.length === 0,
-    errors: [...missingCitations, ...orphanedCitations],
+    valid: validation.valid,
+    errors: validation.errors,
     missingCitations,
-    orphanedCitations,
+    orphanedCitations: [],
   };
 }
 
@@ -352,7 +322,6 @@ export function detectHallucinations(
 
   // Check executive summary for supported claims
   const summary = proposal.executiveSummary;
-  const summaryLower = summary.toLowerCase();
 
   // P1-1 FIX: Enhanced keyword matching with phrase extraction
   const keyPhrases = extractKeyPhrases(summary);
@@ -414,23 +383,29 @@ export function detectHallucinations(
     totalClaims++;
     let foundSupport = false;
 
-    // Check if number appears in any finding metrics
+    // Check if number appears in any finding metrics, impact score, or finding
+    // text (title/description). Numbers cited from audit findings usually live
+    // in the finding title or description (e.g. "LCP is 13653ms (Poor)") rather
+    // than the (often empty) structured metrics map — treat any of these as
+    // grounded support. Break out of the findings loop on the first match.
     for (const finding of findingRefs) {
+      if (foundSupport) break;
+
       const metricsValues = Object.values(finding.metrics).filter(
         (v) => typeof v === 'number'
       ) as number[];
 
       // Allow 10% tolerance for rounded numbers
-      for (const metricValue of metricsValues) {
-        if (Math.abs(metricValue - claim.value) / Math.max(metricValue, 1) <= 0.1) {
-          foundSupport = true;
-          supportedClaims++;
-          break;
-        }
-      }
+      const metricMatch = metricsValues.some(
+        (metricValue) => Math.abs(metricValue - claim.value) / Math.max(metricValue, 1) <= 0.1
+      );
+      const impactMatch =
+        claim.value === finding.impactScore || claim.value === Math.round(finding.impactScore);
+      const textMatch =
+        finding.title.includes(String(claim.value)) ||
+        finding.description.includes(String(claim.value));
 
-      // Check impact score matches
-      if (claim.value === finding.impactScore || claim.value === Math.round(finding.impactScore)) {
+      if (metricMatch || impactMatch || textMatch) {
         foundSupport = true;
         supportedClaims++;
         break;
@@ -473,8 +448,16 @@ export function detectHallucinations(
   const confidenceScore =
     totalClaims > 0 ? Math.max(0, Math.min(1, supportedClaims / totalClaims)) : 1;
 
+  // Only high-severity deviations (fabricated statistics, guarantee/legal-risk
+  // language) hard-block proposal generation. Medium "may not be grounded"
+  // phrase flags are noisy heuristics on natural-language summaries — they feed
+  // confidenceScore and are surfaced in QA telemetry, but a grounded proposal
+  // must not be rejected outright on them. Downstream ProposalQAService performs
+  // precise claim-contract grounding verification for the published QA score.
+  const hasHallucinations = flaggedClaims.some((claim) => claim.severity === 'high');
+
   return {
-    hasHallucinations: flaggedClaims.length > 0,
+    hasHallucinations,
     flaggedClaims,
     confidenceScore,
   };

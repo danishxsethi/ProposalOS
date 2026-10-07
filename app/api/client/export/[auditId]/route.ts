@@ -23,8 +23,10 @@ import {
 } from '@/lib/api/errors';
 import { generateExportPackage } from '@/lib/client/data-export';
 import { logger } from '@/lib/logger';
+import { withAuth } from '@/lib/middleware/auth';
 import { withRateLimit } from '@/lib/middleware/rateLimit';
 import { prisma } from '@/lib/prisma';
+import { getTenantId, runWithTenantAsync } from '@/lib/tenant/context';
 
 /**
  * Export query params schema
@@ -48,17 +50,6 @@ interface Params {
 /**
  * Verify access via proposal token
  */
-async function verifyAccess(token: string | null, auditId: string) {
-  if (!token) return true;
-
-  const proposal = await prisma.proposal.findUnique({
-    where: { webLinkToken: token },
-    select: { auditId: true },
-  });
-
-  return proposal?.auditId === auditId;
-}
-
 /**
  * Inner handler for GET export
  */
@@ -67,6 +58,8 @@ async function handleGetExport(req: Request, { params }: Params): Promise<NextRe
 
   try {
     const { auditId } = await params;
+    const tenantId = await getTenantId();
+    if (!tenantId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     const { searchParams } = new URL(req.url);
     const token = searchParams.get('token');
 
@@ -83,20 +76,11 @@ async function handleGetExport(req: Request, { params }: Params): Promise<NextRe
       );
     }
 
-    // Verify access
-    const hasAccess = await verifyAccess(token, auditId);
-    if (!hasAccess) {
-      return NextResponse.json(
-        new UnauthorizedError('Access denied').toEnvelope(req.url, traceId),
-        { status: 403 }
-      );
-    }
-
     // Get audit to verify it exists
-    const audit = await prisma.audit.findUnique({
-      where: { id: auditId },
+    const audit = await runWithTenantAsync(tenantId, () => prisma.audit.findFirst({
+      where: { id: auditId, tenantId },
       select: { tenantId: true, businessName: true },
-    });
+    }));
 
     if (!audit) {
       return NextResponse.json(new NotFoundError('Audit', auditId).toEnvelope(req.url, traceId), {
@@ -105,12 +89,12 @@ async function handleGetExport(req: Request, { params }: Params): Promise<NextRe
     }
 
     // Generate export package
-    const exportResult = await generateExportPackage(audit.tenantId, auditId, {
+    const exportResult = await runWithTenantAsync(tenantId, () => generateExportPackage(audit.tenantId, auditId, {
       includePdfReports: true,
       includeRawData: true,
       includeProposals: true,
       includeCommunications: true,
-    });
+    }));
 
     logger.info(
       {
@@ -148,6 +132,8 @@ async function handlePostExport(req: Request, { params }: Params): Promise<NextR
 
   try {
     const { auditId } = await params;
+    const tenantId = await getTenantId();
+    if (!tenantId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     const body = await req.json();
 
     // Validate request body
@@ -165,20 +151,11 @@ async function handlePostExport(req: Request, { params }: Params): Promise<NextR
 
     const { token, reason } = result.data;
 
-    // Verify access
-    const hasAccess = await verifyAccess(token || null, auditId);
-    if (!hasAccess) {
-      return NextResponse.json(
-        new UnauthorizedError('Access denied').toEnvelope(req.url, traceId),
-        { status: 403 }
-      );
-    }
-
     // Get audit
-    const audit = await prisma.audit.findUnique({
-      where: { id: auditId },
+    const audit = await runWithTenantAsync(tenantId, () => prisma.audit.findFirst({
+      where: { id: auditId, tenantId },
       select: { tenantId: true, businessName: true },
-    });
+    }));
 
     if (!audit) {
       return NextResponse.json(new NotFoundError('Audit', auditId).toEnvelope(req.url, traceId), {
@@ -187,12 +164,12 @@ async function handlePostExport(req: Request, { params }: Params): Promise<NextR
     }
 
     // Generate offboarding package
-    const exportResult = await generateExportPackage(audit.tenantId, auditId, {
+    const exportResult = await runWithTenantAsync(tenantId, () => generateExportPackage(audit.tenantId, auditId, {
       includePdfReports: true,
       includeRawData: true,
       includeProposals: true,
       includeCommunications: true,
-    });
+    }));
 
     logger.info(
       {
@@ -237,5 +214,5 @@ const rateLimitedPost = (req: Request, params: Params) =>
     message: 'Too many export requests. Please wait before trying again.',
   })(req, () => handlePostExport(req, params));
 
-export const GET = (req: Request, params: Params) => rateLimitedGet(req, params);
-export const POST = (req: Request, params: Params) => rateLimitedPost(req, params);
+export const GET = withAuth((req: Request, ...args: Params[]) => rateLimitedGet(req, args[0]!));
+export const POST = withAuth((req: Request, ...args: Params[]) => rateLimitedPost(req, args[0]!));

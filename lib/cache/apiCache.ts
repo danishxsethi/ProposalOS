@@ -15,7 +15,11 @@ const IS_PROD = process.env.NODE_ENV === 'production';
 
 let redis: Redis | null = null;
 if (USE_REDIS && process.env.REDIS_URL) {
-  redis = new Redis(process.env.REDIS_URL);
+  redis = new Redis(process.env.REDIS_URL, {
+    ...(process.env.REDIS_URL.startsWith('rediss://')
+      ? { tls: { rejectUnauthorized: false } }
+      : {}),
+  });
   logger.info('[Cache] Using Redis for caching');
 } else if (!IS_PROD && ALLOW_LOCAL_CACHE) {
   // Ensure cache dir exists only if allowed

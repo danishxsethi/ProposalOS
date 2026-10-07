@@ -1,6 +1,8 @@
 import { Finding } from '@prisma/client';
 
+import { validateFinding } from '@/lib/audit/findingContract';
 import { inferOrganizationSegment } from '@/lib/proposal';
+import { validateProposalGrounding } from '@/lib/proposal/grounding';
 import { type QAContext, type QAStatus, runAutoQA } from '@/lib/qa/autoQA';
 
 import { ProposalResult } from './types';
@@ -23,20 +25,17 @@ export interface ProposalQAEvaluation {
   autoQAStatus: QAStatus;
 }
 
-const METRIC_PATTERN =
-  /\d+(\.\d+)?(%|\/100|\s*(?:seconds?|ms|scores?|rating|reviews?|\$|points?|findings?|issues?|critical|painkillers?|load|speed|LCP|FCP|CLS|index|MB|kb|stars?|hours?|days?|minutes?|of|out\s+of|visitors?|customers?|bounce|traffic|conversion|percent|percentage))/gi;
+export function isProposalQAPublishable(evaluation: ProposalQAEvaluation): boolean {
+  return (
+    evaluation.passed &&
+    evaluation.autoQAStatus.status === 'PASS' &&
+    evaluation.autoQAStatus.hardFailures.length === 0 &&
+    evaluation.autoQAStatus.clientPerfect.hardFails.length === 0 &&
+    !evaluation.autoQAStatus.clientPerfect.requiresHumanReview
+  );
+}
 
 const CTA_PATTERN = /(reply|schedule|book|call|start|get started|send it|approve|accept)/i;
-
-function hasValidEvidence(e: any): boolean {
-  if (!e) return false;
-  if (typeof e === 'string') return e.trim().length > 0;
-  if (typeof e !== 'object') return false;
-  const obj = e as Record<string, any>;
-  if (typeof obj.pointer === 'string' && obj.pointer.length > 0 && obj.collected_at) return true;
-  if (obj.type && (obj.value !== undefined || obj.label)) return true;
-  return !!(obj.url || obj.source || obj.raw);
-}
 
 export class ProposalQAService {
   /**
@@ -51,15 +50,11 @@ export class ProposalQAService {
   ): ProposalQAEvaluation {
     const feedbackLogs: string[] = [];
     const summary = proposal.executiveSummary || '';
-    const summaryLower = summary.toLowerCase();
     const industry = (context?.industry || '').toLowerCase();
     const url = (context?.businessUrl || '').toLowerCase();
 
     // 1. evidenceQuality
-    const findingsWithEvidence = findings.filter((f) => {
-      const evidence = (f.evidence as unknown[]) || [];
-      return evidence.some(hasValidEvidence);
-    });
+    const findingsWithEvidence = findings.filter((finding) => validateFinding(finding).success);
     const evidenceQuality =
       findings.length > 0
         ? Number(((findingsWithEvidence.length / findings.length) * 10).toFixed(1))
@@ -71,42 +66,35 @@ export class ProposalQAService {
       );
     }
 
-    // 2. relevance
-    const hasBusiness = summaryLower.includes(businessName.toLowerCase());
-    const hasCity = city ? summaryLower.includes(city.toLowerCase()) : true;
-    const hasIndustry = context?.industry
-      ? summaryLower.includes(context.industry.toLowerCase())
-      : true;
+    const firstFinding = findings[0];
+    const grounding = firstFinding
+      ? validateProposalGrounding(proposal, {
+          auditId: firstFinding.auditId,
+          tenantId: firstFinding.tenantId,
+          findings,
+        })
+      : { valid: false, errors: ['Proposal requires at least one validated Finding'] };
 
-    let relevance = 0;
-    if (hasBusiness) relevance += 4;
-    if (hasCity) relevance += 3;
-    if (hasIndustry) relevance += 3;
+    // 2. relevance
+    const relevance = summary.trim().length > 0 && grounding.valid ? 10 : 0;
 
     if (relevance < 7.0) {
-      const missing = [];
-      if (!hasBusiness) missing.push('business name');
-      if (!hasCity) missing.push('city name');
-      if (!hasIndustry) missing.push('industry context');
       feedbackLogs.push(
-        `relevance score of ${relevance}/10 is below threshold. Missing mentions of: ${missing.join(', ')}.`
+        `relevance score of ${relevance}/10 is below threshold. ${grounding.errors.join('; ')}`
       );
     }
 
     // 3. specificity
-    const metricMatches = summary.match(METRIC_PATTERN) || [];
-    const specificity = Math.min(10, Number(((metricMatches.length / 3) * 10).toFixed(1)));
+    const specificity = grounding.valid ? 10 : 0;
 
     if (specificity < 7.0) {
       feedbackLogs.push(
-        `specificity score of ${specificity}/10 is below threshold. Target density of >=3 quantified metrics not met (found ${metricMatches.length}).`
+        `specificity score of ${specificity}/10 is below threshold because claim grounding failed.`
       );
     }
 
     // 4. clarity
-    const topActionRows = (proposal.nextSteps || []).filter(
-      (s) => /impact:/i.test(s) && /effort:/i.test(s) && /timeline:/i.test(s)
-    );
+    const topActionRows = proposal.topActions ?? [];
     const clearCta = (proposal.nextSteps || []).some((line) => CTA_PATTERN.test(line));
 
     let clarity = 0;
@@ -121,10 +109,8 @@ export class ProposalQAService {
 
     if (clarity < 7.0) {
       const gaps = [];
-      if (topActionRows.length < 3)
-        gaps.push(
-          `fewer than 3 action rows with impact/effort/timeline (found ${topActionRows.length})`
-        );
+      if (topActionRows.length < Math.min(3, findings.length))
+        gaps.push(`missing Finding-backed priority actions (found ${topActionRows.length})`);
       if (!clearCta) gaps.push('no clear Call-To-Action (CTA)');
       feedbackLogs.push(
         `clarity score of ${clarity}/10 is below threshold due to: ${gaps.join(' and ')}.`
@@ -166,7 +152,11 @@ export class ProposalQAService {
 
     // Also run original segment local marketing checks
     const segment = inferOrganizationSegment(url, businessName, context?.industry);
-    const isNonSmb = segment !== 'smb_local' && segment !== 'baseline_unknown';
+    // Healthcare practices are commonly local SMBs. Keep their GBP/local SEO
+    // recommendations valid instead of treating every healthcare segment as
+    // enterprise copy leakage.
+    const isNonSmb =
+      segment !== 'smb_local' && segment !== 'baseline_unknown' && segment !== 'healthcare';
     const hasLocalSleaze = isNonSmb && foundCommercialTerms.length > 0;
 
     let copywritingSafety = 10;
@@ -222,7 +212,15 @@ export class ProposalQAService {
       copywritingSafety >= 7.0 &&
       clientReadiness >= 7.0;
 
-    const passed = meetsThresholds && !forceManualMode && autoPromotionEnabled;
+  const passed =
+    meetsThresholds &&
+    grounding.valid &&
+    autoQAStatus.status === 'PASS' &&
+    autoQAStatus.hardFailures.length === 0 &&
+    autoQAStatus.clientPerfect.hardFails.length === 0 &&
+      !autoQAStatus.clientPerfect.requiresHumanReview &&
+      !forceManualMode &&
+      autoPromotionEnabled;
 
     if (forceManualMode) {
       feedbackLogs.push(

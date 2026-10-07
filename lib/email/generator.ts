@@ -1,4 +1,6 @@
-import { generateWithGemini } from '@/lib/llm/provider';
+import { BEDROCK_NOVA_MICRO } from '@/lib/config/models';
+import { generateWithLLM } from '@/lib/llm/provider';
+import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 
 import { generatePersonalizationDirectives, ProspectMetadata } from './personalization';
@@ -14,7 +16,7 @@ export interface EmailSequenceResult {
 }
 
 /**
- * Parses the delimiter-based email output format from Gemini:
+ * Parses the delimiter-based email output format from the LLM:
  *   ---EMAIL 1---
  *   SUBJECT_A: ...
  *   SUBJECT_B: ...
@@ -40,7 +42,7 @@ function parseDelimitedEmails(raw: string): EmailSequenceResult['emails'] {
     emails.push({ step, subjectA, subjectB, body, status: 'draft' });
   }
 
-  // Fallback: if Gemini dropped the delimiter entirely, treat the whole text as email 1
+  // Fallback: if the model dropped the delimiter entirely, treat the whole text as email 1
   if (emails.length === 0 && raw.length > 50) {
     emails.push({
       step: 1,
@@ -111,8 +113,8 @@ Email Strategy:
 
 Write like a sharp senior strategist — not like a generic AI mailer.`;
 
-  const response = await generateWithGemini({
-    model: process.env.LLM_MODEL_PROPOSAL || 'gemini-2.5-flash',
+  const response = await generateWithLLM({
+    model: BEDROCK_NOVA_MICRO,
     input: systemPrompt,
     temperature: 0.7,
     maxOutputTokens: 4096,
@@ -133,7 +135,7 @@ Write like a sharp senior strategist — not like a generic AI mailer.`;
       proposalId === 'test' ||
       proposalId === 'p1'
     ) {
-      console.warn(
+      logger.warn(
         `[Mock Mode] Proposal ID "${typeof proposalId === 'object' ? JSON.stringify(proposalId) : proposalId}" not found in DB. Skipping database save.`
       );
       return { emails: emailsData };

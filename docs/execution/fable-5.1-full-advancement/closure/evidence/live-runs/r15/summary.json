@@ -1,0 +1,20 @@
+{
+  "generatedAt": "2026-09-28T07:49:29.267Z",
+  "sampleSize": 1,
+  "trusted": 0,
+  "degraded": 1,
+  "failed": 0,
+  "auditWallMs": {
+    "p50": 62968,
+    "p90": 62968,
+    "p95": 62968,
+    "max": 62968,
+    "samples": [
+      62968
+    ]
+  },
+  "costCents": [
+    14
+  ],
+  "proposals": []
+}

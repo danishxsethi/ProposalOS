@@ -47,9 +47,13 @@ export function buildCspHeader(nonce?: string): string {
     'https://js.posthog.com', // PostHog
   ].filter(Boolean) as string[];
 
+  // style-src: inline `style=""` attributes (React inline styles, recharts, PDF
+  // templates) cannot carry a nonce and a nonce makes browsers ignore
+  // 'unsafe-inline'. Script execution is the security-relevant surface and stays
+  // nonce-strict; styles allow inline.
   const styleSrc = [
     "'self'",
-    nonce ? `'nonce-${nonce}'` : undefined,
+    "'unsafe-inline'",
     'https://fonts.googleapis.com', // Google Fonts
   ].filter(Boolean) as string[];
 

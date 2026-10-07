@@ -103,7 +103,9 @@ export function createObservabilityContextFromRequest(
     service: OBSERVABILITY_SERVICE_NAME,
     method: req.method,
     path: url.pathname,
-    tenantId: req.headers.get('x-tenant-id') || undefined,
+    // A request header is untrusted and must not be recorded as the authenticated tenant.
+    // The auth boundary may replace this context after principal validation.
+    tenantId: undefined,
     ...overrides,
   };
 }

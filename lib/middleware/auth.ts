@@ -1,9 +1,23 @@
+import { createHash, timingSafeEqual } from 'crypto';
+
 import { NextResponse } from 'next/server';
 
 import { auth } from '@/lib/auth';
 import { validateApiKey } from '@/lib/auth/apiKeys';
 import { logger } from '@/lib/logger';
 import { runWithTenantAsync } from '@/lib/tenant/context';
+
+function timingSafeStringEqual(a: string, b: string): boolean {
+  const hashA = createHash('sha256').update(a).digest();
+  const hashB = createHash('sha256').update(b).digest();
+  return timingSafeEqual(hashA, hashB);
+}
+
+export function isInternalOpsRequest(req: Request): boolean {
+  const configured = process.env.INTERNAL_OPS_KEY;
+  const supplied = req.headers.get('x-internal-ops-key');
+  return Boolean(configured && supplied && timingSafeStringEqual(supplied, configured));
+}
 
 // Typed handler signature used by withAuth and withRole
 // Note: args uses any[] (not unknown[]) because Next.js route handlers receive typed `{ params }` objects
@@ -24,6 +38,19 @@ interface AuthUser {
 // API key can be passed via Authorization: Bearer <key> OR X-API-Key header (for Cloud Run + identity token)
 export function withAuth(handler: AuthHandler) {
   return async (req: Request, ...args: any[]) => {
+    if (isInternalOpsRequest(req)) {
+      // The secret establishes server authority; the tenant header is only a requested
+      // target for this privileged server-to-server operation.
+      const tenantId = req.headers.get('x-tenant-id')?.trim();
+      if (!tenantId) {
+        return NextResponse.json(
+          { error: 'x-tenant-id is required for internal ops requests' },
+          { status: 400 }
+        );
+      }
+      return runWithTenantAsync(tenantId, () => handler(req, ...args));
+    }
+
     const authHeader = req.headers.get('Authorization');
     const xApiKey = req.headers.get('x-api-key')?.trim();
     const token =
@@ -49,17 +76,21 @@ export function withAuth(handler: AuthHandler) {
         return runWithTenantAsync(tenantId, () => handler(req, ...args));
       }
 
-      // 1b. Env API key fallback — server-to-server, single-tenant
-      if (process.env.API_KEY && token === process.env.API_KEY) {
-        const headerTenant = req.headers.get('x-tenant-id')?.trim();
-        const tenantId = headerTenant || process.env.DEFAULT_TENANT_ID;
+      // 1b. Env API key fallback — server-to-server, single-tenant only.
+      // Tenant identity is bound server-side (DEFAULT_TENANT_ID). Caller-controlled
+      // x-tenant-id is ignored (P0/P1-16 containment).
+      if (process.env.API_KEY && timingSafeStringEqual(token, process.env.API_KEY)) {
+        const tenantId = process.env.DEFAULT_TENANT_ID?.trim();
 
         if (!tenantId) {
           logger.warn(
             { authMethod: 'env_key' },
-            'Auth: env API key rejected due to missing x-tenant-id'
+            'Auth: env API key rejected — DEFAULT_TENANT_ID not configured'
           );
-          return NextResponse.json({ error: 'Missing x-tenant-id header' }, { status: 400 });
+          return NextResponse.json(
+            { error: 'Server API key is not bound to a tenant' },
+            { status: 503 }
+          );
         }
 
         logger.info({ authMethod: 'env_key', tenantId }, 'Auth: env API key');

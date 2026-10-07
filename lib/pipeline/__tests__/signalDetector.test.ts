@@ -6,7 +6,7 @@
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { prisma } from '@/lib/db';
+import { prisma } from '@/lib/prisma';
 
 import {
   deduplicateSignals,
@@ -18,8 +18,9 @@ import {
 
 import type { DetectedSignal, SignalType } from '../types';
 
-// Mock prisma
-vi.mock('@/lib/db', () => ({
+// Mock the canonical scoped Prisma client (Wave 1 P1-05 — signalDetector now imports from
+// @/lib/prisma and threads tenant context via runWithTenantAsync / runScopedToOwnerTenant).
+vi.mock('@/lib/prisma', () => ({
   prisma: {
     prospectLead: {
       findMany: vi.fn(),
@@ -33,6 +34,21 @@ vi.mock('@/lib/db', () => ({
       updateMany: vi.fn(),
       findFirst: vi.fn(),
     },
+  },
+}));
+
+// Tenant-context helpers are exercised for real in tests/security/wave1-tenant-scoping.test.ts.
+// Here they are transparent passthroughs so assertions stay focused on business logic.
+vi.mock('@/lib/tenant/context', () => ({
+  runWithTenantAsync: async (_tenantId: string, fn: () => Promise<unknown>) => fn(),
+  runScopedToOwnerTenant: async (
+    _reason: string,
+    lookupTenantId: () => Promise<string | null | undefined>,
+    fn: (tenantId: string) => Promise<unknown>
+  ) => {
+    const tenantId = await lookupTenantId();
+    if (!tenantId) throw new Error('runScopedToOwnerTenant: could not resolve owning tenant');
+    return fn(tenantId);
   },
 }));
 
@@ -374,7 +390,7 @@ describe('Signal Detector', () => {
       });
     });
 
-    it('should handle signals without leadId', async () => {
+    it('should fail closed when signal has no leadId (no tenant to attribute the signal to)', async () => {
       const signal: DetectedSignal = {
         id: 'signal-1',
         leadId: undefined,
@@ -385,18 +401,12 @@ describe('Signal Detector', () => {
         outreachTriggered: false,
       };
 
-      vi.mocked(prisma.detectedSignal.create).mockResolvedValue({} as any);
-      vi.mocked(prisma.detectedSignal.updateMany).mockResolvedValue({ count: 1 } as any);
-
-      await triggerSignalOutreach(signal);
-
-      expect(prisma.detectedSignal.create).toHaveBeenCalledWith({
-        data: expect.objectContaining({
-          tenantId: '',
-          leadId: undefined,
-          signalType: 'new_business_license',
-        }),
-      });
+      // Wave 1 fix: previously this silently wrote tenantId: '' (an invalid tenant).
+      // It now fails closed instead of persisting an unattributed signal.
+      await expect(triggerSignalOutreach(signal)).rejects.toThrow(
+        /could not resolve owning tenant/
+      );
+      expect(prisma.detectedSignal.create).not.toHaveBeenCalled();
     });
 
     it('should generate signal-specific email content for bad review', async () => {

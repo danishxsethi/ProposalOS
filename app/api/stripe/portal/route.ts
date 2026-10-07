@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 
+import { logger } from '@/lib/logger';
 import { withAuth } from '@/lib/middleware/auth';
 import { prisma } from '@/lib/prisma';
 import { stripe } from '@/lib/stripe/stripe';
@@ -24,7 +25,7 @@ export const POST = withAuth(async () => {
 
     return NextResponse.json({ url: session.url });
   } catch (error) {
-    console.error('Stripe Portal Error:', error);
+    logger.error('Stripe Portal Error:', error);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 });

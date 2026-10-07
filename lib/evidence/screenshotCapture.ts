@@ -1,14 +1,15 @@
-import { Storage } from '@google-cloud/storage';
 import chromium from '@sparticuz/chromium';
 import puppeteer, { Browser, Page } from 'puppeteer-core';
 import sharp from 'sharp';
 
 import { logger } from '@/lib/logger';
+import { safePageGoto } from '@/lib/security/safeBrowser';
+import { createProtectedObjectUrl, uploadToS3 } from '@/lib/storage';
+import { getTenantIdFromStore } from '@/lib/tenant/context';
 
-const storage = new Storage();
-const BUCKET_NAME = 'proposal-engine-assets';
 const SCREENSHOT_TIMEOUT = 20000; // 20 seconds total budget
 const MAX_PARALLEL = 3; // Capture 3 screenshots at a time max
+const MAX_SCREENSHOT_BYTES = 5 * 1024 * 1024;
 
 export interface ScreenshotOptions {
   url: string;
@@ -48,7 +49,7 @@ interface ScreenshotTask {
 let browserInstance: Browser | null = null;
 
 async function getBrowser(): Promise<Browser> {
-  if (browserInstance && browserInstance.isConnected()) {
+  if (browserInstance && browserInstance.connected) {
     return browserInstance;
   }
 
@@ -63,11 +64,19 @@ async function getBrowser(): Promise<Browser> {
       args: ['--no-sandbox', '--disable-setuid-sandbox'],
     });
   } else {
-    // Production - use Chromium from @sparticuz/chromium
+    const executablePath = process.env.CHROME_EXECUTABLE_PATH || (await chromium.executablePath());
     browserInstance = await puppeteer.launch({
-      args: chromium.args,
+      args: [
+        ...(process.env.CHROME_EXECUTABLE_PATH ? [] : chromium.args),
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-gpu',
+        '--disable-dev-shm-usage',
+        '--disable-software-rasterizer',
+        '--no-zygote',
+      ],
       defaultViewport: { width: 1920, height: 1080, deviceScaleFactor: 1 },
-      executablePath: await chromium.executablePath(),
+      executablePath,
       headless: true,
     });
   }
@@ -194,10 +203,7 @@ async function captureScreenshot(
 
     // Navigate to page
     logger.info({ url: options.url, device: options.device }, 'Capturing screenshot');
-    await page.goto(options.url, {
-      waitUntil: 'networkidle2',
-      timeout: 10000,
-    });
+    await safePageGoto(page, options.url, { waitUntil: 'networkidle2', timeout: 10000 });
 
     // Wait a moment for any animations
     await new Promise((r) => setTimeout(r, 1000));
@@ -210,10 +216,13 @@ async function captureScreenshot(
     const screenshotBuffer = Buffer.isBuffer(screenshotData)
       ? screenshotData
       : Buffer.from(screenshotData);
+    if (screenshotBuffer.length > MAX_SCREENSHOT_BYTES) {
+      throw new Error(`Screenshot exceeds ${MAX_SCREENSHOT_BYTES} byte limit`);
+    }
 
-    // Upload to GCS
+    // Upload a private screenshot object; callers receive a tenant-authorized URL.
     const mainFileName = `screenshots/${auditId}/${options.name}.png`;
-    const mainUrl = await uploadToGCS(screenshotBuffer, mainFileName);
+    const mainUrl = await uploadScreenshot(screenshotBuffer, auditId, mainFileName);
 
     // Generate thumbnail (400px wide)
     const thumbnailBuffer = await sharp(screenshotBuffer)
@@ -222,7 +231,7 @@ async function captureScreenshot(
       .toBuffer();
 
     const thumbnailFileName = `screenshots/${auditId}/${options.name}-thumb.png`;
-    const thumbnailUrl = await uploadToGCS(thumbnailBuffer, thumbnailFileName);
+    const thumbnailUrl = await uploadScreenshot(thumbnailBuffer, auditId, thumbnailFileName);
 
     let annotatedUrl: string | undefined;
 
@@ -240,7 +249,7 @@ async function captureScreenshot(
         : Buffer.from(annotatedData);
 
       const annotatedFileName = `screenshots/${auditId}/${options.name}-annotated.png`;
-      annotatedUrl = await uploadToGCS(annotatedBuffer, annotatedFileName);
+      annotatedUrl = await uploadScreenshot(annotatedBuffer, auditId, annotatedFileName);
     }
 
     logger.info({ name: options.name, url: mainUrl }, 'Screenshot captured and uploaded');
@@ -265,24 +274,23 @@ async function captureScreenshot(
   }
 }
 
-/**
- * Upload buffer to Google Cloud Storage
- */
-async function uploadToGCS(buffer: Buffer, fileName: string): Promise<string> {
-  const bucket = storage.bucket(BUCKET_NAME);
-  const file = bucket.file(fileName);
+async function uploadScreenshot(
+  buffer: Buffer,
+  auditId: string,
+  fileName: string
+): Promise<string> {
+  const tenantId = getTenantIdFromStore();
+  if (!tenantId) throw new Error('Tenant context is required to store screenshots');
 
-  await file.save(buffer, {
-    metadata: {
-      contentType: 'image/png',
-      cacheControl: 'public, max-age=31536000', // 1 year
-    },
-  });
+  const objectName = fileName.split('/').pop();
+  if (!objectName) throw new Error('Screenshot filename is required');
 
-  // Make publicly readable
-  await file.makePublic();
-
-  return `https://storage.googleapis.com/${BUCKET_NAME}/${fileName}`;
+  const reference = await uploadToS3(
+    buffer,
+    `screenshots/${tenantId}/${auditId}/${objectName}`,
+    'image/png'
+  );
+  return createProtectedObjectUrl(reference);
 }
 
 /**
@@ -330,13 +338,13 @@ export async function captureComparisonScreenshot(
     await page.setViewport(viewport);
 
     // Capture left side
-    await page.goto(leftUrl, { waitUntil: 'networkidle2', timeout: 10000 });
+    await safePageGoto(page, leftUrl, { waitUntil: 'networkidle2', timeout: 10000 });
     await new Promise((r) => setTimeout(r, 500));
     const leftData = await page.screenshot({ type: 'png', fullPage: false });
     const leftBuffer = Buffer.isBuffer(leftData) ? leftData : Buffer.from(leftData);
 
     // Capture right side
-    await page.goto(rightUrl, { waitUntil: 'networkidle2', timeout: 10000 });
+    await safePageGoto(page, rightUrl, { waitUntil: 'networkidle2', timeout: 10000 });
     await new Promise((r) => setTimeout(r, 500));
     const rightData = await page.screenshot({ type: 'png', fullPage: false });
     const rightBuffer = Buffer.isBuffer(rightData) ? rightData : Buffer.from(rightData);
@@ -368,7 +376,7 @@ export async function captureComparisonScreenshot(
 
     // Upload comparison
     const fileName = `screenshots/${auditId}/${name}-comparison.png`;
-    const url = await uploadToGCS(combined, fileName);
+    const url = await uploadScreenshot(combined, auditId, fileName);
 
     // Generate thumbnail
     const thumbnailBuffer = await sharp(combined)
@@ -377,7 +385,7 @@ export async function captureComparisonScreenshot(
       .toBuffer();
 
     const thumbnailFileName = `screenshots/${auditId}/${name}-comparison-thumb.png`;
-    const thumbnailUrl = await uploadToGCS(thumbnailBuffer, thumbnailFileName);
+    const thumbnailUrl = await uploadScreenshot(thumbnailBuffer, auditId, thumbnailFileName);
 
     logger.info({ name, url }, 'Comparison screenshot created');
 
@@ -420,7 +428,7 @@ export async function captureGBPScreenshot(
 
     logger.info({ businessName, city, mapsUrl }, 'Capturing GBP screenshot');
 
-    await page.goto(mapsUrl, { waitUntil: 'networkidle2', timeout: 15000 });
+    await safePageGoto(page, mapsUrl, { waitUntil: 'networkidle2', timeout: 15000 });
 
     // Wait for map to load
     await new Promise((r) => setTimeout(r, 3000));
@@ -441,13 +449,13 @@ export async function captureGBPScreenshot(
 
     // Upload
     const fileName = `screenshots/${auditId}/gbp-listing.png`;
-    const url = await uploadToGCS(screenshotBuffer, fileName);
+    const url = await uploadScreenshot(screenshotBuffer, auditId, fileName);
 
     // Thumbnail
     const thumbnailBuffer = await sharp(screenshotBuffer).resize(400, null).png().toBuffer();
 
     const thumbnailFileName = `screenshots/${auditId}/gbp-listing-thumb.png`;
-    const thumbnailUrl = await uploadToGCS(thumbnailBuffer, thumbnailFileName);
+    const thumbnailUrl = await uploadScreenshot(thumbnailBuffer, auditId, thumbnailFileName);
 
     logger.info({ url }, 'GBP screenshot captured');
 

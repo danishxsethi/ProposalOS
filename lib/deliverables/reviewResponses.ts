@@ -1,6 +1,6 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
-
-import { CostTracker } from '@/lib/costs/costTracker';
+import { BEDROCK_NOVA_2_LITE } from '@/lib/config/models';
+import { CostTracker, trackBedrockUsage } from '@/lib/costs/costTracker';
+import { generateWithLLM } from '@/lib/llm/provider';
 import { logger } from '@/lib/logger';
 
 export interface Review {
@@ -33,13 +33,6 @@ export async function generateReviewResponses(
 ): Promise<ReviewResponse[]> {
   logger.info({ businessName: input.businessName }, '[ReviewResponses] Generating drafts');
 
-  if (!process.env.GOOGLE_AI_API_KEY) {
-    throw new Error('GOOGLE_AI_API_KEY is missing');
-  }
-
-  const genAI = new GoogleGenerativeAI(process.env.GOOGLE_AI_API_KEY);
-  const model = genAI.getGenerativeModel({ model: 'gemini-1.5-pro' }); // Pro for high quality writing
-
   // Filter for unanswered reviews (or those with empty responses)
   // Limit to top 5 most relevant (recent/long) to save costs and focus on impact
   const unansweredReviews = input.reviews
@@ -56,9 +49,8 @@ export async function generateReviewResponses(
 
   // Parallel generation
   const promises = unansweredReviews.map(async (review) => {
-    tracker?.addApiCall('GEMINI_REVIEW_RESPONSE');
     try {
-      const draft = await generateSingleResponse(model, review, input);
+      const draft = await generateSingleResponse(review, input, tracker);
       return {
         review,
         draftResponse: draft,
@@ -80,12 +72,12 @@ export async function generateReviewResponses(
 }
 
 /**
- * Generate single response using Gemini
+ * Generate a single response using Bedrock
  */
 async function generateSingleResponse(
-  model: any,
   review: Review,
-  context: ReviewResponseInput
+  context: ReviewResponseInput,
+  tracker?: CostTracker
 ): Promise<string> {
   const isPositive = review.rating >= 4;
 
@@ -120,6 +112,7 @@ async function generateSingleResponse(
     
     DRAFT RESPONSE:`;
 
-  const result = await model.generateContent(prompt);
-  return result.response.text().trim();
+  const result = await generateWithLLM({ model: BEDROCK_NOVA_2_LITE, input: prompt });
+  trackBedrockUsage(tracker, result, prompt);
+  return result.text.trim();
 }

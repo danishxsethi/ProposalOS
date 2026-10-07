@@ -12,9 +12,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 import { generateTraceId, InternalError, UnauthorizedError } from '@/lib/api/errors';
-import { API_KEY_SCOPES, validateApiKey } from '@/lib/auth/apiKeys';
+import { API_KEY_SCOPES, apiKeyCanAccessTenant, validateApiKey } from '@/lib/auth/apiKeys';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
+import { runWithTenantAsync } from '@/lib/tenant/context';
 
 export const dynamic = 'force-dynamic';
 
@@ -58,10 +59,7 @@ export async function POST(
       throw new UnauthorizedError('Invalid or insufficient API key');
     }
 
-    const hasAdminScope =
-      validation.scopes.includes(API_KEY_SCOPES.ALL) || validation.scopes.includes('admin:*');
-
-    if (!hasAdminScope && validation.tenantId !== tenantId) {
+    if (!apiKeyCanAccessTenant(validation, tenantId)) {
       throw new UnauthorizedError('Access denied to this tenant');
     }
 
@@ -84,12 +82,11 @@ export async function POST(
     }
 
     // Check if domain is already in use by another tenant
-    const existingDomain = await prisma.tenantBranding.findFirst({
-      where: {
-        customDomain: body.customDomain,
-        tenantId: { not: tenantId },
-      },
-    });
+    const existingDomain = await runWithTenantAsync(tenantId, () =>
+      prisma.tenantBranding.findFirst({
+        where: { customDomain: body.customDomain, tenantId: { not: tenantId } },
+      })
+    );
 
     if (existingDomain) {
       return NextResponse.json(
@@ -99,19 +96,17 @@ export async function POST(
     }
 
     // Set custom domain (unverified initially)
-    await prisma.tenantBranding.upsert({
-      where: { tenantId },
-      update: {
-        customDomain: body.customDomain,
-        customDomainVerified: false,
-        customDomainVerifiedAt: null,
-      },
-      create: {
-        tenantId,
-        customDomain: body.customDomain,
-        customDomainVerified: false,
-      },
-    });
+    await runWithTenantAsync(tenantId, () =>
+      prisma.tenantBranding.upsert({
+        where: { tenantId },
+        update: {
+          customDomain: body.customDomain,
+          customDomainVerified: false,
+          customDomainVerifiedAt: null,
+        },
+        create: { tenantId, customDomain: body.customDomain, customDomainVerified: false },
+      })
+    );
 
     logger.info(
       {
@@ -176,21 +171,16 @@ export async function GET(
       throw new UnauthorizedError('Invalid or insufficient API key');
     }
 
-    const hasAdminScope =
-      validation.scopes.includes(API_KEY_SCOPES.ALL) || validation.scopes.includes('admin:*');
-
-    if (!hasAdminScope && validation.tenantId !== tenantId) {
+    if (!apiKeyCanAccessTenant(validation, tenantId)) {
       throw new UnauthorizedError('Access denied to this tenant');
     }
 
-    const branding = await prisma.tenantBranding.findUnique({
-      where: { tenantId },
-      select: {
-        customDomain: true,
-        customDomainVerified: true,
-        customDomainVerifiedAt: true,
-      },
-    });
+    const branding = await runWithTenantAsync(tenantId, () =>
+      prisma.tenantBranding.findUnique({
+        where: { tenantId },
+        select: { customDomain: true, customDomainVerified: true, customDomainVerifiedAt: true },
+      })
+    );
 
     return NextResponse.json({
       customDomain: branding?.customDomain || null,
@@ -247,21 +237,16 @@ export async function DELETE(
       throw new UnauthorizedError('Invalid or insufficient API key');
     }
 
-    const hasAdminScope =
-      validation.scopes.includes(API_KEY_SCOPES.ALL) || validation.scopes.includes('admin:*');
-
-    if (!hasAdminScope && validation.tenantId !== tenantId) {
+    if (!apiKeyCanAccessTenant(validation, tenantId)) {
       throw new UnauthorizedError('Access denied to this tenant');
     }
 
-    await prisma.tenantBranding.update({
-      where: { tenantId },
-      data: {
-        customDomain: null,
-        customDomainVerified: false,
-        customDomainVerifiedAt: null,
-      },
-    });
+    await runWithTenantAsync(tenantId, () =>
+      prisma.tenantBranding.update({
+        where: { tenantId },
+        data: { customDomain: null, customDomainVerified: false, customDomainVerifiedAt: null },
+      })
+    );
 
     logger.info(
       {

@@ -29,6 +29,7 @@ import type { Target, TargetList } from './target-list';
 
 let BASE_URL = process.env.BASE_URL || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
 const API_KEY = process.env.API_KEY;
+const SESSION_COOKIE = process.env.SESSION_COOKIE;
 const TENANT_ID = process.env.DEFAULT_TENANT_ID || process.env.E2E_TENANT_ID;
 const TARGETS_PATH = path.join(process.cwd(), 'data', 'saskatoon-targets.json');
 const REPORTS_DIR = path.join(process.cwd(), 'audit', 'reports');
@@ -57,8 +58,9 @@ function parseArgs(): {
 function headers(): Record<string, string> {
   const h: Record<string, string> = {
     'Content-Type': 'application/json',
-    Authorization: `Bearer ${API_KEY}`,
   };
+  if (SESSION_COOKIE) h.Cookie = SESSION_COOKIE;
+  else if (API_KEY) h.Authorization = `Bearer ${API_KEY}`;
   if (TENANT_ID) h['x-tenant-id'] = TENANT_ID;
   return h;
 }
@@ -73,14 +75,49 @@ async function runAudit(target: Target): Promise<{ auditId: string; status: stri
     headers: headers(),
     body: JSON.stringify({
       url: target.url,
-      name: target.businessName,
-      city: 'Saskatoon',
+      businessName: target.businessName,
+      businessCity: target.businessCity || 'Saskatoon',
       industry: target.vertical,
     }),
   });
   const data = await res.json();
-  if (!res.ok) throw new Error(data.error || data.details || res.statusText);
-  return { auditId: data.auditId, status: data.status };
+  if (!res.ok) {
+    const err = data?.error;
+    const message =
+      typeof err === 'string' ? err : typeof err?.message === 'string' ? err.message : JSON.stringify(data);
+    throw new Error(message);
+  }
+
+  // Poll audit status until complete/failed/timeout
+  const timeoutMs = 180_000; // 3 minutes (real audits include full module run)
+  const pollInterval = 2_000; // 2 seconds
+  const pollTimeout = timeoutMs / pollInterval;
+  let polled = 0;
+  let auditStatus = String(data.status || '').toUpperCase();
+
+  while (
+    polled < pollTimeout &&
+    !['COMPLETE', 'PARTIAL', 'DEGRADED', 'FAILED', 'DEAD'].includes(auditStatus)
+  ) {
+    await sleep(pollInterval);
+    polled++;
+    const statusRes = await fetch(`${BASE_URL}/api/audit/${data.auditId}`, {
+      headers: headers(),
+    });
+    const statusData = await statusRes.json();
+    if (!statusRes.ok) throw new Error(statusData.error || statusRes.statusText);
+    auditStatus = String(statusData.status || auditStatus).toUpperCase();
+  }
+
+  if (auditStatus === 'FAILED' || auditStatus === 'DEAD') {
+    throw new Error(`Audit ${data.auditId} failed (status: ${auditStatus})`);
+  }
+
+  if (!['COMPLETE', 'PARTIAL', 'DEGRADED'].includes(auditStatus)) {
+    throw new Error(`Audit ${data.auditId} did not complete after ${timeoutMs}ms (status: ${auditStatus})`);
+  }
+
+  return { auditId: data.auditId, status: auditStatus };
 }
 
 async function runPropose(
@@ -92,7 +129,12 @@ async function runPropose(
     body: JSON.stringify({}),
   });
   const data = await res.json();
-  if (!res.ok) throw new Error(data.error || data.details || res.statusText);
+  if (!res.ok) {
+    const err = data?.error;
+    const message =
+      typeof err === 'string' ? err : typeof err?.message === 'string' ? err.message : JSON.stringify(data);
+    throw new Error(message);
+  }
   return {
     proposalId: data.proposalId,
     webLinkToken: data.proposal?.webLinkToken ?? data.webLinkToken,
@@ -234,8 +276,8 @@ function generateReport(results: AuditResult[]): string {
 }
 
 async function main(): Promise<void> {
-  if (!API_KEY) {
-    console.error('API_KEY required. Add to .env or .env.local');
+  if (!API_KEY && !SESSION_COOKIE) {
+    console.error('API_KEY or SESSION_COOKIE required. Add one to the environment.');
     process.exit(1);
   }
 
@@ -247,7 +289,7 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  let data = loadTargets();
+  const data = loadTargets();
   let targets = data.targets.filter((t) => {
     if (!t.url) return false;
     if (retry) return t.status === 'error';

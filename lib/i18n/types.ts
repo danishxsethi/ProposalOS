@@ -48,7 +48,7 @@ export interface LocalizedPrompt {
   locale: string;
   promptText: string;
   culturalContext: string;
-  thinkingBudget: number; // 4,096 tokens
+  thinkingBudget: number; // 0 for Bedrock models without configurable thinking tokens.
   createdAt: Date;
   approvalStatus: 'pending' | 'approved' | 'rejected';
   nativeSpeakerReview?: string;

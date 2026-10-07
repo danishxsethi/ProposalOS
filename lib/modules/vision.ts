@@ -2,7 +2,7 @@ import { MODEL_CONFIG } from '@/lib/config/models';
 import { getThinkingBudgetForNode } from '@/lib/config/thinking-budgets';
 import { CostTracker } from '@/lib/costs/costTracker';
 import { ScreenshotResult } from '@/lib/evidence/screenshotCapture';
-import { generateWithGemini } from '@/lib/llm/provider';
+import { generateWithLLM } from '@/lib/llm/provider';
 import { logger } from '@/lib/logger';
 
 import { normalizeConfidence } from './findingGenerator';
@@ -61,7 +61,7 @@ Return ONLY a valid JSON object matching this exact schema:
 DO NOT wrap the response in markdown codeblocks. Just raw JSON. Keep it professional and persuasive.`;
 
   try {
-    const result = await generateWithGemini({
+    const result = await generateWithLLM({
       model: MODEL_CONFIG.diagnosis.model,
       input: [
         { type: 'text', data: systemPrompt },
@@ -79,7 +79,7 @@ DO NOT wrap the response in markdown codeblocks. Just raw JSON. Keep it professi
 
     if (tracker && result.usageMetadata) {
       tracker.addLlmCall(
-        'GEMINI_31_PRO',
+        'BEDROCK_NOVA_2_LITE',
         result.usageMetadata.promptTokenCount || 0,
         result.usageMetadata.candidatesTokenCount || 0,
         result.usageMetadata.thoughtsTokenCount || 0
@@ -127,17 +127,28 @@ DO NOT wrap the response in markdown codeblocks. Just raw JSON. Keep it professi
       evidenceSnapshots: [
         {
           module: 'vision',
-          source: 'gemini_31_pro',
+          source: 'amazon_bedrock_nova_2_lite',
           rawResponse: parsed,
           collectedAt: new Date(),
         },
       ],
+      execution: {
+        state: findings.length > 0 ? 'complete' : 'unavailable',
+        reason: findings.length ? undefined : 'Vision analysis returned no supported findings',
+      },
     };
   } catch (e) {
     logger.error(
       { error: e, auditId: input.auditId },
       '[VisionModule] Failed to analyze vision inputs'
     );
-    return { findings: [], evidenceSnapshots: [] };
+    return {
+      findings: [],
+      evidenceSnapshots: [],
+      execution: {
+        state: 'unavailable',
+        reason: e instanceof Error ? e.message : 'Vision analysis failed',
+      },
+    };
   }
 }

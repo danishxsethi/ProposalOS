@@ -1,4 +1,4 @@
-const TARGET_MAX_WORDS = 80;
+const TARGET_MAX_WORDS = 90;
 const TARGET_MAX_GRADE = 5.5;
 
 const SPAM_TERMS = [

@@ -10,6 +10,7 @@
 
 import { NextResponse } from 'next/server';
 
+import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 
 export const dynamic = 'force-dynamic';
@@ -77,7 +78,7 @@ export async function GET(req: Request) {
       records,
     });
   } catch (error) {
-    console.error('[qa-telemetry] Query failed:', error);
+    logger.error('[qa-telemetry] Query failed:', error);
     return NextResponse.json(
       {
         error: 'Internal Server Error',

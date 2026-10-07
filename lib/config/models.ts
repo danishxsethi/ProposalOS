@@ -5,6 +5,18 @@
  * This enables easy model switching, A/B testing, and cost optimization.
  */
 
+/** Bedrock model IDs used by the ProposalOS runtime. */
+export const BEDROCK_NOVA_MICRO = process.env.BEDROCK_FAST_MODEL_ID || 'us.amazon.nova-micro-v1:0';
+export const BEDROCK_NOVA_2_LITE = process.env.BEDROCK_MODEL_ID || 'us.amazon.nova-2-lite-v1:0';
+export const BEDROCK_NOVA_MULTIMODAL = process.env.BEDROCK_VISION_MODEL_ID || BEDROCK_NOVA_2_LITE;
+
+const BEDROCK_MODEL_ID_PATTERN = /^(?:arn:aws:bedrock:|(?:us|eu|ap|global)\.amazon\.|amazon\.)/;
+
+/** Accept Bedrock-native overrides and ignore model IDs from retired providers. */
+function configuredBedrockModel(value: string | undefined, fallback: string): string {
+  return value && BEDROCK_MODEL_ID_PATTERN.test(value) ? value : fallback;
+}
+
 export interface ModelConfig {
   model: string;
   thinkingBudget?: number;
@@ -45,80 +57,80 @@ export interface AllModelConfig {
 }
 
 export const MODEL_CONFIG: AllModelConfig = {
-  // === Core Models (existing) ===
+  // === Core Models ===
   diagnosis: {
-    model: process.env.LLM_MODEL_DIAGNOSIS || 'gemini-2.0-flash',
+    model: configuredBedrockModel(process.env.LLM_MODEL_DIAGNOSIS, BEDROCK_NOVA_2_LITE),
     thinkingBudget: parseInt(process.env.THINKING_BUDGET_DIAGNOSIS || '0'),
   },
   proposal: {
-    model: process.env.LLM_MODEL_PROPOSAL || 'gemini-2.0-flash',
+    model: configuredBedrockModel(process.env.LLM_MODEL_PROPOSAL, BEDROCK_NOVA_2_LITE),
     thinkingBudget: parseInt(process.env.THINKING_BUDGET_PROPOSAL || '0'),
   },
   flash: {
-    model: process.env.LLM_MODEL_FLASH || 'gemini-2.0-flash',
-    thinkingBudget: 0, // Flash never uses thinking
+    model: configuredBedrockModel(process.env.LLM_MODEL_FLASH, BEDROCK_NOVA_MICRO),
+    thinkingBudget: 0,
   },
 
   // === Email Models ===
   email: {
-    model: process.env.LLM_MODEL_EMAIL || 'gemini-2.0-flash',
+    model: configuredBedrockModel(process.env.LLM_MODEL_EMAIL, BEDROCK_NOVA_MICRO),
     temperature: 0.7,
     maxOutputTokens: 512,
   },
   emailFollowUp: {
-    model: process.env.LLM_MODEL_EMAIL_FOLLOWUP || 'gemini-2.0-flash',
+    model: configuredBedrockModel(process.env.LLM_MODEL_EMAIL_FOLLOWUP, BEDROCK_NOVA_MICRO),
     temperature: 0.8,
     maxOutputTokens: 512,
   },
 
   // === Chat/Sales Models ===
   chat: {
-    model: process.env.LLM_MODEL_CHAT || 'gemini-2.0-flash',
+    model: configuredBedrockModel(process.env.LLM_MODEL_CHAT, BEDROCK_NOVA_MICRO),
     temperature: 0.7,
     maxOutputTokens: 1024,
   },
   salesChat: {
-    model: process.env.LLM_MODEL_SALES_CHAT || 'gemini-2.0-flash',
+    model: configuredBedrockModel(process.env.LLM_MODEL_SALES_CHAT, BEDROCK_NOVA_MICRO),
     temperature: 0.6,
     maxOutputTokens: 1024,
   },
 
   // === Multimodal Models ===
   multimodal: {
-    model: process.env.LLM_MODEL_MULTIMODAL || 'gemini-2.0-pro',
+    model: configuredBedrockModel(process.env.LLM_MODEL_MULTIMODAL, BEDROCK_NOVA_MULTIMODAL),
     thinkingBudget: 0,
   },
 
   // === Localization Models ===
   localization: {
-    model: process.env.LLM_MODEL_LOCALIZATION || 'gemini-2.0-flash',
+    model: configuredBedrockModel(process.env.LLM_MODEL_LOCALIZATION, BEDROCK_NOVA_MICRO),
     temperature: 0.3,
   },
   translation: {
-    model: process.env.LLM_MODEL_TRANSLATION || 'gemini-2.0-flash',
+    model: configuredBedrockModel(process.env.LLM_MODEL_TRANSLATION, BEDROCK_NOVA_MICRO),
     temperature: 0.3,
   },
 
   // === Analysis Models ===
   clustering: {
-    model: process.env.LLM_MODEL_CLUSTERING || 'gemini-2.0-flash',
+    model: configuredBedrockModel(process.env.LLM_MODEL_CLUSTERING, BEDROCK_NOVA_MICRO),
     thinkingBudget: parseInt(process.env.THINKING_BUDGET_CLUSTERING || '0'),
   },
   analysis: {
-    model: process.env.LLM_MODEL_ANALYSIS || 'gemini-2.0-pro',
+    model: configuredBedrockModel(process.env.LLM_MODEL_ANALYSIS, BEDROCK_NOVA_2_LITE),
     thinkingBudget: parseInt(process.env.THINKING_BUDGET_ANALYSIS || '0'),
   },
 
   // === Executive Summary ===
   executiveSummary: {
-    model: process.env.LLM_MODEL_EXEC_SUMMARY || 'gemini-2.0-pro',
+    model: configuredBedrockModel(process.env.LLM_MODEL_EXEC_SUMMARY, BEDROCK_NOVA_2_LITE),
     thinkingBudget: parseInt(process.env.THINKING_BUDGET_EXEC_SUMMARY || '0'),
     temperature: 0.3,
   },
 
   // === Pricing Generation ===
   pricing: {
-    model: process.env.LLM_MODEL_PRICING || 'gemini-2.0-flash',
+    model: configuredBedrockModel(process.env.LLM_MODEL_PRICING, BEDROCK_NOVA_MICRO),
     temperature: 0.2,
     maxOutputTokens: 512,
   },
@@ -142,12 +154,12 @@ export function getConfigForTask(task: keyof AllModelConfig): ModelConfig {
  * Check if a model is a "flash" class (fast, cheap) model
  */
 export function isFlashModel(modelName: string): boolean {
-  return modelName.includes('flash') || modelName.includes('haiku');
+  return modelName.includes('nova-micro');
 }
 
 /**
  * Check if a model is a "pro" class (powerful, expensive) model
  */
 export function isProModel(modelName: string): boolean {
-  return modelName.includes('pro') || modelName.includes('opus') || modelName.includes('gpt-4');
+  return modelName.includes('nova-2-lite') || modelName.includes('nova-pro');
 }

@@ -2,6 +2,7 @@ import chromium from '@sparticuz/chromium';
 import puppeteer from 'puppeteer-core';
 
 import { BRANDING } from '@/lib/config/branding';
+import { safePageGoto } from '@/lib/security/safeBrowser';
 
 /**
  * Generate a case study PDF from the case study template page.
@@ -46,11 +47,15 @@ export async function generateCaseStudyPdf(
     }
 
     browser = await puppeteer.launch({
-      args: ['--no-sandbox', '--disable-setuid-sandbox'],
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-gpu',
+        '--disable-dev-shm-usage',
+      ],
       defaultViewport: { width: 1920, height: 1080, deviceScaleFactor: 1 },
       executablePath,
       headless: true,
-      ignoreHTTPSErrors: true,
     } as Parameters<typeof puppeteer.launch>[0]);
 
     const page = await browser.newPage();
@@ -58,7 +63,7 @@ export async function generateCaseStudyPdf(
       ? `${baseUrl}/case-study/${auditId}/pdf?token=${encodeURIComponent(token)}`
       : `${baseUrl}/case-study/${auditId}/pdf`;
 
-    await page.goto(url, { waitUntil: 'load', timeout: 45000 });
+    await safePageGoto(page, url, { waitUntil: 'load', timeout: 45000 });
     await new Promise((r) => setTimeout(r, 2000));
 
     const selector = '[data-pdf-ready], .pdf-root, main';

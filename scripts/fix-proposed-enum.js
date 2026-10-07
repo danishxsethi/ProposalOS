@@ -3,8 +3,8 @@ const path = require('path');
 
 function walk(dir, callback) {
   fs.readdirSync(dir).forEach((f) => {
-    let dirPath = path.join(dir, f);
-    let isDirectory = fs.statSync(dirPath).isDirectory();
+    const dirPath = path.join(dir, f);
+    const isDirectory = fs.statSync(dirPath).isDirectory();
     if (isDirectory) {
       if (!dirPath.includes('node_modules') && !dirPath.includes('.next')) {
         walk(dirPath, callback);
@@ -18,7 +18,7 @@ function walk(dir, callback) {
 function processDirectory(sourceDir) {
   walk(sourceDir, (filePath) => {
     let content = fs.readFileSync(filePath, 'utf8');
-    let original = content;
+    const original = content;
 
     // Replace strict matches for 'proposed' with 'QUALIFIED'
     content = content.replace(/'proposed'/g, "'QUALIFIED'");

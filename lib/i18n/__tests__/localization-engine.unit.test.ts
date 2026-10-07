@@ -4,8 +4,8 @@ import { LocalizationEngine } from '../localization-engine';
 import { LocaleConfig } from '../types';
 
 vi.mock('@/lib/llm/provider', () => ({
-  generateWithGemini: vi.fn().mockImplementation(async ({ model, input }) => {
-    if (model?.includes('flash') || input?.includes('professional translator')) {
+  generateWithLLM: vi.fn().mockImplementation(async ({ model, input }) => {
+    if (model?.includes('micro') || input?.includes('professional translator')) {
       const textToTranslate = input.split('\n\n').pop() || 'Translated Text';
       return { text: `[Translated] ${textToTranslate}` };
     }

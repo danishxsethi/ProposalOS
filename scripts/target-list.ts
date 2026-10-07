@@ -30,6 +30,7 @@ export interface Target {
   qaScore: number | null;
   errorMessage?: string;
   notes: string;
+  businessCity?: string;
 }
 
 export interface TargetList {

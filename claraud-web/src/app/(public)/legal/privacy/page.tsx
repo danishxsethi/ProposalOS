@@ -66,7 +66,8 @@ export default function PrivacyPage() {
             </p>
             <ul className="list-disc pl-6 text-text-secondary space-y-2">
               <li>
-                <strong>Google Cloud & Vertex AI:</strong> For hosting and running our AI analysis.
+                <strong>Amazon Web Services and Amazon Bedrock:</strong> For hosting and running our
+                AI analysis.
               </li>
               <li>
                 <strong>PostHog:</strong> For analyzing website traffic and user behavior.

@@ -23,6 +23,7 @@ import { generateTraceId, InternalError, ValidationError } from '@/lib/api/error
 import { batchAuditSchema } from '@/lib/api/schemas/audit';
 import { processBatch } from '@/lib/audit/batchProcessor';
 import { checkAndDecrementQuota } from '@/lib/billing/limits';
+import { trackUsage } from '@/lib/billing/metering';
 import { logger } from '@/lib/logger';
 import { withAuth } from '@/lib/middleware/auth';
 import { withIdempotency } from '@/lib/middleware/idempotency';
@@ -147,6 +148,9 @@ async function handleBatchAuditCreation(req: Request): Promise<NextResponse> {
     }
 
     // Enqueue all audit jobs — returns immediately, no in-process execution
+    // Record billable usage for the batch (fire-and-forget — never blocks)
+    trackUsage(tenantId, 'batch.item', auditIds.length).catch(() => {});
+
     const enqueueResult = await processBatch(batchId, tenantId, auditIds);
 
     logger.info(

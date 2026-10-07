@@ -1,0 +1,15 @@
+route,methods,auth_guard,classification
+/api/admin/feature-flags,"GET,POST",withRole(super_admin),protected
+/api/admin/model-metrics,GET,NONE,UNVERIFIED_EXPOSED
+/api/audit,"POST",withRole(agency_member),protected
+/api/audit/[id]/route,GET,NONE,UNVERIFIED
+/api/audit/batch/route,POST,withRole(agency_member),protected
+/api/auth/[...nextauth],"GET,POST",public,public
+/api/billing/webhook,POST,NONE,UNVERIFIED
+/api/cron/*,GET|POST,verifyCronAuth,protected_cron
+/api/outreach/webhook,POST,verifyResendWebhook,sig_verified
+/api/proposal/token/[token]/route,"GET,PATCH",public_token+rateLimit,public_token
+/api/stripe/webhook,POST,stripe.constructEvent,sig_verified
+/api/v1/audit,POST,withAuth+validateApiKey,protected
+/api/widget/quick-audit,"POST,OPTIONS",public+CORS_allowlist+rateLimit,public
+/api/worker/audit-job,POST,NONE,internal_unverified

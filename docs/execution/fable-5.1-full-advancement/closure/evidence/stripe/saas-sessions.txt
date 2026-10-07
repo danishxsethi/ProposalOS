@@ -1,0 +1,6 @@
+sessions created in last 15min: 2
+  cs_test_b1L0ZLPNPNQ4cSgaGi4c subscription amount_total= 0 usd plan= pro tenant= c3140a66 open
+  cs_test_b1kkcY9C7jX7N15e3AS7 subscription amount_total= 0 usd plan= starter tenant= c3140a66 open
+starter catalog=9900 stripe=9900 OK
+growth catalog=29900 stripe=29900 OK
+scale catalog=59900 stripe=59900 OK

@@ -3,15 +3,17 @@
  * Uses Puppeteer to analyze homepage + /contact for sales/lead-gen elements.
  * Frames missing elements as lost revenue.
  */
-import chromium from '@sparticuz/chromium';
-import puppeteer, { Browser } from 'puppeteer-core';
 // @ts-ignore
 import rs from 'text-readability';
 
 import type { CostTracker } from '@/lib/costs/costTracker';
 import { logger } from '@/lib/logger';
+import { acquireSharedBrowser, releaseSharedBrowser } from '@/lib/security/browserLauncher';
+import { safePageGoto } from '@/lib/security/safeBrowser';
 
 import { LegacyAuditModuleResult } from './types';
+
+import type { Browser } from 'puppeteer-core';
 
 export interface ConversionResult {
   status: 'success' | 'error';
@@ -39,9 +41,13 @@ export interface ConversionResult {
 
 export interface ConversionModuleInput {
   url: string;
+  signal?: AbortSignal;
   businessName?: string;
   /** Industry/vertical for scoring weights (e.g. dental, medical, retail) */
   industry?: string;
+  /** P2-43: audit identity used to share one Puppeteer Browser process across
+   * accessibility/mobileUX/conversion instead of each launching its own. */
+  auditId?: string;
 }
 
 /** Verticals where booking is critical vs less important */
@@ -60,43 +66,13 @@ interface PageAnalysis {
   text: string;
 }
 
-async function launchBrowser(): Promise<Browser> {
-  const fs = require('fs');
-  const localPaths = [
-    process.env.CHROME_EXECUTABLE_PATH,
-    '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-    '/Applications/Chromium.app/Contents/MacOS/Chromium',
-    '/usr/bin/google-chrome',
-    '/usr/bin/chromium-browser',
-  ].filter(Boolean) as string[];
-
-  let executablePath: string | undefined;
-  for (const p of localPaths) {
-    if (p && fs.existsSync(p)) {
-      executablePath = p;
-      break;
-    }
-  }
-  if (!executablePath) {
-    try {
-      executablePath = await chromium.executablePath();
-    } catch {
-      // Ignore
-    }
-  }
-  if (!executablePath) {
-    throw new Error('Chromium not found. Install Chrome or set CHROME_EXECUTABLE_PATH.');
-  }
-
-  return puppeteer.launch({
-    args: ['--no-sandbox', '--disable-setuid-sandbox'],
-    defaultViewport: { width: 375, height: 812, deviceScaleFactor: 1 },
-    executablePath,
-    headless: true,
-  });
-}
-
-function analyzePage(): PageAnalysis {
+/**
+ * P2-42: exported for direct unit testing (jsdom) of the visibility gate without
+ * requiring a real browser — Puppeteer's `page.evaluate(analyzePage)` still calls
+ * this exact function by reference in production; exporting it changes nothing
+ * about how it executes in-browser.
+ */
+export function analyzePage(): PageAnalysis {
   const CTA_PAT =
     /\b(book now|get quote|schedule|buy|order|contact|call|request|appointment|consultation|free quote|start|sign up|register)\b/i;
   const CHAT = [
@@ -138,6 +114,27 @@ function analyzePage(): PageAnalysis {
     text: '',
   };
 
+  // P2-42: DOM presence is not visibility. A CTA counted here must actually be
+  // rendered: not display:none, not visibility:hidden, not fully transparent, not
+  // zero-size, not disabled, and not hidden by a collapsed ancestor (offsetParent
+  // === null while not fixed-positioned). Without this gate, hidden mobile-menu
+  // duplicates, cookie-banner leftovers, and disabled buttons all inflated the CTA
+  // count and falsely counted toward "above the fold".
+  const isVisibleCta = (el: Element): boolean => {
+    const style = window.getComputedStyle(el);
+    if (style.display === 'none' || style.visibility === 'hidden') return false;
+    const opacity = parseFloat(style.opacity);
+    if (!Number.isNaN(opacity) && opacity === 0) return false;
+    const rect = el.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) return false;
+    if ((el as HTMLButtonElement).disabled) return false;
+    const htmlEl = el as HTMLElement;
+    if (htmlEl.offsetParent === null && style.position !== 'fixed' && el !== document.body) {
+      return false;
+    }
+    return true;
+  };
+
   const html = document.documentElement.outerHTML.toLowerCase();
   const bodyText = document.body?.innerText?.toLowerCase() || '';
   result.text = document.body?.innerText || '';
@@ -146,7 +143,7 @@ function analyzePage(): PageAnalysis {
   const buttons = document.querySelectorAll('a, button, [role="button"]');
   buttons.forEach((el) => {
     const text = (el.textContent || '').trim();
-    if (text && CTA_PAT.test(text) && text.length < 80) {
+    if (text && CTA_PAT.test(text) && text.length < 80 && isVisibleCta(el)) {
       result.ctas.count++;
       result.ctas.texts.push(text.slice(0, 50));
       const rect = el.getBoundingClientRect();
@@ -327,24 +324,38 @@ export async function runConversionModule(
   }
 
   let browser: Browser | null = null;
+  let browserKey: string | null = null;
 
   try {
-    browser = await launchBrowser();
+    const acquired = await acquireSharedBrowser(input.auditId);
+    browser = acquired.browser;
+    browserKey = acquired.key;
     const page = await browser.newPage();
+    // Conversion analysis is a mobile-first check — set its own viewport on its
+    // own Page even though the Browser process may be shared with mobileUX/
+    // accessibility for this same audit.
+    await page.setViewport({ width: 375, height: 812, deviceScaleFactor: 1 });
 
     const baseUrl = url.startsWith('http') ? url : `https://${url}`;
     const parsed = new URL(baseUrl);
     const contactUrl = `${parsed.origin}/contact`;
 
-    await page.goto(baseUrl, { waitUntil: 'domcontentloaded', timeout: 20000 });
+    await safePageGoto(
+      page,
+      baseUrl,
+      { waitUntil: 'domcontentloaded', timeout: 20000 },
+      input.signal
+    );
     const homeResult = await page.evaluate(analyzePage);
 
     let contactResult: PageAnalysis | null = null;
     try {
-      const contactRes = await page.goto(contactUrl, {
-        waitUntil: 'domcontentloaded',
-        timeout: 10000,
-      });
+      const contactRes = await safePageGoto(
+        page,
+        contactUrl,
+        { waitUntil: 'domcontentloaded', timeout: 10000 },
+        input.signal
+      );
       if (contactRes && contactRes.status() === 200) {
         contactResult = await page.evaluate(analyzePage);
       }
@@ -605,30 +616,12 @@ export async function runConversionModule(
     logger.error({ error, url }, '[Conversion] Analysis failed');
     return {
       moduleId: 'conversion',
-      status: 'success',
+      status: 'failed',
       timestamp: new Date().toISOString(),
-      data: {
-        status: 'error',
-        data: {
-          score: 0,
-          elements: {
-            ctas: { count: 0, aboveFold: 0, texts: [] },
-            phone: { present: false, clickToCall: false, number: null },
-            contactForm: { present: false, onHomepage: false, fields: [] },
-            chat: { present: false, provider: null },
-            booking: { present: false, provider: null },
-            emailCapture: { present: false, type: null },
-            socialProof: { testimonials: false, reviews: false, trustBadges: false },
-            maps: { present: false, provider: null },
-          },
-          missing: ['Analysis failed'],
-          recommendations: [
-            `Conversion analysis failed: ${error instanceof Error ? error.message : 'Unknown error'}. Ensure the URL is accessible.`,
-          ],
-        },
-      },
-    };
+      error: error instanceof Error ? error.message : 'Conversion analysis failed',
+      data: {},
+    } as unknown as LegacyAuditModuleResult;
   } finally {
-    if (browser) await browser.close();
+    if (browserKey) await releaseSharedBrowser(browserKey);
   }
 }

@@ -2,12 +2,16 @@
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { createEvidence } from '@/lib/modules/types';
+import { buildProposalGrounding } from '@/lib/proposal/grounding';
+
 const mocks = vi.hoisted(() => ({
   auth: vi.fn(),
   validateApiKey: vi.fn(),
   auditFindFirst: vi.fn(),
   auditUpdate: vi.fn(),
   proposalCreate: vi.fn(),
+  compileProposal: vi.fn(),
   proposalTemplateFindFirst: vi.fn(),
   evidenceFindMany: vi.fn(),
   invokeDiagnosisGraphWithTimeout: vi.fn(),
@@ -20,6 +24,7 @@ const mocks = vi.hoisted(() => ({
   loggerInfo: vi.fn(),
   loggerWarn: vi.fn(),
   loggerDebug: vi.fn(),
+  loggerError: vi.fn(),
   logError: vi.fn(),
   getTenantId: vi.fn(),
   runWithTenantAsync: vi.fn(),
@@ -38,6 +43,7 @@ vi.mock('@/lib/logger', () => ({
     info: mocks.loggerInfo,
     warn: mocks.loggerWarn,
     debug: mocks.loggerDebug,
+    error: mocks.loggerError,
   },
   logError: mocks.logError,
 }));
@@ -58,6 +64,10 @@ vi.mock('@/lib/prisma', () => ({
       findMany: mocks.evidenceFindMany,
     },
   },
+}));
+vi.mock('@/lib/proposal/compiler', () => ({
+  compileAndPersistProposal: mocks.compileProposal,
+  getCurrentProposalVersion: vi.fn().mockResolvedValue(1),
 }));
 
 vi.mock('@/lib/analysis/competitorComparison', () => ({
@@ -115,6 +125,92 @@ vi.mock('@/lib/tracing', () => ({
 
 import { POST } from '@/app/api/audit/[id]/propose/route';
 
+function finding() {
+  return {
+    id: 'finding-1',
+    auditId: 'audit-1',
+    tenantId: 'tenant-a',
+    title: 'Slow site',
+    description: 'Slow site delivery was measured.',
+    category: 'Performance',
+    module: 'performance',
+    type: 'PAINKILLER',
+    impactScore: 8,
+    confidenceScore: 9,
+    evidence: [
+      createEvidence({
+        pointer: 'https://acme.test/',
+        source: 'pagespeed_v5',
+        value: 4200,
+        label: 'LCP',
+      }),
+    ],
+    metrics: { lcpMs: 4200 },
+    effortEstimate: 'MEDIUM',
+    recommendedFix: ['Address Slow site'],
+  } as any;
+}
+
+function completeProposal() {
+  const findings = [finding()];
+  const proposal: any = {
+    executiveSummary: 'Acme Dental: Validated audit finding: Slow site.',
+    painClusters: [
+      {
+        id: 'cluster-1',
+        rootCause: 'Slow site',
+        severity: 'high',
+        findingIds: ['finding-1'],
+      },
+    ],
+    topActions: [
+      {
+        findingId: 'finding-1',
+        title: 'Slow site',
+        impact: 8,
+        effort: 'MEDIUM',
+        timeline: '14-21 days',
+      },
+    ],
+    tiers: {
+      essentials: {
+        name: 'Essentials',
+        description: 'Addresses: Slow site',
+        findingIds: ['finding-1'],
+        deliveryTime: '5 business days',
+        price: 100,
+        features: ['Address Slow site'],
+      },
+      growth: {
+        name: 'Growth',
+        description: 'Addresses: Slow site',
+        findingIds: ['finding-1'],
+        deliveryTime: '10 business days',
+        price: 200,
+        features: ['Address Slow site'],
+      },
+      premium: {
+        name: 'Premium',
+        description: 'Addresses: Slow site',
+        findingIds: ['finding-1'],
+        deliveryTime: '15 business days',
+        price: 300,
+        features: ['Address Slow site'],
+      },
+    },
+    pricing: { essentials: 100, growth: 200, premium: 300, currency: 'USD' },
+    assumptions: ['Scope requires confirmation'],
+    disclaimers: ['Automated findings require review'],
+    nextSteps: ['Review and approve a tier'],
+  };
+  proposal.grounding = buildProposalGrounding(
+    proposal,
+    { auditId: 'audit-1', tenantId: 'tenant-a', findings },
+    ['finding-1']
+  );
+  return proposal;
+}
+
 describe('audit propose authorization', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -129,18 +225,12 @@ describe('audit propose authorization', () => {
     mocks.proposalTemplateFindFirst.mockResolvedValue(null);
     mocks.evidenceFindMany.mockResolvedValue([]);
     mocks.invokeDiagnosisGraphWithTimeout.mockResolvedValue({
+      resultState: 'trusted',
       clusters: [{ findingIds: ['finding-1'] }],
       validation: { valid: true },
     });
     mocks.invokeProposalGraphWithTimeout.mockResolvedValue({
-      proposalDef: {
-        executiveSummary: 'Summary',
-        tiers: { essentials: {}, growth: {}, premium: {} },
-        pricing: { essentials: 100, growth: 200, premium: 300 },
-        assumptions: [],
-        disclaimers: [],
-        nextSteps: [],
-      },
+      completeProposal: completeProposal(),
     });
     mocks.runAutoQA.mockReturnValue({
       score: 95,
@@ -160,6 +250,12 @@ describe('audit propose authorization', () => {
     mocks.proposalCreate.mockResolvedValue({
       id: 'proposal-1',
       webLinkToken: 'token-1',
+    });
+    mocks.compileProposal.mockResolvedValue({
+      proposalRecord: { id: 'proposal-1', webLinkToken: 'token-1', status: 'READY' },
+      proposal: completeProposal(),
+      evaluation: { autoQAStatus: { score: 95, clientPerfect: { score: 92, hardFails: [], requiresHumanReview: false } }, dimensions: {}, overallScore: 95, passed: true, feedbackLogs: [] },
+      costTracker: { getTotalCents: () => 7 },
     });
   });
 
@@ -199,11 +295,6 @@ describe('audit propose authorization', () => {
           orderBy: { createdAt: 'desc' },
           take: 1,
         },
-        evidence: {
-          where: { module: 'competitor' },
-          orderBy: { collectedAt: 'desc' },
-          take: 1,
-        },
       },
     });
   });
@@ -215,18 +306,13 @@ describe('audit propose authorization', () => {
     mocks.auditFindFirst.mockResolvedValue({
       id: 'audit-1',
       tenantId: 'tenant-a',
+      status: 'COMPLETE',
+      trustState: 'TRUSTED',
       businessName: 'Acme Dental',
       businessIndustry: 'Dental',
       businessCity: 'Regina',
       businessUrl: null,
-      findings: [
-        {
-          id: 'finding-1',
-          title: 'Slow site',
-          category: 'Performance',
-          module: 'performance',
-        },
-      ],
+      findings: [finding()],
       proposals: [],
       evidence: [],
     });
@@ -248,19 +334,8 @@ describe('audit propose authorization', () => {
       proposalId: 'proposal-1',
       webLinkToken: 'token-1',
     });
-    expect(mocks.proposalCreate).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({
-          auditId: 'audit-1',
-          tenantId: 'tenant-a',
-        }),
-      })
-    );
-    expect(mocks.auditUpdate).toHaveBeenCalledWith({
-      where: { id: 'audit-1' },
-      data: {
-        apiCostCents: { increment: 7 },
-      },
-    });
+    expect(mocks.compileProposal).toHaveBeenCalledWith(expect.objectContaining({
+      auditId: 'audit-1', tenantId: 'tenant-a', version: 1,
+    }));
   });
 });

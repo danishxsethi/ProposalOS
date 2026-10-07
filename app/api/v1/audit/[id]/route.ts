@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 
+import { logger } from '@/lib/logger';
 import { withAuth } from '@/lib/middleware/auth';
 import { prisma } from '@/lib/prisma';
 import { getTenantId } from '@/lib/tenant/context';
@@ -32,7 +33,7 @@ export const GET = withAuth(
         })),
       });
     } catch (error) {
-      console.error('Error fetching audit details:', error);
+      logger.error('Error fetching audit details:', error);
       return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
     }
   }

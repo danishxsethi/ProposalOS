@@ -1,6 +1,4 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
-
-import { MultimodalContent } from './provider';
+import type { MultimodalContent } from './provider';
 
 const IMAGE_TOKEN_ESTIMATE = 258;
 
@@ -17,7 +15,7 @@ export interface TokenValidationResult {
 export async function validateContextSize(
   modelName: string,
   content: string | MultimodalContent[],
-  maxTokens: number = 1000000
+  maxTokens?: number
 ): Promise<TokenValidationResult> {
   let textContent = '';
   let imageCount = 0;
@@ -37,28 +35,23 @@ export async function validateContextSize(
   let textTokens = 0;
 
   if (textContent.length > 0) {
-    const apiKey = process.env.GOOGLE_AI_API_KEY;
-    if (apiKey) {
-      const genAI = new GoogleGenerativeAI(apiKey);
-      const model = genAI.getGenerativeModel({ model: modelName });
-      try {
-        const result = await model.countTokens(textContent);
-        textTokens = result.totalTokens;
-      } catch (err) {
-        // Fallback rough estimate: 1 token ~= 4 chars
-        textTokens = Math.ceil(textContent.length / 4);
-      }
-    } else {
-      textTokens = Math.ceil(textContent.length / 4);
-    }
+    // Bedrock Converse does not expose a preflight token-count endpoint.
+    // Keep this local and approximate so validation itself never incurs inference charges.
+    textTokens = Math.ceil(textContent.length / 4);
   }
 
+  const modelContextWindow = modelName.includes('nova-micro')
+    ? 128_000
+    : modelName.includes('nova-lite')
+      ? 300_000
+      : 1_000_000;
+  const contextLimit = maxTokens ?? modelContextWindow;
   const imageTokens = imageCount * IMAGE_TOKEN_ESTIMATE;
   const totalTokens = textTokens + imageTokens;
 
   const result: TokenValidationResult = {
     totalTokens,
-    isWithinBudget: totalTokens <= maxTokens,
+    isWithinBudget: totalTokens <= contextLimit,
     breakdown: {
       text: textTokens,
       images: imageTokens,

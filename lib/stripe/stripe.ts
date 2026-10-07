@@ -6,12 +6,7 @@ const isBuildTime = process.env.NEXT_PHASE === 'phase-production-build';
 
 function requireEnv(name: string): string {
   const value = process.env[name];
-  const isLive = process.env.BILLING_LIVE_MODE === 'true';
-  if (
-    !value ||
-    value === '' ||
-    (isLive && (value.includes('placeholder') || value.includes('xxxxx')))
-  ) {
+  if (!value || value === '' || value.includes('placeholder') || value.includes('xxxxx')) {
     throw new Error(
       `[FATAL] ${name} is missing or placeholder. Billing is non-functional. Set a real value in environment variables.`
     );

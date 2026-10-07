@@ -1,0 +1,1773 @@
+{
+  "generatedAt": "2026-07-12T20:04:37Z",
+  "auditSource": "AUDIT_REPORT.md",
+  "note": "107 finding rows normalized from AUDIT_REPORT.md (Phase 0 + Pass 1, 2, 3, 4A, 4B batches 1-6, 4C.1). IDs P0-01..P0-18 and P1-10..P1-13 are not rows in this report (prior/other numbering) and are intentionally absent. P2-26 is superseded by an in-report self-correction (line 1450). Wave assignments for findings beyond the current wave are provisional and refined at wave entry. Unfinished audit passes (4C.2, 4C.3, Passes 5-20) are tracked in REMEDIATION_STATE.md as open audit work, NOT as confirmed defects.",
+  "severityTotals": {
+    "P0": 10,
+    "P1": 49,
+    "P2": 61,
+    "total": 120
+  },
+  "openAuditPasses": [
+    "Pass 4C.2 \u2014 cost controls, persistence, idempotency, result integrity",
+    "Pass 4C.3 \u2014 browser-navigation SSRF interception + timeout signal propagation (per P1-46/P1-48)",
+    "Passes 5-20 \u2014 proposal compiler/claim policy, diagnosis, delivery/outreach/closing/retention, billing/metering/webhooks, multi-tenancy/white-label/frontend, LLM/prompt security/cost governance, observability/infra/CI, adversarial QA, runtime certification, docs/marketing reconciliation, final GO/NO-GO (not yet performed by the audit)"
+  ],
+  "findings": [
+    {
+      "id": "P0-19",
+      "severity": "P0",
+      "title": "withRole()/withPermission() API-key branch ignores required role/permission; scope-allowlist gap at key creation",
+      "status": "verified",
+      "rootCauseGroup": "A",
+      "dependencies": [],
+      "files": ["lib/auth/rbac.ts", "lib/auth/apiKeys.ts", "app/api/settings/api-keys/route.ts"],
+      "verification": [
+        "vitest run tests/security/wave0-rbac-api-key.test.ts",
+        "grep confirms withRole no longer uses fixed audit:create/audit:*/* trio",
+        "tsx red-before proof: OLD predicate grants super_admin to audit:create key (true) vs apiKeySatisfiesRole=false"
+      ],
+      "wave": 0,
+      "notes": "Fixed by prior session, verified this session. apiKeySatisfiesRole/apiKeySatisfiesPermission check actual requirement; super_admin never satisfiable by tenant key; fail-closed 403. sanitizeApiKeyScopes enforces server allowlist."
+    },
+    {
+      "id": "P0-20",
+      "severity": "P0",
+      "title": "DELETE /api/tenants/[tenantId]/delete-data performed irreversible mass deletion with no authentication (user branch had TODO 'we allow the request')",
+      "status": "verified",
+      "rootCauseGroup": "A",
+      "dependencies": [],
+      "files": ["app/api/tenants/[tenantId]/delete-data/route.ts"],
+      "verification": [
+        "vitest run tests/security/wave0-tenant-delete-authz.test.ts",
+        "grep confirms TODO 'we allow the request' removed"
+      ],
+      "wave": 0,
+      "notes": "authHandler: anon->401; session super_admin(any) or agency_admin(own tenant); DELETE needs confirm===DELETE_TENANT_DATA; cron via Bearer CRON_SECRET; UUID validation; audit event emitted. P1-08 retention decision intentionally preserved for its later wave."
+    },
+    {
+      "id": "P0-21",
+      "severity": "P0",
+      "title": "Team-invite role is unchecked mass-assignment (no enum/ceiling); combined with P0-19 enables super_admin escalation",
+      "status": "verified",
+      "rootCauseGroup": "A",
+      "dependencies": ["P0-19"],
+      "files": [
+        "app/api/team/invite/route.ts",
+        "app/api/team/invite/[token]/accept/route.ts",
+        "lib/auth/rbac.ts"
+      ],
+      "verification": [
+        "vitest run tests/security/wave0-invite-role.test.ts (incl. API-key->invite->super_admin chain)"
+      ],
+      "wave": 0,
+      "notes": "assertAssignableInviteRole enforces enum + inviter ceiling; super_admin never invitable; accept revalidates stored role via normalizeRole and fails closed on legacy/invalid. Sibling [token]/route.ts is a read-only GET (returns role for display), not a write path."
+    },
+    {
+      "id": "P0-22",
+      "severity": "P0",
+      "title": "POST /api/client/scan creates QUEUED Audit and returns success but calls no execution mechanism \u2014 100% stuck audits",
+      "status": "verified",
+      "rootCauseGroup": "C",
+      "dependencies": ["P1-24"],
+      "files": [
+        "app/api/client/scan/route.ts",
+        "lib/audit/dispatch.ts",
+        "lib/queue/auditJobQueue.ts"
+      ],
+      "verification": [
+        "vitest run tests/security/audit-job-lease-heartbeat.test.ts tests/security/batch-queue-worker.test.ts (30/30)",
+        "tsc --noEmit exit 0",
+        "code review: POST /api/client/scan now calls dispatchAuditExecution() (durable enqueue) before returning success; enqueue failure marks the Audit FAILED and returns 500 instead of a false QUEUED promise; GET returns real auditId/status/progress for polling"
+      ],
+      "wave": 2,
+      "notes": "Fixed via the shared dispatchAuditExecution() (lib/audit/dispatch.ts) which enqueues a durable single-item AuditJob (batch of one) through the same queue used by /api/audit/batch. Also corrected the response's false notification promise (no notification system exists) to accurate polling language."
+    },
+    {
+      "id": "P0-23",
+      "severity": "P0",
+      "title": "lib/retention/scheduled-audit-runner.ts::createScheduledAudit is a self-documented stub; fabricates auditsRun/comparison success",
+      "status": "verified",
+      "rootCauseGroup": "C",
+      "dependencies": ["P1-22", "P1-24"],
+      "files": [
+        "lib/retention/scheduled-audit-runner.ts",
+        "app/api/cron/scheduled-audits/route.ts",
+        "lib/graph/retention-graph.ts"
+      ],
+      "verification": [
+        "vitest run lib/pipeline/stages/__tests__/auditStage.test.ts (unaffected)",
+        "code review: createScheduledAudit() now calls dispatchAuditExecution() and records failure via ScheduledAuditRun.status='failed' on enqueue error",
+        "code review: finalizeCompletedScheduledRuns() only generates comparison reports after the new audit reaches a TERMINAL_AUDIT_STATUSES state -- never compares against a zero-finding unexecuted audit",
+        "tsc --noEmit exit 0"
+      ],
+      "wave": 2,
+      "notes": "The stub that created an Audit row, incremented auditsRun, and never triggered execution is replaced. createScheduledAudit() now dispatches through the durable queue; comparison/upsell logic is split into a separate finalizeCompletedScheduledRuns() pass that only runs once the dispatched audit reaches a terminal status."
+    },
+    {
+      "id": "P0-24",
+      "severity": "P0",
+      "title": "security module fetchWithRedirect uses raw http/https with rejectUnauthorized:false and no SSRF/redirect validation",
+      "status": "verified",
+      "rootCauseGroup": "G",
+      "dependencies": [],
+      "files": ["lib/modules/security.ts"],
+      "verification": [
+        "vitest run tests/security/wave0-security-ssrf.test.ts",
+        "grep confirms no rejectUnauthorized:false in app/ lib/"
+      ],
+      "wave": 0,
+      "notes": "Rewritten with fetch+redirect:manual, per-hop validateUrl (shared helper), hop cap 5, AbortController timeout, credentialed/bad-scheme rejection, no header forwarding; tls.connect rejectUnauthorized:true. P2-52 widened blast radius (both engines) \u2014 no extra remediation beyond this fix."
+    },
+    {
+      "id": "P0-25",
+      "severity": "P0",
+      "title": "socialDeep analyzeProfile/findSocialProfiles are stubs; 'No Active Social Presence' PAINKILLER finding fabricated from non-functional fallback",
+      "status": "verified",
+      "rootCauseGroup": "F",
+      "dependencies": [],
+      "files": ["lib/modules/socialDeep.ts"],
+      "verification": [
+        "vitest run lib/modules/__tests__/socialDeepImplementation.test.ts (validated owned profile, rejected share/content URLs, private/inaccessible state, genuine bounded-search absence, unavailable/malformed provider, abort propagation, no false negative, no phantom cost)",
+        "vitest run lib/audit/__tests__/wave6AdapterStates.test.ts (unavailable maps to SKIPPED; canonical social dependency forwarded)",
+        "vitest run tests/architecture/wave6-module-implementation-boundary.test.ts (historical exists:true/demo/phantom patterns absent)"
+      ],
+      "wave": 6,
+      "notes": "Wave 6 verified: production stubs removed. Bounded discovery uses validated website links and configured SerpAPI; public profiles are fetched through safeFetch; share/embed/content URLs are rejected; provider/private/ambiguous states remain partial/unavailable; absence findings require successful evidenced searches; no followers/posts/recency are fabricated."
+    },
+    {
+      "id": "P0-26",
+      "severity": "P0",
+      "title": "privacyCompliance emits unhedged absolute legal-violation conclusions ('violates GDPR', 'illegal') with no jurisdiction check or 'not legal advice' disclosure",
+      "status": "verified",
+      "rootCauseGroup": "F",
+      "dependencies": [],
+      "files": ["lib/modules/privacyCompliance.ts"],
+      "verification": [
+        "Rewrite finding language to scoped hedged technical observations + 'not legal advice' disclosure; test asserting no unhedged 'violates'/'illegal' string"
+      ],
+      "wave": 8,
+      "notes": "Wave 8 verified. Wave 8A made privacyCompliance a bounded technical-signal scanner with honest unavailable states, strict untrusted policy parsing, Wave 3-valid Evidence, and explicit not-legal-advice/jurisdiction limitations. Wave 8B now prevents this output from becoming an unsupported downstream diagnosis/proposal claim: all factual claims require validated same-audit/same-tenant Finding citations and deterministic QA rejects prohibited legal verdict language. Tests: wave8aPrivacyClaims.test.ts, claimContract.test.ts, wave8bGrounding.test.ts, wave8b-claim-policy.test.ts."
+    },
+    {
+      "id": "P1-01",
+      "severity": "P1",
+      "title": "claraud-web (live customer FE) excluded from GitHub CI gates governing proposal-engine",
+      "status": "open",
+      "rootCauseGroup": "K",
+      "dependencies": [],
+      "files": ["claraud-web/cloudbuild.yaml", ".github/workflows/ci-cd-pipeline.yml"],
+      "verification": ["Add claraud-web to a CI job (lint/tsc/coverage)"],
+      "wave": 11,
+      "notes": "Frontend parity."
+    },
+    {
+      "id": "P1-02",
+      "severity": "P1",
+      "title": "Field/audit-trail encryption keys referenced in code but absent from .env.example and validateEnv",
+      "status": "open",
+      "rootCauseGroup": "N",
+      "dependencies": [],
+      "files": ["lib/config/validateEnv.ts", ".env.example"],
+      "verification": ["Add keys to validateEnv + .env.example; boot-time presence check"],
+      "wave": 13,
+      "notes": "Latent boot/first-use failure."
+    },
+    {
+      "id": "P1-03",
+      "severity": "P1",
+      "title": "Triple-divergent module source-of-truth (CANONICAL=5, MODULE_REGISTRY~25, AuditOrchestrator~12)",
+      "status": "verified",
+      "rootCauseGroup": "C",
+      "dependencies": ["P1-23"],
+      "files": [
+        "packages/shared/src/audit.ts",
+        "lib/audit/modules.ts",
+        "lib/audit/runner.ts",
+        "tests/architecture/canonical-module-manifest.test.ts"
+      ],
+      "verification": [
+        "vitest run tests/architecture/canonical-module-manifest.test.ts (7/7): exactly 27 unique IDs, no cycles, MODULE_REGISTRY parity (IDs/phase/deps/optional/timeout), rolloutFlag parity, stale 5/14-module lists cannot masquerade as the full list",
+        "tsc --noEmit exit 0"
+      ],
+      "wave": 2,
+      "notes": "packages/shared/src/audit.ts now exports CANONICAL_AUDIT_MODULES (27 modules, single declarative source of truth for id/phase/dependsOn/optional/timeoutMs/rolloutFlag). The old CANONICAL_AUDIT_MODULES (5-module completeness subset) was renamed to CRITICAL_COMPLETION_MODULES with a doc comment explaining it is NOT the full list. lib/audit/modules.ts re-exports only that renamed 5-module subset for runner.ts's completeness guardrail -- it no longer masquerades as canonical. The 14-module AuditOrchestrator list remains only inside the deprecated, non-production-reachable class (P1-23/P2-08). A contract test enforces shared/server parity permanently."
+    },
+    {
+      "id": "P1-04",
+      "severity": "P1",
+      "title": "Contradictory customer-facing product claims across two frontends (latency/price/module count)",
+      "status": "open",
+      "rootCauseGroup": "O",
+      "dependencies": [],
+      "files": ["app/(marketing)/page.tsx", "claraud-web/.../pricing/page.tsx", "README.md"],
+      "verification": [
+        "Measure latency/cost full-flow (Wave 15); reconcile copy against measured evidence"
+      ],
+      "wave": 16,
+      "notes": "No marketing claim update until measured runtime evidence supports it."
+    },
+    {
+      "id": "P1-05",
+      "severity": "P1",
+      "title": "Unscoped lib/db.ts Prisma client (never sets app.current_tenant_id) used by 8 prod paths",
+      "status": "verified",
+      "rootCauseGroup": "B",
+      "dependencies": [],
+      "files": [
+        "lib/db.ts",
+        "lib/tenant/context.ts",
+        "lib/pipeline/tenantConfig.ts",
+        "lib/pipeline/signalDetector.ts",
+        "lib/pipeline/preWarming.ts",
+        "lib/pipeline/deliveryEngine.ts",
+        "lib/pipeline/crossTenantIntelligence.ts",
+        "lib/pipeline/partnerPortal.ts",
+        "app/api/cron/partner-matching/route.ts",
+        "app/api/cron/pipeline-delivery/route.ts"
+      ],
+      "verification": [
+        "vitest run tests/security/wave1-tenant-scoping.test.ts tests/architecture/no-unscoped-db-import.test.ts + 12 updated pipeline test files (158+ tests)",
+        "tsc --noEmit exit 0",
+        "grep confirms zero import { prisma } from @/lib/db in app/ lib/"
+      ],
+      "wave": 1,
+      "notes": "lib/db.ts no longer exports a client; exports withSystemDbBypass(reason, fn) built on the same canonical scoped client. Tenant-scoped callers use runWithTenantAsync/runScopedToOwnerTenant with a real tenantId; genuinely global callers (crossTenantIntelligence, partnerPortal, both cron routes) use withSystemDbBypass with a specific reason. Architecture test blocks regression."
+    },
+    {
+      "id": "P1-06",
+      "severity": "P1",
+      "title": "RLS grants full access to current_user='postgres' when GUC empty; superuser bypasses RLS",
+      "status": "fixed",
+      "rootCauseGroup": "B",
+      "dependencies": [],
+      "files": ["lib/config/dbRoleGuard.ts"],
+      "verification": ["vitest run tests/security/wave1-db-role-guard.test.ts (5/5 pass)"],
+      "wave": 1,
+      "notes": "Repository-side fail-fast guard added (assertSafeDbRole throws in production on superuser/BYPASSRLS role). NOT yet wired into a startup/readiness probe (follow-up). BLOCKED fact: confirm live production DATABASE_URL connects as a restricted role (e.g. app_user), not postgres/superuser -- requires operator access to deploy config, not derivable from repo."
+    },
+    {
+      "id": "P1-07",
+      "severity": "P1",
+      "title": "claraud-web Prisma sets SET LOCAL on tx but runs query on base client; $executeRawUnsafe interpolation, no UUID validation",
+      "status": "verified",
+      "rootCauseGroup": "B",
+      "dependencies": [],
+      "files": ["claraud-web/src/lib/prisma.ts"],
+      "verification": [
+        "claraud-web: vitest run tests/prisma-tenant-scoping.test.ts -> 11/11 pass",
+        "claraud-web: npx tsc --noEmit -> 0 new errors (7 pre-existing implicit-any confirmed via before/after diff)",
+        "claraud-web: npx eslint src/lib/prisma.ts -> 0 issues",
+        "grep -rn executeRawUnsafe claraud-web/src -> none (only comments describing the prior defect)"
+      ],
+      "wave": 1,
+      "notes": "VERIFIED (continuation session). claraud-web/src/lib/prisma.ts rewritten: createTenantScopingExtension() dispatches every model op onto the SAME tx the RLS GUC was just set on (fixes the base-client/tx mismatch); $executeRawUnsafe replaced with parameterized tagged-template $executeRaw; assertValidTenantId() UUID-validates before any query; missing context now fails closed (throws) instead of silently running unscoped -- setTenantContext()/withSystemBypass() are the only entry points, and were wired into all 6 real call sites (analytics, audits, dashboard/stats, proposals, settings routes; apiKeys.ts; auth.ts credentials authorize; register/route.ts). wrapTransaction() additionally makes app-opened prisma.$transaction() (self-registration) reuse the same connection for every nested op instead of splitting into separate nested transactions. 11 unit tests (tests/prisma-tenant-scoping.test.ts, claraud-web's own new vitest harness) prove: GUC set on same tx as dispatch; base client never invoked; malformed/injection-shaped tenant IDs rejected; missing context throws; explicit bypass sets app.bypass_rls and still dispatches on tx; app-opened transaction reuse. claraud-web's own tsc/eslint clean (0 new issues; 7 pre-existing implicit-any errors confirmed via before/after diff to predate this fix -- caused by no schema.prisma existing for claraud-web in this sandbox, so @prisma/client ships its ungenerated stub; `npx prisma generate` fails 'Could not find Prisma Schema'). New findings logged: P2-58 (claraud-web's own register route still writes role:'owner' literally, but confirmed INERT -- claraud-web has no RBAC/role-hierarchy code reading that field at all, unlike the root app's dangerous LEGACY_ROLE_VALUES mapping); P2-59 (NextAuth's PrismaAdapter is wired with the tenant-scoped client but no catch-all app/api/auth/[...nextauth]/route.ts exists to mount `handlers`, so Google OAuth cannot complete and the adapter's own Account/Session methods are currently unreachable -- if that route is added later, adapter calls must be wrapped in an auth-adapter-style bypass or they will fail closed, mirroring lib/auth/adapterContext.ts's pattern)."
+    },
+    {
+      "id": "P1-08",
+      "severity": "P1",
+      "title": "Tenant deletion cascades financial + audit/legal records with no retention/soft-delete",
+      "status": "open",
+      "rootCauseGroup": "B",
+      "dependencies": [],
+      "files": ["prisma/schema.prisma"],
+      "verification": ["Add retention/archival or restrict cascade; product/legal decision"],
+      "wave": 10,
+      "notes": "Explicitly preserved by Wave 0 P0-20 fix; retention policy owned by billing/records wave."
+    },
+    {
+      "id": "P1-09",
+      "severity": "P1",
+      "title": "Claim Policy not DB-enforceable: Finding.evidence Json default '[]'; citations are JSON strings not FKs",
+      "status": "verified",
+      "rootCauseGroup": "D",
+      "dependencies": [],
+      "files": ["prisma/schema.prisma"],
+      "verification": [
+        "vitest run lib/audit/__tests__/findingContract.test.ts (empty-evidence Finding rejected at runtime boundary and at persistence)",
+        "vitest run lib/audit/__tests__/findingPersistence.test.ts (malformed finding rejected before Prisma call)",
+        "vitest run tests/architecture/finding-persistence-boundary.test.ts (no unauthorized direct prisma.finding writes)"
+      ],
+      "wave": 3,
+      "notes": "Runtime enforcement added at lib/audit/findingContract.ts (FindingRuntimeSchema) and lib/audit/findingPersistence.ts, since Finding.evidence remains a Json column (schema migration judged unnecessary this wave per campaign instruction \u2014 smallest robust boundary preferred). A 0-evidence Finding is now rejected at both the adapter/aggregation boundary and, independently, immediately before the Prisma write."
+    },
+    {
+      "id": "P1-14",
+      "severity": "P1",
+      "title": "Session-role extraction never normalizes legacy role strings; ROLE_HIERARCHY['owner'] undefined locks out self-registered owners",
+      "status": "verified",
+      "rootCauseGroup": "A",
+      "dependencies": [],
+      "files": ["lib/auth/rbac.ts", "app/api/auth/register/route.ts"],
+      "verification": [
+        "Covered by wave0-rbac-api-key + wave0-invite-role tests; normalizeRole fails closed on unknown",
+        "vitest run tests/security/wave1-owner-role-escalation.test.ts (4/4 pass)"
+      ],
+      "wave": 0,
+      "notes": "Wave 0 folded in normalizeRole application. Wave 1 found and fixed a CRITICAL escalation this uncovered: LEGACY_ROLE_VALUES.owner mapped to 'super_admin' (not agency_admin), meaning every self-registered tenant admin normalized to PLATFORM-WIDE super_admin. Fixed; register route now writes role:'agency_admin' directly. See wave1-owner-role-escalation.test.ts."
+    },
+    {
+      "id": "P1-15",
+      "severity": "P1",
+      "title": "No visible rate limiting on NextAuth Credentials login (brute-force)",
+      "status": "verified",
+      "rootCauseGroup": "K",
+      "dependencies": [],
+      "files": ["app/api/auth/[...nextauth]/route.ts"],
+      "verification": ["vitest run tests/security/wave1-login-rate-limit.test.ts (6/6 pass)"],
+      "wave": 1,
+      "notes": "Credentials callback path rate-limited (per-IP + per-account via shared Redis-backed limiter) before password verification; OAuth callbacks unaffected; 429 body identical regardless of account existence."
+    },
+    {
+      "id": "P1-16",
+      "severity": "P1",
+      "title": "API_KEY env fallback lets caller choose tenant via x-tenant-id header; plain === compare",
+      "status": "verified",
+      "rootCauseGroup": "A",
+      "dependencies": [],
+      "files": ["lib/middleware/auth.ts", "lib/auth/rbac.ts"],
+      "verification": [
+        "vitest run tests/security/wave0-env-api-key-tenant.test.ts (binds DEFAULT_TENANT_ID, ignores x-tenant-id, rejects when unset)"
+      ],
+      "wave": 0,
+      "notes": "Env key bound server-side to DEFAULT_TENANT_ID; x-tenant-id ignored; timingSafeEqual used. Retire-vs-keep decision (Pass 3 \u00a715) deferred; containment applied now."
+    },
+    {
+      "id": "P1-17",
+      "severity": "P1",
+      "title": "GET/POST /api/predictions unauthenticated; raw tenantId query param into where; only 500s due to DB-layer assertion",
+      "status": "verified",
+      "rootCauseGroup": "B",
+      "dependencies": [],
+      "files": ["app/api/predictions/route.ts"],
+      "verification": ["vitest run tests/security/wave1-predictions-authz.test.ts (7/7 pass)"],
+      "wave": 1,
+      "notes": "GET wrapped in withAuth, POST in withRole('agency_member'); tenant comes exclusively from getTenantId()/ALS context; client-supplied tenantId in query/body ignored; runtime input validation added; response no longer includes tenant relation."
+    },
+    {
+      "id": "P1-18",
+      "severity": "P1",
+      "title": "claraud-web tenant-scoping uses $executeRawUnsafe manual escaping; query runs on wrong connection (P1-07)",
+      "status": "verified",
+      "rootCauseGroup": "B",
+      "dependencies": ["P1-07"],
+      "files": ["claraud-web/src/lib/prisma.ts"],
+      "verification": [
+        "claraud-web: vitest run tests/prisma-tenant-scoping.test.ts -> 11/11 pass",
+        "claraud-web: npx tsc --noEmit -> 0 new errors (7 pre-existing implicit-any confirmed via before/after diff)",
+        "claraud-web: npx eslint src/lib/prisma.ts -> 0 issues",
+        "grep -rn executeRawUnsafe claraud-web/src -> none (only comments describing the prior defect)"
+      ],
+      "wave": 1,
+      "notes": "VERIFIED as part of the single coherent P1-07 fix (same file/commit) -- see P1-07 notes."
+    },
+    {
+      "id": "P1-19",
+      "severity": "P1",
+      "title": "Two independent NextAuth authorities over same User/Session tables with divergent security posture (no revocation, weaker password on claraud-web)",
+      "status": "open",
+      "rootCauseGroup": "K",
+      "dependencies": [],
+      "files": ["lib/auth.ts", "claraud-web/src/auth.ts"],
+      "verification": [
+        "Unify auth authority OR enforce equivalent session-integrity + password policy on both; test"
+      ],
+      "wave": 11,
+      "notes": "SSO-vs-separate is a product decision."
+    },
+    {
+      "id": "P1-20",
+      "severity": "P1",
+      "title": "Fire-and-forget non-durable execution on /api/audit, /api/v1/audit, /api/public/audit + sniper worker (no AuditJob backing)",
+      "status": "verified",
+      "rootCauseGroup": "C",
+      "dependencies": ["P1-24"],
+      "files": [
+        "lib/audit/dispatch.ts",
+        "app/api/audit/route.ts",
+        "app/api/v1/audit/route.ts",
+        "app/api/public/audit/route.ts",
+        "app/api/client/scan/route.ts",
+        "lib/outreach/sprint2/sniperWorker.ts",
+        "lib/retention/scheduled-audit-runner.ts"
+      ],
+      "verification": [
+        "grep -rn \"runAudit\\(\" app lib -- every remaining direct call is awaited (lib/queue/auditJobWorker.ts as the canonical worker owner; lib/pipeline/stages/auditStage.ts and lib/outreach/AutomatedOutreachOrchestrator.ts and lib/graph/delivery-graph.ts as documented same-control-flow exceptions, Step 5 req 12); zero fire-and-forget `.catch()` patterns remain on any customer-facing route",
+        "tsc --noEmit exit 0"
+      ],
+      "wave": 2,
+      "notes": "All customer-facing audit-creation routes now call dispatchAuditExecution() (durable enqueue) instead of an in-process runAudit() call. Pre-existing direct-awaited exceptions (auditStage.ts, AutomatedOutreachOrchestrator.ts, delivery-graph.ts) are background-job control flow that needs the terminal result in the same call, not detached customer-request work -- documented in code and here per Step 5 requirement 13."
+    },
+    {
+      "id": "P1-21",
+      "severity": "P1",
+      "title": "Widget quick-audit bypasses registry; hardcoded 2-call mini-audit with fabricated score formula and static topIssue",
+      "status": "verified",
+      "rootCauseGroup": "C",
+      "dependencies": ["P1-24", "P1-09"],
+      "files": [
+        "app/api/widget/quick-audit/route.ts",
+        "packages/shared/src/audit.ts",
+        "tests/security/widget-graceful-degradation.test.ts",
+        "tests/security/widget-origin-allowlist.test.ts"
+      ],
+      "verification": [
+        "vitest run tests/security/widget-graceful-degradation.test.ts (5/5): module failure -> unavailable not a fabricated finding; full success -> score derived from real findings, not a static formula",
+        "vitest run tests/security/widget-origin-allowlist.test.ts (34/34, updated to mock the new runModuleSubset() execution path)",
+        "code review: no fabricated score formula, no static topIssue remains; response labels quickAudit:true with modulesChecked/modulesCompleted/modulesUnavailable"
+      ],
+      "wave": 2,
+      "notes": "Route now calls lib/audit/runner.ts::runModuleSubset(EXECUTION_PROFILES.QUICK_AUDIT, ...) -- the exact canonical adapter/timeout/retry/finding-normalization path -- instead of calling crawlWebsite()/runGBPModule() directly and computing a fabricated +10/-10/+20 score. QUICK_AUDIT profile (website+gbp) is a named, centrally-defined execution profile in packages/shared/src/audit.ts, validated against the canonical module ID set at import time."
+    },
+    {
+      "id": "P1-22",
+      "severity": "P1",
+      "title": "Two independent scheduled-audit implementations both poll AuditSchedule (split-brain; retention path is a stub)",
+      "status": "verified",
+      "rootCauseGroup": "C",
+      "dependencies": ["P0-23"],
+      "files": [
+        "lib/retention/scheduled-audit-runner.ts",
+        "app/api/cron/scheduled-audits/route.ts",
+        "lib/graph/retention-graph.ts"
+      ],
+      "verification": [
+        "code review: both cron entry points (app/api/cron/scheduled-audits and retention-graph's run_scheduled_audits node) call the single shared processScheduledAudits()",
+        "code review: kickoffDueSchedules() claims a due schedule atomically via updateMany({ where: { id, nextRunAt: { lte: now } }, data: { nextRunAt: <advanced> } }) -- a concurrent/overlapping invocation sees claimed.count===0 and skips, so the same occurrence is never dispatched twice",
+        "tsc --noEmit exit 0"
+      ],
+      "wave": 2,
+      "notes": "No more split-brain: the retention path's self-documented stub (which used to silently 'eat' the AuditSchedule row an hour before the cron's real AuditOrchestrator-based pass could see it) and the cron's own duplicate polling logic are both replaced by one shared, idempotent implementation."
+    },
+    {
+      "id": "P1-23",
+      "severity": "P1",
+      "title": "AuditOrchestrator (sole scheduled-audits engine) missing reputation/social/website; self-logs [DEPRECATED]",
+      "status": "verified",
+      "rootCauseGroup": "C",
+      "dependencies": ["P1-24"],
+      "files": ["app/api/cron/scheduled-audits/route.ts", "lib/orchestrator/auditOrchestrator.ts"],
+      "verification": [
+        "grep -rn \"AuditOrchestrator\\b\" app lib -- zero production instantiations remain (only the deprecated class definition itself and its own direct unit test, lib/modules/__tests__/auditOrchestrator.test.ts, which tests the class in isolation and is not a production caller)",
+        "tsc --noEmit exit 0"
+      ],
+      "wave": 2,
+      "notes": "app/api/cron/scheduled-audits/route.ts no longer instantiates AuditOrchestrator; it now delegates entirely to lib/retention/scheduled-audit-runner.ts::processScheduledAudits(), which dispatches through the canonical 27-module engine via the durable queue. AuditOrchestrator.ts is retained only as a deprecated, self-logging (\"[DEPRECATED]\"/\"[DEPRECATION_METRIC]\") class with zero remaining production callers -- not deleted outright this wave (Wave 2 scope is retiring its EXECUTION, not necessarily the file; safe to delete in a later cleanup wave once confirmed no external/rollback dependency)."
+    },
+    {
+      "id": "P1-24",
+      "severity": "P1",
+      "title": "Durable AuditJob queue wired to only one entry point (/api/audit/batch)",
+      "status": "verified",
+      "rootCauseGroup": "C",
+      "dependencies": [],
+      "files": [
+        "lib/audit/dispatch.ts",
+        "lib/queue/auditJobQueue.ts",
+        "app/api/audit/route.ts",
+        "app/api/v1/audit/route.ts",
+        "app/api/public/audit/route.ts",
+        "app/api/client/scan/route.ts",
+        "lib/retention/scheduled-audit-runner.ts",
+        "lib/outreach/sprint2/sniperWorker.ts",
+        "app/api/worker/audit-job/route.ts",
+        "cron.yaml"
+      ],
+      "verification": [
+        "vitest run tests/security/batch-queue-worker.test.ts tests/security/audit-job-lease-heartbeat.test.ts (30/30)",
+        "code review: every audit-creation entry point (root/v1/public/client-scan/scheduled/retention/outreach) now calls dispatchAuditExecution(); worker route supports both push-dispatch (jobId) and cron poll-sweep (audit-job-sweep entry in cron.yaml, claims up to WORKER_POLL_BATCH_SIZE QUEUED/stale-RUNNING jobs per tick)",
+        "tsc --noEmit exit 0"
+      ],
+      "wave": 2,
+      "notes": "The durable AuditJob queue previously served only /api/audit/batch. It is now the single execution path for every audit-creation entry point in the app, with a documented push-dispatch (WORKER_DISPATCH_URL) and cron-poll (audit-job-sweep) fallback so the queue never depends solely on push delivery."
+    },
+    {
+      "id": "P1-25",
+      "severity": "P1",
+      "title": "createEvidence() defaults pointer to 'unknown' \u2014 fabricated placeholder pointer passes shape checks",
+      "status": "verified",
+      "rootCauseGroup": "D",
+      "dependencies": [],
+      "files": ["lib/modules/types.ts"],
+      "verification": [
+        "vitest run lib/modules/__tests__/createEvidence.test.ts (17/17: real pointer accepted; missing/empty/whitespace/'unknown'/'n/a'/'none'/'placeholder'/module-name-only/secret-like pointer all rejected; explicit collected_at not overwritten)",
+        "tsc --noEmit (pointer is now a required, non-optional parameter at the type level)"
+      ],
+      "wave": 3,
+      "notes": "createEvidence()'s `pointer: opts.pointer || 'unknown'` fallback removed; pointer is required at both the type level and runtime (assertRealPointer throws a descriptive error). isPlaceholderPointer()/containsSecretLike() are the shared, reusable checks used by both createEvidence and the runtime Evidence schema."
+    },
+    {
+      "id": "P1-26",
+      "severity": "P1",
+      "title": "techStack constructs Findings with evidence:[] and hand-built evidence omitting pointer/collected_at",
+      "status": "verified",
+      "rootCauseGroup": "D",
+      "dependencies": ["P1-25"],
+      "files": ["lib/modules/techStack.ts"],
+      "verification": [
+        "vitest run lib/modules/__tests__/techStackEvidence.test.ts (6/6: every generateTechFindings() finding, across an empty stack, a builder-CMS stack, a hosting-only-modern stack, and a full-tooling stack, passes FindingRuntimeSchema)",
+        "grep -n \"evidence: \\[\\]\" lib/modules/techStack.ts -> no matches"
+      ],
+      "wave": 3,
+      "notes": "All 5 findings in generateTechFindings() (evidence:[] on 'No Analytics'/'No Email Marketing', and hand-built literals missing pointer/collected_at on 'Website Built on X'/'Modern Technology Stack'/'Comprehensive Digital Tooling') now route through createEvidence() with the real analyzed URL as pointer. Only reachable after a successful fetch+parse (the module's catch block already returned findings:[] on failure, unchanged)."
+    },
+    {
+      "id": "P1-27",
+      "severity": "P1",
+      "title": "crawlWebsite invoked twice per audit (website internal + websiteCrawler standalone)",
+      "status": "verified",
+      "rootCauseGroup": "I",
+      "dependencies": [],
+      "files": ["lib/modules/website.ts", "lib/audit/runner.ts"],
+      "verification": ["Reuse crawler result via dependencyResults; test single crawl"],
+      "wave": 7,
+      "notes": "Duplicate collection. Wave 7A: fixed. lib/modules/websiteCrawlerModule.ts's runWebsiteCrawlerModule now single-flight-coalesces concurrent (auditId,url) calls; website.ts and the canonical websiteCrawler adapter both thread the real auditId. Verified: lib/modules/__tests__/websiteCrawlerDedup.test.ts (3/3)."
+    },
+    {
+      "id": "P1-28",
+      "severity": "P1",
+      "title": "gbpAdapter never inspects runGBPModule status; launders failure as COMPLETE",
+      "status": "verified",
+      "rootCauseGroup": "H",
+      "dependencies": [],
+      "files": ["lib/audit/runner.ts", "lib/modules/gbp.ts"],
+      "verification": ["Adapter checks data.status==='failed' -> FAILED; test"],
+      "wave": 5,
+      "notes": "Provider-state laundering. | Wave 5: Re-verified in Wave 5 (already fixed/verified in Wave 3): gbpAdapter checks legacy status and maps failure to FAILED, not COMPLETE. Regression: lib/audit/__tests__/adapterFailureMasking.test.ts (pre-existing, still green) + new wave5AdapterRepairs.test.ts coverage."
+    },
+    {
+      "id": "P1-29",
+      "severity": "P1",
+      "title": "gbp/gbpDeep resolve business via maxResultCount:1 with no disambiguation/confidence gate",
+      "status": "verified",
+      "rootCauseGroup": "H",
+      "dependencies": [],
+      "files": ["lib/modules/gbp.ts", "lib/modules/gbpDeep.ts"],
+      "verification": ["Multi-candidate scoring vs website/phone/address; flag ambiguity; test"],
+      "wave": 7,
+      "notes": "Wrong-business risk for common names/franchises. Wave 7A: fixed. gbp.ts's runGBPModule now requests up to 5 Text Search candidates and scores them by name+address signal (scorePlaceCandidate, exported and reused by gbpDeep.ts's own independent fallback resolution); ambiguous/weak matches are flagged identityConfidence:'ambiguous' and the aggregation layer (runner.ts extractFindingsFromRegistryResult) + gbpDeepAdapter withhold definitive customer-negative findings for those cases. Verified: lib/modules/__tests__/gbpIdentityMatch.test.ts (3/3), lib/audit/__tests__/wave7aAdapterRepairs.test.ts (4 of 9)."
+    },
+    {
+      "id": "P1-30",
+      "severity": "P1",
+      "title": "gbpDeep photo-analysis degrade returns fabricated {5,5,5} score; isClaimed hardcoded true",
+      "status": "verified",
+      "rootCauseGroup": "F",
+      "dependencies": [],
+      "files": ["lib/modules/gbpDeep.ts"],
+      "verification": [
+        "vitest run lib/modules/__tests__/gbpDeepImplementation.test.ts (dependency reuse, strict valid/malformed photo output, claimed unavailable, provider unavailable/failure, abort, real-call cost)",
+        "vitest run lib/modules/__tests__/gbpDeepEvidence.test.ts (all generated findings pass Finding/Evidence contract)",
+        "vitest run lib/audit/__tests__/wave6AdapterStates.test.ts (PARTIAL mapping and canonical GBP data forwarding)"
+      ],
+      "wave": 6,
+      "notes": "Wave 6 verified: Wave 3's removal of the synthetic 5/5/5 fallback remains intact; hardcoded claimed state is replaced by explicit unavailable status; Gemini output is strict Zod-validated; images are bounded and fetched through safeFetchResponseDerived; canonical GBP details are reused without duplicate Places calls; unavailable sub-metrics make the module PARTIAL."
+    },
+    {
+      "id": "P1-31",
+      "severity": "P1",
+      "title": "gbpDeep: 3 evidence:[] findings, zero createEvidence usage",
+      "status": "verified",
+      "rootCauseGroup": "D",
+      "dependencies": ["P1-25"],
+      "files": ["lib/modules/gbpDeep.ts"],
+      "verification": [
+        "vitest run lib/modules/__tests__/gbpDeepEvidence.test.ts (4/4: Description-Missing and Missing-Attributes findings carry real Places API record pointers; every finding produced passes FindingRuntimeSchema; AI-photo-quality finding pointer is the real photo URL)",
+        "grep -n \"evidence: \\[\\]\" lib/modules/gbpDeep.ts -> no matches"
+      ],
+      "wave": 3,
+      "notes": "All 3 evidence:[] findings in generateGbpFindings() (Description Missing, Missing Attributes, and the catch-all 'GBP Analysis Failed' fabricated-failure finding) fixed: the first two now cite the real fetched Places API record (placeId-scoped pointer); the third is removed entirely per Step 7/8 (a technical failure must never become a customer Finding) rather than patched with fake evidence. The remaining hand-built evidence literals in the same function (Ghost Town, Owner Photos, Poor Photo Quality, Low Review Velocity) were also converted to createEvidence with real pointers while in the file. Additionally fixed the Gemini photo-analysis fallback (previously fabricated {quality:5,...} on LLM failure, driving a real negative finding) to degrade:false and skip the photo instead of inventing a score \u2014 a Step 7/8 'fallback numeric score' instance found and fixed in the same file."
+    },
+    {
+      "id": "P1-32",
+      "severity": "P1",
+      "title": "gbp/gbpDeep duplicate Places Details fetch (separate caches never cross-serve)",
+      "status": "verified",
+      "rootCauseGroup": "I",
+      "dependencies": [],
+      "files": ["lib/modules/gbp.ts", "lib/modules/gbpDeep.ts"],
+      "verification": ["Pass details via dependencyResults or unify cache key; test single fetch"],
+      "wave": 7,
+      "notes": "Duplicate real-money API cost. Wave 7A: re-verified, already fixed in Wave 6. gbpDeepAdapter forwards placeData from the canonical gbp dependency; runGbpDeepModule's dependencyPlaceToApiShape() consumes it and skips both the Text Search and Places Details calls. Existing regression lib/modules/__tests__/gbpDeepImplementation.test.ts already asserted tracker.calls excludes PLACES_DETAILS_DEEP/PLACES_TEXT_SEARCH when placeData is present -- no code change required. Ledger was stale (still wave:7/open); status corrected to verified."
+    },
+    {
+      "id": "P1-33",
+      "severity": "P1",
+      "title": "schemaMarkup does real analysis but never populates findings array; aggregation silently discards output",
+      "status": "verified",
+      "rootCauseGroup": "E",
+      "dependencies": [],
+      "files": ["lib/modules/schemaMarkup.ts", "lib/audit/runner.ts"],
+      "verification": [
+        "Add findings:Finding[] built from schemasMissing/recommendations; regression test non-empty findings"
+      ],
+      "wave": 5,
+      "notes": "Adapter/result-shape drift \u2014 output discarded. | Wave 5: Fixed: runSchemaMarkupModule now builds a findings[] array from schemasMissing/schemasFound (real analysis, real evidence citing analyzed URL + timestamp). Adapter (schemaMarkupAdapter) also fixed to honor the module's own success/failure status (was previously always success). Outer LegacyAuditModuleResult.status now honestly reports failed on fetch/parse error instead of laundering through a nested status:\"error\". Tests: lib/modules/__tests__/schemaMarkupFindings.test.ts, lib/audit/__tests__/wave5AdapterRepairs.test.ts."
+    },
+    {
+      "id": "P1-34",
+      "severity": "P1",
+      "title": "website + schemaAnalysis emit near-duplicate schema findings for same observations",
+      "status": "verified",
+      "rootCauseGroup": "E",
+      "dependencies": [],
+      "files": ["lib/modules/website.ts", "lib/audit/runner.ts"],
+      "verification": [
+        "Consolidate schema-finding ownership into schemaAnalysis; test no duplicates"
+      ],
+      "wave": 5,
+      "notes": "Inflated issue count. | Wave 5: Fixed: deduplicateFindings() now merges by a stable metrics.schemaFingerprint/fingerprint key (falling back to type+title) instead of title-only matching, and merges the union of evidence rather than dropping the loser's evidence. schemaAnalysis findings tagged with matching schema-missing:<Type> fingerprints so they correctly collide with schemaMarkup's once schemaAnalysis's own zero-evidence gap is closed (Wave 6/7 \u2014 tracked separately, not fixed here since it is a module-implementation defect, not an adapter defect). Test: wave5AdapterRepairs.test.ts \"P1-34\" describe block."
+    },
+    {
+      "id": "P1-35",
+      "severity": "P1",
+      "title": "seoDeep/schemaMarkup declare websiteCrawler dependency but re-fetch homepage independently",
+      "status": "verified",
+      "rootCauseGroup": "I",
+      "dependencies": [],
+      "files": ["lib/audit/runner.ts"],
+      "verification": ["Forward dependencyResults.websiteCrawler HTML; test no re-fetch"],
+      "wave": 7,
+      "notes": "Compounds P1-27 duplicate crawl. Wave 7A: fixed. lib/modules/websiteCrawler.ts's crawlWebsite() now captures the homepage's real raw HTML (CrawlResult.homepageHtml) and a hasViewportMeta flag per page as free byproducts of the parse it already performs; runner.ts's seoDeepAdapter/schemaMarkupAdapter forward this websiteCrawler dependency data instead of leaving seoDeep.ts/schemaMarkup.ts to independently re-fetch the same homepage. Verified: lib/audit/__tests__/wave7aAdapterRepairs.test.ts (3 of 9), lib/modules/__tests__/seoDeepDependencyReuse.test.ts (2 of 5)."
+    },
+    {
+      "id": "P1-36",
+      "severity": "P1",
+      "title": "accessibility asserts wcagLevel A/AA/AAA from axe-core score alone \u2014 unsupported certification claim",
+      "status": "verified",
+      "rootCauseGroup": "F",
+      "dependencies": [],
+      "files": ["lib/modules/accessibility.ts"],
+      "verification": [
+        "Relabel as automated-scan estimate + 'manual review required' disclosure; test never emits bare cert"
+      ],
+      "wave": 8,
+      "notes": "Wave 8 verified. Wave 8A removed wcagLevel certification output and preserved automated violations/no-automated-violations/unavailable states, sanitized snippets, Evidence, and manual-review limits. Wave 8B now requires same-audit/same-tenant Finding citations through diagnosis, proposal, persistence, rendering, and QA; deterministic QA rejects accessibility certification language. Tests: wave8aAccessibilityClaims.test.ts, claimContract.test.ts, wave8bGrounding.test.ts, wave8b-claim-policy.test.ts."
+    },
+    {
+      "id": "P1-37",
+      "severity": "P1",
+      "title": "mobileUX hardcodes CLS=0 (placeholder) and mislabels TBT from unrelated timing pair",
+      "status": "verified",
+      "rootCauseGroup": "F",
+      "dependencies": [],
+      "files": ["lib/modules/mobileUX.ts"],
+      "verification": [
+        "vitest run lib/modules/__tests__/mobileUXImplementation.test.ts (real observer metrics, valid/missing/malformed PageSpeed, abort, evidence, no phantom call)",
+        "vitest run tests/architecture/wave6-module-implementation-boundary.test.ts (hardcoded CLS and mislabeled DOM-event TBT absent)"
+      ],
+      "wave": 6,
+      "notes": "Wave 6 verified: CLS is captured with a buffered layout-shift PerformanceObserver; TBT is computed from observed long tasks rather than DOMContentLoaded timing; PageSpeed responses are runtime-validated and missing/failure stays absent/PARTIAL rather than score zero; findings cite the audited URL or PageSpeed run."
+    },
+    {
+      "id": "P1-38",
+      "severity": "P1",
+      "title": "mobileUX makes separate PageSpeed call instead of reusing website's Lighthouse/PSI data",
+      "status": "verified",
+      "rootCauseGroup": "I",
+      "dependencies": [],
+      "files": ["lib/modules/mobileUX.ts", "lib/audit/runner.ts"],
+      "verification": ["Forward website Lighthouse via dependencyResults; test single PSI call"],
+      "wave": 7,
+      "notes": "Duplicate billable API cost. Wave 7A: fixed. mobileUXAdapter (runner.ts) forwards website's already-computed mobile PageSpeed score (gated on coreWebVitals.full being genuinely present, never the missing-key/failure fallback shape) as reusedMobileScore; mobileUX.ts's fetchPageSpeedMobile skips its own duplicate mobile-strategy call when supplied, while the desktop comparison call (genuinely new data) is unaffected. Verified: lib/modules/__tests__/mobileUXDependencyReuse.test.ts (2/2), lib/audit/__tests__/wave7aAdapterRepairs.test.ts (2 of 9)."
+    },
+    {
+      "id": "P1-39",
+      "severity": "P1",
+      "title": "competitorStrategy/videoPresence read dependencyResults.competitor.results (nonexistent field; actual is topCompetitors) \u2014 never execute real logic",
+      "status": "verified",
+      "rootCauseGroup": "E",
+      "dependencies": [],
+      "files": ["lib/audit/runner.ts", "lib/modules/competitor.ts"],
+      "verification": [
+        "Read compData.topCompetitors; regression test asserting non-SKIPPED/non-empty on real competitors"
+      ],
+      "wave": 5,
+      "notes": "Highest value/effort regression test in audit; single-line field mismatch. | Wave 5: Fixed: root cause was runner.ts adapters reading a nonexistent dependencyResults.competitor.results field; the real module (lib/modules/competitor.ts) returns data.topCompetitors. Added getCanonicalCompetitors() helper as the one canonical read path; videoPresenceAdapter and competitorStrategyAdapter both updated to use it. Findings generator (findingGenerator.ts) already used topCompetitors correctly \u2014 drift was isolated to runner.ts. Tests: wave5AdapterRepairs.test.ts \"P1-39\" describe block proves real forwarded data reaches both dependents."
+    },
+    {
+      "id": "P1-40",
+      "severity": "P1",
+      "title": "paidSearch asserts businessIsAdvertising:false identically for missing-creds/failure/genuine-absence",
+      "status": "verified",
+      "rootCauseGroup": "H",
+      "dependencies": [],
+      "files": ["lib/modules/paidSearch.ts"],
+      "verification": [
+        "Distinguish not-configured/failed from checked-found-nothing; disclose single-snapshot; test"
+      ],
+      "wave": 8,
+      "notes": "Wave 8 verified. Wave 8A added observed/not_observed/unavailable paid-search states, bounded snapshot language, hostname attribution, scoped Evidence, and removed invented CPC/budget claims. Wave 8B now carries only validated same-audit/same-tenant Finding-backed claims into diagnosis/proposals and deterministic QA rejects definitive 'not advertising' language. Tests: wave8aPaidSearchClaims.test.ts, claimContract.test.ts, wave8bGrounding.test.ts, wave8b-claim-policy.test.ts."
+    },
+    {
+      "id": "P1-41",
+      "severity": "P1",
+      "title": "backlinks derives metrics from Google site:/link: search counts, presented as backlink profile without disclosure",
+      "status": "fixed-and-blocked",
+      "rootCauseGroup": "F",
+      "dependencies": [],
+      "files": ["lib/modules/backlinks.ts"],
+      "verification": [
+        "vitest run lib/modules/__tests__/backlinksImplementation.test.ts (provider-neutral fixture parsing, duplicates, domain normalization, true zero, provider-specific metric labels, malformed/unavailable/abort, unsafe URL filtering, evidence)",
+        "vitest run tests/architecture/wave6-module-implementation-boundary.test.ts (site:/link: search proxy and serp_api_estimation absent)"
+      ],
+      "wave": 6,
+      "notes": "Wave 6 fixed-and-blocked: unreliable Google site:/link: methodology and all SerpAPI backlink fallbacks removed. A provider-neutral, runtime-validated normalization contract now distinguishes backlinks, referring domains, follow/nofollow, source scope, freshness, and provider-specific authority. Production returns UNAVAILABLE when no provider is selected. External block: product must select/provision a real backlink provider and add its cost/config contract before live verification."
+    },
+    {
+      "id": "P1-42",
+      "severity": "P1",
+      "title": "videoPresence hardcodes channel metrics to Unknown/empty; 'stale channel' finding fires for every discovered channel",
+      "status": "verified",
+      "rootCauseGroup": "F",
+      "dependencies": [],
+      "files": ["lib/modules/videoPresence.ts"],
+      "verification": [
+        "vitest run lib/modules/__tests__/videoPresenceImplementation.test.ts (owned/ambiguous channel, active/stale real timestamps, unavailable metrics/provider, genuine absence, malformed response, abort, evidence)",
+        "vitest run lib/audit/__tests__/wave6AdapterStates.test.ts (canonical competitor context consumed and PARTIAL preserved)",
+        "vitest run tests/architecture/wave6-module-implementation-boundary.test.ts (Unknown/empty metrics and stale-on-missing-date patterns absent)"
+      ],
+      "wave": 6,
+      "notes": "Wave 6 verified: channel ownership uses website links or confidence-scored SerpAPI discovery; public channel pages and Atom feeds are fetched through safeFetch; activity findings require a real publish timestamp; unavailable subscribers/total counts remain absent; provider failure/ambiguity never becomes no-channel or stale; Wave 5 canonical competitor names are consumed."
+    },
+    {
+      "id": "P1-43",
+      "severity": "P1",
+      "title": "vision registry entry can never execute \u2014 requires screenshot snapshot from websiteCrawler, which captures none",
+      "status": "verified",
+      "rootCauseGroup": "E",
+      "dependencies": [],
+      "files": [
+        "lib/audit/runner.ts",
+        "lib/modules/websiteCrawler.ts",
+        "lib/orchestrator/auditOrchestrator.ts"
+      ],
+      "verification": [
+        "Add screenshot-capture step to primary engine so vision prerequisite is met; test vision executes"
+      ],
+      "wave": 5,
+      "notes": "Flagship visual analysis dead in primary engine. | Wave 5: Fixed: vision was unreachable because websiteCrawler (its sole canonical dependency) never captured a screenshot. Root cause and fix already anticipated in packages/shared/src/audit.ts's own comment above CANONICAL_AUDIT_MODULE_IDS: screenshot capture is shared input-acquisition infrastructure, not a 28th module. lib/modules/websiteCrawlerModule.ts now calls the existing Wave-4-safe captureScreenshots() (via safePageGoto) as a best-effort step and attaches a type:\"screenshot\" evidence snapshot when input.auditId is provided; visionAdapter's existing filter (evidenceSnapshots.filter(type===\"screenshot\")) now finds it. 27-module manifest unchanged (confirmed by tests/architecture/canonical-module-manifest.test.ts, still 27/27 green). No real browser/GCS calls in tests \u2014 captureScreenshots is not invoked (auditId omitted) in unit tests; reachability is proven via a mocked dependencyResults.websiteCrawler snapshot. Test: wave5AdapterRepairs.test.ts \"P1-43\" describe block."
+    },
+    {
+      "id": "P1-44",
+      "severity": "P1",
+      "title": "Screenshots uploaded via file.makePublic() at predictable path, no signed URL/expiry/retention",
+      "status": "open",
+      "rootCauseGroup": "N",
+      "dependencies": [],
+      "files": ["lib/evidence/screenshotCapture.ts"],
+      "verification": [
+        "Time-limited signed URLs scoped to tenant/viewer; retention/deletion tied to lifecycle; test"
+      ],
+      "wave": 13,
+      "notes": "Public unauthenticated artifact exposure; also Wave 11 tenant-lifecycle deletion."
+    },
+    {
+      "id": "P1-45",
+      "severity": "P1",
+      "title": "vision sends all screenshots to Gemini with no internal cap; parses model JSON with no schema validation",
+      "status": "open",
+      "rootCauseGroup": "J",
+      "dependencies": [],
+      "files": ["lib/modules/vision.ts"],
+      "verification": [
+        "Internal image-count cap + Zod schema validation rejecting malformed output; test"
+      ],
+      "wave": 12,
+      "notes": "Unbounded multimodal cost / unvalidated output."
+    },
+    {
+      "id": "P1-46",
+      "severity": "P1",
+      "title": "Browser modules configure no Puppeteer request interception; navigation redirects + subresources not SSRF-revalidated",
+      "status": "verified",
+      "rootCauseGroup": "G",
+      "dependencies": [],
+      "files": [
+        "lib/modules/mobileUX.ts",
+        "lib/modules/accessibility.ts",
+        "lib/modules/conversion.ts",
+        "lib/modules/privacyCompliance.ts",
+        "lib/evidence/screenshotCapture.ts"
+      ],
+      "verification": [
+        "setRequestInterception with per-request validateUrl mirroring safeFetch; test blocks metadata/private hops"
+      ],
+      "wave": 4,
+      "notes": "Verified Wave 4: shared safePageGoto installs request interception for every interceptable subresource, validates the target before navigation and final URL after navigation, blocks unsafe requests/popups, and is used by all production page.goto callers."
+    },
+    {
+      "id": "P1-47",
+      "severity": "P1",
+      "title": "Circuit breaker never invoked with tenantId \u2014 one tenant's failures open shared circuit for all tenants",
+      "status": "verified",
+      "rootCauseGroup": "G",
+      "dependencies": [],
+      "files": ["lib/resilience/circuitBreaker.ts", "lib/modules/*.ts"],
+      "verification": [
+        "Pass tenantId into every withProviderResilience call OR document global decision; test tenant-scoped state"
+      ],
+      "wave": 4,
+      "notes": "Verified Wave 4: withProviderResilience derives tenantId from trusted AsyncLocalStorage when callers do not explicitly pass it; audit and quick-audit execution install that context. Direct circuit-breaker tenant isolation test is green."
+    },
+    {
+      "id": "P1-48",
+      "severity": "P1",
+      "title": "Global audit timeout is logical-only; AbortSignal never forwarded into ModuleInput/in-flight calls; dead MODULE_TIMEOUT_MS",
+      "status": "verified",
+      "rootCauseGroup": "G",
+      "dependencies": [],
+      "files": ["lib/audit/runner.ts"],
+      "verification": [
+        "Thread canonical AbortSignal through ModuleInput into fetch/page.goto/withProviderResilience; reduce per-module timeouts; test cancellation"
+      ],
+      "wave": 4,
+      "notes": "Verified Wave 4: canonical signal is placed in ModuleInput and runtime context, module timeouts abort their signal and race completion, provider resilience links it to each attempt/backoff, browser navigation stops loading, and aggregation checks abort before persistence."
+    },
+    {
+      "id": "P2-01",
+      "severity": "P2",
+      "title": "Tracked stale route.ts.bak",
+      "status": "open",
+      "rootCauseGroup": "P",
+      "dependencies": [],
+      "files": [],
+      "verification": ["git rm"],
+      "wave": 17,
+      "notes": "Hygiene."
+    },
+    {
+      "id": "P2-02",
+      "severity": "P2",
+      "title": "Tracked claraud-web/dev.log",
+      "status": "open",
+      "rootCauseGroup": "P",
+      "dependencies": [],
+      "files": ["claraud-web/dev.log"],
+      "verification": ["git rm --cached; ignore *.log"],
+      "wave": 17,
+      "notes": "Hygiene."
+    },
+    {
+      "id": "P2-03",
+      "severity": "P2",
+      "title": "scratch/* tracked despite partial .gitignore",
+      "status": "open",
+      "rootCauseGroup": "P",
+      "dependencies": [],
+      "files": ["scratch/"],
+      "verification": ["git rm --cached"],
+      "wave": 17,
+      "notes": "Partly addressed by HEAD commit 3cd069f gitignore work; re-verify."
+    },
+    {
+      "id": "P2-04",
+      "severity": "P2",
+      "title": "tsc excludes tests/scripts/claraud-web; no secondary project checks them",
+      "status": "open",
+      "rootCauseGroup": "N",
+      "dependencies": [],
+      "files": ["tsconfig.json"],
+      "verification": ["Add test/script tsconfig or CI typecheck"],
+      "wave": 13,
+      "notes": ""
+    },
+    {
+      "id": "P2-05",
+      "severity": "P2",
+      "title": "Env DB port drift (5444 vs 5435)",
+      "status": "open",
+      "rootCauseGroup": "P",
+      "dependencies": [],
+      "files": [".env.local", ".env"],
+      "verification": ["Unify DB ports across env files"],
+      "wave": 17,
+      "notes": ""
+    },
+    {
+      "id": "P2-06",
+      "severity": "P2",
+      "title": "74 undocumented prod env keys",
+      "status": "open",
+      "rootCauseGroup": "N",
+      "dependencies": [],
+      "files": [".env.example"],
+      "verification": ["Extend .env.example"],
+      "wave": 16,
+      "notes": ""
+    },
+    {
+      "id": "P2-07",
+      "severity": "P2",
+      "title": "RBAC role read via (session.user as any).role",
+      "status": "verified",
+      "rootCauseGroup": "A",
+      "dependencies": ["P0-19"],
+      "files": ["lib/auth/rbac.ts"],
+      "verification": [
+        "Covered by wave0-rbac-api-key tests (normalizeRole typed extraction); wave1-owner-role-escalation.test.ts proves the downstream owner-role mapping bug is closed"
+      ],
+      "wave": 1,
+      "notes": "Type-unsafe (session.user as any).role extraction fixed in Wave 0 via normalizeRole with a typed cast. Reverified in Wave 1 -- no duplicate fix needed."
+    },
+    {
+      "id": "P2-08",
+      "severity": "P2",
+      "title": "runAuditOrchestrator wrapper has 0 prod importers",
+      "status": "verified",
+      "rootCauseGroup": "C",
+      "dependencies": ["P1-23"],
+      "files": ["lib/orchestrator/index.ts"],
+      "verification": [
+        "git status confirms lib/orchestrator/index.ts is deleted",
+        "grep -rn \"runAuditOrchestrator\\b\" app lib -- zero remaining references (outside AUDIT_REPORT.md's historical record)",
+        "tsc --noEmit exit 0"
+      ],
+      "wave": 2,
+      "notes": "Dead wrapper file removed outright -- it had zero production importers before Wave 2 and gains none from Wave 2's changes."
+    },
+    {
+      "id": "P2-09",
+      "severity": "P2",
+      "title": ".dockerignore omits claraud-web/coverage/scratch",
+      "status": "open",
+      "rootCauseGroup": "N",
+      "dependencies": [],
+      "files": [".dockerignore"],
+      "verification": ["Extend ignore"],
+      "wave": 13,
+      "notes": ""
+    },
+    {
+      "id": "P2-10",
+      "severity": "P2",
+      "title": "Two frontends on divergent majors (React 19 vs 18, zod 4 vs 3)",
+      "status": "open",
+      "rootCauseGroup": "K",
+      "dependencies": [],
+      "files": ["claraud-web/package.json"],
+      "verification": ["Track as intentional or converge"],
+      "wave": 11,
+      "notes": ""
+    },
+    {
+      "id": "P2-11",
+      "severity": "P2",
+      "title": "claraud-web shares root schema but owns no migrations",
+      "status": "open",
+      "rootCauseGroup": "K",
+      "dependencies": [],
+      "files": ["claraud-web/Dockerfile"],
+      "verification": ["Document ownership; pin schema version"],
+      "wave": 11,
+      "notes": ""
+    },
+    {
+      "id": "P2-12",
+      "severity": "P2",
+      "title": "AuditJob has no lease/heartbeat; stale reclamation cron-time-based",
+      "status": "fixed",
+      "rootCauseGroup": "C",
+      "dependencies": ["P1-24"],
+      "files": [
+        "prisma/schema.prisma",
+        "prisma/migrations/20260711120000_audit_job_lease_heartbeat/migration.sql",
+        "lib/queue/auditJobQueue.ts",
+        "lib/queue/auditJobWorker.ts",
+        "tests/security/audit-job-lease-heartbeat.test.ts"
+      ],
+      "verification": [
+        "vitest run tests/security/audit-job-lease-heartbeat.test.ts (10/10): atomic claim, owner-bound heartbeat rejects a stale/reclaimed leaseToken, lease expiry makes a RUNNING job reclaimable, a reclaimed old worker's later markJobSucceeded/markJobFailed calls are rejected (count===0), requeue-on-failure clears the lease so a fresh worker can claim immediately, DEAD after maxAttempts",
+        "npx --no-install prisma validate -> schema valid",
+        "tsc --noEmit exit 0",
+        "eslint 0 errors"
+      ],
+      "wave": 2,
+      "notes": "AuditJob gained leaseOwner/leaseToken/leaseExpiresAt/lastHeartbeatAt (forward-only additive migration, nullable columns, documented rollback in the migration file). claimJob() atomically assigns a fresh leaseToken via a conditional updateMany (WHERE status=QUEUED OR (status=RUNNING AND leaseExpiresAt < now)); heartbeatJob()/markJobSucceeded()/markJobFailed() all require the caller's leaseToken to still match, so a stale worker's late completion is rejected rather than silently overwriting a newer attempt. BLOCKED (environmental, not a code gap): no local Postgres reachable in this sandbox (localhost:5435/5435 connection refused) to run an empty-database migration replay -- schema/SQL validated statically (prisma validate + manual SQL review) but not replayed against a live empty DB."
+    },
+    {
+      "id": "P2-13",
+      "severity": "P2",
+      "title": "Non-FK string references (audit_jobs.auditId, Finding citations)",
+      "status": "verified",
+      "rootCauseGroup": "D",
+      "dependencies": [],
+      "files": ["prisma/schema.prisma"],
+      "verification": [
+        "vitest run lib/audit/__tests__/findingPersistence.test.ts (auditId/tenantId always injected from function parameters, never trusted from the finding object, even when the finding object explicitly carries attacker-supplied values)"
+      ],
+      "wave": 3,
+      "notes": "No Prisma schema FK migration performed (judged unnecessary this wave; Finding.evidence/metrics remain Json, and audit_jobs.auditId/Finding citations remain non-FK strings, unchanged). Runtime integrity enforcement added instead, which is the concrete mechanism the verification text ('Consider FK or integrity checks') calls for: persistFindings()/validateFindingForPersistence() always source auditId/tenantId from the trusted caller context and strip/ignore any auditId/tenantId/module the finding object itself carries, making cross-audit/cross-tenant attribution structurally impossible regardless of FK enforcement at the DB layer."
+    },
+    {
+      "id": "P2-14",
+      "severity": "P2",
+      "title": "Metric stores tenantId inside labels Json; no tenantId column/RLS",
+      "status": "open",
+      "rootCauseGroup": "B",
+      "dependencies": [],
+      "files": ["prisma/schema.prisma"],
+      "verification": ["Add tenantId column+RLS if tenant-scoped"],
+      "wave": 13,
+      "notes": ""
+    },
+    {
+      "id": "P2-15",
+      "severity": "P2",
+      "title": "i18n raw pg pool = separate persistence model outside Prisma/RLS",
+      "status": "open",
+      "rootCauseGroup": "B",
+      "dependencies": [],
+      "files": ["lib/i18n/db/connection.ts"],
+      "verification": ["Keep test-scoped or bring under Prisma/RLS"],
+      "wave": 11,
+      "notes": ""
+    },
+    {
+      "id": "P2-16",
+      "severity": "P2",
+      "title": "Stale local proposalos_dev DB (0 RLS) \u2014 dev artifact",
+      "status": "open",
+      "rootCauseGroup": "P",
+      "dependencies": [],
+      "files": [],
+      "verification": ["Recreate local DB from migrations"],
+      "wave": 17,
+      "notes": "Not prod evidence."
+    },
+    {
+      "id": "P2-17",
+      "severity": "P2",
+      "title": "Finding lacks @@index([auditId, module]) compound",
+      "status": "open",
+      "rootCauseGroup": "P",
+      "dependencies": [],
+      "files": ["prisma/schema.prisma"],
+      "verification": ["Add compound index if hot"],
+      "wave": 17,
+      "notes": ""
+    },
+    {
+      "id": "P2-18",
+      "severity": "P2",
+      "title": "Self-evolving raw executor default requireTenant=false",
+      "status": "verified",
+      "rootCauseGroup": "B",
+      "dependencies": [],
+      "files": ["lib/self-evolving-prompts/db.ts"],
+      "verification": ["vitest run tests/security/wave1-self-evolving-executor.test.ts (4/4 pass)"],
+      "wave": 1,
+      "notes": "requireTenant now defaults to true (was false). Every existing call site already passed it explicitly (true or false) -- zero behavior change at existing call sites, closes the omission-based fail-open gap for any future caller."
+    },
+    {
+      "id": "P2-19",
+      "severity": "P2",
+      "title": "GET /api/admin/model-metrics unauthenticated (returns mock data today)",
+      "status": "open",
+      "rootCauseGroup": "K",
+      "dependencies": [],
+      "files": ["app/api/admin/model-metrics/route.ts"],
+      "verification": ["Gate with withRole('super_admin') before wiring real data"],
+      "wave": 13,
+      "notes": ""
+    },
+    {
+      "id": "P2-20",
+      "severity": "P2",
+      "title": "Proposal webLinkToken has no expiry/rotation",
+      "status": "open",
+      "rootCauseGroup": "K",
+      "dependencies": [],
+      "files": ["prisma/schema.prisma"],
+      "verification": ["Add optional expiry; support rotation"],
+      "wave": 11,
+      "notes": ""
+    },
+    {
+      "id": "P2-21",
+      "severity": "P2",
+      "title": "claraud-web has two Stripe webhook route files; double-processing risk unverified",
+      "status": "open",
+      "rootCauseGroup": "L",
+      "dependencies": [],
+      "files": [
+        "claraud-web/src/app/api/stripe/webhook/route.ts",
+        "claraud-web/src/app/api/webhook/stripe/route.ts"
+      ],
+      "verification": ["Confirm only one registered; remove/alias other"],
+      "wave": 10,
+      "notes": ""
+    },
+    {
+      "id": "P2-22",
+      "severity": "P2",
+      "title": "Rate-limit IP extraction trusts x-forwarded-for with no proxy-trust verification",
+      "status": "verified",
+      "rootCauseGroup": "B",
+      "dependencies": [],
+      "files": ["lib/security/getClientIp.ts", "lib/middleware/rateLimit.ts"],
+      "verification": ["vitest run tests/security/wave1-client-ip-trust.test.ts (8/8 pass)"],
+      "wave": 1,
+      "notes": "New shared getClientIp() trusts only the configured number of X-Forwarded-For hops (default 1, matching Cloud Run edge behavior) instead of the client-controlled first entry. Wired into both IP-extraction sites in rateLimit.ts. Other 5 duplicate-logic sites noted in the audit (case-study/generate, pipeline/chat, proposal/token/*, idempotency.ts, lib/auth.ts) NOT migrated this wave -- tracked as new finding P2-57."
+    },
+    {
+      "id": "P2-23",
+      "severity": "P2",
+      "title": "Registration distinguishes 'User already exists' (enumeration); audit-trail writes fire-and-forget",
+      "status": "verified",
+      "rootCauseGroup": "K",
+      "dependencies": [],
+      "files": ["app/api/auth/register/route.ts", "lib/auth.ts"],
+      "verification": [
+        "vitest run tests/security/register-bypass-isolation.test.ts -> 6/6 pass (updated to assert the new generic response + no cross-tenant leak + no duplicate created)",
+        "vitest run tests/security/wave1-audit-trail-criticality.test.ts -> 7/7 pass (destructive/role events rethrow; non-critical events log-and-swallow; success path silent)",
+        "vitest run tests/security/audit-trail-sensitive-actions.test.ts tests/security/auditTrail/hash-chain.test.ts -> 3/3, 5/5 pass (no regression)",
+        "tsc --noEmit -> exit 0; eslint on both changed source files -> 0 errors, only pre-existing any-warnings unrelated to the changed lines"
+      ],
+      "wave": 1,
+      "notes": "VERIFIED (continuation session). Enumeration: app/api/auth/register/route.ts's existing-user branch no longer returns a distinct 'User already exists' 400 -- it responds with the same 2xx shape a fresh registration would (no duplicate account created either way; enforcement unchanged). Residual gap documented, not fully closed: the frontend's auto-login-then-redirect step still distinguishes existing (redirect /login on wrong password) from new (redirect /onboarding) accounts via behavior, not response text -- closing that fully requires a bigger product-flow change (e.g. email-verification-gated registration) out of this session's scope; logged as P2-60. Audit-trail: lib/observability/auditTrail.ts's recordAuditTrailEvent() already logged failures (logger.warn) and rethrew for stripe./session./apikey. events (pre-existing, re-verified) -- extended the critical-rethrow classification to also cover data.deletion_* (tenant deletion) and role.* (role/permission changes), so those destructive/security categories can no longer be silently swallowed by a call site's own .catch(() => {}). Single shared-boundary fix, not per-caller patches."
+    },
+    {
+      "id": "P2-24",
+      "severity": "P2",
+      "title": "AuditOrchestrator deprecation log claims '15 modules' vs actual 14",
+      "status": "verified",
+      "rootCauseGroup": "C",
+      "dependencies": ["P1-23"],
+      "files": ["lib/orchestrator/auditOrchestrator.ts"],
+      "verification": [
+        "grep -n \"14 modules\" lib/orchestrator/auditOrchestrator.ts -- deprecation log now reads \"This path has 14 modules vs MODULE_REGISTRY's 27\" (previously claimed 15 while actually registering 14)",
+        "tsc --noEmit exit 0"
+      ],
+      "wave": 2,
+      "notes": "One-line log-message correction; the class's actual private modules[] array was already 14 entries, only the claimed count in the deprecation warning was wrong."
+    },
+    {
+      "id": "P2-25",
+      "severity": "P2",
+      "title": "Four ENABLE_*_AUDIT_MODULE feature flags mutable via admin API but read nowhere",
+      "status": "verified",
+      "rootCauseGroup": "C",
+      "dependencies": [],
+      "files": [
+        "lib/config/feature-flags.ts",
+        "lib/audit/runner.ts",
+        "app/api/admin/feature-flags/route.ts",
+        "tests/security/feature-flag-effective-override.test.ts",
+        "tests/architecture/canonical-module-manifest.test.ts"
+      ],
+      "verification": [
+        "vitest run tests/security/feature-flag-effective-override.test.ts (5/5): DB override flips the effective value module gating sees; cache invalidation picks up a fresh admin write; unknown/stale DB keys fail safe (ignored, not injected); DB-unavailable falls back to static defaults instead of throwing",
+        "vitest run tests/architecture/canonical-module-manifest.test.ts (7/7): FEATURE_FLAG_GATED_MODULES only gates real canonical modules and matches each module's declared rolloutFlag exactly, in both directions",
+        "tsc --noEmit exit 0; eslint 0 errors"
+      ],
+      "wave": 2,
+      "notes": "Two-part fix. (1) lib/audit/runner.ts's executePhase() now gates each flagged module inline (accessibility/coreWebVitals/seoDeep/security) via FEATURE_FLAG_GATED_MODULES + isFeatureEnabledEffective(), reporting a disabled module as SKIPPED/\"DISABLED: <flag>\" (distinct from a dependency-skip or provider failure). (2) A DEEPER, previously-undiscovered half of this defect found during Wave 2 verification: the admin API (app/api/admin/feature-flags/route.ts) persisted toggles to the FeatureFlag DB table, but the static, env-computed FEATURE_FLAGS object could never see that table -- so even after modules were wired to read a flag, an admin's runtime toggle still had zero actual effect on execution (only on the admin API's own read response). Added lib/config/feature-flags.ts::getEffectiveFeatureFlags()/isFeatureEnabledEffective() as the one shared DB-override-aware read path; both the admin route and the module gate now go through it (single selection layer, no second framework). All 4 flags default to enabled (opt-out only), preserving current behavior for operators who never touch the admin API."
+    },
+    {
+      "id": "P2-26",
+      "severity": "P2",
+      "title": "[SUPERSEDED] websiteCrawlerModule.ts claimed orphan \u2014 retracted in-report (imported by runner.ts:52)",
+      "status": "superseded",
+      "rootCauseGroup": "C",
+      "dependencies": [],
+      "files": ["lib/modules/websiteCrawlerModule.ts"],
+      "verification": [
+        "N/A \u2014 retracted by AUDIT_REPORT.md self-correction (line 1450); real issue is duplicate invocation P1-27"
+      ],
+      "wave": null,
+      "notes": "Do not treat as an active defect. The file is used by the primary engine; the genuine concern is the double-crawl (P1-27)."
+    },
+    {
+      "id": "P2-27",
+      "severity": "P2",
+      "title": "4/5 Batch 1 modules perform network calls invisible to CostTracker",
+      "status": "verified",
+      "rootCauseGroup": "I",
+      "dependencies": [],
+      "files": [
+        "lib/audit/runner.ts",
+        "lib/modules/techStack.ts",
+        "lib/modules/websiteCrawler.ts",
+        "lib/modules/security.ts",
+        "lib/modules/emailFinder.ts"
+      ],
+      "verification": [
+        "Wire tracker.addApiCall at every fetch site",
+        "Verify real module tracker behavior for completed fetches, retry/failure, cache/reuse, and abort"
+      ],
+      "wave": 7,
+      "notes": "Wave 7B verified all four immutable-audit paths. techStack, websiteCrawler, security, and emailFinder forward the canonical CostTracker from the adapter and record each completed safe-fetch operation as zero-cost WEBSITE_FETCH. Cache/single-flight reuse and abort-before-fetch emit no phantom event; retries follow the existing provider-resilience attempt behavior. TLS socket work remains unpriced because the canonical tracker has no TLS resource class."
+    },
+    {
+      "id": "P2-28",
+      "severity": "P2",
+      "title": "emailFinder adapter's status==='error' branch is unreachable dead code",
+      "status": "verified",
+      "rootCauseGroup": "E",
+      "dependencies": [],
+      "files": ["lib/audit/runner.ts", "lib/modules/emailFinder.ts"],
+      "verification": ["Add status field to findEmails or remove dead check"],
+      "wave": 5,
+      "notes": "Wave 5: Fixed: emailFinderAdapter's dead `data.status==='error'` check (findEmails() never returns a status field) replaced with a check against findEmails()'s real signal, data.source ('failed'|'error' = real failure, distinct from a genuine empty result). Test: wave5AdapterRepairs.test.ts \"P2-28\" describe block covers all four states (found / verified-empty / fetch-unavailable / parser-error)."
+    },
+    {
+      "id": "P2-29",
+      "severity": "P2",
+      "title": "Zero real tests for Batch 1 modules (all vi.mock'd away)",
+      "status": "open",
+      "rootCauseGroup": "M",
+      "dependencies": [],
+      "files": ["tests/"],
+      "verification": ["Fixture-based unit tests per module (success/failure/timeout/malformed)"],
+      "wave": 14,
+      "notes": ""
+    },
+    {
+      "id": "P2-30",
+      "severity": "P2",
+      "title": "socialDeep over-reports SERP tracker call for work that never happens",
+      "status": "verified",
+      "rootCauseGroup": "F",
+      "dependencies": ["P0-25"],
+      "files": ["lib/modules/socialDeep.ts"],
+      "verification": [
+        "vitest run lib/modules/__tests__/socialDeepImplementation.test.ts (zero calls when unconfigured; one tracked call per executed platform search)",
+        "bounded source search confirms tracker call occurs inside the real SerpAPI provider callback"
+      ],
+      "wave": 6,
+      "notes": "Wave 6 verified: SERP cost is recorded only inside the configured provider callback immediately before the real fixed-host request; missing configuration and blocked discovery produce zero tracked calls."
+    },
+    {
+      "id": "P2-31",
+      "severity": "P2",
+      "title": "social (6 platforms) vs socialDeep (5, omits Twitter/X) platform mismatch",
+      "status": "verified",
+      "rootCauseGroup": "H",
+      "dependencies": [],
+      "files": ["lib/modules/social.ts", "lib/modules/socialDeep.ts"],
+      "verification": ["Align platform lists"],
+      "wave": 7,
+      "notes": "Wave 7A: fixed. social.ts's platform vocabulary reduced from 6 to the same 5 platforms socialDeep.ts recognizes (dropped twitter, which socialDeep could never validate and therefore always silently discarded downstream). socialDeep.ts's SOCIAL_PLATFORMS exported as SOCIAL_DEEP_PLATFORMS for cross-file test verification (no runtime coupling introduced). Verified: lib/modules/__tests__/socialShareExclusion.test.ts (1 of 4)."
+    },
+    {
+      "id": "P2-32",
+      "severity": "P2",
+      "title": "social takes first regex match with no share/embed/widget URL exclusion",
+      "status": "verified",
+      "rootCauseGroup": "H",
+      "dependencies": [],
+      "files": ["lib/modules/social.ts"],
+      "verification": ["Denylist share/widget/embed URL patterns"],
+      "wave": 7,
+      "notes": "Wave 7A: fixed. social.ts's regex-based scan now rejects generic share/embed/widget/watch path shapes (REJECTED_PATH_PARTS, mirroring the exclusion socialDeep.ts already enforced) before accepting a matched URL as a real profile link. Verified: lib/modules/__tests__/socialShareExclusion.test.ts (3 of 4)."
+    },
+    {
+      "id": "P2-33",
+      "severity": "P2",
+      "title": "Zero meaningful tests for reputation/gbp/gbpDeep/social/socialDeep",
+      "status": "open",
+      "rootCauseGroup": "M",
+      "dependencies": [],
+      "files": ["tests/"],
+      "verification": [
+        "Fixture-based unit tests (identity ambiguity, provider-failure-vs-absence, evidence contract)"
+      ],
+      "wave": 14,
+      "notes": ""
+    },
+    {
+      "id": "P2-34",
+      "severity": "P2",
+      "title": "reputation has leftover authoring/debugging comment in shipped source",
+      "status": "verified",
+      "rootCauseGroup": "P",
+      "dependencies": [],
+      "files": ["lib/modules/reputation.ts"],
+      "verification": ["Clean up stray comment"],
+      "wave": 7,
+      "notes": "Wave 7A: fixed (trivial, no test needed). lib/modules/reputation.ts's traceLlmCall token-usage callback had a stream-of-consciousness authoring note ('Wait, I removed the tracker logic... but here I should keep it? Yes...') shipped in production source; replaced with a concise, accurate comment. No behavior change."
+    },
+    {
+      "id": "P2-35",
+      "severity": "P2",
+      "title": "seoDeep robots/sitemap/ranking fallbacks indistinguishable from verified absence",
+      "status": "verified",
+      "rootCauseGroup": "H",
+      "dependencies": [],
+      "files": ["lib/modules/seoDeep.ts"],
+      "verification": ["Return UNAVAILABLE/null-with-reason marker"],
+      "wave": 7,
+      "notes": "Wave 7A: fixed. seoDeep.ts's checkEndpoint() now returns {status,checked} distinguishing a real HTTP response (checked:true) from a network/provider failure (checked:false, fallbackValue -1) instead of collapsing both into an assumed 404; fetchOrganicRanking() now returns rankCheckStatus: 'not_configured'|'checked'|'unavailable' instead of an identical null/false shape for 'no key' vs 'checked, not found' vs 'provider error'. All three real distinctions are recorded in evidenceSnapshots[0].rawResponse.seoChecks. Verified: lib/modules/__tests__/seoDeepDependencyReuse.test.ts (3 of 5)."
+    },
+    {
+      "id": "P2-36",
+      "severity": "P2",
+      "title": "Systemic evidence:[]/missing-evidence across 15/15 modules (Batches 1-3)",
+      "status": "verified",
+      "rootCauseGroup": "D",
+      "dependencies": ["P1-25"],
+      "files": ["lib/modules/*.ts", "lib/audit/runner.ts"],
+      "verification": [
+        "vitest run lib/audit/__tests__/findingContract.test.ts (normalizeAndValidateModuleFindings: a finding with evidence:[] from an otherwise-COMPLETE module is rejected, not repaired)",
+        "vitest run lib/audit/__tests__/findingPersistence.test.ts",
+        "code review: 11 modules (keywordGap, privacyCompliance, backlinks, citations, competitorStrategy, contentQuality, mobileUX, paidSearch, seoDeep, socialDeep, +techStack/gbpDeep mechanically fixed) confirmed to still construct evidence:[] findings at the source; the shared aggregation boundary (lib/audit/findingContract.ts::normalizeAndValidateModuleFindings, wired into lib/audit/runner.ts's per-module aggregation loop) now rejects every one of them before they can reach allFindings/persistence"
+      ],
+      "wave": 3,
+      "notes": "Central runtime enforcement shipped at the shared aggregation boundary, satisfying the verification text exactly ('Enforce evidence presence at shared aggregation boundary'). techStack and gbpDeep were mechanically fixed at the source (P1-26/P1-31) because real provenance was already available in those files; the other 9 modules' evidence:[] findings are left unfixed at the source (their module logic is out of Wave 3 scope) but can no longer reach a customer-facing Finding \u2014 they are rejected at the boundary and logged (event: audit.findings_rejected_at_aggregation). Also fixed 2 additional mechanical instances of the same systemic pattern found while wiring the boundary: lib/audit/runner.ts's emailFinder Finding (hand-built evidence missing pointer/collected_at, now createEvidence with the crawled URL) and lib/modules/website.ts's double-fallback failure Finding (evidence:[] AND a technical-failure-as-Finding violation \u2014 see notes on the new P1-50 below). Assigning the 9 untouched modules' real fixes to the wave already scheduled for each (Wave 5-7, root-cause groups E/H) \u2014 see REMEDIATION_STATE.md."
+    },
+    {
+      "id": "P2-37",
+      "severity": "P2",
+      "title": "contentQuality interpolates page content into LLM prompt with no untrusted-content framing",
+      "status": "open",
+      "rootCauseGroup": "J",
+      "dependencies": [],
+      "files": ["lib/modules/contentQuality.ts"],
+      "verification": ["Add untrusted-evidence preamble + structural delimiters"],
+      "wave": 12,
+      "notes": ""
+    },
+    {
+      "id": "P2-38",
+      "severity": "P2",
+      "title": "contentQuality asserts Flesch-Kincaid with no language detection",
+      "status": "verified",
+      "rootCauseGroup": "H",
+      "dependencies": [],
+      "files": ["lib/modules/contentQuality.ts"],
+      "verification": ["Detect language before applying readability finding"],
+      "wave": 7,
+      "notes": "Wave 7B: detects declared HTML/meta language before a bounded English heuristic; Flesch-Kincaid finding is emitted only for detected English and records language provenance."
+    },
+    {
+      "id": "P2-39",
+      "severity": "P2",
+      "title": "Zero meaningful tests for Batch 3 modules",
+      "status": "open",
+      "rootCauseGroup": "M",
+      "dependencies": [],
+      "files": ["tests/"],
+      "verification": [
+        "Fixture-based tests, prioritize schemaMarkup findings-array regression (P1-33)"
+      ],
+      "wave": 14,
+      "notes": ""
+    },
+    {
+      "id": "P2-40",
+      "severity": "P2",
+      "title": "coreWebVitals/mobileUX/conversion missing/absent evidence (18/19 modules)",
+      "status": "verified",
+      "rootCauseGroup": "D",
+      "dependencies": ["P1-25"],
+      "files": ["lib/audit/runner.ts", "lib/modules/mobileUX.ts", "lib/modules/conversion.ts"],
+      "verification": [
+        "vitest run lib/audit/__tests__/findingContract.test.ts",
+        "code review: coreWebVitals findings (findingGenerator.ts) already route through createEvidence with real pagespeed_v5 pointers (unaffected/compliant); mobileUX.ts and conversion.ts's own evidence:[] findings are rejected by the same shared aggregation boundary as P2-36's 9 modules"
+      ],
+      "wave": 3,
+      "notes": "Same shared aggregation enforcement as P2-36 (identical mechanism, identical file). mobileUX/conversion module-level fixes remain out of Wave 3 scope, assigned to their existing later-wave slot (Wave 5-7); their invalid findings cannot persist starting this wave."
+    },
+    {
+      "id": "P2-41",
+      "severity": "P2",
+      "title": "mobileUX missing PAGESPEED key -> {mobileScore:0} indistinguishable from real 0",
+      "status": "verified",
+      "rootCauseGroup": "H",
+      "dependencies": [],
+      "files": ["lib/modules/mobileUX.ts"],
+      "verification": ["Return null/'not measured' marker on missing credential"],
+      "wave": 7,
+      "notes": "Wave 7A: re-verified, already fixed in Wave 6. mobileUX.ts's fetchPageSpeedMobile returns {status:'unavailable'} with mobileScore left undefined (never 0) when GOOGLE_PAGESPEED_API_KEY is missing; analyzeMobileUX maps this to mobilePerformanceScore: pagespeedData.mobileScore ?? null (explicit null, not a fabricated zero), and generateMobileFindings' 'Critical Mobile Performance Issues' check explicitly guards `!== null` before comparing < 30. Existing regression lib/modules/__tests__/mobileUXImplementation.test.ts already asserts mobilePerformanceScore toBeNull() when the key is missing -- no code change required. Ledger was stale (still wave:7/open); status corrected to verified."
+    },
+    {
+      "id": "P2-42",
+      "severity": "P2",
+      "title": "conversion CTA-detection doesn't check element visibility/dimensions",
+      "status": "verified",
+      "rootCauseGroup": "H",
+      "dependencies": [],
+      "files": ["lib/modules/conversion.ts"],
+      "verification": ["Add visibility gate before counting CTA"],
+      "wave": 7,
+      "notes": "Wave 7B: CTA counting now requires rendered visibility, non-zero geometry, enabled interaction, and above-fold geometry where claimed."
+    },
+    {
+      "id": "P2-43",
+      "severity": "P2",
+      "title": "Three separate Puppeteer launches per audit (mobileUX/accessibility/conversion)",
+      "status": "verified",
+      "rootCauseGroup": "I",
+      "dependencies": [],
+      "files": [
+        "lib/modules/mobileUX.ts",
+        "lib/modules/accessibility.ts",
+        "lib/modules/conversion.ts"
+      ],
+      "verification": ["Share one browser/page or consolidate launcher; test"],
+      "wave": 7,
+      "notes": "Wave 7B: conversion, mobileUX, and accessibility share a reference-counted browser process per audit while retaining isolated Pages, viewport setup, and cleanup."
+    },
+    {
+      "id": "P2-44",
+      "severity": "P2",
+      "title": "coreWebVitals extracts INP but never surfaces it as a finding",
+      "status": "verified",
+      "rootCauseGroup": "E",
+      "dependencies": [],
+      "files": ["lib/audit/runner.ts"],
+      "verification": ["Add INP finding block mirroring LCP/CLS/TBT"],
+      "wave": 7,
+      "notes": "Wave 7B: coreWebVitals emits contract-valid INP findings only for observed Lighthouse INP, labeled as a single-run lab measurement with milliseconds and provenance."
+    },
+    {
+      "id": "P2-45",
+      "severity": "P2",
+      "title": "Zero meaningful tests for Batch 4 modules",
+      "status": "open",
+      "rootCauseGroup": "M",
+      "dependencies": [],
+      "files": ["tests/"],
+      "verification": [
+        "Fixture-based tests; assert wcagLevel never bare, CLS/TBT never fabricated"
+      ],
+      "wave": 14,
+      "notes": ""
+    },
+    {
+      "id": "P2-46",
+      "severity": "P2",
+      "title": "competitor/backlinks/videoPresence missing SERP_API_KEY -> zero-value shape == genuine zero",
+      "status": "verified",
+      "rootCauseGroup": "H",
+      "dependencies": [],
+      "files": [
+        "lib/modules/competitor.ts",
+        "lib/modules/backlinks.ts",
+        "lib/modules/videoPresence.ts"
+      ],
+      "verification": ["Add distinct 'not checked' state"],
+      "wave": 7,
+      "notes": "Wave 7B: competitor configuration failure is unavailable/not_configured, backlinks remain unavailable without an approved provider, and video discovery preserves unavailable versus verified absence."
+    },
+    {
+      "id": "P2-47",
+      "severity": "P2",
+      "title": "competitorStrategy adapter uses naive exact-string self-exclusion (latent after P1-39 fix)",
+      "status": "verified",
+      "rootCauseGroup": "E",
+      "dependencies": ["P1-39"],
+      "files": ["lib/audit/runner.ts"],
+      "verification": ["Reuse competitor.ts excluded list; test"],
+      "wave": 5,
+      "notes": "Wave 5: Fixed: competitorStrategyAdapter's self-exclusion changed from an exact-string r.title!==businessName comparison to a normalized comparison (normalizeBusinessName, mirroring gbp.ts's existing normalize() pattern) so case/punctuation/whitespace differences no longer let the subject business match itself as its own competitor. Resolved as part of the same edit as P1-39 (shared getCanonicalCompetitors() read path). Test: wave5AdapterRepairs.test.ts \"P2-47\" describe block."
+    },
+    {
+      "id": "P2-48",
+      "severity": "P2",
+      "title": "Zero meaningful tests for Batch 5 modules",
+      "status": "open",
+      "rootCauseGroup": "M",
+      "dependencies": [],
+      "files": ["tests/"],
+      "verification": ["Regression test for P1-39 first, then per-module fixtures"],
+      "wave": 14,
+      "notes": ""
+    },
+    {
+      "id": "P2-49",
+      "severity": "P2",
+      "title": "vision prompt lacks untrusted-content framing for on-image text",
+      "status": "open",
+      "rootCauseGroup": "J",
+      "dependencies": [],
+      "files": ["lib/modules/vision.ts"],
+      "verification": ["Add untrusted visual/text framing to system prompt"],
+      "wave": 12,
+      "notes": ""
+    },
+    {
+      "id": "P2-50",
+      "severity": "P2",
+      "title": "privacyCompliance tracker detection uses narrow hardcoded pattern list",
+      "status": "verified",
+      "rootCauseGroup": "H",
+      "dependencies": [],
+      "files": ["lib/modules/privacyCompliance.ts"],
+      "verification": ["Expand tracker-name patterns or integrate signature DB"],
+      "wave": 7,
+      "notes": "Wave 7B: expanded only tracker-cookie patterns (including Hotjar, LinkedIn, TikTok, Microsoft Clarity, HubSpot, and common analytics identifiers). No Wave 8 legal/compliance claim behavior changed."
+    },
+    {
+      "id": "P2-51",
+      "severity": "P2",
+      "title": "Zero meaningful tests for Batch 6 capabilities",
+      "status": "open",
+      "rootCauseGroup": "M",
+      "dependencies": [],
+      "files": ["tests/"],
+      "verification": [
+        "Fixture tests; assert no unhedged legal string, screenshots never public without signed URL"
+      ],
+      "wave": 14,
+      "notes": ""
+    },
+    {
+      "id": "P2-52",
+      "severity": "P2",
+      "title": "security.ts fetchWithRedirect (P0-24) confirmed reachable in BOTH engines \u2014 widened blast radius",
+      "status": "verified",
+      "rootCauseGroup": "G",
+      "dependencies": ["P0-24"],
+      "files": ["lib/modules/security.ts", "lib/orchestrator/auditOrchestrator.ts"],
+      "verification": [
+        "Closed by P0-24 fix (single shared fetchWithRedirect); no separate remediation"
+      ],
+      "wave": 0,
+      "notes": "Resolved together with P0-24 \u2014 the fix is in the shared module used by both engines."
+    },
+    {
+      "id": "P2-53",
+      "severity": "P2",
+      "title": "executePhase retry loop retries any error (no classification, no delay)",
+      "status": "verified",
+      "rootCauseGroup": "G",
+      "dependencies": [],
+      "files": ["lib/audit/runner.ts"],
+      "verification": ["Apply retryable-error classification or remove redundant outer retry"],
+      "wave": 4,
+      "notes": "Verified Wave 4: redundant executePhase retry loop removed; provider retry classification remains solely in withProviderResilience."
+    },
+    {
+      "id": "P2-54",
+      "severity": "P2",
+      "title": "Circuit breaker logs 'failing closed' while behavior is fail-open",
+      "status": "verified",
+      "rootCauseGroup": "G",
+      "dependencies": [],
+      "files": ["lib/resilience/circuitBreaker.ts"],
+      "verification": ["Correct log message or reconsider fail-closed"],
+      "wave": 4,
+      "notes": "Verified Wave 4: fail-open shared-store behavior is now logged accurately."
+    },
+    {
+      "id": "P2-55",
+      "severity": "P2",
+      "title": "No test coverage for SSRF layer/timeout/retry/circuit-breaker/failure-normalization",
+      "status": "open",
+      "rootCauseGroup": "M",
+      "dependencies": [],
+      "files": ["lib/security/", "lib/resilience/"],
+      "verification": [
+        "Unit tests for safeFetch redirect-revalidation, urlValidator IP/DNS, withProviderResilience abort/backoff, circuit-breaker state machine"
+      ],
+      "wave": 14,
+      "notes": "Note: Wave 0 added tests/security/wave0-security-ssrf.test.ts covering security-module SSRF; broader shared-layer coverage still owed."
+    },
+    {
+      "id": "P2-56",
+      "severity": "P2",
+      "title": "Latent field/enum/type mismatches in lib/pipeline/signalDetector.ts and tenantConfig.ts masked by the old lib/db.ts prisma:any typing",
+      "status": "re-scoped",
+      "rootCauseGroup": "M",
+      "dependencies": ["P1-05"],
+      "files": ["lib/pipeline/signalDetector.ts", "lib/pipeline/tenantConfig.ts"],
+      "verification": [
+        "Fix status-enum casing (discovered/audited vs DISCOVERED/AUDITED), select-field names (gbpPlaceId/websiteUrl/industry), and Tenant include/pipelineConfig relation shape; add real types back"
+      ],
+      "wave": 14,
+      "notes": "Discovered during Wave 1 P1-05 migration off the unscoped any-typed client -- tsc surfaced real, pre-existing type errors that were always silently swallowed. Preserved exact prior runtime behavior via an explicit as-any cast (documented ponytail comment in both files) rather than blind-fixing business logic under time pressure. Needs its own investigation with tests before changing behavior. Re-scoped from wave 7 to wave 14 (group M -- 'Complete tests, adversarial fixtures, coverage' -- matches this finding's own rootCauseGroup M exactly). Not an audit-module PARTIAL-hardening item (it's latent type/enum debt in lib/pipeline/signalDetector.ts and lib/pipeline/tenantConfig.ts uncovered by the Wave 1 unscoped-Prisma-client fix), so it does not belong in Wave 7's 'harden remaining PARTIAL audit modules' theme. Not touched this wave."
+    },
+    {
+      "id": "P2-57",
+      "severity": "P2",
+      "title": "Duplicated, inconsistent X-Forwarded-For/X-Real-IP extraction logic outside lib/middleware/rateLimit.ts",
+      "status": "re-scoped",
+      "rootCauseGroup": "B",
+      "dependencies": ["P2-22"],
+      "files": [
+        "app/api/case-study/[auditId]/generate/route.ts",
+        "app/api/pipeline/chat/route.ts",
+        "app/api/proposal/token/[token]/route.ts",
+        "app/api/proposal/token/[token]/track/route.ts",
+        "app/api/proposal/token/[token]/accept/route.ts",
+        "lib/middleware/idempotency.ts",
+        "lib/auth.ts"
+      ],
+      "verification": [
+        "Migrate each site to the new shared lib/security/getClientIp.ts helper; remove duplicated first-hop-trusting logic"
+      ],
+      "wave": 13,
+      "notes": "P2-22 fixed the two sites cited as evidence in the audit (rateLimit.ts) and shipped the shared helper; these 7 sites still duplicate the old, spoofable first-hop-trusting pattern and should be migrated to the shared helper. Re-scoped from wave 7 to wave 13 (group N -- 'Observability, infrastructure, CI' -- closest available bucket for cross-cutting security/infra hygiene; rootCauseGroup B has no dedicated wave after Wave 1 closed). Not an audit-module PARTIAL-hardening item (it's duplicated client-IP-extraction logic in non-audit routes: case-study generation, pipeline chat, proposal tokens, idempotency middleware, lib/auth.ts). Not touched this wave."
+    },
+    {
+      "id": "P2-58",
+      "severity": "P2",
+      "title": "claraud-web register route writes role:'owner' literally (inert -- no RBAC reads it)",
+      "status": "open",
+      "rootCauseGroup": "K",
+      "dependencies": [],
+      "files": ["claraud-web/src/app/api/auth/register/route.ts"],
+      "verification": [
+        "Confirmed via grep: no ROLE_HIERARCHY/normalizeRole/withRole exists anywhere in claraud-web/src"
+      ],
+      "wave": 1,
+      "notes": "Discovered while fixing P1-07/P1-18. Same literal-string pattern as the root app's pre-Wave-1 bug, but claraud-web has no role-hierarchy/RBAC code reading the User.role field at all today, so this is inert/dead data rather than a live privilege-escalation path. Low priority; normalize for hygiene/future-proofing in a later wave if claraud-web ever grows real RBAC."
+    },
+    {
+      "id": "P2-59",
+      "severity": "P2",
+      "title": "claraud-web NextAuth adapter/OAuth wired but no catch-all route mounts `handlers` -- Google OAuth unreachable; PrismaAdapter calls would fail closed if ever reached",
+      "status": "open",
+      "rootCauseGroup": "K",
+      "dependencies": [],
+      "files": ["claraud-web/src/auth.ts"],
+      "verification": [
+        "Confirmed via file listing: no claraud-web/src/app/api/auth/[...nextauth]/route.ts exists"
+      ],
+      "wave": 1,
+      "notes": "Discovered while fixing P1-07/P1-18: PrismaAdapter(prisma) uses the tenant-scoped client; its internal Account/Session/User bookkeeping calls run with no tenant/bypass context. Currently inert because there is no HTTP route serving NextAuth's own endpoints (no [...nextauth]/route.ts), so Google OAuth cannot complete and the adapter is unreachable. If a future wave adds that route, adapter calls must be wrapped in an auth-adapter-style allowlisted bypass (mirroring the root app's lib/auth/adapterContext.ts) before OAuth is exercised, or they will throw 'Tenant context required' -- a safe failure, not a silent one, but still needs the missing route + bypass wiring to actually work."
+    },
+    {
+      "id": "P2-60",
+      "severity": "P2",
+      "title": "Registration enumeration only partially closed -- auto-login redirect target still distinguishes existing vs new accounts",
+      "status": "open",
+      "rootCauseGroup": "K",
+      "dependencies": [],
+      "files": ["app/(auth)/register/page.tsx", "app/api/auth/register/route.ts"],
+      "verification": [
+        "Manual trace of app/(auth)/register/page.tsx's handleSubmit: existing-email + guessed-password -> signIn fails -> redirect /login; new-email -> signIn always succeeds -> redirect /onboarding"
+      ],
+      "wave": 1,
+      "notes": "P2-23 closed the direct response-text/status oracle (no more distinct 'User already exists' 400). The frontend's immediate auto-login-then-redirect step is a residual, harder-to-close side channel: an existing email with a wrong guessed password still observably redirects to /login instead of /onboarding, unlike a genuinely new email (which always redirects to /onboarding, since the account was just created with that exact password). Fully closing this requires a bigger, product-level flow change (e.g. always show a generic 'check your email' step instead of auto-login) that was judged out of scope for a blind same-session change; flagged for a future wave/product decision."
+    },
+    {
+      "id": "P1-49",
+      "severity": "P1",
+      "title": "competitorAdapter never inspects runCompetitorModule status; launders failure as COMPLETE (same defect class as P1-28)",
+      "status": "verified",
+      "rootCauseGroup": "H",
+      "dependencies": [],
+      "files": ["lib/audit/runner.ts", "lib/modules/competitor.ts"],
+      "verification": [
+        "vitest run lib/audit/__tests__/adapterFailureMasking.test.ts (competitorAdapter: legacy status:'failed' -> ModuleResult.status:'FAILED', not COMPLETE)"
+      ],
+      "wave": 3,
+      "notes": "Discovered while fixing P1-28 (gbpAdapter) \u2014 competitorAdapter had the identical pattern (`data: (data as any)?.data || data`, discarding the legacy LegacyAuditModuleResult.status field). Fixed in the same commit as P1-28 since both are the same 2-line pattern in the same file; not deferred to Wave 5."
+    },
+    {
+      "id": "P1-50",
+      "severity": "P1",
+      "title": "website.ts double-fallback failure fabricates a 'Website Analysis Failed' customer-facing PAINKILLER Finding with evidence:[]",
+      "status": "verified",
+      "rootCauseGroup": "D",
+      "dependencies": [],
+      "files": ["lib/modules/website.ts"],
+      "verification": [
+        "tsc --noEmit; grep -n \"Website Analysis Failed\" lib/modules/website.ts -> no matches",
+        "code review: catch block now returns findings: [] (matching the sibling techStack.ts pattern) instead of constructing a Finding"
+      ],
+      "wave": 3,
+      "notes": "AUDIT_REPORT.md's own Pass 4B module table (line ~1287) proved this exact zero-evidence Finding. A technical failure (crawler AND PageSpeed fallback both failed) must never become a customer-facing business deficiency (Step 7/8) \u2014 the fabricated Finding is removed rather than given fake evidence; the module returns no findings on total failure and logs the real error."
+    },
+    {
+      "id": "P1-51",
+      "severity": "P1",
+      "title": "lib/proposal/index.ts normalizeFindingsForProposal() 'repairs' a 0-evidence Finding by inventing a citation instead of dropping it",
+      "status": "verified",
+      "rootCauseGroup": "D",
+      "dependencies": [],
+      "files": ["lib/proposal/index.ts"],
+      "verification": [
+        "code review: the fabrication branch (createEvidence({pointer:'audit', value: f.title, ...})) removed; replaced with a filter that drops any finding lacking real evidence before it reaches proposal tier-mapping",
+        "tsc --noEmit"
+      ],
+      "wave": 3,
+      "notes": "Discovered while reviewing proposal/diagnosis-input consumers per Step 9 ('QA cannot repair missing evidence by inventing citations'). In steady state this is a no-op \u2014 findings reaching this function already passed the aggregation/persistence evidence contract \u2014 but it protected against legacy-persisted or otherwise-sourced findings predating the contract. Full proposal claim-to-Finding citation enforcement remains Wave 8 per campaign instruction; this was a small compatibility fix at the existing boundary, not an expansion into Wave 8's scope."
+    },
+    {
+      "id": "P1-52",
+      "severity": "P1",
+      "title": "Pipeline outreach can bypass tenant execution and duplicate or misrepresent outbound delivery",
+      "status": "verified",
+      "rootCauseGroup": "C",
+      "dependencies": ["Wave 1 tenant context", "Wave 8 claim contract"],
+      "files": [
+        "app/api/cron/pipeline-outreach/route.ts",
+        "lib/pipeline/inboxRotation.ts",
+        "lib/pipeline/outreach.ts"
+      ],
+      "verification": [
+        "red-before static trace: app/api/cron/pipeline-outreach/route.ts queried RLS-enforced Prisma with no runWithTenantAsync/runWithTenantBypass boundary",
+        "red-before static trace: lib/pipeline/inboxRotation.ts called sendEmail before persisting an OutreachEmail, used a generated email ID as its only identity, and did not query EmailBlocklist",
+        "green-after: vitest run app/api/cron/pipeline-outreach/__tests__/route.test.ts lib/pipeline/__tests__/outreach.test.ts lib/pipeline/__tests__/inboxRotation.test.ts lib/pipeline/__tests__/wave9aFollowup.test.ts lib/outreach/__tests__/wave9aOutboundSafety.test.ts",
+        "green-after: tsc --noEmit --pretty false --incremental false"
+      ],
+      "wave": 9,
+      "notes": "Created only after executable/static evidence and verified with the listed fixture-backed tests. Scope is the pipeline-outreach initial-send path, not all historical email routes. The repair enumerates configured tenants through a named bypass, executes every tenant operation in context, validates/persists Finding IDs, writes PENDING intent before dispatch, enforces an explicit live-delivery flag, suppression, stable prospect/proposal idempotency, domain-scoped shared caps, reconciliation on ambiguous results, and idempotent follow-up scheduling. ProposalFollowUp/manual send routes remain separate W9-V04/W9-V05 work and are not represented as fixed by this finding. The canonical manifest assertions passed 7/7, though that Vitest process later hit the documented local Prisma engine block."
+    },
+    {
+      "id": "P0-27",
+      "severity": "P0",
+      "title": "Closing agent allowed model-selected commercial mutations and acceptance without server-side authorization or confirmation",
+      "status": "open",
+      "rootCauseGroup": "C",
+      "dependencies": ["Wave 1 tenant context", "Wave 8 claim contract"],
+      "files": ["lib/closing/agent.ts", "app/api/pipeline/chat/route.ts", "app/api/proposal/[id]/chat/route.ts"],
+      "verification": [
+        "red-before static trace: lib/closing/agent.ts:287-386 declared model tools that directly updated tiers, discount notes, and ACCEPTED state",
+        "green-after implementation requires targeted chat/tool route tests before status can be verified"
+      ],
+      "wave": 9,
+      "notes": "Created at Wave 9B entry from exact static evidence. The implementation removes model mutation tools and constrains output to grounded citations or human handoff, but end-to-end route/authorization coverage remains required."
+    },
+    {
+      "id": "P0-28",
+      "severity": "P0",
+      "title": "Delivery engine fabricated completion and verification results for unimplemented execution",
+      "status": "open",
+      "rootCauseGroup": "D",
+      "dependencies": ["Wave 2 durable execution", "Wave 8 claim contract"],
+      "files": ["lib/pipeline/deliveryEngine.ts", "lib/graph/delivery-graph.ts", "app/api/delivery/[proposalId]/bundle/route.ts"],
+      "verification": [
+        "red-before static trace: deliveryEngine dispatch marked tasks completed immediately and verifyDeliverable generated random improvement with simulated-audit-id",
+        "partial green-after: vitest run lib/pipeline/__tests__/delivery.test.ts lib/pipeline/__tests__/delivery.property.test.ts"
+      ],
+      "wave": 9,
+      "notes": "Wave 9B changes leave delivery tasks escalated when no approved execution adapter exists and reject verification without a canonical re-audit gate. Route, artifact, and storage integration coverage remains required."
+    },
+    {
+      "id": "P1-53",
+      "severity": "P1",
+      "title": "Legacy follow-up routes bypass outbound delivery safety and emit unsupported customer copy",
+      "status": "open",
+      "rootCauseGroup": "C",
+      "dependencies": ["P1-52", "Wave 8 claim contract"],
+      "files": ["app/api/cron/follow-ups/route.ts", "app/api/email/send-followup/route.ts", "lib/email-templates/followup-sequence.ts"],
+      "verification": [
+        "red-before static trace: direct Resend sends lacked explicit delivery gate, suppression, durable intent, provider reconciliation, and claim-safe copy",
+        "green-after route and provider-fixture tests remain required"
+      ],
+      "wave": 9,
+      "notes": "Created at Wave 9B entry from exact static evidence. Initial code now queues manual follow-ups and routes cron sends through the shared outbound claim, but verification is incomplete."
+    },
+    {
+      "id": "P2-61",
+      "severity": "P2",
+      "title": "AutomatedOutreachOrchestrator simulate mode fabricates Finding evidence ({url:'https://example.com'}, no pointer/source/collected_at, no real check) and writes directly to prisma.finding.createMany",
+      "status": "fixed",
+      "rootCauseGroup": "D",
+      "dependencies": [],
+      "files": ["lib/outreach/AutomatedOutreachOrchestrator.ts"],
+      "verification": [
+        "code review: migrated to persistFindings(); evidence now carries an honestly-labeled sandbox:// provenance pointer instead of a fabricated https:// pseudo-URL",
+        "tsc --noEmit; eslint 0 errors",
+        "NOT independently re-run against a live DB this session (lib/__tests__/outreachE2ESandbox.test.ts, the only test exercising this path end-to-end, requires a local Postgres unavailable in this sandbox -- same class of environment limitation as P2-12/P1-06)"
+      ],
+      "wave": 3,
+      "notes": "Discovered while inventorying every prisma.finding.create/createMany call site per Step 2. This is a sandboxed/offline test-fixture code path (opt-in `simulate: true`, not the default production audit flow), but it wrote to the same Finding table with no distinction from real customer findings and no real observation behind the evidence. Status is `fixed` not `verified`: the code change is complete and passed tsc/eslint, but the one test that exercises it end-to-end is DB-environment-blocked in this sandbox, so the fix has not been proven against a live run. Flag for a future session with DB access to confirm outreachE2ESandbox.test.ts still passes."
+    }
+  ]
+}

@@ -7,8 +7,10 @@
  * Requirements: 13.1, 13.2, 13.3, 13.4, 13.5
  */
 
-import { prisma } from '@/lib/db';
+import { withSystemDbBypass } from '@/lib/db';
 import { logger } from '@/lib/logger';
+import { prisma } from '@/lib/prisma';
+import { runScopedToOwnerTenant, runWithTenantAsync } from '@/lib/tenant/context';
 
 import type { PreWarmingAction, PreWarmingConfig, PreWarmingEngine } from './types';
 
@@ -36,99 +38,119 @@ export async function scheduleActions(
   outreachDate: Date,
   config: PreWarmingConfig = DEFAULT_CONFIG
 ): Promise<PreWarmingAction[]> {
-  // Get the prospect to determine tenant and available platforms
-  const lead = await prisma.prospectLead.findUnique({
-    where: { id: leadId },
-    select: {
-      id: true,
-      tenantId: true,
-      sourceUrl: true,
-      website: true,
-    },
-  });
-
-  if (!lead) {
-    throw new Error(`Lead ${leadId} not found`);
-  }
-
-  const actions: PreWarmingAction[] = [];
-  const actionTypes: Array<PreWarmingAction['actionType']> = [
-    'question',
-    'like',
-    'comment',
-    'follow',
-    'post_interaction',
-  ];
-
-  // Determine which platforms are available
-  // Determine which platforms are available by checking for their specific URLs
-  const platforms: Array<{ platform: 'gbp' | 'facebook' | 'instagram'; available: boolean }> = [
-    { platform: 'gbp', available: !!(lead as any).gbpUrl || !!lead.website || !!lead.sourceUrl },
-    {
-      platform: 'facebook',
-      available: !!(lead as any).facebookUrl || !!lead.website || !!lead.sourceUrl,
-    },
-    {
-      platform: 'instagram',
-      available: !!(lead as any).instagramUrl || !!lead.website || !!lead.sourceUrl,
-    },
-  ];
-
-  // Schedule actions within the pre-warming window (3-5 days before outreach)
-  const windowStart = new Date(outreachDate);
-  windowStart.setDate(windowStart.getDate() - config.windowDays.max);
-
-  const windowEnd = new Date(outreachDate);
-  windowEnd.setDate(windowEnd.getDate() - config.windowDays.min);
-
-  // For each available platform, schedule 1-2 actions
-  for (const { platform, available } of platforms) {
-    if (!available) continue;
-
-    // Randomly select 1-2 action types for this platform
-    const numActions = Math.floor(Math.random() * 2) + 1; // 1 or 2 actions
-    const selectedActionTypes = actionTypes.sort(() => Math.random() - 0.5).slice(0, numActions);
-
-    for (const actionType of selectedActionTypes) {
-      // Schedule action at a random time within the window
-      const scheduledAt = new Date(
-        windowStart.getTime() + Math.random() * (windowEnd.getTime() - windowStart.getTime())
-      );
-
-      // Check daily limit for this platform on the scheduled date
-      const dailyCount = await getDailyActionCount(platform, scheduledAt);
-      const limit = config.dailyLimits[platform];
-
-      if (dailyCount >= limit) {
-        // Skip this action if daily limit reached
-        continue;
+  return runScopedToOwnerTenant(
+    'pipeline:pre-warming:resolve-lead-tenant',
+    async () => {
+      const lead = await prisma.prospectLead.findUnique({
+        where: { id: leadId },
+        select: { tenantId: true },
+      });
+      if (!lead) {
+        throw new Error(`Lead ${leadId} not found`);
       }
-
-      // Create the pre-warming action
-      const action = await prisma.preWarmingAction.create({
-        data: {
-          tenantId: lead.tenantId,
-          leadId: lead.id,
-          platform,
-          actionType,
-          scheduledAt,
-          status: 'scheduled',
+      return lead.tenantId;
+    },
+    async () => {
+      // Get the prospect to determine available platforms (already tenant-scoped here)
+      const lead = await prisma.prospectLead.findUnique({
+        where: { id: leadId },
+        select: {
+          id: true,
+          tenantId: true,
+          sourceUrl: true,
+          website: true,
         },
       });
 
-      actions.push({
-        id: action.id,
-        leadId: action.leadId,
-        platform: action.platform as 'gbp' | 'facebook' | 'instagram',
-        actionType: action.actionType as PreWarmingAction['actionType'],
-        scheduledAt: action.scheduledAt,
-        executedAt: action.executedAt ?? undefined,
-        status: action.status as PreWarmingAction['status'],
-      });
-    }
-  }
+      if (!lead) {
+        throw new Error(`Lead ${leadId} not found`);
+      }
 
-  return actions;
+      const actions: PreWarmingAction[] = [];
+      const actionTypes: Array<PreWarmingAction['actionType']> = [
+        'question',
+        'like',
+        'comment',
+        'follow',
+        'post_interaction',
+      ];
+
+      // Determine which platforms are available
+      // Determine which platforms are available by checking for their specific URLs
+      const platforms: Array<{ platform: 'gbp' | 'facebook' | 'instagram'; available: boolean }> = [
+        {
+          platform: 'gbp',
+          available: !!(lead as any).gbpUrl || !!lead.website || !!lead.sourceUrl,
+        },
+        {
+          platform: 'facebook',
+          available: !!(lead as any).facebookUrl || !!lead.website || !!lead.sourceUrl,
+        },
+        {
+          platform: 'instagram',
+          available: !!(lead as any).instagramUrl || !!lead.website || !!lead.sourceUrl,
+        },
+      ];
+
+      // Schedule actions within the pre-warming window (3-5 days before outreach)
+      const windowStart = new Date(outreachDate);
+      windowStart.setDate(windowStart.getDate() - config.windowDays.max);
+
+      const windowEnd = new Date(outreachDate);
+      windowEnd.setDate(windowEnd.getDate() - config.windowDays.min);
+
+      // For each available platform, schedule 1-2 actions
+      for (const { platform, available } of platforms) {
+        if (!available) continue;
+
+        // Randomly select 1-2 action types for this platform
+        const numActions = Math.floor(Math.random() * 2) + 1; // 1 or 2 actions
+        const selectedActionTypes = actionTypes
+          .sort(() => Math.random() - 0.5)
+          .slice(0, numActions);
+
+        for (const actionType of selectedActionTypes) {
+          // Schedule action at a random time within the window
+          const scheduledAt = new Date(
+            windowStart.getTime() + Math.random() * (windowEnd.getTime() - windowStart.getTime())
+          );
+
+          // Check daily limit for this platform on the scheduled date (global, cross-tenant)
+          const dailyCount = await getDailyActionCount(platform, scheduledAt);
+          const limit = config.dailyLimits[platform];
+
+          if (dailyCount >= limit) {
+            // Skip this action if daily limit reached
+            continue;
+          }
+
+          // Create the pre-warming action
+          const action = await prisma.preWarmingAction.create({
+            data: {
+              tenantId: lead.tenantId,
+              leadId: lead.id,
+              platform,
+              actionType,
+              scheduledAt,
+              status: 'scheduled',
+            },
+          });
+
+          actions.push({
+            id: action.id,
+            leadId: action.leadId,
+            platform: action.platform as 'gbp' | 'facebook' | 'instagram',
+            actionType: action.actionType as PreWarmingAction['actionType'],
+            scheduledAt: action.scheduledAt,
+            executedAt: action.executedAt ?? undefined,
+            status: action.status as PreWarmingAction['status'],
+          });
+        }
+      }
+
+      return actions;
+    }
+  );
 }
 
 /**
@@ -140,41 +162,53 @@ export async function scheduleActions(
  * @param action - Pre-warming action to execute
  */
 export async function executeAction(action: PreWarmingAction): Promise<void> {
-  try {
-    // In a real implementation, this would call platform-specific APIs:
-    // - GBP: Post a question, like a post, respond to reviews
-    // - Facebook: Like page, comment on post, follow
-    // - Instagram: Like post, comment, follow
+  await runScopedToOwnerTenant(
+    'pipeline:pre-warming:resolve-action-tenant',
+    async () => {
+      const row = await prisma.preWarmingAction.findUnique({
+        where: { id: action.id },
+        select: { tenantId: true },
+      });
+      return row?.tenantId ?? null;
+    },
+    async () => {
+      try {
+        // In a real implementation, this would call platform-specific APIs:
+        // - GBP: Post a question, like a post, respond to reviews
+        // - Facebook: Like page, comment on post, follow
+        // - Instagram: Like post, comment, follow
 
-    // For now, we simulate the action execution
-    logger.info(
-      { actionType: action.actionType, platform: action.platform, leadId: action.leadId },
-      'Executing pre-warming action'
-    );
+        // For now, we simulate the action execution
+        logger.info(
+          { actionType: action.actionType, platform: action.platform, leadId: action.leadId },
+          'Executing pre-warming action'
+        );
 
-    // Simulate API call delay
-    await new Promise((resolve) => setTimeout(resolve, 100));
+        // Simulate API call delay
+        await new Promise((resolve) => setTimeout(resolve, 100));
 
-    // Mark action as completed
-    await prisma.preWarmingAction.update({
-      where: { id: action.id },
-      data: {
-        status: 'completed',
-        executedAt: new Date(),
-      },
-    });
-  } catch (error) {
-    // Log error and mark action as failed
-    logger.error({ actionId: action.id, error }, 'Failed to execute pre-warming action');
+        // Mark action as completed
+        await prisma.preWarmingAction.update({
+          where: { id: action.id },
+          data: {
+            status: 'completed',
+            executedAt: new Date(),
+          },
+        });
+      } catch (error) {
+        // Log error and mark action as failed
+        logger.error({ actionId: action.id, error }, 'Failed to execute pre-warming action');
 
-    await prisma.preWarmingAction.update({
-      where: { id: action.id },
-      data: {
-        status: 'failed',
-        errorMessage: error instanceof Error ? error.message : 'Unknown error',
-      },
-    });
-  }
+        await prisma.preWarmingAction.update({
+          where: { id: action.id },
+          data: {
+            status: 'failed',
+            errorMessage: error instanceof Error ? error.message : 'Unknown error',
+          },
+        });
+      }
+    }
+  );
 }
 
 /**
@@ -187,36 +221,50 @@ export async function executeAction(action: PreWarmingAction): Promise<void> {
  * @returns True if window is complete, false otherwise
  */
 export async function checkWindowComplete(leadId: string): Promise<boolean> {
-  const actions = await prisma.preWarmingAction.findMany({
-    where: { leadId },
-  });
+  return runScopedToOwnerTenant(
+    'pipeline:pre-warming:resolve-lead-tenant',
+    async () => {
+      const lead = await prisma.prospectLead.findUnique({
+        where: { id: leadId },
+        select: { tenantId: true },
+      });
+      return lead?.tenantId ?? null;
+    },
+    async () => {
+      const actions = await prisma.preWarmingAction.findMany({
+        where: { leadId },
+      });
 
-  if (actions.length === 0) {
-    // No actions scheduled, window is complete
-    return true;
-  }
+      if (actions.length === 0) {
+        // No actions scheduled, window is complete
+        return true;
+      }
 
-  // Check if all actions are in a terminal state
-  const allComplete = actions.every(
-    (action: any) =>
-      action.status === 'completed' || action.status === 'failed' || action.status === 'skipped'
+      // Check if all actions are in a terminal state
+      const allComplete = actions.every(
+        (action: any) =>
+          action.status === 'completed' || action.status === 'failed' || action.status === 'skipped'
+      );
+
+      if (allComplete) {
+        return true;
+      }
+
+      // Check if the latest scheduled action is in the past
+      const latestScheduledAt = Math.max(
+        ...actions.map((action: any) => action.scheduledAt.getTime())
+      );
+      const now = Date.now();
+
+      // If the latest action was scheduled more than 24 hours ago and still not complete,
+      // consider the window expired
+      if (now - latestScheduledAt > 24 * 60 * 60 * 1000) {
+        return true;
+      }
+
+      return false;
+    }
   );
-
-  if (allComplete) {
-    return true;
-  }
-
-  // Check if the latest scheduled action is in the past
-  const latestScheduledAt = Math.max(...actions.map((action: any) => action.scheduledAt.getTime()));
-  const now = Date.now();
-
-  // If the latest action was scheduled more than 24 hours ago and still not complete,
-  // consider the window expired
-  if (now - latestScheduledAt > 24 * 60 * 60 * 1000) {
-    return true;
-  }
-
-  return false;
 }
 
 /**
@@ -227,27 +275,27 @@ export async function checkWindowComplete(leadId: string): Promise<boolean> {
  * @returns Number of actions scheduled/executed on that date
  */
 export async function getDailyActionCount(platform: string, date: Date): Promise<number> {
-  // Get start and end of the day
-  const startOfDay = new Date(date);
-  startOfDay.setHours(0, 0, 0, 0);
+  return withSystemDbBypass('pipeline:pre-warming:global-daily-limit-check', async (client) => {
+    // Get start and end of the day
+    const startOfDay = new Date(date);
+    startOfDay.setHours(0, 0, 0, 0);
 
-  const endOfDay = new Date(date);
-  endOfDay.setHours(23, 59, 59, 999);
+    const endOfDay = new Date(date);
+    endOfDay.setHours(23, 59, 59, 999);
 
-  const count = await prisma.preWarmingAction.count({
-    where: {
-      platform,
-      scheduledAt: {
-        gte: startOfDay,
-        lte: endOfDay,
+    return client.preWarmingAction.count({
+      where: {
+        platform,
+        scheduledAt: {
+          gte: startOfDay,
+          lte: endOfDay,
+        },
+        status: {
+          in: ['scheduled', 'completed'],
+        },
       },
-      status: {
-        in: ['scheduled', 'completed'],
-      },
-    },
+    });
   });
-
-  return count;
 }
 
 /**

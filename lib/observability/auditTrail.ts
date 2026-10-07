@@ -17,6 +17,7 @@ export type AuditTrailEventType =
   | 'proposal.generated'
   | 'proposal.sent'
   | 'proposal.delivered'
+  | 'data.deletion_auth'
   | 'data.deletion_requested'
   | 'data.deletion_completed'
   | 'data.deletion_failed'
@@ -354,11 +355,21 @@ export async function recordAuditTrailEvent(input: AuditTrailEventInput): Promis
       },
       'Failed to write audit trail event'
     );
-    // Explicitly rethrow if it's billing or security-critical
+    // Explicitly rethrow for billing- or security-critical event categories, so a
+    // silently-failed write can never be mistaken for "the destructive/security action
+    // didn't happen" -- these must be durably observable, not just logged. Classified by
+    // criticality (P2-23), not by blocking every audit-trail write:
+    //   - stripe.*    billing/webhook integrity
+    //   - session.*   login/session security events
+    //   - apikey.*    API-key creation/revocation
+    //   - data.deletion_*  tenant/account deletion (destructive)
+    //   - role.*      role/permission changes
     const isCritical =
       input.eventType.startsWith('stripe.') ||
       input.eventType.startsWith('session.') ||
-      input.eventType.startsWith('apikey.');
+      input.eventType.startsWith('apikey.') ||
+      input.eventType.startsWith('data.deletion') ||
+      input.eventType.startsWith('role.');
     if (isCritical) {
       throw error;
     }

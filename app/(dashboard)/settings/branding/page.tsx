@@ -67,7 +67,7 @@ export default function BrandingPage() {
   };
 
   return (
-    <div className="container max-w-6xl mx-auto py-10 px-4">
+    <div className="container max-w-6xl mx-auto py-10 px-4 overflow-x-hidden">
       <h1 className="text-3xl font-bold text-slate-100 mb-8">Branding & Customization</h1>
 
       <div className="grid lg:grid-cols-2 gap-12">
@@ -78,6 +78,7 @@ export default function BrandingPage() {
             <Field label="Brand Name">
               <input
                 name="brandName"
+                id="field-brand-name"
                 value={config.brandName}
                 onChange={handleChange}
                 className="input-dark w-full"
@@ -87,6 +88,7 @@ export default function BrandingPage() {
             <Field label="Tagline">
               <input
                 name="tagline"
+                id="field-tagline"
                 value={config.tagline}
                 onChange={handleChange}
                 className="input-dark w-full"
@@ -120,17 +122,19 @@ export default function BrandingPage() {
 
           {/* Colors */}
           <Section title="Colors">
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <Field label="Primary">
                 <div className="flex items-center gap-2">
                   <input
                     type="color"
                     name="primaryColor"
+                    aria-label="Primary color picker"
                     value={config.primaryColor}
                     onChange={handleChange}
                     className="h-10 w-10 rounded cursor-pointer"
                   />
                   <input
+                    id="field-primary"
                     name="primaryColor"
                     value={config.primaryColor}
                     onChange={handleChange}
@@ -143,11 +147,13 @@ export default function BrandingPage() {
                   <input
                     type="color"
                     name="secondaryColor"
+                    aria-label="Secondary color picker"
                     value={config.secondaryColor}
                     onChange={handleChange}
                     className="h-10 w-10 rounded cursor-pointer"
                   />
                   <input
+                    id="field-secondary"
                     name="secondaryColor"
                     value={config.secondaryColor}
                     onChange={handleChange}
@@ -160,11 +166,13 @@ export default function BrandingPage() {
                   <input
                     type="color"
                     name="accentColor"
+                    aria-label="Accent color picker"
                     value={config.accentColor}
                     onChange={handleChange}
                     className="h-10 w-10 rounded cursor-pointer"
                   />
                   <input
+                    id="field-accent"
                     name="accentColor"
                     value={config.accentColor}
                     onChange={handleChange}
@@ -179,6 +187,7 @@ export default function BrandingPage() {
           <Section title="Contact Info">
             <Field label="Public Email">
               <input
+                id="field-public-email"
                 name="contactEmail"
                 value={config.contactEmail}
                 onChange={handleChange}
@@ -281,10 +290,13 @@ function Section({ title, children }: any) {
   );
 }
 
-function Field({ label, children }: any) {
+function Field({ label, htmlFor, children }: { label: string; htmlFor?: string; children: React.ReactNode }) {
+  const id = htmlFor ?? `field-${label.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
   return (
     <div>
-      <label className="block text-sm font-medium text-slate-300 mb-1">{label}</label>
+      <label htmlFor={id} className="block text-sm font-medium text-slate-300 mb-1">
+        {label}
+      </label>
       {children}
     </div>
   );

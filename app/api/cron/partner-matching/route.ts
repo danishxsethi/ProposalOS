@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-import { prisma } from '@/lib/db';
+import { withSystemDbBypass } from '@/lib/db';
+import { logger } from '@/lib/logger';
 import { verifyCronAuth } from '@/lib/middleware/cronAuth';
 import { deliverLead, matchLeadsToPartner } from '@/lib/pipeline/partnerPortal';
 
@@ -19,10 +20,14 @@ export async function POST(request: NextRequest) {
     let totalDelivered = 0;
     let errors = 0;
 
-    // Get all active partners
-    const partners = await prisma.agencyPartner.findMany({
-      where: { isActive: true },
-    });
+    // Get all active partners (cross-tenant platform data)
+    const partners = await withSystemDbBypass(
+      'cron:partner-matching:list-active-partners',
+      (prisma) =>
+        prisma.agencyPartner.findMany({
+          where: { isActive: true },
+        })
+    );
 
     // For each partner, match and deliver leads
     for (const partner of partners) {
@@ -34,14 +39,14 @@ export async function POST(request: NextRequest) {
             await deliverLead(partner.id, match.leadId);
             totalDelivered++;
           } catch (error) {
-            console.error(`Error delivering lead ${match.leadId} to partner ${partner.id}:`, error);
+            logger.error(`Error delivering lead ${match.leadId} to partner ${partner.id}:`, error);
             errors++;
           }
         }
 
         totalMatched += matches.length;
       } catch (error) {
-        console.error(`Error matching leads for partner ${partner.id}:`, error);
+        logger.error(`Error matching leads for partner ${partner.id}:`, error);
         errors++;
       }
     }
@@ -57,7 +62,7 @@ export async function POST(request: NextRequest) {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error('Partner matching cron error:', error);
+    logger.error('Partner matching cron error:', error);
     return NextResponse.json(
       {
         success: false,

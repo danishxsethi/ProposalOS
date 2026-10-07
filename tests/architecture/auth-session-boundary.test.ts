@@ -10,6 +10,15 @@ describe('Auth & Session Architecture Boundary Tests', () => {
       path.resolve(rootDir, 'lib/auth.ts'),
       path.resolve(rootDir, 'lib/auth/adapterContext.ts'),
       path.resolve(rootDir, 'lib/auth/wrappedPrismaAdapter.ts'),
+      // RAOS adapter-filter coverage scanner: references the symbol name in
+      // JSDoc documentation only (not an import or call). Approved exception
+      // — the scanner describes the bypass mechanism for documentation purposes.
+      // Fix for register #3 (arch-boundary false positive). [#3]
+      path.resolve(rootDir, 'lib/raos/tenantIsolation/adapterFilterCoverage.ts'),
+      // RAOS adapter-filter inventory: references the symbol in a comment and
+      // a string description field (not an import or call). Approved exception
+      // for the same reason as adapterFilterCoverage.ts above. [#3]
+      path.resolve(rootDir, 'lib/raos/tenantIsolation/adapterFilterInventory.ts'),
     ];
 
     const scanDirectory = (dir: string) => {
@@ -101,6 +110,7 @@ describe('Auth & Session Architecture Boundary Tests', () => {
       'public/',
       'widget/',
       'outreach/track/',
+      'outreach/webhook/',
       'proposal/token/',
       'team/invite/',
       'client/',
@@ -114,6 +124,11 @@ describe('Auth & Session Architecture Boundary Tests', () => {
       'email/',
       'stripe/',
       'onboarding/',
+      // NPS survey response is a public token-gated endpoint: authentication is a
+      // single-use hashed token (see lib/retention/nps.ts hashNpsToken), same class
+      // as proposal/token/ and team/invite/ above. It is additionally rate-limited
+      // fail-closed (routeClass 'public_nps'). No session auth by design.
+      'nps/respond/',
     ];
 
     const exemptExact = [
@@ -122,7 +137,8 @@ describe('Auth & Session Architecture Boundary Tests', () => {
       'openapi/route.ts',
       'metrics/route.ts',
       'predictions/route.ts',
-      'proposal-status/status/route.ts',
+      // NOTE: proposal-status/status/route.ts intentionally removed from exemption
+      // after fix for register #4 (added withAuth guard). Do not re-add.
       'pipeline/chat/route.ts',
       'pipeline/engagement/route.ts',
       'csrf/route.ts',

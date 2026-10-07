@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 
+import { logger } from '@/lib/logger';
 import { withAuth } from '@/lib/middleware/auth';
 import { prisma } from '@/lib/prisma';
 import { assertBillingNotFrozen, getSaasPlanById, stripe } from '@/lib/stripe/stripe';
@@ -29,41 +30,61 @@ export const POST = withAuth(async (req: Request) => {
       return NextResponse.json({ error: 'Tenant not found' }, { status: 404 });
     }
 
-    const session = await stripe.checkout.sessions.create({
-      mode: 'subscription',
-      line_items: [{ price: plan.priceId, quantity: 1 }],
-      customer: tenant.stripeCustomerId ?? undefined,
-      customer_email: tenant.users[0]?.email ?? undefined,
-      client_reference_id: tenantId,
-      metadata: {
-        tenantId,
-        planId: plan.id,
-        checkoutType: 'saas',
-      },
-      allow_promotion_codes: true,
-      payment_method_collection: 'if_required',
-      subscription_data: {
-        trial_period_days: 14,
+    const period = new Date().toISOString().slice(0, 7); // YYYY-MM billing period for idempotency scoping
+    const idempotencyKey = `saas:${tenantId}:${plan.id}:${period}`;
+    const existingAttempt = await prisma.checkoutAttempt.findUnique({ where: { idempotencyKey } });
+    if (existingAttempt?.stripeSessionId) {
+      const existingSession = await stripe.checkout.sessions.retrieve(existingAttempt.stripeSessionId);
+      if (existingSession.status === 'open' && existingSession.url) {
+        return NextResponse.json({ url: existingSession.url, checkoutSessionId: existingSession.id });
+      }
+    }
+
+    const session = await stripe.checkout.sessions.create(
+      {
+        mode: 'subscription',
+        line_items: [{ price: plan.priceId, quantity: 1 }],
+        customer: tenant.stripeCustomerId ?? undefined,
+        customer_email: tenant.users[0]?.email ?? undefined,
+        client_reference_id: tenantId,
         metadata: {
           tenantId,
           planId: plan.id,
+          checkoutType: 'saas',
         },
+        allow_promotion_codes: true,
+        payment_method_collection: 'if_required',
+        subscription_data: {
+          trial_period_days: 14,
+          metadata: {
+            tenantId,
+            planId: plan.id,
+          },
+        },
+        success_url: `${process.env.NEXTAUTH_URL}/onboarding?session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${process.env.NEXTAUTH_URL}/settings/billing?checkout=cancel`,
       },
-      success_url: `${process.env.NEXTAUTH_URL}/onboarding?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${process.env.NEXTAUTH_URL}/settings/billing?checkout=cancel`,
-    });
+      { idempotencyKey }
+    );
 
-    await prisma.checkoutAttempt.create({
-      data: {
+    await prisma.checkoutAttempt.upsert({
+      where: { idempotencyKey },
+      create: {
         stripeSessionId: session.id,
         tenantId,
         type: 'saas',
+        status: 'PENDING',
+        idempotencyKey,
+      },
+      update: {
+        stripeSessionId: session.id,
+        status: 'PENDING',
       },
     });
 
     return NextResponse.json({ url: session.url });
   } catch (error) {
-    console.error('Stripe SaaS Checkout Error:', error);
+    logger.error('Stripe SaaS Checkout Error:', error);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 });

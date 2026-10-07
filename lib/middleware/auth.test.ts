@@ -34,26 +34,29 @@ describe('withAuth env API key tenant guard', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     process.env.API_KEY = 'test-env-api-key';
-    delete process.env.DEFAULT_TENANT_ID;
+    process.env.DEFAULT_TENANT_ID = '00000000-0000-4000-8000-000000000001';
+    mockRunWithTenantAsync.mockImplementation(async (_tenantId: unknown, fn: () => unknown) => fn());
   });
 
-  it('returns clean 400 when env API key is used without x-tenant-id and no DEFAULT_TENANT_ID', async () => {
+  it('uses only server-configured DEFAULT_TENANT_ID and ignores a forged tenant header', async () => {
     const handler = vi.fn(async () => new Response(JSON.stringify({ ok: true }), { status: 200 }));
     const wrapped = withAuth(handler);
 
     const req = new Request('http://localhost/api/protected', {
       headers: {
         Authorization: 'Bearer test-env-api-key',
+        'x-tenant-id': '00000000-0000-4000-8000-000000000099',
       },
     });
 
     const res = await wrapped(req);
     const body = await res.json();
 
-    expect(res.status).toBe(400);
-    expect(body).toEqual({ error: 'Missing x-tenant-id header' });
-    expect(handler).not.toHaveBeenCalled();
-    expect(mockRunWithTenantAsync).not.toHaveBeenCalled();
-    expect(mockLoggerWarn).toHaveBeenCalled();
+    expect(res.status).toBe(200);
+    expect(body).toEqual({ ok: true });
+    expect(mockRunWithTenantAsync).toHaveBeenCalledWith(
+      '00000000-0000-4000-8000-000000000001',
+      expect.any(Function)
+    );
   });
 });

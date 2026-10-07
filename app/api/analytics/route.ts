@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 
 import { format, startOfWeek, subDays } from 'date-fns';
 
+import { logger } from '@/lib/logger';
 import { withAuth } from '@/lib/middleware/auth';
 import { prisma } from '@/lib/prisma';
 import { getTenantId } from '@/lib/tenant/context';
@@ -166,7 +167,7 @@ export const GET = withAuth(async (req: Request) => {
       },
     });
   } catch (error) {
-    console.error('Analytics Error:', error);
+    logger.error('Analytics Error:', error);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 });

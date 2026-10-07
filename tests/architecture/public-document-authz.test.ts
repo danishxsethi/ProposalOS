@@ -43,6 +43,7 @@ describe('Architecture boundary guard: Public document and export routes authori
       'validateCaseStudyAccess',
       'getServerSession',
       'webLinkToken',
+      'resolvePublicProposalAccess',
       'withAuth',
       'validateApiKey',
     ];

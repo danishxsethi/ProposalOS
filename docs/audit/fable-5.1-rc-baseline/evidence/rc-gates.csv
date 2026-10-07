@@ -1,0 +1,8 @@
+gate,entry_criteria,exit_criteria,status
+G0 Baseline Accepted,typecheck 0 errors + build passes + test bootstrap ok,PASS,REACHED
+G1 P0 Containment,zero P0 + migration drift resolved + auth boundary allowlisted,lint 0 errors + tests 0 failures,NOT_REACHED
+G2 Core Product Correctness,27 modules verified + proposal grounding blocks legacy + RLS proven,5-industry proposals avg >=85,NOT_REACHED
+G3 Premium Polish,responsive+a11y no critical violations + PDF professional,visual baseline + keyboards,NOT_REACHED
+G4 Staging RC,Stripe test-mode smoke + soak 24h + rollback drill,PENDING,NOT_REACHED
+G5 Public RC,all hard gates pass + weighted >=75,PENDING,NOT_REACHED
+G6 GA,SLOs + 30-day monitoring + incident runbook proven,PENDING,NOT_REACHED

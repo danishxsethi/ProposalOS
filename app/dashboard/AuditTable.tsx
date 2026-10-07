@@ -83,6 +83,7 @@ export default function AuditTable() {
           />
         </form>
         <select
+          aria-label="Filter by status"
           value={status}
           onChange={(e) => {
             setStatus(e.target.value);
@@ -100,7 +101,7 @@ export default function AuditTable() {
       </div>
 
       {/* Table */}
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Audits table">
         <table className="w-full">
           <thead className="border-b border-[var(--color-border)]">
             <tr className="text-left text-sm text-[var(--color-text-secondary)]">

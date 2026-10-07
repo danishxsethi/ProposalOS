@@ -8,6 +8,8 @@
  */
 import { Annotation, StateGraph } from '@langchain/langgraph';
 
+import { validateFinding } from '@/lib/audit/findingContract';
+import { validateCustomerClaim, ValidatedCustomerClaim } from '@/lib/claims/claimContract';
 import { AggregatedContext } from '@/lib/context/aggregator';
 import {
   generateNarratives,
@@ -80,6 +82,10 @@ export const DiagnosisState = Annotation.Root({
     reducer: (x, y) => y,
     default: () => false,
   }),
+  resultState: Annotation<'trusted' | 'degraded' | 'failed'>({
+    reducer: (x, y) => y,
+    default: () => 'failed',
+  }),
   staleFindingsCount: Annotation<number>({
     reducer: (x, y) => y,
     default: () => 0,
@@ -128,13 +134,46 @@ function nodeError(node: string, error: unknown): NodeError {
   return { node, error: String(error), timestamp: new Date().toISOString() };
 }
 
+function claimInput(claim: ValidatedCustomerClaim) {
+  const { auditId: _auditId, tenantId: _tenantId, ...input } = claim;
+  return input;
+}
+
+function validateDiagnosisInput(state: Pick<State, 'findings' | 'auditId' | 'tenantId'>): string[] {
+  const issues: string[] = [];
+  if (!state.auditId) issues.push('trusted auditId is required');
+  if (!state.tenantId) issues.push('trusted tenantId is required');
+
+  for (const finding of state.findings) {
+    if (finding.auditId !== state.auditId)
+      issues.push(`Finding ${finding.id} belongs to another audit`);
+    if (finding.tenantId !== state.tenantId)
+      issues.push(`Finding ${finding.id} belongs to another tenant`);
+    if (finding.excluded) issues.push(`Finding ${finding.id} is excluded`);
+    if (!validateFinding(finding).success)
+      issues.push(`Finding ${finding.id} failed the Wave 3 contract`);
+  }
+  return issues;
+}
+
 // ─── Nodes (P0-2: every node now has try/catch with safe fallback) ─────────────
 
 // P1-4: Use real evidence for stale checks
 async function verify_evidence(state: State): Promise<Partial<State>> {
   try {
-    const { findings, staleCount } = await verifyEvidenceActivity(state.findings);
-    return { findings, staleFindingsCount: staleCount };
+    const { findings, staleCount, invalidCount } = await verifyEvidenceActivity(
+      state.findings,
+      24,
+      state.evidenceSnapshots
+    );
+    return {
+      findings,
+      staleFindingsCount: staleCount,
+      degraded: state.degraded || invalidCount > 0 || staleCount > 0,
+      ...(invalidCount > 0 || staleCount > 0
+        ? { errors: [nodeError('verify_evidence', `Evidence eligibility failure: invalid=${invalidCount}, stale=${staleCount}`)] }
+        : {}),
+    };
   } catch (error) {
     // On error skip verification — do NOT block the pipeline
     logger.error(
@@ -174,26 +213,18 @@ async function cluster_root_causes(state: State): Promise<Partial<State>> {
       findings: state.findings.filter((f) => c.findingIds.includes(f.id)),
       rootCause: c.rootCause,
       narrative: c.narrative,
+      rootCauseClaim: c.rootCauseClaim,
+      narrativeClaim: c.narrativeClaim,
     }));
 
     return { clusters };
   } catch (error) {
     logger.error(
       { node: 'cluster_root_causes', error },
-      '[LangGraph] cluster_root_causes failed — using single fallback cluster'
+      '[LangGraph] cluster_root_causes failed closed'
     );
-    // Fallback: single cluster containing all finding IDs
-    const fallbackCluster: DiagnosisCluster = {
-      id: 'fallback-cluster-1',
-      title: 'Multiple issues detected across the business',
-      description: 'Multiple issues detected across the business',
-      rootCause: 'Multiple issues detected across the business',
-      severity: 'medium',
-      findingIds: state.findings.map((f) => f.id),
-      findings: state.findings,
-    };
     return {
-      clusters: [fallbackCluster],
+      clusters: [],
       degraded: true,
       errors: [nodeError('cluster_root_causes', error)],
     };
@@ -202,13 +233,26 @@ async function cluster_root_causes(state: State): Promise<Partial<State>> {
 
 async function rank_by_impact(state: State): Promise<Partial<State>> {
   try {
-    const rankings: DiagnosisRanking[] = state.clusters.map((c, idx) => ({
-      clusterId: c.id,
-      rank: idx + 1,
-      impactScore: c.severity === 'critical' ? 100 : c.severity === 'high' ? 80 : 50,
-      estimatedROI: 1000,
-      effortLevel: 'moderate', // placeholder or logic if available
-    }));
+    const severityScore = { critical: 100, high: 80, medium: 50, low: 20 } as const;
+    const rankings: DiagnosisRanking[] = [...state.clusters]
+      .sort(
+        (a, b) => severityScore[b.severity] - severityScore[a.severity] || a.id.localeCompare(b.id)
+      )
+      .map((cluster, index) => {
+        const efforts = cluster.findings.map((finding) => finding.effortEstimate);
+        const effortLevel = efforts.some((effort) => effort === 'HIGH')
+          ? 'major_effort'
+          : efforts.length > 0 && efforts.every((effort) => effort === 'LOW')
+            ? 'quick_win'
+            : 'moderate';
+        return {
+          clusterId: cluster.id,
+          rank: index + 1,
+          impactScore: severityScore[cluster.severity],
+          estimatedROI: null,
+          effortLevel,
+        };
+      });
     return { rankings };
   } catch (error) {
     logger.error({ node: 'rank_by_impact', error }, '[LangGraph] rank_by_impact failed');
@@ -254,6 +298,8 @@ async function generate_narrative(state: State): Promise<Partial<State>> {
       severity: c.severity,
       findingIds: c.findings.map((f) => f.id),
       narrative: c.narrative,
+      rootCauseClaim: c.rootCauseClaim,
+      narrativeClaim: c.narrativeClaim,
     }));
     const newClusters = await generateNarratives(
       painClusters as any,
@@ -265,7 +311,11 @@ async function generate_narrative(state: State): Promise<Partial<State>> {
 
     const clusters = state.clusters.map((c) => {
       const updated = newClusters.find((n) => n.id === c.id);
-      return { ...c, narrative: updated?.narrative || c.narrative };
+      return {
+        ...c,
+        narrative: updated?.narrative,
+        narrativeClaim: updated?.narrativeClaim,
+      };
     });
 
     return { clusters };
@@ -291,9 +341,26 @@ async function validate_diagnosis(state: State): Promise<Partial<State>> {
       findingIds: c.findings.map((f) => f.id),
     }));
     const val = validateClusters(painClusters as any, state.findings);
+    const claimErrors: string[] = [];
+    for (const cluster of state.clusters) {
+      if (!cluster.rootCauseClaim) {
+        claimErrors.push(`Cluster ${cluster.id} is missing a root-cause claim`);
+      } else {
+        const result = validateCustomerClaim(claimInput(cluster.rootCauseClaim), {
+          auditId: state.auditId || '',
+          tenantId: state.tenantId,
+          findings: state.findings,
+        });
+        if (!result.success)
+          claimErrors.push(...result.issues.map((issue) => `${cluster.id}: ${issue}`));
+      }
+      if (cluster.narrative && !cluster.narrativeClaim) {
+        claimErrors.push(`Cluster ${cluster.id} narrative is missing a claim`);
+      }
+    }
     const validation = {
-      valid: val.valid,
-      issues: val.errors || [],
+      valid: val.valid && claimErrors.length === 0,
+      issues: [...(val.errors || []), ...claimErrors],
       clusterCount: state.clusters.length,
       findingsCovered: state.clusters.reduce((acc, c) => acc + c.findings.length, 0),
       totalFindings: state.findings.length,
@@ -380,7 +447,11 @@ async function degrade_and_continue(state: State): Promise<Partial<State>> {
 
 async function adversarial_qa(state: State): Promise<Partial<State>> {
   try {
-    const content = state.clusters.map((c) => c.rootCause).join('\n');
+    // Check the diagnosis narrative (customer-visible) for hallucination, not the
+    // internal cluster label (internal slug never shown to customers). The prior
+    // content was the label 'Website and Mobile Performance Issues' — flagging it
+    // as unsupported was a tautology that degraded every real audit.
+    const content = state.clusters.map((c) => c.narrative ?? c.rootCause).join('\n');
 
     const qaGraph = createAdversarialQAGraph(state.costTracker);
     const result = await qaGraph.invoke({
@@ -414,7 +485,12 @@ async function adversarial_qa(state: State): Promise<Partial<State>> {
 
     if (retryTriggered) {
       logger.warn(
-        { qaScore, qaRetryCount: state.qaRetryCount },
+        {
+          qaScore,
+          qaRetryCount: state.qaRetryCount,
+          hallucinationFlags: (result.hallucinationFlags ?? []).slice(0, 5),
+          consistencyFlags: (result.consistencyFlags ?? []).slice(0, 5),
+        },
         '[DiagnosisGraph] QA hallucination score > 0.3 — triggering QA retry'
       );
     } else if (result.hallucinationFlags?.length > 0) {
@@ -425,7 +501,7 @@ async function adversarial_qa(state: State): Promise<Partial<State>> {
     }
 
     return {
-      narrative: result.hardenedContent || state.narrative,
+      narrative: state.narrative,
       // P0-1: Thread computed score into state for route_qa to read
       lastQaScore: qaScore,
       qaRetryCount: state.qaRetryCount,
@@ -437,8 +513,9 @@ async function adversarial_qa(state: State): Promise<Partial<State>> {
     );
     // Return state unchanged — QA failure is non-fatal
     return {
-      lastQaScore: 0,
+      lastQaScore: 1,
       qaRetryCount: state.qaRetryCount,
+      degraded: true,
       errors: [nodeError('adversarial_qa', error)],
     };
   }
@@ -535,6 +612,25 @@ export async function invokeDiagnosisGraphWithTimeout(
   initialState: Partial<State>,
   timeoutMs: number = DIAGNOSIS_GRAPH_TIMEOUT_MS
 ): Promise<State> {
+  const inputIssues = validateDiagnosisInput({
+    findings: initialState.findings ?? [],
+    auditId: initialState.auditId,
+    tenantId: initialState.tenantId ?? '',
+  });
+  if (inputIssues.length > 0) {
+    throw new Error(`DIAGNOSIS_INPUT_INVALID: ${inputIssues.join('; ')}`);
+  }
+
+  if (!initialState.evidenceSnapshots || initialState.evidenceSnapshots.length === 0) {
+    throw new Error('DIAGNOSIS_EVIDENCE_REQUIRED: Evidence snapshots are required for trusted diagnosis');
+  }
+  const invalidEvidenceFindingIds = (initialState.findings ?? [])
+    .filter((finding) => !Array.isArray(finding.evidence) || finding.evidence.length === 0)
+    .map((finding) => finding.id);
+  if (invalidEvidenceFindingIds.length > 0) {
+    throw new Error(`DIAGNOSIS_EVIDENCE_INVALID: Findings without evidence: ${invalidEvidenceFindingIds.join(',')}`);
+  }
+
   const controller = new AbortController();
 
   let timeoutId: NodeJS.Timeout | undefined;
@@ -546,10 +642,20 @@ export async function invokeDiagnosisGraphWithTimeout(
   });
 
   try {
-    return await Promise.race([
-      diagnosisGraph.invoke(initialState as State, { signal: controller.signal } as any),
+    const result = await Promise.race([
+      diagnosisGraph.invoke(
+        initialState as State,
+        { signal: controller.signal, recursionLimit: 100 } as any
+      ),
       timeoutPromise,
     ]);
+    const qaMissing = result.errors.some((error) => error.node === 'adversarial_qa');
+    const resultState = result.degraded || result.errors.length > 0 || qaMissing
+      ? 'degraded'
+      : result.validation?.valid
+        ? 'trusted'
+        : 'failed';
+    return { ...result, resultState };
   } catch (error) {
     if (error instanceof Error && error.message.startsWith('DIAGNOSIS_GRAPH_TIMEOUT')) {
       logger.error({ error, timeoutMs }, '[DiagnosisGraph] Timed out — returning degraded state');
@@ -569,6 +675,7 @@ export async function invokeDiagnosisGraphWithTimeout(
         },
         retryCount: initialState.retryCount ?? 0,
         degraded: true,
+        resultState: 'degraded',
         staleFindingsCount: initialState.staleFindingsCount ?? 0,
         tenantId: initialState.tenantId ?? 'unknown',
         mode: initialState.mode ?? 'MULTI_STEP',
@@ -584,7 +691,7 @@ export async function invokeDiagnosisGraphWithTimeout(
         costTracker: initialState.costTracker,
       } as State;
     }
-    throw error;
+    throw new Error(`DIAGNOSIS_FAILED: ${error instanceof Error ? error.message : String(error)}`);
   } finally {
     if (timeoutId) clearTimeout(timeoutId);
   }

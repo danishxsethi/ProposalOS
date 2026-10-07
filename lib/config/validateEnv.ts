@@ -7,12 +7,6 @@ const REQUIRED_ENV_VARS = [
   'BASE_URL',
   'CRON_SECRET',
 
-  // ─── Google APIs ───────────────────────────────────────────────────────────
-  'GOOGLE_PAGESPEED_API_KEY',
-  'GOOGLE_PLACES_API_KEY',
-  'GOOGLE_AI_API_KEY',
-  'GCP_PROJECT_ID',
-
   // ─── External Services ─────────────────────────────────────────────────────
   'SERP_API_KEY',
   'STRIPE_SECRET_KEY',
@@ -28,9 +22,16 @@ const REQUIRED_ENV_VARS = [
 ] as const;
 
 const OPTIONAL_ENV_VARS = [
-  // ─── GCS / Cloud Storage ───────────────────────────────────────────────────
-  'GCS_BUCKET_NAME',
-  'GCP_REGION',
+  // ─── AWS runtime storage ───────────────────────────────────────────────────
+  'AWS_REGION',
+  'PROPOSALOS_DATA_BUCKET',
+
+  // ─── AWS Bedrock LLM provider ──────────────────────────────────────────────
+  'LLM_PRIMARY_PROVIDER',
+  'BEDROCK_ENABLED',
+  'BEDROCK_FAST_MODEL_ID',
+  'BEDROCK_MODEL_ID',
+  'BEDROCK_VISION_MODEL_ID',
 
   // ─── LangSmith tracing ─────────────────────────────────────────────────────
   'LANGSMITH_API_KEY',
@@ -42,7 +43,7 @@ const OPTIONAL_ENV_VARS = [
   'GOOGLE_CLIENT_ID',
   'GOOGLE_CLIENT_SECRET',
 
-  // ─── Puppeteer / Chrome path in Docker/Cloud Run ───────────────────────────
+  // ─── Puppeteer / Chrome path in Docker/ECS ─────────────────────────────────
   'CHROME_EXECUTABLE_PATH',
 
   // ─── Alerting ──────────────────────────────────────────────────────────────
@@ -55,9 +56,7 @@ const OPTIONAL_ENV_VARS = [
   // ─── Tenant defaults ───────────────────────────────────────────────────────
   'DEFAULT_TENANT_ID',
 
-  // ─── LLM model selection (Gemini) ──────────────────────────────────────────
-  'GEMINI_31_PRO_ENABLED',
-  'GEMINI_31_PRO_TRAFFIC_PCT',
+  // ─── LLM model selection (Amazon Bedrock) ───────────────────────────────────
   'LLM_MODEL_DIAGNOSIS',
   'LLM_MODEL_FLASH',
   'LLM_MODEL_PROPOSAL',
@@ -135,10 +134,6 @@ const OPTIONAL_ENV_VARS = [
   'ZEROBOUNCE_API_KEY',
   'NEVERBOUNCE_API_KEY',
 
-  // ─── Search Engines ────────────────────────────────────────────────────────
-  'GOOGLE_SEARCH_API_KEY',
-  'GOOGLE_SEARCH_CX',
-
   // ─── LLM Reliability & Performance ─────────────────────────────────────────
   'LLM_MAX_RETRIES',
   'LLM_BASE_RETRY_DELAY_MS',
@@ -164,7 +159,12 @@ const OPTIONAL_ENV_VARS = [
 ] as const;
 
 export function validateEnv(): void {
-  const missing = REQUIRED_ENV_VARS.filter((v) => !process.env[v]?.trim());
+  const missing = [
+    ...REQUIRED_ENV_VARS.filter((v) => !process.env[v]?.trim()),
+    ...(process.env.NODE_ENV === 'production' && !process.env.PROPOSALOS_DATA_BUCKET?.trim()
+      ? ['PROPOSALOS_DATA_BUCKET']
+      : []),
+  ];
   const missingOptional = OPTIONAL_ENV_VARS.filter((v) => !process.env[v]?.trim());
 
   if (missingOptional.length > 0) {
@@ -178,7 +178,7 @@ export function validateEnv(): void {
     throw new Error(
       `[validateEnv] FATAL: Missing required environment variables:\n` +
         missing.map((v) => `  - ${v}`).join('\n') +
-        `\n\nSet these in .env.local or Cloud Run environment config before starting the server.`
+        `\n\nSet these in .env.local or the AWS ECS task environment before starting the server.`
     );
   }
 

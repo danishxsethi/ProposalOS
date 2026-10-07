@@ -811,10 +811,13 @@ export const industries: Industry[] = [
   },
 ];
 
+export const PROVEN_INDUSTRY_SLUGS = ['dentists', 'gyms', 'restaurants'] as const;
+
 export function getIndustry(slug: string): Industry | undefined {
+  if (!PROVEN_INDUSTRY_SLUGS.includes(slug as any)) return undefined;
   return industries.find((i) => i.slug === slug);
 }
 
 export function getAllIndustrySlugs(): string[] {
-  return industries.map((i) => i.slug);
+  return [...PROVEN_INDUSTRY_SLUGS];
 }

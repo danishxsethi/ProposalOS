@@ -1,43 +1,26 @@
-import { Storage } from '@google-cloud/storage';
-
 import { logger } from '@/lib/logger';
+import { createProtectedObjectUrl, uploadToS3 } from '@/lib/storage';
+import { getTenantIdFromStore } from '@/lib/tenant/context';
 
-const storage = new Storage({
-  projectId: process.env.GCP_PROJECT_ID,
-});
-
-const bucketName = process.env.GCS_BUCKET_NAME || 'proposalus-pdfs';
-
-export async function uploadPdfToGCS(proposalId: string, pdfBuffer: Buffer): Promise<string> {
+export async function uploadPdfToS3(proposalId: string, pdfBuffer: Buffer): Promise<string> {
   try {
-    const bucket = storage.bucket(bucketName);
-    const fileName = `proposals/${proposalId}.pdf`;
-    const file = bucket.file(fileName);
+    const tenantId = getTenantIdFromStore();
+    if (!tenantId) throw new Error('Tenant context is required to store proposal PDFs');
 
-    await file.save(pdfBuffer, {
-      metadata: {
-        contentType: 'application/pdf',
-        cacheControl: 'public, max-age=86400', // 24 hours
-      },
-    });
-
-    // Make publicly accessible
-    await file.makePublic();
-
-    const publicUrl = `https://storage.googleapis.com/${bucketName}/${fileName}`;
+    const key = `proposals/${tenantId}/${proposalId}.pdf`;
+    const reference = await uploadToS3(pdfBuffer, key, 'application/pdf');
+    const url = createProtectedObjectUrl(reference);
 
     logger.info(
       {
         event: 'pdf.uploaded',
         proposalId,
-        fileName,
         size: pdfBuffer.length,
-        url: publicUrl,
       },
-      'PDF uploaded to GCS'
+      'PDF uploaded to S3'
     );
 
-    return publicUrl;
+    return url;
   } catch (error) {
     logger.error(
       {
@@ -45,7 +28,7 @@ export async function uploadPdfToGCS(proposalId: string, pdfBuffer: Buffer): Pro
         proposalId,
         error: error instanceof Error ? error.message : String(error),
       },
-      'Failed to upload PDF to GCS'
+      'Failed to upload PDF to S3'
     );
     throw error;
   }

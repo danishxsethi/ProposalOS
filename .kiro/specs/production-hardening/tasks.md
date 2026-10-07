@@ -47,7 +47,7 @@ This plan hardens ProposalOS from a post-audit state with known defects into a p
   - [x] 7.1 Wire validateEnv into application startup
   - [x] 7.2 Write property test for validateEnv reports all missing vars (Property 11)
   - [x] 7.3 Verify and harden health endpoints
-  - [x] 7.4 Replace console.\* with structured logger in production code
+  - [x] 7.4 Replace console.\* with structured logger in production code — COMPLETED 2026-06-18 (#10). app/api/ → 0 console.\* (58 files replaced). Client-side .tsx kept: browser has no pino. lib/config/validateEnv.ts startup banner kept (runs before logger init, intentional). lib/integrations/retryWrapper.ts JSDoc kept (comment-only). See lib/security/piiScrubber.ts — Stripe key patterns added.
 
 - [x] 8. Checkpoint — Phase 4 complete
 

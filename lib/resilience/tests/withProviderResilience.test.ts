@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { withProviderResilience } from '../withProviderResilience';
 import { ProviderResilienceError } from '../types';
+import { withTenantRuntimeContext } from '@/lib/tenant/context';
 
 describe('Resilience - withProviderResilience Orchestrator', () => {
   beforeEach(() => {
@@ -66,5 +67,41 @@ describe('Resilience - withProviderResilience Orchestrator', () => {
 
     expect(result).toBe('dynamic-fallback-value');
     expect(fallbackFn).toHaveBeenCalled();
+  });
+
+  it('does not retry after the caller aborts', async () => {
+    const controller = new AbortController();
+    const fn = vi.fn().mockImplementation(() => {
+      controller.abort(new DOMException('Cancelled', 'AbortError'));
+      const error: any = new Error('temporary');
+      error.status = 500;
+      throw error;
+    });
+
+    await expect(
+      withProviderResilience(
+        {
+          provider: 'generic',
+          operation: 'test-caller-abort',
+          signal: controller.signal,
+          policy: { maxAttempts: 3, baseDelayMs: 1, maxDelayMs: 1 },
+        },
+        fn
+      )
+    ).rejects.toThrow('Cancelled');
+    expect(fn).toHaveBeenCalledTimes(1);
+  });
+
+  it('inherits the canonical audit signal from tenant runtime context', async () => {
+    const controller = new AbortController();
+    controller.abort(new DOMException('Audit cancelled', 'AbortError'));
+    const fn = vi.fn();
+
+    await expect(
+      withTenantRuntimeContext({ auditSignal: controller.signal }, () =>
+        withProviderResilience({ provider: 'generic', operation: 'test-inherited-abort' }, fn)
+      )
+    ).rejects.toThrow('Audit cancelled');
+    expect(fn).not.toHaveBeenCalled();
   });
 });

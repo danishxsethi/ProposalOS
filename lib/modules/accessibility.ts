@@ -1,24 +1,29 @@
 /**
  * Accessibility Quick Scan Module
- * Uses Puppeteer + axe-core for WCAG checks, supplemented with custom checks.
- * Frames findings as: legal risk (ADA), SEO benefit, UX improvement.
+ * Uses Puppeteer + axe-core for automated rule checks, supplemented with custom checks.
+ * It does not certify WCAG conformance or legal compliance.
  */
 import { AxePuppeteer } from '@axe-core/puppeteer';
-import chromium from '@sparticuz/chromium';
-import puppeteer, { Browser } from 'puppeteer-core';
 
 import type { CostTracker } from '@/lib/costs/costTracker';
 import { logger } from '@/lib/logger';
+import { acquireSharedBrowser, releaseSharedBrowser } from '@/lib/security/browserLauncher';
+import { safePageGoto } from '@/lib/security/safeBrowser';
 
 import { LegacyAuditModuleResult } from './types';
+
+import type { Browser } from 'puppeteer-core';
 
 export interface AccessibilityResult {
   status: 'success' | 'error';
   data: {
-    score: number;
-    wcagLevel: 'A' | 'AA' | 'AAA' | 'Fail';
-    totalIssues: number;
-    criticalIssues: number;
+    scanStatus: 'violations_detected' | 'no_automated_violations' | 'unavailable';
+    score: number | null;
+    totalIssues: number | null;
+    criticalIssues: number | null;
+    manualReviewRequired: true;
+    coverageLimitation: string;
+    scanTimestamp: string;
     issuesByCategory: {
       altText: { total: number; withAlt: number; percentage: number };
       headings: { h1Count: number; skipLevels: boolean; structure: string[] };
@@ -28,9 +33,13 @@ export interface AccessibilityResult {
     };
     topIssues: Array<{
       severity: string;
+      impact: string;
+      ruleId: string;
+      selector: string;
       description: string;
       element: string;
       recommendation: string;
+      scanTimestamp: string;
     }>;
     recommendations: string[];
   };
@@ -38,6 +47,10 @@ export interface AccessibilityResult {
 
 export interface AccessibilityModuleInput {
   url: string;
+  signal?: AbortSignal;
+  /** P2-43: audit identity used to share one Puppeteer Browser process across
+   * accessibility/mobileUX/conversion instead of each launching its own. */
+  auditId?: string;
 }
 
 interface CustomCheckResult {
@@ -50,42 +63,16 @@ interface CustomCheckResult {
   hasFocusStyles: boolean;
 }
 
-async function launchBrowser(): Promise<Browser> {
-  const fs = require('fs');
-  const localPaths = [
-    process.env.CHROME_EXECUTABLE_PATH,
-    '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-    '/Applications/Chromium.app/Contents/MacOS/Chromium',
-    '/usr/bin/google-chrome',
-    '/usr/bin/chromium-browser',
-  ].filter(Boolean) as string[];
+const AUTOMATION_LIMITATION =
+  'Automated accessibility checks cover only part of applicable accessibility requirements. Manual review by an accessibility expert is required to assess overall WCAG conformance or legal obligations.';
 
-  let executablePath: string | undefined;
-  for (const p of localPaths) {
-    if (p && fs.existsSync(p)) {
-      executablePath = p;
-      break;
-    }
-  }
-
-  if (!executablePath) {
-    try {
-      executablePath = await chromium.executablePath();
-    } catch {
-      // Ignore
-    }
-  }
-
-  if (!executablePath) {
-    throw new Error('Chromium not found. Install Chrome or set CHROME_EXECUTABLE_PATH.');
-  }
-
-  return puppeteer.launch({
-    args: ['--no-sandbox', '--disable-setuid-sandbox'],
-    defaultViewport: { width: 1920, height: 1080, deviceScaleFactor: 1 },
-    executablePath,
-    headless: true,
-  });
+function sanitizeElementSnippet(value: string): string {
+  return value
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/[\u0000-\u001f\u007f]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 160);
 }
 
 /**
@@ -211,17 +198,21 @@ export async function runAccessibilityModule(
   const { url } = input;
 
   if (!url) {
+    const scanTimestamp = new Date().toISOString();
     return {
       moduleId: 'accessibility',
-      status: 'success',
-      timestamp: new Date().toISOString(),
+      status: 'failed',
+      timestamp: scanTimestamp,
       data: {
         status: 'error',
         data: {
-          score: 0,
-          wcagLevel: 'Fail',
-          totalIssues: 0,
-          criticalIssues: 0,
+          scanStatus: 'unavailable',
+          score: null,
+          totalIssues: null,
+          criticalIssues: null,
+          manualReviewRequired: true,
+          coverageLimitation: AUTOMATION_LIMITATION,
+          scanTimestamp,
           issuesByCategory: {
             altText: { total: 0, withAlt: 0, percentage: 0 },
             headings: { h1Count: 0, skipLevels: false, structure: [] },
@@ -237,20 +228,43 @@ export async function runAccessibilityModule(
   }
 
   let browser: Browser | null = null;
+  let browserKey: string | null = null;
+  let page: Awaited<ReturnType<Browser['newPage']>> | null = null;
 
   try {
-    browser = await launchBrowser();
-    const page = await browser.newPage();
+    const acquired = await acquireSharedBrowser(input.auditId);
+    browser = acquired.browser;
+    browserKey = acquired.key;
+    page = await browser.newPage();
+    // axe-core is injected into the audited page via script injection; sites with a
+    // strict Content-Security-Policy block that and @axe-core/puppeteer surfaces it
+    // as "Page/Frame is not ready". Bypassing the *target site's* CSP inside our
+    // sandboxed headless browser is the documented axe/puppeteer approach and has no
+    // effect on ProposalOS's own CSP.
+    await page.setBypassCSP(true);
 
-    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 20000 });
+    await safePageGoto(page, url, { waitUntil: 'domcontentloaded', timeout: 20000 }, input.signal);
 
     const custom = await runCustomChecks(page);
 
-    const axeResults = await new AxePuppeteer(page)
-      .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
-      .analyze();
+    // axe injects into every frame; third-party iframes (booking widgets, chat,
+    // maps) still loading at domcontentloaded make @axe-core/puppeteer throw
+    // "Page/Frame is not ready" (reproduced live). Let the network settle
+    // (bounded) and retry once — both bounded well inside the module timeout.
+    await page.waitForNetworkIdle({ idleTime: 500, timeout: 8000 }).catch(() => undefined);
+    const runAxe = () =>
+      new AxePuppeteer(page!).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']).analyze();
+    let axeResults: Awaited<ReturnType<typeof runAxe>>;
+    try {
+      axeResults = await runAxe();
+    } catch (firstError) {
+      if (!/not ready/i.test(firstError instanceof Error ? firstError.message : String(firstError))) throw firstError;
+      await new Promise((r) => setTimeout(r, 2000));
+      axeResults = await runAxe();
+    }
 
     const violations = axeResults.violations || [];
+    const scanTimestamp = new Date().toISOString();
     let criticalCount = 0;
     let contrastFailCount = 0;
     let worstRatio = 0;
@@ -275,12 +289,17 @@ export async function runAccessibilityModule(
 
       if (topIssues.length < 8) {
         const node = v.nodes?.[0];
-        const el = node?.html?.slice(0, 80) ?? String(node?.target?.[0] || 'element');
+        const selector = String(node?.target?.[0] || 'unknown selector');
+        const el = sanitizeElementSnippet(node?.html || selector);
         topIssues.push({
           severity: v.impact || 'moderate',
+          impact: v.impact || 'moderate',
+          ruleId: v.id,
+          selector,
           description: v.description || v.help,
           element: el,
           recommendation: v.helpUrl ? `See ${v.helpUrl}` : v.help || 'Fix accessibility issue',
+          scanTimestamp,
         });
       }
     }
@@ -364,18 +383,16 @@ export async function runAccessibilityModule(
       (!custom.hasFocusStyles ? 3 : 0);
 
     const score = Math.max(0, Math.min(100, 100 - deduction));
-    let wcagLevel: 'A' | 'AA' | 'AAA' | 'Fail' = 'Fail';
-    if (score >= 90 && criticalCount === 0) wcagLevel = 'AA';
-    else if (score >= 80 && criticalCount === 0) wcagLevel = 'A';
-    else if (score >= 95) wcagLevel = 'AAA';
-
     const result: AccessibilityResult = {
       status: 'success',
       data: {
+        scanStatus: totalIssues > 0 ? 'violations_detected' : 'no_automated_violations',
         score,
-        wcagLevel,
         totalIssues,
         criticalIssues: criticalCount,
+        manualReviewRequired: true,
+        coverageLimitation: AUTOMATION_LIMITATION,
+        scanTimestamp,
         issuesByCategory: {
           altText: {
             total: custom.altText.total,
@@ -401,8 +418,8 @@ export async function runAccessibilityModule(
         topIssues,
         recommendations:
           recommendations.length > 0
-            ? recommendations
-            : ['No major issues found. Maintain current standards.'],
+            ? [...recommendations, AUTOMATION_LIMITATION]
+            : ['No automated violations were detected in this scan.', AUTOMATION_LIMITATION],
       },
     };
 
@@ -421,17 +438,21 @@ export async function runAccessibilityModule(
       { url, errorMessage: errMsg, errorStack: errStack },
       '[Accessibility] Scan failed'
     );
+    const scanTimestamp = new Date().toISOString();
     return {
       moduleId: 'accessibility',
-      status: 'success',
-      timestamp: new Date().toISOString(),
+      status: 'failed',
+      timestamp: scanTimestamp,
       data: {
         status: 'error',
         data: {
-          score: 0,
-          wcagLevel: 'Fail',
-          totalIssues: 0,
-          criticalIssues: 0,
+          scanStatus: 'unavailable',
+          score: null,
+          totalIssues: null,
+          criticalIssues: null,
+          manualReviewRequired: true,
+          coverageLimitation: AUTOMATION_LIMITATION,
+          scanTimestamp,
           issuesByCategory: {
             altText: { total: 0, withAlt: 0, percentage: 0 },
             headings: { h1Count: 0, skipLevels: false, structure: [] },
@@ -442,11 +463,13 @@ export async function runAccessibilityModule(
           topIssues: [],
           recommendations: [
             `Accessibility scan failed: ${error instanceof Error ? error.message : 'Unknown error'}. Ensure the URL is accessible.`,
+            AUTOMATION_LIMITATION,
           ],
         },
       },
     };
   } finally {
-    if (browser) await browser.close();
+    await page?.close().catch(() => undefined);
+    if (browserKey) await releaseSharedBrowser(browserKey);
   }
 }

@@ -14,9 +14,6 @@
 
 import crypto from 'crypto';
 
-import { GoogleGenerativeAI } from '@google/generative-ai';
-
-import { FEATURE_FLAGS } from '@/lib/config/feature-flags';
 import { logger } from '@/lib/logger';
 import { MetricsRecorder } from '@/lib/observability/MetricsRecorder';
 import { PiiScrubber } from '@/lib/security/piiScrubber';
@@ -25,6 +22,8 @@ import { PromptPerformanceTracker } from '@/lib/self-evolving-prompts/PromptPerf
 import { llmAuditLogger } from './audit-logger';
 import { llmCache } from './cache';
 import { validateAndFilter } from './output-validator';
+import { bedrockProvider } from './providers/bedrock';
+import { LLMProvider } from './types';
 
 /**
  * Task 1 (Pipeline 16): Token budget enforcement errors.
@@ -132,35 +131,22 @@ class CircuitBreaker {
   }
 }
 
-/** Context windows for supported models (tokens). */
+/** Context windows for the Bedrock models used by ProposalOS (tokens). */
 const MODEL_CONTEXT_WINDOWS: Record<string, number> = {
+  'us.amazon.nova-micro-v1:0': 128_000,
+  'us.amazon.nova-2-lite-v1:0': 1_000_000,
+  'amazon.nova-lite-v1:0': 300_000,
   default: 1_000_000,
-  'gemini-2.0-flash': 1_000_000,
-  'gemini-2.0-pro': 1_000_000,
-  'gemini-2.0-pro-exp-01-21': 1_000_000,
-  'gemini-1.5-pro': 1_000_000,
-  'gemini-1.5-flash': 1_000_000,
-  'gemini-3.1-pro': 1_000_000,
 };
 
 function getContextWindow(model: string): number {
   for (const [key, limit] of Object.entries(MODEL_CONTEXT_WINDOWS)) {
-    if (limit !== undefined && (model.includes(key) || key === 'default')) return limit;
+    if (key !== 'default' && limit !== undefined && model.includes(key)) return limit;
   }
   return MODEL_CONTEXT_WINDOWS.default ?? 1_000_000;
 }
 
 const performanceTracker = new PromptPerformanceTracker();
-
-let _vertexAvailable: boolean | null = null;
-
-function isVertexAvailable(): boolean {
-  if (_vertexAvailable !== null) return _vertexAvailable;
-  const projectId = process.env.GCP_PROJECT_ID;
-  const hasCreds = !!process.env.GOOGLE_APPLICATION_CREDENTIALS;
-  _vertexAvailable = !!(projectId && hasCreds);
-  return _vertexAvailable;
-}
 
 export interface MultimodalContent {
   type: 'text' | 'image' | 'pdf';
@@ -175,6 +161,7 @@ export interface LLMCallOptions {
   maxOutputTokens?: number;
   temperature?: number;
   stream?: boolean; // enable streaming
+  signal?: AbortSignal;
   responseModality?: 'text' | 'json' | 'multimodal';
   tools?: any[];
   toolConfig?: any;
@@ -194,6 +181,8 @@ export interface LLMCallOptions {
 
 export interface LLMCallResult {
   text: string;
+  model?: string;
+  provider?: LLMProvider;
   functionCalls?: any[];
   usageMetadata?: {
     promptTokenCount?: number;
@@ -229,11 +218,12 @@ function calculateRetryDelay(attempt: number): number {
  * Check if error is retryable
  */
 function isRetryableError(error: any): boolean {
-  const statusCode = error?.status || error?.response?.status;
+  const statusCode = error?.status || error?.response?.status || error?.$metadata?.httpStatusCode;
   // Retry on rate limit (429), server errors (5xx), and network errors
   return (
     statusCode === 429 ||
     (statusCode >= 500 && statusCode < 600) ||
+    !!error?.$retryable ||
     error?.code === 'ECONNRESET' ||
     error?.code === 'ETIMEDOUT' ||
     error?.message?.includes('timeout') ||
@@ -248,7 +238,7 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-export async function generateWithGemini(
+export async function generateWithLLM(
   optionsOrModelName: LLMCallOptions | string,
   prompt?: string,
   legacyOptions?: { temperature?: number; maxOutputTokens?: number }
@@ -268,72 +258,29 @@ export async function generateWithGemini(
     opts = optionsOrModelName;
   }
 
-  const generationConfig: any = {
-    temperature: opts.temperature ?? 0.4,
-    maxOutputTokens: opts.maxOutputTokens ?? 2048,
-  };
-
-  if (opts.responseModality === 'json') {
-    generationConfig.responseMimeType = 'application/json';
+  const configuredProvider = process.env.LLM_PRIMARY_PROVIDER;
+  if (configuredProvider && configuredProvider !== LLMProvider.BEDROCK) {
+    throw new Error(
+      `Unsupported LLM_PRIMARY_PROVIDER "${configuredProvider}"; ProposalOS uses Amazon Bedrock`
+    );
+  }
+  if (process.env.BEDROCK_ENABLED !== 'true') {
+    throw new Error('Amazon Bedrock is disabled; set BEDROCK_ENABLED=true to enable it');
   }
 
-  if (opts.thinkingBudget && opts.thinkingBudget > 0 && !opts.model.includes('flash')) {
-    generationConfig.thinkingConfig = {
-      thinkingBudget: opts.thinkingBudget,
-    };
-  }
-
-  // Format input parts for multimodal
-  let contents: any[] = [];
   let inputText = '';
   let estimatedInputTokens = 0;
   if (typeof opts.input === 'string') {
     inputText = opts.input;
-    contents = [{ role: 'user', parts: [{ text: opts.input }] }];
   } else {
-    const parts = opts.input.map((content) => {
+    for (const content of opts.input) {
       if (content.type === 'text') {
         inputText += content.data as string;
-        return { text: content.data as string };
-      } else {
-        const base64Data = Buffer.isBuffer(content.data)
-          ? content.data.toString('base64')
-          : content.data;
-
-        return {
-          inlineData: {
-            data: base64Data,
-            mimeType: content.mimeType || 'image/png',
-          },
-        };
       }
-    });
-    contents = [{ role: 'user', parts }];
-  }
-
-  const apiKey = process.env.GOOGLE_AI_API_KEY;
-  if (!apiKey && !isVertexAvailable()) {
-    throw new Error(
-      'GOOGLE_AI_API_KEY or GCP_PROJECT_ID + GOOGLE_APPLICATION_CREDENTIALS required'
-    );
-  }
-
-  let targetModel = opts.model;
-
-  // Model Config Override for 3.1 Pro
-  if (
-    opts.metadata?.auditId &&
-    FEATURE_FLAGS.GEMINI_31_PRO_ENABLED &&
-    FEATURE_FLAGS.GEMINI_31_PRO_TRAFFIC_PCT > 0
-  ) {
-    const hashBuffer = crypto.createHash('sha256').update(opts.metadata.auditId).digest();
-    const hashInt = hashBuffer.readUInt32BE(0);
-    const bucket = hashInt % 100;
-
-    if (bucket < FEATURE_FLAGS.GEMINI_31_PRO_TRAFFIC_PCT) {
-      targetModel = 'gemini-3.1-pro';
     }
   }
+
+  const targetModel = bedrockProvider.resolveModelId(opts.model, opts.input);
 
   // Check cache before making API call
   const useCache = opts.metadata?.useCache !== false;
@@ -385,29 +332,6 @@ export async function generateWithGemini(
         abortController.abort('Request timeout');
       }, timeoutMs);
 
-      let model: any;
-
-      if (apiKey) {
-        const genAI = new GoogleGenerativeAI(apiKey);
-        model = genAI.getGenerativeModel({
-          model: targetModel,
-          generationConfig,
-          tools: opts.tools,
-          toolConfig: opts.toolConfig,
-        });
-      } else {
-        const { VertexAI } = require('@google-cloud/vertexai');
-        const projectId = process.env.GCP_PROJECT_ID!;
-        const location = process.env.GCP_REGION || 'us-central1';
-        const vertexAI = new VertexAI({ project: projectId, location });
-        model = vertexAI.getGenerativeModel({
-          model: targetModel,
-          generationConfig,
-          tools: opts.tools,
-          toolConfig: opts.toolConfig,
-        });
-      }
-
       if (opts.stream) {
         clearTimeout(timeoutId);
         throw new Error(
@@ -444,30 +368,59 @@ export async function generateWithGemini(
           'Token budget at 90% — truncating input'
         );
         if (typeof opts.input === 'string' && opts.input.length > targetInputChars) {
+          const truncatedInput =
+            opts.input.slice(0, targetInputChars) +
+            '\n[TRUNCATED: input exceeded 90% of context window]';
           opts = {
             ...opts,
-            input:
-              opts.input.slice(0, targetInputChars) +
-              '\n[TRUNCATED: input exceeded 90% of context window]',
+            input: truncatedInput,
           };
-        }
-        // Re-format contents after truncation
-        if (typeof opts.input === 'string') {
-          contents = [{ role: 'user', parts: [{ text: opts.input }] }];
+          inputText = truncatedInput;
         }
       }
       // ── End Token Budget Validator ──────────────────
 
       // Execute with circuit breaker
-      const result = await circuitBreaker.execute(async () => {
-        return await model.generateContent({ contents }, { signal: abortController.signal });
+      const result = await circuitBreaker.execute<any>(async () => {
+        const bedrockResult = await bedrockProvider.generateContent({
+          provider: LLMProvider.BEDROCK,
+          model: targetModel,
+          input: opts.input,
+          temperature: opts.temperature,
+          maxOutputTokens: opts.maxOutputTokens,
+          responseModality: opts.responseModality,
+          tools: opts.tools,
+          toolConfig: opts.toolConfig,
+          signal: abortController.signal,
+          metadata: opts.metadata,
+        });
+        return {
+          response: {
+            candidates: [
+              {
+                content: {
+                  parts: [
+                    ...(bedrockResult.text ? [{ text: bedrockResult.text }] : []),
+                    ...(bedrockResult.functionCalls || []).map((functionCall: any) => ({
+                      functionCall,
+                    })),
+                  ],
+                },
+              },
+            ],
+            usageMetadata: {
+              promptTokenCount: bedrockResult.usageMetadata?.promptTokenCount,
+              candidatesTokenCount: bedrockResult.usageMetadata?.candidatesTokenCount,
+            },
+          },
+        };
       });
 
       clearTimeout(timeoutId);
       const endTime = performance.now();
       const response = result.response;
 
-      // Try to safely extract text from Gemini response structure
+      // Normalize the selected provider's response structure.
       let text = '';
       let functionCalls: any[] | undefined = undefined;
 
@@ -502,7 +455,11 @@ export async function generateWithGemini(
       // Compute token counts + cost
       const inputTokens = usage?.promptTokenCount || estimatedInputTokens;
       const outputTokens = usage?.candidatesTokenCount || 0;
-      const costUSD = (inputTokens / 1000000) * 1.25 + (outputTokens / 1000000) * 3.75;
+      const costUSD = targetModel.includes('nova-2-lite')
+        ? (inputTokens / 1000) * 0.0003 + (outputTokens / 1000) * 0.0025
+        : targetModel.includes('nova-lite')
+          ? (inputTokens / 1000) * 0.00006 + (outputTokens / 1000) * 0.00024
+          : (inputTokens / 1000) * 0.000035 + (outputTokens / 1000) * 0.00014;
 
       // Compute quality heuristic
       const qaScore = opts.metadata?.qaScore as number | undefined;
@@ -586,6 +543,8 @@ export async function generateWithGemini(
           cacheKey,
           {
             text,
+            model: targetModel,
+            provider: LLMProvider.BEDROCK,
             functionCalls,
             usageMetadata: usage
               ? {
@@ -627,6 +586,8 @@ export async function generateWithGemini(
 
       return {
         text,
+        model: targetModel,
+        provider: LLMProvider.BEDROCK,
         functionCalls,
         usageMetadata: usage
           ? {
@@ -641,7 +602,11 @@ export async function generateWithGemini(
       const latencyMs = performance.now() - startTime;
 
       // Check if rate limited
-      if (error?.status === 429 || error?.message?.includes('429')) {
+      if (
+        error?.status === 429 ||
+        error?.$metadata?.httpStatusCode === 429 ||
+        error?.message?.includes('429')
+      ) {
         const retryAfter = error?.headers?.['retry-after']
           ? parseInt(error.headers['retry-after']) * 1000
           : undefined;
@@ -733,62 +698,32 @@ export async function generateWithGemini(
   throw lastError || new Error('LLM call failed after all retries');
 }
 
-// Generate Async Generator
+// Generate an async stream from Amazon Bedrock.
 export async function* generateContentStream(
   opts: LLMCallOptions
 ): AsyncGenerator<string, void, unknown> {
-  const generationConfig: any = {
-    temperature: opts.temperature ?? 0.4,
-    maxOutputTokens: opts.maxOutputTokens ?? 2048,
-  };
-
-  if (opts.thinkingBudget && opts.thinkingBudget > 0 && !opts.model.includes('flash')) {
-    generationConfig.thinkingConfig = {
-      thinkingBudget: opts.thinkingBudget,
-    };
+  const configuredProvider = process.env.LLM_PRIMARY_PROVIDER;
+  if (configuredProvider && configuredProvider !== LLMProvider.BEDROCK) {
+    throw new Error(
+      `Unsupported LLM_PRIMARY_PROVIDER "${configuredProvider}"; ProposalOS uses Amazon Bedrock`
+    );
+  }
+  if (process.env.BEDROCK_ENABLED !== 'true') {
+    throw new Error('Amazon Bedrock is disabled; set BEDROCK_ENABLED=true to enable it');
   }
 
-  let contents = [];
-  if (typeof opts.input === 'string') {
-    contents = [{ role: 'user', parts: [{ text: opts.input }] }];
-  } else {
-    const parts = opts.input.map((content) => {
-      if (content.type === 'text') {
-        return { text: content.data as string };
-      } else {
-        const base64Data = Buffer.isBuffer(content.data)
-          ? content.data.toString('base64')
-          : content.data;
-
-        return {
-          inlineData: {
-            data: base64Data,
-            mimeType: content.mimeType || 'image/png',
-          },
-        };
-      }
-    });
-    contents = [{ role: 'user', parts }];
-  }
-
-  const apiKey = process.env.GOOGLE_AI_API_KEY;
-  let model;
-
-  if (apiKey) {
-    const genAI = new GoogleGenerativeAI(apiKey);
-    model = genAI.getGenerativeModel({ model: opts.model, generationConfig });
-  } else {
-    const { VertexAI } = require('@google-cloud/vertexai');
-    const projectId = process.env.GCP_PROJECT_ID!;
-    const location = process.env.GCP_REGION || 'us-central1';
-    const vertexAI = new VertexAI({ project: projectId, location });
-    model = vertexAI.getGenerativeModel({ model: opts.model, generationConfig });
-  }
-
-  const resultStream = await model.generateContentStream({ contents });
-  for await (const chunk of resultStream.stream) {
-    yield chunk.text();
-  }
+  yield* bedrockProvider.generateContentStream({
+    provider: LLMProvider.BEDROCK,
+    model: opts.model,
+    input: opts.input,
+    temperature: opts.temperature,
+    maxOutputTokens: opts.maxOutputTokens,
+    responseModality: opts.responseModality,
+    tools: opts.tools,
+    toolConfig: opts.toolConfig,
+    metadata: opts.metadata,
+    signal: opts.signal,
+  });
 }
 
 export async function streamToString(stream: AsyncGenerator<string>): Promise<string> {

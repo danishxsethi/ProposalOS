@@ -1,8 +1,9 @@
 /**
- * Provider Registry with Fallback Chain
+ * Provider registry for the Amazon Bedrock runtime.
  *
- * Manages multiple LLM providers and implements fallback logic.
- * Automatically falls back to alternative providers on failure.
+ * Keeps the shared provider interface and health tracking used by existing
+ * callers. AWS task resilience handles Bedrock retries; no cross-provider
+ * model fallback is configured.
  */
 
 import { logger } from '@/lib/logger';
@@ -18,9 +19,7 @@ import {
   ProviderHealth,
   ProviderResponse,
 } from '../types';
-import { anthropicProvider, AnthropicProvider } from './anthropic';
-import { GoogleProvider, googleProvider } from './google';
-import { openAIProvider, OpenAIProvider } from './openai';
+import { bedrockProvider } from './bedrock';
 
 /**
  * Provider Registry - manages all available LLM providers
@@ -28,26 +27,23 @@ import { openAIProvider, OpenAIProvider } from './openai';
 export class ProviderRegistry {
   private providers: Map<LLMProvider, ProviderEntry> = new Map();
   private healthStatus: Map<LLMProvider, ProviderHealth> = new Map();
-  private defaultPriority: LLMProvider[] = [
-    LLMProvider.GOOGLE_AI,
-    LLMProvider.GOOGLE_VERTEX,
-    LLMProvider.OPENAI,
-    LLMProvider.ANTHROPIC,
-  ];
+  private defaultPriority: LLMProvider[] = [];
 
   constructor() {
     this.initializeProviders();
   }
 
   private initializeProviders(): void {
-    // Register Google AI provider (highest priority by default)
-    this.register(LLMProvider.GOOGLE_AI, googleProvider, 0);
+    const requestedPrimary = process.env.LLM_PRIMARY_PROVIDER;
+    if (requestedPrimary && requestedPrimary !== LLMProvider.BEDROCK) {
+      throw new Error(
+        `Unsupported LLM_PRIMARY_PROVIDER "${requestedPrimary}"; ProposalOS uses Amazon Bedrock`
+      );
+    }
 
-    // Register OpenAI provider
-    this.register(LLMProvider.OPENAI, openAIProvider, 1);
-
-    // Register Anthropic provider
-    this.register(LLMProvider.ANTHROPIC, anthropicProvider, 2);
+    this.defaultPriority = [LLMProvider.BEDROCK];
+    this.register(LLMProvider.BEDROCK, bedrockProvider, 0);
+    this.setEnabled(LLMProvider.BEDROCK, process.env.BEDROCK_ENABLED === 'true');
 
     // Initialize health status for all providers
     for (const provider of this.defaultPriority) {
@@ -244,7 +240,7 @@ export class ProviderRegistry {
    * Classify provider error
    */
   private classifyProviderError(error: any, provider: LLMProvider): ClassifiedError {
-    const statusCode = error?.status || error?.response?.status;
+    const statusCode = error?.status || error?.response?.status || error?.$metadata?.httpStatusCode;
     const code = error?.code;
 
     // Rate limit - transient
@@ -314,15 +310,10 @@ export class ProviderRegistry {
    */
   private getDefaultModel(provider: LLMProvider): string {
     switch (provider) {
-      case LLMProvider.GOOGLE_AI:
-      case LLMProvider.GOOGLE_VERTEX:
-        return process.env.LLM_MODEL_FLASH || 'gemini-2.0-flash';
-      case LLMProvider.OPENAI:
-        return 'gpt-3.5-turbo';
-      case LLMProvider.ANTHROPIC:
-        return 'claude-3-haiku-20240307';
+      case LLMProvider.BEDROCK:
+        return process.env.BEDROCK_FAST_MODEL_ID || 'us.amazon.nova-micro-v1:0';
       default:
-        return 'gemini-2.0-flash';
+        return process.env.BEDROCK_FAST_MODEL_ID || 'us.amazon.nova-micro-v1:0';
     }
   }
 

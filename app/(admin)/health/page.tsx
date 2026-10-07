@@ -9,7 +9,7 @@ export default function HealthPage() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
         <StatusCard name="Database (Prisma)" status="ONLINE" latency="4ms" />
         <StatusCard name="Orchestrator" status="ONLINE" latency="12ms" />
-        <StatusCard name="LLM Gateway (Gemini)" status="ONLINE" latency="850ms" />
+        <StatusCard name="LLM Gateway (Amazon Bedrock)" status="ONLINE" latency="850ms" />
         <StatusCard name="Google Search API" status="ONLINE" latency="320ms" />
         <StatusCard name="Email Service (Resend)" status="ONLINE" latency="-" />
         <StatusCard name="Job Queue" status="HEALTHY" latency="0 pending" />

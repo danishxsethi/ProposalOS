@@ -4,5 +4,6 @@ WORKDIR /app
 COPY package.json package-lock.json* ./
 RUN npm ci --legacy-peer-deps
 COPY prisma ./prisma
+COPY scripts/migration/run-aws-prisma-migrations.js ./scripts/migration/run-aws-prisma-migrations.js
 ENV NODE_ENV=production
-CMD ["npx", "prisma", "migrate", "deploy"]
+CMD ["node", "scripts/migration/run-aws-prisma-migrations.js"]

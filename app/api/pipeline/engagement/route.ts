@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 
+import { logger } from '@/lib/logger';
 import { recordEvent } from '@/lib/pipeline/dealCloser';
 import type { EngagementEvent } from '@/lib/pipeline/types';
 
@@ -57,7 +58,7 @@ export async function POST(req: Request) {
       eventType,
     });
   } catch (error) {
-    console.error('Engagement tracking error:', error);
+    logger.error('Engagement tracking error:', error);
 
     if (error instanceof Error) {
       return NextResponse.json({ error: error.message }, { status: 500 });

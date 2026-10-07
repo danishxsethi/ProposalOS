@@ -16,6 +16,7 @@ import { z } from 'zod';
 
 import { generateTraceId, InternalError, UnauthorizedError } from '@/lib/api/errors';
 import { getServerSession } from '@/lib/auth';
+import { logger } from '@/lib/logger';
 import { withRateLimit } from '@/lib/middleware/rateLimit';
 import { prisma } from '@/lib/prisma';
 import { getTenantId } from '@/lib/tenant/context';
@@ -345,7 +346,7 @@ async function handleGetOutreachMetrics(req: NextRequest): Promise<NextResponse>
     response.headers.set('X-Trace-Id', traceId);
     return response;
   } catch (error) {
-    console.error('Error fetching outreach metrics:', error);
+    logger.error('Error fetching outreach metrics:', error);
     const internalError = new InternalError('Failed to fetch outreach metrics', {
       originalError: error instanceof Error ? error.message : String(error),
     });

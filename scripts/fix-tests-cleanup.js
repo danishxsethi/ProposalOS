@@ -23,7 +23,7 @@ for (const file of files) {
     if (!fs.existsSync(file)) continue;
 
     let content = fs.readFileSync(file, 'utf8');
-    let original = content;
+    const original = content;
 
     if (content.includes('deleteMany')) {
       // Find sequences of deleteMany calls

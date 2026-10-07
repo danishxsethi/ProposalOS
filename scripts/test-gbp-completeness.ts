@@ -3,8 +3,7 @@
  * Test GBP completeness module with real Saskatoon businesses.
  * Usage: npx ts-node scripts/test-gbp-completeness.ts
  *
- * Requires: GOOGLE_PLACES_API_KEY
- * Optional: SERP_API_KEY, GOOGLE_PAGESPEED_API_KEY (for competitor comparison)
+ * Requires: SERP_API_KEY (Google Maps results and optional competitor comparison)
  */
 
 import * as path from 'path';
@@ -42,8 +41,8 @@ function roughCompetitorScore(c: {
 }
 
 async function main() {
-  if (!process.env.GOOGLE_PLACES_API_KEY) {
-    console.error('GOOGLE_PLACES_API_KEY required');
+  if (!process.env.SERP_API_KEY) {
+    console.error('SERP_API_KEY required');
     process.exit(1);
   }
 

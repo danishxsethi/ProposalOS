@@ -14,11 +14,11 @@ import { NextResponse } from 'next/server';
 
 import { generateTraceId, InternalError, ValidationError } from '@/lib/api/errors';
 import { auditTriggerSchema } from '@/lib/api/schemas/audit';
-import { runAudit } from '@/lib/audit/runner';
-import { checkAndDecrementQuota, checkAuditLimit } from '@/lib/billing/limits';
+import { dispatchAuditExecution } from '@/lib/audit/dispatch';
+import { checkAndDecrementQuota, checkAuditLimit, QuotaExceededError } from '@/lib/billing/limits';
 import { logError, logger } from '@/lib/logger';
 import { Metrics } from '@/lib/metrics';
-import { withAuth } from '@/lib/middleware/auth';
+import { isInternalOpsRequest, withAuth } from '@/lib/middleware/auth';
 import { withIdempotency } from '@/lib/middleware/idempotency';
 import { RateLimitPresets, withRateLimit } from '@/lib/middleware/rateLimit';
 import { withRole } from '@/lib/middleware/withRole';
@@ -26,11 +26,10 @@ import { recordAuditTrailEvent } from '@/lib/observability/auditTrail';
 import {
   applyObservabilityHeaders,
   createObservabilityContextFromRequest,
-  getObservabilityContext,
   runWithObservabilityContext,
 } from '@/lib/observability/context';
 import { prisma } from '@/lib/prisma';
-import { getTenantId, runWithTenantAsync } from '@/lib/tenant/context';
+import { getTenantId } from '@/lib/tenant/context';
 import { extractBusinessFromUrl } from '@/lib/utils/urlExtractor';
 
 /**
@@ -70,10 +69,13 @@ async function handleAuditCreation(req: Request): Promise<NextResponse> {
 
         const { url, industry, businessName, businessCity, placeId } = result.data;
 
-        // Check Daily Quota
+        // Ops-key bypass: internal requests are completely exempt from quota limits and never touch quota checks
+        const isInternalOps = isInternalOpsRequest(req);
+
+        // Check Daily Quota (bypassed for internal ops)
         const { checkDailyAuditLimit, incrementAuditCount } =
           await import('@/lib/costs/costTracker');
-        const dailyLimit = checkDailyAuditLimit(tenantId);
+        const dailyLimit = checkDailyAuditLimit(tenantId, isInternalOps);
         if (!dailyLimit.allowed) {
           await recordAuditTrailEvent({
             eventType: 'abuse.quota_exceeded',
@@ -111,38 +113,54 @@ async function handleAuditCreation(req: Request): Promise<NextResponse> {
           targetUrl = extracted.url;
         }
 
-        // Transactionally check monthly/plan limit with SELECT FOR UPDATE row lock and create audit
+        // Check monthly quota if not internal ops.
+        // Pure reads are done outside any transaction; only QuotaExceededError maps to 429.
+        if (!isInternalOps) {
+          try {
+            await checkAndDecrementQuota(tenantId, undefined, 1, false);
+          } catch (err: unknown) {
+            if (err instanceof QuotaExceededError) {
+              return NextResponse.json(
+                {
+                  error: {
+                    code: 'QUOTA_EXCEEDED',
+                    message: err.message,
+                    details: { reason: 'QUOTA_EXHAUSTED', upgrade: true },
+                    timestamp: new Date().toISOString(),
+                    traceId,
+                  },
+                },
+                { status: 429 }
+              );
+            }
+            // Unexpected database/system errors return 500 with real message — no masking
+            logError('Monthly quota check failed unexpectedly', err, { tenantId, traceId });
+            const message = err instanceof Error ? err.message : String(err);
+            const internalError = new InternalError(message, { reason: 'DATABASE_ERROR' });
+            return NextResponse.json(internalError.toEnvelope(req.url, traceId), { status: 500 });
+          }
+        }
+
+        // Create audit record
         let audit;
         try {
-          audit = await prisma.$transaction(async (tx) => {
-            await checkAndDecrementQuota(tenantId, tx);
-
-            return await tx.audit.create({
-              data: {
-                tenantId,
-                businessName: name || 'Pending...',
-                businessCity: city ?? null,
-                businessUrl: targetUrl ?? null,
-                placeId: placeId ?? null,
-                businessIndustry: industry || 'Generic',
-                status: 'QUEUED',
-                apiCostCents: 0,
-              },
-            });
-          });
-        } catch (quotaError: any) {
-          return NextResponse.json(
-            {
-              error: {
-                code: 'QUOTA_EXCEEDED',
-                message: quotaError instanceof Error ? quotaError.message : String(quotaError),
-                details: { reason: 'QUOTA_EXHAUSTED', upgrade: true },
-                timestamp: new Date().toISOString(),
-                traceId,
-              },
+          audit = await prisma.audit.create({
+            data: {
+              tenantId,
+              businessName: name || 'Pending...',
+              businessCity: city ?? null,
+              businessUrl: targetUrl ?? null,
+              placeId: placeId ?? null,
+              businessIndustry: industry || 'Generic',
+              status: 'QUEUED',
+              apiCostCents: 0,
             },
-            { status: 429 }
-          );
+          });
+        } catch (dbErr: unknown) {
+          logError('Failed to create audit record in database', dbErr, { tenantId, traceId });
+          const message = dbErr instanceof Error ? dbErr.message : String(dbErr);
+          const internalError = new InternalError(message, { reason: 'DATABASE_ERROR' });
+          return NextResponse.json(internalError.toEnvelope(req.url, traceId), { status: 500 });
         }
 
         incrementAuditCount(tenantId);
@@ -171,29 +189,33 @@ async function handleAuditCreation(req: Request): Promise<NextResponse> {
           },
         });
 
-        // Run audit via canonical runner (single source of truth)
-        // Ensure runner has tenant context for child graphs
-        // Fire and forget so we don't block the request timeout
-        const currentContext = getObservabilityContext();
-        runWithObservabilityContext(
-          { ...currentContext, tenantId, auditId: audit.id, workflow: 'audit-runner' },
-          () => runWithTenantAsync(tenantId, () => runAudit(audit.id))
-        ).catch((err) => {
-          logError('Error running audit asynchronously', err, { auditId: audit.id });
-          prisma.audit
+        // Run audit via the durable job queue (canonical engine, P1-24) — not a
+        // fire-and-forget in-process call. Enqueue is fast (a DB write); if it fails
+        // we can still return a clear error since nothing long-running has started yet.
+        try {
+          await dispatchAuditExecution({ tenantId, auditId: audit.id });
+        } catch (err) {
+          logError('Failed to enqueue audit for execution', err, { auditId: audit.id });
+          await prisma.audit
             .update({
               where: { id: audit.id },
-              data: {
-                status: 'FAILED',
-                completedAt: new Date(),
-              },
+              data: { status: 'FAILED', completedAt: new Date() },
             })
             .catch((updateErr) => {
-              logError('Failed to persist async kickoff failure on audit record', updateErr, {
+              logError('Failed to persist enqueue failure on audit record', updateErr, {
                 auditId: audit.id,
               });
             });
-        });
+
+          const internalError = new InternalError('Failed to queue audit for execution', {
+            originalError: err instanceof Error ? err.message : String(err),
+          });
+          const response = NextResponse.json(internalError.toEnvelope(req.url, traceId), {
+            status: 500,
+          });
+          applyObservabilityHeaders(response);
+          return response;
+        }
 
         const response = NextResponse.json({
           success: true,

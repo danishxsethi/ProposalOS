@@ -10,11 +10,16 @@
 
 import { NextResponse } from 'next/server';
 
-import { generateTraceId, InternalError, NotFoundError, ValidationError } from '@/lib/api/errors';
+import { generateTraceId, InternalError, ValidationError } from '@/lib/api/errors';
 import { proposalContactSchema } from '@/lib/api/schemas/proposal';
 import { RateLimitPresets, withRateLimit } from '@/lib/middleware/rateLimit';
 import { sendProposalInterest } from '@/lib/notifications/email';
 import { prisma } from '@/lib/prisma';
+import {
+  PublicProposalAccessError,
+  resolvePublicProposalAccess,
+} from '@/lib/proposal/publicAccess';
+import { runWithTenantAsync } from '@/lib/tenant/context';
 
 /**
  * Inner handler for contact form submission
@@ -45,16 +50,7 @@ async function handleContactForm(
 
     const { name, email, phone, company: companyName, message } = result.data;
 
-    const proposal = await prisma.proposal.findUnique({
-      where: { webLinkToken: token },
-      include: { audit: { select: { businessName: true, tenantId: true } } },
-    });
-
-    if (!proposal) {
-      return NextResponse.json(new NotFoundError('Proposal', token).toEnvelope(req.url, traceId), {
-        status: 404,
-      });
-    }
+    const access = await resolvePublicProposalAccess(token);
 
     const tierAlias: Record<string, string> = {
       essentials: 'starter',
@@ -68,36 +64,38 @@ async function handleContactForm(
 
     const now = new Date();
 
-    await prisma.$transaction(async (tx: any) => {
-      await tx.contactRequest.create({
-        data: {
-          proposalId: proposal.id,
-          tenantId: proposal.audit.tenantId || 'system',
-          name: name.trim(),
-          email: email.trim(),
-          phone: typeof phone === 'string' ? phone.trim() || null : null,
-          preferredTier: tier,
-          bestTime: typeof body.bestTime === 'string' ? body.bestTime.trim() || null : null,
-          message: typeof message === 'string' ? message.trim() || null : null,
-        },
-      });
-
-      // Outcome tracking signals
-      const updateData: Record<string, unknown> = {};
-      if (!proposal.replyReceivedAt) updateData.replyReceivedAt = now;
-      if (!proposal.outcome) updateData.outcome = 'PENDING';
-      if (tier && !proposal.tierChosen) updateData.tierChosen = tier;
-
-      if (Object.keys(updateData).length > 0) {
-        await tx.proposal.update({
-          where: { id: proposal.id },
-          data: updateData,
+    await runWithTenantAsync(access.tenantId, () =>
+      prisma.$transaction(async (tx: any) => {
+        await tx.contactRequest.create({
+          data: {
+            proposalId: access.proposalId,
+            tenantId: access.tenantId,
+            name: name.trim(),
+            email: email.trim(),
+            phone: typeof phone === 'string' ? phone.trim() || null : null,
+            preferredTier: tier,
+            bestTime: typeof body.bestTime === 'string' ? body.bestTime.trim() || null : null,
+            message: typeof message === 'string' ? message.trim() || null : null,
+          },
         });
-      }
-    });
+
+        // Outcome tracking signals
+        const updateData: Record<string, unknown> = {};
+        if (!access.replyReceivedAt) updateData.replyReceivedAt = now;
+        if (!access.outcome) updateData.outcome = 'PENDING';
+        if (tier && !access.tierChosen) updateData.tierChosen = tier;
+
+        if (Object.keys(updateData).length > 0) {
+          await tx.proposal.update({
+            where: { id: access.proposalId },
+            data: updateData,
+          });
+        }
+      })
+    );
 
     const proposalUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/proposal/${token}`;
-    await sendProposalInterest(proposal.audit.businessName, proposalUrl, {
+    await sendProposalInterest(access.proposal.audit.businessName, proposalUrl, {
       name: name.trim(),
       email: email.trim(),
       phone: typeof phone === 'string' ? phone.trim() || null : null,
@@ -117,6 +115,9 @@ async function handleContactForm(
     response.headers.set('X-Trace-Id', traceId);
     return response;
   } catch (error) {
+    if (error instanceof PublicProposalAccessError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
     const internalError = new InternalError('Failed to process contact form', {
       originalError: error instanceof Error ? error.message : String(error),
     });

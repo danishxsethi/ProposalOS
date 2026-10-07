@@ -14,6 +14,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 import { generateTraceId, InternalError, NotFoundError, UnauthorizedError } from '@/lib/api/errors';
+import { logger } from '@/lib/logger';
+import { withAuth } from '@/lib/middleware/auth';
 import { withRateLimit } from '@/lib/middleware/rateLimit';
 import { getProspectContext } from '@/lib/pipeline/humanReview';
 import { prisma } from '@/lib/prisma';
@@ -41,8 +43,8 @@ async function handleGetProspect(req: NextRequest, { params }: Params): Promise<
     }
 
     return runWithTenantAsync(tenantId, async () => {
-      const prospect = await prisma.prospectLead.findUnique({
-        where: { id: id },
+      const prospect = await prisma.prospectLead.findFirst({
+        where: { id, tenantId },
         select: { id: true },
       });
 
@@ -66,7 +68,7 @@ async function handleGetProspect(req: NextRequest, { params }: Params): Promise<
       return response;
     });
   } catch (error) {
-    console.error('Error fetching prospect details:', error);
+    logger.error('Error fetching prospect details:', error);
     const internalError = new InternalError('Failed to fetch prospect details', {
       originalError: error instanceof Error ? error.message : String(error),
     });
@@ -82,4 +84,6 @@ const rateLimitedHandler = (req: NextRequest, params: Params) =>
     message: 'Too many prospect requests. Please wait before trying again.',
   })(req, () => handleGetProspect(req, params));
 
-export const GET = (req: NextRequest, params: Params) => rateLimitedHandler(req, params);
+export const GET = withAuth((req: Request, ...args: unknown[]) =>
+  rateLimitedHandler(req as NextRequest, args[0] as Params)
+);

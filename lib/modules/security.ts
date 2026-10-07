@@ -2,15 +2,16 @@
  * SSL and Security Headers Audit Module
  * Checks HTTPS, certificate, and security headers. Frames as trust signals for proposals.
  */
-import * as http from 'http';
-import * as https from 'https';
 import * as tls from 'tls';
 
 import type { CostTracker } from '@/lib/costs/costTracker';
 import { logger } from '@/lib/logger';
 import { withProviderResilience } from '@/lib/resilience/withProviderResilience';
+import { safeFetch } from '@/lib/security/safeFetch';
 
 import { LegacyAuditModuleResult } from './types';
+
+const FETCH_TIMEOUT_MS = 15_000;
 
 export interface SecurityResult {
   status: 'success' | 'error';
@@ -37,6 +38,8 @@ export interface SecurityResult {
 
 export interface SecurityModuleInput {
   url: string;
+  tenantId?: string;
+  signal?: AbortSignal;
 }
 
 function parseUrl(url: string): { protocol: string; host: string; port: number; path: string } {
@@ -66,62 +69,54 @@ function getGrade(score: number): 'A' | 'B' | 'C' | 'D' | 'F' {
   return 'F';
 }
 
-async function fetchWithRedirect(
+/**
+ * Header/HTTPS probe with SSRF controls (P0-24).
+ * Validates the initial URL and every redirect hop via validateUrl;
+ * caps hops; aborts on timeout; does not disable TLS verification.
+ * Exported for regression tests.
+ */
+export async function fetchWithRedirect(
   url: string,
-  followRedirects = true
+  followRedirects = true,
+  signal?: AbortSignal,
+  tracker?: CostTracker
 ): Promise<{ statusCode: number; headers: Record<string, string>; finalUrl: string }> {
-  return new Promise((resolve, reject) => {
-    const parsed = parseUrl(url);
-    const protocol = parsed.protocol === 'https' ? https : http;
-    const req = protocol.request(
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+  signal?.addEventListener('abort', () => controller.abort(signal.reason), { once: true });
+
+  try {
+    const res = await safeFetch(
+      url,
       {
-        hostname: parsed.host,
-        port: parsed.port,
-        path: parsed.path,
         method: 'GET',
-        timeout: 15000,
+        signal: controller.signal,
         headers: { 'User-Agent': 'ProposalOS-SecurityScan/1.0' },
-        rejectUnauthorized: false,
       },
-      (res) => {
-        const headers: Record<string, string> = {};
-        for (const [k, v] of Object.entries(res.headers)) {
-          if (k && v != null) headers[k.toLowerCase()] = Array.isArray(v) ? v[0] || '' : String(v);
-        }
-
-        if (followRedirects && res.statusCode && res.statusCode >= 300 && res.statusCode < 400) {
-          const loc = res.headers.location;
-          if (loc) {
-            const nextUrl = loc.startsWith('http')
-              ? loc
-              : `${parsed.protocol}://${parsed.host}${loc}`;
-            fetchWithRedirect(nextUrl, true).then(resolve).catch(reject);
-            return;
-          }
-        }
-
-        resolve({
-          statusCode: res.statusCode || 0,
-          headers,
-          finalUrl: `${parsed.protocol}://${parsed.host}${parsed.path}`,
-        });
-      }
+      { allowHttp: true, followRedirects, maxResponseBytes: 0 }
     );
-    req.on('error', reject);
-    req.on('timeout', () => {
-      req.destroy();
-      reject(new Error('Request timeout'));
+    tracker?.addApiCall('WEBSITE_FETCH');
+    const headers: Record<string, string> = {};
+    res.headers.forEach((value, key) => {
+      headers[key.toLowerCase()] = value;
     });
-    req.end();
-  });
+    await res.body?.cancel().catch(() => undefined);
+    return { statusCode: res.status, headers, finalUrl: res.url || url };
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
+/**
+ * Inspect TLS certificate with verification enabled.
+ * Invalid/untrusted certificates report as invalid (TLS verification always on).
+ */
 async function getSslCertificate(
   host: string,
   port: number
 ): Promise<{ valid: boolean; expiresAt: string; issuer: string }> {
   return new Promise((resolve) => {
-    const socket = tls.connect({ host, port, servername: host, rejectUnauthorized: false }, () => {
+    const socket = tls.connect({ host, port, servername: host, rejectUnauthorized: true }, () => {
       const cert = socket.getPeerCertificate();
       socket.end();
 
@@ -145,22 +140,30 @@ async function getSslCertificate(
   });
 }
 
-async function checkMixedContent(url: string): Promise<boolean> {
+async function checkMixedContent(
+  url: string,
+  tenantId?: string,
+  signal?: AbortSignal,
+  tracker?: CostTracker
+): Promise<boolean> {
   try {
     const html = await withProviderResilience<string>(
       {
         provider: 'generic',
         operation: 'security_check_mixed_content_fetch',
+        tenantId,
+        signal,
         policy: {
           timeoutMs: 10000,
           maxAttempts: 2,
         },
       },
       async ({ signal }) => {
-        const res = await fetch(url, {
+        const res = await safeFetch(url, {
           headers: { 'User-Agent': 'ProposalOS-SecurityScan/1.0' },
           signal,
         });
+        tracker?.addApiCall('WEBSITE_FETCH');
         if (!res.ok) throw new Error(`HTTP error ${res.status}`);
         return await res.text();
       }
@@ -180,7 +183,7 @@ async function checkMixedContent(url: string): Promise<boolean> {
  */
 export async function runSecurityModule(
   input: SecurityModuleInput,
-  _tracker?: CostTracker
+  tracker?: CostTracker
 ): Promise<LegacyAuditModuleResult> {
   const { url } = input;
 
@@ -216,21 +219,26 @@ export async function runSecurityModule(
     let redirects = false;
 
     if (parsed.protocol === 'http') {
-      const httpResult = await fetchWithRedirect(url, true);
+      const httpResult = await fetchWithRedirect(url, true, input.signal, tracker);
       if (httpResult.finalUrl.startsWith('https://')) {
         redirects = true;
         httpsEnabled = true;
       }
     } else {
       try {
-        const httpResult = await fetchWithRedirect(`http://${parsed.host}${parsed.path}`, true);
+        const httpResult = await fetchWithRedirect(
+          `http://${parsed.host}${parsed.path}`,
+          true,
+          input.signal,
+          tracker
+        );
         redirects = httpResult.finalUrl.startsWith('https://');
       } catch {
         redirects = false;
       }
     }
 
-    const headerResult = await fetchWithRedirect(secureUrl, false);
+    const headerResult = await fetchWithRedirect(secureUrl, false, input.signal, tracker);
     const headers = headerResult.headers;
 
     const certificate =
@@ -442,7 +450,9 @@ export async function runSecurityModule(
         if (h.status === 'missing') recommendations.push(h.recommendation);
       });
 
-    const mixedContent = httpsEnabled ? await checkMixedContent(secureUrl) : false;
+    const mixedContent = httpsEnabled
+      ? await checkMixedContent(secureUrl, input.tenantId, input.signal, tracker)
+      : false;
     if (mixedContent) {
       recommendations.push(
         'Remove mixed content: some resources load over HTTP on your HTTPS page. Browsers may block them.'
@@ -499,26 +509,10 @@ export async function runSecurityModule(
     logger.error({ error, url }, '[Security] Audit failed');
     return {
       moduleId: 'security',
-      status: 'success',
+      status: 'failed',
       timestamp: new Date().toISOString(),
-      data: {
-        status: 'error',
-        data: {
-          score: 0,
-          grade: 'F',
-          https: {
-            enabled: false,
-            redirects: false,
-            certificate: { valid: false, expiresAt: '', issuer: '' },
-          },
-          headers: [],
-          mixedContent: false,
-          serverExposed: false,
-          recommendations: [
-            `Security audit failed: ${error instanceof Error ? error.message : 'Unknown error'}. Ensure the URL is accessible.`,
-          ],
-        },
-      },
-    };
+      error: error instanceof Error ? error.message : 'Security audit failed',
+      data: {},
+    } as unknown as LegacyAuditModuleResult;
   }
 }

@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server';
 import { subDays } from 'date-fns';
 
 import { auth } from '@/auth';
-import { prisma } from '@/lib/prisma';
+import { prisma, setTenantContext } from '@/lib/prisma';
 
 export async function GET(req: Request) {
   try {
@@ -17,20 +17,22 @@ export async function GET(req: Request) {
 
     // Fetch aggregate stats for revenue and counts
     const [totalRevenueResult, audits30Days, proposalsSent, acceptedProposals, totalProposals] =
-      await Promise.all([
-        prisma.proposal.aggregate({
-          where: { tenantId, status: 'ACCEPTED' },
-          _sum: { dealValue: true },
-        }),
-        prisma.audit.count({
-          where: { tenantId, createdAt: { gte: thirtyDaysAgo } },
-        }),
-        prisma.proposal.count({
-          where: { tenantId, status: { not: 'DRAFT' } },
-        }),
-        prisma.proposal.count({ where: { tenantId, status: 'ACCEPTED' } }),
-        prisma.proposal.count({ where: { tenantId } }),
-      ]);
+      await setTenantContext(tenantId, () =>
+        Promise.all([
+          prisma.proposal.aggregate({
+            where: { tenantId, status: 'ACCEPTED' },
+            _sum: { dealValue: true },
+          }),
+          prisma.audit.count({
+            where: { tenantId, createdAt: { gte: thirtyDaysAgo } },
+          }),
+          prisma.proposal.count({
+            where: { tenantId, status: { not: 'DRAFT' } },
+          }),
+          prisma.proposal.count({ where: { tenantId, status: 'ACCEPTED' } }),
+          prisma.proposal.count({ where: { tenantId } }),
+        ])
+      );
 
     const conversionRate = totalProposals > 0 ? (acceptedProposals / totalProposals) * 100 : 0;
     const totalRevenue = totalRevenueResult._sum.dealValue

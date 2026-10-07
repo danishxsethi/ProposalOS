@@ -3,19 +3,22 @@ import { URL } from 'url';
 
 import * as cheerio from 'cheerio';
 
+import { collectHtml } from '@/lib/audit/collectors/htmlCollector';
 import { CostTracker } from '@/lib/costs/costTracker';
 import { logger } from '@/lib/logger';
 import { withProviderResilience } from '@/lib/resilience/withProviderResilience';
 
 import { normalizeConfidence } from './findingGenerator';
-import { AuditModuleResult, Finding } from './types';
+import { AuditModuleResult, createEvidence, Finding } from './types';
 
 export interface TechStackModuleInput {
   url: string;
   html?: string; // Optional: reuse HTML from crawler
+  signal?: AbortSignal;
+  auditId?: string;
 }
 
-interface TechStack {
+export interface TechStack {
   cms: string[];
   hosting: string[];
   analytics: string[];
@@ -44,27 +47,17 @@ export async function runTechStackModule(
 
     // Fetch if HTML not provided
     if (!html) {
-      const fetchResult = await withProviderResilience<{ text: string; headers: Headers }>(
-        {
-          provider: 'generic',
-          operation: 'tech_stack_fetch_website',
-          policy: {
-            timeoutMs: 10000,
-            maxAttempts: 2,
-          },
-        },
-        async ({ signal }) => {
-          const response = await fetch(input.url, {
-            signal,
-            headers: {
-              'User-Agent': 'Mozilla/5.0 (compatible; ProposalOS/1.0; +http://proposalos.com)',
-            },
-          });
-          if (!response.ok) throw new Error(`HTTP error ${response.status}`);
-          const text = await response.text();
-          return { text, headers: response.headers };
-        }
-      );
+      if (input.signal?.aborted) {
+        throw input.signal.reason ?? new DOMException('Aborted', 'AbortError');
+      }
+      const collected = await collectHtml(input.url, {
+        auditId: input.auditId,
+        signal: input.signal,
+        tracker,
+        timeoutMs: 20000,
+      });
+      if (!collected.ok || collected.blocked) throw new Error(`HTTP error ${collected.status || 'blocked'}`);
+      const fetchResult = { text: collected.html, headers: new Headers(collected.headers) };
       html = fetchResult.text;
       headers = fetchResult.headers;
     }
@@ -83,7 +76,8 @@ export async function runTechStackModule(
     };
 
     // Generate findings
-    const findings = generateTechFindings(stack);
+    const collectedAt = new Date().toISOString();
+    const findings = generateTechFindings(stack, input.url, collectedAt);
 
     const evidenceSnapshot = {
       module: 'tech_stack',
@@ -111,6 +105,7 @@ export async function runTechStackModule(
     return {
       findings: [],
       evidenceSnapshots: [],
+      execution: { state: 'unavailable', reason: error instanceof Error ? error.message : 'Website fetch failed' },
     };
   }
 }
@@ -273,9 +268,20 @@ function detectFrameworks($: cheerio.CheerioAPI, html: string): string[] {
 }
 
 /**
- * Generate Findings based on Tech Stack
+ * Generate Findings based on Tech Stack.
+ *
+ * P1-26 (Wave 3): every evidence item identifies the real analyzed URL and the
+ * detection pass's collection time via `createEvidence`, rather than `evidence: []` or
+ * hand-built literals missing pointer/collected_at. Only called after a successful
+ * fetch + HTML parse (the caller's catch block returns `findings: []` on failure), so
+ * "not detected" here always means "checked this URL and did not find it" — never a
+ * fetch/parse failure silently becoming a deficiency finding.
  */
-function generateTechFindings(stack: TechStack): Finding[] {
+export function generateTechFindings(
+  stack: TechStack,
+  url: string,
+  collectedAt: string
+): Finding[] {
   const findings: Finding[] = [];
 
   // VITAMIN: Website Builder Limitations
@@ -289,7 +295,16 @@ function generateTechFindings(stack: TechStack): Finding[] {
       description: `Your website is built on ${usedBuilder}. While functional, this platform limits your ability to optimize for search engines and load speed compared to more flexible solutions like WordPress or custom code.`,
       impactScore: 5,
       confidenceScore: normalizeConfidence(80, '0-100'),
-      evidence: [{ type: 'text', value: usedBuilder, label: 'Platform Detected' }],
+      evidence: [
+        createEvidence({
+          pointer: url,
+          source: 'html_analysis',
+          collected_at: collectedAt,
+          type: 'text',
+          value: usedBuilder,
+          label: 'Platform Detected',
+        }),
+      ],
       metrics: {},
       effortEstimate: 'HIGH', // Replatforming is hard
       recommendedFix: [
@@ -309,7 +324,16 @@ function generateTechFindings(stack: TechStack): Finding[] {
         'We could not detect Google Analytics or similar tools. You are flying blind without data on visitor behavior.',
       impactScore: 6,
       confidenceScore: normalizeConfidence(90, '0-100'),
-      evidence: [],
+      evidence: [
+        createEvidence({
+          pointer: url,
+          source: 'html_analysis',
+          collected_at: collectedAt,
+          type: 'text',
+          value: 'No analytics script markers found',
+          label: 'Analytics Detection Scope',
+        }),
+      ],
       metrics: {},
       effortEstimate: 'LOW',
       recommendedFix: ['Install Google Analytics 4 (GA4)', 'Set up Google Search Console'],
@@ -326,7 +350,16 @@ function generateTechFindings(stack: TechStack): Finding[] {
         "You have no email marketing tools detected (e.g., Mailchimp, Klaviyo). You're missing the #1 ROI channel (avg $42 return per $1 spent).",
       impactScore: 5,
       confidenceScore: normalizeConfidence(70, '0-100'), // Possibility of false negative
-      evidence: [],
+      evidence: [
+        createEvidence({
+          pointer: url,
+          source: 'html_analysis',
+          collected_at: collectedAt,
+          type: 'text',
+          value: 'No email marketing script markers found',
+          label: 'Marketing Tool Detection Scope',
+        }),
+      ],
       metrics: {},
       effortEstimate: 'MEDIUM',
       recommendedFix: ['Integrate an email capture form', 'Set up an automated welcome sequence'],
@@ -340,6 +373,10 @@ function generateTechFindings(stack: TechStack): Finding[] {
     stack.hosting.includes('Netlify');
 
   if (isModern) {
+    const modernFrameworks = stack.frameworks.filter((f) =>
+      ['React', 'Vue.js', 'Next.js'].includes(f)
+    );
+    const modernHosting = stack.hosting.filter((h) => ['Vercel', 'Netlify'].includes(h));
     findings.push({
       type: 'VITAMIN',
       category: 'Performance',
@@ -348,9 +385,16 @@ function generateTechFindings(stack: TechStack): Finding[] {
         'Your website uses modern technologies (React/Vue/Cloud Hosting) which enables excellent performance and user experience potential.',
       impactScore: 3,
       confidenceScore: normalizeConfidence(90, '0-100'),
-      evidence: stack.frameworks
-        .filter((f) => ['React', 'Vue.js'].includes(f))
-        .map((f) => ({ type: 'text' as const, value: f, label: 'Framework' })),
+      evidence: [...modernFrameworks, ...modernHosting].map((tech) =>
+        createEvidence({
+          pointer: url,
+          source: 'html_analysis',
+          collected_at: collectedAt,
+          type: 'text',
+          value: tech,
+          label: modernFrameworks.includes(tech) ? 'Framework' : 'Hosting',
+        })
+      ),
       metrics: {},
       effortEstimate: 'LOW',
       recommendedFix: ['Maintain package updates'],
@@ -368,8 +412,26 @@ function generateTechFindings(stack: TechStack): Finding[] {
       impactScore: 2,
       confidenceScore: normalizeConfidence(90, '0-100'),
       evidence: [
-        ...stack.analytics.map((t) => ({ type: 'text' as const, value: t, label: 'Analytics' })),
-        ...stack.marketing.map((t) => ({ type: 'text' as const, value: t, label: 'Marketing' })),
+        ...stack.analytics.map((t) =>
+          createEvidence({
+            pointer: url,
+            source: 'html_analysis',
+            collected_at: collectedAt,
+            type: 'text',
+            value: t,
+            label: 'Analytics',
+          })
+        ),
+        ...stack.marketing.map((t) =>
+          createEvidence({
+            pointer: url,
+            source: 'html_analysis',
+            collected_at: collectedAt,
+            type: 'text',
+            value: t,
+            label: 'Marketing',
+          })
+        ),
       ],
       metrics: {},
       effortEstimate: 'LOW',

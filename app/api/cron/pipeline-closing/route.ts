@@ -1,11 +1,12 @@
 import { NextResponse } from 'next/server';
 
+import { withSystemDbBypass } from '@/lib/db';
 import { logger } from '@/lib/logger';
 import { verifyCronAuth } from '@/lib/middleware/cronAuth';
-import { sendWebhook } from '@/lib/notifications/webhook';
 import { computeEngagementScore, isHotLead } from '@/lib/pipeline/dealCloser';
 import type { PipelineConfig } from '@/lib/pipeline/types';
 import { prisma } from '@/lib/prisma';
+import { runWithTenantAsync } from '@/lib/tenant/context';
 
 /**
  * Pipeline Closing Cron Job
@@ -27,16 +28,16 @@ export async function GET(req: Request) {
 
   try {
     // Get all active tenants with pipeline config
-    const tenants = await prisma.tenant.findMany({
-      where: {
-        pipelineConfig: {
-          isNot: null,
+    const tenants = await withSystemDbBypass('cron:pipeline-closing:list-tenants', (client) =>
+      client.tenant.findMany({
+        where: {
+          pipelineConfig: {
+            isNot: null,
+          },
         },
-      },
-      include: {
-        pipelineConfig: true,
-      },
-    });
+        include: { pipelineConfig: true },
+      })
+    );
 
     const results = {
       tenantsProcessed: 0,
@@ -47,24 +48,23 @@ export async function GET(req: Request) {
 
     for (const tenant of tenants) {
       try {
-        logger.info(
-          { event: 'pipeline_closing.tenant_start', tenantId: tenant.id },
-          'Processing tenant'
-        );
+        await runWithTenantAsync(tenant.id, async () => {
+          logger.info(
+            { event: 'pipeline_closing.tenant_start', tenantId: tenant.id },
+            'Processing tenant'
+          );
 
-        // Get pipeline config
-        const config: PipelineConfig = {
-          tenantId: tenant.id,
-          concurrencyLimit: tenant.pipelineConfig?.concurrencyLimit || 10,
-          batchSize: tenant.pipelineConfig?.batchSize || 50,
-          painScoreThreshold: tenant.pipelineConfig?.painScoreThreshold || 60,
-          dailyVolumeLimit: tenant.pipelineConfig?.dailyVolumeLimit || 200,
-          spendingLimitCents: tenant.pipelineConfig?.spendingLimitCents || 100000,
-          hotLeadPercentile: tenant.pipelineConfig?.hotLeadPercentile || 95,
-        };
+          const config: PipelineConfig = {
+            tenantId: tenant.id,
+            concurrencyLimit: tenant.pipelineConfig?.concurrencyLimit || 10,
+            batchSize: tenant.pipelineConfig?.batchSize || 50,
+            painScoreThreshold: tenant.pipelineConfig?.painScoreThreshold || 60,
+            dailyVolumeLimit: tenant.pipelineConfig?.dailyVolumeLimit || 200,
+            spendingLimitCents: tenant.pipelineConfig?.spendingLimitCents || 100000,
+            hotLeadPercentile: tenant.pipelineConfig?.hotLeadPercentile || 95,
+          };
 
-        // Get active prospects (outreach_sent status with recent engagement)
-        const activeProspects = await prisma.prospectLead.findMany({
+          const activeProspects = await prisma.prospectLead.findMany({
           where: {
             tenantId: tenant.id,
             pipelineStatus: 'outreach_sent',
@@ -75,7 +75,7 @@ export async function GET(req: Request) {
           take: config.batchSize,
         });
 
-        logger.info(
+          logger.info(
           {
             event: 'pipeline_closing.prospects_found',
             tenantId: tenant.id,
@@ -84,7 +84,7 @@ export async function GET(req: Request) {
           'Active prospects found'
         );
 
-        for (const prospect of activeProspects) {
+          for (const prospect of activeProspects) {
           try {
             // Compute engagement score
             const score = await computeEngagementScore(prospect.id);
@@ -131,33 +131,37 @@ export async function GET(req: Request) {
                   'Routing to Human Review Queue'
                 );
 
-                // Send notification to agency via webhook instead of silent DB queue
-                await sendWebhook('chat.escalated', {
-                  tenantId: tenant.id,
-                  leadId: prospect.id,
-                  reason: 'high_engagement_score_hot_lead',
-                  score: score.total,
+                await prisma.pipelineErrorLog.create({
+                  data: {
+                    tenantId: tenant.id,
+                    stage: 'human_handoff',
+                    prospectId: prospect.id,
+                    errorType: 'HANDOFF_NOTIFICATION_PENDING',
+                    errorMessage: 'High engagement lead requires human review',
+                    metadata: { reason: 'high_engagement_score_hot_lead', score: score.total },
+                  },
                 });
               }
 
               // Send automated follow-up
               // Future: Integrate with outreach system for personalized follow-up sequences
               logger.info(
-                { event: 'pipeline_closing.followup_sent', prospectId: prospect.id },
-                'Sending automated follow-up'
+                { event: 'pipeline_closing.followup_eligible', prospectId: prospect.id },
+                'Follow-up eligibility recorded; dispatch remains in the durable outbound worker'
               );
             }
           } catch (error) {
-            console.error(`[Pipeline Closing] Error processing prospect ${prospect.id}:`, error);
+            logger.error(`[Pipeline Closing] Error processing prospect ${prospect.id}:`, error);
             results.errors.push(
               `Prospect ${prospect.id}: ${error instanceof Error ? error.message : 'Unknown error'}`
             );
           }
-        }
+          }
 
-        results.tenantsProcessed++;
+          results.tenantsProcessed++;
+        });
       } catch (error) {
-        console.error(`[Pipeline Closing] Error processing tenant ${tenant.id}:`, error);
+        logger.error(`[Pipeline Closing] Error processing tenant ${tenant.id}:`, error);
         results.errors.push(
           `Tenant ${tenant.id}: ${error instanceof Error ? error.message : 'Unknown error'}`
         );
@@ -172,7 +176,7 @@ export async function GET(req: Request) {
       results,
     });
   } catch (error) {
-    console.error('[Pipeline Closing] Fatal error:', error);
+    logger.error('[Pipeline Closing] Fatal error:', error);
     return NextResponse.json(
       {
         success: false,

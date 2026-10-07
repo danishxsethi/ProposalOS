@@ -18,7 +18,7 @@ export interface AggregatedContext {
 
 /**
  * Aggregates all context from an Audit (findings + evidence)
- * into a single structured format for Gemini 3.1 Pro single-pass analysis.
+ * into a single structured format for Nova 2 Lite single-pass analysis.
  * Implements Smart Context Pruning based on finding volume.
  */
 export async function aggregateContext(
@@ -92,11 +92,8 @@ export async function aggregateContext(
     textContext += '\n';
   });
 
-  // Validate Context Size (Using 3.1 Pro model)
-  const modelName =
-    process.env.GEMINI_31_PRO_ENABLED === 'true'
-      ? 'gemini-1.5-pro' // Using 1.5-pro token counts as substitute locally
-      : MODEL_CONFIG.diagnosis.model;
+  // Validate using the Bedrock model configured for diagnosis.
+  const modelName = MODEL_CONFIG.diagnosis.model;
 
   const validationContent: MultimodalContent[] = [{ type: 'text', data: textContext }, ...images];
 

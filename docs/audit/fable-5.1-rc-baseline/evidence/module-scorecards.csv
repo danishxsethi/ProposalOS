@@ -1,0 +1,28 @@
+module,registered,reachable,real_provider,input_correct,ssrf_safe,honest_failure,findings_surfaced,evidence_attached,cost_tracked,status
+website,yes,yes,PageSpeed+safeFetch,yes,yes,PARTIAL,yes,yes,yes,VERIFIED
+websiteCrawler,yes,yes,safeFetch 20-page,yes,yes,PARTIAL,yes,yes,yes,VERIFIED
+gbp,yes,yes,Google Places TextSearch,yes,yes,PARTIAL,yes,yes,yes,VERIFIED
+competitor,yes,yes,SerpAPI,yes,yes,PARTIAL,yes,yes,yes,VERIFIED
+techStack,yes,yes,safeFetch+cheerio+DNS,yes,yes,PARTIAL,yes,yes,yes,VERIFIED
+security,yes,yes,safeFetch headers/TLS,yes,yes,PARTIAL,yes,yes,yes,VERIFIED
+emailFinder,yes,yes,safeFetch regex,yes,yes,PARTIAL,yes,yes,yes,VERIFIED
+coreWebVitals,yes,yes,derived PSI,yes,n/a,PARTIAL,yes,yes,no,VERIFIED
+schemaAnalysis,yes,yes,derived cheerio,yes,n/a,PARTIAL,yes,yes,no,VERIFIED
+reputation,yes,yes,Gemini,yes,yes,PARTIAL,yes,yes,yes,VERIFIED
+social,yes,yes,HTML parse,yes,yes,PARTIAL,yes,yes,yes,VERIFIED
+socialDeep,yes,yes,fetch+Gemini,yes,yes,PARTIAL,yes,yes,yes,VERIFIED
+gbpDeep,yes,yes,Places Details+Gemini,yes,yes,PARTIAL,yes,yes,yes,VERIFIED
+seoDeep,yes,yes,HTML+SerpAPI,yes,yes,PARTIAL,yes,yes,yes,VERIFIED
+accessibility,yes,yes,axe-core/puppeteer,yes,yes,PARTIAL,yes,yes,yes,VERIFIED
+mobileUX,yes,yes,PSI reuse,yes,yes,PARTIAL,yes,yes,yes,VERIFIED
+contentQuality,yes,yes,Gemini+crawler,yes,yes,PARTIAL,yes,yes,yes,VERIFIED
+conversion,yes,yes,Puppeteer detector,yes,yes,PARTIAL,yes,yes,yes,VERIFIED
+citations,yes,yes,Places API,yes,yes,PARTIAL,yes,yes,yes,VERIFIED
+paidSearch,yes,yes,SerpAPI Ads,yes,yes,PARTIAL,yes,yes,yes,VERIFIED
+backlinks,yes,yes,backlink API,yes,yes,PARTIAL,yes,yes,yes,VERIFIED
+privacyCompliance,yes,yes,HTML+Gemini,yes,yes,PARTIAL,yes,yes,yes,VERIFIED
+schemaMarkup,yes,yes,safeFetch JSON-LD,yes,yes,PARTIAL,yes,yes,yes,VERIFIED
+keywordGap,yes,yes,SerpAPI+Gemini,yes,yes,PARTIAL,yes,yes,yes,VERIFIED
+videoPresence,yes,yes,SerpAPI+Gemini,yes,yes,PARTIAL,yes,yes,yes,VERIFIED
+competitorStrategy,yes,yes,Gemini,yes,yes,PARTIAL,yes,yes,yes,VERIFIED
+vision,yes,yes,Gemini vision,yes,yes,PARTIAL,yes,yes,yes,VERIFIED

@@ -22,6 +22,7 @@ import { transition } from '@/lib/pipeline/stateMachine';
 import type { OutreachContext } from '@/lib/pipeline/types';
 import { PipelineStage } from '@/lib/pipeline/types';
 import { prisma } from '@/lib/prisma';
+import { runWithTenantAsync, runWithTenantBypass } from '@/lib/tenant/context';
 
 const MAX_TENANTS_PER_RUN = 5;
 const DEFAULT_BATCH_SIZE = 50;
@@ -34,10 +35,12 @@ async function handleOutreachCron(req: Request): Promise<NextResponse> {
 
   try {
     // 2. Find tenants with active PipelineConfig where outreach is not paused
-    const configs = await prisma.pipelineConfig.findMany({
-      take: MAX_TENANTS_PER_RUN,
-      orderBy: { updatedAt: 'asc' },
-    });
+    const configs = await runWithTenantBypass('cron-pipeline-outreach-config-enumeration', () =>
+      prisma.pipelineConfig.findMany({
+        take: MAX_TENANTS_PER_RUN,
+        orderBy: { updatedAt: 'asc' },
+      })
+    );
 
     const activeConfigs = configs.filter((cfg) => {
       const paused = Array.isArray(cfg.pausedStages) ? (cfg.pausedStages as string[]) : [];
@@ -78,14 +81,16 @@ async function handleOutreachCron(req: Request): Promise<NextResponse> {
         const batchSize = config.batchSize || DEFAULT_BATCH_SIZE;
 
         // Find prospects in "QUALIFIED" status for this tenant
-        const prospects = await prisma.prospectLead.findMany({
-          where: {
-            tenantId: config.tenantId,
-            pipelineStatus: 'QUALIFIED',
-          },
-          take: batchSize,
-          orderBy: { createdAt: 'asc' },
-        });
+        const prospects = await runWithTenantAsync(config.tenantId, () =>
+          prisma.prospectLead.findMany({
+            where: {
+              tenantId: config.tenantId,
+              pipelineStatus: 'QUALIFIED',
+            },
+            take: batchSize,
+            orderBy: { createdAt: 'asc' },
+          })
+        );
 
         if (prospects.length === 0) {
           logger.info(
@@ -123,121 +128,103 @@ async function handleOutreachCron(req: Request): Promise<NextResponse> {
         // Process each prospect
         for (const prospect of prospects) {
           try {
-            // Fetch audit and proposal separately
-            const audit = await prisma.audit.findFirst({
-              where: {
-                businessUrl: prospect.website || '',
-                tenantId: config.tenantId,
-              },
-              include: {
-                findings: true,
-              },
-              orderBy: { createdAt: 'desc' },
-            });
+            const outcome = await runWithTenantAsync(config.tenantId, async () => {
+              const [audit, branding] = await Promise.all([
+                prisma.audit.findFirst({
+                  where: {
+                    businessUrl: prospect.website || '',
+                    tenantId: config.tenantId,
+                  },
+                  include: {
+                    findings: true,
+                  },
+                  orderBy: { createdAt: 'desc' },
+                }),
+                prisma.tenantBranding.findUnique({
+                  where: { tenantId: config.tenantId },
+                  select: { brandName: true, contactEmail: true, footerText: true },
+                }),
+              ]);
 
-            const proposal = await prisma.proposal.findFirst({
-              where: {
-                auditId: audit?.id,
-              },
-              orderBy: { createdAt: 'desc' },
-            });
+              const proposal = audit
+                ? await prisma.proposal.findFirst({
+                    where: {
+                      auditId: audit.id,
+                      tenantId: config.tenantId,
+                    },
+                    orderBy: { createdAt: 'desc' },
+                  })
+                : null;
 
-            // Skip if no audit or proposal
-            if (!audit || !proposal) {
-              logger.warn(
-                {
-                  event: 'cron.pipeline_outreach.missing_data',
-                  prospectId: prospect.id,
-                  hasAudit: !!audit,
-                  hasProposal: !!proposal,
+              if (!audit || !proposal || !branding?.footerText) {
+                return {
+                  status: 'failed' as const,
+                  error: 'Missing same-tenant audit, proposal, or outbound footer configuration',
+                };
+              }
+
+              const context: OutreachContext = {
+                prospect,
+                audit,
+                proposal,
+                findings: audit.findings || [],
+                painBreakdown: (prospect.painBreakdown as any) || {
+                  websiteSpeed: 0,
+                  mobileBroken: 0,
+                  gbpNeglected: 0,
+                  noSsl: 0,
+                  zeroReviewResponses: 0,
+                  socialMediaDead: 0,
+                  competitorsOutperforming: 0,
+                  accessibilityViolations: 0,
                 },
-                `Skipping prospect ${prospect.id} - missing audit or proposal`
-              );
-              failed++;
-              continue;
-            }
+                vertical: prospect.vertical || 'default',
+                tenantBranding: branding,
+              };
+              const email = await generateAndQualifyEmail(context);
+              return sendWithRotation(email, config.tenantId);
+            });
 
-            // Build outreach context
-            const context: OutreachContext = {
-              prospect,
-              audit: audit,
-              proposal: proposal,
-              findings: audit.findings || [],
-              painBreakdown: (prospect.painBreakdown as any) || {
-                websiteSpeed: 0,
-                mobileBroken: 0,
-                gbpNeglected: 0,
-                noSsl: 0,
-                zeroReviewResponses: 0,
-                socialMediaDead: 0,
-                competitorsOutperforming: 0,
-                accessibilityViolations: 0,
-              },
-              vertical: prospect.vertical || 'default',
-              tenantBranding: {
-                brandName: 'Our Team',
-                contactEmail: 'hello@example.com',
-              },
-            };
-
-            // Generate and qualify email
-            const email = await generateAndQualifyEmail(context);
-
-            // Send with rotation
-            const sendResult = await sendWithRotation(email, config.tenantId);
-
-            if (sendResult.status === 'sent') {
+            if (outcome.status === 'sent') {
               emailsSent++;
-
-              // Schedule follow-ups
-              await scheduleFollowUps(prospect.id, sendResult.emailId);
-
-              // Transition prospect to "outreach_sent"
-              await transition(prospect.id, 'outreach_sent', PipelineStage.OUTREACH);
+              await runWithTenantAsync(config.tenantId, async () => {
+                await scheduleFollowUps(prospect.id, outcome.emailId);
+                await transition(prospect.id, 'outreach_sent', PipelineStage.OUTREACH);
+              });
 
               logger.info(
                 {
                   event: 'cron.pipeline_outreach.email_sent',
                   prospectId: prospect.id,
-                  emailId: sendResult.emailId,
-                  sendingDomain: sendResult.sendingDomain,
+                  emailId: outcome.emailId,
+                  sendingDomain: outcome.sendingDomain,
                 },
                 `Outreach email sent for prospect ${prospect.id}`
               );
-            } else if (sendResult.status === 'queued') {
+            } else if (outcome.status === 'queued') {
               emailsQueued++;
-
               logger.info(
                 {
                   event: 'cron.pipeline_outreach.email_queued',
                   prospectId: prospect.id,
-                  reason: sendResult.error,
+                  reason: outcome.error,
                 },
                 `Outreach email queued for prospect ${prospect.id}`
               );
             } else {
               failed++;
-
-              logger.error(
-                {
-                  event: 'cron.pipeline_outreach.email_failed',
-                  prospectId: prospect.id,
-                  error: sendResult.error,
-                },
-                `Failed to send outreach email for prospect ${prospect.id}`
+              await runWithTenantAsync(config.tenantId, () =>
+                prisma.pipelineErrorLog.create({
+                  data: {
+                    tenantId: config.tenantId,
+                    stage: PipelineStage.OUTREACH,
+                    prospectId: prospect.id,
+                    errorType: 'EMAIL_SEND_FAILED',
+                    errorMessage: outcome.error || 'Unknown error',
+                    metadata: JSON.parse(JSON.stringify({ outcome })),
+                  },
+                })
               );
-
-              // Log to PipelineErrorLog
-              await prisma.pipelineErrorLog.create({
-                data: {
-                  tenantId: config.tenantId,
-                  stage: PipelineStage.OUTREACH,
-                  prospectId: prospect.id,
-                  errorType: 'EMAIL_SEND_FAILED',
-                  errorMessage: sendResult.error || 'Unknown error',
-                  metadata: JSON.parse(JSON.stringify({ sendResult })),
-                },
-              });
             }
           } catch (err) {
             failed++;
@@ -254,16 +241,18 @@ async function handleOutreachCron(req: Request): Promise<NextResponse> {
             );
 
             // Log to PipelineErrorLog
-            await prisma.pipelineErrorLog.create({
-              data: {
-                tenantId: config.tenantId,
-                stage: PipelineStage.OUTREACH,
-                prospectId: prospect.id,
-                errorType: 'OUTREACH_PROCESSING_ERROR',
-                errorMessage,
-                metadata: {},
-              },
-            });
+            await runWithTenantAsync(config.tenantId, () =>
+              prisma.pipelineErrorLog.create({
+                data: {
+                  tenantId: config.tenantId,
+                  stage: PipelineStage.OUTREACH,
+                  prospectId: prospect.id,
+                  errorType: 'OUTREACH_PROCESSING_ERROR',
+                  errorMessage,
+                  metadata: {},
+                },
+              })
+            );
           }
         }
 

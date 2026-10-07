@@ -1,0 +1,38 @@
+{
+  "auditDate": "2026-09-18",
+  "repository": {
+    "remote": "https://github.com/danishxsethi/ProposalOS.git",
+    "branch": "remediation/proposalos-e2e",
+    "head": "88967f1323313b519625dd4a61451fa884c51fd5",
+    "tree": "61839351e95839cc1d2a3ba4d2c1cb6d3603ffc3",
+    "worktree": "clean at freeze; audit artifacts added afterward and remain uncommitted",
+    "defaultBranch": "UNKNOWN_NOT_QUERIED"
+  },
+  "runtime": {
+    "node": "v25.6.0",
+    "npm": "11.8.0",
+    "python": "3.10.12",
+    "docker": "29.7.2",
+    "gcloud": "581.0.0",
+    "project": "phantom-sandbox-5352",
+    "authentication": "configured account but token refresh blocked",
+    "liveVerification": "BLOCKED"
+  },
+  "build": {
+    "packageManager": "npm",
+    "lockfile": "package-lock.json",
+    "framework": "Next.js ^16.1.6",
+    "prisma": "^5.20.0",
+    "temporal": "not present in package.json baseline",
+    "langgraph": "^1.1.5",
+    "langsmith": "^0.4.12"
+  },
+  "deployment": {
+    "imageDigest": "NOT_OBSERVED",
+    "registryObject": "NOT_OBSERVED",
+    "cloudRunRevision": "NOT_OBSERVED",
+    "traffic": "NOT_OBSERVED",
+    "databaseSchema": "source schema observed; live schema NOT_OBSERVED",
+    "workers": "source/API workers observed; running workers NOT_OBSERVED"
+  }
+}

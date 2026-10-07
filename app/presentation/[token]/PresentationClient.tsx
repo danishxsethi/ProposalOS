@@ -26,14 +26,8 @@ export default function PresentationClient({ proposal, branding }: PresentationP
   const findings = audit.findings;
   const criticalFindings = findings.filter((f: any) => f.type === 'PAINKILLER').slice(0, 3);
 
-  // Calculate Score
-  const calculateHealthScore = () => {
-    if (findings.length === 0) return 85;
-    const avgImpact =
-      findings.reduce((sum: any, f: any) => sum + f.impactScore, 0) / findings.length;
-    return Math.max(0, Math.min(100, Math.round(100 - avgImpact * 8)));
-  };
-  const healthScore = calculateHealthScore();
+  const healthScore =
+    typeof audit.overallScore === 'number' ? Math.max(0, Math.min(100, audit.overallScore)) : null;
 
   // Extract individual scores from findings
   const extractScores = (findings: any[]) => {
@@ -79,12 +73,12 @@ export default function PresentationClient({ proposal, branding }: PresentationP
     }
 
     return {
-      performance: pCount ? Math.round(performance / pCount) : 0,
-      seo: sCount ? Math.round(seo / sCount) : 0,
-      accessibility: aCount ? Math.round(accessibility / aCount) : 0,
-      security: secCount ? Math.round(security / secCount) : 0,
-      trust: tCount ? Math.round(trust / tCount) : 0,
-      conversion: cCount ? Math.round(conversion / cCount) : 0,
+      performance: pCount ? Math.round(performance / pCount) : null,
+      seo: sCount ? Math.round(seo / sCount) : null,
+      accessibility: aCount ? Math.round(accessibility / aCount) : null,
+      security: secCount ? Math.round(security / secCount) : null,
+      trust: tCount ? Math.round(trust / tCount) : null,
+      conversion: cCount ? Math.round(conversion / cCount) : null,
     };
   };
 
@@ -115,51 +109,57 @@ export default function PresentationClient({ proposal, branding }: PresentationP
       ),
     },
     // SLIDE 2: Overall Score
-    {
-      id: 'score',
-      render: () => (
-        <div className="flex flex-col items-center justify-center h-full text-center">
-          <h2 className="text-4xl font-bold mb-12 text-slate-200">Overall Digital Health Score</h2>
-          <div className="relative w-96 h-96">
-            <svg className="transform -rotate-90 w-full h-full">
-              <circle
-                cx="50%"
-                cy="50%"
-                r="45%"
-                stroke="#334155"
-                strokeWidth="12"
-                fill="transparent"
-              />
-              <circle
-                cx="50%"
-                cy="50%"
-                r="45%"
-                stroke={healthScore >= 80 ? '#4ade80' : healthScore >= 60 ? '#facc15' : '#f87171'}
-                strokeWidth="12"
-                fill="transparent"
-                strokeDasharray={`${2 * Math.PI * 45} ${2 * Math.PI * 45}`}
-                strokeDashoffset={2 * Math.PI * 45 * (1 - healthScore / 100)} // Correct calculation?
-                strokeLinecap="round"
-                className="transition-all duration-1000"
-              />
-            </svg>
-            <div className="absolute inset-0 flex flex-col items-center justify-center">
-              <span
-                className={`text-8xl font-bold ${healthScore >= 80 ? 'text-green-400' : healthScore >= 60 ? 'text-yellow-400' : 'text-red-400'}`}
-              >
-                {healthScore}
-              </span>
-              <span className="text-2xl text-slate-400 mt-2"> / 100</span>
-            </div>
-          </div>
-          <p className="mt-12 text-2xl text-slate-400 max-w-2xl">
-            {healthScore < 60
-              ? 'Your digital presence is critically impacting your ability to convert customers.'
-              : 'You have a solid foundation, but key gaps are costing you revenue.'}
-          </p>
-        </div>
-      ),
-    },
+    ...(healthScore == null
+      ? []
+      : [
+          {
+            id: 'score',
+            render: () => (
+              <div className="flex flex-col items-center justify-center h-full text-center">
+                <h2 className="text-4xl font-bold mb-12 text-slate-200">
+                  Overall Digital Health Score
+                </h2>
+                <div className="relative w-96 h-96">
+                  <svg className="transform -rotate-90 w-full h-full">
+                    <circle
+                      cx="50%"
+                      cy="50%"
+                      r="45%"
+                      stroke="#334155"
+                      strokeWidth="12"
+                      fill="transparent"
+                    />
+                    <circle
+                      cx="50%"
+                      cy="50%"
+                      r="45%"
+                      stroke={
+                        healthScore >= 80 ? '#4ade80' : healthScore >= 60 ? '#facc15' : '#f87171'
+                      }
+                      strokeWidth="12"
+                      fill="transparent"
+                      strokeDasharray={`${2 * Math.PI * 45} ${2 * Math.PI * 45}`}
+                      strokeDashoffset={2 * Math.PI * 45 * (1 - healthScore / 100)} // Correct calculation?
+                      strokeLinecap="round"
+                      className="transition-all duration-1000"
+                    />
+                  </svg>
+                  <div className="absolute inset-0 flex flex-col items-center justify-center">
+                    <span
+                      className={`text-8xl font-bold ${healthScore >= 80 ? 'text-green-400' : healthScore >= 60 ? 'text-yellow-400' : 'text-red-400'}`}
+                    >
+                      {healthScore}
+                    </span>
+                    <span className="text-2xl text-slate-400 mt-2"> / 100</span>
+                  </div>
+                </div>
+                <p className="mt-12 text-2xl text-slate-400 max-w-2xl">
+                  Deterministic overall score from the completed audit.
+                </p>
+              </div>
+            ),
+          },
+        ]),
     // SLIDE 3: Radar Chart (Simulated for now with CSS or SVG)
     // ... Assuming we don't have a library handy, I'll skip complex chart and do category breakdown
     {
@@ -174,12 +174,12 @@ export default function PresentationClient({ proposal, branding }: PresentationP
               (cat, i) => {
                 // Map categories to actual scores from the proposal
                 const scoreMap: Record<string, ScoreValue> = {
-                  Performance: scores.performance || null,
-                  SEO: scores.seo || null,
-                  Accessibility: scores.accessibility || null,
-                  Security: scores.security || null,
-                  Trust: scores.trust || null,
-                  Conversion: scores.conversion || null,
+                  Performance: scores.performance,
+                  SEO: scores.seo,
+                  Accessibility: scores.accessibility,
+                  Security: scores.security,
+                  Trust: scores.trust,
+                  Conversion: scores.conversion,
                 };
                 const score = scoreMap[cat];
 
@@ -227,15 +227,16 @@ export default function PresentationClient({ proposal, branding }: PresentationP
               <div className="bg-slate-800/50 p-6 rounded-xl border-l-4 border-green-500">
                 <h4 className="text-green-400 font-bold mb-2 uppercase tracking-wide">The Fix</h4>
                 <p className="text-xl text-slate-200">
-                  {finding.recommendedFix?.[0] || 'Immediate remediation required'}
+                  {finding.recommendedFix?.[0] ||
+                    'Qualified review is required before scoping work'}
                 </p>
+                <p className="mt-3 text-sm text-slate-500">Source: {finding.id}</p>
               </div>
             </div>
             <div className="bg-slate-900 rounded-2xl border border-slate-700 flex items-center justify-center overflow-hidden relative">
               {/* Placeholder for evidence if no image */}
               <div className="text-slate-600 text-center">
-                <span className="text-6xl mb-4 block">📸</span>
-                <span className="text-xl">Evidence Snapshot</span>
+                <span className="text-xl">No public image evidence attached</span>
               </div>
             </div>
           </div>
@@ -246,23 +247,23 @@ export default function PresentationClient({ proposal, branding }: PresentationP
       id: 'action-plan',
       render: () => (
         <div className="flex flex-col h-full px-12 py-12">
-          <h2 className="text-4xl font-bold mb-12 text-center text-white">Your 90-Day Roadmap</h2>
+          <h2 className="text-4xl font-bold mb-12 text-center text-white">Configured Packages</h2>
           <div className="grid grid-cols-3 gap-8 flex-1">
             {[
               {
-                title: 'Phase 1: Quick Wins',
-                weeks: 'Weeks 1-2',
-                items: ['Fix Google Business Profile', 'Respond to Reviews', 'Site Speed Tuning'],
+                title: proposal.tierEssentials.name,
+                weeks: proposal.tierEssentials.deliveryTime,
+                items: proposal.tierEssentials.features,
               },
               {
-                title: 'Phase 2: Foundations',
-                weeks: 'Weeks 3-6',
-                items: ['Landing Page Optimization', 'Content Expansion', 'Citation Building'],
+                title: proposal.tierGrowth.name,
+                weeks: proposal.tierGrowth.deliveryTime,
+                items: proposal.tierGrowth.features,
               },
               {
-                title: 'Phase 3: Growth',
-                weeks: 'Weeks 7-12',
-                items: ['SEO Campaign Launch', 'Review Generation System', 'Social Ads'],
+                title: proposal.tierPremium.name,
+                weeks: proposal.tierPremium.deliveryTime,
+                items: proposal.tierPremium.features,
               },
             ].map((phase, i) => (
               <div
@@ -274,7 +275,7 @@ export default function PresentationClient({ proposal, branding }: PresentationP
                   <span className="text-slate-500 font-medium">{phase.weeks}</span>
                 </div>
                 <ul className="space-y-4 flex-1">
-                  {phase.items.map((item, j) => (
+                  {phase.items.map((item: string, j: number) => (
                     <li key={j} className="flex items-start gap-3 text-lg text-slate-300">
                       <span className="text-green-400 mt-1">✓</span>
                       {item}
@@ -293,7 +294,7 @@ export default function PresentationClient({ proposal, branding }: PresentationP
         <div className="flex flex-col items-center justify-center h-full text-center space-y-12">
           <h2 className="text-5xl font-bold text-white">Ready to transform your business?</h2>
           <p className="text-2xl text-slate-400 max-w-3xl">
-            We've already identified the problems. Now let's execute the solution.
+            Review the cited Findings, package scope, configured pricing, and delivery assumptions.
           </p>
           <div className="flex gap-8">
             <button className="px-12 py-6 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl text-2xl font-bold transition-all transform hover:scale-105 shadow-xl">

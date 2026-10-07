@@ -21,10 +21,10 @@ export function generateEmailSequence(input: ComposeSequenceInput): SequenceEmai
 
   const touchpoints = [
     { position: 1, type: OutreachEmailType.INITIAL, offsetHours: 0 },
-    { position: 2, type: OutreachEmailType.FOLLOWUP_COMPETITOR, offsetHours: 24 * 3 }, // Day 3
-    { position: 3, type: OutreachEmailType.FOLLOWUP_GBP, offsetHours: 24 * 7 }, // Day 7
-    { position: 4, type: OutreachEmailType.FOLLOWUP_RETRY, offsetHours: 24 * 14 }, // Day 14
-    { position: 5, type: OutreachEmailType.FOLLOWUP_PROPOSAL, offsetHours: 24 * 21 }, // Day 21
+    { position: 2, type: OutreachEmailType.FOLLOWUP_COMPETITOR, offsetHours: 24 * 3 }, // Day 3 (FU1)
+    { position: 3, type: OutreachEmailType.FOLLOWUP_GBP, offsetHours: 24 * 7 }, // Day 7 (FU2)
+    { position: 4, type: OutreachEmailType.FOLLOWUP_RETRY, offsetHours: 24 * 11 }, // Day 11 (FU3)
+    { position: 5, type: OutreachEmailType.FOLLOWUP_PROPOSAL, offsetHours: 24 * 15 }, // Day 15 (FU4)
   ];
 
   for (const touch of touchpoints) {

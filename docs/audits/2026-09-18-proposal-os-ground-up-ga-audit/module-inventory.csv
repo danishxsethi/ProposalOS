@@ -1,0 +1,28 @@
+module,phase,source,provider_or_input,dependencies,live_or_fixture,execution_truth,production_caller,notes
+website,1,lib/modules/website.ts,internal crawler;PageSpeed,,source-only,COMPLETE can mask failure,lib/audit/runner.ts,PageSpeed zero fallback risk
+websiteCrawler,1,lib/modules/websiteCrawlerModule.ts,internal crawl;safe fetch,,source-only,legacy evidence shapes,lib/audit/runner.ts,crawl failure not first-class
+gbp,1,lib/modules/gbp.ts,Google Places,,source-only,provider state partial,lib/audit/runner.ts,ambiguous identity handled
+competitor,1,lib/modules/competitor.ts,SerpAPI;Places;PageSpeed,,source-only,checked/not_checked partly modeled,lib/audit/runner.ts,provider outage distinction exists
+techStack,1,lib/modules/techStack.ts,HTML;headers;DNS,,source-only,empty success fallback,lib/audit/runner.ts,adapter reports complete
+security,1,lib/modules/security.ts,safe fetch;TLS;headers,,source-only,nested errors under success,lib/audit/runner.ts,needs normalized state
+emailFinder,1,lib/modules/emailFinder.ts,website HTML,,source-only,failed/error distinguished,lib/audit/runner.ts,PII projection risk
+coreWebVitals,2,lib/modules/coreWebVitals.ts,derived Lighthouse/PageSpeed,website,source-only,partial extraction bug,lib/audit/runner.ts,decimal confidence conflicts DB
+schemaAnalysis,2,lib/modules/schemaAnalysis.ts,local HTML parser,websiteCrawler,source-only,evidence-less findings rejected,lib/audit/runner.ts,contract mismatch
+reputation,2,lib/modules/reputation.ts,Vertex/Gemini reviews,gbp,source-only,provider failure partial,lib/audit/runner.ts,live model unverified
+social,2,lib/modules/social.ts,website HTML,website,source-only,fetch failure can complete,lib/audit/runner.ts,legacy path
+socialDeep,2,lib/modules/socialDeep.ts,SerpAPI;profiles,social,source-only,explicit state model,lib/audit/runner.ts,partial findings discarded
+gbpDeep,2,lib/modules/gbpDeep.ts,Places;photos;Gemini,gbp,source-only,identity ambiguity handled,lib/audit/runner.ts,provider unverified
+seoDeep,2,lib/modules/seoDeep.ts,HTML;robots;sitemap;SerpAPI,website;websiteCrawler,source-only,unavailable inner state masked,lib/audit/runner.ts,adapter reports complete
+accessibility,2,lib/modules/accessibility.ts,Puppeteer;axe-core,website,source-only,failed state mapped,lib/audit/runner.ts,browser unverified
+mobileUX,2,lib/modules/mobileUX.ts,Puppeteer;PageSpeed,website,source-only,partial state exists,lib/audit/runner.ts,partial extraction bug
+contentQuality,2,lib/modules/contentQuality.ts,HTML;Gemini,websiteCrawler,source-only,evidence-less unavailable output,lib/audit/runner.ts,legacy evidence mismatch
+conversion,2,lib/modules/conversion.ts,Puppeteer,website,source-only,nested error masked,lib/audit/runner.ts,adapter reports complete
+citations,2,lib/modules/citations.ts,directory searches;SerpAPI,gbp,source-only,outage can become found=false,lib/audit/runner.ts,unknown/negative defect
+paidSearch,2,lib/modules/paidSearch.ts,SerpAPI;HTML,optional,source-only,explicit unavailable/not_observed,lib/audit/runner.ts,partial extraction bug
+backlinks,2,lib/modules/backlinks.ts,BacklinkProvider,optional,fixture/provider injected,unavailable if absent,lib/audit/runner.ts,external provider gate
+privacyCompliance,2,lib/modules/privacyCompliance.ts,Puppeteer;HTML;Gemini,website,source-only,explicit policy states,lib/audit/runner.ts,live unverified
+schemaMarkup,2,lib/modules/schemaMarkup.ts,HTML;schema parser,websiteCrawler;gbp,source-only,failed state mapped,lib/audit/runner.ts,live unverified
+keywordGap,2,lib/modules/keywordGap.ts,Gemini;SerpAPI,gbp;competitor,source-only,evidence-less unavailable output,lib/audit/runner.ts,adapter reports complete
+videoPresence,2,lib/modules/videoPresence.ts,website;YouTube feed;SerpAPI,competitor,source-only,explicit state model,lib/audit/runner.ts,partial extraction bug
+competitorStrategy,3,lib/modules/competitorStrategy.ts,crawl;GBP;Gemini,competitor;seoDeep,source-only,empty success fallback,lib/audit/runner.ts,positive evidence-less finding
+vision,3,lib/modules/vision.ts,screenshot;Gemini vision,websiteCrawler,source-only,empty success fallback,lib/audit/runner.ts,live unverified

@@ -5,12 +5,10 @@
  */
 
 export type ProviderName =
-  | 'pagespeed'
-  | 'google-places'
+  | 'lighthouse'
   | 'serpapi'
   | 'yelp'
-  | 'gemini'
-  | 'vertex'
+  | 'bedrock'
   | 'resend'
   | 'stripe'
   | 'crawler'
@@ -36,6 +34,7 @@ export interface ResilienceOptions {
   provider: ProviderName;
   operation: string;
   tenantId?: string;
+  signal?: AbortSignal;
   policy?: Partial<ProviderPolicy>;
   degrade?: boolean;
 }

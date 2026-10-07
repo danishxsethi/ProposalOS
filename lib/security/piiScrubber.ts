@@ -94,6 +94,13 @@ export class PiiScrubber {
     // AWS keys
     { pattern: /\b(AKIA|ABIA|ACCA|ASIA)[A-Z0-9]{16}\b/g, replacement: '[AWS_KEY_REDACTED]' },
 
+    // Stripe API keys (test and live)
+    { pattern: /\bsk_(test|live)_[A-Za-z0-9]{16,}\b/g, replacement: '[STRIPE_KEY_REDACTED]' },
+    // Stripe restricted/publishable keys
+    { pattern: /\b(rk|pk)_(test|live)_[A-Za-z0-9]{16,}\b/g, replacement: '[STRIPE_KEY_REDACTED]' },
+    // Stripe webhook secrets
+    { pattern: /\bwhsec_[A-Za-z0-9]{16,}\b/g, replacement: '[STRIPE_WEBHOOK_REDACTED]' },
+
     // Private keys
     { pattern: /-----BEGIN\s+(RSA\s+)?PRIVATE\s+KEY-----/g, replacement: '[PRIVATE_KEY_REDACTED]' },
 

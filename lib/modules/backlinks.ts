@@ -1,360 +1,289 @@
-import { withModuleCache } from '@/lib/cache/moduleCache';
+import { z } from 'zod';
+
 import { CostTracker } from '@/lib/costs/costTracker';
 import { logger } from '@/lib/logger';
-import { withProviderResilience } from '@/lib/resilience/withProviderResilience';
 
 import { normalizeConfidence } from './findingGenerator';
-import { AuditModuleResult, Finding } from './types';
+import { AuditModuleResult, createEvidence, Finding } from './types';
+
+const BacklinkRecordSchema = z.object({
+  sourceUrl: z.string().url(),
+  targetUrl: z.string().url(),
+  anchorText: z.string().max(500).optional(),
+  follow: z.boolean().nullable().optional(),
+  firstSeen: z.string().datetime().optional(),
+  lastSeen: z.string().datetime().optional(),
+});
+
+const BacklinkProviderResponseSchema = z.object({
+  reportId: z.string().min(1),
+  reportUrl: z.string().url(),
+  generatedAt: z.string().datetime(),
+  sourceScope: z.string().min(1),
+  backlinks: z.array(BacklinkRecordSchema).max(1_000),
+  totalBacklinks: z.number().int().nonnegative().optional(),
+  totalReferringDomains: z.number().int().nonnegative().optional(),
+  authority: z
+    .object({
+      metric: z.string().min(1),
+      value: z.number().finite(),
+      scaleMax: z.number().positive(),
+    })
+    .optional(),
+});
 
 export interface BacklinksModuleInput {
   websiteUrl: string;
   businessName: string;
   city: string;
-  competitors?: string[]; // Competitor URLs
+  signal?: AbortSignal;
 }
 
-interface BacklinkProfile {
-  url: string;
-  estimatedLinks: number; // Rough count
-  indexedPages: number;
-  hasChamber: boolean;
-  hasLocalNews: boolean;
-  hasIndustryDir: boolean;
+export interface BacklinkProvider {
+  id: string;
+  fetchProfile(input: {
+    domain: string;
+    maxResults: number;
+    signal?: AbortSignal;
+  }): Promise<unknown>;
 }
 
-interface BacklinkAnalysis {
-  business: BacklinkProfile;
-  competitors: BacklinkProfile[];
-  authorityScore: number; // 0-100
+export interface NormalizedBacklink {
+  sourceUrl: string;
+  sourceDomain: string;
+  targetUrl: string;
+  anchorText?: string;
+  follow?: boolean | null;
+  firstSeen?: string;
+  lastSeen?: string;
 }
 
-/**
- * Backlinks Module
- * Estimates link authority using SerpAPI
- */
+export interface BacklinkAnalysis {
+  provider: string;
+  reportId: string;
+  reportUrl: string;
+  generatedAt: string;
+  sourceScope: string;
+  backlinks: NormalizedBacklink[];
+  backlinkCount: number;
+  referringDomains: string[];
+  referringDomainCount: number;
+  followCount: number | null;
+  nofollowCount: number | null;
+  authority?: { metric: string; value: number; scaleMax: number };
+}
+
 export async function runBacklinksModule(
   input: BacklinksModuleInput,
-  tracker?: CostTracker
+  _tracker?: CostTracker,
+  provider?: BacklinkProvider
 ): Promise<AuditModuleResult> {
-  logger.info({ business: input.businessName }, '[Backlinks] Starting analysis');
+  logger.info({ business: input.businessName }, '[Backlinks] Starting provider analysis');
 
-  const analysis = await analyzeBacklinks(input, tracker);
-  const findings = generateBacklinkFindings(analysis, input);
+  if (!provider) {
+    return {
+      findings: [],
+      evidenceSnapshots: [],
+      execution: {
+        state: 'unavailable',
+        reason: 'No real backlink data provider is selected or configured',
+      },
+    };
+  }
+
+  try {
+    const domain = normalizeDomain(input.websiteUrl);
+    const raw = await provider.fetchProfile({ domain, maxResults: 1_000, signal: input.signal });
+    const analysis = normalizeBacklinkProviderResponse(provider.id, raw);
+    const findings = generateBacklinkFindings(analysis, input);
+
+    return {
+      findings,
+      evidenceSnapshots: [
+        {
+          module: 'backlinks',
+          source: provider.id,
+          rawResponse: analysis,
+          collectedAt: new Date(analysis.generatedAt),
+        },
+      ],
+      execution: { state: 'complete' },
+    };
+  } catch (error) {
+    if (input.signal?.aborted) throw input.signal.reason ?? error;
+    logger.error({ error, provider: provider.id }, '[Backlinks] Provider analysis failed');
+    return {
+      findings: [],
+      evidenceSnapshots: [],
+      execution: {
+        state: 'failed',
+        reason: error instanceof Error ? error.message : 'Backlink provider failed',
+      },
+    };
+  }
+}
+
+export function normalizeBacklinkProviderResponse(
+  provider: string,
+  raw: unknown
+): BacklinkAnalysis {
+  const parsed = BacklinkProviderResponseSchema.parse(raw);
+  if (!isHttpUrl(parsed.reportUrl)) {
+    throw new Error('Backlink provider reportUrl must use HTTP or HTTPS');
+  }
+  const deduped = new Map<string, NormalizedBacklink>();
+
+  for (const record of parsed.backlinks) {
+    if (!isHttpUrl(record.sourceUrl) || !isHttpUrl(record.targetUrl)) continue;
+    const sourceUrl = normalizeHttpUrl(record.sourceUrl);
+    const targetUrl = normalizeHttpUrl(record.targetUrl);
+    const key = `${sourceUrl}\n${targetUrl}\n${record.anchorText || ''}`;
+    if (deduped.has(key)) continue;
+    deduped.set(key, {
+      sourceUrl,
+      sourceDomain: normalizeDomain(sourceUrl),
+      targetUrl,
+      anchorText: record.anchorText,
+      follow: record.follow,
+      firstSeen: record.firstSeen,
+      lastSeen: record.lastSeen,
+    });
+  }
+
+  const backlinks = [...deduped.values()];
+  const referringDomains = [...new Set(backlinks.map((record) => record.sourceDomain))].sort();
+  const followValues = backlinks.filter((record) => typeof record.follow === 'boolean');
 
   return {
-    findings,
-    evidenceSnapshots: [
-      {
-        module: 'backlinks',
-        source: 'serp_api_estimation',
-        rawResponse: analysis,
-        collectedAt: new Date(),
-      },
-    ],
+    provider,
+    reportId: parsed.reportId,
+    reportUrl: parsed.reportUrl,
+    generatedAt: parsed.generatedAt,
+    sourceScope: parsed.sourceScope,
+    backlinks,
+    backlinkCount: parsed.totalBacklinks ?? backlinks.length,
+    referringDomains,
+    referringDomainCount: parsed.totalReferringDomains ?? referringDomains.length,
+    followCount:
+      followValues.length > 0
+        ? followValues.filter((record) => record.follow === true).length
+        : null,
+    nofollowCount:
+      followValues.length > 0
+        ? followValues.filter((record) => record.follow === false).length
+        : null,
+    authority: parsed.authority,
   };
 }
 
-// ANALYSIS LOGIC
-
-async function analyzeBacklinks(
-  input: BacklinksModuleInput,
-  tracker?: CostTracker
-): Promise<BacklinkAnalysis> {
-  const businessProfile = await getProfile(
-    input.websiteUrl,
-    input.businessName,
-    input.city,
-    tracker
-  );
-
-  const competitors: BacklinkProfile[] = [];
-  if (input.competitors) {
-    for (const compUrl of input.competitors.slice(0, 3)) {
-      competitors.push(await getProfile(compUrl, '', input.city, tracker));
-    }
-  }
-
-  // Calculate Score
-  // Heuristic:
-  // - 50 pts for indexed pages (log scale)
-  // - 15 pts for each major link type (Chamber, News, Industry)
-  // - Cap at 100
-  let score = 0;
-
-  // Indexed Pages Score (0-50)
-  // 0 -> 0
-  // 10 -> 10
-  // 100 -> 30
-  // 1000+ -> 50
-  const pages = businessProfile.indexedPages;
-  if (pages < 10) score += pages;
-  else if (pages < 100) score += 10 + (pages - 10) * 0.2;
-  else if (pages < 1000) score += 30 + (pages - 100) * 0.02;
-  else score += 50;
-
-  if (businessProfile.hasChamber) score += 15;
-  if (businessProfile.hasLocalNews) score += 15;
-  if (businessProfile.hasIndustryDir) score += 20;
-
-  return {
-    business: businessProfile,
-    competitors,
-    authorityScore: Math.min(Math.round(score), 100),
-  };
+export function normalizeDomain(value: string): string {
+  const parsed = new URL(value.includes('://') ? value : `https://${value}`);
+  return parsed.hostname
+    .toLowerCase()
+    .replace(/^www\./, '')
+    .replace(/\.$/, '');
 }
-
-async function getProfile(
-  url: string,
-  name: string,
-  city: string,
-  tracker?: CostTracker
-): Promise<BacklinkProfile> {
-  const domain = new URL(url).hostname.replace('www.', '');
-  const profile: BacklinkProfile = {
-    url,
-    estimatedLinks: 0,
-    indexedPages: 0,
-    hasChamber: false,
-    hasLocalNews: false,
-    hasIndustryDir: false,
-  };
-
-  const serpApiKey = process.env.SERP_API_KEY;
-  if (!serpApiKey) return profile;
-
-  // 1. Indexed Pages (site:domain.com)
-  try {
-    tracker?.addApiCall('SERP');
-    const siteQuery = `site:${domain}`;
-    const serpUrl = `https://serpapi.com/search.json?q=${encodeURIComponent(siteQuery)}&api_key=${serpApiKey}`;
-
-    const data = await withModuleCache<{ search_information?: { total_results?: number } }>(
-      {
-        module: 'backlinks',
-        version: 1,
-        input: { type: 'site_search', domain },
-      },
-      { ttlSeconds: 168 * 3600 },
-      async () => {
-        return withProviderResilience<{ search_information?: { total_results?: number } }>(
-          {
-            provider: 'serpapi',
-            operation: 'backlinks:site_search',
-            degrade: true,
-            fallbackValue: { search_information: { total_results: 0 } },
-          },
-          async () => {
-            const res = await fetch(serpUrl);
-            if (!res.ok) {
-              throw new Error(`HTTP error ${res.status}: ${res.statusText}`);
-            }
-            return await res.json();
-          }
-        );
-      }
-    );
-
-    // SerpAPI returns "About X results" in search_information.total_results
-    profile.indexedPages = data.search_information?.total_results || 0;
-  } catch (e) {
-    logger.error({ error: e }, 'Site search failed');
-  }
-
-  // 2. Link Estimation (link:domain.com) - Less reliable on Google but nonzero
-  try {
-    tracker?.addApiCall('SERP');
-    const linkQuery = `link:${domain}`;
-    const data = await withModuleCache<{ search_information?: { total_results?: number } }>(
-      {
-        module: 'backlinks',
-        version: 1,
-        input: { type: 'link_search', domain },
-      },
-      { ttlSeconds: 24 * 3600 },
-      async () => {
-        const url = `https://serpapi.com/search.json?q=${encodeURIComponent(linkQuery)}&api_key=${serpApiKey}`;
-        return withProviderResilience<{ search_information?: { total_results?: number } }>(
-          {
-            provider: 'serpapi',
-            operation: 'backlinks:link_search',
-            degrade: true,
-            fallbackValue: { search_information: { total_results: 0 } },
-          },
-          async () => {
-            const res = await fetch(url);
-            if (!res.ok) {
-              throw new Error(`HTTP error ${res.status}: ${res.statusText}`);
-            }
-            return await res.json();
-          }
-        );
-      }
-    );
-    profile.estimatedLinks = data.search_information?.total_results || 0;
-  } catch (e) {}
-
-  // 3. High Value Links (Only check for main business, competitors skip this to save cost/time)
-  if (name) {
-    // Chamber
-    profile.hasChamber = await checkLinkPresence(
-      `"${city}" chamber of commerce "${name}"`,
-      domain,
-      serpApiKey,
-      tracker
-    );
-
-    // News (generic "news" keyword with city + business name)
-    profile.hasLocalNews = await checkLinkPresence(
-      `"${city}" news "${name}"`,
-      domain,
-      serpApiKey,
-      tracker
-    );
-  }
-
-  return profile;
-}
-
-async function checkLinkPresence(
-  query: string,
-  targetDomain: string,
-  apiKey: string,
-  tracker?: CostTracker
-): Promise<boolean> {
-  try {
-    tracker?.addApiCall('SERP');
-    const url = `https://serpapi.com/search.json?q=${encodeURIComponent(query)}&api_key=${apiKey}`;
-    const data = await withModuleCache<{ organic_results?: Array<{ link: string }> }>(
-      {
-        module: 'backlinks',
-        version: 1,
-        input: { type: 'check_presence', query },
-      },
-      { ttlSeconds: 168 * 3600 },
-      async () => {
-        return withProviderResilience<{ organic_results?: Array<{ link: string }> }>(
-          {
-            provider: 'serpapi',
-            operation: 'backlinks:check_presence',
-            degrade: true,
-            fallbackValue: { organic_results: [] },
-          },
-          async () => {
-            const res = await fetch(url);
-            if (!res.ok) {
-              throw new Error(`HTTP error ${res.status}: ${res.statusText}`);
-            }
-            return await res.json();
-          }
-        );
-      }
-    );
-
-    // Check if any result is NOT the target domain itself
-    // Actually, we want to find IF the target domain is mentioned/linked in these results results
-    // But simpler: does a result appear that matches the query?
-    // If we search "City Chamber Business Name" and get a result from "citychamber.com", that's a hit.
-
-    const results = data.organic_results || [];
-    // If we find a result from a different domain that mentions us?
-    // Heuristic: If we get ANY results that aren't our own website, likely a mention.
-    const externalHits = results.filter((r: any) => !r.link.includes(targetDomain));
-    return externalHits.length > 0;
-  } catch (e) {
-    return false;
-  }
-}
-
-// FINDINGS
 
 function generateBacklinkFindings(
   analysis: BacklinkAnalysis,
   input: BacklinksModuleInput
 ): Finding[] {
   const findings: Finding[] = [];
-  const b = analysis.business;
-  const score = analysis.authorityScore;
+  const collectedAt = analysis.generatedAt;
 
-  // PAINKILLER: Thin Content / Not Indexed
-  if (b.indexedPages < 5) {
+  if (analysis.backlinkCount === 0 && analysis.referringDomainCount === 0) {
     findings.push({
-      type: 'PAINKILLER',
-      category: 'Visibility',
-      title: 'Website Not Properly Indexed',
-      description: `Google has only indexed ${b.indexedPages} pages of your website. Most customers effectively cannot find you.`,
-      impactScore: 8,
-      confidenceScore: normalizeConfidence(95, '0-100'),
-      evidence: [{ type: 'metric', value: b.indexedPages, label: 'Indexed Pages' }],
-      metrics: { indexed: b.indexedPages },
-      effortEstimate: 'HIGH',
-      recommendedFix: [
-        'Submit sitemap to Google Search Console',
-        'Fix "noindex" tags',
-        'Create more content',
-      ],
-    });
-  }
-
-  // PAINKILLER: Competitor Gap
-  const strongCompetitor = analysis.competitors.find((c) => c.indexedPages > b.indexedPages * 5);
-  if (strongCompetitor) {
-    findings.push({
-      type: 'PAINKILLER',
-      category: 'Visibility',
-      title: 'Competitors Dominate Search Presence',
-      description: `Competitors have 5x more pages indexed by Google (${strongCompetitor.indexedPages} vs ${b.indexedPages}). They are capturing significantly more traffic.`,
-      impactScore: 7,
+      type: 'VITAMIN',
+      category: 'Authority',
+      title: 'No Backlinks Reported by the Configured Provider',
+      description: `${analysis.provider} reported zero backlinks and zero referring domains for ${normalizeDomain(input.websiteUrl)} within its stated data scope.`,
+      impactScore: 6,
       confidenceScore: normalizeConfidence(90, '0-100'),
       evidence: [
-        { type: 'metric', value: strongCompetitor.indexedPages, label: 'Competitor Pages' },
+        createEvidence({
+          pointer: analysis.reportUrl,
+          source: analysis.provider,
+          collected_at: collectedAt,
+          type: 'metric',
+          value: 0,
+          label: 'Provider Backlink Count',
+          raw: {
+            reportId: analysis.reportId,
+            sourceScope: analysis.sourceScope,
+            referringDomains: 0,
+          },
+        }),
       ],
-      metrics: { gap: strongCompetitor.indexedPages - b.indexedPages },
+      metrics: {
+        provider: analysis.provider,
+        backlinkCount: 0,
+        referringDomainCount: 0,
+        sourceScope: analysis.sourceScope,
+      },
       effortEstimate: 'HIGH',
       recommendedFix: [
-        'Publish weekly blog content',
-        'Create location service pages',
-        'Expand service descriptions',
+        'Earn relevant editorial links through useful resources, partnerships, and legitimate local coverage',
+        'Avoid paid link schemes and automated link exchanges',
       ],
     });
   }
 
-  // VITAMIN: Authority Gap
-  if (score < 30) {
+  if (
+    analysis.authority &&
+    analysis.authority.scaleMax > 0 &&
+    analysis.authority.value / analysis.authority.scaleMax < 0.3
+  ) {
     findings.push({
       type: 'VITAMIN',
       category: 'Authority',
-      title: 'Low Domain Authority',
-      description:
-        'Your website lacks authority signals. This makes it hard to rank for competitive keywords.',
-      impactScore: 6,
+      title: `Low ${analysis.provider} ${analysis.authority.metric}`,
+      description: `${analysis.provider} reports ${analysis.authority.metric} ${analysis.authority.value}/${analysis.authority.scaleMax}. This is a provider-specific metric, not a Google ranking score.`,
+      impactScore: 5,
       confidenceScore: normalizeConfidence(85, '0-100'),
-      evidence: [{ type: 'metric', value: score, label: 'Authority Score' }],
-      metrics: { score },
+      evidence: [
+        createEvidence({
+          pointer: analysis.reportUrl,
+          source: analysis.provider,
+          collected_at: collectedAt,
+          type: 'metric',
+          value: analysis.authority.value,
+          label: `${analysis.authority.metric} (${analysis.provider})`,
+          raw: { scaleMax: analysis.authority.scaleMax, reportId: analysis.reportId },
+        }),
+      ],
+      metrics: {
+        provider: analysis.provider,
+        authorityMetric: analysis.authority.metric,
+        authorityValue: analysis.authority.value,
+        authorityScaleMax: analysis.authority.scaleMax,
+      },
       effortEstimate: 'HIGH',
       recommendedFix: [
-        'Get citations from local chamber',
-        'Partner with local charities',
-        'Link from social profiles',
+        'Prioritize relevant editorial links from trusted organizations in the same market',
       ],
-    });
-  }
-
-  // VITAMIN: Missing specific links
-  if (!b.hasChamber) {
-    findings.push({
-      type: 'VITAMIN',
-      category: 'Authority',
-      title: 'Missing Chamber of Commerce Link',
-      description:
-        'No link found from the local Chamber of Commerce. This is a powerful trust signal for Google.',
-      impactScore: 4,
-      confidenceScore: normalizeConfidence(60, '0-100'), // Fuzzy check
-      evidence: [],
-      metrics: {},
-      effortEstimate: 'LOW',
-      recommendedFix: ['Join local chamber', 'Ensure they link to your website'],
     });
   }
 
   return findings;
+}
+
+function isHttpUrl(value: string): boolean {
+  try {
+    return ['http:', 'https:'].includes(new URL(value).protocol);
+  } catch {
+    return false;
+  }
+}
+
+function normalizeHttpUrl(value: string): string {
+  const parsed = new URL(value);
+  parsed.hash = '';
+  parsed.hostname = parsed.hostname.toLowerCase().replace(/^www\./, '');
+  if (
+    (parsed.protocol === 'https:' && parsed.port === '443') ||
+    (parsed.protocol === 'http:' && parsed.port === '80')
+  ) {
+    parsed.port = '';
+  }
+  return parsed.toString();
 }

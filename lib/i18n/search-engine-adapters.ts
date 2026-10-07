@@ -7,7 +7,8 @@
  * - Baidu (China)
  * - Naver (South Korea)
  *
- * Requirements: 3.1, 3.2, 3.3, 3.4, 11.1
+ * Google web search is served through SerpApi so the application does not call
+ * Google Cloud Custom Search directly.
  */
 
 import { logger } from '@/lib/logger';
@@ -71,39 +72,42 @@ export interface SearchEngineAdapter {
  */
 export class GoogleSearchAdapter implements SearchEngineAdapter {
   private apiKey: string;
-  private cx: string; // Custom Search Engine ID
 
-  constructor(apiKey?: string, cx?: string) {
-    this.apiKey = apiKey || process.env.GOOGLE_SEARCH_API_KEY || '';
-    this.cx = cx || process.env.GOOGLE_SEARCH_CX || '';
+  constructor(apiKey?: string) {
+    this.apiKey = apiKey || process.env.SERP_API_KEY || '';
   }
 
   async search(options: SearchOptions): Promise<SearchResult[]> {
-    if (!this.apiKey || !this.cx) {
+    if (!this.apiKey) {
       // Fallback to returning empty results if API not configured
-      logger.warn('[GoogleSearchAdapter] API credentials not configured');
+      logger.warn('[GoogleSearchAdapter] SERP_API_KEY is not configured');
       return [];
     }
 
-    const url = new URL('https://www.googleapis.com/customsearch/v1');
-    url.searchParams.append('key', this.apiKey);
-    url.searchParams.append('cx', this.cx);
+    const url = new URL('https://serpapi.com/search.json');
+    url.searchParams.append('engine', 'google');
+    url.searchParams.append('api_key', this.apiKey);
     url.searchParams.append('q', options.query);
-    url.searchParams.append('num', String(options.numResults || 10));
+    url.searchParams.append('num', String(Math.min(20, Math.max(1, options.numResults || 10))));
     url.searchParams.append('gl', this.getRegionForLocale(options.locale));
-    url.searchParams.append('lr', `lang_${this.getLanguageForLocale(options.locale)}`);
+    url.searchParams.append('hl', options.language || this.getLanguageForLocale(options.locale));
 
     try {
       const response = await fetch(url.toString());
+      if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       const data = await response.json();
+      if (data.error) throw new Error(String(data.error));
 
-      return (data.items || []).map((item: any, index: number) => ({
-        title: item.title,
-        url: item.link,
-        description: item.snippet,
-        position: index + 1,
-        snippet: item.snippet,
-      }));
+      return (Array.isArray(data.organic_results) ? data.organic_results : [])
+        .slice(0, options.numResults || 10)
+        .map((item: any, index: number) => ({
+          title: String(item.title ?? ''),
+          url: String(item.link ?? ''),
+          description: String(item.snippet ?? ''),
+          position: typeof item.position === 'number' ? item.position : index + 1,
+          snippet: typeof item.snippet === 'string' ? item.snippet : undefined,
+        }))
+        .filter((item: SearchResult) => item.title && item.url);
     } catch (error) {
       logger.error({ error }, '[GoogleSearchAdapter] Search failed');
       return [];

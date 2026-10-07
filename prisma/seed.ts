@@ -36,7 +36,9 @@ async function main() {
   console.log(`TENANT_ID=${tenant.id}`);
 
   // 2. Create or get User
-  const passwordHash = await bcrypt.hash('password123', 10);
+  // Must satisfy PASSWORD_POLICY (lib/config/security.ts): >=12 chars, upper, lower, number, special.
+  const DEMO_PASSWORD = process.env.SEED_DEMO_PASSWORD || 'DemoAgency!2026';
+  const passwordHash = await bcrypt.hash(DEMO_PASSWORD, 10);
   const user = await prisma.user.upsert({
     where: { email: 'demo@acme.com' },
     update: { passwordHash, role: 'owner', tenantId: tenant.id },
@@ -49,7 +51,7 @@ async function main() {
       emailVerified: new Date(),
     },
   });
-  console.log(`✅ Created User: ${user.email} (password123)`);
+  console.log(`✅ Created User: ${user.email} (password: ${DEMO_PASSWORD})`);
 
   // 3. Create Audits across multiple industries (e-commerce, SaaS, healthcare, restaurant, legal)
   const businesses = [
@@ -330,7 +332,11 @@ async function main() {
 
     const findings = findingsByIndustry[b.industry] ?? findingsByIndustry.restaurant;
 
+    const collectedAt = new Date().toISOString();
     for (const f of findings ?? []) {
+      // Canonical runtime contract (lib/audit/findingContract.ts): scores are
+      // integers on a 0-10 scale (DB CHECK constraint since 20260924000000) and
+      // every finding carries >=1 evidence pointer with source + collected_at.
       await prisma.finding.create({
         data: {
           auditId: audit.id,
@@ -341,7 +347,20 @@ async function main() {
           module: f.module,
           category: f.category,
           impactScore: f.impactScore,
-          confidenceScore: 90 + Math.floor(Math.random() * 10),
+          confidenceScore: 9,
+          evidence: [
+            {
+              pointer: b.url,
+              source: `seed:${f.module}`,
+              collected_at: collectedAt,
+              type: 'url',
+              label: 'Seed observation',
+              value: f.title,
+            },
+          ],
+          metrics: {},
+          effortEstimate: f.impactScore >= 8 ? 'HIGH' : f.impactScore >= 6 ? 'MEDIUM' : 'LOW',
+          recommendedFix: [`Address: ${f.title}`],
         },
       });
     }

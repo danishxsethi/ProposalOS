@@ -1,0 +1,6 @@
+Creating temporary archive of 1890 file(s) totalling 18.3 MiB before compression.
+Uploading tarball of [.] to [gs://proposal-487522_cloudbuild/source/1790572856.757733-07d0a7e893f748309d32cdc3fda7c492.tgz]
+Created [https://cloudbuild.googleapis.com/v1/projects/proposal-487522/locations/us-central1/builds/12759f4a-1d06-47c6-aedd-b288e07d60da].
+Logs are available at [ https://console.cloud.google.com/cloud-build/builds;region=us-central1/12759f4a-1d06-47c6-aedd-b288e07d60da?project=120416863832 ].
+ID                                    CREATE_TIME                DURATION  SOURCE                                                                                         IMAGES  STATUS
+12759f4a-1d06-47c6-aedd-b288e07d60da  2026-09-28T05:20:58+00:00  -         gs://proposal-487522_cloudbuild/source/1790572856.757733-07d0a7e893f748309d32cdc3fda7c492.tgz  -       QUEUED

@@ -16,6 +16,7 @@ import { z } from 'zod';
 
 import { generateTraceId, InternalError, NotFoundError, UnauthorizedError } from '@/lib/api/errors';
 import { getServerSession } from '@/lib/auth';
+import { logger } from '@/lib/logger';
 import { withRateLimit } from '@/lib/middleware/rateLimit';
 import { prisma } from '@/lib/prisma';
 
@@ -150,7 +151,7 @@ async function handleGetBenchmarks(req: NextRequest): Promise<NextResponse> {
     response.headers.set('X-Trace-Id', traceId);
     return response;
   } catch (error) {
-    console.error('[API] Error fetching benchmarks:', error);
+    logger.error('[API] Error fetching benchmarks:', error);
     const internalError = new InternalError('Failed to fetch benchmarks', {
       originalError: error instanceof Error ? error.message : String(error),
     });

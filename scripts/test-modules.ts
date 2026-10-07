@@ -30,27 +30,21 @@ async function main() {
     console.log('SKIPPED: SERP_API_KEY missing');
   }
 
-  // 2. Website Module (Uses PSI API - Key Missing)
+  // 2. Website Module (uses local Lighthouse; no Google API key required)
   console.log('\n2. Testing Website Module...');
-  if (process.env.GOOGLE_PAGESPEED_API_KEY) {
-    const websiteResult = await runWebsiteModule({
-      url: target.url,
-    });
-    console.log('Result:', JSON.stringify(websiteResult, null, 2));
-  } else {
-    console.log('SKIPPED: GOOGLE_PAGESPEED_API_KEY missing');
-  }
+  const websiteResult = await runWebsiteModule({ url: target.url });
+  console.log('Result:', JSON.stringify(websiteResult, null, 2));
 
-  // 3. GBP Module (Uses Places API - Key Missing)
+  // 3. GBP Module (uses SerpApi Google Maps results)
   console.log('\n3. Testing GBP Module...');
-  if (process.env.GOOGLE_PLACES_API_KEY) {
+  if (process.env.SERP_API_KEY) {
     const gbpResult = await runGBPModule({
       businessName: target.businessName,
       city: target.city,
     });
     console.log('Result:', JSON.stringify(gbpResult, null, 2));
   } else {
-    console.log('SKIPPED: GOOGLE_PLACES_API_KEY missing');
+    console.log('SKIPPED: SERP_API_KEY missing');
   }
 }
 

@@ -1,5 +1,7 @@
 import { PainCluster } from '../diagnosis/types';
 
+import type { ProposalGrounding } from './grounding';
+
 export type OrganizationSegment =
   | 'smb_local'
   | 'nonprofit'
@@ -121,4 +123,5 @@ export interface ProposalResult {
   assumptions: string[];
   disclaimers: string[];
   nextSteps: string[];
+  grounding?: ProposalGrounding;
 }

@@ -48,6 +48,27 @@ next-env.d.ts
 # Scratch outputs containing data
 scratch/proposal_summaries.txt
 scratch/*.log
+# JS scripts in scratch that are dev/test tooling — never commit
+scratch/*.js
+scratch/*.sh
+
+# RAOS WIP scripts (reference lib/raos/ and lib/audit-engine/ — both gitignored)
+scripts/raos/
+scripts/raos-drift-run.ts
+
+# RAOS and audit-engine Kiro specs (WIP, not Stage 1 scope)
+.kiro/specs/proposal-engine-audit-system/
+.kiro/specs/proposal-engine-remediation-and-operations/
+
+# Workflow files added by RAOS automation (not CI-pipeline approved)
+.github/workflows/drift-run.yml
+.github/workflows/release-gate.yml
+
+# Data files (prospect lists, customer PII — never commit)
+data/
+
+# Script output (transient, may contain PII)
+scripts/output/
 
 # GCP binaries
 cloud-sql-proxy
@@ -63,7 +84,30 @@ fix_confidence.ts
 .terraform/
 *.tfstate
 *.tfstate.backup
+*.tfplan
+*.tfvars
+*.tfvars.json
+infra/aws/**/backend.tf
+infra/aws/**/$plan
+.provider-mirror/
 crash.log
+
+# Local release archives retained for production provenance/recovery
+/build-artifacts/
 
 # Cache store
 lib/cache/store/
+
+# RAOS WIP — un-integrated, not Stage 1 scope.
+# Contains 150 lint errors + 13 tsc errors as of 2026-06-18.
+# Do NOT commit without first clearing lint/tsc and binding to a task.
+# See .kiro/specs/100m-stage-1/tasks.md for documentation.
+lib/audit-engine/
+lib/raos/
+
+# Generated batch audit reports
+/audit/reports/
+
+# harness cruft (never commit; regenerated per run)
+scripts/_proposalSmoke.ts
+scripts/_freshProposal.ts

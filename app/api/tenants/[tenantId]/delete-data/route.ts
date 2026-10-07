@@ -10,9 +10,13 @@
  * - Audit trail logging
  */
 
+import { createHash, timingSafeEqual } from 'crypto';
+
 import { NextResponse } from 'next/server';
 
 import { generateTraceId, InternalError } from '@/lib/api/errors';
+import { auth } from '@/lib/auth';
+import { hasRole, normalizeRole } from '@/lib/auth/rbac';
 import { logger } from '@/lib/logger';
 import { verifyCronAuth } from '@/lib/middleware/cronAuth';
 import { recordAuditTrailEvent } from '@/lib/observability/auditTrail';
@@ -21,6 +25,26 @@ import { runWithTenantAsync } from '@/lib/tenant/context';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
+
+const TENANT_ID_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+/** Explicit confirmation string required for interactive DELETE. */
+export const DELETE_DATA_CONFIRMATION = 'DELETE_TENANT_DATA';
+
+function timingSafeStringEqual(a: string, b: string): boolean {
+  const hashA = createHash('sha256').update(a).digest();
+  const hashB = createHash('sha256').update(b).digest();
+  return timingSafeEqual(hashA, hashB);
+}
+
+/** True when Authorization bearer matches CRON_SECRET (distinct internal path). */
+function isCronBearerAuthorized(req: Request): boolean {
+  const cronSecret = process.env.CRON_SECRET;
+  if (!cronSecret) return false;
+  const authHeader = req.headers.get('authorization') ?? '';
+  const expected = `Bearer ${cronSecret}`;
+  return timingSafeStringEqual(authHeader, expected);
+}
 
 /**
  * Delete all data for a tenant (GDPR right to erasure)
@@ -303,29 +327,96 @@ async function getDeletionStatus(req: Request, tenantId: string): Promise<NextRe
   }
 }
 
-// Auth wrapper - only allow tenant admins or system admins
+/**
+ * Auth wrapper — anonymous requests are always rejected.
+ *
+ * Paths:
+ * 1. Cron/internal: Authorization Bearer CRON_SECRET (strongly authenticated).
+ * 2. Session: super_admin (any tenant) or agency_admin of the target tenant only.
+ *    Interactive DELETE requires body.confirm === DELETE_TENANT_DATA.
+ *
+ * Financial/audit retention policy (P1-08) is intentionally unchanged here.
+ */
 const authHandler = async (
   req: Request,
   context: { params: Promise<{ tenantId: string }> }
 ): Promise<NextResponse> => {
   const { tenantId } = await context.params;
 
-  // For cron requests, verify cron auth
-  const isCronRequest = req.headers.get('X-Cron-Auth') === 'true';
-  if (isCronRequest) {
-    const authError = await verifyCronAuth(req);
-    if (authError) return authError;
+  if (!TENANT_ID_UUID.test(tenantId)) {
+    return NextResponse.json({ error: 'Invalid tenant id' }, { status: 400 });
   }
 
-  // For user requests, verify tenant admin access
-  // TODO: Implement proper user auth check here
-  // For now, we allow the request but in production you should verify:
-  // 1. User is authenticated
-  // 2. User has admin role for this tenant
-  // 3. User has explicitly confirmed data deletion
+  let actor: { type: 'cron' | 'session'; role?: string; userId?: string; email?: string };
+
+  if (isCronBearerAuthorized(req)) {
+    // Full cron auth (rate-limit on failure path handled inside verifyCronAuth when used).
+    const authError = await verifyCronAuth(req);
+    if (authError) return authError;
+    actor = { type: 'cron' };
+  } else {
+    const session = await auth();
+    const user = session?.user as
+      | { id?: string; email?: string; role?: string; tenantId?: string }
+      | undefined;
+
+    if (!user?.email) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const role = normalizeRole(user.role);
+    if (!role) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
+    const isSuperAdmin = role === 'super_admin';
+    const isOwnTenantAdmin = hasRole(role, 'agency_admin') && user.tenantId === tenantId;
+
+    // super_admin: any tenant (explicit). agency_admin: own tenant only.
+    if (!isSuperAdmin && !isOwnTenantAdmin) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
+    if (req.method === 'DELETE') {
+      let confirm: unknown;
+      try {
+        const body = await req.json();
+        confirm = body?.confirm;
+      } catch {
+        confirm = undefined;
+      }
+      if (confirm !== DELETE_DATA_CONFIRMATION) {
+        return NextResponse.json(
+          {
+            error: 'Confirmation required',
+            hint: `Send JSON body { "confirm": "${DELETE_DATA_CONFIRMATION}" }`,
+          },
+          { status: 400 }
+        );
+      }
+    }
+
+    actor = {
+      type: 'session',
+      role,
+      userId: user.id,
+      email: user.email,
+    };
+  }
+
+  await recordAuditTrailEvent({
+    eventType: 'data.deletion_auth',
+    tenantId,
+    triggerSource: actor.type === 'cron' ? 'cron' : 'api',
+    payload: {
+      actorType: actor.type,
+      role: actor.role ?? null,
+      userId: actor.userId ?? null,
+      method: req.method,
+    },
+  }).catch(() => {});
 
   if (req.method === 'DELETE') {
-    // The route param is the authority for this destructive tenant-local workflow.
     return runWithTenantAsync(tenantId, () => handleDataDeletion(req, tenantId));
   } else if (req.method === 'GET') {
     return runWithTenantAsync(tenantId, () => getDeletionStatus(req, tenantId));

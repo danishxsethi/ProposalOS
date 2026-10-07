@@ -22,6 +22,9 @@
 
 import { logger } from '@/lib/logger';
 
+const UPSTASH_URL = process.env.UPSTASH_REDIS_REST_URL;
+const UPSTASH_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN;
+
 // ─── Interface ───────────────────────────────────────────────────────────────
 
 export interface SharedStore {
@@ -51,6 +54,26 @@ export interface SharedStore {
   increment(key: string, ttlSeconds: number): Promise<number>;
 
   /**
+   * Atomically increment a float value. Returns the new value after increment.
+   * Sets TTL on first write (key creation). Safe for concurrent instances.
+   */
+  incrementFloat(key: string, amount: number, ttlSeconds: number): Promise<number>;
+
+  /**
+   * Atomic check-and-increment: increment a float counter ONLY if the result
+   * would not exceed `cap`. Returns { allowed, newValue }.
+   *
+   * Uses a Lua script for atomicity — no race between read and write.
+   * If key doesn't exist, it's created with TTL on first write.
+   */
+  checkAndIncrementFloat(
+    key: string,
+    amount: number,
+    cap: number,
+    ttlSeconds: number
+  ): Promise<{ allowed: boolean; newValue: number }>;
+
+  /**
    * Delete a key.  No-op when the key does not exist.
    */
   del(key: string): Promise<void>;
@@ -59,6 +82,121 @@ export interface SharedStore {
    * Clear all keys in the store. Mainly for admin/tests.
    */
   clear?(): Promise<void>;
+}
+
+// ─── Upstash REST adapter (serverless-safe, no TCP/VPC needed) ──────────────
+
+/** Lazy-loaded singleton for Upstash REST client. */
+let _upstashUrl: string | null = null;
+let _upstashToken: string | null = null;
+
+function getUpstashConfig(): { url: string; token: string } | null {
+  if (_upstashUrl && _upstashToken) return { url: _upstashUrl, token: _upstashToken };
+  const url = process.env.UPSTASH_REDIS_REST_URL;
+  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
+  if (!url || !token) return null;
+  _upstashUrl = url;
+  _upstashToken = token;
+  return { url, token };
+}
+
+function makeUpstashAdapter(config: { url: string; token: string }): SharedStore {
+  const base = config.url.replace(/\/$/, '');
+  const token = config.token;
+
+  async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+    const res = await fetch(`${base}${path}`, {
+      ...init,
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+        ...init.headers,
+      },
+    });
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      throw new Error(`Upstash HTTP ${res.status}: ${text}`);
+    }
+    if (res.status === 204) return undefined as unknown as T;
+    return res.json() as Promise<T>;
+  }
+
+  return {
+    async get(key) {
+      const data = await request<{ result: string | null }>(`/get/${encodeURIComponent(key)}`);
+      return data.result;
+    },
+    async set(key, value, ttlSeconds) {
+      await request(`/set/${encodeURIComponent(key)}`, {
+        method: 'POST',
+        body: JSON.stringify({ value, ex: ttlSeconds }),
+      });
+    },
+    async setIfNotExists(key, value, ttlSeconds) {
+      const data = await request<{ result: boolean }>(`/set/${encodeURIComponent(key)}`, {
+        method: 'POST',
+        body: JSON.stringify({ value, ex: ttlSeconds, nx: true }),
+      });
+      return data.result;
+    },
+    async increment(key, ttlSeconds) {
+      const data = await request<{ result: number }>(`/incr/${encodeURIComponent(key)}`);
+      // Set expiry on first write (Upstash doesn't support EX on INCR directly)
+      // We'll set it separately; race is acceptable for this use case
+      await request(`/expire/${encodeURIComponent(key)}`, {
+        method: 'POST',
+        body: JSON.stringify({ ex: ttlSeconds }),
+      }).catch(() => {});
+      return data.result;
+    },
+    async incrementFloat(key, amount, ttlSeconds) {
+      const data = await request<{ result: number }>(`/incrbyfloat/${encodeURIComponent(key)}`, {
+        method: 'POST',
+        body: JSON.stringify({ amount }),
+      });
+      await request(`/expire/${encodeURIComponent(key)}`, {
+        method: 'POST',
+        body: JSON.stringify({ ex: ttlSeconds }),
+      }).catch(() => {});
+      return data.result;
+    },
+    async checkAndIncrementFloat(key, amount, cap, ttlSeconds) {
+      // Use Lua via EVAL for atomicity (Upstash supports EVAL)
+      const luaScript = `
+        local current = tonumber(redis.call('GET', KEYS[1]) or '0')
+        local amount = tonumber(ARGV[1])
+        local cap = tonumber(ARGV[2])
+        local ttl = tonumber(ARGV[3])
+        local newVal = current + amount
+        if newVal > cap then
+          return {0, tostring(current)}
+        end
+        redis.call('SET', KEYS[1], tostring(newVal))
+        if current == 0 then
+          redis.call('EXPIRE', KEYS[1], ttl)
+        end
+        return {1, tostring(newVal)}
+      `;
+      const data = await request<{ result: [number, string] }>(`/eval`, {
+        method: 'POST',
+        body: JSON.stringify({
+          script: luaScript,
+          keys: [key],
+          args: [String(amount), String(cap), String(ttlSeconds)],
+        }),
+      });
+      return {
+        allowed: data.result[0] === 1,
+        newValue: parseFloat(data.result[1]),
+      };
+    },
+    async del(key) {
+      await request(`/del/${encodeURIComponent(key)}`, { method: 'POST' });
+    },
+    async clear() {
+      await request(`/flushdb`, { method: 'POST' });
+    },
+  };
 }
 
 // ─── Redis adapter (ioredis) ─────────────────────────────────────────────────
@@ -71,12 +209,16 @@ async function getRedisInstance(): Promise<import('ioredis').Redis | null> {
   const url = process.env.REDIS_URL;
   if (!url) return null;
   try {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
+
     const { default: Redis } = await import('ioredis');
     _redisInstance = new Redis(url, {
       lazyConnect: true,
       maxRetriesPerRequest: 2,
       enableOfflineQueue: false,
+      // Memorystore SERVER_AUTHENTICATION uses a GCP-managed CA not in the
+      // public trust store. Accept the host CA — traffic stays inside the
+      // private VPC, confidentiality is provided by TLS either way.
+      ...(url.startsWith('rediss://') ? { tls: { rejectUnauthorized: false } } : {}),
     });
     await _redisInstance.connect();
     logger.info({ event: 'shared_store.redis_connected' }, 'SharedStore: Redis connected');
@@ -111,6 +253,45 @@ function makeRedisAdapter(redis: import('ioredis').Redis): SharedStore {
       // results[0] = [err, count]
       const count = results?.[0]?.[1] as number | undefined;
       return count ?? 1;
+    },
+    async incrementFloat(key, amount, ttlSeconds) {
+      const pipeline = redis.pipeline();
+      pipeline.incrbyfloat(key, amount);
+      pipeline.expire(key, ttlSeconds);
+      const results = await pipeline.exec();
+      const val = results?.[0]?.[1] as string | undefined;
+      return parseFloat(val ?? '0');
+    },
+    async checkAndIncrementFloat(key, amount, cap, ttlSeconds) {
+      // Lua script: atomic read-check-increment
+      // Returns: [allowed (0/1), newValue]
+      const luaScript = `
+        local current = tonumber(redis.call('GET', KEYS[1]) or '0')
+        local amount = tonumber(ARGV[1])
+        local cap = tonumber(ARGV[2])
+        local ttl = tonumber(ARGV[3])
+        local newVal = current + amount
+        if newVal > cap then
+          return {0, tostring(current)}
+        end
+        redis.call('SET', KEYS[1], tostring(newVal))
+        if current == 0 then
+          redis.call('EXPIRE', KEYS[1], ttl)
+        end
+        return {1, tostring(newVal)}
+      `;
+      const result = (await redis.eval(
+        luaScript,
+        1,
+        key,
+        String(amount),
+        String(cap),
+        String(ttlSeconds)
+      )) as [number, string];
+      return {
+        allowed: result[0] === 1,
+        newValue: parseFloat(result[1]),
+      };
     },
     async del(key) {
       await redis.del(key);
@@ -169,6 +350,28 @@ export function createMemoryStore(): SharedStore & {
       _store.set(key, { value: String(next), expiresAt: entry.expiresAt });
       return next;
     },
+    async incrementFloat(key, amount, ttlSeconds) {
+      const entry = _store.get(key);
+      if (!entry || isExpired(entry)) {
+        _store.set(key, { value: String(amount), expiresAt: Date.now() + ttlSeconds * 1000 });
+        return amount;
+      }
+      const next = parseFloat(entry.value) + amount;
+      _store.set(key, { value: String(next), expiresAt: entry.expiresAt });
+      return next;
+    },
+    async checkAndIncrementFloat(key, amount, cap, ttlSeconds) {
+      const entry = _store.get(key);
+      const current = entry && !isExpired(entry) ? parseFloat(entry.value) : 0;
+      const newVal = current + amount;
+      if (newVal > cap) {
+        return { allowed: false, newValue: current };
+      }
+      const expiresAt =
+        entry && !isExpired(entry) ? entry.expiresAt : Date.now() + ttlSeconds * 1000;
+      _store.set(key, { value: String(newVal), expiresAt });
+      return { allowed: true, newValue: newVal };
+    },
     async del(key) {
       _store.delete(key);
     },
@@ -202,7 +405,15 @@ export async function getSharedStore(): Promise<SharedStore> {
     return _instance;
   }
 
-  // No Redis available — check whether we're allowed to fall back
+  // Check Upstash REST (serverless-safe, no TCP/VPC connector needed)
+  const upstash = getUpstashConfig();
+  if (upstash) {
+    _instance = makeUpstashAdapter(upstash);
+    logger.info({ event: 'shared_store.upstash_connected' }, 'SharedStore: Upstash REST connected');
+    return _instance;
+  }
+
+  // No Redis or Upstash available — check whether we're allowed to fall back
   const isProd = process.env.NODE_ENV === 'production';
   const requiredDisabled = process.env.SHARED_STORE_REQUIRED === 'false';
 

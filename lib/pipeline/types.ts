@@ -200,10 +200,12 @@ export interface EmailQAResult {
  */
 export interface GeneratedEmail {
   id: string;
+  auditId: string;
   subject: string;
   body: string;
   prospectId: string;
   proposalId: string;
+  findingIds: string[];
   findingReferences: string[];
   scorecardUrl: string;
   generatedAt: Date;

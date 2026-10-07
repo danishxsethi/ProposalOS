@@ -1,3 +1,4 @@
+import type { ValidatedCustomerClaim } from '@/lib/claims/claimContract';
 import { CostTracker } from '@/lib/costs/costTracker';
 import { Finding } from '@/lib/diagnosis/types';
 
@@ -11,6 +12,8 @@ export interface DiagnosisCluster {
   findings: Finding[];
   rootCause: string;
   narrative?: string;
+  rootCauseClaim?: ValidatedCustomerClaim;
+  narrativeClaim?: ValidatedCustomerClaim;
   confidenceScore?: number;
 }
 
@@ -18,7 +21,7 @@ export interface DiagnosisRanking {
   clusterId: string;
   rank: number;
   impactScore: number;
-  estimatedROI: number;
+  estimatedROI: number | null;
   effortLevel: 'quick_win' | 'moderate' | 'major_effort';
 }
 

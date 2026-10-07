@@ -70,7 +70,7 @@ async function verifySprint9() {
     );
   }
 
-  console.log('  -> Asking general question to invoke Gemini Generative fallback...');
+  console.log('  -> Asking a general question through the configured LLM provider...');
   const chatResult2 = await runClosingAgent(
     proposal2.id,
     sessionId2,

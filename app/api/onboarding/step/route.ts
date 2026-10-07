@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 
 import { z } from 'zod';
 
+import { logger } from '@/lib/logger';
 import { withAuth } from '@/lib/middleware/auth';
 import { prisma } from '@/lib/prisma';
 import { validateCsrfRequest } from '@/lib/security/csrf';
@@ -73,7 +74,7 @@ async function handleOnboardingStep(req: Request) {
       onboardingCompletedAt: updatedTenant.onboardingCompletedAt,
     });
   } catch (error) {
-    console.error('[API] Onboarding step update error:', error);
+    logger.error('[API] Onboarding step update error:', error);
     return NextResponse.json({ error: 'Failed to update onboarding step' }, { status: 500 });
   }
 }

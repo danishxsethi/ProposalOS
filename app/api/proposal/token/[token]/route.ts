@@ -5,7 +5,12 @@ import { withAuth } from '@/lib/middleware/auth';
 import { checkRateLimit } from '@/lib/middleware/rateLimit';
 import { recordAuditTrailEvent } from '@/lib/observability/auditTrail';
 import { prisma } from '@/lib/prisma';
+import {
+  PublicProposalAccessError,
+  resolvePublicProposalAccess,
+} from '@/lib/proposal/publicAccess';
 import { hashSensitive } from '@/lib/security/abuseDefense/policies';
+import { getTenantId } from '@/lib/tenant/context';
 
 interface Params {
   params: Promise<{ token: string }>;
@@ -19,22 +24,14 @@ export async function GET(request: Request, { params }: Params) {
   try {
     const { token } = await params;
 
-    // Find proposal by token first
-    const proposal = await prisma.proposal.findUnique({
-      where: { webLinkToken: token },
-      include: {
-        audit: {
-          include: {
-            findings: {
-              where: { excluded: false },
-              orderBy: { impactScore: 'desc' },
-            },
-          },
-        },
-      },
-    });
-
-    if (!proposal) {
+    let access;
+    try {
+      access = await resolvePublicProposalAccess(token);
+    } catch (error) {
+      if (!(error instanceof PublicProposalAccessError)) throw error;
+      if (error.status !== 404) {
+        return NextResponse.json({ error: error.message }, { status: error.status });
+      }
       // 1. Invalid Token Attempt: IP-scoped strict rate limit (10 attempts per hour)
       const invalidLimit = await checkRateLimit(request, {
         windowMs: 60 * 60 * 1000, // 1 hour
@@ -70,6 +67,7 @@ export async function GET(request: Request, { params }: Params) {
 
       return NextResponse.json({ error: 'Proposal not found' }, { status: 404 });
     }
+    const { proposal, tenantId } = access;
 
     // 2. Valid Token Usage: Token-hash-scoped scraping limit (100 requests per hour)
 
@@ -81,7 +79,7 @@ export async function GET(request: Request, { params }: Params) {
       routeClass: 'token_download',
       auditOnBlock: true,
       failClosed: true,
-      tenantId: proposal.tenantId,
+      tenantId,
     });
 
     if (!validLimit.success) {
@@ -91,55 +89,23 @@ export async function GET(request: Request, { params }: Params) {
       );
     }
 
-    // Verify expiration: Status is REJECTED or older than 90 days
-    if (proposal.status === 'REJECTED') {
-      return NextResponse.json({ error: 'Proposal has been rejected' }, { status: 410 });
-    }
-
-    const ageMs = Date.now() - proposal.createdAt.getTime();
-    const expiryMs = 90 * 24 * 60 * 60 * 1000; // 90 days
-    if (ageMs > expiryMs) {
-      return NextResponse.json({ error: 'Proposal has expired' }, { status: 410 });
-    }
+    // Public mutating channels permit customer actions only; status mutation remains authenticated.
 
     // Log proposal access for security monitoring (structured — no PII in message, token/IP redacted by logger)
     logger.info(
-      { event: 'proposal.accessed', proposalId: proposal.id },
+      { event: 'proposal.accessed', proposalId: access.proposalId },
       'Proposal accessed via public token'
     );
 
     return NextResponse.json({
-      id: proposal.id,
+      ...proposal,
       businessName: proposal.audit.businessName,
       businessCity: proposal.audit.businessCity,
       businessIndustry: proposal.audit.businessIndustry,
-      executiveSummary: proposal.executiveSummary,
-      painClusters: proposal.painClusters,
       findings: proposal.audit.findings,
-      pricing: proposal.pricing,
-      tiers: {
-        essentials: proposal.tierEssentials,
-        growth: proposal.tierGrowth,
-        premium: proposal.tierPremium,
-      },
-      tierEssentials: proposal.tierEssentials,
-      tierGrowth: proposal.tierGrowth,
-      tierPremium: proposal.tierPremium,
-      nextSteps: proposal.nextSteps,
-      assumptions: proposal.assumptions,
-      disclaimers: proposal.disclaimers,
-      qaScore: proposal.qaScore,
-      clientScore: proposal.clientScore,
-      clientScoreResults: proposal.clientScoreResults,
-      humanCloseabilityScore: proposal.humanCloseabilityScore,
-      replyReceivedAt: proposal.replyReceivedAt,
-      meetingBookedAt: proposal.meetingBookedAt,
-      tierChosen: proposal.tierChosen,
-      viewedAt: proposal.viewedAt,
-      createdAt: proposal.createdAt,
     });
   } catch (error) {
-    console.error('[API] Error fetching proposal:', error);
+    logger.error('[API] Error fetching proposal:', error);
     return NextResponse.json({ error: 'Failed to fetch proposal' }, { status: 500 });
   }
 }
@@ -151,16 +117,26 @@ export async function GET(request: Request, { params }: Params) {
 export const PATCH = withAuth(async (request: Request, { params }: Params) => {
   try {
     const { token } = await params;
+    const tenantId = await getTenantId();
+    if (!tenantId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     const body = await request.json();
     const { status } = body;
 
-    // Validate status
-    const validStatuses = ['DRAFT', 'READY', 'SENT', 'VIEWED', 'ACCEPTED', 'REJECTED'];
+    // Public share tokens may only record a view. Acceptance/rejection have
+    // dedicated client actions; payment and close state are server-owned.
+    const validStatuses = ['VIEWED'];
     if (status && !validStatuses.includes(status)) {
       return NextResponse.json(
         { error: `Invalid status. Must be one of: ${validStatuses.join(', ')}` },
         { status: 400 }
       );
+    }
+
+    const existing = await prisma.proposal.findFirst({ where: { webLinkToken: token, tenantId } });
+    if (!existing) return NextResponse.json({ error: 'Proposal not found' }, { status: 404 });
+    if (status === 'VIEWED') {
+      const { proposalId } = await resolvePublicProposalAccess(token);
+      if (proposalId !== existing.id) return NextResponse.json({ error: 'Proposal not found' }, { status: 404 });
     }
 
     const updateData: Record<string, unknown> = {};
@@ -172,7 +148,7 @@ export const PATCH = withAuth(async (request: Request, { params }: Params) => {
     }
 
     const proposal = await prisma.proposal.update({
-      where: { webLinkToken: token },
+      where: { id: existing.id, tenantId },
       data: updateData,
     });
 
@@ -183,7 +159,7 @@ export const PATCH = withAuth(async (request: Request, { params }: Params) => {
       viewedAt: proposal.viewedAt,
     });
   } catch (error) {
-    console.error('[API] Error updating proposal:', error);
+    logger.error('[API] Error updating proposal:', error);
     return NextResponse.json({ error: 'Failed to update proposal' }, { status: 500 });
   }
 });

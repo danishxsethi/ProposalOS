@@ -9,15 +9,13 @@
  * Requirements: 3.1, 3.2, 3.3, 3.4, 3.5, 3.6
  */
 
-import crypto from 'crypto';
+import { z } from 'zod';
 
 import { FEATURE_FLAGS } from '@/lib/config/feature-flags';
 import { aggregateContext } from '@/lib/context/aggregator';
 import { CostTracker } from '@/lib/costs/costTracker';
-import { invokeDiagnosisGraphWithTimeout } from '@/lib/graph/diagnosis-graph';
-import { invokeProposalGraphWithTimeout } from '@/lib/graph/proposal-graph';
-import { detectVertical, getPlaybook } from '@/lib/playbooks/registry';
 import { prisma } from '@/lib/prisma';
+import { compileAndPersistProposal } from '@/lib/proposal/compiler';
 
 import { logStageFailure } from '../metrics';
 import { transition } from '../stateMachine';
@@ -107,38 +105,39 @@ export async function processOneDiagnosisProposal(prospectId: string): Promise<S
   if (!audit) {
     throw new Error(`Audit not found: ${prospect.auditId}`);
   }
-
-  const costTracker = new CostTracker();
-
-  // Detect vertical and get playbook
-  const vertical = detectVertical({
-    businessIndustry: audit.businessIndustry,
-    businessName: audit.businessName,
-    businessCity: audit.businessCity,
-  });
-  const playbook = getPlaybook(vertical);
-
-  // 2. Run diagnosis pipeline via LangGraph
-  // Build context if Single-Pass is enabled
-  let aggregatedContext;
-  if (FEATURE_FLAGS.SINGLE_PASS_DIAGNOSIS) {
-    aggregatedContext = await aggregateContext(audit as any);
+  if (audit.tenantId !== tenantId) {
+    throw new Error(`Audit ${prospect.auditId} belongs to another tenant`);
+  }
+  if (audit.status !== 'COMPLETE' || audit.trustState !== 'TRUSTED') {
+    throw new Error(
+      `Audit ${prospect.auditId} is not trusted for proposal generation (status=${audit.status}, trustState=${audit.trustState})`
+    );
   }
 
-  const diagnosisResult = await invokeDiagnosisGraphWithTimeout({
-    findings: audit.findings,
+  const pipelineConfig = await prisma.pipelineConfig.findUnique({ where: { tenantId } });
+  const pricingMultiplier = z
+    .number()
+    .finite()
+    .min(0.5)
+    .max(2)
+    .parse(pipelineConfig?.pricingMultiplier ?? 1);
+  const costTracker = new CostTracker();
+  const aggregatedContext = FEATURE_FLAGS.SINGLE_PASS_DIAGNOSIS
+    ? await aggregateContext(audit as any)
+    : undefined;
+  const compiled = await compileAndPersistProposal({
+    auditId: audit.id,
     tenantId,
-    mode: FEATURE_FLAGS.SINGLE_PASS_DIAGNOSIS ? 'SINGLE_PASS' : 'MULTI_STEP',
+    pricingMultiplier,
+    costTracker,
+    allowZeroClusters: true,
+    diagnosisMode: FEATURE_FLAGS.SINGLE_PASS_DIAGNOSIS ? 'SINGLE_PASS' : 'MULTI_STEP',
     aggregatedContext,
   });
-
-  const costCents = costTracker.getTotalCents();
-
-  // 3. If zero clusters: transition to "low_value"
-  if (diagnosisResult.clusters.length === 0) {
+  if ('emptyDiagnosis' in compiled) {
+    const costCents = compiled.costTracker.getTotalCents();
     await transition(prospectId, 'low_value', PipelineStage.DIAGNOSIS);
     await recordTenantCost(tenantId, costCents, audit.id);
-
     return {
       success: true,
       prospectId,
@@ -152,59 +151,10 @@ export async function processOneDiagnosisProposal(prospectId: string): Promise<S
       },
     };
   }
+  const diagnosisResult = compiled.diagnosis;
 
-  // 4. Run proposal pipeline via LangGraph
-  const evidenceSnapshots = await prisma.evidenceSnapshot.findMany({
-    where: { auditId: audit.id },
-  });
-
-  const proposalResult = await invokeProposalGraphWithTimeout({
-    businessName: audit.businessName,
-    businessIndustry: audit.businessIndustry ?? undefined,
-    clusters: diagnosisResult.clusters,
-    findings: audit.findings,
-    evidenceSnapshots,
-    tenantId: audit.tenantId,
-    auditId: audit.id,
-  });
-
-  // 5. Get tenant pricing multiplier
-  const pipelineConfig = await prisma.pipelineConfig.findUnique({
-    where: { tenantId },
-  });
-  const pricingMultiplier = pipelineConfig?.pricingMultiplier ?? 1.0;
-
-  // Apply pricing multiplier to tier prices
-  const adjustedPricing = {
-    essentials: Math.round((proposalResult.pricing.essentials ?? 0) * pricingMultiplier),
-    growth: Math.round((proposalResult.pricing.growth ?? 0) * pricingMultiplier),
-    premium: Math.round((proposalResult.pricing.premium ?? 0) * pricingMultiplier),
-    currency: proposalResult.pricing.currency ?? 'USD',
-  };
-
-  // 6. Create Proposal record with unique web link token
-  const webLinkToken = crypto.randomUUID();
-
-  const proposal = await prisma.proposal.create({
-    data: {
-      auditId: audit.id,
-      tenantId,
-      status: 'DRAFT',
-      executiveSummary: proposalResult.executiveSummary,
-      painClusters: JSON.parse(JSON.stringify(proposalResult.clusters)),
-      tierEssentials: JSON.parse(JSON.stringify(proposalResult.tiers.essentials)),
-      tierGrowth: JSON.parse(JSON.stringify(proposalResult.tiers.growth)),
-      tierPremium: JSON.parse(JSON.stringify(proposalResult.tiers.premium)),
-      pricing: JSON.parse(JSON.stringify(adjustedPricing)),
-      assumptions: proposalResult.proposalDef.assumptions,
-      disclaimers: proposalResult.proposalDef.disclaimers,
-      nextSteps: proposalResult.proposalDef.nextSteps,
-      comparisonReport: proposalResult.proposalDef.comparisonReport
-        ? JSON.parse(JSON.stringify(proposalResult.proposalDef.comparisonReport))
-        : undefined,
-      webLinkToken,
-    },
-  });
+  const proposal = compiled.proposalRecord;
+  const webLinkToken = proposal.webLinkToken;
 
   // 7. Link proposalId to ProspectLead
   await prisma.prospectLead.update({
@@ -231,7 +181,7 @@ export async function processOneDiagnosisProposal(prospectId: string): Promise<S
       webLinkToken,
       clusterCount: diagnosisResult.clusters.length,
       pricingMultiplier,
-      adjustedPricing,
+      adjustedPricing: compiled.proposal.pricing,
     },
   };
 }

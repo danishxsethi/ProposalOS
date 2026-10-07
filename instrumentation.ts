@@ -41,5 +41,15 @@ export async function register() {
       logger.error({ error }, '[instrumentation] OpenTelemetry initialization failed');
       // Don't throw - allow the application to start without tracing
     }
+
+    // Eager Prisma connection on boot to mitigate Cloud Run cold-start latency
+    try {
+      const { prisma } = await import('./lib/prisma');
+      await prisma.$connect();
+      logger.info('[instrumentation] Eager Prisma database connection established');
+    } catch (dbError) {
+      // Do not crash server if DB is temporarily unreachable during local builds/tests
+      logger.warn({ error: dbError }, '[instrumentation] Eager Prisma database connection deferred');
+    }
   }
 }

@@ -1,11 +1,7 @@
-import { withModuleCache } from '@/lib/cache/moduleCache';
-import { CostTracker } from '@/lib/costs/costTracker';
 import { logger } from '@/lib/logger';
-import { withProviderResilience } from '@/lib/resilience/withProviderResilience';
+import { mapsIntelligence, normalizePlaceToLegacy } from '@/lib/maps/serpMapsProvider';
 
 import { GBPModuleInput, LegacyAuditModuleResult } from './types';
-
-const PLACES_API_BASE = 'https://places.googleapis.com/v1';
 
 /** Normalize for comparison: lowercase, remove punctuation, collapse spaces */
 function normalize(s: string): string {
@@ -14,6 +10,51 @@ function normalize(s: string): string {
     .replace(/[^\w\s]/g, '')
     .replace(/\s+/g, ' ')
     .trim();
+}
+
+/**
+ * P1-29 (Wave 7): score a Text Search candidate against the input business identity
+ * using the real signals the search response actually returns (name, address) — no
+ * fabricated certainty. Used to pick the best-matching candidate out of multiple
+ * results instead of blindly trusting index 0, and to flag when the match is not
+ * confidently distinguishable from a same-name/franchise competitor.
+ */
+/**
+ * P1-29 (Wave 7): score a Text Search candidate against the input business identity
+ * using the real signals the search response actually returns (name, address) — no
+ * fabricated certainty. Used to pick the best-matching candidate out of multiple
+ * results instead of blindly trusting index 0, and to flag when the match is not
+ * confidently distinguishable from a same-name/franchise competitor. Exported so
+ * `gbpDeep.ts`'s own independent fallback resolution (used only when the canonical
+ * `gbp` dependency is unavailable) applies the identical disambiguation logic
+ * instead of a second, divergent implementation.
+ */
+export function scorePlaceCandidate(
+  candidate: { displayName?: { text?: string }; formattedAddress?: string },
+  businessName: string,
+  city: string
+): number {
+  const candidateName = normalize(candidate.displayName?.text || '');
+  const targetName = normalize(businessName);
+  let score = 0;
+
+  if (candidateName && targetName) {
+    if (candidateName === targetName) {
+      score += 70;
+    } else if (candidateName.includes(targetName) || targetName.includes(candidateName)) {
+      score += 45;
+    } else {
+      const candidateTokens = new Set(candidateName.split(' ').filter(Boolean));
+      const targetTokens = targetName.split(' ').filter(Boolean);
+      const overlap = targetTokens.filter((t) => candidateTokens.has(t)).length;
+      if (targetTokens.length > 0) score += Math.round((overlap / targetTokens.length) * 40);
+    }
+  }
+
+  const address = (candidate.formattedAddress || '').toLowerCase();
+  if (city && address.includes(city.toLowerCase())) score += 30;
+
+  return score;
 }
 
 /** Check if GBP name is consistent with website domain (e.g. "Main Street Dental" vs mainstreetdental.com) */
@@ -37,120 +78,57 @@ function checkNameMatchesWebsite(
 
 export async function runGBPModule(
   input: GBPModuleInput,
-  tracker?: CostTracker
+  _tracker?: unknown
 ): Promise<LegacyAuditModuleResult> {
   logger.info({ businessName: input.businessName, city: input.city }, '[GBPModule] Analyzing');
 
-  if (!process.env.GOOGLE_PLACES_API_KEY) {
-    throw new Error('GOOGLE_PLACES_API_KEY is missing');
-  }
-
   try {
-    // 1. Find Place ID via Text Search (Cached 24 hours)
-    tracker?.addApiCall('PLACES_TEXT_SEARCH');
-
-    const searchData = await withModuleCache<any>(
-      {
-        module: 'gbp',
-        version: 1,
-        input: { type: 'places_text_search', businessName: input.businessName, city: input.city },
-      },
-      { ttlSeconds: 24 * 60 * 60 },
-      async () => {
-        return withProviderResilience<any>(
-          {
-            provider: 'google-places',
-            operation: 'gbp:places_text_search',
-            degrade: true,
-            fallbackValue: { places: [] },
-          },
-          async () => {
-            const searchRes = await fetch(`${PLACES_API_BASE}/places:searchText`, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'X-Goog-Api-Key': process.env.GOOGLE_PLACES_API_KEY!,
-                'X-Goog-FieldMask':
-                  'places.name,places.id,places.formattedAddress,places.rating,places.userRatingCount',
-              },
-              body: JSON.stringify({
-                textQuery: `${input.businessName} in ${input.city}`,
-                maxResultCount: 1,
-              }),
-            });
-
-            if (!searchRes.ok) {
-              throw new Error(`Places Text Search failed: ${searchRes.statusText}`);
-            }
-
-            return searchRes.json();
-          }
-        );
-      }
-    );
-
-    if (!searchData.places || searchData.places.length === 0) {
+    const resolution = await mapsIntelligence.resolveBusiness({
+      businessName: input.businessName,
+      city: input.city,
+      domain: input.websiteUrl,
+      phone: input.phone,
+      address: input.address,
+      latitude: input.latitude,
+      longitude: input.longitude,
+      fieldProfile: 'GBP_STANDARD',
+    });
+    if (resolution.status === 'UNAVAILABLE' || resolution.status === 'FAILED') {
+      return {
+        moduleId: 'gbp-audit',
+        status: 'failed',
+        timestamp: new Date().toISOString(),
+        data: null,
+        error: resolution.error?.message ?? 'Maps provider unavailable',
+      };
+    }
+    if (resolution.data?.identityStatus === 'NOT_FOUND' || !resolution.data) {
       throw new Error(`Business not found: ${input.businessName} in ${input.city}`);
     }
-
-    const place = searchData.places[0];
-    const placeId = place.id;
-
-    // 2. Get Details + Reviews
-    // 2. Get Details + Reviews (Cached 7 days)
-    tracker?.addApiCall('PLACES_DETAILS');
-
-    const fieldMask = [
-      'id',
-      'displayName',
-      'formattedAddress',
-      'rating',
-      'userRatingCount',
-      'websiteUri',
-      'reviews',
-      'photos',
-      'regularOpeningHours',
-      'types',
-      'editorialSummary',
-      'nationalPhoneNumber',
-      'internationalPhoneNumber',
-      'primaryTypeDisplayName',
-      'primaryType',
-      'paymentOptions',
-      'accessibilityOptions',
-      'amenities',
-    ].join(',');
-    const details = await withModuleCache<any>(
-      {
-        module: 'gbp',
-        version: 1,
-        input: { type: 'places_details', placeId },
-      },
-      { ttlSeconds: 7 * 24 * 60 * 60 },
-      async () => {
-        return withProviderResilience<any>(
-          {
-            provider: 'google-places',
-            operation: 'gbp:places_details',
-            degrade: true,
-            fallbackValue: {},
-          },
-          async () => {
-            const detailsRes = await fetch(`${PLACES_API_BASE}/places/${placeId}`, {
-              headers: {
-                'Content-Type': 'application/json',
-                'X-Goog-Api-Key': process.env.GOOGLE_PLACES_API_KEY!,
-                'X-Goog-FieldMask': fieldMask,
-              },
-            });
-            if (!detailsRes.ok) {
-              throw new Error(`Places Details failed: ${detailsRes.statusText}`);
-            }
-            return await detailsRes.json();
-          }
-        );
-      }
-    );
+    const identityConfidence =
+      resolution.data.identityStatus === 'CONFIRMED' ? 'high' : 'ambiguous';
+    if (resolution.data.identityStatus !== 'CONFIRMED') {
+      return {
+        moduleId: 'gbp-audit',
+        status: 'success',
+        timestamp: new Date().toISOString(),
+        data: {
+          placeId: resolution.data.placeId,
+          mapsUri: resolution.data.mapsUri,
+          name: resolution.data.displayName,
+          address: resolution.data.formattedAddress,
+          identityStatus: resolution.data.identityStatus,
+          identityConfidence,
+          matchConfidenceScore: resolution.data.identityConfidence,
+          candidatesConsidered: resolution.data.candidateCount,
+          alternateCandidateNames: resolution.data.alternateCandidates
+            .map((candidate) => candidate.displayName)
+            .filter((name): name is string => !!name),
+          mapsProvenance: resolution.provenance,
+        },
+      };
+    }
+    const details = normalizePlaceToLegacy(resolution.data) as Record<string, any>;
 
     const phone = details.nationalPhoneNumber || details.internationalPhoneNumber;
     const description = details.editorialSummary?.text;
@@ -160,7 +138,7 @@ export async function runGBPModule(
 
     // Check name/phone consistency with website (if websiteUrl provided)
     const websiteUrl = input.websiteUrl;
-    const nameMatchesWebsite = checkNameMatchesWebsite(details.displayName?.text, websiteUrl);
+    const nameMatchesWebsite = checkNameMatchesWebsite(details.name, websiteUrl);
     const phoneMatchesWebsite = true; // Places API doesn't expose website phone; assume OK if both present
 
     return {
@@ -168,18 +146,19 @@ export async function runGBPModule(
       status: 'success',
       timestamp: new Date().toISOString(),
       data: {
-        placeId: details.id,
-        name: details.displayName?.text,
-        address: details.formattedAddress,
+        placeId: details.placeId,
+        identityStatus: resolution.data.identityStatus,
+        name: details.name,
+        address: details.address,
         rating: details.rating,
         reviewCount: details.userRatingCount,
-        website: details.websiteUri,
+        website: details.website,
         reviews: reviews.slice(0, 10),
         photos: photos.slice(0, 5),
         photoCount,
         openingHours: details.regularOpeningHours,
         types: details.types,
-        primaryType: details.primaryTypeDisplayName?.text,
+        primaryType: details.primaryType,
         phone,
         nationalPhoneNumber: details.nationalPhoneNumber,
         internationalPhoneNumber: details.internationalPhoneNumber,
@@ -195,6 +174,16 @@ export async function runGBPModule(
           details.accessibilityOptions ||
           details.amenities
         ),
+        // P1-29 (Wave 7): real identity-match provenance — never fabricated
+        // certainty. `gbpDeep` and the aggregation layer use this to withhold
+        // definitive customer-negative findings about an unconfirmed match.
+        identityConfidence,
+        matchConfidenceScore: resolution.data.identityConfidence ?? 0,
+        candidatesConsidered: resolution.data.candidateCount,
+        alternateCandidateNames: resolution.data.alternateCandidates
+          .map((candidate) => candidate.displayName)
+          .filter((name): name is string => !!name),
+        mapsProvenance: resolution.provenance,
       },
     };
   } catch (error) {

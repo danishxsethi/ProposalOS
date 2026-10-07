@@ -11,6 +11,7 @@
 import { NextResponse } from 'next/server';
 
 import { generateTraceId } from '@/lib/api/errors';
+import { logger } from '@/lib/logger';
 import { withAuth } from '@/lib/middleware/auth';
 import { RateLimitPresets, withRateLimit } from '@/lib/middleware/rateLimit';
 import { prisma } from '@/lib/prisma';
@@ -87,7 +88,7 @@ async function handleListProposals(req: Request): Promise<NextResponse> {
     response.headers.set('X-Trace-Id', traceId);
     return response;
   } catch (error) {
-    console.error('[API] Error fetching proposals:', error);
+    logger.error('[API] Error fetching proposals:', error);
     return NextResponse.json({ error: 'Failed to fetch proposals' }, { status: 500 });
   }
 }

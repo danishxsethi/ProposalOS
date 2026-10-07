@@ -3,13 +3,74 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { CostTracker } from '../../costs/costTracker';
 import { AuditOrchestrator } from '../../orchestrator/auditOrchestrator';
 
-// Mock dependencies
-vi.mock('../../modules/websiteCrawler', () => ({
-  crawlWebsite: vi.fn().mockResolvedValue({ status: 'success', pages: [] }),
+// Mock dependencies — the orchestrator imports every audit module directly via
+// '@/lib/modules/*'; without deterministic mocks these hit live providers
+// (SerpAPI, Places, PageSpeed, Puppeteer) and time out in unit tests.
+// A successful module result must expose findings/evidenceSnapshots so the
+// orchestrator's result aggregation works. Note: vi.mock factories are hoisted,
+// so the result object must be built inside each factory (no shared const).
+vi.mock('@/lib/modules/websiteCrawler', () => ({
+  crawlWebsite: vi.fn().mockResolvedValue({ findings: [], evidenceSnapshots: [] }),
 }));
 
-vi.mock('../../modules/gbp', () => ({
-  runGbpModule: vi.fn().mockResolvedValue({ status: 'success', data: {} }),
+vi.mock('@/lib/modules/gbp', () => ({
+  runGBPModule: vi.fn().mockResolvedValue({ findings: [], evidenceSnapshots: [] }),
+}));
+
+vi.mock('@/lib/modules/gbpDeep', () => ({
+  runGbpDeepModule: vi.fn().mockResolvedValue({ findings: [], evidenceSnapshots: [] }),
+}));
+
+vi.mock('@/lib/modules/competitor', () => ({
+  runCompetitorModule: vi.fn().mockResolvedValue({ findings: [], evidenceSnapshots: [] }),
+}));
+
+vi.mock('@/lib/modules/competitorStrategy', () => ({
+  runCompetitorStrategyModule: vi
+    .fn()
+    .mockResolvedValue({ findings: [], evidenceSnapshots: [] }),
+}));
+
+vi.mock('@/lib/modules/mobileUX', () => ({
+  runMobileUXModule: vi.fn().mockResolvedValue({ findings: [], evidenceSnapshots: [] }),
+}));
+
+vi.mock('@/lib/modules/conversion', () => ({
+  runConversionModule: vi.fn().mockResolvedValue({ findings: [], evidenceSnapshots: [] }),
+}));
+
+vi.mock('@/lib/modules/techStack', () => ({
+  runTechStackModule: vi.fn().mockResolvedValue({ findings: [], evidenceSnapshots: [] }),
+}));
+
+vi.mock('@/lib/modules/security', () => ({
+  runSecurityModule: vi.fn().mockResolvedValue({ findings: [], evidenceSnapshots: [] }),
+}));
+
+vi.mock('@/lib/modules/accessibility', () => ({
+  runAccessibilityModule: vi
+    .fn()
+    .mockResolvedValue({ findings: [], evidenceSnapshots: [] }),
+}));
+
+vi.mock('@/lib/modules/keywordGap', () => ({
+  runKeywordGapModule: vi.fn().mockResolvedValue({ findings: [], evidenceSnapshots: [] }),
+}));
+
+vi.mock('@/lib/modules/citations', () => ({
+  runCitationsModule: vi.fn().mockResolvedValue({ findings: [], evidenceSnapshots: [] }),
+}));
+
+vi.mock('@/lib/modules/paidSearch', () => ({
+  runPaidSearchModule: vi.fn().mockResolvedValue({ findings: [], evidenceSnapshots: [] }),
+}));
+
+vi.mock('@/lib/modules/vision', () => ({
+  runVisionModule: vi.fn().mockResolvedValue({ findings: [], evidenceSnapshots: [] }),
+}));
+
+vi.mock('@/lib/evidence/screenshotCapture', () => ({
+  captureScreenshots: vi.fn().mockResolvedValue([]),
 }));
 
 describe('AuditOrchestrator', () => {

@@ -6,6 +6,8 @@
  */
 
 import { logger } from '@/lib/logger';
+import { linkAbortSignals } from '@/lib/security/abort';
+import { getAuditSignalFromStore, getTenantIdFromStore } from '@/lib/tenant/context';
 
 import { checkCircuitBreaker, recordCircuitFailure, recordCircuitSuccess } from './circuitBreaker';
 import { getProviderPolicy } from './providerPolicy';
@@ -94,8 +96,22 @@ function isRetryableErrorKind(err: unknown, policy: ProviderPolicy): boolean {
 
 // ─── Sleep Utility ───────────────────────────────────────────────────────────
 
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+function sleep(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(signal.reason ?? new DOMException('Aborted', 'AbortError'));
+      return;
+    }
+    const timer = setTimeout(() => {
+      signal?.removeEventListener('abort', onAbort);
+      resolve();
+    }, ms);
+    const onAbort = () => {
+      clearTimeout(timer);
+      reject(signal?.reason ?? new DOMException('Aborted', 'AbortError'));
+    };
+    signal?.addEventListener('abort', onAbort, { once: true });
+  });
 }
 
 // ─── Resilience Orchestrator ─────────────────────────────────────────────────
@@ -109,8 +125,11 @@ export async function withProviderResilience<T>(
   options: ExtendedResilienceOptions<T>,
   fn: (context: { signal: AbortSignal }) => Promise<T>
 ): Promise<T> {
-  const { provider, operation, tenantId } = options;
+  const { provider, operation } = options;
+  const signal = options.signal ?? getAuditSignalFromStore();
+  const tenantId = options.tenantId ?? getTenantIdFromStore() ?? undefined;
   const policy = { ...getProviderPolicy(provider), ...options.policy };
+  if (signal?.aborted) throw signal.reason ?? new DOMException('Aborted', 'AbortError');
 
   // 1. Check Rate Limit
   const rateLimit = await checkProviderRateLimit(provider, tenantId, policy);
@@ -142,11 +161,12 @@ export async function withProviderResilience<T>(
   // 3. Retry Loop
   while (attempt < policy.maxAttempts) {
     attempt++;
-    const controller = new AbortController();
+    const timeoutController = new AbortController();
+    const controller = linkAbortSignals([signal, timeoutController.signal]);
 
     // Setup Timeout Timer
     const timeoutTimer = setTimeout(() => {
-      controller.abort();
+      timeoutController.abort(new DOMException('Provider timed out', 'AbortError'));
     }, policy.timeoutMs);
 
     try {
@@ -176,8 +196,12 @@ export async function withProviderResilience<T>(
       lastError = sanitizedErr;
 
       // Check if aborted due to timeout
+      const wasCallerAborted = Boolean(signal?.aborted);
+      if (wasCallerAborted) {
+        throw signal?.reason ?? new DOMException('Aborted', 'AbortError');
+      }
       const isTimeout =
-        controller.signal.aborted ||
+        timeoutController.signal.aborted ||
         sanitizedErr.name === 'AbortError' ||
         sanitizedErr.message.toLowerCase().includes('timeout') ||
         sanitizedErr.message.toLowerCase().includes('aborted');
@@ -207,7 +231,7 @@ export async function withProviderResilience<T>(
             }
           }
           if (!isNaN(seconds) && seconds > 0) {
-            retryAfterMs = seconds * 1000;
+            retryAfterMs = Math.min(seconds * 1000, policy.maxDelayMs);
           }
         }
       }
@@ -240,7 +264,7 @@ export async function withProviderResilience<T>(
           `Retrying ${provider}:${operation} in ${sleepMs.toFixed(0)}ms...`
         );
 
-        await sleep(sleepMs);
+        await sleep(sleepMs, signal);
       } else {
         // Not retryable or exhausted all attempts
         await recordCircuitFailure(provider, tenantId, policy);

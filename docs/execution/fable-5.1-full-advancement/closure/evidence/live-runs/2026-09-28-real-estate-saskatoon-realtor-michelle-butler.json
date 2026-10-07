@@ -1,0 +1,25 @@
+{
+  "business": {
+    "name": "Saskatoon Realtor - Michelle Butler",
+    "city": "Saskatoon",
+    "url": "http://www.michellebutler.ca/",
+    "industry": "real-estate"
+  },
+  "auditId": "b07002a0-f9c2-4ce4-8e28-1be8d149f81f",
+  "auditStatus": "FAILED",
+  "trustState": "PENDING",
+  "overallScore": null,
+  "apiCostCents": 0,
+  "auditWallMs": 146,
+  "auditError": null,
+  "modulesCompleted": 0,
+  "modulesFailed": 1,
+  "moduleStatusCounts": {},
+  "moduleTimingsMs": {},
+  "findings": 0,
+  "findingsByType": {},
+  "evidenceSnapshots": 0,
+  "proposalWallMs": null,
+  "proposalError": null,
+  "proposal": null
+}

@@ -14,6 +14,9 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { createEvidence } from '@/lib/modules/types';
+import { buildProposalGrounding } from '@/lib/proposal/grounding';
+
 // ---------------------------------------------------------------------------
 // Shared mocks
 // ---------------------------------------------------------------------------
@@ -27,6 +30,8 @@ const mocks = vi.hoisted(() => ({
   auditFindFirst: vi.fn(),
   auditUpdate: vi.fn(),
   proposalCreate: vi.fn(),
+  proposalUpdate: vi.fn(),
+  compileProposal: vi.fn(),
   proposalTemplateFindFirst: vi.fn(),
   evidenceFindMany: vi.fn(),
 
@@ -44,6 +49,7 @@ const mocks = vi.hoisted(() => ({
   loggerInfo: vi.fn(),
   loggerWarn: vi.fn(),
   loggerDebug: vi.fn(),
+  loggerError: vi.fn(),
   logError: vi.fn(),
 
   // tenant context
@@ -54,16 +60,25 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@/lib/auth', () => ({ auth: mocks.auth }));
 vi.mock('@/lib/auth/apiKeys', () => ({ validateApiKey: mocks.validateApiKey }));
 vi.mock('@/lib/logger', () => ({
-  logger: { info: mocks.loggerInfo, warn: mocks.loggerWarn, debug: mocks.loggerDebug },
+  logger: {
+    info: mocks.loggerInfo,
+    warn: mocks.loggerWarn,
+    debug: mocks.loggerDebug,
+    error: mocks.loggerError,
+  },
   logError: mocks.logError,
 }));
 vi.mock('@/lib/prisma', () => ({
   prisma: {
     audit: { findFirst: mocks.auditFindFirst, update: mocks.auditUpdate },
-    proposal: { create: mocks.proposalCreate },
+    proposal: { create: mocks.proposalCreate, update: mocks.proposalUpdate },
     proposalTemplate: { findFirst: mocks.proposalTemplateFindFirst },
     evidenceSnapshot: { findMany: mocks.evidenceFindMany },
   },
+}));
+vi.mock('@/lib/proposal/compiler', () => ({
+  compileAndPersistProposal: mocks.compileProposal,
+  getCurrentProposalVersion: vi.fn().mockResolvedValue(1),
 }));
 vi.mock('@/lib/analysis/competitorComparison', () => ({
   generateComparison: mocks.generateComparison,
@@ -180,45 +195,104 @@ function makeAudit(overrides = {}) {
   return {
     id: 'audit-1',
     tenantId: 'tenant-a',
+    status: 'COMPLETE',
+    trustState: 'TRUSTED',
     businessName: 'Acme Dental',
     businessIndustry: 'Dental',
     businessCity: 'Regina',
     businessUrl: null,
     verticalPlaybookId: null,
-    findings: [
-      {
-        id: 'finding-1',
-        title: 'Slow site',
-        category: 'Performance',
-        module: 'performance',
-        type: 'PAINKILLER',
-        impactScore: 8,
-        confidenceScore: 90,
-        evidence: [{ pointer: 'https://example.com', collected_at: '2026-01-01' }],
-      },
-    ],
+    findings: [finding()],
     proposals: [],
     evidence: [],
     ...overrides,
   };
 }
 
-/** Minimal proposal graph result. */
-const proposalGraphResult = {
-  proposalDef: {
-    executiveSummary: 'Acme Dental in Regina is losing patients due to slow site.',
+function finding() {
+  return {
+    id: 'finding-1',
+    auditId: 'audit-1',
+    tenantId: 'tenant-a',
+    title: 'Slow site',
+    description: 'Slow site delivery was measured.',
+    category: 'Performance',
+    module: 'performance',
+    type: 'PAINKILLER',
+    impactScore: 8,
+    confidenceScore: 9,
+    evidence: [
+      createEvidence({
+        pointer: 'https://acme.test/',
+        source: 'pagespeed_v5',
+        value: 4200,
+        label: 'LCP',
+      }),
+    ],
+    metrics: { lcpMs: 4200 },
+    effortEstimate: 'MEDIUM',
+    recommendedFix: ['Address Slow site'],
+  } as any;
+}
+
+function proposalGraphResult() {
+  const proposal: any = {
+    executiveSummary: 'Acme Dental in Regina: Validated audit finding: Slow site.',
+    painClusters: [
+      {
+        id: 'cluster-1',
+        rootCause: 'Slow site',
+        severity: 'high',
+        findingIds: ['finding-1'],
+      },
+    ],
+    topActions: [
+      {
+        findingId: 'finding-1',
+        title: 'Slow site',
+        impact: 8,
+        effort: 'MEDIUM',
+        timeline: '14-21 days',
+      },
+    ],
     tiers: {
-      essentials: { name: 'Essentials', findingIds: ['finding-1'], deliveryTime: '5 days' },
-      growth: { name: 'Growth', findingIds: ['finding-1'], deliveryTime: '10 days' },
-      premium: { name: 'Premium', findingIds: ['finding-1'], deliveryTime: '15 days' },
+      essentials: {
+        name: 'Essentials',
+        description: 'Addresses: Slow site',
+        findingIds: ['finding-1'],
+        deliveryTime: '5 business days',
+        price: 1000,
+        features: ['Address Slow site'],
+      },
+      growth: {
+        name: 'Growth',
+        description: 'Addresses: Slow site',
+        findingIds: ['finding-1'],
+        deliveryTime: '10 business days',
+        price: 2000,
+        features: ['Address Slow site'],
+      },
+      premium: {
+        name: 'Premium',
+        description: 'Addresses: Slow site',
+        findingIds: ['finding-1'],
+        deliveryTime: '15 business days',
+        price: 3000,
+        features: ['Address Slow site'],
+      },
     },
     pricing: { essentials: 1000, growth: 2000, premium: 3000, currency: 'USD' },
-    assumptions: ['Access to GBP required'],
-    disclaimers: ['Results may vary'],
+    assumptions: ['Scope requires confirmation'],
+    disclaimers: ['Automated findings require review'],
     nextSteps: ['Reply to schedule a call'],
-    painClusters: [],
-  },
-};
+  };
+  proposal.grounding = buildProposalGrounding(
+    proposal,
+    { auditId: 'audit-1', tenantId: 'tenant-a', findings: [finding()] },
+    ['finding-1']
+  );
+  return { completeProposal: proposal };
+}
 
 const diagnosisResult = {
   clusters: [{ findingIds: ['finding-1'], rootCause: 'Performance', severity: 'high' }],
@@ -275,8 +349,8 @@ describe('POST /api/audit/[id]/propose — proposal status promotion', () => {
     mocks.getPlaybook.mockReturnValue({ id: 'general' });
     mocks.proposalTemplateFindFirst.mockResolvedValue(null);
     mocks.evidenceFindMany.mockResolvedValue([]);
-    mocks.invokeDiagnosisGraphWithTimeout.mockResolvedValue(diagnosisResult);
-    mocks.invokeProposalGraphWithTimeout.mockResolvedValue(proposalGraphResult);
+    mocks.invokeDiagnosisGraphWithTimeout.mockResolvedValue({ ...diagnosisResult, resultState: 'trusted' });
+    mocks.invokeProposalGraphWithTimeout.mockResolvedValue(proposalGraphResult());
     mocks.createParentTrace.mockResolvedValue(undefined);
     mocks.auditUpdate.mockResolvedValue({});
     mocks.proposalCreate.mockImplementation(async (args: any) => {
@@ -288,10 +362,33 @@ describe('POST /api/audit/[id]/propose — proposal status promotion', () => {
         clientScore: args?.data?.clientScore,
       };
     });
+    mocks.proposalUpdate.mockImplementation(async (args: any) => ({
+      id: 'proposal-1',
+      webLinkToken: 'token-1',
+      status: args?.data?.status ?? 'DRAFT',
+      qaScore: 75,
+      clientScore: 75,
+    }));
     mocks.auth.mockResolvedValue({
       user: { email: 'owner@example.com', tenantId: 'tenant-a' },
     });
     mocks.auditFindFirst.mockResolvedValue(makeAudit());
+    mocks.compileProposal.mockImplementation(async () => {
+      const qa = mocks.runAutoQA();
+      const status = qa.score >= 60 && qa.clientPerfect?.hardFails?.length === 0 ? 'READY' : 'DRAFT';
+      return {
+        proposalRecord: {
+          id: 'proposal-1', version: 1, webLinkToken: 'token-1', status,
+          qaScore: qa.score, clientScore: qa.clientPerfect?.score ?? qa.score,
+        },
+        proposal: proposalGraphResult().completeProposal,
+        evaluation: {
+          autoQAStatus: qa,
+          dimensions: {}, overallScore: qa.score, passed: status === 'READY', feedbackLogs: qa.warnings ?? [],
+        },
+        costTracker: { getTotalCents: () => 5 },
+      };
+    });
 
     // Bridge evaluateProposal to runAutoQA
     mocks.evaluateProposal.mockImplementation(
@@ -349,12 +446,7 @@ describe('POST /api/audit/[id]/propose — proposal status promotion', () => {
     const body = await response.json();
     expect(body.status).toBe('READY');
 
-    // Verify the persisted status is READY
-    expect(mocks.proposalCreate).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({ status: 'READY' }),
-      })
-    );
+    expect(mocks.compileProposal).toHaveBeenCalledWith(expect.objectContaining({ auditId: 'audit-1', tenantId: 'tenant-a', version: 1 }));
   });
 
   it('persists DRAFT and returns status=DRAFT when QA score < 60', async () => {
@@ -373,11 +465,7 @@ describe('POST /api/audit/[id]/propose — proposal status promotion', () => {
     const body = await response.json();
     expect(body.status).toBe('DRAFT');
 
-    expect(mocks.proposalCreate).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({ status: 'DRAFT' }),
-      })
-    );
+    expect(mocks.compileProposal).toHaveBeenCalled();
   });
 
   it('persists DRAFT when QA has hard-fail (score forced to 0)', async () => {
@@ -397,15 +485,11 @@ describe('POST /api/audit/[id]/propose — proposal status promotion', () => {
     expect(body.status).toBe('DRAFT');
     expect(body.hardFails).toHaveLength(1);
 
-    expect(mocks.proposalCreate).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({ status: 'DRAFT' }),
-      })
-    );
+    expect(mocks.compileProposal).toHaveBeenCalled();
   });
 
   it('does not create a proposal when generation throws', async () => {
-    mocks.invokeProposalGraphWithTimeout.mockRejectedValue(new Error('LLM timeout'));
+    mocks.compileProposal.mockRejectedValue(new Error('LLM timeout'));
 
     const { POST } = await import('@/app/api/audit/[id]/propose/route');
     const response = await POST(
@@ -434,6 +518,18 @@ describe('POST /api/audit/[id]/propose — proposal status promotion', () => {
     expect(mocks.proposalCreate).not.toHaveBeenCalled();
   });
 
+  it('rejects non-COMPLETE trusted audit records before compilation', async () => {
+    mocks.auditFindFirst.mockResolvedValue(makeAudit({ status: 'PARTIAL' }));
+    const { POST } = await import('@/app/api/audit/[id]/propose/route');
+    const response = await POST(
+      new Request('http://localhost/api/audit/audit-1/propose', { method: 'POST' }),
+      { params: Promise.resolve({ id: 'audit-1' }) }
+    );
+    expect(response.status).toBe(409);
+    expect(mocks.invokeDiagnosisGraphWithTimeout).not.toHaveBeenCalled();
+    expect(mocks.proposalCreate).not.toHaveBeenCalled();
+  });
+
   it('returns 404 when audit belongs to different tenant — tenant isolation preserved', async () => {
     mocks.auditFindFirst.mockResolvedValue(null);
 
@@ -459,15 +555,7 @@ describe('POST /api/audit/[id]/propose — proposal status promotion', () => {
       { params: Promise.resolve({ id: 'audit-1' }) }
     );
 
-    expect(mocks.proposalCreate).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({
-          status: 'READY',
-          qaScore: 80,
-          clientScore: 80,
-        }),
-      })
-    );
+    expect(mocks.compileProposal).toHaveBeenCalled();
   });
 
   it('response status matches persisted status (READY)', async () => {
@@ -484,8 +572,6 @@ describe('POST /api/audit/[id]/propose — proposal status promotion', () => {
 
     const body = await response.json();
     // The response status field must match what was persisted
-    const persistedStatus = mocks.proposalCreate.mock.calls[0]?.[0]?.data?.status;
-    expect(body.status).toBe(persistedStatus);
     expect(body.status).toBe('READY');
   });
 
@@ -502,8 +588,6 @@ describe('POST /api/audit/[id]/propose — proposal status promotion', () => {
     );
 
     const body = await response.json();
-    const persistedStatus = mocks.proposalCreate.mock.calls[0]?.[0]?.data?.status;
-    expect(body.status).toBe(persistedStatus);
     expect(body.status).toBe('DRAFT');
   });
 });

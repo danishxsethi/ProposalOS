@@ -5,8 +5,9 @@ import { DeliveryEngine } from '../deliveryEngine';
 
 import type { Deliverable } from '../types';
 
-// Mock Prisma
-vi.mock('@/lib/db', () => ({
+// Mock the canonical scoped Prisma client (Wave 1 P1-05 — deliveryEngine now resolves the
+// owning tenant via runScopedToOwnerTenant / withSystemDbBypass instead of an unscoped client).
+vi.mock('@/lib/prisma', () => ({
   prisma: {
     proposal: {
       findUnique: vi.fn(),
@@ -17,11 +18,32 @@ vi.mock('@/lib/db', () => ({
       updateMany: vi.fn(),
       findUnique: vi.fn(),
       findMany: vi.fn(),
+      findFirst: vi.fn(),
     },
   },
 }));
 
-import { prisma } from '@/lib/db';
+vi.mock('@/lib/tenant/context', () => ({
+  runScopedToOwnerTenant: async (
+    _reason: string,
+    lookupTenantId: () => Promise<string | null>,
+    fn: (tenantId: string) => Promise<unknown>
+  ) => {
+    const tenantId = await lookupTenantId();
+    if (!tenantId) throw new Error('runScopedToOwnerTenant: could not resolve owning tenant');
+    return fn(tenantId);
+  },
+  runWithTenantAsync: async (_tenantId: string, fn: () => Promise<unknown>) => fn(),
+}));
+
+vi.mock('@/lib/db', () => ({
+  withSystemDbBypass: async (_reason: string, fn: (client: unknown) => Promise<unknown>) => {
+    const { prisma } = await import('@/lib/prisma');
+    return fn(prisma);
+  },
+}));
+
+import { prisma } from '@/lib/prisma';
 
 describe('Delivery Engine Property Tests', () => {
   let deliveryEngine: DeliveryEngine;
@@ -29,6 +51,7 @@ describe('Delivery Engine Property Tests', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     deliveryEngine = new DeliveryEngine();
+    (prisma.deliveryTask.findFirst as any).mockResolvedValue({ tenantId: 'tenant-123' });
   });
 
   /**
@@ -482,6 +505,9 @@ describe('Delivery Engine Property Tests', () => {
               ...deliverable,
               status: 'in_progress',
             });
+            (prisma.deliveryTask.findUnique as any).mockResolvedValue({
+              tenantId: 'tenant-123',
+            });
 
             // Execute
             await deliveryEngine.dispatchToAgent(deliverable);
@@ -497,33 +523,19 @@ describe('Delivery Engine Property Tests', () => {
       );
     });
 
-    it('should transition from completed to verified on verification', async () => {
+    it('never transitions from completed to verified without a canonical verification gate', async () => {
       await fc.assert(
         fc.asyncProperty(fc.uuid(), async (deliverableId) => {
           // Setup mock
           (prisma.deliveryTask.findUnique as any).mockResolvedValue({
             id: deliverableId,
+            tenantId: 'tenant-123',
             status: 'completed',
           });
-          (prisma.deliveryTask.update as any).mockResolvedValue({
-            id: deliverableId,
-            status: 'verified',
-          });
-
-          // Execute
-          const result = await deliveryEngine.verifyDeliverable(deliverableId);
-
-          // Verify status transition
-          expect(prisma.deliveryTask.update).toHaveBeenCalledWith({
-            where: { id: deliverableId },
-            data: expect.objectContaining({
-              status: 'verified',
-            }),
-          });
-
-          // Verify result
-          expect(result.passed).toBe(true);
-          expect(result.improvementPercent).toBeGreaterThan(0);
+          await expect(deliveryEngine.verifyDeliverable(deliverableId)).rejects.toThrow(
+            'DELIVERY_VERIFICATION_UNAVAILABLE'
+          );
+          expect(prisma.deliveryTask.update).not.toHaveBeenCalled();
         }),
         { numRuns: 100 }
       );

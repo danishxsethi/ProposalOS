@@ -1,6 +1,7 @@
 import { auth } from '@/lib/auth';
 import { getUsageStats } from '@/lib/billing/metering';
 import { prisma } from '@/lib/prisma';
+import { runWithTenantAsync } from '@/lib/tenant/context';
 
 import ManageSubscriptionButton from './ManageSubscriptionButton';
 
@@ -12,7 +13,8 @@ export default async function BillingPage() {
       : undefined;
   if (!tenantId) return <div>Auth required</div>;
 
-  const [tenant, subscription, payments] = await Promise.all([
+  const [tenant, subscription, payments] = await runWithTenantAsync(tenantId, () =>
+    Promise.all([
     prisma.tenant.findUnique({ where: { id: tenantId } }),
     prisma.subscription.findFirst({
       where: { tenantId },
@@ -23,11 +25,11 @@ export default async function BillingPage() {
       orderBy: { createdAt: 'desc' },
       take: 20,
     }),
-  ]);
+  ]));
 
   if (!tenant) return <div>Tenant not found</div>;
 
-  const usage = await getUsageStats(tenant.id);
+  const usage = await runWithTenantAsync(tenantId, () => getUsageStats(tenant.id));
 
   // Limits logic (duplicate from lib, ideally shared const)
   let limit = 10;

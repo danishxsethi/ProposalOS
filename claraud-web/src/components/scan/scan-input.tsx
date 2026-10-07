@@ -35,6 +35,55 @@ const INDUSTRIES = [
   'Retail',
 ];
 
+type ScanSearchFieldProps = {
+  input: string;
+  onInputChange: (value: string) => void;
+  onFocus: () => void;
+  onAutocompleteLoad: (autocomplete: google.maps.places.Autocomplete) => void;
+  onPlaceChanged: () => void;
+};
+
+function GooglePlacesSearchField({
+  input,
+  onInputChange,
+  onFocus,
+  onAutocompleteLoad,
+  onPlaceChanged,
+}: ScanSearchFieldProps) {
+  const { isLoaded, loadError } = useJsApiLoader({
+    googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY!,
+    libraries,
+  });
+
+  const searchInput = (
+    <Input
+      type="text"
+      value={input}
+      onChange={(e) => onInputChange(e.target.value)}
+      onFocus={onFocus}
+      placeholder={
+        isLoaded && !loadError
+          ? 'Enter your website URL or business name...'
+          : 'Enter your website URL...'
+      }
+      className="w-full bg-transparent border-none text-white focus-visible:ring-0 text-sm lg:text-base px-0"
+    />
+  );
+
+  if (!isLoaded || loadError) return searchInput;
+
+  return (
+    <Autocomplete
+      onLoad={onAutocompleteLoad}
+      onPlaceChanged={onPlaceChanged}
+      className="w-full h-full flex items-center"
+      options={{ fields: ['place_id', 'website', 'name'] }}
+    >
+      {searchInput}
+    </Autocomplete>
+  );
+}
+
 export function ScanInput({ variant = 'large' }: { variant?: 'large' | 'compact' }) {
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -51,12 +100,8 @@ export function ScanInput({ variant = 'large' }: { variant?: 'large' | 'compact'
   const router = useRouter();
   const { captureEvent } = usePostHog();
 
-  const { isLoaded } = useJsApiLoader({
-    googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY as string,
-    libraries,
-  });
-
   const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
+  const mapsApiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
 
   const addCompetitor = () => {
     if (competitors.length < 3) setCompetitors([...competitors, '']);
@@ -148,28 +193,20 @@ export function ScanInput({ variant = 'large' }: { variant?: 'large' | 'compact'
           )}
         </div>
 
-        {isLoaded && !isUrlMode ? (
+        {mapsApiKey && !isUrlMode ? (
           <div className="flex-1 h-full flex items-center">
-            <Autocomplete
-              onLoad={(autocomplete) => {
+            <GooglePlacesSearchField
+              input={input}
+              onInputChange={(value) => {
+                setInput(value);
+                setNoWebsiteMsg('');
+              }}
+              onFocus={() => captureEvent('scan_input_focus')}
+              onAutocompleteLoad={(autocomplete) => {
                 autocompleteRef.current = autocomplete;
               }}
               onPlaceChanged={onPlaceChanged}
-              className="w-full h-full flex items-center"
-              options={{ fields: ['place_id', 'website', 'name'] }}
-            >
-              <Input
-                type="text"
-                value={input}
-                onChange={(e) => {
-                  setInput(e.target.value);
-                  setNoWebsiteMsg('');
-                }}
-                onFocus={() => captureEvent('scan_input_focus')}
-                placeholder="Enter your website URL or business name..."
-                className="w-full bg-transparent border-none text-white focus-visible:ring-0 text-sm lg:text-base px-0"
-              />
-            </Autocomplete>
+            />
           </div>
         ) : (
           <Input
@@ -180,7 +217,11 @@ export function ScanInput({ variant = 'large' }: { variant?: 'large' | 'compact'
               setNoWebsiteMsg('');
             }}
             onFocus={() => captureEvent('scan_input_focus')}
-            placeholder="Enter your website URL or business name..."
+            placeholder={
+              mapsApiKey && !isUrlMode
+                ? 'Enter your website URL or business name...'
+                : 'Enter your website URL...'
+            }
             className="flex-1 bg-transparent border-none text-white focus-visible:ring-0 text-sm lg:text-base px-0"
           />
         )}

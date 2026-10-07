@@ -1,0 +1,62 @@
+{
+  "business": {
+    "name": "Rosemary & Rye Restaurant",
+    "city": "Regina",
+    "url": "https://www.rosemaryrye.ca/",
+    "industry": "restaurant"
+  },
+  "auditId": "1d92aec8-a5b3-4293-9536-ac414ef22364",
+  "auditStatus": "PARTIAL",
+  "trustState": "DEGRADED_REVIEW_REQUIRED",
+  "overallScore": null,
+  "apiCostCents": 9,
+  "auditWallMs": 45936,
+  "auditError": null,
+  "modulesCompleted": 16,
+  "modulesFailed": 10,
+  "moduleStatusCounts": {
+    "COMPLETE": 16,
+    "SKIPPED": 3,
+    "PARTIAL": 1,
+    "UNAVAILABLE": 6,
+    "FAILED": 1
+  },
+  "moduleTimingsMs": {
+    "gbp": null,
+    "social": null,
+    "vision": null,
+    "gbpDeep": null,
+    "seoDeep": null,
+    "website": null,
+    "mobileUX": null,
+    "security": null,
+    "backlinks": null,
+    "citations": null,
+    "techStack": null,
+    "competitor": null,
+    "conversion": null,
+    "keywordGap": null,
+    "paidSearch": null,
+    "reputation": null,
+    "socialDeep": null,
+    "emailFinder": null,
+    "schemaMarkup": null,
+    "accessibility": null,
+    "coreWebVitals": null,
+    "videoPresence": null,
+    "contentQuality": null,
+    "schemaAnalysis": null,
+    "websiteCrawler": null,
+    "privacyCompliance": null,
+    "competitorStrategy": null
+  },
+  "findings": 17,
+  "findingsByType": {
+    "VITAMIN": 12,
+    "PAINKILLER": 5
+  },
+  "evidenceSnapshots": 15,
+  "proposalWallMs": null,
+  "proposalError": null,
+  "proposal": null
+}

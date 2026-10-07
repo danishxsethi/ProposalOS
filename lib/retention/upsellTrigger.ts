@@ -22,33 +22,54 @@ interface AuditCompetitorSnapshot {
   competitors?: CompetitorSignal[];
 }
 
+export type CompetitorComparisonResult = {
+  triggered: boolean;
+  reason: string;
+  status: 'SIGNAL' | 'UNCHANGED' | 'UNAVAILABLE' | 'INCOMPATIBLE';
+};
+
+function competitorKey(competitor: CompetitorSignal): string | null {
+  const name = competitor.name.trim().toLowerCase();
+  return name ? `${name}|${competitor.websiteHash ?? ''}` : null;
+}
+
 /**
  * Compare current audit's competitor evidence with the previous audit's.
  * Returns true if any competitor gained ≥20 reviews OR changed website.
  */
 export async function detectCompetitorImprovement(
+  tenantId: string,
   previousAuditId: string,
   currentAuditId: string
-): Promise<{ triggered: boolean; reason: string }> {
+): Promise<CompetitorComparisonResult> {
   try {
     const [prevSnap, currSnap] = await Promise.all([
       prisma.evidenceSnapshot.findFirst({
-        where: { auditId: previousAuditId, module: 'competitor' },
+        where: { auditId: previousAuditId, tenantId, module: 'competitor' },
       }),
       prisma.evidenceSnapshot.findFirst({
-        where: { auditId: currentAuditId, module: 'competitor' },
+        where: { auditId: currentAuditId, tenantId, module: 'competitor' },
       }),
     ]);
 
     if (!prevSnap || !currSnap) {
-      return { triggered: false, reason: 'No competitor snapshots available' };
+      return { triggered: false, reason: 'Competitor evidence is unavailable', status: 'UNAVAILABLE' };
+    }
+    if (prevSnap.source !== currSnap.source) {
+      return { triggered: false, reason: 'Competitor evidence sources are incompatible', status: 'INCOMPATIBLE' };
     }
 
     const prev = (prevSnap.rawResponse as AuditCompetitorSnapshot)?.competitors ?? [];
     const curr = (currSnap.rawResponse as AuditCompetitorSnapshot)?.competitors ?? [];
+    const previousByKey = new Map<string, CompetitorSignal>();
+    for (const competitor of prev) {
+      const key = competitorKey(competitor);
+      if (key && !previousByKey.has(key)) previousByKey.set(key, competitor);
+    }
 
     for (const currComp of curr) {
-      const prevComp = prev.find((p) => p.name === currComp.name);
+      const key = competitorKey(currComp);
+      const prevComp = key ? previousByKey.get(key) : undefined;
       if (!prevComp) continue;
 
       // Signal 1: Competitor gained ≥20 reviews
@@ -57,6 +78,7 @@ export async function detectCompetitorImprovement(
         return {
           triggered: true,
           reason: `Competitor "${currComp.name}" gained ${reviewDelta} new reviews`,
+          status: 'SIGNAL',
         };
       }
 
@@ -69,14 +91,15 @@ export async function detectCompetitorImprovement(
         return {
           triggered: true,
           reason: `Competitor "${currComp.name}" launched a new website`,
+          status: 'SIGNAL',
         };
       }
     }
 
-    return { triggered: false, reason: 'No significant competitor changes detected' };
+    return { triggered: false, reason: 'No compatible competitor changes detected', status: 'UNCHANGED' };
   } catch (error) {
-    logger.error({ err: error }, '[UpsellTrigger] detectCompetitorImprovement failed');
-    return { triggered: false, reason: 'Error during comparison' };
+    logger.error({ err: error, tenantId }, '[UpsellTrigger] competitor evidence unavailable');
+    return { triggered: false, reason: 'Competitor evidence is unavailable', status: 'UNAVAILABLE' };
   }
 }
 
@@ -90,8 +113,26 @@ export async function triggerUpsellProposal(
   reason: string
 ): Promise<{ proposalId: string } | null> {
   try {
-    const audit = await prisma.audit.findUnique({ where: { id: auditId } });
+    // Tenant/target validation: the source audit must belong to the calling tenant.
+    const audit = await prisma.audit.findFirst({ where: { id: auditId, tenantId } });
     if (!audit) return null;
+
+    // Idempotency: at most one open upsell proposal per (tenant, audit).
+    const candidates = await prisma.proposal.findMany({
+      where: { auditId, tenantId },
+      select: { id: true, nextSteps: true },
+    });
+    const existingUpsell = candidates.find((r) =>
+      r.nextSteps?.some((s) => s.startsWith('[upsell:true]'))
+    );
+
+    if (existingUpsell) {
+      logger.info(
+        { proposalId: existingUpsell.id, auditId, tenantId },
+        '[UpsellTrigger] Upsell proposal already exists — reusing'
+      );
+      return { proposalId: existingUpsell.id };
+    }
 
     // Create a fresh proposal record tagged as upsell
     const proposal = await prisma.proposal.create({

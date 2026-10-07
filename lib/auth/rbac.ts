@@ -1,8 +1,9 @@
+import { createHash, timingSafeEqual } from 'crypto';
+
 import { NextResponse } from 'next/server';
 
 import { auth } from '@/lib/auth';
-import { prisma } from '@/lib/prisma';
-import { getTenantId } from '@/lib/tenant/context';
+import { runWithTenantAsync } from '@/lib/tenant/context';
 
 /**
  * Role definitions for the Proposal Engine
@@ -41,12 +42,24 @@ export const LEGACY_ROLE_MAP: Record<'owner' | 'admin' | 'member' | 'viewer' | '
 
 // Legacy role value aliases for string comparisons
 export const LEGACY_ROLE_VALUES: Record<string, Role> = {
-  owner: 'super_admin',
+  // 'owner' historically meant "owner of their own self-registered tenant", never
+  // platform-wide super_admin. Mapping it to super_admin (as this table previously did)
+  // is a privilege-escalation bug: every self-registered tenant admin would normalize to
+  // platform super_admin. agency_admin is the correct, least-privileged equivalent.
+  owner: 'agency_admin',
   admin: 'agency_admin',
   member: 'agency_member',
   viewer: 'bic_user',
   partner: 'white_label_partner',
 };
+
+/** Roles that may be assigned via tenant team invitation (never super_admin). */
+export const INVITE_ASSIGNABLE_ROLES: readonly Role[] = [
+  'agency_admin',
+  'agency_member',
+  'white_label_partner',
+  'bic_user',
+] as const;
 
 /**
  * Permission definitions
@@ -88,12 +101,150 @@ export const ROLE_HIERARCHY: Record<Role, number> = {
   bic_user: 1,
 };
 
+/** Permission → API-key scopes that satisfy it (tenant keys only). */
+const PERMISSION_TO_SCOPES: Record<string, string[]> = {
+  manage_audits: ['audit:create', 'audit:update', 'audit:delete', 'audit:*'],
+  view_audits: ['audit:read', 'audit:*'],
+  manage_proposals: ['proposal:create', 'proposal:update', 'proposal:delete', 'proposal:*'],
+  view_proposals: ['proposal:read', 'proposal:*'],
+  manage_settings: ['tenant:update', 'tenant:*'],
+  manage_api_keys: ['api_key:create', 'api_key:delete', 'api_key:*'],
+  manage_team: ['tenant:update', 'tenant:*'],
+  manage_billing: ['tenant:update', 'tenant:*'],
+  view_analytics: ['audit:read', 'audit:*'],
+  api_access: ['audit:read', 'audit:create', 'audit:*', 'proposal:read', 'proposal:*'],
+  view_own_audits: ['audit:read', 'audit:*'],
+  view_own_proposals: ['proposal:read', 'proposal:*'],
+  view_own_reports: ['audit:read', 'audit:*'],
+};
+
+function timingSafeStringEqual(a: string, b: string): boolean {
+  const hashA = createHash('sha256').update(a).digest();
+  const hashB = createHash('sha256').update(b).digest();
+  return timingSafeEqual(hashA, hashB);
+}
+
+function matchesEnvApiKey(token: string): boolean {
+  const envKey = process.env.API_KEY;
+  if (!envKey) return false;
+  return timingSafeStringEqual(token, envKey);
+}
+
+function matchesInternalOpsKey(req: Request): boolean {
+  const configured = process.env.INTERNAL_OPS_KEY;
+  const supplied = req.headers.get('x-internal-ops-key');
+  if (!configured || !supplied) return false;
+  return timingSafeStringEqual(supplied, configured);
+}
+
 /**
- * Get the current user's role from session
+ * Map tenant API-key scopes to a maximum Role.
+ * Tenant keys never elevate to super_admin — platform admin is session-only
+ * (or the server env API_KEY path, handled separately).
+ */
+export function effectiveRoleFromScopes(scopes: string[]): Role | undefined {
+  if (!scopes.length) return undefined;
+
+  // `*` is full *tenant* access, not platform super_admin.
+  if (
+    scopes.includes('*') ||
+    scopes.includes('tenant:*') ||
+    scopes.includes('tenant:update') ||
+    scopes.includes('api_key:create') ||
+    scopes.includes('api_key:delete') ||
+    scopes.includes('api_key:*')
+  ) {
+    return 'agency_admin';
+  }
+
+  if (
+    scopes.includes('audit:create') ||
+    scopes.includes('audit:update') ||
+    scopes.includes('audit:delete') ||
+    scopes.includes('audit:*') ||
+    scopes.includes('proposal:create') ||
+    scopes.includes('proposal:update') ||
+    scopes.includes('proposal:delete') ||
+    scopes.includes('proposal:send') ||
+    scopes.includes('proposal:*')
+  ) {
+    return 'agency_member';
+  }
+
+  if (
+    scopes.includes('audit:read') ||
+    scopes.includes('proposal:read') ||
+    scopes.includes('tenant:read') ||
+    scopes.includes('api_key:read')
+  ) {
+    return 'bic_user';
+  }
+
+  return undefined;
+}
+
+/** Whether a tenant API key's scopes satisfy a minimum role requirement. */
+export function apiKeySatisfiesRole(scopes: string[], requiredRole: Role): boolean {
+  // Tenant pe_live_* keys can never satisfy platform super_admin.
+  if (requiredRole === 'super_admin') return false;
+  const effective = effectiveRoleFromScopes(scopes);
+  return hasRole(effective, requiredRole);
+}
+
+/** Whether a tenant API key's scopes satisfy a named permission. */
+export function apiKeySatisfiesPermission(scopes: string[], permission: string): boolean {
+  // `*` grants all *tenant* permissions — not a substitute for super_admin session.
+  if (scopes.includes('*')) return true;
+
+  const requiredScopes = PERMISSION_TO_SCOPES[permission];
+  if (!requiredScopes?.length) return false;
+  return requiredScopes.some(
+    (s) =>
+      scopes.includes(s) ||
+      scopes.includes(`${s.split(':')[0]}:*`) ||
+      (s.endsWith(':*') && scopes.some((k) => k.startsWith(`${s.slice(0, -1)}`)))
+  );
+}
+
+/**
+ * Validate invite role: enum + inviter ceiling. super_admin never assignable via invite.
+ */
+export function assertAssignableInviteRole(
+  requestedRole: unknown,
+  inviterRole: Role | undefined
+): { role: Role } | { error: string } {
+  if (typeof requestedRole !== 'string' || !requestedRole.trim()) {
+    return { error: 'Invalid role' };
+  }
+
+  const role = normalizeRole(requestedRole);
+  if (!role || !(role in ROLE_HIERARCHY)) {
+    return { error: 'Invalid or unknown role' };
+  }
+
+  if (role === 'super_admin' || !INVITE_ASSIGNABLE_ROLES.includes(role)) {
+    return { error: 'Role is not assignable via invitation' };
+  }
+
+  if (!inviterRole || !(inviterRole in ROLE_HIERARCHY)) {
+    return { error: 'Inviter role is not authorized' };
+  }
+
+  // Inviter may only grant roles at or below their own authority.
+  if (ROLE_HIERARCHY[inviterRole] < ROLE_HIERARCHY[role]) {
+    return { error: 'Cannot assign a role above your own authority' };
+  }
+
+  // Tenant-scoped inviters (everyone except super_admin) already cannot assign super_admin.
+  return { role };
+}
+
+/**
+ * Get the current user's role from session (legacy values normalized).
  */
 export async function getCurrentRole(): Promise<Role | undefined> {
   const session = await auth();
-  return (session?.user as any)?.role as Role | undefined;
+  return normalizeRole((session?.user as { role?: string } | undefined)?.role);
 }
 
 /**
@@ -105,7 +256,10 @@ export async function getCurrentRole(): Promise<Role | undefined> {
  */
 export function hasRole(currentRole: Role | undefined, requiredRole: Role): boolean {
   if (!currentRole) return false;
-  return ROLE_HIERARCHY[currentRole] >= ROLE_HIERARCHY[requiredRole];
+  const current = ROLE_HIERARCHY[currentRole];
+  const required = ROLE_HIERARCHY[requiredRole];
+  if (current === undefined || required === undefined) return false;
+  return current >= required;
 }
 
 /**
@@ -119,6 +273,7 @@ export function hasPermission(currentRole: Role | undefined, permission: string)
   if (!currentRole) return false;
 
   const rolePermissions = PERMISSIONS[currentRole];
+  if (!rolePermissions) return false;
 
   // Owner has all permissions
   if (rolePermissions.includes('*')) return true;
@@ -141,6 +296,10 @@ export function hasPermission(currentRole: Role | undefined, permission: string)
  */
 export function withRole(role: Role, handler: Function) {
   return async (req: Request, ...args: any[]) => {
+    if (matchesInternalOpsKey(req)) {
+      return NextResponse.json({ error: 'Platform operator role is not granted by internal ops credentials' }, { status: 403 });
+    }
+
     // 1. Check for API key in headers
     const authHeader = req.headers.get('Authorization');
     const xApiKey = req.headers.get('x-api-key')?.trim();
@@ -148,34 +307,43 @@ export function withRole(role: Role, handler: Function) {
       xApiKey || (authHeader?.startsWith('Bearer ') ? authHeader.slice(7).trim() : null);
 
     if (token) {
-      if (process.env.API_KEY && token === process.env.API_KEY) {
-        return handler(req, ...args);
+      // Platform env key — server-to-server only; timing-safe compare.
+      // Does not grant via tenant-scoped pe_live_* scopes.
+      if (matchesEnvApiKey(token)) {
+        if (role === 'super_admin') {
+          return NextResponse.json({ error: 'Platform administrator session required' }, { status: 403 });
+        }
+        const tenantId = process.env.DEFAULT_TENANT_ID?.trim();
+        if (!tenantId) {
+          return NextResponse.json({ error: 'Server API key is not bound to a tenant' }, { status: 503 });
+        }
+        return runWithTenantAsync(tenantId, () => handler(req, ...args));
       }
 
       if (token.startsWith('pe_live_')) {
         const { validateApiKey } = await import('@/lib/auth/apiKeys');
         const validation = await validateApiKey(token);
         if (validation && !('error' in validation)) {
-          const scopes = validation.scopes;
-          if (
-            scopes.includes('*') ||
-            scopes.includes('audit:create') ||
-            scopes.includes('audit:*')
-          ) {
-            return handler(req, ...args);
+          if (apiKeySatisfiesRole(validation.scopes, role)) {
+            return runWithTenantAsync(validation.tenantId, () => handler(req, ...args));
           }
         }
+        return NextResponse.json({ error: 'Forbidden: Insufficient Permissions' }, { status: 403 });
       }
     }
 
     const session = await auth();
-    const userRole = (session?.user as { role?: string })?.role as Role | undefined;
+    const userRole = normalizeRole((session?.user as { role?: string } | undefined)?.role);
 
     if (!userRole || !hasRole(userRole, role)) {
       return NextResponse.json({ error: 'Forbidden: Insufficient Permissions' }, { status: 403 });
     }
 
-    return handler(req, ...args);
+    const tenantId = (session?.user as { tenantId?: unknown } | undefined)?.tenantId;
+    if (typeof tenantId !== 'string' || !tenantId.trim()) {
+      return NextResponse.json({ error: 'Tenant context required' }, { status: 403 });
+    }
+    return runWithTenantAsync(tenantId, () => handler(req, ...args));
   };
 }
 
@@ -201,55 +369,54 @@ export function withPermission(permission: string, handler: Function) {
       xApiKey || (authHeader?.startsWith('Bearer ') ? authHeader.slice(7).trim() : null);
 
     if (token) {
-      if (process.env.API_KEY && token === process.env.API_KEY) {
-        return handler(req, ...args);
+      if (matchesEnvApiKey(token)) {
+        const tenantId = process.env.DEFAULT_TENANT_ID?.trim();
+        if (!tenantId) {
+          return NextResponse.json({ error: 'Server API key is not bound to a tenant' }, { status: 503 });
+        }
+        return runWithTenantAsync(tenantId, () => handler(req, ...args));
       }
 
       if (token.startsWith('pe_live_')) {
         const { validateApiKey } = await import('@/lib/auth/apiKeys');
         const validation = await validateApiKey(token);
         if (validation && !('error' in validation)) {
-          if (validation.scopes.includes('*')) {
-            return handler(req, ...args);
-          }
-          const permToScopeMap: Record<string, string[]> = {
-            manage_audits: ['audit:create', 'audit:update', 'audit:delete', 'audit:*'],
-            view_audits: ['audit:read', 'audit:*'],
-            manage_proposals: [
-              'proposal:create',
-              'proposal:update',
-              'proposal:delete',
-              'proposal:*',
-            ],
-            view_proposals: ['proposal:read', 'proposal:*'],
-            manage_settings: ['tenant:update', 'tenant:*'],
-            manage_api_keys: ['api_key:create', 'api_key:delete', 'api_key:*'],
-          };
-          const requiredScopes = permToScopeMap[permission] || [];
-          if (requiredScopes.some((s) => validation.scopes.includes(s))) {
-            return handler(req, ...args);
+          if (apiKeySatisfiesPermission(validation.scopes, permission)) {
+            return runWithTenantAsync(validation.tenantId, () => handler(req, ...args));
           }
         }
+        return NextResponse.json({ error: 'Forbidden: Insufficient Permissions' }, { status: 403 });
       }
     }
 
     const session = await auth();
-    const userRole = (session?.user as { role?: string })?.role as Role | undefined;
+    const userRole = normalizeRole((session?.user as { role?: string } | undefined)?.role);
 
     if (!userRole || !hasPermission(userRole, permission)) {
       return NextResponse.json({ error: 'Forbidden: Insufficient Permissions' }, { status: 403 });
     }
 
-    return handler(req, ...args);
+    const tenantId = (session?.user as { tenantId?: unknown } | undefined)?.tenantId;
+    if (typeof tenantId !== 'string' || !tenantId.trim()) {
+      return NextResponse.json({ error: 'Tenant context required' }, { status: 403 });
+    }
+    return runWithTenantAsync(tenantId, () => handler(req, ...args));
   };
 }
 
 /**
- * Helper to normalize legacy role strings to Role type
+ * Helper to normalize legacy role strings to Role type.
+ * Unknown values fail closed (undefined) rather than casting through.
  */
 export function normalizeRole(legacyRole: string | undefined): Role | undefined {
   if (!legacyRole) return undefined;
-  return LEGACY_ROLE_VALUES[legacyRole] ?? (legacyRole as Role);
+  if (legacyRole in LEGACY_ROLE_VALUES) {
+    return LEGACY_ROLE_VALUES[legacyRole];
+  }
+  if (legacyRole in ROLE_HIERARCHY) {
+    return legacyRole as Role;
+  }
+  return undefined;
 }
 
 /**

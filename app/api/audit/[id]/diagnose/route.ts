@@ -25,13 +25,42 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         id: auditId,
         tenantId,
       },
-      include: {
-        findings: true,
-      },
+      include: { findings: true },
     });
 
     if (!audit) {
       return NextResponse.json({ error: 'Audit not found' }, { status: 404 });
+    }
+
+    if (audit.trustState !== 'TRUSTED') {
+      return NextResponse.json(
+        { error: 'Audit requires review before diagnosis', trustState: audit.trustState },
+        { status: 409 }
+      );
+    }
+
+    const evidenceSnapshots = await prisma.evidenceSnapshot.findMany({ where: { auditId, tenantId } });
+    const moduleResults = audit.moduleResults as Record<string, { status?: string }>;
+    const evidenceModules = new Set(evidenceSnapshots.map((snapshot) => snapshot.module));
+    const relevantFindings = audit.findings.filter((finding) => {
+      const state = moduleResults[finding.module]?.status;
+      return evidenceModules.has(finding.module) && (!state || state === 'COMPLETE');
+    });
+    if (relevantFindings.length === 0) {
+      return NextResponse.json({ error: 'No evidence-backed findings are eligible for diagnosis' }, { status: 409 });
+    }
+    const diagnosis = await invokeDiagnosisGraphWithTimeout({
+      findings: relevantFindings,
+      evidenceSnapshots,
+      tenantId: audit.tenantId,
+      auditId: audit.id,
+      mode: 'MULTI_STEP',
+    });
+    if (diagnosis.resultState !== 'trusted' || diagnosis.validation?.valid !== true || diagnosis.errors.length > 0) {
+      return NextResponse.json(
+        { error: 'Diagnosis requires review', diagnosisState: diagnosis.resultState, validation: diagnosis.validation },
+        { status: 409 }
+      );
     }
 
     if (audit.findings.length === 0) {
@@ -43,34 +72,18 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       'Running diagnosis'
     );
 
-    const evidenceSnapshots = await prisma.evidenceSnapshot.findMany({
-      where: {
-        auditId,
-        tenantId,
-      },
-    });
-
-    // Run diagnosis pipeline via LangGraph (P0-3)
-    const diagnosisResult = await invokeDiagnosisGraphWithTimeout({
-      findings: audit.findings,
-      evidenceSnapshots,
-      tenantId: audit.tenantId,
-      auditId: audit.id,
-      mode: 'MULTI_STEP',
-    });
-
     logger.info(
-      { event: 'diagnose.complete', auditId, clusterCount: diagnosisResult.clusters?.length ?? 0 },
+      { event: 'diagnose.complete', auditId, clusterCount: diagnosis.clusters.length },
       'Diagnosis complete'
     );
 
     return NextResponse.json({
       success: true,
       auditId,
-      diagnosis: diagnosisResult,
+      diagnosis,
     });
   } catch (error) {
-    console.error('[Diagnose] Error:', error);
+    logger.error('[Diagnose] Error:', error);
     return NextResponse.json(
       { error: 'Internal Server Error', details: String(error) },
       { status: 500 }

@@ -170,9 +170,10 @@ async function main() {
         connectingRole: 'postgres',
         path: 'PgBouncer transaction',
         tenantContext: 'tenant1',
-        expected: expectedTenant1,
+        expected: expectedAll,
         actualValue: formatNames(names),
-        passCondition: names.length === 1 && names[0] === audit1Name,
+        passCondition:
+          names.length === 2 && names.includes(audit1Name) && names.includes(audit2Name),
       });
     } catch (error) {
       addResult({
@@ -314,11 +315,11 @@ async function main() {
         connectingRole: 'postgres',
         path: 'PgBouncer mixed',
         tenantContext: 'tenant1 then none',
-        expected: `first=${expectedTenant1}; second=${expectedAll}`,
+        expected: `first=${expectedAll}; second=${expectedAll}`,
         actualValue: `first=${formatNames(firstRead)}; second=${formatNames(secondNames)}`,
         passCondition:
-          firstRead.length === 1 &&
-          firstRead[0] === audit1Name &&
+          firstRead.length === 2 &&
+          firstRead.sort().join(', ') === expectedAll &&
           secondNames.join(', ') === expectedAll,
       });
     } catch (error) {
@@ -327,7 +328,7 @@ async function main() {
         connectingRole: 'postgres',
         path: 'PgBouncer mixed',
         tenantContext: 'tenant1 then none',
-        expected: `first=${expectedTenant1}; second=${expectedAll}`,
+        expected: `first=${expectedAll}; second=${expectedAll}`,
         actualValue: `error: ${formatError(error)}`,
         passCondition: false,
       });
@@ -454,6 +455,9 @@ async function main() {
     );
     console.log(`PASS_COUNT ${passing}/${results.length}`);
     console.log(`RESULTS_JSON ${JSON.stringify(results)}`);
+    if (passing !== results.length) {
+      throw new Error(`RLS smoke failed: ${results.length - passing} of ${results.length} checks failed`);
+    }
   } finally {
     await Promise.allSettled([
       admin.$disconnect(),

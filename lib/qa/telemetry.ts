@@ -48,6 +48,16 @@ export function computeHallucinationScore(
 }
 
 /**
+ * Sanitize UUID fields: only pass valid UUIDs or null.
+ */
+function sanitizeUuid(val: string | undefined | null): string | null {
+  if (!val) return null;
+  // UUID regex
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  return uuidRegex.test(val) ? val : null;
+}
+
+/**
  * Persist a QA telemetry record to the database.
  * Fire-and-forget safe — errors are caught and logged but never bubble up to the caller.
  */
@@ -76,9 +86,9 @@ export async function logQATelemetry(input: QATelemetryInput): Promise<void> {
         unsupportedClaims: input.qaResult.consistencyFlags as any,
         retryTriggered: input.retryTriggered,
         retryCount: input.retryCount,
-        tenantId: input.tenantId ?? null,
-        auditId: input.auditId ?? null,
-        proposalId: input.proposalId ?? null,
+        tenantId: sanitizeUuid(input.tenantId),
+        auditId: sanitizeUuid(input.auditId),
+        proposalId: sanitizeUuid(input.proposalId),
       },
     });
   } catch (err) {

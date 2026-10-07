@@ -292,6 +292,58 @@ describe('withIdempotency', () => {
       expect(extractIdempotencyKey(req)).toBe(expected);
     }
   });
+
+  it('same key with a different body does NOT dedupe (distinct keys)', async () => {
+    let counter = 0;
+    const handler = vi.fn().mockImplementation(async () => {
+      counter += 1;
+      return new Response(JSON.stringify({ result: `r${counter}` }), { status: 200 });
+    });
+    const wrapped = withIdempotency(handler, { includeBody: true });
+
+    const mkBody = (url: string) =>
+      new Request('http://localhost/api', {
+        method: 'POST',
+        headers: { 'idempotency-key': 'shared-key', 'content-type': 'application/json' },
+        body: JSON.stringify({ url }),
+      });
+
+    const res1 = await wrapped(mkBody('https://example.com'));
+    const res2 = await wrapped(mkBody('https://www.google.com'));
+
+    // Different bodies embed a different body hash in the store key, so each executes.
+    expect(handler).toHaveBeenCalledTimes(2);
+    expect(res1.status).toBe(200);
+    expect(res2.status).toBe(200);
+    expect(res2.headers.get('X-Idempotency-Cache')).toBeNull();
+    expect((await res2.clone().text()).includes('r2')).toBe(true);
+  });
+
+  it('fingerprint fallback distinguishes different bodies (no false dedupe)', async () => {
+    let counter = 0;
+    const handler = vi.fn().mockImplementation(async () => {
+      counter += 1;
+      return new Response(JSON.stringify({ result: `r${counter}` }), { status: 200 });
+    });
+    const wrapped = withIdempotency(handler, { includeBody: true, useFingerprintFallback: true });
+
+    const mkBody = (url: string) =>
+      new Request('http://localhost/api/public/audit', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ url }),
+      });
+
+    const res1 = await wrapped(mkBody('https://example.com'));
+    const res2 = await wrapped(mkBody('https://www.google.com'));
+
+    // Distinct URLs must not collide: handler runs for each, no cached dedupe
+    expect(handler).toHaveBeenCalledTimes(2);
+    expect(res1.headers.get('X-Idempotency-Cache')).toBeNull();
+    expect(res2.headers.get('X-Idempotency-Cache')).toBeNull();
+    expect((await res1.clone().text()).includes('r1')).toBe(true);
+    expect((await res2.clone().text()).includes('r2')).toBe(true);
+  });
 });
 
 // ---------------------------------------------------------------------------

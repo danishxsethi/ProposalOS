@@ -9,14 +9,13 @@ import {
   ProspectLead,
   ProspectLeadStatus,
 } from '@prisma/client';
-import { Resend } from 'resend';
 
-import { runAudit } from '@/lib/audit/runner';
+import { dispatchAuditExecution } from '@/lib/audit/dispatch';
 import { FeatureFlagService } from '@/lib/config/FeatureFlagService';
 import { logger } from '@/lib/logger';
+import { assertLiveProviderReady, getSendProvider } from '@/lib/outreach/providers';
 import { prisma } from '@/lib/prisma';
 import { generateProposal } from '@/lib/proposal/runner';
-import { withProviderResilience } from '@/lib/resilience/withProviderResilience';
 import { runWithTenantAsync } from '@/lib/tenant/context';
 
 import { incrementDomainCounter, selectDomainForSend } from './domainRotation';
@@ -138,8 +137,8 @@ async function ensureProposalUrlForLead(
       },
       select: { id: true },
     });
-    runAudit(created.id).catch((error) => {
-      logger.error({ auditId: created.id, error }, 'Bg audit failed');
+    dispatchAuditExecution({ tenantId: lead.tenantId, auditId: created.id }).catch((error) => {
+      logger.error({ auditId: created.id, error }, 'Failed to enqueue bg audit for execution');
     });
   }
 
@@ -173,7 +172,7 @@ function renderHtmlBody(
     `;
 }
 
-async function sendWithResend(params: {
+async function sendWithProvider(params: {
   fromName: string | null;
   fromEmail: string;
   toEmail: string;
@@ -182,42 +181,22 @@ async function sendWithResend(params: {
   leadId: string;
   tenantId: string;
 }): Promise<{ messageId: string | null }> {
-  const key = process.env.RESEND_API_KEY;
-  if (!key) {
-    throw new Error('RESEND_API_KEY is required');
-  }
+  assertLiveProviderReady();
+  const result = await getSendProvider().send({
+    from: params.fromEmail,
+    fromName: params.fromName || process.env.OUTREACH_SENDER_NAME || 'Danish at Claraud',
+    replyTo: process.env.OUTREACH_REPLY_TO || 'danish@claraud.com',
+    to: params.toEmail,
+    subject: params.subject,
+    html: params.html,
+    tags: [
+      { name: 'category', value: 'outreach-sniper' },
+      { name: 'lead_id', value: params.leadId },
+      { name: 'tenant_id', value: params.tenantId },
+    ],
+  });
 
-  const resend = new Resend(key);
-  const fromName = params.fromName || process.env.OUTREACH_SENDER_NAME || 'ProposalOS';
-
-  const messageId = await withProviderResilience<string | null>(
-    {
-      provider: 'resend',
-      operation: 'outreach:send_email',
-      tenantId: params.tenantId,
-    },
-    async () => {
-      const response = await resend.emails.send({
-        from: `${fromName} <${params.fromEmail}>`,
-        to: params.toEmail,
-        subject: params.subject,
-        html: params.html,
-        tags: [
-          { name: 'category', value: 'outreach-sniper' },
-          { name: 'lead_id', value: params.leadId },
-          { name: 'tenant_id', value: params.tenantId },
-        ],
-      });
-
-      if (response.error) {
-        throw new Error(response.error.message || 'Resend send failed');
-      }
-
-      return response.data?.id ?? null;
-    }
-  );
-
-  return { messageId };
+  return { messageId: result.messageId };
 }
 
 async function fetchEligibleLeads(tenantId: string, limit: number): Promise<LeadWithOutreach[]> {
@@ -370,8 +349,8 @@ export async function processSniperOutreach(
             scorecardUrl: scorecardUrl,
           });
 
-          // eslint-disable-next-line no-console
-          console.log(
+
+          logger.info(
             'DEBUG SEQUENCE:',
             JSON.stringify(
               sequence.map((s) => ({
@@ -592,8 +571,8 @@ export async function processSniperOutreach(
       let capCheckPassed = false;
       try {
         await prisma.$transaction(async (tx) => {
-          // Enforce concurrency safe locking
-          await tx.$executeRawUnsafe(`SELECT id FROM "Tenant" WHERE id = $1 FOR UPDATE`, tenantId);
+          // Enforce concurrency safe locking via typed parameter
+          await tx.$queryRaw`SELECT id FROM "Tenant" WHERE id = ${tenantId} FOR UPDATE`;
 
           const startOfToday = new Date();
           startOfToday.setHours(0, 0, 0, 0);
@@ -653,7 +632,7 @@ export async function processSniperOutreach(
 
         if (liveSendingEnabled) {
           // LIVE TRANSMISSION (ONLY IF EXPLICITLY ON)
-          const send = await sendWithResend({
+           const send = await sendWithProvider({
             fromName: domainSelection.domain.fromName,
             fromEmail: domainSelection.domain.fromEmail,
             toEmail: lead.decisionMakerEmail!,

@@ -1,9 +1,12 @@
-import { createHash } from 'crypto';
-
 import { RunTree } from 'langsmith';
 
 import { runWithConcurrency } from '@/lib/audit/concurrency';
-import { redisCache } from '@/lib/cache/redisCache';
+import {
+  normalizeAndValidateModuleFindings,
+  type RejectedFinding,
+} from '@/lib/audit/findingContract';
+import { persistAuditResult } from '@/lib/audit/findingPersistence';
+import { FEATURE_FLAGS, isFeatureEnabledEffective } from '@/lib/config/feature-flags';
 import { CostTracker } from '@/lib/costs/costTracker';
 import { logger } from '@/lib/logger';
 import { Metrics } from '@/lib/metrics';
@@ -14,15 +17,17 @@ import {
   generateSocialFindings,
   generateWebsiteFindings,
 } from '@/lib/modules/findingGenerator';
+import { createEvidence } from '@/lib/modules/types';
 import { recordAuditTrailEvent } from '@/lib/observability/auditTrail';
 import { withChildObservabilityContext } from '@/lib/observability/context';
 import { MetricsRecorder } from '@/lib/observability/MetricsRecorder';
 import { detectVertical } from '@/lib/playbooks';
 import { prisma } from '@/lib/prisma';
+import { withTenantRuntimeContext } from '@/lib/tenant/context';
 import { createParentTrace } from '@/lib/tracing';
 
 // --- Step 1: Import all modules ---
-import { CANONICAL_MODULES } from './modules';
+import { CANONICAL_MODULES as CRITICAL_COMPLETION_MODULES } from './modules';
 import { runAccessibilityModule } from '../modules/accessibility';
 import { runBacklinksModule } from '../modules/backlinks';
 import { runCitationsModule } from '../modules/citations';
@@ -58,16 +63,32 @@ export interface ModuleInput {
   url?: string;
   businessName?: string;
   city?: string;
+  latitude?: number;
+  longitude?: number;
   industry?: string;
   dependencyResults?: Record<string, any>;
   tenantId: string;
+  signal?: AbortSignal;
 }
 
 export interface ModuleResult {
-  status: 'COMPLETE' | 'PARTIAL' | 'FAILED' | 'SKIPPED';
+  status: 'COMPLETE' | 'PARTIAL' | 'UNAVAILABLE' | 'FAILED' | 'SKIPPED';
   data: any;
   error?: string;
   cost?: number;
+}
+
+export interface AuditRunResult {
+  success: boolean;
+  auditId: string;
+  status: 'COMPLETE' | 'PARTIAL' | 'DEGRADED' | 'FAILED';
+  modulesCompleted: string[];
+  modulesFailed: Array<{ module: string; status?: string; error?: string }>;
+  findingsCount: number;
+  costCents: number;
+  apiCostCents: number;
+  duration_ms: number;
+  error?: string;
 }
 
 // --- Step 2: Define the 3-phase execution plan ---
@@ -81,34 +102,205 @@ interface ModuleConfig {
   timeoutMs?: number;
 }
 
-async function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
-  let timeoutId: NodeJS.Timeout;
-  const timeoutPromise = new Promise<T>((_, reject) => {
-    timeoutId = setTimeout(() => reject(new Error(`Timed out after ${timeoutMs}ms`)), timeoutMs);
+function adaptAuditModuleResult(data: {
+  findings: unknown[];
+  evidenceSnapshots: unknown[];
+  unavailableChecks?: string[];
+  execution?: {
+    state: 'complete' | 'partial' | 'unavailable' | 'failed';
+    reason?: string;
+  };
+}): ModuleResult {
+  const observation = data as {
+    findings: unknown[];
+    evidenceSnapshots: unknown[];
+    unavailableChecks?: string[];
+    execution?: { state: 'complete' | 'partial' | 'unavailable' | 'failed'; reason?: string };
+  };
+  switch (observation.execution?.state) {
+    case 'partial':
+      return { status: 'PARTIAL', data, error: observation.execution.reason };
+    case 'unavailable':
+      return {
+        status: 'UNAVAILABLE',
+        data,
+        error: observation.execution.reason || 'Provider unavailable',
+      };
+    case 'failed':
+      return {
+        status: 'FAILED',
+        data: null,
+        error: observation.execution.reason || 'Module failed',
+      };
+    case 'complete':
+      return { status: 'COMPLETE', data };
+    default: {
+      return {
+        status: observation.unavailableChecks?.length ? 'PARTIAL' : 'COMPLETE',
+        data,
+        error: observation.unavailableChecks?.join(', '),
+      };
+    }
+  }
+}
+
+function adaptLegacyModuleResult(data: unknown, label: string): ModuleResult {
+  if (!data || typeof data !== 'object') {
+    return { status: 'FAILED', data: null, error: `${label} returned malformed data` };
+  }
+  const value = data as Record<string, unknown>;
+  if (value.status === 'failed' || value.status === 'error') {
+    return {
+      status: 'FAILED',
+      data: null,
+      error: typeof value.error === 'string' ? value.error : `${label} failed`,
+    };
+  }
+  if (value.execution && typeof value.execution === 'object') {
+    const execution = value.execution as Record<string, unknown>;
+    if (['complete', 'partial', 'unavailable', 'failed'].includes(String(execution.state))) {
+      return adaptAuditModuleResult(
+        data as {
+          findings: unknown[];
+          evidenceSnapshots: unknown[];
+          unavailableChecks?: string[];
+          execution: { state: 'complete' | 'partial' | 'unavailable' | 'failed'; reason?: string };
+        }
+      );
+    }
+  }
+  if (value.status === 'success' && value.data && typeof value.data === 'object') {
+    const nested = value.data as Record<string, unknown>;
+    if (nested.execution && typeof nested.execution === 'object') {
+      const state = (nested.execution as Record<string, unknown>).state;
+      if (['complete', 'partial', 'unavailable', 'failed'].includes(String(state))) {
+        return adaptAuditModuleResult(
+          nested as {
+            findings: unknown[];
+            evidenceSnapshots: unknown[];
+            unavailableChecks?: string[];
+            execution: {
+              state: 'complete' | 'partial' | 'unavailable' | 'failed';
+              reason?: string;
+            };
+          }
+        );
+      }
+    }
+    if (nested.status === 'error') {
+      return { status: 'FAILED', data: null, error: `${label} returned an internal error result` };
+    }
+    if (nested.skipped === true || nested.executionState === 'unavailable') {
+      return {
+        status: 'UNAVAILABLE',
+        data: value.data,
+        error: typeof nested.reason === 'string' ? nested.reason : `${label} could not be checked`,
+      };
+    }
+    return { status: 'COMPLETE', data: value.data };
+  }
+  if (Array.isArray(value.findings) && Array.isArray(value.evidenceSnapshots)) {
+    const result = data as {
+      findings: unknown[];
+      evidenceSnapshots: unknown[];
+      unavailableChecks?: string[];
+    };
+    if (result.unavailableChecks?.length) {
+      return {
+        status: result.findings.length ? 'PARTIAL' : 'UNAVAILABLE',
+        data: result,
+        error: result.unavailableChecks.join(', '),
+      };
+    }
+    return { status: 'COMPLETE', data: result };
+  }
+  if (value.skipped === true) {
+    return {
+      status: 'UNAVAILABLE',
+      data,
+      error: typeof value.reason === 'string' ? value.reason : `${label} could not be checked`,
+    };
+  }
+  return { status: 'COMPLETE', data };
+}
+
+async function withTimeout<T>(
+  run: (signal: AbortSignal) => Promise<T>,
+  timeoutMs: number,
+  parentSignal?: AbortSignal
+): Promise<T> {
+  const controller = new AbortController();
+  const onAbort = () => controller.abort(parentSignal?.reason);
+  parentSignal?.addEventListener('abort', onAbort, { once: true });
+  const timeoutId = setTimeout(
+    () => controller.abort(new DOMException(`Timed out after ${timeoutMs}ms`, 'AbortError')),
+    timeoutMs
+  );
+
+  const aborted = new Promise<never>((_, reject) => {
+    controller.signal.addEventListener(
+      'abort',
+      () => reject(controller.signal.reason ?? new DOMException('Aborted', 'AbortError')),
+      { once: true }
+    );
   });
-  return Promise.race([promise, timeoutPromise]).finally(() => clearTimeout(timeoutId));
+
+  try {
+    return await Promise.race([run(controller.signal), aborted]);
+  } finally {
+    clearTimeout(timeoutId);
+    parentSignal?.removeEventListener('abort', onAbort);
+  }
 }
 
 // Adapters to normalize the diverse module inputs/outputs into the standard ModuleResult
 const websiteAdapter = async (input: ModuleInput, tracker: CostTracker): Promise<ModuleResult> => {
   if (!input.url) throw new Error('url required');
-  const data = await runWebsiteModule({ url: input.url }, tracker);
-  return { status: 'COMPLETE', data };
+  // P1-27 (Wave 7): forward auditId so runWebsiteModule's internal crawl call and
+  // the sibling `websiteCrawler` module's own call coalesce into one real crawl
+  // (see lib/modules/websiteCrawlerModule.ts's single-flight cache).
+  const data = await runWebsiteModule({ url: input.url, auditId: input.auditId }, tracker);
+  return adaptLegacyModuleResult(data, 'Website');
 };
 
-const websiteCrawlerAdapter = async (input: ModuleInput): Promise<ModuleResult> => {
+const websiteCrawlerAdapter = async (
+  input: ModuleInput,
+  tracker: CostTracker
+): Promise<ModuleResult> => {
   if (!input.url || !input.businessName) throw new Error('url and businessName required');
-  const data = await runWebsiteCrawlerModule({ url: input.url, businessName: input.businessName });
-  return { status: 'COMPLETE', data };
+  const data = await runWebsiteCrawlerModule(
+    {
+      url: input.url,
+      businessName: input.businessName,
+      auditId: input.auditId,
+      signal: input.signal,
+    },
+    tracker
+  );
+  return adaptLegacyModuleResult(data, 'Accessibility');
 };
 
 const gbpAdapter = async (input: ModuleInput, tracker: CostTracker): Promise<ModuleResult> => {
   if (!input.businessName || !input.city) throw new Error('businessName and city required');
-  const data = await runGbpModule(
+  const raw = await runGbpModule(
     { businessName: input.businessName, city: input.city, websiteUrl: input.url },
     tracker
   );
-  return { status: 'COMPLETE', data: (data as unknown as Record<string, any>)?.data || data };
+  const legacy = raw as unknown as Record<string, any>;
+  const normalized = adaptLegacyModuleResult(legacy, 'GBP');
+  const gbpObservation = normalized.data as Record<string, unknown> | null;
+  if (
+    normalized.status === 'COMPLETE' &&
+    !gbpObservation?.placeId &&
+    !gbpObservation?.identityConfidence
+  ) {
+    return {
+      status: 'UNAVAILABLE',
+      data: normalized.data,
+      error: 'Business listing identity was not confirmed',
+    };
+  }
+  return normalized;
 };
 
 const competitorAdapter = async (
@@ -116,11 +308,14 @@ const competitorAdapter = async (
   tracker: CostTracker
 ): Promise<ModuleResult> => {
   if (!input.businessName || !input.city) throw new Error('keyword and location required');
-  const data = await runCompetitorModule(
+  const raw = await runCompetitorModule(
     { keyword: input.businessName, location: input.city },
     tracker
   );
-  return { status: 'COMPLETE', data: (data as unknown as Record<string, any>)?.data || data };
+  const legacy = raw as unknown as Record<string, any>;
+  // Same adapter defect as gbpAdapter above — the module's own failure status was being
+  // silently discarded, reporting COMPLETE regardless (Wave 3, Step 8).
+  return adaptLegacyModuleResult(legacy, 'Competitor');
 };
 
 const techStackAdapter = async (
@@ -128,21 +323,47 @@ const techStackAdapter = async (
   tracker: CostTracker
 ): Promise<ModuleResult> => {
   if (!input.url) throw new Error('url required');
-  const data = await runTechStackModule({ url: input.url }, tracker);
-  return { status: 'COMPLETE', data };
+  const data = await runTechStackModule(
+    { url: input.url, signal: input.signal, auditId: input.auditId },
+    tracker
+  );
+  return adaptLegacyModuleResult(data, 'Accessibility');
 };
 
-const securityAdapter = async (input: ModuleInput): Promise<ModuleResult> => {
+const securityAdapter = async (input: ModuleInput, tracker: CostTracker): Promise<ModuleResult> => {
   if (!input.url) throw new Error('url required');
-  const data = await runSecurityModule({ url: input.url });
-  return { status: 'COMPLETE', data: (data as unknown as Record<string, any>)?.data || data };
+  const data = await runSecurityModule(
+    {
+      url: input.url,
+      tenantId: input.tenantId,
+      signal: input.signal,
+    },
+    tracker
+  );
+  return adaptLegacyModuleResult(data, 'Security');
 };
 
-const emailFinderAdapter = async (input: ModuleInput): Promise<ModuleResult> => {
+const emailFinderAdapter = async (
+  input: ModuleInput,
+  tracker: CostTracker
+): Promise<ModuleResult> => {
   if (!input.url) throw new Error('url required');
-  const data = await runEmailFinderModule(input.url);
-  if ((data as unknown as Record<string, any>).status === 'error')
-    throw new Error((data as unknown as Record<string, any>).error);
+  const data = await runEmailFinderModule(input.url, tracker, input.signal, input.auditId);
+  // P2-28 (Wave 5): `findEmails()` (lib/modules/emailFinder.ts) never returns a
+  // `status` field — the previous `data.status === 'error'` check was dead code that
+  // could never fire, letting a total fetch failure (source: 'failed'/'error', empty
+  // emails) report COMPLETE with an empty result indistinguishable from a genuine
+  // "page fetched successfully, no public emails found" outcome. `findEmails`'s real
+  // signal is its `source` field: 'failed' (fetch/provider unavailable) and 'error'
+  // (unexpected exception during scan) are both real implementation failure, never a
+  // verified absence of emails.
+  if (data.source === 'failed' || data.source === 'error') {
+    return {
+      status: 'FAILED',
+      data: null,
+      error: `Email discovery failed (source: ${data.source})`,
+    };
+  }
   return { status: 'COMPLETE', data };
 };
 
@@ -152,23 +373,34 @@ const reputationAdapter = async (
   trace: any
 ): Promise<ModuleResult> => {
   const gbpData = input.dependencyResults?.gbp;
-  if (!gbpData?.reviews || gbpData.reviews.length === 0)
-    return { status: 'SKIPPED', data: null, error: 'No reviews found' };
+  if (!gbpData)
+    return { status: 'UNAVAILABLE', data: null, error: 'Business profile result unavailable' };
+  if (gbpData.identityConfidence === 'ambiguous' || gbpData.identityStatus === 'AMBIGUOUS') {
+    return {
+      status: 'PARTIAL',
+      data: null,
+      error: 'GBP identity match ambiguous — reputation analysis withheld',
+    };
+  }
+  if (gbpData.reviewsUnavailable === true)
+    return { status: 'UNAVAILABLE', data: null, error: 'Reviews could not be retrieved' };
+  if (!gbpData.reviews || gbpData.reviews.length === 0)
+    return { status: 'SKIPPED', data: null, error: 'No reviews were available to analyze' };
   const data = await runReputationModule(
     { reviews: gbpData.reviews, businessName: input.businessName || 'Unknown' },
     tracker,
     trace
   );
-  return { status: 'COMPLETE', data: (data as unknown as Record<string, any>)?.data || data };
+  return adaptLegacyModuleResult(data, 'Reputation');
 };
 
 const socialAdapter = async (input: ModuleInput, tracker: CostTracker): Promise<ModuleResult> => {
   if (!input.url || !input.businessName) throw new Error('url and businessName required');
   const data = await runSocialModule(
-    { websiteUrl: input.url, businessName: input.businessName },
+    { websiteUrl: input.url, businessName: input.businessName, auditId: input.auditId },
     tracker
   );
-  return { status: 'COMPLETE', data: (data as unknown as Record<string, any>)?.data || data };
+  return adaptLegacyModuleResult(data, 'Social');
 };
 
 const socialDeepAdapter = async (
@@ -185,10 +417,12 @@ const socialDeepAdapter = async (
       city: input.city,
       industry: input.industry || 'Generic',
       discoveredUrls,
+      websiteDiscoverySucceeded: socialData?.skipped !== true,
+      signal: input.signal,
     },
     tracker
   );
-  return { status: 'COMPLETE', data };
+  return adaptLegacyModuleResult(data, 'Accessibility');
 };
 
 const gbpDeepAdapter = async (input: ModuleInput, tracker: CostTracker): Promise<ModuleResult> => {
@@ -201,19 +435,49 @@ const gbpDeepAdapter = async (input: ModuleInput, tracker: CostTracker): Promise
       websiteUrl: input.url,
       businessName: input.businessName || 'Unknown',
       city: input.city || 'Unknown',
+      placeData: gbpData,
+      signal: input.signal,
     },
     tracker
   );
-  return { status: 'COMPLETE', data };
+  const result = adaptAuditModuleResult(data);
+  // P1-29 (Wave 7): if the canonical GBP dependency could not confirm the business
+  // identity with confidence, gbpDeep's own reviews/photos/completeness analysis
+  // may describe the wrong business entirely. The `gbp` module's own advisory
+  // finding (extractFindingsFromRegistryResult) already discloses this to the
+  // customer — gbpDeep's deep-analysis findings are withheld here rather than
+  // duplicated or presented as definitive.
+  if (
+    (gbpData?.identityConfidence === 'ambiguous' || gbpData?.identityStatus === 'AMBIGUOUS') &&
+    result.status === 'COMPLETE'
+  ) {
+    return {
+      status: 'PARTIAL',
+      data: { ...result.data, findings: [] },
+      error: 'GBP identity match ambiguous — deep-analysis findings withheld',
+    };
+  }
+  return result;
 };
 
 const seoDeepAdapter = async (input: ModuleInput, tracker: CostTracker): Promise<ModuleResult> => {
   if (!input.url) throw new Error('url required');
+  // P1-35 (Wave 7): reuse the websiteCrawler dependency's already-crawled homepage
+  // page metrics instead of independently re-fetching the same homepage.
+  const crawlerData = input.dependencyResults?.websiteCrawler;
+  const homepageCrawlPage = crawlerData?.evidenceSnapshots?.[0]?.rawResponse?.crawledPages?.find(
+    (p: { url?: string }) => p.url === input.url
+  );
   const data = await runSeoDeepModule(
-    { url: input.url, businessName: input.businessName || 'Unknown', city: input.city },
+    {
+      url: input.url,
+      businessName: input.businessName || 'Unknown',
+      city: input.city,
+      homepageCrawlData: homepageCrawlPage ?? null,
+    },
     tracker
   );
-  return { status: 'COMPLETE', data };
+  return adaptAuditModuleResult(data);
 };
 
 const accessibilityAdapter = async (
@@ -221,17 +485,48 @@ const accessibilityAdapter = async (
   tracker: CostTracker
 ): Promise<ModuleResult> => {
   if (!input.url) throw new Error('url required');
-  const data = await runAccessibilityModule({ url: input.url }, tracker);
-  return { status: 'COMPLETE', data };
+  const data = await runAccessibilityModule(
+    { url: input.url, signal: input.signal, auditId: input.auditId },
+    tracker
+  );
+  if (data.status === 'failed' || data.data?.status === 'error') {
+    return {
+      status: 'FAILED',
+      data: null,
+      error:
+        data.error || data.data?.data?.recommendations?.[0] || 'Accessibility scan unavailable',
+    };
+  }
+  return adaptLegacyModuleResult(data, 'Accessibility');
 };
 
 const mobileUXAdapter = async (input: ModuleInput, tracker: CostTracker): Promise<ModuleResult> => {
   if (!input.url) throw new Error('url required');
+  // P1-38 (Wave 7): reuse `website`'s already-fetched mobile Lighthouse score
+  // instead of launching a second browser run. Only
+  // trusted when `website`'s own PageSpeed call genuinely succeeded — `coreWebVitals.full`
+  // is only populated on the real success path (lib/modules/website.ts), never on
+  // a missing-key or fetch-failure fallback — so a failed website Lighthouse run
+  // check correctly falls through to mobileUX's own independent fetch attempt.
+  const websiteData = input.dependencyResults?.website;
+  // dependencyResults holds the module's full AuditModuleResult; the PSI payload
+  // lives under `.data` (see lib/modules/website.ts return shape).
+  const websitePsi = websiteData?.data ?? websiteData;
+  const reusedMobileScore =
+    websitePsi?.coreWebVitals?.full && typeof websitePsi?.scores?.performance === 'number'
+      ? Math.round(websitePsi.scores.performance * 100)
+      : null;
   const data = await runMobileUXModule(
-    { url: input.url, businessName: input.businessName || 'Unknown' },
+    {
+      url: input.url,
+      businessName: input.businessName || 'Unknown',
+      signal: input.signal,
+      reusedMobileScore,
+      auditId: input.auditId,
+    },
     tracker
   );
-  return { status: 'COMPLETE', data };
+  return adaptAuditModuleResult(data);
 };
 
 const contentQualityAdapter = async (
@@ -240,7 +535,18 @@ const contentQualityAdapter = async (
 ): Promise<ModuleResult> => {
   if (!input.url) throw new Error('url required');
   const crawlerData = input.dependencyResults?.websiteCrawler;
-  const crawledPages = crawlerData?.evidenceSnapshots?.[0]?.rawResponse?.crawledPages || [];
+  const crawlRaw = crawlerData?.evidenceSnapshots?.[0]?.rawResponse ?? {};
+  // The crawler persists per-page *metrics* (no per-page HTML, by design — 20
+  // pages of HTML per audit is not evidence worth storing) plus the homepage's
+  // raw HTML. Content analysis needs HTML, so analyze the homepage (the highest
+  // value page) with real HTML and keep the other pages as titled metadata.
+  const metricPages: Array<{ url: string; title?: string | null; wordCount?: number }> =
+    Array.isArray(crawlRaw.crawledPages) ? crawlRaw.crawledPages : [];
+  const homepageHtml: string | null =
+    typeof crawlRaw.html === 'string' && crawlRaw.html.length > 0 ? crawlRaw.html : null;
+  const crawledPages = homepageHtml
+    ? [{ url: input.url, html: homepageHtml, title: metricPages[0]?.title ?? undefined }]
+    : [];
   const data = await runContentQualityModule(
     {
       url: input.url,
@@ -251,7 +557,7 @@ const contentQualityAdapter = async (
     },
     tracker
   );
-  return { status: 'COMPLETE', data };
+  return adaptAuditModuleResult(data);
 };
 
 const conversionAdapter = async (
@@ -260,10 +566,16 @@ const conversionAdapter = async (
 ): Promise<ModuleResult> => {
   if (!input.url) throw new Error('url required');
   const data = await runConversionModule(
-    { url: input.url, businessName: input.businessName || 'Unknown', industry: input.industry },
+    {
+      url: input.url,
+      businessName: input.businessName || 'Unknown',
+      industry: input.industry,
+      signal: input.signal,
+      auditId: input.auditId,
+    },
     tracker
   );
-  return { status: 'COMPLETE', data };
+  return adaptLegacyModuleResult(data, 'Conversion');
 };
 
 const citationsAdapter = async (
@@ -275,7 +587,7 @@ const citationsAdapter = async (
     { businessName: input.businessName, city: input.city },
     tracker
   );
-  return { status: 'COMPLETE', data };
+  return adaptAuditModuleResult(data);
 };
 
 const paidSearchAdapter = async (
@@ -292,7 +604,7 @@ const paidSearchAdapter = async (
     },
     tracker
   );
-  return { status: 'COMPLETE', data };
+  return adaptAuditModuleResult(data);
 };
 
 const backlinksAdapter = async (
@@ -301,10 +613,15 @@ const backlinksAdapter = async (
 ): Promise<ModuleResult> => {
   if (!input.url || !input.businessName || !input.city) throw new Error('url, name, city required');
   const data = await runBacklinksModule(
-    { websiteUrl: input.url, businessName: input.businessName, city: input.city },
+    {
+      websiteUrl: input.url,
+      businessName: input.businessName,
+      city: input.city,
+      signal: input.signal,
+    },
     tracker
   );
-  return { status: 'COMPLETE', data };
+  return adaptAuditModuleResult(data);
 };
 
 const privacyComplianceAdapter = async (
@@ -313,21 +630,39 @@ const privacyComplianceAdapter = async (
 ): Promise<ModuleResult> => {
   if (!input.url) throw new Error('url required');
   const data = await runPrivacyComplianceModule(
-    { url: input.url, businessName: input.businessName || 'Unknown', city: input.city || '' },
+    {
+      url: input.url,
+      businessName: input.businessName || 'Unknown',
+      city: input.city || '',
+      signal: input.signal,
+    },
     tracker
   );
-  return { status: 'COMPLETE', data };
+  return adaptAuditModuleResult(data);
 };
 
 const schemaMarkupAdapter = async (input: ModuleInput): Promise<ModuleResult> => {
   if (!input.url) throw new Error('url required');
   const gbpData = input.dependencyResults?.gbp;
-  const data = await runSchemaMarkupModule({
+  // P1-35 (Wave 7): reuse the homepage HTML the canonical `websiteCrawler`
+  // dependency already fetched instead of independently re-fetching the same page.
+  const crawlerData = input.dependencyResults?.websiteCrawler;
+  const homepageHtml = crawlerData?.evidenceSnapshots?.[0]?.rawResponse?.html ?? null;
+  const raw = await runSchemaMarkupModule({
     url: input.url,
+    auditId: input.auditId,
     businessName: input.businessName,
     gbpTypes: gbpData?.types,
+    homepageHtml,
   });
-  return { status: 'COMPLETE', data: (data as unknown as Record<string, any>)?.data || data };
+  const legacy = raw as unknown as Record<string, any>;
+  // P1-33 (Wave 5): `runSchemaMarkupModule` now reports its own outer status
+  // honestly (fixed alongside P1-33 — fetch/parse failure used to always be
+  // laundered into an outer 'success'). Provider/fetch failure must never be
+  // reported as COMPLETE.
+  if (legacy?.status === 'failed' || legacy?.status === 'error')
+    return adaptLegacyModuleResult(legacy, 'Schema markup');
+  return adaptLegacyModuleResult(legacy, 'Schema markup');
 };
 
 const keywordGapAdapter = async (
@@ -344,8 +679,41 @@ const keywordGapAdapter = async (
     },
     tracker
   );
-  return { status: 'COMPLETE', data };
+  return adaptAuditModuleResult(data);
 };
+
+/**
+ * P1-39 (Wave 5): the `competitor` module (lib/modules/competitor.ts) returns its real
+ * competitor list under `data.topCompetitors` — never `data.results`, which does not
+ * exist on the module's output shape. Every adapter that reads the competitor
+ * dependency must use this one canonical field name; reading a nonexistent field
+ * silently produces `undefined`, which both downstream adapters previously treated as
+ * "no competitors" via `?.` chaining, discarding real, already-collected data instead
+ * of forwarding it.
+ */
+function getCanonicalCompetitors(competitorDependencyData: unknown): Array<{
+  name: string;
+  website?: string;
+  placeId?: string;
+  rating?: number;
+  reviews?: number;
+}> {
+  const list = (competitorDependencyData as Record<string, unknown> | undefined)?.topCompetitors;
+  if (!Array.isArray(list)) return [];
+  // Defensive: reject entries with an unrecognized/legacy shape (no `name`) rather
+  // than silently passing through `undefined` fields to dependents.
+  return list.filter(
+    (
+      c
+    ): c is {
+      name: string;
+      website?: string;
+      placeId?: string;
+      rating?: number;
+      reviews?: number;
+    } => !!c && typeof c === 'object' && typeof (c as Record<string, unknown>).name === 'string'
+  );
+}
 
 const videoPresenceAdapter = async (
   input: ModuleInput,
@@ -353,7 +721,9 @@ const videoPresenceAdapter = async (
 ): Promise<ModuleResult> => {
   if (!input.businessName || !input.city) throw new Error('name, city required');
   const compData = input.dependencyResults?.competitor;
-  const competitors = compData?.results?.slice(0, 3).map((r: any) => r.title) || [];
+  const competitors = getCanonicalCompetitors(compData)
+    .slice(0, 3)
+    .map((c) => c.name);
   const data = await runVideoPresenceModule(
     {
       businessName: input.businessName,
@@ -361,11 +731,21 @@ const videoPresenceAdapter = async (
       industry: input.industry || 'Generic',
       websiteUrl: input.url || '',
       competitors,
+      signal: input.signal,
     },
     tracker
   );
-  return { status: 'COMPLETE', data };
+  return adaptAuditModuleResult(data);
 };
+
+/** Normalize for self-exclusion comparison: lowercase, strip punctuation, collapse spaces. */
+function normalizeBusinessName(s: string): string {
+  return s
+    .toLowerCase()
+    .replace(/[^\w\s]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
 
 const competitorStrategyAdapter = async (
   input: ModuleInput,
@@ -373,23 +753,42 @@ const competitorStrategyAdapter = async (
 ): Promise<ModuleResult> => {
   if (!input.url || !input.businessName || !input.city) throw new Error('url, name, city required');
   const compData = input.dependencyResults?.competitor;
-  const topComp = compData?.results?.find(
-    (r: any) => r.link && r.title && r.title !== input.businessName
+  // P2-47 (Wave 5): self-exclusion previously compared `title !== businessName` as an
+  // exact string — any case, whitespace, or punctuation difference between the SERP
+  // listing's title and the input business name (e.g. "Joe's Plumbing" vs "Joes
+  // Plumbing Inc") let the subject business be selected as its own "competitor".
+  // Normalize both sides the same way the `gbp` module already does for its own
+  // name-consistency check (lib/modules/gbp.ts::normalize).
+  const selfNormalized = normalizeBusinessName(input.businessName);
+  const topComp = getCanonicalCompetitors(compData).find(
+    (c): c is typeof c & { website: string } =>
+      !!c.website && !!c.name && normalizeBusinessName(c.name) !== selfNormalized
   );
-  if (!topComp) return { status: 'SKIPPED', data: null, error: 'No major competitor found' };
+  if (!compData)
+    return { status: 'UNAVAILABLE', data: null, error: 'Competitor search unavailable' };
+  if (!topComp) return { status: 'SKIPPED', data: null, error: 'No major competitor identified' };
   const data = await runCompetitorStrategyModule(
     {
       businessName: input.businessName,
       industry: input.industry || 'Generic',
       city: input.city,
       websiteUrl: input.url,
-      competitorName: topComp.title,
-      competitorWebsite: topComp.link,
+      competitorName: topComp.name,
+      competitorWebsite: topComp.website,
       competitorPlaceId: topComp.placeId,
     },
     tracker
   );
-  return { status: 'COMPLETE', data };
+  const result = adaptAuditModuleResult(data);
+  if (
+    result.status === 'UNAVAILABLE' &&
+    Array.isArray(data.findings) &&
+    data.findings.length === 0 &&
+    data.evidenceSnapshots.length > 0
+  ) {
+    return { status: 'COMPLETE', data };
+  }
+  return result;
 };
 
 const visionAdapter = async (input: ModuleInput, tracker: CostTracker): Promise<ModuleResult> => {
@@ -407,17 +806,28 @@ const visionAdapter = async (input: ModuleInput, tracker: CostTracker): Promise<
     },
     tracker
   );
-  return { status: 'COMPLETE', data };
+  return adaptAuditModuleResult(data);
 };
 
 // P1-7: Adapters for previously dead modules — using existing utility functions
 const coreWebVitalsAdapter = async (input: ModuleInput): Promise<ModuleResult> => {
-  // Reads from the website (PageSpeed) module output which contains Lighthouse audits
+  // Reads from the website module output which contains Lighthouse audits
   const websiteData = input.dependencyResults?.website;
+  // The website module stores the local Lighthouse report as an evidence snapshot;
+  // also accept the legacy payload shape during deployment transition.
+  const psiSnapshot = Array.isArray(websiteData?.evidenceSnapshots)
+    ? websiteData.evidenceSnapshots.find(
+        (s: { source?: string; rawResponse?: { lighthouseResult?: unknown } }) =>
+          s?.source === 'Local Lighthouse' ||
+          s?.source === 'PageSpeed Insights API' ||
+          s?.rawResponse?.lighthouseResult
+      )
+    : null;
   const lighthouseAudits =
     websiteData?.lighthouseResult?.audits ??
     websiteData?.audits ??
     websiteData?.data?.lighthouseResult?.audits ??
+    psiSnapshot?.rawResponse?.lighthouseResult?.audits ??
     null;
   if (!lighthouseAudits)
     return {
@@ -428,6 +838,21 @@ const coreWebVitalsAdapter = async (input: ModuleInput): Promise<ModuleResult> =
 
   const cwv = extractCoreWebVitalsFromAudits(lighthouseAudits);
 
+  // Evidence for each Core Web Vital: the Lighthouse lab measurement itself,
+  // pointed at the audited URL. Findings without evidence are rejected at the
+  // aggregation boundary and would silently degrade audit trust.
+  const cwvCollectedAt = new Date().toISOString();
+  const cwvEvidence = (label: string, value: string | number) => [
+    createEvidence({
+      pointer: input.url ?? 'https://pagespeed.web.dev',
+      source: 'lighthouse_lab',
+      collected_at: cwvCollectedAt,
+      type: 'metric',
+      value,
+      label,
+    }),
+  ];
+
   // Generate findings based on CWV ratings
   const findings: any[] = [];
   if (cwv.lcp && cwv.lcp.rating !== 'good') {
@@ -436,9 +861,14 @@ const coreWebVitalsAdapter = async (input: ModuleInput): Promise<ModuleResult> =
       category: 'Performance',
       type: cwv.lcp.rating === 'poor' ? 'PAINKILLER' : 'VITAMIN',
       title: `Largest Contentful Paint: ${cwv.lcp.value.toFixed(2)}s`,
-      description: `LCP is ${cwv.lcp.rating} (threshold: good < ${cwv.lcp.thresholdGood}s). Slow LCP hurts SEO rankings and user experience.`,
+      description: `LCP is ${cwv.lcp.rating} (threshold: good < ${cwv.lcp.thresholdGood}s) — visitors wait about ${Math.floor(Number(cwv.lcp.value))}s for content to appear, hurting engagement and SEO.`,
       impactScore: cwv.lcp.rating === 'poor' ? 8 : 5,
-      confidenceScore: 95,
+      confidenceScore: 9,
+      evidence: cwvEvidence(
+        'Largest Contentful Paint (s, mobile lab)',
+        Number(cwv.lcp.value.toFixed(2))
+      ),
+      metrics: { lcpSeconds: Number(cwv.lcp.value.toFixed(2)), rating: cwv.lcp.rating },
       effortEstimate: 'HIGH',
       recommendedFix: [
         'Optimize images',
@@ -456,7 +886,12 @@ const coreWebVitalsAdapter = async (input: ModuleInput): Promise<ModuleResult> =
       title: `Cumulative Layout Shift: ${cwv.cls.value.toFixed(3)}`,
       description: `CLS is ${cwv.cls.rating} (threshold: good < ${cwv.cls.thresholdGood}). Layout shifts hurt UX and SEO.`,
       impactScore: cwv.cls.rating === 'poor' ? 7 : 4,
-      confidenceScore: 95,
+      confidenceScore: 9,
+      evidence: cwvEvidence(
+        'Cumulative Layout Shift (mobile lab)',
+        Number(cwv.cls.value.toFixed(3))
+      ),
+      metrics: { cls: Number(cwv.cls.value.toFixed(3)), rating: cwv.cls.rating },
       effortEstimate: 'MEDIUM',
       recommendedFix: [
         'Set explicit width/height on images',
@@ -473,12 +908,62 @@ const coreWebVitalsAdapter = async (input: ModuleInput): Promise<ModuleResult> =
       title: `Total Blocking Time: ${cwv.tbt.value}ms`,
       description: `TBT is ${cwv.tbt.rating} (threshold: good < ${cwv.tbt.thresholdGood}ms). High TBT means the main thread is blocked, delaying user interaction.`,
       impactScore: cwv.tbt.rating === 'poor' ? 7 : 4,
-      confidenceScore: 90,
+      confidenceScore: 9,
+      evidence: cwvEvidence('Total Blocking Time (ms, mobile lab)', cwv.tbt.value),
+      metrics: { tbtMs: cwv.tbt.value, rating: cwv.tbt.rating },
       effortEstimate: 'HIGH',
       recommendedFix: [
         'Break up long tasks',
         'Defer non-critical JavaScript',
         'Reduce third-party scripts',
+      ],
+    });
+  }
+  // P2-44: extractCoreWebVitalsFromAudits already computes cwv.inp from the same
+  // Lighthouse run as lcp/cls/tbt above, but no finding was ever emitted for it —
+  // INP (Interaction to Next Paint) replaced FID as the Core Web Vital for
+  // responsiveness in 2024, so a missing INP finding under-reports real UX issues.
+  if (cwv.inp && cwv.inp.rating !== 'good') {
+    const collectedAt = new Date().toISOString();
+    findings.push({
+      module: 'coreWebVitals',
+      category: 'Performance',
+      type: cwv.inp.rating === 'poor' ? 'PAINKILLER' : 'VITAMIN',
+      title: `Interaction to Next Paint: ${Math.round(cwv.inp.value)}ms`,
+      // Labeled as a single-run Lighthouse lab measurement (not CrUX real-user field
+      // data) — this module has no field-data source, so it must not be presented
+      // as observed real-user responsiveness.
+      description: `INP (lab, single Lighthouse run) is ${cwv.inp.rating} (threshold: good < ${cwv.inp.thresholdGood}ms). Slow INP means clicks and taps feel sluggish to users.`,
+      impactScore: cwv.inp.rating === 'poor' ? 6 : 4,
+      confidenceScore: 9,
+      evidence: [
+        createEvidence({
+          pointer: input.url || 'https://pagespeed.web.dev/',
+          source: 'lighthouse_lab',
+          collected_at: collectedAt,
+          type: 'metric',
+          value: cwv.inp.value,
+          label: 'Interaction to Next Paint (single Lighthouse lab run)',
+          raw: {
+            formFactor: 'unknown',
+            provenance: 'lab',
+            unit: cwv.inp.unit,
+            thresholdGood: cwv.inp.thresholdGood,
+            thresholdPoor: cwv.inp.thresholdPoor,
+          },
+        }),
+      ],
+      metrics: {
+        metric: 'INP',
+        value: cwv.inp.value,
+        unit: cwv.inp.unit,
+        provenance: 'lighthouse_lab_single_run',
+      },
+      effortEstimate: 'HIGH',
+      recommendedFix: [
+        'Break up long JavaScript tasks',
+        'Reduce/defer third-party scripts',
+        'Optimize event handlers',
       ],
     });
   }
@@ -511,8 +996,36 @@ const schemaAnalysisAdapter = async (input: ModuleInput): Promise<ModuleResult> 
 
   const analysis = analyzeSchemaMarkup(rawHtml);
   const findings: any[] = [];
+  // Real evidence for each schema observation: the analyzed homepage is the
+  // pointer, the observation is which schema types were / were not present.
+  const schemaCollectedAt = new Date().toISOString();
+  const schemaEvidence = (label: string, value: string) => [
+    createEvidence({
+      pointer: input.url ?? 'https://schema.org',
+      source: 'schema_analysis',
+      collected_at: schemaCollectedAt,
+      type: 'text',
+      value,
+      label,
+    }),
+  ];
+  const detectedTypes = Array.isArray((analysis as { detectedTypes?: unknown }).detectedTypes)
+    ? ((analysis as { detectedTypes?: string[] }).detectedTypes ?? []).join(', ') || 'none'
+    : 'none';
 
   // Generate findings for missing critical schema types
+  //
+  // P1-34 (Wave 5): each finding below carries `metrics.schemaFingerprint` identifying
+  // its exact root cause (e.g. `schema-missing:LocalBusiness`) using the same key
+  // scheme `schemaMarkup` (lib/modules/schemaMarkup.ts::buildSchemaMarkupFindings)
+  // assigns for the identical observation from the same crawled HTML, so
+  // `deduplicateFindings` merges true duplicates instead of presenting the customer
+  // two near-identical "you're missing X schema" findings. This module's own
+  // zero-evidence gap (these findings currently carry no `evidence`, so Wave 3's
+  // contract rejects them before they can reach aggregation at all) is a separate,
+  // pre-existing module-implementation defect out of Wave 5's adapter-repair scope —
+  // tracked for Wave 6/7, not fixed here — but the fingerprint is added now so
+  // dedup is already correct once that gap closes.
   if (!analysis.hasLocalBusinessOrOrganization.present) {
     findings.push({
       module: 'schemaAnalysis',
@@ -521,7 +1034,12 @@ const schemaAnalysisAdapter = async (input: ModuleInput): Promise<ModuleResult> 
       title: 'Missing LocalBusiness/Organization Schema',
       description: analysis.hasLocalBusinessOrOrganization.recommendation,
       impactScore: 8,
-      confidenceScore: 95,
+      confidenceScore: 9,
+      evidence: schemaEvidence(
+        'Structured data detected on homepage',
+        `LocalBusiness/Organization absent; detected: ${detectedTypes}`
+      ),
+      metrics: { schemaFingerprint: 'schema-missing:LocalBusiness' },
       effortEstimate: 'LOW',
       recommendedFix: [
         'Add JSON-LD LocalBusiness schema with name, address, phone, hours, and geo coordinates',
@@ -536,7 +1054,12 @@ const schemaAnalysisAdapter = async (input: ModuleInput): Promise<ModuleResult> 
       title: 'Missing AggregateRating Schema',
       description: analysis.hasReviewAggregateRating.recommendation,
       impactScore: 5,
-      confidenceScore: 90,
+      confidenceScore: 9,
+      evidence: schemaEvidence(
+        'Structured data detected on homepage',
+        `AggregateRating absent; detected: ${detectedTypes}`
+      ),
+      metrics: { schemaFingerprint: 'schema-missing:AggregateRating' },
       effortEstimate: 'LOW',
       recommendedFix: [
         'Add AggregateRating schema referencing your review platform (Google, Yelp, etc.)',
@@ -551,7 +1074,12 @@ const schemaAnalysisAdapter = async (input: ModuleInput): Promise<ModuleResult> 
       title: 'No FAQPage Schema Detected',
       description: analysis.hasFaq.recommendation,
       impactScore: 3,
-      confidenceScore: 80,
+      confidenceScore: 8,
+      evidence: schemaEvidence(
+        'Structured data detected on homepage',
+        `FAQPage absent; detected: ${detectedTypes}`
+      ),
+      metrics: { schemaFingerprint: 'schema-missing:FAQPage' },
       effortEstimate: 'LOW',
       recommendedFix: ['Add FAQPage JSON-LD to any page with Q&A content to unlock rich results'],
     });
@@ -569,10 +1097,10 @@ const schemaAnalysisAdapter = async (input: ModuleInput): Promise<ModuleResult> 
 
 export const MODULE_REGISTRY: ModuleConfig[] = [
   // Phase 1: Foundation (parallel) — no dependencies
-  { name: 'website', phase: 1, run: websiteAdapter, timeoutMs: 30000 },
+  { name: 'website', phase: 1, run: websiteAdapter, timeoutMs: 60000 },
   { name: 'websiteCrawler', phase: 1, run: websiteCrawlerAdapter, timeoutMs: 45000 },
   { name: 'gbp', phase: 1, run: gbpAdapter, timeoutMs: 20000 },
-  { name: 'competitor', phase: 1, run: competitorAdapter, timeoutMs: 25000 },
+  { name: 'competitor', phase: 1, run: competitorAdapter, timeoutMs: 90000 },
   { name: 'techStack', phase: 1, run: techStackAdapter, timeoutMs: 15000 },
   { name: 'security', phase: 1, run: securityAdapter, timeoutMs: 20000 },
   { name: 'emailFinder', phase: 1, run: emailFinderAdapter, timeoutMs: 15000, optional: true },
@@ -625,7 +1153,7 @@ export const MODULE_REGISTRY: ModuleConfig[] = [
     dependsOn: ['website'],
     timeoutMs: 45000,
   },
-  { name: 'mobileUX', phase: 2, run: mobileUXAdapter, dependsOn: ['website'], timeoutMs: 45000 },
+  { name: 'mobileUX', phase: 2, run: mobileUXAdapter, dependsOn: ['website'], timeoutMs: 60000 },
   {
     name: 'contentQuality',
     phase: 2,
@@ -692,18 +1220,68 @@ export const MODULE_REGISTRY: ModuleConfig[] = [
 ];
 
 /**
+ * P2-25: modules gated by an ENABLE_*_AUDIT_MODULE feature flag. All 4 flags default
+ * to enabled (see lib/config/feature-flags.ts) so existing behavior is unchanged
+ * until an operator explicitly opts out. Checked inline in executePhase() below (not
+ * via a second filtered copy of MODULE_REGISTRY) so disabled modules still get an
+ * explicit SKIPPED/"DISABLED" result recorded — distinguishing "operator turned this
+ * off" from "this module failed" or "this module is missing" for dependents and for
+ * customer-facing status reporting.
+ */
+export const FEATURE_FLAG_GATED_MODULES: Partial<Record<string, keyof typeof FEATURE_FLAGS>> = {
+  accessibility: 'ENABLE_ACCESSIBILITY_AUDIT_MODULE',
+  coreWebVitals: 'ENABLE_PERFORMANCE_AUDIT_MODULE',
+  seoDeep: 'ENABLE_SEO_AUDIT_MODULE',
+  security: 'ENABLE_SECURITY_AUDIT_MODULE',
+};
+
+/**
  * Normalizes findings out of the custom module results and legacy modules
  */
-function extractFindingsFromRegistryResult(
+export function extractFindingsFromRegistryResult(
   moduleName: string,
   result: ModuleResult,
   input: ModuleInput
 ): { findings: any[]; snapshots: any[] } {
-  if (result.status !== 'COMPLETE' || !result.data) return { findings: [], snapshots: [] };
+  if ((result.status !== 'COMPLETE' && result.status !== 'PARTIAL') || !result.data) {
+    return { findings: [], snapshots: [] };
+  }
   const rd = result.data;
 
   const findings: any[] = [];
   const snapshots: any[] = [];
+
+  if (moduleName === 'gbp' && rd.identityConfidence === 'ambiguous') {
+    findings.push({
+      module: 'gbp',
+      category: 'Visibility',
+      type: 'VITAMIN',
+      title: 'Google Business Profile Match Needs Manual Confirmation',
+      description: `A possible Google Maps business match was found for ${input.businessName ?? 'this business'}, but identity is ambiguous. Specific profile findings are withheld until the correct listing is confirmed.`,
+      impactScore: 0,
+      confidenceScore: 4,
+      evidence: [],
+      metrics: {
+        identityConfidence: 'ambiguous',
+        identityStatus: rd.identityStatus,
+        candidatesConsidered: rd.candidatesConsidered ?? null,
+      },
+      effortEstimate: 'LOW',
+      recommendedFix: ['Confirm the correct business location or Place ID'],
+    });
+    snapshots.push({
+      source: 'SerpApi Google Maps identity observation',
+      rawResponse: {
+        placeId: rd.placeId,
+        identityStatus: rd.identityStatus,
+        identityConfidence: rd.matchConfidenceScore,
+        candidateCount: rd.candidatesConsidered,
+        alternateCandidates: rd.alternateCandidateNames,
+        mapsProvenance: rd.mapsProvenance,
+      },
+    });
+    return { findings, snapshots };
+  }
 
   // legacy path
   if (moduleName === 'website') {
@@ -715,13 +1293,59 @@ function extractFindingsFromRegistryResult(
     }
     snapshots.push({ source: 'PageSpeed', rawResponse });
   } else if (moduleName === 'gbp') {
-    findings.push(
-      ...generateGBPFindings(
-        rd,
-        input.businessName || 'Unknown',
-        input.dependencyResults?.competitor
-      )
-    );
+    // P1-29 (Wave 7): an ambiguous business match (common name, franchise, or a
+    // weak candidate) must never produce definitive customer-negative findings
+    // about a business we could not confirm is actually the customer's listing.
+    if (rd?.identityConfidence === 'ambiguous' || rd?.identityStatus === 'AMBIGUOUS') {
+      const alternates: string[] = Array.isArray(rd.alternateCandidateNames)
+        ? rd.alternateCandidateNames
+        : [];
+      findings.push({
+        module: 'gbp',
+        category: 'Visibility',
+        type: 'VITAMIN',
+        title: 'Google Business Profile Match Needs Manual Confirmation',
+        description:
+          `We found a Google Business Profile that may match "${input.businessName || 'this business'}", ` +
+          `but could not confirm it with confidence` +
+          (alternates.length > 0
+            ? ` — similarly named results include: ${alternates.join(', ')}.`
+            : '.') +
+          ' Specific profile findings are withheld until the correct listing is confirmed.',
+        impactScore: 0,
+        confidenceScore: 4,
+        evidence: [
+          createEvidence({
+            pointer:
+              rd.mapsUri ||
+              (rd.placeId
+                ? `https://www.google.com/maps/search/?api=1&query_place_id=${encodeURIComponent(rd.placeId)}`
+                : input.url || 'https://www.google.com/maps'),
+            source: 'serpapi_google_maps',
+            type: 'text',
+            value: `matchConfidenceScore=${rd.matchConfidenceScore ?? 'unknown'}, candidatesConsidered=${rd.candidatesConsidered ?? 'unknown'}`,
+            label: 'GBP Identity Match',
+          }),
+        ],
+        metrics: {
+          identityConfidence: 'ambiguous',
+          candidatesConsidered: rd.candidatesConsidered ?? null,
+        },
+        effortEstimate: 'LOW',
+        recommendedFix: [
+          'Confirm which Google Business Profile listing is actually yours',
+          'Provide the exact Place ID or Google Maps link to improve match accuracy',
+        ],
+      });
+    } else {
+      findings.push(
+        ...generateGBPFindings(
+          rd,
+          input.businessName || 'Unknown',
+          input.dependencyResults?.competitor
+        )
+      );
+    }
     snapshots.push({ source: 'Places API', rawResponse: rd });
   } else if (moduleName === 'competitor') {
     findings.push(...generateCompetitorFindings(rd, input.businessName || 'Unknown'));
@@ -739,16 +1363,27 @@ function extractFindingsFromRegistryResult(
     snapshots.push({ source: 'Module Data', rawResponse: rd });
   } else if (moduleName === 'emailFinder') {
     if (rd.emails && rd.emails.length > 0) {
+      // Wave 3 (P2-36): real pointer is the crawled URL the emails were extracted from.
+      const collectedAt = new Date().toISOString();
       findings.push({
         module: 'emailFinder',
         category: 'Contact & Outreach',
         type: 'VITAMIN',
         title: `${rd.emails.length} Emails Found`,
         description: `Discovered emails: ${rd.emails.join(', ')}`,
-        evidence: rd.emails.map((e: string) => ({ type: 'text', value: e, label: 'Email' })),
+        evidence: rd.emails.map((e: string) =>
+          createEvidence({
+            pointer: input.url as string,
+            source: 'email_finder',
+            collected_at: collectedAt,
+            type: 'text',
+            value: e,
+            label: 'Email',
+          })
+        ),
         metrics: { emailCount: rd.emails.length },
         impactScore: 3,
-        confidenceScore: 90,
+        confidenceScore: 9, // canonical 0-10 scale (FindingRuntimeSchema)
         effortEstimate: 'LOW',
         recommendedFix: ['Use for outreach'],
       });
@@ -756,7 +1391,10 @@ function extractFindingsFromRegistryResult(
   } else {
     // new modules path
     if (Array.isArray(rd.findings)) {
-      findings.push(...rd.findings.map((f: any) => ({ ...f, module: f.module || moduleName })));
+      // Wave 3 (Step 3 requirement 4): trusted module identity always wins over
+      // whatever the module output itself claims — a module cannot mislabel its
+      // findings as belonging to a different module.
+      findings.push(...rd.findings.map((f: any) => ({ ...f, module: moduleName })));
       if (rd.evidenceSnapshots && Array.isArray(rd.evidenceSnapshots)) {
         rd.evidenceSnapshots.forEach((s: any) => snapshots.push(s));
       } else {
@@ -768,13 +1406,69 @@ function extractFindingsFromRegistryResult(
   return { findings, snapshots };
 }
 
+const REQUIRED_AUDIT_MODULES = new Set([
+  'website',
+  'websiteCrawler',
+  'gbp',
+  'competitor',
+  'techStack',
+  'security',
+  'coreWebVitals',
+  'schemaAnalysis',
+  'reputation',
+  'social',
+  'seoDeep',
+  'accessibility',
+  'mobileUX',
+  'contentQuality',
+  'conversion',
+  'citations',
+  'privacyCompliance',
+  'schemaMarkup',
+  'keywordGap',
+  'competitorStrategy',
+]);
+
+/**
+ * Trust policy. A required module counts as *observed* when it is COMPLETE or
+ * PARTIAL: PARTIAL means the module genuinely ran against the customer's assets
+ * and reports exactly which sub-checks were unavailable (e.g. citations: "Yellow
+ * Pages unavailable" with 2 of 3 directories observed). Its findings are already
+ * gated per-finding by evidence at the aggregation boundary, so a single
+ * unavailable directory must not veto the whole audit. UNAVAILABLE / FAILED /
+ * SKIPPED / DISABLED mean nothing was observed and do block TRUSTED.
+ */
+const OBSERVED_STATES = new Set<ModuleResult['status']>(['COMPLETE', 'PARTIAL']);
+
+export function assessAuditResult(
+  results: Map<string, ModuleResult>,
+  rejectedFindingCount: number
+) {
+  const required = [...REQUIRED_AUDIT_MODULES];
+  const completeRequired = required.filter((name) =>
+    OBSERVED_STATES.has(results.get(name)?.status as ModuleResult['status'])
+  ).length;
+  const failures = required.filter(
+    (name) => !OBSERVED_STATES.has(results.get(name)?.status as ModuleResult['status'])
+  );
+  const status =
+    completeRequired === required.length ? 'COMPLETE' : completeRequired > 0 ? 'PARTIAL' : 'FAILED';
+  const trustState =
+    status === 'FAILED'
+      ? 'FAILED'
+      : status === 'COMPLETE' && rejectedFindingCount === 0
+        ? 'TRUSTED'
+        : 'DEGRADED_REVIEW_REQUIRED';
+  return { status, trustState, incompleteRequiredModules: failures } as const;
+}
+
 // --- Step 3: Replace the current execution logic ---
 
 /**
  * Per-phase concurrency limit.
  *
  * Phase 2 has the most modules (≈18) and many of them call AI providers.
- * A bounded limit prevents thundering herd on Gemini/Vertex/Lighthouse and
+ * A bounded limit prevents thundering herd on Bedrock/Lighthouse and
  * keeps tail latency predictable.  Tunable via env without code change.
  *
  * Default of 6 is conservative for free-tier quotas; production should
@@ -811,11 +1505,26 @@ async function executePhase(
   );
 
   const tasks = phaseModules.map((mod) => async () => {
+    // P2-25: feature-flag-gated modules report as explicitly DISABLED, distinct from a
+    // dependency-skip or a provider failure — dependents treat a disabled optional
+    // dependency the same as a missing/failed one (fail-open on optionality), but the
+    // audit-level reporting must not conflate "disabled by operator" with "broke".
+    const gateFlag = FEATURE_FLAG_GATED_MODULES[mod.name];
+    if (gateFlag && !(await isFeatureEnabledEffective(gateFlag))) {
+      results.set(mod.name, {
+        status: 'SKIPPED',
+        data: null,
+        error: `DISABLED: ${gateFlag} is set to false`,
+      });
+      return;
+    }
+
     // Check dependencies
     if (mod.dependsOn) {
-      const missingDeps = mod.dependsOn.filter(
-        (dep) => !results.has(dep) || results.get(dep)!.status === 'FAILED'
-      );
+      const missingDeps = mod.dependsOn.filter((dep) => {
+        const dependency = results.get(dep);
+        return !dependency || ['FAILED', 'UNAVAILABLE', 'SKIPPED'].includes(dependency.status);
+      });
       if (missingDeps.length > 0 && !mod.optional) {
         logger.warn({ module: mod.name, missingDeps }, 'Skipping module — dependencies failed');
         results.set(mod.name, {
@@ -829,30 +1538,29 @@ async function executePhase(
 
     const moduleStart = Date.now();
     try {
-      if (signal?.aborted) return;
+      if (signal?.aborted) {
+        results.set(mod.name, { status: 'UNAVAILABLE', data: null, error: 'Audit aborted' });
+        return;
+      }
 
       const moduleInput: ModuleInput = {
         ...input,
+        signal,
         dependencyResults: Object.fromEntries(
           (mod.dependsOn || [])
             .map((dep) => [dep, results.get(dep)?.data])
-            .filter(([_, v]) => v != null)
+            .filter(([name, v]) => v != null && results.get(String(name))?.status === 'COMPLETE')
         ),
       };
 
-      const runPromise = async () => {
-        for (let attempt = 0; attempt < 2; attempt++) {
-          try {
-            if (signal?.aborted) throw new Error('AbortError');
-            return await mod.run(moduleInput, costTracker, parentTrace);
-          } catch (e) {
-            if (attempt === 1 || (e as any).name === 'AbortError') throw e;
-          }
+      const runPromise = async (moduleSignal: AbortSignal) => {
+        if (moduleSignal.aborted) {
+          throw moduleSignal.reason ?? new DOMException('Aborted', 'AbortError');
         }
-        throw new Error('Retries exceeded');
+        return mod.run({ ...moduleInput, signal: moduleSignal }, costTracker, parentTrace);
       };
 
-      const result = await withTimeout(runPromise(), mod.timeoutMs || 30000);
+      const result = await withTimeout(runPromise, mod.timeoutMs || 30000, signal);
 
       results.set(mod.name, result);
 
@@ -868,17 +1576,23 @@ async function executePhase(
       );
     } catch (error) {
       const durationMs = Date.now() - moduleStart;
+      const message = error instanceof Error ? error.message : String(error);
+      const aborted = signal?.aborted || (error instanceof Error && error.name === 'AbortError');
       logger.error(
         {
           event: 'audit.module_failed',
           phase,
           module: mod.name,
           durationMs,
-          error: String(error),
+          error: message,
         },
         'Module execution failed'
       );
-      results.set(mod.name, { status: 'FAILED', data: null, error: String(error) });
+      results.set(mod.name, {
+        status: aborted ? 'UNAVAILABLE' : 'FAILED',
+        data: null,
+        error: message,
+      });
     }
   });
 
@@ -896,17 +1610,81 @@ async function executePhase(
   );
 }
 
-// ─── P2-3: Finding deduplication ────────────────────────────────────────────
-// Deduplicates by type + normalised title before DB insert.
-// If two modules produce the same finding, we keep the one with the higher impactScore.
+/**
+ * Executes a named subset of MODULE_REGISTRY through the exact same canonical
+ * per-module execution path (adapter dispatch, retry, timeout, result shape) used by
+ * the full 27-module audit — grouped and run phase-by-phase so any dependsOn ordering
+ * within the subset is respected. Used by execution profiles that intentionally run
+ * fewer than all 27 canonical modules (e.g. the widget's QUICK_AUDIT profile,
+ * Wave 2 / P1-21) instead of duplicating adapter-call logic outside the engine.
+ *
+ * Any dependency NOT included in `moduleIds` is simply absent from `results` for
+ * modules in the subset, which the existing per-module dependency check already
+ * handles by marking the dependent SKIPPED ("Dependencies failed") — callers should
+ * pass a subset that is closed under its own dependencies to avoid that.
+ */
+export async function runModuleSubset(
+  moduleIds: readonly string[],
+  input: ModuleInput,
+  costTracker: CostTracker,
+  signal?: AbortSignal
+): Promise<Map<string, ModuleResult>> {
+  return withTenantRuntimeContext({ auditSignal: signal ?? null }, async () => {
+    const results = new Map<string, ModuleResult>();
+    const idSet = new Set(moduleIds);
+    const selected = MODULE_REGISTRY.filter((m) => idSet.has(m.name));
+    const phases = Array.from(new Set(selected.map((m) => m.phase))).sort((a, b) => a - b);
+
+    for (const phase of phases) {
+      await executePhase(phase, selected, results, input, costTracker, undefined, signal);
+    }
+
+    return results;
+  });
+}
+
+// ─── P2-3 / P1-34: Finding deduplication ────────────────────────────────────
+/**
+ * Deduplicates findings before DB insert.
+ *
+ * P1-34 (Wave 5): title-only matching under-deduplicates (two modules phrasing the
+ * same root-cause observation slightly differently, e.g. "Missing LocalBusiness
+ * Schema" vs "Missing LocalBusiness/Organization Schema" both stay) and can
+ * over-merge unrelated findings that happen to share a title. A finding may declare
+ * a stable root-cause key at `metrics.schemaFingerprint` (or the more generic
+ * `metrics.fingerprint`) — set by modules that know they might overlap with another
+ * module's observation of the exact same underlying fact (e.g. `schemaMarkup` and
+ * `schemaAnalysis` both observing "no LocalBusiness schema present"). When present,
+ * that fingerprint is the dedup key instead of type+title, so near-title duplicates
+ * with the same root cause correctly merge while distinct schema issues (different
+ * fingerprint) never do. Findings without a fingerprint keep the original
+ * type+title behavior unchanged.
+ *
+ * The surviving finding keeps the higher impactScore, but retains the UNION of both
+ * findings' evidence (deterministically ordered: survivor's own evidence first, then
+ * any evidence from the merged-away finding not already present by pointer) rather
+ * than silently discarding the loser's real evidence.
+ */
 export function deduplicateFindings(findings: any[]): any[] {
   const seen = new Map<string, any>();
   for (const finding of findings) {
-    const key = `${finding.type}:${(finding.title || '').toLowerCase().trim()}`;
+    const fingerprint = finding?.metrics?.schemaFingerprint || finding?.metrics?.fingerprint;
+    const key = fingerprint
+      ? `fp:${fingerprint}`
+      : `${finding.type}:${(finding.title || '').toLowerCase().trim()}`;
     const existing = seen.get(key);
-    if (!existing || (finding.impactScore ?? 0) > (existing.impactScore ?? 0)) {
+    if (!existing) {
       seen.set(key, finding);
+      continue;
     }
+    const winner = (finding.impactScore ?? 0) > (existing.impactScore ?? 0) ? finding : existing;
+    const loser = winner === finding ? existing : finding;
+    const winnerPointers = new Set((winner.evidence || []).map((e: any) => e?.pointer));
+    const mergedEvidence = [
+      ...(winner.evidence || []),
+      ...(loser.evidence || []).filter((e: any) => !winnerPointers.has(e?.pointer)),
+    ];
+    seen.set(key, { ...winner, evidence: mergedEvidence });
   }
   return Array.from(seen.values());
 }
@@ -914,12 +1692,10 @@ export function deduplicateFindings(findings: any[]): any[] {
 // ─── P2-1: Global audit timeout ──────────────────────────────────────────────
 /**
  * Wall-clock limit for an entire audit run (all phases + DB writes).
- * P0 FIX: Reduced from 5 minutes to 30 seconds to meet performance target.
- * If audit exceeds 30s, it will be marked as FAILED and cached result will be checked.
  */
 const GLOBAL_AUDIT_TIMEOUT_MS = process.env.GLOBAL_AUDIT_TIMEOUT_MS
   ? parseInt(process.env.GLOBAL_AUDIT_TIMEOUT_MS, 10)
-  : 60 * 1000; // 60 seconds (adjusted to support slower local Puppeteer navigations)
+  : 5 * 60 * 1000;
 
 // Module-level timeout - each module should complete within this time
 const MODULE_TIMEOUT_MS = 10 * 1000; // 10 seconds per module
@@ -999,39 +1775,36 @@ class AuditPerformanceTimer {
 const auditTimer = new AuditPerformanceTimer();
 
 /**
- * Public entry point. Wraps the internal runner in a hard 5-minute timeout.
+ * Public entry point. Wraps the internal runner in the configured global timeout.
  * If the timeout fires, the audit row is marked FAILED and the error is rethrown.
  */
-export async function runAudit(auditId: string) {
+export async function runAudit(auditId: string): Promise<AuditRunResult> {
   const controller = new AbortController();
-  const timeoutPromise = new Promise<never>((_, reject) =>
-    setTimeout(() => {
+  let timeoutId: NodeJS.Timeout | undefined;
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(() => {
       controller.abort();
-      reject(new Error('AUDIT_TIMEOUT: Global 5-minute limit exceeded'));
-    }, GLOBAL_AUDIT_TIMEOUT_MS)
-  );
-  try {
-    return await Promise.race([runAuditInternal(auditId, controller.signal), timeoutPromise]);
-  } catch (error) {
-    if (error instanceof Error && error.message.startsWith('AUDIT_TIMEOUT')) {
-      // Best-effort status update — don't let this throw and mask the original error
-      await prisma.audit
-        .update({
-          where: { id: auditId },
-          data: { status: 'FAILED', completedAt: new Date() },
-        })
-        .catch(() => null);
+      reject(new Error(`AUDIT_TIMEOUT: Global ${GLOBAL_AUDIT_TIMEOUT_MS}ms limit exceeded`));
+    }, GLOBAL_AUDIT_TIMEOUT_MS);
+  });
+  return withTenantRuntimeContext({ auditSignal: controller.signal }, async () => {
+    try {
+      return await Promise.race([runAuditInternal(auditId, controller.signal), timeoutPromise]);
+    } catch (error) {
+      if (error instanceof Error && error.message.startsWith('AUDIT_TIMEOUT')) {
+        // Best-effort status update — don't let this throw and mask the original error
+        await prisma.audit
+          .update({
+            where: { id: auditId },
+            data: { status: 'FAILED', trustState: 'FAILED', completedAt: new Date() },
+          })
+          .catch(() => null);
+      }
+      throw error;
+    } finally {
+      if (timeoutId) clearTimeout(timeoutId);
     }
-    throw error;
-  }
-}
-
-/**
- * Generate cache key from URL
- */
-function generateUrlHash(url: string | null | undefined): string | null {
-  if (!url) return null;
-  return createHash('sha256').update(url).digest('hex');
+  });
 }
 
 /** Internal implementation — called only by runAudit() above. */
@@ -1042,29 +1815,6 @@ async function runAuditInternal(auditId: string, signal?: AbortSignal) {
 
   if (!audit) {
     throw new Error(`Audit ${auditId} not found`);
-  }
-
-  // P0 FIX: Check cache first for same URL audit within 24h
-  const urlHash = generateUrlHash(audit.businessUrl);
-  if (urlHash) {
-    try {
-      const cachedAudit = await redisCache.get<any>('audit', urlHash);
-      if (cachedAudit && cachedAudit.status === 'COMPLETE') {
-        logger.info(
-          { auditId, urlHash },
-          '[runAudit] Returning cached audit result (same URL within 24h)'
-        );
-        return {
-          success: true,
-          auditId: audit.id,
-          status: 'COMPLETE',
-          cached: true,
-          ...cachedAudit,
-        };
-      }
-    } catch (error) {
-      logger.warn({ error }, '[runAudit] Cache check failed, proceeding with fresh audit');
-    }
   }
 
   return withChildObservabilityContext(
@@ -1108,304 +1858,433 @@ async function runAuditInternal(auditId: string, signal?: AbortSignal) {
       });
 
       const costTracker = new CostTracker();
-      let parentTrace: RunTree | undefined;
+
+      // Reserve budget for this audit (atomic, cross-instance safe).
+      // settled in the finally block below regardless of success/failure.
+      let reservedCents = 0;
       try {
-        parentTrace = await createParentTrace(audit.id, 'audit-data-collection', {
-          tenantId: audit.tenantId,
-          hasBusinessName: Boolean(name),
-          hasUrl: Boolean(url),
-        });
-      } catch (e) {
-        logger.error({ error: e }, 'Failed to create parent trace');
+        const { reserveAuditBudget } = await import('@/lib/costs/costTracker');
+        const reservation = await reserveAuditBudget(
+          audit.tenantId,
+          (audit as any).tenant?.planTier || 'STARTER'
+        );
+        if (!reservation.allowed) {
+          logger.warn(
+            { auditId: audit.id, tenantId: audit.tenantId },
+            '[runAudit] Monthly budget exceeded — audit blocked'
+          );
+          // P-baseline: `Audit` has no `error` scalar column — module failures are
+          // recorded in the `modulesFailed: Json` array (see all other writers/readers
+          // of this field, e.g. the per-module FAILED branch below and
+          // app/api/analytics/route.ts's reader). Merge into any failures already
+          // recorded on this row rather than overwriting them, matching the
+          // established read-modify-write pattern used elsewhere for this field.
+          const existingModulesFailed = Array.isArray(
+            (audit as { modulesFailed?: unknown }).modulesFailed
+          )
+            ? ((audit as { modulesFailed?: unknown }).modulesFailed as Array<{
+                module: string;
+                error: string;
+              }>)
+            : [];
+          await prisma.audit.update({
+            where: { id: audit.id },
+            data: {
+              status: 'FAILED',
+              modulesFailed: [
+                ...existingModulesFailed,
+                { module: 'budget', error: 'BUDGET_EXCEEDED' },
+              ],
+              completedAt: new Date(),
+            },
+          });
+          return {
+            success: false,
+            auditId: audit.id,
+            status: 'FAILED' as const,
+            modulesCompleted: [],
+            modulesFailed: [{ module: 'budget', status: 'FAILED', error: 'BUDGET_EXCEEDED' }],
+            findingsCount: 0,
+            costCents: 0,
+            apiCostCents: 0,
+            duration_ms: 0,
+            error: 'BUDGET_EXCEEDED',
+          };
+        }
+        reservedCents = reservation.reservedCents;
+      } catch (budgetErr) {
+        // Budget check failure is non-fatal — proceed with audit (conservative)
+        logger.warn({ error: budgetErr }, '[runAudit] Budget reservation failed — proceeding');
       }
 
-      const moduleInput: ModuleInput = {
-        auditId: audit.id,
-        url: url || undefined,
-        businessName: name || undefined,
-        city: city || undefined,
-        industry: audit.businessIndustry || undefined,
-        tenantId: audit.tenantId,
-      };
+      try {
+        let parentTrace: RunTree | undefined;
+        try {
+          parentTrace = await createParentTrace(audit.id, 'audit-data-collection', {
+            tenantId: audit.tenantId,
+            hasBusinessName: Boolean(name),
+            hasUrl: Boolean(url),
+          });
+        } catch (e) {
+          logger.error({ error: e }, 'Failed to create parent trace');
+        }
 
-      const results = new Map<string, ModuleResult>();
+        const moduleInput: ModuleInput = {
+          auditId: audit.id,
+          url: url || undefined,
+          businessName: name || undefined,
+          city: city || undefined,
+          latitude: audit.businessLatitude ?? undefined,
+          longitude: audit.businessLongitude ?? undefined,
+          industry: audit.businessIndustry || undefined,
+          tenantId: audit.tenantId,
+        };
 
-      // Phase 1: Foundation
-      await executePhase(
-        1,
-        MODULE_REGISTRY,
-        results,
-        moduleInput,
-        costTracker,
-        parentTrace,
-        signal
-      );
+        const results = new Map<string, ModuleResult>();
 
-      // Phase 2: Analysis (uses Phase 1 outputs)
-      await executePhase(
-        2,
-        MODULE_REGISTRY,
-        results,
-        moduleInput,
-        costTracker,
-        parentTrace,
-        signal
-      );
+        // Phase 1: Foundation
+        await executePhase(
+          1,
+          MODULE_REGISTRY,
+          results,
+          moduleInput,
+          costTracker,
+          parentTrace,
+          signal
+        );
+        if (signal?.aborted) throw signal.reason ?? new DOMException('Aborted', 'AbortError');
 
-      // Phase 3: Synthesis (uses Phase 1 + 2 outputs)
-      await executePhase(
-        3,
-        MODULE_REGISTRY,
-        results,
-        moduleInput,
-        costTracker,
-        parentTrace,
-        signal
-      );
+        // Phase 2: Analysis (uses Phase 1 outputs)
+        await executePhase(
+          2,
+          MODULE_REGISTRY,
+          results,
+          moduleInput,
+          costTracker,
+          parentTrace,
+          signal
+        );
+        if (signal?.aborted) throw signal.reason ?? new DOMException('Aborted', 'AbortError');
 
-      const allFindings: any[] = [];
-      const modulesCompleted: string[] = [];
-      const modulesFailed: any[] = [];
-      let failedEvidenceWrites = 0;
+        // Phase 3: Synthesis (uses Phase 1 + 2 outputs)
+        await executePhase(
+          3,
+          MODULE_REGISTRY,
+          results,
+          moduleInput,
+          costTracker,
+          parentTrace,
+          signal
+        );
+        if (signal?.aborted) throw signal.reason ?? new DOMException('Aborted', 'AbortError');
 
-      // Synthesize results into discoveries and evidence
-      for (const [modName, res] of Array.from(results.entries())) {
-        if (res.status === 'COMPLETE') {
-          modulesCompleted.push(modName);
-          const ext = extractFindingsFromRegistryResult(modName, res, moduleInput);
-          allFindings.push(...ext.findings);
+        const allFindings: any[] = [];
+        const modulesCompleted: string[] = [];
+        const modulesFailed: any[] = [];
+        const rejectedFindings: RejectedFinding[] = [];
+        const evidenceToPersist: Array<{
+          module: string;
+          source: string;
+          rawResponse: any;
+          collectedAt?: Date;
+          targetUrl?: string | null;
+          observationStatus: string;
+        }> = [];
 
-          for (const snap of ext.snapshots) {
-            try {
-              await prisma.evidenceSnapshot.create({
-                data: {
-                  auditId: audit.id,
-                  module: modName,
-                  source: snap.source || modName,
-                  rawResponse: snap.rawResponse ?? snap,
-                  tenantId: audit.tenantId,
-                },
+        // Synthesize results into discoveries and evidence
+        for (const [modName, res] of Array.from(results.entries())) {
+          if (res.status === 'COMPLETE' || res.status === 'PARTIAL') {
+            if (res.status === 'COMPLETE') modulesCompleted.push(modName);
+            const ext = extractFindingsFromRegistryResult(modName, res, moduleInput);
+            if (modName === 'gbp' && res.status === 'PARTIAL')
+              modulesFailed.push({
+                module: modName,
+                status: 'PARTIAL',
+                error: res.error ?? 'Business identity is ambiguous',
               });
-            } catch (error) {
-              failedEvidenceWrites += 1;
-              Metrics.increment('failed_evidence_writes' as any);
-              logger.warn(
-                {
-                  event: 'audit.evidence_snapshot_write_failed',
-                  auditId: audit.id,
-                  module: modName,
-                  source: snap.source || modName,
-                  error: String(error),
-                },
-                'Failed to persist evidence snapshot (non-fatal)'
-              );
+
+            // Wave 3 (Step 5): the one shared adapter/aggregation boundary every
+            // module's raw finding output must pass through before it can become a
+            // customer-facing Finding. Rejects malformed/evidence-less findings
+            // outright rather than repairing them with fabricated evidence.
+            const { accepted, rejected } = normalizeAndValidateModuleFindings(
+              modName,
+              res.status,
+              ext.findings
+            );
+            allFindings.push(...accepted);
+            rejectedFindings.push(...rejected);
+
+            for (const snap of ext.snapshots) {
+              const snapshotRaw = snap.rawResponse ?? snap;
+              const persistedRaw =
+                modName === 'gbp' && snapshotRaw && typeof snapshotRaw === 'object'
+                  ? {
+                      placeId: (snapshotRaw as Record<string, unknown>).placeId ?? null,
+                      identityStatus:
+                        (snapshotRaw as Record<string, unknown>).identityStatus ?? null,
+                      identityConfidence:
+                        (snapshotRaw as Record<string, unknown>).identityConfidence ?? null,
+                      matchConfidenceScore:
+                        (snapshotRaw as Record<string, unknown>).matchConfidenceScore ?? null,
+                      candidatesConsidered:
+                        (snapshotRaw as Record<string, unknown>).candidatesConsidered ?? null,
+                      fieldProfile:
+                        (
+                          (snapshotRaw as Record<string, unknown>).mapsProvenance as
+                            | Record<string, unknown>
+                            | undefined
+                        )?.fieldProfile ?? null,
+                    }
+                  : snapshotRaw;
+              evidenceToPersist.push({
+                module: modName,
+                source: String(snap.source || modName),
+                rawResponse: persistedRaw,
+                collectedAt: snap.collectedAt instanceof Date ? snap.collectedAt : undefined,
+                targetUrl: url,
+                observationStatus: res.status,
+              });
+            }
+          } else if (res.status === 'FAILED') {
+            modulesFailed.push({ module: modName, error: res.error });
+          } else {
+            modulesFailed.push({ module: modName, status: res.status, error: res.error });
+          }
+        }
+
+        if (rejectedFindings.length > 0) {
+          logger.warn(
+            {
+              event: 'audit.findings_rejected_at_aggregation',
+              auditId: audit.id,
+              tenantId: audit.tenantId,
+              rejectedCount: rejectedFindings.length,
+              rejected: rejectedFindings,
+            },
+            `[Audit] Rejected ${rejectedFindings.length} malformed/evidence-less finding(s) before aggregation`
+          );
+        }
+
+        // NOTE (Wave 3, Step 8 — was: "GBP missing fallback (Preserves original
+        // behavior)"): removed. The prior fallback fabricated a customer-negative "No
+        // Google Business Listing Detected" Finding whenever the gbp module simply
+        // wasn't in `modulesCompleted` — collapsing "search ran, genuinely zero
+        // results", a provider outage, a quota error, and a missing API key into the
+        // same fabricated finding (AUDIT_REPORT.md Pass 4B). Provider/module failure
+        // must never become verified absence (Step 8). A trustworthy "no GBP listing"
+        // finding requires the gbp module itself to distinguish a genuine zero-result
+        // search from a failure and return real evidence identifying the search that
+        // was run — that is gbp.ts module work, assigned to a later module wave
+        // (root-cause group E/H), not a Wave 3 boundary-enforcement fix. Until then: no
+        // finding is fabricated here.
+
+        // P2-3: Deduplicate findings before persisting
+        const dedupedFindings = deduplicateFindings(allFindings);
+
+        // Create Finding records in DB (Wave 3, Step 6: routed through the one
+        // validated persistence boundary — no direct prisma.finding.createMany here).
+        // Calculate total API cost
+        const totalCostCents = costTracker.getTotalCents();
+
+        // Determine final status
+        const totalModules = MODULE_REGISTRY.filter((m) => !m.optional).length;
+        const completedRequiredModules = [...results.entries()].filter(([n, r]) => {
+          const specs = MODULE_REGISTRY.find((x) => x.name === n);
+          return specs && !specs.optional && r.status === 'COMPLETE';
+        }).length;
+
+        let finalStatus =
+          completedRequiredModules >= totalModules * 0.8
+            ? 'COMPLETE'
+            : completedRequiredModules >= totalModules * 0.5
+              ? 'PARTIAL'
+              : completedRequiredModules >= 1
+                ? 'DEGRADED'
+                : 'FAILED';
+
+        const failedCriticalModules = CRITICAL_COMPLETION_MODULES.filter((moduleName: string) => {
+          const moduleResult = results.get(moduleName);
+          return !moduleResult || moduleResult.status !== 'COMPLETE';
+        });
+
+        const assessed = assessAuditResult(results, rejectedFindings.length);
+        finalStatus = assessed.status;
+        const incompleteRequiredModules = assessed.incompleteRequiredModules;
+
+        // Trust is not a percentage: every required module and critical identity check
+        // must complete before the audit may claim COMPLETE.
+        if (
+          finalStatus === 'COMPLETE' &&
+          (failedCriticalModules.length > 0 || incompleteRequiredModules.length > 0)
+        ) {
+          finalStatus = completedRequiredModules > 0 ? 'PARTIAL' : 'FAILED';
+          logger.warn(
+            {
+              event: 'audit.final_status_downgraded_for_critical_failures',
+              auditId: audit.id,
+              failedCriticalModules,
+              incompleteRequiredModules,
+            },
+            'Downgrading audit status from COMPLETE because critical modules were not completed'
+          );
+        }
+
+        const detectIndustryFromCategory = (type: string): string => {
+          const t = type.toLowerCase();
+          if (t.includes('law') || t.includes('attorney') || t.includes('legal')) return 'legal';
+          if (t.includes('dent') || t.includes('ortho')) return 'dental';
+          if (t.includes('med') || t.includes('health') || t.includes('clinic')) return 'medical';
+          if (t.includes('construct') || t.includes('build')) return 'construction';
+          if (t.includes('plumb')) return 'plumbing';
+          if (t.includes('hvac') || t.includes('air')) return 'hvac';
+          if (t.includes('real') || t.includes('estate') || t.includes('realtor'))
+            return 'real_estate';
+          if (t.includes('roof')) return 'roofing';
+          return 'general';
+        };
+
+        let detectedIndustry: string | null = null;
+        const gbpData = results.get('gbp')?.data;
+        const gbpTypes = gbpData?.types || [];
+        if (gbpTypes.length > 0) {
+          for (const type of gbpTypes) {
+            const industry = detectIndustryFromCategory(type);
+            if (industry !== 'general') {
+              detectedIndustry = industry;
+              break;
             }
           }
-        } else if (res.status === 'FAILED') {
-          modulesFailed.push({ module: modName, error: res.error });
         }
-      }
 
-      // GBP missing fallback (Preserves original behavior)
-      if (!modulesCompleted.includes('gbp') && name && city) {
-        allFindings.push({
-          module: 'gbp',
-          category: 'Local SEO',
-          type: 'PAINKILLER',
-          title: 'No Google Business Listing Detected',
-          description:
-            'No Google Business listing was found for this business. This is a major missed opportunity.',
-          evidence: [{ type: 'text', value: 'Places API returned no results', label: 'Search' }],
-          metrics: { businessName: name, city },
-          impactScore: 9,
-          confidenceScore: 90,
-          effortEstimate: 'MEDIUM',
-          recommendedFix: ['Create a Google Business Profile'],
+        const verticalPlaybookId = detectVertical({
+          businessName: name,
+          businessIndustry: detectedIndustry,
+          businessCity: city,
+          businessUrl: url,
+          gbpCategories: gbpTypes,
+          reviewCount: gbpData?.reviewCount,
+          rating: gbpData?.rating,
         });
-      }
 
-      // P2-3: Deduplicate findings before persisting
-      const dedupedFindings = deduplicateFindings(allFindings);
-
-      // Create Finding records in DB
-      if (dedupedFindings.length > 0) {
-        await prisma.finding.createMany({
-          data: dedupedFindings.map((f) => ({
-            ...f,
-            evidence: f.evidence ?? [],
-            metrics: f.metrics ?? {},
-            recommendedFix: f.recommendedFix ?? [],
-            auditId: audit.id,
-            tenantId: audit.tenantId,
-            manuallyEdited: false,
-            excluded: false,
-          })),
-        });
-      }
-
-      // Calculate total API cost
-      const totalCostCents = costTracker.getTotalCents();
-
-      // Determine final status
-      const totalModules = MODULE_REGISTRY.filter((m) => !m.optional).length;
-      const completedRequiredModules = [...results.entries()].filter(([n, r]) => {
-        const specs = MODULE_REGISTRY.find((x) => x.name === n);
-        return specs && !specs.optional && r.status === 'COMPLETE';
-      }).length;
-
-      let finalStatus =
-        completedRequiredModules >= totalModules * 0.8
-          ? 'COMPLETE'
-          : completedRequiredModules >= totalModules * 0.5
-            ? 'PARTIAL'
-            : completedRequiredModules >= 1
-              ? 'DEGRADED'
-              : 'FAILED';
-
-      const failedCriticalModules = CANONICAL_MODULES.filter((moduleName: string) => {
-        const moduleResult = results.get(moduleName);
-        return !moduleResult || moduleResult.status !== 'COMPLETE';
-      });
-
-      // Guardrail: never emit COMPLETE if any critical module failed/skipped.
-      if (finalStatus === 'COMPLETE' && failedCriticalModules.length > 0) {
-        finalStatus = 'PARTIAL';
-        logger.warn(
-          {
-            event: 'audit.final_status_downgraded_for_critical_failures',
-            auditId: audit.id,
-            failedCriticalModules,
-          },
-          'Downgrading audit status from COMPLETE because critical modules were not completed'
+        const moduleResults = Object.fromEntries(
+          Array.from(results.entries()).map(([module, result]) => [
+            module,
+            {
+              status: result.status,
+              error: result.error ?? null,
+            },
+          ])
         );
-      }
+        let trustState = assessAuditResult(results, rejectedFindings.length).trustState;
 
-      const detectIndustryFromCategory = (type: string): string => {
-        const t = type.toLowerCase();
-        if (t.includes('law') || t.includes('attorney') || t.includes('legal')) return 'legal';
-        if (t.includes('dent') || t.includes('ortho')) return 'dental';
-        if (t.includes('med') || t.includes('health') || t.includes('clinic')) return 'medical';
-        if (t.includes('construct') || t.includes('build')) return 'construction';
-        if (t.includes('plumb')) return 'plumbing';
-        if (t.includes('hvac') || t.includes('air')) return 'hvac';
-        if (t.includes('real') || t.includes('estate') || t.includes('realtor'))
-          return 'real_estate';
-        if (t.includes('roof')) return 'roofing';
-        return 'general';
-      };
+        const persisted = await persistAuditResult({
+          auditId: audit.id,
+          tenantId: audit.tenantId,
+          findings: dedupedFindings,
+          evidence: evidenceToPersist,
+          auditUpdate: {
+            status: finalStatus as 'COMPLETE' | 'PARTIAL' | 'DEGRADED' | 'FAILED',
+            trustState,
+            moduleResults,
+            modulesCompleted,
+            modulesFailed,
+            apiCostCents: totalCostCents,
+            completedAt: new Date(),
+            businessIndustry: detectedIndustry ?? undefined,
+            verticalPlaybookId: verticalPlaybookId !== 'general' ? verticalPlaybookId : undefined,
+          },
+        });
+        trustState = persisted.trustState;
+        if (persisted.rejectedFindings.length > 0) {
+          logger.warn(
+            {
+              event: 'audit.findings_rejected_during_persistence',
+              auditId: audit.id,
+              tenantId: audit.tenantId,
+              rejectedCount: persisted.rejectedFindings.length,
+              rejectedFindings: persisted.rejectedFindings,
+            },
+            'Some invalid module findings were rejected; valid evidence and findings were persisted'
+          );
+        }
 
-      let detectedIndustry: string | null = null;
-      const gbpData = results.get('gbp')?.data;
-      const gbpTypes = gbpData?.types || [];
-      if (gbpTypes.length > 0) {
-        for (const type of gbpTypes) {
-          const industry = detectIndustryFromCategory(type);
-          if (industry !== 'general') {
-            detectedIndustry = industry;
-            break;
+        const duration_ms = Date.now() - startTime;
+        MetricsRecorder.auditCompleted(
+          audit.tenantId,
+          finalStatus,
+          duration_ms,
+          totalCostCents / 100
+        );
+        if (finalStatus === 'FAILED') {
+          MetricsRecorder.auditFailure(audit.tenantId, 'audit_failed');
+        }
+        await recordAuditTrailEvent({
+          eventType: finalStatus === 'FAILED' ? 'audit.failed' : 'audit.completed',
+          tenantId: audit.tenantId,
+          auditId: audit.id,
+          targetUrl: audit.businessUrl,
+          modulesRun: modulesCompleted,
+          findingsCount: dedupedFindings.length,
+          proposalGenerated: false,
+          payload: {
+            status: finalStatus,
+            durationMs: duration_ms,
+            apiCostCents: totalCostCents,
+            modulesFailed,
+          },
+        });
+
+        logger.info(
+          {
+            event: 'audit.complete',
+            auditId: audit.id,
+            status: finalStatus,
+            findingsCount: allFindings.length,
+            modulesCompleted: modulesCompleted.length,
+            modulesFailed: modulesFailed.length,
+            persistedEvidence: persisted.persistedEvidence,
+            trustState,
+            failedCriticalModules,
+            duration_ms,
+            apiCostCents: totalCostCents,
+          },
+          'Audit complete'
+        );
+
+        const result = {
+          success: trustState === 'TRUSTED',
+          auditId: audit.id,
+          status: finalStatus as AuditRunResult['status'],
+          modulesCompleted,
+          modulesFailed,
+          findingsCount: allFindings.length,
+          costCents: totalCostCents,
+          apiCostCents: totalCostCents,
+          duration_ms,
+        };
+
+        return result;
+      } finally {
+        // Settle budget reservation — release unused portion (runs even on crash/throw)
+        if (reservedCents > 0) {
+          try {
+            const { settleAuditSpend } = await import('@/lib/costs/costTracker');
+            await settleAuditSpend(
+              audit.tenantId,
+              reservedCents,
+              costTracker.getTotalCents(),
+              (audit as any).tenant?.planTier || 'STARTER'
+            );
+          } catch (settleErr) {
+            // Non-critical: reservation stays (conservative, self-heals at month boundary via TTL)
+            logger.warn(
+              { error: settleErr, auditId: audit.id },
+              '[runAudit] Failed to settle reservation'
+            );
           }
         }
       }
-
-      const verticalPlaybookId = detectVertical({
-        businessName: name,
-        businessIndustry: detectedIndustry,
-        businessCity: city,
-        businessUrl: url,
-        gbpCategories: gbpTypes,
-        reviewCount: gbpData?.reviewCount,
-        rating: gbpData?.rating,
-      });
-
-      await prisma.audit.update({
-        where: { id: audit.id },
-        data: {
-          status: finalStatus as any,
-          modulesCompleted,
-          modulesFailed,
-          apiCostCents: totalCostCents,
-          completedAt: new Date(),
-          businessIndustry: detectedIndustry ?? undefined,
-          verticalPlaybookId: verticalPlaybookId !== 'general' ? verticalPlaybookId : undefined,
-        },
-      });
-
-      const duration_ms = Date.now() - startTime;
-      MetricsRecorder.auditCompleted(
-        audit.tenantId,
-        finalStatus,
-        duration_ms,
-        totalCostCents / 100
-      );
-      if (finalStatus === 'FAILED') {
-        MetricsRecorder.auditFailure(audit.tenantId, 'audit_failed');
-      }
-      await recordAuditTrailEvent({
-        eventType: finalStatus === 'FAILED' ? 'audit.failed' : 'audit.completed',
-        tenantId: audit.tenantId,
-        auditId: audit.id,
-        targetUrl: audit.businessUrl,
-        modulesRun: modulesCompleted,
-        findingsCount: dedupedFindings.length,
-        proposalGenerated: false,
-        payload: {
-          status: finalStatus,
-          durationMs: duration_ms,
-          apiCostCents: totalCostCents,
-          modulesFailed,
-        },
-      });
-
-      logger.info(
-        {
-          event: 'audit.complete',
-          auditId: audit.id,
-          status: finalStatus,
-          findingsCount: allFindings.length,
-          modulesCompleted: modulesCompleted.length,
-          modulesFailed: modulesFailed.length,
-          failedEvidenceWrites,
-          failedCriticalModules,
-          duration_ms,
-          apiCostCents: totalCostCents,
-        },
-        'Audit complete'
-      );
-
-      const result = {
-        success: true,
-        auditId: audit.id,
-        status: finalStatus,
-        modulesCompleted,
-        modulesFailed,
-        findingsCount: allFindings.length,
-        costCents: totalCostCents,
-        duration_ms,
-      };
-
-      // P0 FIX: Cache successful audit results for 24h
-      if (urlHash && finalStatus === 'COMPLETE') {
-        try {
-          await redisCache.set(
-            'audit',
-            urlHash,
-            {
-              status: finalStatus,
-              modulesCompleted,
-              findingsCount: allFindings.length,
-              costCents: totalCostCents,
-              duration_ms,
-              completedAt: new Date().toISOString(),
-            },
-            { ttl: 24 * 60 * 60 } // 24 hours
-          );
-          logger.info({ auditId, urlHash }, '[runAudit] Cached audit result');
-        } catch (error) {
-          logger.warn({ error }, '[runAudit] Failed to cache audit result');
-        }
-      }
-
-      return result;
     }
   );
 }

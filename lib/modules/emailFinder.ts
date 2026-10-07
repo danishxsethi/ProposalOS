@@ -1,5 +1,7 @@
 import * as cheerio from 'cheerio';
 
+import { collectHtml } from '@/lib/audit/collectors/htmlCollector';
+import type { CostTracker } from '@/lib/costs/costTracker';
 import { logger } from '@/lib/logger';
 import { withProviderResilience } from '@/lib/resilience/withProviderResilience';
 
@@ -9,34 +11,24 @@ interface EmailDiscoveryResult {
   confidence: number;
 }
 
-export async function findEmails(url: string): Promise<EmailDiscoveryResult> {
+export async function findEmails(
+  url: string,
+  tracker?: CostTracker,
+  signal?: AbortSignal,
+  auditId?: string
+): Promise<EmailDiscoveryResult> {
   try {
     // Ensure URL has protocol
     const targetUrl = url.startsWith('http') ? url : `https://${url}`;
 
     logger.info({ url: targetUrl }, '[EmailFinder] Scanning');
 
-    // Fetch main page
-    const response = await withProviderResilience<Response | null>(
-      {
-        provider: 'crawler',
-        operation: 'emailFinder:scan',
-        degrade: true,
-        fallbackValue: null,
-      },
-      async () => {
-        const res = await fetch(targetUrl, {
-          headers: {
-            'User-Agent':
-              'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-          },
-        });
-        if (!res.ok) {
-          throw new Error(`HTTP error ${res.status}: ${res.statusText}`);
-        }
-        return res;
-      }
-    );
+    // Fetch main page via the shared HTML collector (memoized per audit,
+    // honest auditor UA, headless-browser fallback for bot-blocking sites).
+    const collected = await collectHtml(targetUrl, { auditId, signal, tracker, timeoutMs: 20000 }).catch(() => null);
+    const response = collected && collected.ok && !collected.blocked
+      ? ({ ok: true, status: collected.status, text: async () => collected.html } as unknown as Response)
+      : null;
 
     if (!response || !response.ok) {
       return { emails: [], source: 'failed', confidence: 0 };

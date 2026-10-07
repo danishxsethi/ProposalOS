@@ -4,7 +4,7 @@ import { RunTree } from 'langsmith';
 import { MODEL_CONFIG } from '@/lib/config/models';
 import { getThinkingBudgetForNode } from '@/lib/config/thinking-budgets';
 import { CostTracker } from '@/lib/costs/costTracker';
-import { generateWithGemini } from '@/lib/llm/provider';
+import { generateWithLLM } from '@/lib/llm/provider';
 import { logger } from '@/lib/logger';
 import type { VerticalPlaybook } from '@/lib/playbooks/types';
 import { traceLlmCall } from '@/lib/tracing';
@@ -23,7 +23,7 @@ function sanitizeForPrompt(input: string | null | undefined): string {
 }
 
 /**
- * Generate executive summary using Gemini 1.5 Pro
+ * Generate executive summary using the configured Amazon Bedrock model.
  * @param playbook Optional vertical playbook — proposalLanguage influences tone and urgency
  * @param comparisonReport Optional competitor comparison — AI references specific competitor data
  */
@@ -179,7 +179,7 @@ export async function generateExecutiveSummary(
       parent: parentTrace,
       tags: [
         'exec_summary',
-        'gemini-pro',
+        'bedrock-nova-2-lite',
         `exp:${promptConfig.name}`,
         `variant:${promptConfig.variant}`,
       ],
@@ -192,12 +192,13 @@ export async function generateExecutiveSummary(
     },
     async () => {
       try {
-        const result = await generateWithGemini({
+        const result = await generateWithLLM({
           model: MODEL_CONFIG.proposal.model,
           input: prompt,
           thinkingBudget: getThinkingBudgetForNode('draft_proposal'),
           temperature: 0.2,
-          maxOutputTokens: 512,
+          maxOutputTokens: 2048,
+          responseModality: 'json',
           metadata: { node: 'draft_proposal', auditId },
         });
 
@@ -206,7 +207,7 @@ export async function generateExecutiveSummary(
 
         if (tracker && usage) {
           tracker.addLlmCall(
-            'GEMINI_31_PRO',
+            'BEDROCK_NOVA_2_LITE',
             usage.promptTokenCount || 0,
             usage.candidatesTokenCount || 0,
             usage.thoughtsTokenCount || 0

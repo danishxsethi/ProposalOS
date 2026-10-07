@@ -17,9 +17,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 import { generateTraceId, InternalError, UnauthorizedError } from '@/lib/api/errors';
-import { API_KEY_SCOPES, validateApiKey } from '@/lib/auth/apiKeys';
+import { API_KEY_SCOPES, apiKeyCanAccessTenant, validateApiKey } from '@/lib/auth/apiKeys';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
+import { runWithTenantAsync } from '@/lib/tenant/context';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -328,18 +329,15 @@ export async function GET(
       throw new UnauthorizedError(validationResult.error);
     }
 
-    // Verify requester has access to this tenant's data
-    if (validationResult.tenantId !== tenantId) {
-      // Check if admin
-      const hasAdminScope =
-        validationResult.scopes.includes(API_KEY_SCOPES.ALL) ||
-        validationResult.scopes.includes('admin:*');
-      if (!hasAdminScope) {
-        throw new UnauthorizedError('Access denied to tenant metrics');
-      }
+    // Tenant API-key scopes never grant platform-wide tenant access.
+    if (!apiKeyCanAccessTenant(validationResult, tenantId)) {
+      throw new UnauthorizedError('Access denied to tenant metrics');
     }
 
-    const metrics = await getTenantMetrics(tenantId);
+    // Wrap in runWithTenantAsync so the Prisma RLS middleware has the correct
+    // tenant context. Without this, all Prisma calls inside getTenantMetrics
+    // throw MissingTenantError. Fix for register #22. [#22]
+    const metrics = await runWithTenantAsync(tenantId, () => getTenantMetrics(tenantId));
 
     logger.info(
       {

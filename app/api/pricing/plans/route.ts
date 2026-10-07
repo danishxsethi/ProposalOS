@@ -16,8 +16,10 @@ import { z } from 'zod';
 
 import { generateTraceId, InternalError, NotFoundError, UnauthorizedError } from '@/lib/api/errors';
 import { getServerSession } from '@/lib/auth';
+import { logger } from '@/lib/logger';
 import { withRateLimit } from '@/lib/middleware/rateLimit';
 import { PricingPlanConfig, PricingService } from '@/lib/stripe/pricingService';
+import { runWithTenantBypass } from '@/lib/tenant/context';
 
 /**
  * Query params schema for GET requests
@@ -71,8 +73,10 @@ async function handleGetPlans(req: NextRequest): Promise<NextResponse> {
     }
 
     if (planId) {
-      // Get specific plan by ID
-      const plan = await PricingService.getPricingPlanById(planId);
+      // Get specific plan by ID — pricing plans are global system data, bypass RLS
+      const plan = await runWithTenantBypass('pricing-plans-get-by-id', () =>
+        PricingService.getPricingPlanById(planId)
+      );
       if (!plan) {
         return NextResponse.json(
           new NotFoundError('Pricing plan', planId).toEnvelope(req.url, traceId),
@@ -83,21 +87,27 @@ async function handleGetPlans(req: NextRequest): Promise<NextResponse> {
       response.headers.set('X-Trace-Id', traceId);
       return response;
     } else if (type) {
-      // Get plans by type
-      const plans = await PricingService.getPricingPlans(type);
+      // Get plans by type — pricing plans are global system data, bypass RLS
+      const plans = await runWithTenantBypass('pricing-plans-get-by-type', () =>
+        PricingService.getPricingPlans(type)
+      );
       const response = NextResponse.json(plans);
       response.headers.set('X-Trace-Id', traceId);
       return response;
     } else {
-      // Get all active plans
-      const saasPlans = await PricingService.getPricingPlans('saas');
-      const proposalPlans = await PricingService.getPricingPlans('proposal');
+      // Get all active plans — pricing plans are global system data, bypass RLS
+      const [saasPlans, proposalPlans] = await runWithTenantBypass('pricing-plans-get-all', () =>
+        Promise.all([
+          PricingService.getPricingPlans('saas'),
+          PricingService.getPricingPlans('proposal'),
+        ])
+      );
       const response = NextResponse.json({ saas: saasPlans, proposal: proposalPlans });
       response.headers.set('X-Trace-Id', traceId);
       return response;
     }
   } catch (error) {
-    console.error('Error fetching pricing plans:', error);
+    logger.error('Error fetching pricing plans:', error);
     const internalError = new InternalError('Failed to fetch pricing plans', {
       originalError: error instanceof Error ? error.message : String(error),
     });
@@ -141,7 +151,7 @@ async function handleCreatePlan(req: NextRequest): Promise<NextResponse> {
     response.headers.set('X-Trace-Id', traceId);
     return response;
   } catch (error) {
-    console.error('Error creating pricing plan:', error);
+    logger.error('Error creating pricing plan:', error);
     const internalError = new InternalError('Failed to create pricing plan', {
       originalError: error instanceof Error ? error.message : String(error),
     });
@@ -188,7 +198,7 @@ async function handleUpdatePlan(req: NextRequest): Promise<NextResponse> {
     response.headers.set('X-Trace-Id', traceId);
     return response;
   } catch (error) {
-    console.error('Error updating pricing plan:', error);
+    logger.error('Error updating pricing plan:', error);
     const internalError = new InternalError('Failed to update pricing plan', {
       originalError: error instanceof Error ? error.message : String(error),
     });
@@ -233,7 +243,7 @@ async function handleSyncWithStripe(req: NextRequest): Promise<NextResponse> {
         return NextResponse.json(actionError.toEnvelope(req.url, traceId), { status: 400 });
     }
   } catch (error) {
-    console.error('Error in patch operation:', error);
+    logger.error('Error in patch operation:', error);
     const internalError = new InternalError('Failed to sync with Stripe', {
       originalError: error instanceof Error ? error.message : String(error),
     });

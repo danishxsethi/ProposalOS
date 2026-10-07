@@ -1,4 +1,39 @@
 import { Finding } from '@prisma/client';
+import { z } from 'zod';
+
+const ExplicitRoiInputSchema = z
+  .object({
+    price: z.number().finite().positive(),
+    monthlyBenefit: z.number().finite().nonnegative(),
+    currency: z
+      .string()
+      .trim()
+      .regex(/^[A-Z]{3}$/),
+    assumptions: z.array(z.string().trim().min(1)).min(1),
+    inputSources: z
+      .array(
+        z
+          .object({
+            name: z.string().trim().min(1),
+            source: z.enum(['observed', 'configured', 'assumption']),
+          })
+          .strict()
+      )
+      .min(2),
+  })
+  .strict();
+
+export function calculateExplicitROI(input: z.input<typeof ExplicitRoiInputSchema>) {
+  const parsed = ExplicitRoiInputSchema.parse(input);
+  return {
+    inputs: parsed,
+    monthlyRatio: Number((parsed.monthlyBenefit / parsed.price).toFixed(2)),
+    paybackMonths:
+      parsed.monthlyBenefit === 0
+        ? null
+        : Number((parsed.price / parsed.monthlyBenefit).toFixed(2)),
+  };
+}
 
 /**
  * Industry benchmarks for ROI calculations

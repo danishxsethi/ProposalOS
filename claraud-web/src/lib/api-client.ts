@@ -1,10 +1,15 @@
+export let lastApiError: string | null = null;
+
 class ProposalEngineClient {
   private baseUrl: string;
   private apiKey: string;
   private timeout: number = 60000;
 
   constructor() {
-    this.baseUrl = process.env.PROPOSAL_ENGINE_API_URL || '';
+    this.baseUrl =
+      process.env.PROPOSAL_ENGINE_API_URL ||
+      process.env.NEXT_PUBLIC_APP_URL ||
+      'https://claraud.com';
     this.apiKey = process.env.PROPOSAL_ENGINE_API_KEY || '';
   }
 
@@ -18,27 +23,30 @@ class ProposalEngineClient {
     const timeoutId = setTimeout(() => controller.abort(), this.timeout);
 
     try {
+      const internalOpsKey = process.env.INTERNAL_OPS_KEY;
+      const tenantId = process.env.DEFAULT_TENANT_ID;
+
       const response = await fetch(`${this.baseUrl}${path}`, {
         ...options,
         signal: controller.signal,
         headers: {
           'Content-Type': 'application/json',
-          'X-API-Key': this.apiKey,
+          ...(this.apiKey ? { 'X-API-Key': this.apiKey } : {}),
+          ...(internalOpsKey ? { 'x-internal-ops-key': internalOpsKey } : {}),
+          ...(tenantId ? { 'x-tenant-id': tenantId } : {}),
           ...options?.headers,
         },
       });
 
       if (!response.ok) {
         const text = await response.text();
-        console.error(
-          `[API Client] ${path} returned ${response.status}: ${response.statusText} - ${text}`
-        );
+        lastApiError = `${response.status} ${response.statusText} - ${text}`;
         return null;
       }
 
       return (await response.json()) as T;
     } catch (error) {
-      console.error(`[API Client] ${path} failed:`, error);
+      lastApiError = error instanceof Error ? error.message : String(error);
       return null;
     } finally {
       clearTimeout(timeoutId);
@@ -87,6 +95,8 @@ class ProposalEngineClient {
   }
 
   async getProposal(token: string): Promise<any | null> {
+    const res = await this.fetch(`/api/proposal/token/${token}`);
+    if (res) return res;
     return this.fetch(`/api/proposal/${token}`);
   }
 }

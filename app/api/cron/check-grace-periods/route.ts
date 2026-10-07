@@ -135,7 +135,7 @@ async function handleCheckGracePeriods(req: Request): Promise<NextResponse> {
     response.headers.set('X-Trace-Id', traceId);
     return response;
   } catch (error) {
-    console.error('[GracePeriodCheck] Error:', error);
+    logger.error('[GracePeriodCheck] Error:', error);
     const internalError = new InternalError('Grace period check cron failed', {
       originalError: error instanceof Error ? error.message : String(error),
     });

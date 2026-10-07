@@ -8,10 +8,13 @@ import { motion } from 'framer-motion';
 import { ArrowRight, ChevronLeft, ChevronRight } from 'lucide-react';
 
 import { SectionWrapper } from '@/components/shared/section-wrapper';
-import { industries } from '@/lib/industries';
+import { industries, PROVEN_INDUSTRY_SLUGS } from '@/lib/industries';
 
 export function IndustryVerticals() {
   const scrollRef = useRef<HTMLDivElement>(null);
+  const activeIndustries = industries.filter((i) =>
+    PROVEN_INDUSTRY_SLUGS.includes(i.slug as any)
+  );
 
   const scroll = (dir: 'left' | 'right') => {
     if (!scrollRef.current) return;
@@ -52,7 +55,7 @@ export function IndustryVerticals() {
           className="flex gap-6 overflow-x-auto snap-x scroll-smooth pb-8"
           style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
         >
-          {industries.map((industry, idx) => (
+          {activeIndustries.map((industry, idx) => (
             <Link
               key={idx}
               href={`/industries/${industry.slug}`}

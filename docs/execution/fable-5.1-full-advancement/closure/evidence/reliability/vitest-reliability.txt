@@ -1,0 +1,1192 @@
+
+> proposal-os@0.1.0 test
+> vitest run tests/reliability --reporter=verbose
+
+
+ RUN  v4.1.11 /home/danish/workspace/ProposalOS
+
+(node:1192592) Warning: `--localstorage-file` was provided without a valid path
+(Use `node --trace-warnings ...` to show where the warning was created)
+[2026-09-28 06:08:44.304 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "test-fixture:create-tenant"
+[2026-09-28 06:08:44.364 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "test-fixture:create-audit"
+[2026-09-28 06:08:44.393 +0000] INFO: AuditJob: enqueued
+    event: "audit_job.enqueued"
+    jobId: "5e5fd6cf-f4d7-4e0e-85bf-1073a42d751e"
+    batchId: "16f56cc2-c828-4017-a0e2-c4272ffd8415"
+    auditId: "16f56cc2-c828-4017-a0e2-c4272ffd8415"
+    tenantId: "f82effa6-4fcf-4871-a8b8-36aadb823f15"
+[2026-09-28 06:08:44.403 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "test-fixture:expire-lease"
+[2026-09-28 06:08:44.411 +0000] INFO: Starting stale jobs and audits cleanup cron...
+    cutoffTime: "2026-09-28T04:08:44.411Z"
+[2026-09-28 06:08:44.411 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "cleanup-stale-audits"
+[2026-09-28 06:08:44.415 +0000] INFO: Found stale RUNNING audits.
+    count: 0
+[2026-09-28 06:08:44.419 +0000] INFO: Found stale QUEUED/RUNNING audit jobs.
+    count: 0
+[2026-09-28 06:08:44.421 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "test-fixture:read-job"
+[2026-09-28 06:08:44.443 +0000] WARN: AuditJob: heartbeat rejected — lease no longer owned (expired/reclaimed)
+    event: "audit_job.heartbeat_stale_lease"
+    jobId: "5e5fd6cf-f4d7-4e0e-85bf-1073a42d751e"
+[2026-09-28 06:08:44.446 +0000] WARN: AuditJob: stale/reclaimed worker attempted to mark job SUCCEEDED — rejected
+    event: "audit_job.stale_lease_complete_rejected"
+    jobId: "5e5fd6cf-f4d7-4e0e-85bf-1073a42d751e"
+[2026-09-28 06:08:44.451 +0000] WARN: AuditJob: stale/reclaimed worker attempted to mark job failed — rejected
+    event: "audit_job.stale_lease_failure_rejected"
+    jobId: "5e5fd6cf-f4d7-4e0e-85bf-1073a42d751e"
+[2026-09-28 06:08:44.452 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "test-fixture:read-job"
+[2026-09-28 06:08:44.460 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "test-fixture:read-job"
+[2026-09-28 06:08:44.465 +0000] WARN: AuditJob: stale/reclaimed worker attempted to mark job SUCCEEDED — rejected
+    event: "audit_job.stale_lease_complete_rejected"
+    jobId: "5e5fd6cf-f4d7-4e0e-85bf-1073a42d751e"
+[2026-09-28 06:08:44.474 +0000] WARN: AuditJob: stale/reclaimed worker attempted to mark job failed — rejected
+    event: "audit_job.stale_lease_failure_rejected"
+    jobId: "5e5fd6cf-f4d7-4e0e-85bf-1073a42d751e"
+[2026-09-28 06:08:44.474 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "test-fixture:read-job"
+[2026-09-28 06:08:44.477 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "test-fixture:count"
+[2026-09-28 06:08:44.479 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "test-fixture:count"
+[2026-09-28 06:08:44.483 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "test-fixture:create-audit"
+[2026-09-28 06:08:44.499 +0000] INFO: AuditJob: enqueued
+    event: "audit_job.enqueued"
+    jobId: "5c36bfd2-de4b-4ed9-82fe-06838a440550"
+    batchId: "be128a17-222a-433f-8360-73b0757afc2a"
+    auditId: "be128a17-222a-433f-8360-73b0757afc2a"
+    tenantId: "f82effa6-4fcf-4871-a8b8-36aadb823f15"
+[2026-09-28 06:08:44.507 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "test-fixture:expire-lease"
+[2026-09-28 06:08:44.513 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "worker-load-audit-job"
+[2026-09-28 06:08:44.516 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "worker-claim-audit-job"
+[2026-09-28 06:08:44.522 +0000] INFO: Worker: processing job
+    event: "worker.job_start"
+    jobId: "5c36bfd2-de4b-4ed9-82fe-06838a440550"
+    auditId: "be128a17-222a-433f-8360-73b0757afc2a"
+    tenantId: "f82effa6-4fcf-4871-a8b8-36aadb823f15"
+    attempt: 2
+    maxAttempts: 3
+[2026-09-28 06:08:44.524 +0000] WARN: Worker: skipping proposal generation — audit is not trusted or proposal generation was disabled
+    event: "worker.skipping_proposal"
+    jobId: "5c36bfd2-de4b-4ed9-82fe-06838a440550"
+    auditId: "be128a17-222a-433f-8360-73b0757afc2a"
+    auditStatus: "QUEUED"
+    trustState: "PENDING"
+[2026-09-28 06:08:44.530 +0000] INFO: Worker: job succeeded
+    event: "worker.job_succeeded"
+    jobId: "5c36bfd2-de4b-4ed9-82fe-06838a440550"
+    auditId: "be128a17-222a-433f-8360-73b0757afc2a"
+    tenantId: "f82effa6-4fcf-4871-a8b8-36aadb823f15"
+[2026-09-28 06:08:44.531 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "test-fixture:read-job"
+[2026-09-28 06:08:44.536 +0000] WARN: AuditJob: stale/reclaimed worker attempted to mark job SUCCEEDED — rejected
+    event: "audit_job.stale_lease_complete_rejected"
+    jobId: "5c36bfd2-de4b-4ed9-82fe-06838a440550"
+[2026-09-28 06:08:44.541 +0000] WARN: AuditJob: stale/reclaimed worker attempted to mark job failed — rejected
+    event: "audit_job.stale_lease_failure_rejected"
+    jobId: "5c36bfd2-de4b-4ed9-82fe-06838a440550"
+[2026-09-28 06:08:44.541 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "test-fixture:read-job"
+[2026-09-28 06:08:44.545 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "test-fixture:count"
+[2026-09-28 06:08:44.548 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "test-fixture:create-audit"
+[2026-09-28 06:08:44.565 +0000] INFO: AuditJob: enqueued
+    event: "audit_job.enqueued"
+    jobId: "a42ed8e8-e4e5-489b-921e-446aae04bcfc"
+    batchId: "cc86a1d8-6d55-47d9-87aa-f5fa1fc38fbb"
+    auditId: "cc86a1d8-6d55-47d9-87aa-f5fa1fc38fbb"
+    tenantId: "f82effa6-4fcf-4871-a8b8-36aadb823f15"
+[2026-09-28 06:08:44.572 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "test-fixture:expire-lease"
+[2026-09-28 06:08:44.577 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "test-fixture:backdate"
+[2026-09-28 06:08:44.591 +0000] INFO: Starting stale jobs and audits cleanup cron...
+    cutoffTime: "2026-09-28T04:08:44.591Z"
+[2026-09-28 06:08:44.591 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "cleanup-stale-audits"
+[2026-09-28 06:08:44.596 +0000] INFO: Found stale RUNNING audits.
+    count: 0
+[2026-09-28 06:08:44.599 +0000] INFO: Found stale QUEUED/RUNNING audit jobs.
+    count: 1
+[2026-09-28 06:08:44.605 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "test-fixture:read-job"
+[2026-09-28 06:08:44.610 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "worker-load-audit-job"
+[2026-09-28 06:08:44.612 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "worker-claim-audit-job"
+ ✓ tests/reliability/queue-worker-death-poison.test.ts > Stream D — AuditJob queue failure injection (real PostgreSQL) > S1: dead worker A is reclaimed by worker B with a new lease; A stale completion is rejected and does not overwrite B 120ms
+ ✓ tests/reliability/queue-worker-death-poison.test.ts > Stream D — AuditJob queue failure injection (real PostgreSQL) > S1 (end-to-end): worker B runs processAuditJob after A dies; A stale finalization rejected; single Audit row 66ms
+[2026-09-28 06:08:44.615 +0000] INFO: Worker: lock contention — skipping
+    event: "worker.lock_contention"
+    jobId: "a42ed8e8-e4e5-489b-921e-446aae04bcfc"
+[2026-09-28 06:08:44.616 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "test-fixture:create-audit"
+[2026-09-28 06:08:44.802 +0000] INFO: AuditJob: enqueued
+    event: "audit_job.enqueued"
+    jobId: "d9daecde-d8e3-46cb-aef1-af3cfb32d133"
+    batchId: "79452570-fffc-4026-bc99-874557c03a55"
+    auditId: "79452570-fffc-4026-bc99-874557c03a55"
+    tenantId: "f82effa6-4fcf-4871-a8b8-36aadb823f15"
+[2026-09-28 06:08:44.827 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "test-fixture:expire-lease"
+[2026-09-28 06:08:44.931 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "test-fixture:count-rows"
+[2026-09-28 06:08:44.937 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "worker-load-audit-job"
+[2026-09-28 06:08:44.942 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "worker-claim-audit-job"
+[2026-09-28 06:08:44.949 +0000] INFO: Worker: processing job
+    event: "worker.job_start"
+    jobId: "d9daecde-d8e3-46cb-aef1-af3cfb32d133"
+    auditId: "79452570-fffc-4026-bc99-874557c03a55"
+    tenantId: "f82effa6-4fcf-4871-a8b8-36aadb823f15"
+    attempt: 2
+    maxAttempts: 3
+[2026-09-28 06:08:44.968 +0000] INFO: Worker: job succeeded
+    event: "worker.job_succeeded"
+    jobId: "d9daecde-d8e3-46cb-aef1-af3cfb32d133"
+    auditId: "79452570-fffc-4026-bc99-874557c03a55"
+    tenantId: "f82effa6-4fcf-4871-a8b8-36aadb823f15"
+[2026-09-28 06:08:44.968 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "test-fixture:read-job"
+[2026-09-28 06:08:44.971 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "test-fixture:read-job"
+[2026-09-28 06:08:44.974 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "test-fixture:count-rows"
+ ✓ tests/reliability/queue-worker-death-poison.test.ts > Stream D — AuditJob queue failure injection (real PostgreSQL) > S1 (cron): cleanup-stale-jobs only terminates jobs older than the 2 h TTL, and marks them FAILED (not requeued) 67ms
+[2026-09-28 06:08:44.983 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "test-fixture:create-audit"
+[2026-09-28 06:08:45.004 +0000] INFO: AuditJob: enqueued
+    event: "audit_job.enqueued"
+    jobId: "c728db2b-9464-49ff-a1ab-315b766e6f64"
+    batchId: "28f1fcbf-a977-41e4-8452-b3c0ab09d458"
+    auditId: "28f1fcbf-a977-41e4-8452-b3c0ab09d458"
+    tenantId: "f82effa6-4fcf-4871-a8b8-36aadb823f15"
+[2026-09-28 06:08:45.006 +0000] INFO: AuditJob: duplicate idempotency key — skipping enqueue
+    event: "audit_job.enqueue_skipped"
+    jobId: "c728db2b-9464-49ff-a1ab-315b766e6f64"
+    idempotencyKey: "rel:dup:28f1fcbf-a977-41e4-8452-b3c0ab09d458"
+    status: "QUEUED"
+[2026-09-28 06:08:45.006 +0000] INFO: AuditJob: duplicate idempotency key — skipping enqueue
+    event: "audit_job.enqueue_skipped"
+    jobId: "c728db2b-9464-49ff-a1ab-315b766e6f64"
+    idempotencyKey: "rel:dup:28f1fcbf-a977-41e4-8452-b3c0ab09d458"
+    status: "QUEUED"
+[2026-09-28 06:08:45.006 +0000] INFO: AuditJob: duplicate idempotency key — skipping enqueue
+    event: "audit_job.enqueue_skipped"
+    jobId: "c728db2b-9464-49ff-a1ab-315b766e6f64"
+    idempotencyKey: "rel:dup:28f1fcbf-a977-41e4-8452-b3c0ab09d458"
+    status: "QUEUED"
+[2026-09-28 06:08:45.007 +0000] INFO: AuditJob: duplicate idempotency key — skipping enqueue
+    event: "audit_job.enqueue_skipped"
+    jobId: "c728db2b-9464-49ff-a1ab-315b766e6f64"
+    idempotencyKey: "rel:dup:28f1fcbf-a977-41e4-8452-b3c0ab09d458"
+    status: "QUEUED"
+[2026-09-28 06:08:45.007 +0000] INFO: AuditJob: duplicate idempotency key — skipping enqueue
+    event: "audit_job.enqueue_skipped"
+    jobId: "c728db2b-9464-49ff-a1ab-315b766e6f64"
+    idempotencyKey: "rel:dup:28f1fcbf-a977-41e4-8452-b3c0ab09d458"
+    status: "QUEUED"
+[2026-09-28 06:08:45.008 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "test-fixture:count-jobs"
+[2026-09-28 06:08:45.011 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "test-fixture:create-audit"
+ ✓ tests/reliability/queue-worker-death-poison.test.ts > Stream D — AuditJob queue failure injection (real PostgreSQL) > S1b (DEFECT-D1): worker A persists audit results then dies before SUCCEEDED; B re-runs — Finding/Evidence rows must not duplicate 367ms
+[2026-09-28 06:08:45.100 +0000] INFO: AuditJob: enqueued
+    event: "audit_job.enqueued"
+    jobId: "9964926f-f8e9-4c43-9ace-a31ad473eb77"
+    batchId: "4ff9c21a-7f5c-418c-90ab-443ffff0b10c"
+    auditId: "4ff9c21a-7f5c-418c-90ab-443ffff0b10c"
+    tenantId: "f82effa6-4fcf-4871-a8b8-36aadb823f15"
+[2026-09-28 06:08:45.106 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "test-fixture:count-jobs"
+[2026-09-28 06:08:45.111 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "test-fixture:create-audit"
+[2026-09-28 06:08:45.129 +0000] INFO: AuditJob: enqueued
+    event: "audit_job.enqueued"
+    jobId: "e043f436-aeee-4275-aa70-76c49af48a2d"
+    batchId: "71ac1202-296c-48eb-93cc-b352300d0d7f"
+    auditId: "71ac1202-296c-48eb-93cc-b352300d0d7f"
+    tenantId: "f82effa6-4fcf-4871-a8b8-36aadb823f15"
+[2026-09-28 06:08:45.132 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "test-fixture:count-jobs"
+[2026-09-28 06:08:45.135 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "test-fixture:create-audit"
+[2026-09-28 06:08:45.151 +0000] INFO: AuditJob: enqueued
+    event: "audit_job.enqueued"
+    jobId: "8cc85859-b7e6-4a2b-81da-7abcc633af16"
+    batchId: "c352d8de-d209-42f5-a302-0fce7b15c30e"
+    auditId: "c352d8de-d209-42f5-a302-0fce7b15c30e"
+    tenantId: "f82effa6-4fcf-4871-a8b8-36aadb823f15"
+[2026-09-28 06:08:45.153 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "test-fixture:count-jobs"
+[2026-09-28 06:08:45.155 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "test-fixture:create-audit"
+[2026-09-28 06:08:45.174 +0000] INFO: AuditJob: enqueued
+    event: "audit_job.enqueued"
+    jobId: "cc1eb72b-9fb3-4728-b357-d42e19752b3c"
+    batchId: "a5a2ae2f-0268-421a-b4aa-d962a1ced931"
+    auditId: "a5a2ae2f-0268-421a-b4aa-d962a1ced931"
+    tenantId: "f82effa6-4fcf-4871-a8b8-36aadb823f15"
+[2026-09-28 06:08:45.176 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "test-fixture:count-jobs"
+[2026-09-28 06:08:45.179 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "test-fixture:create-audit"
+[2026-09-28 06:08:45.195 +0000] INFO: AuditJob: enqueued
+    event: "audit_job.enqueued"
+    jobId: "a46ca547-8dc6-4668-9cdd-cd5e7356eb8a"
+    batchId: "dbefe18d-84c9-4f10-b508-38e882b3f094"
+    auditId: "dbefe18d-84c9-4f10-b508-38e882b3f094"
+    tenantId: "f82effa6-4fcf-4871-a8b8-36aadb823f15"
+[2026-09-28 06:08:45.196 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "test-fixture:count-jobs"
+[2026-09-28 06:08:45.199 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "test-fixture:create-audit"
+[2026-09-28 06:08:45.217 +0000] INFO: AuditJob: enqueued
+    event: "audit_job.enqueued"
+    jobId: "c6b27c0e-a9ed-4a0d-8692-e6a3b0cfec08"
+    batchId: "56fda7d2-4710-4fd3-9bc1-d8657a1dc134"
+    auditId: "56fda7d2-4710-4fd3-9bc1-d8657a1dc134"
+    tenantId: "f82effa6-4fcf-4871-a8b8-36aadb823f15"
+[2026-09-28 06:08:45.219 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "test-fixture:count-jobs"
+[2026-09-28 06:08:45.223 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "test-fixture:create-audit"
+[2026-09-28 06:08:45.287 +0000] INFO: AuditJob: enqueued
+    event: "audit_job.enqueued"
+    jobId: "8380c95f-7c82-45f6-9409-e1e5b8a9df7c"
+    batchId: "2a940cb3-ebae-4d9b-99e8-89ee6eca37a8"
+    auditId: "2a940cb3-ebae-4d9b-99e8-89ee6eca37a8"
+    tenantId: "f82effa6-4fcf-4871-a8b8-36aadb823f15"
+[2026-09-28 06:08:45.287 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "test-fixture:count-jobs"
+stdout | tests/reliability/queue-worker-death-poison.test.ts > Stream D — AuditJob queue failure injection (real PostgreSQL) > S2a (invariant): concurrent enqueue with the same idempotencyKey never creates more than one AuditJob row
+[S2] 35/48 concurrent enqueue caller(s) received an exception instead of the existing row; error codes: { P2002: 35 }
+
+[2026-09-28 06:08:45.290 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "test-fixture:create-audit"
+[2026-09-28 06:08:45.304 +0000] INFO: AuditJob: enqueued
+    event: "audit_job.enqueued"
+    jobId: "83048d28-75a8-4da1-bc2a-8cd35b2d4f43"
+    batchId: "f30aa1d3-14bd-4cab-b569-21fe386709b9"
+    auditId: "f30aa1d3-14bd-4cab-b569-21fe386709b9"
+    tenantId: "f82effa6-4fcf-4871-a8b8-36aadb823f15"
+[2026-09-28 06:08:45.306 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "test-fixture:count-jobs"
+[2026-09-28 06:08:45.307 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "test-fixture:create-audit"
+[2026-09-28 06:08:45.321 +0000] INFO: AuditJob: enqueued
+    event: "audit_job.enqueued"
+    jobId: "b46a3e07-a121-4102-8c63-45c74cba5805"
+    batchId: "341dc135-c124-40cc-bf67-b30ba5c839e2"
+    auditId: "341dc135-c124-40cc-bf67-b30ba5c839e2"
+    tenantId: "f82effa6-4fcf-4871-a8b8-36aadb823f15"
+[2026-09-28 06:08:45.323 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "test-fixture:count-jobs"
+[2026-09-28 06:08:45.326 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "test-fixture:create-audit"
+[2026-09-28 06:08:45.340 +0000] INFO: AuditJob: enqueued
+    event: "audit_job.enqueued"
+    jobId: "b8d50fef-7d82-42de-a4c9-71810cac9382"
+    batchId: "051dc12d-7bb5-45df-8f4d-b6806ff03b99"
+    auditId: "051dc12d-7bb5-45df-8f4d-b6806ff03b99"
+    tenantId: "f82effa6-4fcf-4871-a8b8-36aadb823f15"
+[2026-09-28 06:08:45.343 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "test-fixture:count-jobs"
+[2026-09-28 06:08:45.345 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "test-fixture:create-audit"
+[2026-09-28 06:08:45.359 +0000] INFO: AuditJob: enqueued
+    event: "audit_job.enqueued"
+    jobId: "1850afb2-17a6-4b45-a6ae-de1e2ba3d0ed"
+    batchId: "47a31f38-d145-4385-bef5-b2ade7be4609"
+    auditId: "47a31f38-d145-4385-bef5-b2ade7be4609"
+    tenantId: "f82effa6-4fcf-4871-a8b8-36aadb823f15"
+[2026-09-28 06:08:45.361 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "test-fixture:count-jobs"
+[2026-09-28 06:08:45.363 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "test-fixture:create-audit"
+[2026-09-28 06:08:45.380 +0000] INFO: AuditJob: enqueued
+    event: "audit_job.enqueued"
+    jobId: "e4f3ad4b-c923-4a0a-8093-f0d62faae519"
+    batchId: "717fcdb2-5bf3-4856-b4b6-0074c5514ac1"
+    auditId: "717fcdb2-5bf3-4856-b4b6-0074c5514ac1"
+    tenantId: "f82effa6-4fcf-4871-a8b8-36aadb823f15"
+[2026-09-28 06:08:45.382 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "test-fixture:count-jobs"
+[2026-09-28 06:08:45.385 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "test-fixture:create-audit"
+ ✓ tests/reliability/queue-worker-death-poison.test.ts > Stream D — AuditJob queue failure injection (real PostgreSQL) > S2a (invariant): concurrent enqueue with the same idempotencyKey never creates more than one AuditJob row 307ms
+[2026-09-28 06:08:45.400 +0000] INFO: AuditJob: enqueued
+    event: "audit_job.enqueued"
+    jobId: "4a186ed5-d5b4-4b48-9d7d-d75fdc5a96fe"
+    batchId: "0c4fc368-aa0c-44cb-980b-70280dbf61dc"
+    auditId: "0c4fc368-aa0c-44cb-980b-70280dbf61dc"
+    tenantId: "f82effa6-4fcf-4871-a8b8-36aadb823f15"
+[2026-09-28 06:08:45.402 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "test-fixture:count-jobs"
+[2026-09-28 06:08:45.406 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "test-fixture:create-audit"
+[2026-09-28 06:08:45.421 +0000] INFO: AuditJob: enqueued
+    event: "audit_job.enqueued"
+    jobId: "521ed141-ce31-47a1-9399-c47213dcc417"
+    batchId: "5667ad1e-9451-4faa-8a94-3b7cbc42f32f"
+    auditId: "5667ad1e-9451-4faa-8a94-3b7cbc42f32f"
+    tenantId: "f82effa6-4fcf-4871-a8b8-36aadb823f15"
+[2026-09-28 06:08:45.423 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "test-fixture:count-jobs"
+[2026-09-28 06:08:45.425 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "test-fixture:create-audit"
+[2026-09-28 06:08:45.437 +0000] INFO: AuditJob: enqueued
+    event: "audit_job.enqueued"
+    jobId: "5c2d6e88-a40a-4967-923b-47b2164ba6b8"
+    batchId: "61e099d2-9212-4128-b413-e453e80d23a2"
+    auditId: "61e099d2-9212-4128-b413-e453e80d23a2"
+    tenantId: "f82effa6-4fcf-4871-a8b8-36aadb823f15"
+[2026-09-28 06:08:45.438 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "test-fixture:count-jobs"
+[2026-09-28 06:08:45.441 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "test-fixture:create-audit"
+[2026-09-28 06:08:45.454 +0000] INFO: AuditJob: enqueued
+    event: "audit_job.enqueued"
+    jobId: "f40bd3dd-7378-4fdb-b347-f5313f6e2a85"
+    batchId: "30f15cfe-fb3e-4003-9bcc-1dd3123a7e55"
+    auditId: "30f15cfe-fb3e-4003-9bcc-1dd3123a7e55"
+    tenantId: "f82effa6-4fcf-4871-a8b8-36aadb823f15"
+[2026-09-28 06:08:45.454 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "worker-load-audit-job"
+[2026-09-28 06:08:45.456 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "worker-claim-audit-job"
+[2026-09-28 06:08:45.463 +0000] INFO: Worker: processing job
+    event: "worker.job_start"
+    jobId: "f40bd3dd-7378-4fdb-b347-f5313f6e2a85"
+    auditId: "30f15cfe-fb3e-4003-9bcc-1dd3123a7e55"
+    tenantId: "f82effa6-4fcf-4871-a8b8-36aadb823f15"
+    attempt: 1
+    maxAttempts: 3
+[2026-09-28 06:08:45.463 +0000] ERROR: Worker: job failed
+    event: "worker.job_failed"
+    jobId: "f40bd3dd-7378-4fdb-b347-f5313f6e2a85"
+    auditId: "30f15cfe-fb3e-4003-9bcc-1dd3123a7e55"
+    tenantId: "f82effa6-4fcf-4871-a8b8-36aadb823f15"
+    attempt: 1
+    maxAttempts: 3
+    error: "poison: deterministic module crash"
+[2026-09-28 06:08:45.470 +0000] WARN: AuditJob: failed — requeued for retry
+    event: "audit_job.requeued"
+    jobId: "f40bd3dd-7378-4fdb-b347-f5313f6e2a85"
+    attempts: 1
+    maxAttempts: 3
+[2026-09-28 06:08:45.475 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "test-fixture:read-job"
+[2026-09-28 06:08:45.479 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "worker-load-audit-job"
+[2026-09-28 06:08:45.483 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "worker-claim-audit-job"
+[2026-09-28 06:08:45.488 +0000] INFO: Worker: processing job
+    event: "worker.job_start"
+    jobId: "f40bd3dd-7378-4fdb-b347-f5313f6e2a85"
+    auditId: "30f15cfe-fb3e-4003-9bcc-1dd3123a7e55"
+    tenantId: "f82effa6-4fcf-4871-a8b8-36aadb823f15"
+    attempt: 2
+    maxAttempts: 3
+[2026-09-28 06:08:45.488 +0000] ERROR: Worker: job failed
+    event: "worker.job_failed"
+    jobId: "f40bd3dd-7378-4fdb-b347-f5313f6e2a85"
+    auditId: "30f15cfe-fb3e-4003-9bcc-1dd3123a7e55"
+    tenantId: "f82effa6-4fcf-4871-a8b8-36aadb823f15"
+    attempt: 2
+    maxAttempts: 3
+    error: "poison: deterministic module crash"
+[2026-09-28 06:08:45.495 +0000] WARN: AuditJob: failed — requeued for retry
+    event: "audit_job.requeued"
+    jobId: "f40bd3dd-7378-4fdb-b347-f5313f6e2a85"
+    attempts: 2
+    maxAttempts: 3
+[2026-09-28 06:08:45.502 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "test-fixture:read-job"
+[2026-09-28 06:08:45.504 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "worker-load-audit-job"
+[2026-09-28 06:08:45.506 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "worker-claim-audit-job"
+[2026-09-28 06:08:45.514 +0000] INFO: Worker: processing job
+    event: "worker.job_start"
+    jobId: "f40bd3dd-7378-4fdb-b347-f5313f6e2a85"
+    auditId: "30f15cfe-fb3e-4003-9bcc-1dd3123a7e55"
+    tenantId: "f82effa6-4fcf-4871-a8b8-36aadb823f15"
+    attempt: 3
+    maxAttempts: 3
+[2026-09-28 06:08:45.514 +0000] ERROR: Worker: job failed
+    event: "worker.job_failed"
+    jobId: "f40bd3dd-7378-4fdb-b347-f5313f6e2a85"
+    auditId: "30f15cfe-fb3e-4003-9bcc-1dd3123a7e55"
+    tenantId: "f82effa6-4fcf-4871-a8b8-36aadb823f15"
+    attempt: 3
+    maxAttempts: 3
+    error: "poison: deterministic module crash"
+[2026-09-28 06:08:45.521 +0000] WARN: AuditJob: exhausted retries — moved to DEAD
+    event: "audit_job.dead"
+    jobId: "f40bd3dd-7378-4fdb-b347-f5313f6e2a85"
+    attempts: 3
+    maxAttempts: 3
+[2026-09-28 06:08:45.526 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "test-fixture:read-job"
+[2026-09-28 06:08:45.528 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "test-fixture:read-job"
+[2026-09-28 06:08:45.530 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "test-fixture:read-audit"
+ ✓ tests/reliability/queue-worker-death-poison.test.ts > Stream D — AuditJob queue failure injection (real PostgreSQL) > S2b (contract, DEFECT-D2): concurrent duplicate dispatch returns the existing row to every caller — no unique-violation leaks 151ms
+[2026-09-28 06:08:45.543 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "worker-load-audit-job"
+[2026-09-28 06:08:45.545 +0000] INFO: Worker: job already in terminal state — skipping
+    event: "worker.job_already_terminal"
+    jobId: "f40bd3dd-7378-4fdb-b347-f5313f6e2a85"
+    status: "DEAD"
+[2026-09-28 06:08:45.545 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "test-fixture:read-job"
+stdout | tests/reliability/queue-worker-death-poison.test.ts > Stream D — AuditJob queue failure injection (real PostgreSQL) > S3: poison job (throws every attempt) is DEAD after MAX_RETRIES attempts and never left RUNNING
+[S3] poison job reached DEAD after 3 attempts (MAX_RETRIES=3)
+
+[2026-09-28 06:08:45.559 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "test-fixture:create-audit"
+[2026-09-28 06:08:45.571 +0000] INFO: AuditJob: enqueued
+    event: "audit_job.enqueued"
+    jobId: "6e69205c-3a9c-4b39-9997-54a5a2619558"
+    batchId: "2683f2b6-3eaa-4f06-a2d1-7a151c520ac0"
+    auditId: "2683f2b6-3eaa-4f06-a2d1-7a151c520ac0"
+    tenantId: "f82effa6-4fcf-4871-a8b8-36aadb823f15"
+[2026-09-28 06:08:45.573 +0000] INFO: Worker: dispatching job
+    event: "worker.dispatch"
+    jobId: "6e69205c-3a9c-4b39-9997-54a5a2619558"
+    traceId: "b4333fc05b211c40b0f46adc626fe63a"
+[2026-09-28 06:08:45.573 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "worker-load-audit-job"
+[2026-09-28 06:08:45.575 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "worker-claim-audit-job"
+[2026-09-28 06:08:45.581 +0000] INFO: Worker: processing job
+    event: "worker.job_start"
+    jobId: "6e69205c-3a9c-4b39-9997-54a5a2619558"
+    auditId: "2683f2b6-3eaa-4f06-a2d1-7a151c520ac0"
+    tenantId: "f82effa6-4fcf-4871-a8b8-36aadb823f15"
+    attempt: 1
+    maxAttempts: 3
+[2026-09-28 06:08:45.582 +0000] ERROR: Worker: job failed
+    event: "worker.job_failed"
+    jobId: "6e69205c-3a9c-4b39-9997-54a5a2619558"
+    auditId: "2683f2b6-3eaa-4f06-a2d1-7a151c520ac0"
+    tenantId: "f82effa6-4fcf-4871-a8b8-36aadb823f15"
+    attempt: 1
+    maxAttempts: 3
+    error: "poison: route path"
+[2026-09-28 06:08:45.589 +0000] WARN: AuditJob: failed — requeued for retry
+    event: "audit_job.requeued"
+    jobId: "6e69205c-3a9c-4b39-9997-54a5a2619558"
+    attempts: 1
+    maxAttempts: 3
+[2026-09-28 06:08:45.593 +0000] INFO: Worker: job complete
+    event: "worker.dispatch_complete"
+    outcome: "FAILED"
+    jobId: "6e69205c-3a9c-4b39-9997-54a5a2619558"
+    auditId: "2683f2b6-3eaa-4f06-a2d1-7a151c520ac0"
+    traceId: "b4333fc05b211c40b0f46adc626fe63a"
+    error: "poison: route path"
+[2026-09-28 06:08:45.594 +0000] INFO: Worker: dispatching job
+    event: "worker.dispatch"
+    jobId: "6e69205c-3a9c-4b39-9997-54a5a2619558"
+    traceId: "96ab302d56c446c9dc9ff80c3b391d0e"
+[2026-09-28 06:08:45.595 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "worker-load-audit-job"
+[2026-09-28 06:08:45.597 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "worker-claim-audit-job"
+[2026-09-28 06:08:45.605 +0000] INFO: Worker: processing job
+    event: "worker.job_start"
+    jobId: "6e69205c-3a9c-4b39-9997-54a5a2619558"
+    auditId: "2683f2b6-3eaa-4f06-a2d1-7a151c520ac0"
+    tenantId: "f82effa6-4fcf-4871-a8b8-36aadb823f15"
+    attempt: 2
+    maxAttempts: 3
+[2026-09-28 06:08:45.605 +0000] ERROR: Worker: job failed
+    event: "worker.job_failed"
+    jobId: "6e69205c-3a9c-4b39-9997-54a5a2619558"
+    auditId: "2683f2b6-3eaa-4f06-a2d1-7a151c520ac0"
+    tenantId: "f82effa6-4fcf-4871-a8b8-36aadb823f15"
+    attempt: 2
+    maxAttempts: 3
+    error: "poison: route path"
+[2026-09-28 06:08:45.611 +0000] WARN: AuditJob: failed — requeued for retry
+    event: "audit_job.requeued"
+    jobId: "6e69205c-3a9c-4b39-9997-54a5a2619558"
+    attempts: 2
+    maxAttempts: 3
+[2026-09-28 06:08:45.615 +0000] INFO: Worker: job complete
+    event: "worker.dispatch_complete"
+    outcome: "FAILED"
+    jobId: "6e69205c-3a9c-4b39-9997-54a5a2619558"
+    auditId: "2683f2b6-3eaa-4f06-a2d1-7a151c520ac0"
+    traceId: "96ab302d56c446c9dc9ff80c3b391d0e"
+    error: "poison: route path"
+[2026-09-28 06:08:45.616 +0000] INFO: Worker: dispatching job
+    event: "worker.dispatch"
+    jobId: "6e69205c-3a9c-4b39-9997-54a5a2619558"
+    traceId: "fe2093991af62275913ed6f722608293"
+[2026-09-28 06:08:45.616 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "worker-load-audit-job"
+[2026-09-28 06:08:45.619 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "worker-claim-audit-job"
+[2026-09-28 06:08:45.625 +0000] INFO: Worker: processing job
+    event: "worker.job_start"
+    jobId: "6e69205c-3a9c-4b39-9997-54a5a2619558"
+    auditId: "2683f2b6-3eaa-4f06-a2d1-7a151c520ac0"
+    tenantId: "f82effa6-4fcf-4871-a8b8-36aadb823f15"
+    attempt: 3
+    maxAttempts: 3
+[2026-09-28 06:08:45.625 +0000] ERROR: Worker: job failed
+    event: "worker.job_failed"
+    jobId: "6e69205c-3a9c-4b39-9997-54a5a2619558"
+    auditId: "2683f2b6-3eaa-4f06-a2d1-7a151c520ac0"
+    tenantId: "f82effa6-4fcf-4871-a8b8-36aadb823f15"
+    attempt: 3
+    maxAttempts: 3
+    error: "poison: route path"
+[2026-09-28 06:08:45.632 +0000] WARN: AuditJob: exhausted retries — moved to DEAD
+    event: "audit_job.dead"
+    jobId: "6e69205c-3a9c-4b39-9997-54a5a2619558"
+    attempts: 3
+    maxAttempts: 3
+[2026-09-28 06:08:45.638 +0000] INFO: Worker: job complete
+    event: "worker.dispatch_complete"
+    outcome: "DEAD"
+    jobId: "6e69205c-3a9c-4b39-9997-54a5a2619558"
+    auditId: "2683f2b6-3eaa-4f06-a2d1-7a151c520ac0"
+    traceId: "fe2093991af62275913ed6f722608293"
+    error: "poison: route path"
+[2026-09-28 06:08:45.638 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "test-fixture:read-job"
+[2026-09-28 06:08:45.641 +0000] INFO: Worker: dispatching job
+    event: "worker.dispatch"
+    jobId: "6e69205c-3a9c-4b39-9997-54a5a2619558"
+    traceId: "10d071dafbbd32335b7e4ba1e41534fb"
+[2026-09-28 06:08:45.641 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "worker-load-audit-job"
+ ✓ tests/reliability/queue-worker-death-poison.test.ts > Stream D — AuditJob queue failure injection (real PostgreSQL) > S3: poison job (throws every attempt) is DEAD after MAX_RETRIES attempts and never left RUNNING 108ms
+[2026-09-28 06:08:45.644 +0000] INFO: Worker: job already in terminal state — skipping
+    event: "worker.job_already_terminal"
+    jobId: "6e69205c-3a9c-4b39-9997-54a5a2619558"
+    status: "DEAD"
+[2026-09-28 06:08:45.644 +0000] INFO: Worker: job complete
+    event: "worker.dispatch_complete"
+    outcome: "SKIPPED"
+    jobId: "6e69205c-3a9c-4b39-9997-54a5a2619558"
+    reason: "Already DEAD"
+    traceId: "10d071dafbbd32335b7e4ba1e41534fb"
+ ✓ tests/reliability/queue-worker-death-poison.test.ts > Stream D — AuditJob queue failure injection (real PostgreSQL) > S3 (worker route): a poison job dispatched via the HTTP worker returns 500 (retry signal) and 200 SKIPPED once DEAD 96ms
+(node:1192777) Warning: `--localstorage-file` was provided without a valid path
+(Use `node --trace-warnings ...` to show where the warning was created)
+[2026-09-28 06:08:54.323 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "test-fixture:create-tenant"
+[2026-09-28 06:08:54.388 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "test-fixture:create-lead"
+[2026-09-28 06:08:54.409 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "FeatureFlagService.get"
+[2026-09-28 06:08:54.430 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "FeatureFlagService.get"
+[2026-09-28 06:08:54.587 +0000] INFO: SANDBOX DRY-RUN Zero real sends. Mock sending successful.
+    event: "outreach.sniper.mock_send"
+    to: "EMAIL_REDACTED"
+    from: "EMAIL_REDACTED"
+    subject: "Quick note for Lead s7a"
+[2026-09-28 06:08:54.638 +0000] INFO: Outreach sniper worker completed
+    event: "outreach.sniper.worker_complete"
+    tenantId: "d08c4fb4-7863-41fc-8179-53e86c48580f"
+    processedLeads: 1
+    sentEmails: 1
+    droppedLeads: 0
+    queuedProposals: 0
+    skipped: 0
+    domainCapReached: false
+[2026-09-28 06:08:54.639 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "test-fixture:read-email"
+[2026-09-28 06:08:54.642 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "test-fixture:read-events"
+stdout | tests/reliability/outbound-kill-switch-provider-failure.test.ts > Stream D — S7/S8 outbound kill switch & provider failure (real PostgreSQL) > S7a: OUTREACH_LIVE_SENDING unset (no env, no flag row) → sniper uses the sandbox mock transport; provider never called
+[S7a] sandbox mock persisted as status=SENT providerMessageId=mock_0856a4a5-dfa4-4b01-8bae-37ae7cea08d0
+
+[2026-09-28 06:08:54.649 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "test-fixture:clear-flags"
+[2026-09-28 06:08:54.652 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "test-fixture:retire-pending"
+[2026-09-28 06:08:54.656 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "test-fixture:create-lead"
+[2026-09-28 06:08:54.669 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "FeatureFlagService.get"
+[2026-09-28 06:08:54.711 +0000] INFO: SANDBOX DRY-RUN Zero real sends. Mock sending successful.
+    event: "outreach.sniper.mock_send"
+    to: "EMAIL_REDACTED"
+    from: "EMAIL_REDACTED"
+    subject: "Quick note for Lead s7b"
+[2026-09-28 06:08:54.727 +0000] INFO: Outreach sniper worker completed
+    event: "outreach.sniper.worker_complete"
+    tenantId: "d08c4fb4-7863-41fc-8179-53e86c48580f"
+    processedLeads: 1
+    sentEmails: 1
+    droppedLeads: 0
+    queuedProposals: 0
+    skipped: 0
+    domainCapReached: false
+[2026-09-28 06:08:54.727 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "test-fixture:read-email"
+[2026-09-28 06:08:54.730 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "test-fixture:clear-flags"
+[2026-09-28 06:08:54.732 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "test-fixture:retire-pending"
+[2026-09-28 06:08:54.736 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "FeatureFlagService.set"
+[2026-09-28 06:08:54.741 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "test-fixture:create-lead"
+[2026-09-28 06:08:54.752 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "FeatureFlagService.get"
+ ✓ tests/reliability/outbound-kill-switch-provider-failure.test.ts > Stream D — S7/S8 outbound kill switch & provider failure (real PostgreSQL) > S7a: OUTREACH_LIVE_SENDING unset (no env, no flag row) → sniper uses the sandbox mock transport; provider never called 269ms
+ ✓ tests/reliability/outbound-kill-switch-provider-failure.test.ts > Stream D — S7/S8 outbound kill switch & provider failure (real PostgreSQL) > S7b: OUTREACH_LIVE_SENDING="false" explicitly → mock transport; provider never called 79ms
+[2026-09-28 06:08:54.762 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "FeatureFlagService.get"
+[2026-09-28 06:08:54.842 +0000] INFO: Outreach sniper worker completed
+    event: "outreach.sniper.worker_complete"
+    tenantId: "d08c4fb4-7863-41fc-8179-53e86c48580f"
+    processedLeads: 1
+    sentEmails: 0
+    droppedLeads: 0
+    queuedProposals: 0
+    skipped: 1
+    domainCapReached: false
+[2026-09-28 06:08:54.842 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "test-fixture:read-email"
+[2026-09-28 06:08:54.846 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "test-fixture:read-events"
+[2026-09-28 06:08:54.849 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "test-fixture:read-lead"
+[2026-09-28 06:08:54.853 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "test-fixture:clear-flags"
+[2026-09-28 06:08:54.857 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "test-fixture:retire-pending"
+[2026-09-28 06:08:54.860 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "test-fixture:create-proposal"
+[2026-09-28 06:08:54.887 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "test-fixture:public-access-stub"
+[2026-09-28 06:08:54.898 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "test-fixture:public-access-stub"
+[2026-09-28 06:08:54.911 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "test-fixture:read-proposal"
+[2026-09-28 06:08:54.915 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "test-fixture:read-outreach"
+[2026-09-28 06:08:54.919 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "test-fixture:clear-flags"
+[2026-09-28 06:08:54.921 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "test-fixture:retire-pending"
+[2026-09-28 06:08:54.923 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "test-fixture:create-proposal"
+[2026-09-28 06:08:54.933 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "test-fixture:public-access-stub"
+[2026-09-28 06:08:54.939 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "test-fixture:read-outreach"
+[2026-09-28 06:08:54.942 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "test-fixture:clear-flags"
+[2026-09-28 06:08:54.944 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "test-fixture:retire-pending"
+[2026-09-28 06:08:54.946 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "test-fixture:create-lead"
+[2026-09-28 06:08:54.956 +0000] WARN: Sniper outreach halted immediately due to KILL_SWITCH_FORCE_MANUAL_MODE being ON
+    tenantId: "d08c4fb4-7863-41fc-8179-53e86c48580f"
+[2026-09-28 06:08:54.956 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "test-fixture:read-email"
+[2026-09-28 06:08:54.959 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "test-fixture:clear-flags"
+[2026-09-28 06:08:54.962 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "test-fixture:retire-pending"
+ ✓ tests/reliability/outbound-kill-switch-provider-failure.test.ts > Stream D — S7/S8 outbound kill switch & provider failure (real PostgreSQL) > S7c: flag drift — DB FeatureFlag OUTREACH_LIVE_SENDING=true but OUTBOUND_DELIVERY_ENABLED unset → live send refused, provider never called, email FAILED 124ms
+ ✓ tests/reliability/outbound-kill-switch-provider-failure.test.ts > Stream D — S7/S8 outbound kill switch & provider failure (real PostgreSQL) > S7d: deliverProposalEmail never returns SENT while live gates are off (disabled → FAILED, sandbox → SIMULATED, forced live → refused) 63ms
+ ✓ tests/reliability/outbound-kill-switch-provider-failure.test.ts > Stream D — S7/S8 outbound kill switch & provider failure (real PostgreSQL) > S7f (DEFECT-D3, fails closed): deliverProposalEmail without ambient tenant context throws MissingTenantError at the blocklist lookup; provider never called 23ms
+[2026-09-28 06:08:54.968 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "test-fixture:create-lead"
+[2026-09-28 06:08:54.977 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "FeatureFlagService.get"
+[2026-09-28 06:08:55.084 +0000] INFO: Outreach sniper worker completed
+    event: "outreach.sniper.worker_complete"
+    tenantId: "d08c4fb4-7863-41fc-8179-53e86c48580f"
+    processedLeads: 1
+    sentEmails: 0
+    droppedLeads: 0
+    queuedProposals: 0
+    skipped: 1
+    domainCapReached: false
+[2026-09-28 06:08:55.084 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "test-fixture:read-email"
+[2026-09-28 06:08:55.089 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "test-fixture:read-events"
+[2026-09-28 06:08:55.092 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "test-fixture:read-lead"
+ ✓ tests/reliability/outbound-kill-switch-provider-failure.test.ts > Stream D — S7/S8 outbound kill switch & provider failure (real PostgreSQL) > S7e: KILL_SWITCH_FORCE_MANUAL_MODE halts the sniper before any send or DB mutation 22ms
+[2026-09-28 06:08:55.103 +0000] INFO: Outreach sniper worker completed
+    event: "outreach.sniper.worker_complete"
+    tenantId: "d08c4fb4-7863-41fc-8179-53e86c48580f"
+    processedLeads: 0
+    sentEmails: 0
+    droppedLeads: 0
+    queuedProposals: 0
+    skipped: 0
+    domainCapReached: false
+[2026-09-28 06:08:55.103 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "test-fixture:clear-flags"
+[2026-09-28 06:08:55.105 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "test-fixture:retire-pending"
+[2026-09-28 06:08:55.108 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "test-fixture:create-proposal"
+[2026-09-28 06:08:55.118 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "test-fixture:public-access-stub"
+[2026-09-28 06:08:55.140 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "test-fixture:read-outreach"
+[2026-09-28 06:08:55.145 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "test-fixture:read-proposal"
+[2026-09-28 06:08:55.148 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "test-fixture:public-access-stub"
+[2026-09-28 06:08:55.161 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "test-fixture:read-outreach"
+[2026-09-28 06:08:55.163 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "test-fixture:read-proposal"
+[2026-09-28 06:08:55.166 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "test-fixture:clear-flags"
+[2026-09-28 06:08:55.169 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "test-fixture:retire-pending"
+[2026-09-28 06:08:55.171 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "test-fixture:create-proposal"
+[2026-09-28 06:08:55.182 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "test-fixture:public-access-stub"
+[2026-09-28 06:08:55.206 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "test-fixture:read-proposal"
+ ✓ tests/reliability/outbound-kill-switch-provider-failure.test.ts > Stream D — S7/S8 outbound kill switch & provider failure (real PostgreSQL) > S8a: live forced on, provider.send throws → outreach email FAILED (not SENT), lead not advanced, no EMAIL_SENT event 140ms
+ ✓ tests/reliability/outbound-kill-switch-provider-failure.test.ts > Stream D — S7/S8 outbound kill switch & provider failure (real PostgreSQL) > S8b: live forced on, provider.send throws inside deliverProposalEmail → ProposalOutreach UNKNOWN_PROVIDER_OUTCOME, proposal not SENT, retry blocked 63ms
+[2026-09-28 06:08:55.210 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "test-fixture:public-access-stub"
+[2026-09-28 06:08:55.221 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "test-fixture:read-outreach"
+[2026-09-28 06:08:55.225 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "test-fixture:clear-flags"
+[2026-09-28 06:08:55.227 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "test-fixture:retire-pending"
+ ✓ tests/reliability/outbound-kill-switch-provider-failure.test.ts > Stream D — S7/S8 outbound kill switch & provider failure (real PostgreSQL) > S8c (control): live forced on and provider succeeds → exactly one send, proposal SENT, second call is idempotent (no resend) 58ms
+(node:1193132) Warning: `--localstorage-file` was provided without a valid path
+(Use `node --trace-warnings ...` to show where the warning was created)
+stdout | tests/reliability/llm-provider-resilience.test.ts > Stream D — S5 LLM provider resilience (fake SDK, bounded retries) > S5a: persistent 429 → exactly MAX_RETRIES+1 attempts, then the error surfaces (no infinite retry, no silent success)
+[S5a] 429: attempts=3 (max 3) elapsed=8ms
+
+stdout | tests/reliability/llm-provider-resilience.test.ts > Stream D — S5 LLM provider resilience (fake SDK, bounded retries) > S5b: persistent 5xx → bounded to MAX_RETRIES+1 attempts, then throws
+[S5b] 5xx: attempts=3 (max 3)
+
+[2026-09-28 06:08:55.848 +0000] ERROR: LLM call failed after retries
+    model: "gemini-2.0-flash"
+    attempt: 3
+    maxRetries: 2
+    error: "Resource exhausted"
+[2026-09-28 06:08:55.862 +0000] ERROR: LLM call failed after retries
+    model: "gemini-2.0-flash"
+    attempt: 3
+    maxRetries: 2
+    error: "Service Unavailable"
+[2026-09-28 06:08:55.865 +0000] ERROR: LLM call failed after retries
+    model: "gemini-2.0-flash"
+    attempt: 1
+    maxRetries: 2
+    error: "Invalid argument"
+stdout | tests/reliability/llm-provider-resilience.test.ts > Stream D — S5 LLM provider resilience (fake SDK, bounded retries) > S5c: hung provider is aborted at the configured timeout on every attempt; total time is bounded
+[S5c] timeout: attempts=3 abort latencies=60,60,60ms total=185ms
+
+ ✓ tests/reliability/llm-provider-resilience.test.ts > Stream D — S5 LLM provider resilience (fake SDK, bounded retries) > S5a: persistent 429 → exactly MAX_RETRIES+1 attempts, then the error surfaces (no infinite retry, no silent success) 62ms
+ ✓ tests/reliability/llm-provider-resilience.test.ts > Stream D — S5 LLM provider resilience (fake SDK, bounded retries) > S5a2: 429 that clears on the last permitted attempt → success without exceeding the bound 6ms
+ ✓ tests/reliability/llm-provider-resilience.test.ts > Stream D — S5 LLM provider resilience (fake SDK, bounded retries) > S5b: persistent 5xx → bounded to MAX_RETRIES+1 attempts, then throws 7ms
+ ✓ tests/reliability/llm-provider-resilience.test.ts > Stream D — S5 LLM provider resilience (fake SDK, bounded retries) > S5b2: 4xx client errors (400) are NOT retried — single attempt 3ms
+[2026-09-28 06:08:56.052 +0000] ERROR: LLM call failed after retries
+    model: "gemini-2.0-flash"
+    attempt: 3
+    maxRetries: 2
+    error: "Request timeout"
+[2026-09-28 06:08:56.078 +0000] ERROR: LLM call failed after retries
+    model: "gemini-2.0-flash"
+    attempt: 1
+    maxRetries: 0
+    error: "Request timeout"
+[2026-09-28 06:08:56.081 +0000] ERROR: LLM call failed after retries
+    model: "gemini-2.0-flash"
+    attempt: 1
+    maxRetries: 0
+    error: "Internal"
+[2026-09-28 06:08:56.081 +0000] WARN: Circuit breaker opened
+    failureCount: 2
+[2026-09-28 06:08:56.082 +0000] ERROR: LLM call failed after retries
+    model: "gemini-2.0-flash"
+    attempt: 1
+    maxRetries: 0
+    error: "Internal"
+[2026-09-28 06:08:56.082 +0000] ERROR: LLM call failed after retries
+    model: "gemini-2.0-flash"
+    attempt: 1
+    maxRetries: 0
+    error: "Circuit breaker is open - service temporarily unavailable"
+ ✓ tests/reliability/llm-provider-resilience.test.ts > Stream D — S5 LLM provider resilience (fake SDK, bounded retries) > S5c: hung provider is aborted at the configured timeout on every attempt; total time is bounded 189ms
+ ✓ tests/reliability/llm-provider-resilience.test.ts > Stream D — S5 LLM provider resilience (fake SDK, bounded retries) > S5c2: per-request metadata.timeoutMs override is honoured 24ms
+ ✓ tests/reliability/llm-provider-resilience.test.ts > Stream D — S5 LLM provider resilience (fake SDK, bounded retries) > S5d: circuit breaker opens after the failure threshold and short-circuits subsequent calls with ZERO provider attempts 4ms
+ ✓ tests/reliability/llm-provider-resilience.test.ts > Stream D — S5 LLM provider resilience (fake SDK, bounded retries) > S5e (provider layer): malformed JSON in json modality is returned verbatim — the provider does NOT validate schema; rejection must happen in the consumer 4ms
+[2026-09-28 06:08:56.151 +0000] ERROR: Error generating executive summary
+    error: {
+      "name": "SyntaxError",
+      "message": "Unterminated string in JSON at position 22 (line 1 column 23)",
+      "stack":
+          SyntaxError: Unterminated string in JSON at position 22 (line 1 column 23)
+              at JSON.parse (anonymous)
+              at ProposalLLMOrchestrator.generateExecutiveSummary (/home/danish/workspace/ProposalOS/lib/proposal/llm-orchestrator.ts:287:16)
+              at processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at /home/danish/workspace/ProposalOS/tests/reliability/llm-provider-resilience.test.ts:286:19
+              at file:///home/danish/workspace/ProposalOS/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+[2026-09-28 06:08:56.154 +0000] ERROR: Error generating executive summary
+    error: {
+      "name": "ZodError",
+      "message": "\"code\": \"invalid_type\",\n    \"expected\": \"array\",\n    \"received\": \"undefined\",\n    \"path\": \n      \"finding_ids\"\n    ,\n    \"message\": \"Required\"",
+      "stack":
+          ZodError: 
+            
+              "code": "invalid_type",
+              "expected": "array",
+              "received": "undefined",
+              "path": 
+                "finding_ids"
+              ,
+              "message": "Required"
+            
+          
+              at Object.get error as error (file:///home/danish/workspace/ProposalOS/node_modules/zod/v3/types.js:39:31)
+              at ZodObject.parse (file:///home/danish/workspace/ProposalOS/node_modules/zod/v3/types.js:114:22)
+              at ProposalLLMOrchestrator.generateExecutiveSummary (/home/danish/workspace/ProposalOS/lib/proposal/llm-orchestrator.ts:286:10)
+              at processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at /home/danish/workspace/ProposalOS/tests/reliability/llm-provider-resilience.test.ts:286:19
+              at file:///home/danish/workspace/ProposalOS/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+[2026-09-28 06:08:56.155 +0000] ERROR: Error generating executive summary
+    error: {
+      "name": "ZodError",
+      "message": "\"code\": \"too_small\",\n    \"minimum\": 1,\n    \"type\": \"array\",\n    \"inclusive\": true,\n    \"exact\": false,\n    \"message\": \"Array must contain at least 1 element(s)\",\n    \"path\": \n      \"finding_ids\"",
+      "stack":
+          ZodError: 
+            
+              "code": "too_small",
+              "minimum": 1,
+              "type": "array",
+              "inclusive": true,
+              "exact": false,
+              "message": "Array must contain at least 1 element(s)",
+              "path": 
+                "finding_ids"
+              
+            
+          
+              at Object.get error as error (file:///home/danish/workspace/ProposalOS/node_modules/zod/v3/types.js:39:31)
+              at ZodObject.parse (file:///home/danish/workspace/ProposalOS/node_modules/zod/v3/types.js:114:22)
+              at ProposalLLMOrchestrator.generateExecutiveSummary (/home/danish/workspace/ProposalOS/lib/proposal/llm-orchestrator.ts:286:10)
+              at processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at /home/danish/workspace/ProposalOS/tests/reliability/llm-provider-resilience.test.ts:286:19
+              at file:///home/danish/workspace/ProposalOS/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+[2026-09-28 06:08:56.156 +0000] ERROR: Error generating executive summary
+    error: {
+      "name": "Error",
+      "message": "Executive summary contains an unknown Finding citation",
+      "stack":
+          Error: Executive summary contains an unknown Finding citation
+              at ProposalLLMOrchestrator.generateExecutiveSummary (/home/danish/workspace/ProposalOS/lib/proposal/llm-orchestrator.ts:296:15)
+              at processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at /home/danish/workspace/ProposalOS/tests/reliability/llm-provider-resilience.test.ts:286:19
+              at file:///home/danish/workspace/ProposalOS/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+[2026-09-28 06:08:56.157 +0000] ERROR: Error generating executive summary
+    error: {
+      "name": "ZodError",
+      "message": "\"code\": \"unrecognized_keys\",\n    \"keys\": \n      \"extra\"\n    ,\n    \"path\": ,\n    \"message\": \"Unrecognized key(s) in object: 'extra'\"",
+      "stack":
+          ZodError: 
+            
+              "code": "unrecognized_keys",
+              "keys": 
+                "extra"
+              ,
+              "path": ,
+              "message": "Unrecognized key(s) in object: 'extra'"
+            
+          
+              at Object.get error as error (file:///home/danish/workspace/ProposalOS/node_modules/zod/v3/types.js:39:31)
+              at ZodObject.parse (file:///home/danish/workspace/ProposalOS/node_modules/zod/v3/types.js:114:22)
+              at ProposalLLMOrchestrator.generateExecutiveSummary (/home/danish/workspace/ProposalOS/lib/proposal/llm-orchestrator.ts:286:10)
+              at processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at /home/danish/workspace/ProposalOS/tests/reliability/llm-provider-resilience.test.ts:286:19
+              at file:///home/danish/workspace/ProposalOS/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+ ✓ tests/reliability/llm-provider-resilience.test.ts > Stream D — S5 LLM provider resilience (fake SDK, bounded retries) > S5e (consumer layer): ProposalLLMOrchestrator.generateExecutiveSummary rejects malformed / off-schema JSON with success:false and empty content — never a silent pass 71ms
+ ✓ tests/reliability/llm-provider-resilience.test.ts > Stream D — S5 LLM provider resilience (fake SDK, bounded retries) > S5e (observation O-5): the LLM cache stores an unparseable JSON payload, so an identical retry is served the poisoned entry without reaching the provider 7ms
+ ✓ tests/reliability/llm-provider-resilience.test.ts > Stream D — S5f provider registry fallback chain (fake providers) > 429 on primary (retry-after honoured, capped) → falls back to next provider; each provider tried at most once 18ms
+ ✓ tests/reliability/llm-provider-resilience.test.ts > Stream D — S5f provider registry fallback chain (fake providers) > 5xx on every provider → bounded to exactly one attempt per provider, then success:false with TRANSIENT classification 3ms
+ ✓ tests/reliability/llm-provider-resilience.test.ts > Stream D — S5f provider registry fallback chain (fake providers) > 400 (permanent, shouldFallback=false) stops the chain after the first provider 4ms
+ ✓ tests/reliability/llm-provider-resilience.test.ts > Stream D — S5f provider registry fallback chain (fake providers) > 401/403 (permanent, shouldFallback=true) skips to the next provider 6ms
+ ✓ tests/reliability/llm-provider-resilience.test.ts > Stream D — S5f provider registry fallback chain (fake providers) > a provider is marked unhealthy after 3 consecutive failures and is excluded from later chains (degrade, not retry-storm) 10ms
+(node:1193159) Warning: `--localstorage-file` was provided without a valid path
+(Use `node --trace-warnings ...` to show where the warning was created)
+[2026-09-28 06:09:00.845 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "test-fixture:create-tenant"
+[2026-09-28 06:09:00.897 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "stripe-webhook-idempotency-check"
+[2026-09-28 06:09:00.901 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "stripe-webhook-customer-lookup"
+[2026-09-28 06:09:00.924 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "test-fixture:count-processed"
+[2026-09-28 06:09:00.927 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "test-fixture:count-payments"
+[2026-09-28 06:09:00.932 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "test-fixture:read-tenant"
+[2026-09-28 06:09:00.937 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "test-fixture:perturb-tenant"
+[2026-09-28 06:09:00.944 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "stripe-webhook-idempotency-check"
+[2026-09-28 06:09:00.947 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "test-fixture:count-processed"
+[2026-09-28 06:09:00.950 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "test-fixture:count-payments"
+[2026-09-28 06:09:00.952 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "test-fixture:read-tenant"
+[2026-09-28 06:09:00.956 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "stripe-webhook-idempotency-check"
+[2026-09-28 06:09:00.959 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "test-fixture:count-processed"
+[2026-09-28 06:09:00.962 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "stripe-webhook-idempotency-check"
+[2026-09-28 06:09:00.966 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "stripe-webhook-customer-lookup"
+[2026-09-28 06:09:01.000 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "stripe-webhook-idempotency-check"
+[2026-09-28 06:09:01.000 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "stripe-webhook-idempotency-check"
+[2026-09-28 06:09:01.000 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "stripe-webhook-idempotency-check"
+[2026-09-28 06:09:01.001 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "stripe-webhook-idempotency-check"
+[2026-09-28 06:09:01.015 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "test-fixture:count-processed"
+[2026-09-28 06:09:01.018 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "test-fixture:count-payments"
+stdout | tests/reliability/stripe-webhook-duplicate.test.ts > Stream D — S4 duplicate Stripe webhook (real PostgreSQL) > S4b: identical event delivered concurrently (Promise.all) → exactly one ProcessedWebhookEvent row and one Payment row
+[S4b] concurrent deliveries=5; results with deduplicated:true=4; results with received:true only=1
+
+[2026-09-28 06:09:01.025 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "test-fixture:count-processed"
+[2026-09-28 06:09:01.027 +0000] WARN <Error:>: RLS bypass invoked
+    event: "rls_bypass"
+    reason: "test-fixture:count-payments"
+ ✓ tests/reliability/stripe-webhook-duplicate.test.ts > Stream D — S4 duplicate Stripe webhook (real PostgreSQL) > S4a: identical event delivered twice sequentially → second is deduplicated, one ProcessedWebhookEvent row, side effects once 66ms
+ ✓ tests/reliability/stripe-webhook-duplicate.test.ts > Stream D — S4 duplicate Stripe webhook (real PostgreSQL) > S4b: identical event delivered concurrently (Promise.all) → exactly one ProcessedWebhookEvent row and one Payment row 63ms
+ ✓ tests/reliability/stripe-webhook-duplicate.test.ts > Stream D — S4 duplicate Stripe webhook (real PostgreSQL) > S4c: kill switch (KILL_SWITCH_FORCE_MANUAL_MODE=true) freezes webhook mutations before any row is written 6ms
+(node:1193335) Warning: `--localstorage-file` was provided without a valid path
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ tests/reliability/redis-down-spend-fallback.test.ts > Stream D — S6 Redis down: spend tracking fails closed at the local sub-cap and never throws > failure shape: factory-throws > checkAndAddSpend does not throw; allows spend up to exactly LOCAL_FALLBACK_FRACTION × cap, then blocks with a reason 4ms
+ ✓ tests/reliability/redis-down-spend-fallback.test.ts > Stream D — S6 Redis down: spend tracking fails closed at the local sub-cap and never throws > failure shape: factory-throws > local fallback is per-tenant: one tenant hitting its sub-cap does not block another 1ms
+ ✓ tests/reliability/redis-down-spend-fallback.test.ts > Stream D — S6 Redis down: spend tracking fails closed at the local sub-cap and never throws > failure shape: factory-throws > checkAndIncrementDailyAudit is a soft guardrail: allowed:true, todayCount:-1, no throw 1ms
+ ✓ tests/reliability/redis-down-spend-fallback.test.ts > Stream D — S6 Redis down: spend tracking fails closed at the local sub-cap and never throws > failure shape: factory-throws > read paths return 0 instead of throwing 1ms
+ ✓ tests/reliability/redis-down-spend-fallback.test.ts > Stream D — S6 Redis down: spend tracking fails closed at the local sub-cap and never throws > failure shape: factory-throws > reserveAuditBudget (runner entry point) inherits the fail-closed sub-cap and never throws 0ms
+ ✓ tests/reliability/redis-down-spend-fallback.test.ts > Stream D — S6 Redis down: spend tracking fails closed at the local sub-cap and never throws > failure shape: factory-throws > settleAuditSpend swallows the store failure (reservation stays — conservative) 0ms
+ ✓ tests/reliability/redis-down-spend-fallback.test.ts > Stream D — S6 Redis down: spend tracking fails closed at the local sub-cap and never throws > failure shape: commands-throw > checkAndAddSpend does not throw; allows spend up to exactly LOCAL_FALLBACK_FRACTION × cap, then blocks with a reason 1ms
+ ✓ tests/reliability/redis-down-spend-fallback.test.ts > Stream D — S6 Redis down: spend tracking fails closed at the local sub-cap and never throws > failure shape: commands-throw > local fallback is per-tenant: one tenant hitting its sub-cap does not block another 0ms
+ ✓ tests/reliability/redis-down-spend-fallback.test.ts > Stream D — S6 Redis down: spend tracking fails closed at the local sub-cap and never throws > failure shape: commands-throw > checkAndIncrementDailyAudit is a soft guardrail: allowed:true, todayCount:-1, no throw 0ms
+ ✓ tests/reliability/redis-down-spend-fallback.test.ts > Stream D — S6 Redis down: spend tracking fails closed at the local sub-cap and never throws > failure shape: commands-throw > read paths return 0 instead of throwing 0ms
+ ✓ tests/reliability/redis-down-spend-fallback.test.ts > Stream D — S6 Redis down: spend tracking fails closed at the local sub-cap and never throws > failure shape: commands-throw > reserveAuditBudget (runner entry point) inherits the fail-closed sub-cap and never throws 0ms
+ ✓ tests/reliability/redis-down-spend-fallback.test.ts > Stream D — S6 Redis down: spend tracking fails closed at the local sub-cap and never throws > failure shape: commands-throw > settleAuditSpend swallows the store failure (reservation stays — conservative) 0ms
+ ✓ tests/reliability/redis-down-spend-fallback.test.ts > Stream D — S6 Redis down: spend tracking fails closed at the local sub-cap and never throws > recovery: when the store becomes reachable, the local fallback counter is discarded and Redis is the source of truth 1ms
+ ✓ tests/reliability/redis-down-spend-fallback.test.ts > Stream D — S6 Redis down: spend tracking fails closed at the local sub-cap and never throws > bounded worst-case: with N instances each fail-closed at 10 %, the documented overspend ceiling is N × 10 % of budget 0ms
+
+ Test Files  5 passed (5)
+      Tests  47 passed | 2 expected fail (49)
+   Start at  06:08:36
+   Duration  24.52s (transform 567ms, setup 692ms, import 19.78s, tests 3.47s, environment 0ms)
+

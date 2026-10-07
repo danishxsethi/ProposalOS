@@ -109,6 +109,11 @@ async function applyRlsContext(
 type TransactionInput = Parameters<PrismaClient['$transaction']>[0];
 type TransactionOptions = Parameters<PrismaClient['$transaction']>[1];
 
+// Cloud Run can incur several seconds of cold connection/setup latency to
+// private Cloud SQL. The default Prisma interactive transaction timeout (5s)
+// expires before the first query completes on a cold instance.
+const RLS_TRANSACTION_OPTIONS = { maxWait: 10_000, timeout: 15_000 };
+
 function wrapTransactionMethod(client: ExtendedPrismaClient): ExtendedPrismaClient {
   const originalTransaction = client.$transaction.bind(client) as PrismaClient['$transaction'];
 
@@ -160,14 +165,16 @@ export function createExtendedPrismaClient(
             assertTenantContext(operationName, tenantId);
           }
 
-          return wrappedClientRef.current!.$transaction(async (tx: Prisma.TransactionClient) =>
-            runWithPrismaTransactionContext(tx, async () => {
-              return runWithDispatch(async () => {
-                await applyRlsContext(tx, operationName, bypassRls, tenantId);
-                return dispatchOnTx(tx, model, operation, args);
-              });
-            })
-          );
+           return wrappedClientRef.current!.$transaction(
+             async (tx: Prisma.TransactionClient) =>
+               runWithPrismaTransactionContext(tx, async () => {
+                 return runWithDispatch(async () => {
+                   await applyRlsContext(tx, operationName, bypassRls, tenantId);
+                   return dispatchOnTx(tx, model, operation, args);
+                 });
+               }),
+             RLS_TRANSACTION_OPTIONS
+           );
         },
       },
     },

@@ -2,8 +2,8 @@ import { notFound } from 'next/navigation';
 
 import PdfTemplate from '@/components/PdfTemplate';
 import { getBranding } from '@/lib/config/branding';
-import { prisma } from '@/lib/prisma';
-import { runWithTenantAsync, runWithTenantBypass } from '@/lib/tenant/context';
+import { PublicProposalAccessError, resolvePublicProposalAccess } from '@/lib/proposal/publicAccess';
+import { runWithTenantAsync } from '@/lib/tenant/context';
 import './pdf-print.css';
 
 export const metadata = {
@@ -17,29 +17,25 @@ interface Props {
 export default async function PdfPage({ params }: Props) {
   const { token } = await params;
 
-  // PDF rendering is token-gated and needs one pre-tenant bootstrap read.
-  const proposal = await runWithTenantBypass('magic-link-pre-auth:proposal-pdf-bootstrap', () =>
-    prisma.proposal.findUnique({
-      where: { webLinkToken: token },
-      include: {
-        audit: {
-          include: { findings: true },
-        },
-      },
-    })
-  );
+  let access;
+  try {
+    access = await resolvePublicProposalAccess(token);
+  } catch (error) {
+    if (error instanceof PublicProposalAccessError) notFound();
+    throw error;
+  }
 
-  if (!proposal) {
+  if (!access) {
     notFound();
   }
 
-  const branding = await runWithTenantAsync(proposal.tenantId, () =>
-    getBranding(proposal.tenantId)
+  const branding = await runWithTenantAsync(access.tenantId, () =>
+    getBranding(access.tenantId)
   );
 
   return (
     <div className="pdf-root" data-pdf-ready>
-      <PdfTemplate proposal={proposal} branding={branding} />
+      <PdfTemplate proposal={access.proposal} branding={branding} />
     </div>
   );
 }

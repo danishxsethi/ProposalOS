@@ -4,7 +4,7 @@ import { apiClient } from '@/lib/api-client';
 import { autoPipelineTriggerStore } from '@/lib/stores';
 import { ScanStatus } from '@/lib/types';
 
-import { FRONTEND_AUDIT_CATEGORIES, FRONTEND_AUDIT_CATEGORY_MAP } from '@shared/audit';
+import { FRONTEND_AUDIT_CATEGORIES, FRONTEND_AUDIT_CATEGORY_MAP } from '@/lib/shared-audit';
 
 const moduleMapping = FRONTEND_AUDIT_CATEGORY_MAP;
 const ALL_FRONTEND_CATEGORIES = [...FRONTEND_AUDIT_CATEGORIES];

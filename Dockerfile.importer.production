@@ -1,0 +1,19 @@
+FROM node:24-alpine
+
+RUN apk add --no-cache aws-cli bash jq openssl postgresql-client ca-certificates \
+  && npm install --global prisma@5.22.0
+
+WORKDIR /app
+COPY prisma/schema.prisma /app/prisma/schema.prisma
+COPY prisma/migrations/ /app/prisma/migrations/
+COPY scripts/migration/production-legacy-migrations.json /app/production-legacy-migrations.json
+COPY scripts/migration/import-production-export.sh /usr/local/bin/import-production-export
+RUN chmod 0555 /usr/local/bin/import-production-export \
+  && bash -n /usr/local/bin/import-production-export \
+  && prisma --version
+
+ENV AWS_PAGER="" \
+    PRISMA_TELEMETRY_DISABLED=1
+
+USER node
+ENTRYPOINT ["/bin/bash", "/usr/local/bin/import-production-export"]

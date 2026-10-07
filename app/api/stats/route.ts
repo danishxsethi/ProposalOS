@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 
+import { logger } from '@/lib/logger';
 import { withAuth } from '@/lib/middleware/auth';
 import { prisma } from '@/lib/prisma';
 import { getTenantId } from '@/lib/tenant/context';
@@ -86,7 +87,7 @@ export const GET = withAuth(async (_req: Request) => {
       avgCostCents,
     });
   } catch (error) {
-    console.error('[API] Error fetching stats:', error);
+    logger.error('[API] Error fetching stats:', error);
     return NextResponse.json({ error: 'Failed to fetch stats' }, { status: 500 });
   }
 });

@@ -2,6 +2,7 @@ import crypto from 'crypto';
 
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
+import { safeFetch } from '@/lib/security/safeFetch';
 
 export type WebhookEvent =
   | 'audit.started'
@@ -62,7 +63,7 @@ async function sendToEndpoint(
     const controller = new AbortController();
     const id = setTimeout(() => controller.abort(), 10000); // 10s timeout
 
-    const response = await fetch(endpoint.url, {
+    const response = await safeFetch(endpoint.url, {
       method: 'POST',
       body,
       headers: {

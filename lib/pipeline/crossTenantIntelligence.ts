@@ -1,4 +1,4 @@
-import { prisma } from '@/lib/db';
+import { withSystemDbBypass } from '@/lib/db';
 
 import { PainScoreBreakdown } from './types';
 
@@ -104,99 +104,111 @@ export async function aggregatePatterns(tenantId: string, outcomes: WinLossData[
     }
   }
 
-  // Create new model version
+  // Create new model version. SharedIntelligenceModel is a genuinely global (non
+  // tenant-owned) table by design — it aggregates anonymized cross-tenant patterns.
+  // `tenantId` (the contributing tenant) is recorded only in the bypass audit log, not
+  // in the model itself, matching `ensureAnonymized`'s no-PII contract.
   const version = `v${Date.now()}`;
   const patternsArray = Array.from(patterns.values());
 
-  await prisma.sharedIntelligenceModel.create({
-    data: {
-      version,
-      patterns: patternsArray as any,
-      isActive: true,
-    },
-  });
+  await withSystemDbBypass(
+    `pipeline:cross-tenant-intelligence:aggregate-patterns:contributor=${tenantId}`,
+    async (prisma) => {
+      await prisma.sharedIntelligenceModel.create({
+        data: {
+          version,
+          patterns: patternsArray as any,
+          isActive: true,
+        },
+      });
 
-  // Deactivate previous versions
-  await prisma.sharedIntelligenceModel.updateMany({
-    where: {
-      version: { not: version },
-      isActive: true,
-    },
-    data: {
-      isActive: false,
-    },
-  });
+      // Deactivate previous versions
+      await prisma.sharedIntelligenceModel.updateMany({
+        where: {
+          version: { not: version },
+          isActive: true,
+        },
+        data: {
+          isActive: false,
+        },
+      });
+    }
+  );
 }
 
 /**
  * Predict close probability for a prospect
  */
 export async function predictCloseProb(prospect: ProspectContext): Promise<PredictiveScore> {
-  // Get active model
-  const model = await prisma.sharedIntelligenceModel.findFirst({
-    where: { isActive: true },
-    orderBy: { createdAt: 'desc' },
-  });
+  return withSystemDbBypass(
+    'pipeline:cross-tenant-intelligence:predict-close-prob',
+    async (prisma) => {
+      // Get active model
+      const model = await prisma.sharedIntelligenceModel.findFirst({
+        where: { isActive: true },
+        orderBy: { createdAt: 'desc' },
+      });
 
-  if (!model) {
-    // No model available, return neutral prediction
-    return {
-      closeProb: 50,
-      confidence: 0,
-      factors: [],
-      modelVersion: 'none',
-    };
-  }
+      if (!model) {
+        // No model available, return neutral prediction
+        return {
+          closeProb: 50,
+          confidence: 0,
+          factors: [],
+          modelVersion: 'none',
+        };
+      }
 
-  const patterns = model.patterns as unknown as AnonymizedPattern[];
-  const key = `${prospect.vertical}:${prospect.geoRegion}`;
+      const patterns = model.patterns as unknown as AnonymizedPattern[];
 
-  // Find matching pattern
-  const matchingPattern = patterns.find(
-    (p) => p.vertical === prospect.vertical && p.geoRegion === prospect.geoRegion
+      // Find matching pattern
+      const matchingPattern = patterns.find(
+        (p) => p.vertical === prospect.vertical && p.geoRegion === prospect.geoRegion
+      );
+
+      if (!matchingPattern) {
+        // No pattern for this vertical/region, return neutral
+        return {
+          closeProb: 50,
+          confidence: 0.3,
+          factors: [],
+          modelVersion: model.version,
+        };
+      }
+
+      // Calculate close probability based on factors
+      const factors: { factor: string; weight: number; value: number }[] = [];
+
+      // Factor 1: Win rate (40% weight)
+      const winRateFactor = matchingPattern.winRate * 100;
+      factors.push({ factor: 'historical_win_rate', weight: 0.4, value: winRateFactor });
+
+      // Factor 2: Pain score (30% weight) - higher pain = higher close prob
+      const painScoreFactor = Math.min(prospect.painScore, 100);
+      factors.push({ factor: 'pain_score', weight: 0.3, value: painScoreFactor });
+
+      // Factor 3: Sample size confidence (20% weight)
+      const confidenceFactor = Math.min(matchingPattern.sampleSize / 100, 1) * 100;
+      factors.push({ factor: 'sample_size_confidence', weight: 0.2, value: confidenceFactor });
+
+      // Factor 4: Price range alignment (10% weight)
+      const priceAlignmentFactor = 50; // Neutral default
+      factors.push({ factor: 'price_alignment', weight: 0.1, value: priceAlignmentFactor });
+
+      // Calculate weighted close probability
+      const closeProb = factors.reduce((sum, f) => sum + f.value * f.weight, 0);
+
+      // Calculate confidence based on sample size
+      const confidence = Math.min(matchingPattern.sampleSize / 100, 1);
+
+      return {
+        closeProb: Math.min(Math.max(closeProb, 0), 100),
+        confidence,
+        factors,
+        modelVersion: model.version,
+      };
+    }
   );
-
-  if (!matchingPattern) {
-    // No pattern for this vertical/region, return neutral
-    return {
-      closeProb: 50,
-      confidence: 0.3,
-      factors: [],
-      modelVersion: model.version,
-    };
-  }
-
-  // Calculate close probability based on factors
-  const factors: { factor: string; weight: number; value: number }[] = [];
-
-  // Factor 1: Win rate (40% weight)
-  const winRateFactor = matchingPattern.winRate * 100;
-  factors.push({ factor: 'historical_win_rate', weight: 0.4, value: winRateFactor });
-
-  // Factor 2: Pain score (30% weight) - higher pain = higher close prob
-  const painScoreFactor = Math.min(prospect.painScore, 100);
-  factors.push({ factor: 'pain_score', weight: 0.3, value: painScoreFactor });
-
-  // Factor 3: Sample size confidence (20% weight)
-  const confidenceFactor = Math.min(matchingPattern.sampleSize / 100, 1) * 100;
-  factors.push({ factor: 'sample_size_confidence', weight: 0.2, value: confidenceFactor });
-
-  // Factor 4: Price range alignment (10% weight)
-  const priceAlignmentFactor = 50; // Neutral default
-  factors.push({ factor: 'price_alignment', weight: 0.1, value: priceAlignmentFactor });
-
-  // Calculate weighted close probability
-  const closeProb = factors.reduce((sum, f) => sum + f.value * f.weight, 0);
-
-  // Calculate confidence based on sample size
-  const confidence = Math.min(matchingPattern.sampleSize / 100, 1);
-
-  return {
-    closeProb: Math.min(Math.max(closeProb, 0), 100),
-    confidence,
-    factors,
-    modelVersion: model.version,
-  };
 }
 
 /**
@@ -210,21 +222,23 @@ export function getModelVersion(): string {
  * Rollback to a previous model version
  */
 export async function rollbackModel(version: string): Promise<void> {
-  // Deactivate current active model
-  await prisma.sharedIntelligenceModel.updateMany({
-    where: { isActive: true },
-    data: { isActive: false },
-  });
+  await withSystemDbBypass('pipeline:cross-tenant-intelligence:rollback-model', async (prisma) => {
+    // Deactivate current active model
+    await prisma.sharedIntelligenceModel.updateMany({
+      where: { isActive: true },
+      data: { isActive: false },
+    });
 
-  // Activate specified version
-  const result = await prisma.sharedIntelligenceModel.updateMany({
-    where: { version },
-    data: { isActive: true },
-  });
+    // Activate specified version
+    const result = await prisma.sharedIntelligenceModel.updateMany({
+      where: { version },
+      data: { isActive: true },
+    });
 
-  if (result.count === 0) {
-    throw new Error(`Model version not found: ${version}`);
-  }
+    if (result.count === 0) {
+      throw new Error(`Model version not found: ${version}`);
+    }
+  });
 }
 
 /**

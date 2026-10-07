@@ -1,237 +1,95 @@
 /**
- * Competitor Monitor
- *
- * Detects competitor changes and triggers upsell proposals
- * when significant changes are detected.
+ * Competitor monitoring has no approved provider. Do not infer a competitor
+ * change or contact a customer from placeholder data.
  */
 
-import { generateWithGemini } from '@/lib/llm/provider';
 import { logger } from '@/lib/logger';
-import { sendProposalEmail } from '@/lib/outreach/emailSender';
 import { prisma } from '@/lib/prisma';
+import { runWithTenantAsync, runWithTenantBypass } from '@/lib/tenant/context';
 
-export type CompetitorSignalType =
-  | 'competitor_new_review'
-  | 'competitor_rating_change'
-  | 'competitor_website_update'
-  | 'competitor_new_listing';
+export type CompetitorMonitorStatus = 'OK' | 'NOT_CONFIGURED' | 'UNAVAILABLE';
 
 export interface CompetitorSignalData {
   competitorName: string;
   competitorUrl?: string;
-  changeType: CompetitorSignalType;
-  oldValue?: string | number;
-  newValue?: string | number;
+  changeType:
+    | 'competitor_new_review'
+    | 'competitor_rating_change'
+    | 'competitor_website_update'
+    | 'competitor_new_listing';
   severity: 'high' | 'medium' | 'low';
   description: string;
+  evidenceId: string;
+}
+
+export interface CompetitorMonitorResult {
+  status: CompetitorMonitorStatus;
+  signals: CompetitorSignalData[];
 }
 
 /**
- * Check for competitor changes for a client's industry/location
- * This would typically integrate with external APIs (Google Places, Yelp, etc.)
+ * Provider boundary. Until a provider is approved and configured, the only
+ * truthful result is NOT_CONFIGURED, not "no change".
  */
 export async function checkCompetitorChanges(
   tenantId: string,
+  targetId: string,
   businessIndustry: string,
   businessCity?: string
-): Promise<CompetitorSignalData[]> {
-  const signals: CompetitorSignalData[] = [];
+): Promise<CompetitorMonitorResult> {
+  if (!process.env.COMPETITOR_MONITOR_PROVIDER) {
+    return { status: 'NOT_CONFIGURED', signals: [] };
+  }
 
-  // In a real implementation, this would:
-  // 1. Query external APIs for competitor reviews/ratings
-  // 2. Check for website changes (scraping or API)
-  // 3. Monitor new listings
-
-  // For now, we'll create a placeholder that could be expanded
-  // The actual implementation would depend on available data sources
-
-  // Placeholder: In production, integrate with:
-  // - Google Places API (reviews, ratings)
-  // - Yelp API
-  // - Website change detection services
-  // - Social listening tools
-
-  return signals;
+  logger.warn(
+    { tenantId, targetId, businessIndustry, businessCity, status: 'UNAVAILABLE' },
+    'Competitor monitor provider is configured but no approved adapter is installed'
+  );
+  return { status: 'UNAVAILABLE', signals: [] };
 }
 
-/**
- * Process competitor signals and trigger upsell proposals
- */
 export async function processCompetitorSignals(): Promise<{
   signalsDetected: number;
   upsellsTriggered: number;
   errors: string[];
+  notConfigured: number;
+  unavailable: number;
 }> {
   const errors: string[] = [];
-  let signalsDetected = 0;
-  let upsellsTriggered = 0;
+  let notConfigured = 0;
+  let unavailable = 0;
 
-  // Get all accepted proposals with their industries
-  const acceptedProposals = await prisma.proposal.findMany({
-    where: { status: 'ACCEPTED' },
-    include: {
-      audit: true,
-    },
-  });
+  // System enumeration is intentional and audited by runWithTenantBypass.
+  const proposals = await runWithTenantBypass('competitor monitor target enumeration', () =>
+    prisma.proposal.findMany({
+      where: { status: 'ACCEPTED' },
+      select: {
+        id: true,
+        tenantId: true,
+        audit: { select: { businessIndustry: true, businessCity: true } },
+      },
+    })
+  );
 
-  for (const proposal of acceptedProposals) {
+  for (const proposal of proposals) {
+    const industry = proposal.audit?.businessIndustry;
+    if (!proposal.tenantId || !industry) continue;
     try {
-      const industry = proposal.audit?.businessIndustry;
-      const city = proposal.audit?.businessCity;
-
-      if (!industry || !proposal.tenantId) continue;
-
-      // Check for competitor changes
-      const signals = await checkCompetitorChanges(proposal.tenantId, industry, city || undefined);
-
-      if (signals.length > 0) {
-        signalsDetected += signals.length;
-
-        // Save signals to database
-        for (const signal of signals) {
-          await prisma.competitorSignal.create({
-            data: {
-              tenantId: proposal.tenantId,
-              leadId: undefined, // Could link to prospect if applicable
-              signalType: signal.changeType,
-              priority: signal.severity,
-              competitorName: signal.competitorName,
-              competitorUrl: signal.competitorUrl,
-              signalData: signal as any,
-            },
-          });
-
-          // If high severity, trigger upsell proposal
-          if (signal.severity === 'high') {
-            const upsellResult = await triggerUpsellProposal(proposal, signal);
-            if (upsellResult) {
-              upsellsTriggered++;
-            }
-          }
-        }
-      }
-    } catch (error: any) {
-      errors.push(`Error processing proposal ${proposal.id}: ${error.message}`);
+      const result = await runWithTenantAsync(proposal.tenantId, () =>
+        checkCompetitorChanges(
+          proposal.tenantId,
+          proposal.id,
+          industry,
+          proposal.audit.businessCity ?? undefined
+        )
+      );
+      if (result.status === 'NOT_CONFIGURED') notConfigured++;
+      if (result.status === 'UNAVAILABLE') unavailable++;
+    } catch (error) {
+      errors.push(`Competitor monitor failed for ${proposal.id}`);
+      logger.error({ err: error, proposalId: proposal.id }, 'Competitor monitor failed');
     }
   }
 
-  return {
-    signalsDetected,
-    upsellsTriggered,
-    errors,
-  };
-}
-
-/**
- * Trigger an upsell proposal based on competitor signal
- */
-async function triggerUpsellProposal(
-  proposal: any,
-  signal: CompetitorSignalData
-): Promise<boolean> {
-  // Generate upsell email content
-  const upsellContent = await generateUpsellContent(proposal, signal);
-
-  if (!proposal.prospectEmail) {
-    return false;
-  }
-
-  try {
-    // Send upsell proposal
-    await sendProposalEmail({
-      proposalId: proposal.id,
-      recipientEmail: proposal.prospectEmail,
-      subject: upsellContent.subject,
-      messageHtml: upsellContent.body,
-      tenantId: proposal.tenantId,
-    });
-
-    // Update signal record
-    await prisma.competitorSignal.updateMany({
-      where: {
-        tenantId: proposal.tenantId,
-        competitorName: signal.competitorName,
-        signalData: { path: ['changeType'], equals: signal.changeType },
-        outreachTriggered: false,
-      },
-      data: {
-        outreachTriggered: true,
-        upsellProposalId: proposal.id,
-      },
-    });
-
-    return true;
-  } catch (error) {
-    logger.error({ error }, 'Failed to send upsell proposal');
-    return false;
-  }
-}
-
-/**
- * Generate upsell content based on competitor signal
- */
-async function generateUpsellContent(
-  proposal: any,
-  signal: CompetitorSignalData
-): Promise<{ subject: string; body: string }> {
-  const businessName = proposal.audit?.businessName || 'your business';
-
-  const prompt = `You are writing a brief, professional upsell email to an existing client.
-
-Context:
-- Client: ${businessName}
-- Industry: ${proposal.audit?.businessIndustry || 'their industry'}
-- Their current proposal is already accepted
-
-Competitor Signal Detected:
-- Competitor: ${signal.competitorName}
-- Change: ${signal.description}
-- Severity: ${signal.severity}
-
-Write a brief email (under 150 words) that:
-1. Notes the positive development for the competitor
-2. Positions it as a reason to enhance their own implementation
-3. Offers additional services or an upgraded package
-4. Has a soft CTA to discuss options
-
-Return format:
-SUBJECT: (short subject line)
-BODY: (email body)
-
-Do NOT use JSON.`;
-
-  const result = await generateWithGemini({
-    model: process.env.LLM_MODEL_PROPOSAL || 'gemini-2.0-flash',
-    input: prompt,
-    temperature: 0.5,
-    maxOutputTokens: 500,
-  });
-
-  const text = result.text || '';
-
-  const subjectMatch = text.match(/SUBJECT:\s*(.+)/i);
-  const bodyMatch = text.match(/BODY:\s*([\s\S]+)/i);
-
-  const subject =
-    subjectMatch?.[1]?.trim() || `Opportunity: ${signal.competitorName} just improved`;
-  const body =
-    bodyMatch?.[1]?.trim() ||
-    `Hi,\n\nI noticed that ${signal.competitorName} just ${signal.description.toLowerCase()}.\n\nThis is actually great news for you — it means the market is validating the importance of this area.\n\nGiven your current implementation, I'd love to discuss how we can ensure you're staying ahead. Would you be open to a quick call to explore some enhancements?\n\nBest regards`;
-
-  return { subject, body };
-}
-
-/**
- * Get pending upsell signals for manual review
- */
-export async function getPendingUpsellSignals(tenantId: string) {
-  return await prisma.competitorSignal.findMany({
-    where: {
-      tenantId,
-      outreachTriggered: false,
-      priority: { in: ['high', 'medium'] },
-    },
-    orderBy: { detectedAt: 'desc' },
-    take: 50,
-  });
+  return { signalsDetected: 0, upsellsTriggered: 0, errors, notConfigured, unavailable };
 }

@@ -1,25 +1,23 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
-
-import { withModuleCache } from '@/lib/cache/moduleCache';
 import { CostTracker } from '@/lib/costs/costTracker';
 import { logger } from '@/lib/logger';
-import { withProviderResilience } from '@/lib/resilience/withProviderResilience';
+import { mapsIntelligence, normalizePlaceToLegacy } from '@/lib/maps/serpMapsProvider';
 
 import { normalizeConfidence } from './findingGenerator';
-import { AuditModuleResult, Finding, GBPModuleInput } from './types';
-
-const PLACES_API_BASE = 'https://places.googleapis.com/v1';
+import { scorePlaceCandidate } from './gbp';
+import { AuditModuleResult, createEvidence, Finding, GBPModuleInput } from './types';
 
 export interface GbpDeepModuleInput extends GBPModuleInput {
   placeId?: string; // Optional if known from basic GBP module
   websiteUrl?: string; // For consistency check
+  placeData?: Record<string, any>;
+  signal?: AbortSignal;
 }
 
 interface PhotoAnalysis {
   totalCount: number;
-  hasLogo: boolean;
-  hasCover: boolean;
-  recentPhotoCount: number; // Last 3 months
+  hasLogo: boolean | null;
+  hasCover: boolean | null;
+  recentPhotoCount: number | null;
   aiAnalysis?: {
     photoUrl: string;
     scores: { quality: number; relevance: number; professionalism: number };
@@ -29,12 +27,12 @@ interface PhotoAnalysis {
 }
 
 interface ReviewAnalysis {
-  totalCount: number;
-  rating: number;
-  velocity: number; // Reviews per month (last 6 months)
-  daysSinceLastReview: number;
-  ownerResponseRate: number; // Percentage
-  avgResponseLength: number; // Words
+  totalCount: number | null;
+  rating: number | null;
+  velocity: number | null;
+  daysSinceLastReview: number | null;
+  ownerResponseRate: number | null;
+  avgResponseLength: number | null;
   sentiment: {
     positiveKeywords: string[];
     negativeKeywords: string[];
@@ -47,15 +45,19 @@ interface ProfileCompleteness {
   nameConsistency: boolean;
   descriptionPresent: boolean;
   attributesPresent: boolean;
-  openingDatePresent: boolean;
+  openingDatePresent: boolean | null;
 }
 
-interface GbpDeepAnalysis {
+export interface GbpDeepAnalysis {
   completeness: ProfileCompleteness;
   photos: PhotoAnalysis;
   reviews: ReviewAnalysis;
-  isClaimed: boolean; // Inference
-  primaryCategory: string;
+  claimedStatus: {
+    value: boolean | null;
+    basis: 'observed' | 'inferred' | 'unavailable';
+    confidence?: number;
+  };
+  primaryCategory: string | null;
   secondaryCategories: string[];
 }
 
@@ -68,121 +70,91 @@ export async function runGbpDeepModule(
 ): Promise<AuditModuleResult> {
   logger.info({ businessName: input.businessName }, '[GBPDeep] Starting deep analysis');
 
-  if (!process.env.GOOGLE_PLACES_API_KEY) {
-    throw new Error('GOOGLE_PLACES_API_KEY is missing');
+  if (input.signal?.aborted) throw input.signal.reason ?? new Error('Places lookup cancelled');
+  if (!input.placeData && !process.env.SERP_API_KEY) {
+    return {
+      findings: [],
+      evidenceSnapshots: [],
+      execution: { state: 'unavailable', reason: 'SERP_API_KEY is missing' },
+    };
   }
 
   try {
-    let placeId = input.placeId;
+    let placeId = input.placeId || input.placeData?.placeId;
+    let details = input.placeData ? dependencyPlaceToApiShape(input.placeData) : null;
 
-    // 1. Resolve Place ID if not provided
-    if (!placeId) {
-      tracker?.addApiCall('PLACES_TEXT_SEARCH');
-      const searchRes = await withModuleCache<any>(
-        {
-          module: 'gbp_deep',
-          version: 1,
-          input: { type: 'places_text_search', businessName: input.businessName, city: input.city },
-        },
-        { ttlSeconds: 24 * 60 * 60 },
-        async () => {
-          return withProviderResilience<any>(
-            {
-              provider: 'google-places',
-              operation: 'gbp_deep:places_text_search',
-              degrade: true,
-              fallbackValue: { places: [] },
-            },
-            async () => {
-              const res = await fetch(`${PLACES_API_BASE}/places:searchText`, {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  'X-Goog-Api-Key': process.env.GOOGLE_PLACES_API_KEY!,
-                  'X-Goog-FieldMask': 'places.id',
-                },
-                body: JSON.stringify({
-                  textQuery: `${input.businessName} in ${input.city}`,
-                  maxResultCount: 1,
-                }),
-              });
-              if (!res.ok) throw new Error(`Place search failed: ${res.statusText}`);
-              return res.json();
-            }
-          );
-        }
-      );
-
-      if (!searchRes.places?.length) throw new Error('Business not found in Maps');
-      placeId = searchRes.places[0].id;
+    if (!details) {
+      const resolution = await mapsIntelligence.resolveBusiness({
+        businessName: input.businessName,
+        city: input.city,
+        domain: input.websiteUrl,
+        placeId,
+        fieldProfile: 'GBP_DEEP',
+      });
+      if (resolution.status === 'FAILED' || resolution.status === 'UNAVAILABLE') {
+        if (input.signal?.aborted)
+          throw input.signal.reason ?? new Error('Places lookup cancelled');
+        return {
+          findings: [],
+          evidenceSnapshots: [],
+          execution: {
+            state: resolution.status === 'FAILED' ? 'failed' : 'unavailable',
+            reason: resolution.error?.message ?? 'Maps provider unavailable',
+          },
+        };
+      }
+      if (!resolution.data)
+        return {
+          findings: [],
+          evidenceSnapshots: [],
+          execution: { state: 'partial', reason: 'No place candidate found' },
+        };
+      placeId = resolution.data.placeId;
+      details = normalizePlaceToLegacy(resolution.data);
+      details.id = resolution.data.placeId;
+      details.websiteUri = resolution.data.website;
+      details.userRatingCount = resolution.data.reviewCount;
+      details.displayName = resolution.data.displayName
+        ? { text: resolution.data.displayName }
+        : undefined;
+      details.formattedAddress = resolution.data.formattedAddress;
+      details.primaryTypeDisplayName = resolution.data.primaryType
+        ? { text: resolution.data.primaryType }
+        : undefined;
+      details.identityConfidence =
+        resolution.data.identityStatus === 'CONFIRMED' ? 'high' : 'ambiguous';
+      details.identityStatus = resolution.data.identityStatus;
+      details.mapsProvenance = resolution.provenance;
     }
 
-    // 2. Fetch Deep Details
-    // Extended FieldMask for deep analysis
-    const fieldMask = [
-      'id',
-      'displayName',
-      'formattedAddress',
-      'websiteUri',
-      'rating',
-      'userRatingCount',
-      'photos',
-      'reviews',
-      'primaryType',
-      'primaryTypeDisplayName',
-      'editorialSummary', // Description
-      'paymentOptions',
-      'accessibilityOptions',
-      'amenities', // Attributes
-      // Note: openingDate is explicitly requested via 'businessStatus' usually or specific fields
-      'regularOpeningHours',
-      'types',
-    ]
-      .map((f) => (f.startsWith('places.') ? f : f))
-      .join(',');
-
-    tracker?.addApiCall('PLACES_DETAILS_DEEP');
-    const details = await withModuleCache<any>(
-      {
-        module: 'gbp_deep',
-        version: 1,
-        input: { type: 'places_details_deep', placeId },
-      },
-      { ttlSeconds: 7 * 24 * 60 * 60 },
-      async () => {
-        return withProviderResilience<any>(
-          {
-            provider: 'google-places',
-            operation: 'gbp_deep:places_details_deep',
-            degrade: true,
-            fallbackValue: {},
-          },
-          async () => {
-            const res = await fetch(`${PLACES_API_BASE}/places/${placeId}?languageCode=en`, {
-              headers: {
-                'Content-Type': 'application/json',
-                'X-Goog-Api-Key': process.env.GOOGLE_PLACES_API_KEY!,
-                'X-Goog-FieldMask': fieldMask,
-              },
-            });
-            if (!res.ok) throw new Error(`Places details deep failed: ${res.statusText}`);
-            return res.json();
-          }
-        );
-      }
-    );
+    if (!details) {
+      throw new Error('Places details response was unavailable');
+    }
+    if (!details.id && !placeId) {
+      throw new Error('Places details response did not identify a place');
+    }
 
     // 3. Analyze Data
-    const analysis = await analyzeGbpData(details, input.websiteUrl, tracker);
+    const analysis = await analyzeGbpData(details, input.websiteUrl, tracker, input.signal);
 
     // 4. Generate Findings
-    const findings = generateGbpFindings(analysis);
+    const collectedAt = new Date().toISOString();
+    const resolvedPlaceId = details.id || placeId;
+    const placeRecordPointer =
+      typeof details.mapsUri === 'string'
+        ? details.mapsUri
+        : `https://www.google.com/maps/search/?api=1&query_place_id=${encodeURIComponent(resolvedPlaceId)}`;
+    const findings = generateGbpFindings(analysis, placeRecordPointer, collectedAt);
+    const photoAnalysisUnavailable =
+      analysis.photos.totalCount > 0 &&
+      (process.env.BEDROCK_ENABLED !== 'true' || !analysis.photos.aiAnalysis?.length);
 
     const evidenceSnapshot = {
       module: 'gbp_deep',
-      source: 'places_api_v1',
+      source: input.placeData ? 'canonical_gbp_dependency' : 'serpapi_google_maps',
       rawResponse: {
         completeness: analysis.completeness,
+        claimedStatus: analysis.claimedStatus,
         photos: {
           count: analysis.photos.totalCount,
           aiResults: analysis.photos.aiAnalysis?.length,
@@ -208,27 +180,64 @@ export async function runGbpDeepModule(
     return {
       findings,
       evidenceSnapshots: [evidenceSnapshot],
+      data: {
+        scores: {},
+        coreWebVitals: undefined,
+        finalUrl: undefined,
+        schemaAnalysis: undefined,
+        conversionAnalysis: undefined,
+        placeId: resolvedPlaceId,
+        placeData: details,
+        identityConfidence: input.placeData?.identityConfidence ?? 'high',
+        identityStatus: input.placeData?.identityStatus ?? 'CONFIRMED',
+        mapsProvenance: input.placeData?.mapsProvenance ?? null,
+        primaryType: analysis.primaryCategory,
+        types: analysis.secondaryCategories,
+        rating: analysis.reviews.rating,
+        reviewCount: analysis.reviews.totalCount,
+      },
+      execution:
+        photoAnalysisUnavailable || analysis.claimedStatus.basis === 'unavailable'
+          ? {
+              state: 'partial',
+              reason: 'Some photo or claimed-status metrics were unavailable',
+            }
+          : { state: 'complete' },
     };
   } catch (error) {
+    if (input.signal?.aborted) throw input.signal.reason ?? error;
     logger.error({ error, businessName: input.businessName }, '[GBPDeep] Analysis failed');
     return {
-      findings: [
-        {
-          type: 'VITAMIN',
-          category: 'Visibility',
-          title: 'GBP Analysis Failed',
-          description: 'Could not perform deep analysis of Google Business Profile.',
-          impactScore: 1,
-          confidenceScore: normalizeConfidence(0, '1-10'),
-          evidence: [],
-          metrics: {},
-          effortEstimate: 'LOW',
-          recommendedFix: [],
-        },
-      ],
+      findings: [],
       evidenceSnapshots: [],
+      execution: {
+        state: 'failed',
+        reason: error instanceof Error ? error.message : 'GBP deep analysis failed',
+      },
     };
   }
+}
+
+function dependencyPlaceToApiShape(place: Record<string, any>): Record<string, any> {
+  if (place.provider === 'serpapi_google_maps') return normalizePlaceToLegacy(place as any);
+  return {
+    id: place.placeId,
+    displayName: place.name ? { text: place.name } : undefined,
+    formattedAddress: place.address,
+    websiteUri: place.website,
+    rating: place.rating,
+    userRatingCount: place.reviewCount,
+    photos: place.photos,
+    reviews: place.reviews,
+    regularOpeningHours: place.openingHours,
+    types: place.types,
+    primaryType: place.primaryType,
+    primaryTypeDisplayName: place.primaryType ? { text: place.primaryType } : undefined,
+    editorialSummary: place.editorialSummary,
+    paymentOptions: place.paymentOptions,
+    accessibilityOptions: place.accessibilityOptions,
+    amenities: place.amenities,
+  };
 }
 
 /**
@@ -237,7 +246,8 @@ export async function runGbpDeepModule(
 async function analyzeGbpData(
   place: any,
   websiteUrl: string | undefined,
-  tracker?: CostTracker
+  tracker?: CostTracker,
+  signal?: AbortSignal
 ): Promise<GbpDeepAnalysis> {
   // A. Profile Completeness
   const missingFields: string[] = [];
@@ -248,15 +258,12 @@ async function analyzeGbpData(
 
   // Check name consistency
   // Simple normalization: lowercase, remove punctuation
-  const normalize = (s: string) =>
-    s
-      .toLowerCase()
-      .replace(/[^\w\s]/g, '')
-      .trim();
-  // Assuming websiteUrl is passed, fetching title would be needed for perfect match,
-  // but here we might just assume consistency if websiteUri exists in GBP.
-  // For now, simply verify websiteUri presence matches input requirement logic later.
-  const nameConsistency = true; // Placeholder for deeper scraper integration
+  const normalize = (s: string) => s.toLowerCase().replace(/[^\w]/g, '');
+  const inputHost = websiteUrl ? normalize(new URL(websiteUrl).hostname.replace(/^www\./, '')) : '';
+  const placeHost = place.websiteUri
+    ? normalize(new URL(place.websiteUri).hostname.replace(/^www\./, ''))
+    : '';
+  const nameConsistency = !inputHost || !placeHost || inputHost === placeHost;
 
   const completenessScore = Math.max(0, 100 - missingFields.length * 15);
 
@@ -264,22 +271,17 @@ async function analyzeGbpData(
   const photos = place.photos || [];
   const photoAnalysis: PhotoAnalysis = {
     totalCount: photos.length,
-    hasLogo: false, // Cannot distinguish explicitly via API v1 easily without "category" field in photo, assuming false for conservative finding
-    hasCover: false,
-    recentPhotoCount: 0,
+    hasLogo: null,
+    hasCover: null,
+    recentPhotoCount: null,
   };
 
   // AI Photo Scoring
-  if (photos.length > 0 && process.env.GOOGLE_AI_API_KEY) {
-    const top5Photos = photos.slice(0, 5);
-    // We need to construct fetchable URLs
-    // Format: https://places.googleapis.com/v1/{name}/media?key=API_KEY&maxHeightPx=400&maxWidthPx=400
-    const photoUrls = top5Photos.map(
-      (p: any) =>
-        `${PLACES_API_BASE}/${p.name}/media?key=${process.env.GOOGLE_PLACES_API_KEY}&maxHeightPx=400&maxWidthPx=400`
-    );
-
-    photoAnalysis.aiAnalysis = await analyzePhotosWithGemini(photoUrls, tracker);
+  if (photos.length > 0 && process.env.BEDROCK_ENABLED === 'true') {
+    // Places photo media requires the secret-bearing media URL; it is not sent
+    // through generic derived-URL fetches. Photo interpretation stays unavailable
+    // until it can be fetched through an explicit credential-safe client path.
+    photoAnalysis.aiAnalysis = [];
   }
 
   // C. Review Analysis
@@ -296,28 +298,16 @@ async function analyzeGbpData(
   const sixMonthsAgo = new Date();
   sixMonthsAgo.setMonth(now.getMonth() - 6);
   const recentReviews = sortedReviews.filter((r: any) => new Date(r.publishTime) > sixMonthsAgo);
-  const velocity = recentReviews.length / 6;
+  const velocity = reviews.length === place.userRatingCount ? recentReviews.length / 6 : null;
 
   // Recency
   const lastReviewDate = sortedReviews.length > 0 ? new Date(sortedReviews[0].publishTime) : null;
   const daysSinceLastReview = lastReviewDate
     ? Math.floor((now.getTime() - lastReviewDate.getTime()) / (1000 * 3600 * 24))
-    : 999;
+    : null;
 
-  // Owner Response Rate
-  // API v1 review object contains 'originalText' (review) and 'text' (response? No, separate logic usually).
-  // Wait, v1 places.reviews contains 'authorAttribution', 'publishTime', 'rating', 'text', 'originalText'.
-  // OWNER RESPONSE is NOT explicitly in the standard 'reviews' array in v1 Place Details unless expanded?
-  // Actually, 'googleMapsUri' -> users can see responses.
-  // Programmatically checking owner response via Places API v1 is tricky. It provides the *user* review.
-  // It DOES NOT standardly providing the owner response text in the default review object for Place Details.
-  // However, GMB API (My Business) does. Places API (public) often omits this.
-  // Workaround: We will skip strict "Owner Response Rate" calculation if data is missing, or infer from specialized fields if available.
-  // For this module, we will assume 0 if we can't see it, or mark "Unknown".
-  // Let's degrade gracefully: if we can't see responses, we don't flag "0% response".
-  // NOTE: For the sake of the prompt requirements, I will assume we might parse this if available, or simulate via scraping if this were a production scraper.
-  // Since we are using official API, we'll mark response rate as -1 (Unknown) to avoid false painkiller.
-  const ownerResponseRate = -1;
+  // Public Places details do not expose owner response coverage.
+  const ownerResponseRate = null;
 
   return {
     completeness: {
@@ -326,121 +316,42 @@ async function analyzeGbpData(
       nameConsistency,
       descriptionPresent: !!place.editorialSummary,
       attributesPresent: !!(place.paymentOptions || place.accessibilityOptions),
-      openingDatePresent: false, // Not easily available in v1 field mask
+      openingDatePresent: null,
     },
     photos: photoAnalysis,
     reviews: {
-      totalCount: place.userRatingCount || 0,
-      rating: place.rating || 0,
+      totalCount: typeof place.userRatingCount === 'number' ? place.userRatingCount : null,
+      rating: typeof place.rating === 'number' ? place.rating : null,
       velocity,
       daysSinceLastReview,
       ownerResponseRate,
-      avgResponseLength:
-        reviews.reduce((acc: number, r: any) => acc + (r.text?.text?.length || 0), 0) /
-        (reviews.length || 1),
+      avgResponseLength: null,
       sentiment: { positiveKeywords: [], negativeKeywords: [] },
     },
-    isClaimed: true, // Difficult to know via API, assume claimed/verified if data is rich
-    primaryCategory: place.primaryTypeDisplayName?.text || place.primaryType || 'Unknown',
+    claimedStatus: { value: null, basis: 'unavailable' },
+    primaryCategory: place.primaryTypeDisplayName?.text || place.primaryType || null,
     secondaryCategories: place.types || [],
   };
 }
 
 /**
- * AI Photo Analysis with Gemini
+ * AI Photo Analysis with Amazon Bedrock
  */
-async function analyzePhotosWithGemini(
-  urls: string[],
-  tracker?: CostTracker
-): Promise<NonNullable<PhotoAnalysis['aiAnalysis']>> {
-  if (!process.env.GOOGLE_AI_API_KEY) return [];
-
-  try {
-    const genAI = new GoogleGenerativeAI(process.env.GOOGLE_AI_API_KEY);
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
-
-    // We cannot pass URLs directly to Gemini 1.5 Flash in this manner usually (needs base64 or file/URI in storage).
-    // However, standard fetch + base64 convert works.
-
-    const results = [];
-
-    // Analyze up to 3 photos to save time/cost
-    for (const url of urls.slice(0, 3)) {
-      tracker?.addApiCall('GEMINI_PHOTO_ANALYSIS');
-
-      try {
-        // Fetch image buffer with resilience
-        const imgRes = await withProviderResilience<Response>(
-          {
-            provider: 'crawler',
-            operation: 'gbp_deep:fetch_photo',
-            degrade: false,
-          },
-          async () => {
-            const res = await fetch(url);
-            if (!res.ok) throw new Error(`Fetch photo failed: ${res.statusText}`);
-            return res;
-          }
-        );
-
-        const arrayBuffer = await imgRes.arrayBuffer();
-        const base64Img = Buffer.from(arrayBuffer).toString('base64');
-
-        const prompt = `Analyze this business photo for a GBP audit.
-              Rate 1-10 on: Quality, Relevance, Professionalism.
-              Identify Type: Exterior, Interior, Team, Product, or Other.
-              Flag issues: Blurry, Dark, TextHeavy, Irrelevant.
-              Return JSON: { scores: { quality: number, relevance: number, professionalism: number }, type: string, flags: string[] }`;
-
-        const result = await withProviderResilience<any>(
-          {
-            provider: 'gemini',
-            operation: 'gbp_deep:photo_analysis_gemini',
-            degrade: true,
-            fallbackValue: {
-              response: {
-                text: () =>
-                  JSON.stringify({
-                    scores: { quality: 5, relevance: 5, professionalism: 5 },
-                    type: 'Other',
-                    flags: ['Photo analysis degraded'],
-                  }),
-              },
-            },
-          },
-          async () => {
-            return await model.generateContent([
-              prompt,
-              { inlineData: { data: base64Img, mimeType: 'image/jpeg' } },
-            ]);
-          }
-        );
-
-        const text = result.response.text();
-        // Simple JSON parse (cleanup markdown if needed)
-        const cleanText = text.replace(/```json|```/g, '').trim();
-        const analysis = JSON.parse(cleanText);
-
-        results.push({
-          photoUrl: url,
-          ...analysis,
-        });
-      } catch (err) {
-        logger.warn({ error: err, url }, '[GBPDeep] Failed to analyze photo, skipping');
-      }
-    }
-
-    return results;
-  } catch (e) {
-    logger.warn({ error: e }, '[GBPDeep] Photo analysis failed');
-    return [];
-  }
-}
-
 /**
- * Generate Findings
+ * Generate Findings.
+ *
+ * P1-31 (Wave 3): every evidence item identifies the real Places API record that was
+ * fetched (`placeRecordPointer`) and the collection time, via `createEvidence`, instead
+ * of `evidence: []`. Only called after a successful Places API details fetch (we are
+ * past the try block's data-fetch stage by the time this runs), so "missing
+ * description"/"missing attributes" here means "checked the real profile and it was
+ * absent" — never a fetch failure silently becoming a deficiency finding.
  */
-function generateGbpFindings(analysis: GbpDeepAnalysis): Finding[] {
+export function generateGbpFindings(
+  analysis: GbpDeepAnalysis,
+  placeRecordPointer: string,
+  collectedAt: string
+): Finding[] {
   const findings: Finding[] = [];
   const { completeness, photos, reviews } = analysis;
 
@@ -454,7 +365,16 @@ function generateGbpFindings(analysis: GbpDeepAnalysis): Finding[] {
         'Your Google Business Profile has no description. This is a primary ranking factor and your main "elevator pitch" to searchers.',
       impactScore: 7,
       confidenceScore: normalizeConfidence(100, '0-100'),
-      evidence: [],
+      evidence: [
+        createEvidence({
+          pointer: `${placeRecordPointer}#editorialSummary`,
+          source: 'serpapi_google_maps',
+          collected_at: collectedAt,
+          type: 'text',
+          value: 'editorialSummary field absent',
+          label: 'Business Description Field',
+        }),
+      ],
       metrics: {},
       effortEstimate: 'LOW',
       recommendedFix: [
@@ -465,7 +385,7 @@ function generateGbpFindings(analysis: GbpDeepAnalysis): Finding[] {
   }
 
   // PAINKILLER: Ghost Town (No recent reviews)
-  if (reviews.daysSinceLastReview > 90) {
+  if (reviews.daysSinceLastReview !== null && reviews.daysSinceLastReview > 90) {
     findings.push({
       type: 'PAINKILLER',
       category: 'Visibility',
@@ -474,7 +394,14 @@ function generateGbpFindings(analysis: GbpDeepAnalysis): Finding[] {
       impactScore: 7,
       confidenceScore: normalizeConfidence(100, '0-100'),
       evidence: [
-        { type: 'metric', value: reviews.daysSinceLastReview, label: 'Days Since Last Review' },
+        createEvidence({
+          pointer: `${placeRecordPointer}#reviews`,
+          source: 'serpapi_google_maps',
+          collected_at: collectedAt,
+          type: 'metric',
+          value: reviews.daysSinceLastReview,
+          label: 'Days Since Last Review',
+        }),
       ],
       metrics: { daysSinceReview: reviews.daysSinceLastReview },
       effortEstimate: 'MEDIUM',
@@ -496,7 +423,16 @@ function generateGbpFindings(analysis: GbpDeepAnalysis): Finding[] {
         'Your profile has very few photos. Businesses with photos receive 42% more requests for directions and 35% more click-throughs.',
       impactScore: 6,
       confidenceScore: normalizeConfidence(90, '0-100'),
-      evidence: [{ type: 'metric', value: photos.totalCount, label: 'Total Photos' }],
+      evidence: [
+        createEvidence({
+          pointer: `${placeRecordPointer}#photos`,
+          source: 'serpapi_google_maps',
+          collected_at: collectedAt,
+          type: 'metric',
+          value: photos.totalCount,
+          label: 'Total Photos',
+        }),
+      ],
       metrics: { photoCount: photos.totalCount },
       effortEstimate: 'MEDIUM',
       recommendedFix: [
@@ -517,11 +453,16 @@ function generateGbpFindings(analysis: GbpDeepAnalysis): Finding[] {
         'AI analysis detected blurry or unprofessional photos on your profile. This damages visible trust before a customer even calls.',
       impactScore: 4,
       confidenceScore: normalizeConfidence(85, '0-100'),
-      evidence: poorPhotos.map((p) => ({
-        type: 'text',
-        value: `Quality Score: ${p.scores.quality}/10 (${p.flags.join(', ')})`,
-        label: 'Photo Issue',
-      })),
+      evidence: poorPhotos.map((p) =>
+        createEvidence({
+          pointer: p.photoUrl,
+          source: 'ai_photo_analysis',
+          collected_at: collectedAt,
+          type: 'text',
+          value: `Quality Score: ${p.scores.quality}/10 (${p.flags.join(', ')})`,
+          label: 'Photo Issue',
+        })
+      ),
       metrics: {},
       effortEstimate: 'LOW',
       recommendedFix: [
@@ -541,7 +482,16 @@ function generateGbpFindings(analysis: GbpDeepAnalysis): Finding[] {
         'You haven\'t added attributes (e.g., "Wheelchair Accessible", "Women-Led", payment methods). These serve as key filters in voice search.',
       impactScore: 5,
       confidenceScore: normalizeConfidence(100, '0-100'),
-      evidence: [],
+      evidence: [
+        createEvidence({
+          pointer: `${placeRecordPointer}#attributes`,
+          source: 'serpapi_google_maps',
+          collected_at: collectedAt,
+          type: 'text',
+          value: 'paymentOptions/accessibilityOptions/amenities fields absent',
+          label: 'Business Attributes Fields',
+        }),
+      ],
       metrics: {},
       effortEstimate: 'LOW',
       recommendedFix: ['Log into GBP and fill out "Attributes" section completely'],
@@ -549,7 +499,12 @@ function generateGbpFindings(analysis: GbpDeepAnalysis): Finding[] {
   }
 
   // VITAMIN: Low Review Velocity
-  if (reviews.velocity < 1 && reviews.totalCount > 10) {
+  if (
+    reviews.velocity !== null &&
+    reviews.totalCount !== null &&
+    reviews.velocity < 1 &&
+    reviews.totalCount > 10
+  ) {
     findings.push({
       type: 'VITAMIN',
       category: 'Visibility',
@@ -557,7 +512,16 @@ function generateGbpFindings(analysis: GbpDeepAnalysis): Finding[] {
       description: `You are averaging ${reviews.velocity.toFixed(1)} reviews/month. Consistent new reviews are a major ranking signal for the Local Pack.`,
       impactScore: 5,
       confidenceScore: normalizeConfidence(100, '0-100'),
-      evidence: [{ type: 'metric', value: reviews.velocity.toFixed(1), label: 'Reviews/Month' }],
+      evidence: [
+        createEvidence({
+          pointer: `${placeRecordPointer}#reviews`,
+          source: 'serpapi_google_maps',
+          collected_at: collectedAt,
+          type: 'metric',
+          value: reviews.velocity.toFixed(1),
+          label: 'Reviews/Month',
+        }),
+      ],
       metrics: { velocity: reviews.velocity },
       effortEstimate: 'MEDIUM',
       recommendedFix: ['Build a review process into your sales flow'],

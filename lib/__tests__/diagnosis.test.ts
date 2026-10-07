@@ -16,7 +16,19 @@ vi.mock('@/lib/graph/diagnosis-graph', () => ({
       },
     ],
     validation: { valid: true },
+    resultState: 'trusted',
+    errors: [],
+    degraded: false,
+    staleFindingsCount: 0,
   }),
+}));
+
+vi.mock('@/lib/prisma', () => ({
+  prisma: {
+    evidenceSnapshot: {
+      findMany: vi.fn().mockResolvedValue([]),
+    },
+  },
 }));
 
 describe('Diagnosis Pipeline', () => {

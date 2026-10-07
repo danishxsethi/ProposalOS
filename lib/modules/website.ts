@@ -2,7 +2,9 @@ import { detectConversionElements } from '@/lib/analysis/conversionDetector';
 import { withModuleCache } from '@/lib/cache/moduleCache';
 import { CostTracker } from '@/lib/costs/costTracker';
 import { logger } from '@/lib/logger';
+import { getLocalLighthouseReport } from '@/lib/performance/localLighthouse';
 import { withProviderResilience } from '@/lib/resilience/withProviderResilience';
+import { safeFetch } from '@/lib/security/safeFetch';
 
 import { type CoreWebVitalsFull, extractCoreWebVitalsFromAudits } from './coreWebVitals';
 import { normalizeConfidence } from './findingGenerator';
@@ -10,47 +12,80 @@ import { analyzeSchemaMarkup } from './schemaAnalysis';
 import { AuditModuleResult, createEvidence, Finding, WebsiteModuleInput } from './types';
 import { runWebsiteCrawlerModule } from './websiteCrawlerModule';
 
-const PSI_API_URL = 'https://www.googleapis.com/pagespeedonline/v5/runPagespeed';
-
 export async function runWebsiteModule(
   input: WebsiteModuleInput,
   tracker?: CostTracker
 ): Promise<AuditModuleResult> {
   logger.info({ url: input.url }, '[WebsiteModule] Starting comprehensive website analysis');
+  const unavailableChecks: string[] = [];
 
   try {
-    // Run comprehensive website crawler (up to 20 pages)
-    const crawlerResult = await runWebsiteCrawlerModule({
-      url: input.url,
-      businessName: input.businessName || 'Website',
-    });
-
-    // Run PageSpeed on homepage for Core Web Vitals
-    tracker?.addApiCall('PAGESPEED');
-    const psiResult = await getPageSpeedFindings(input.url);
+    // Run comprehensive website crawler (up to 20 pages). P1-27 (Wave 7): the
+    // canonical `websiteCrawler` registry module (lib/audit/runner.ts) calls this
+    // exact same function for this exact same audit — passing `auditId` through
+    // lets `runWebsiteCrawlerModule`'s single-flight coalescing recognize the two
+    // calls as one logical crawl instead of performing the real 20-page crawl twice.
+    // The crawl (≤45s) and the PageSpeed run (20-35s measured) are independent
+    // network collectors; running them serially routinely exceeded the module
+    // budget. Run concurrently — the module wall becomes max(), not sum().
+    // PageSpeed is useful but external-provider failure must not poison the
+    // crawler data and skip every module that depends on website.
+    const [crawlerResult, psiResult] = await Promise.all([
+      runWebsiteCrawlerModule(
+        {
+          url: input.url,
+          businessName: input.businessName || 'Website',
+          auditId: input.auditId,
+        },
+        tracker
+      ),
+      getPageSpeedFindings(input.url).catch((error): PageSpeedResult => {
+        logger.warn(
+          { error },
+          '[WebsiteModule] PageSpeed unavailable; preserving crawler findings only'
+        );
+        unavailableChecks.push('pagespeed');
+        return {
+          findings: [],
+          coreWebVitals: { fcp: null, lcp: null, cls: null, tbt: null },
+          scores: null,
+          finalUrl: input.url,
+          rawResponse: null,
+          execution: { state: 'unavailable' as const, reason: String(error) },
+        };
+      }),
+    ]);
+    if (psiResult.execution?.state === 'unavailable' && !unavailableChecks.includes('pagespeed')) {
+      unavailableChecks.push('pagespeed');
+    }
 
     // Fetch homepage HTML for schema analysis and conversion detection
     let schemaAnalysis = null;
     let conversionAnalysis = null;
     try {
-      const html = await withProviderResilience<string>(
-        {
-          provider: 'crawler',
-          operation: 'website:fetchHtmlSchema',
-          degrade: false,
-        },
-        async ({ signal }) => {
-          const htmlRes = await fetch(input.url, {
-            signal,
-            headers: {
-              'User-Agent':
-                'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            },
-          });
-          if (!htmlRes.ok) throw new Error(`HTTP ${htmlRes.status}: ${htmlRes.statusText}`);
-          return await htmlRes.text();
-        }
-      );
+      const crawlerHtml = crawlerResult.evidenceSnapshots
+        .map((snapshot) => snapshot?.rawResponse?.html)
+        .find((html): html is string => typeof html === 'string' && html.length > 0);
+      const html =
+        crawlerHtml ??
+        (await withProviderResilience<string>(
+          {
+            provider: 'crawler',
+            operation: 'website:fetchHtmlSchema',
+            degrade: false,
+          },
+          async ({ signal }) => {
+            const htmlRes = await safeFetch(input.url, {
+              signal,
+              headers: {
+                'User-Agent':
+                  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+              },
+            });
+            if (!htmlRes.ok) throw new Error(`HTTP ${htmlRes.status}: ${htmlRes.statusText}`);
+            return await htmlRes.text();
+          }
+        ));
       schemaAnalysis = analyzeSchemaMarkup(html);
       const schemaFindings = generateSchemaFindings(schemaAnalysis, input.url);
       psiResult.findings.push(...schemaFindings);
@@ -69,7 +104,7 @@ export async function runWebsiteModule(
 
     const psiSnapshot = {
       module: 'website',
-      source: 'PageSpeed Insights API',
+      source: 'Local Lighthouse',
       rawResponse: psiResult.rawResponse,
     };
 
@@ -86,8 +121,18 @@ export async function runWebsiteModule(
     return {
       findings: allFindings,
       evidenceSnapshots: [...crawlerResult.evidenceSnapshots, psiSnapshot],
+      execution:
+        crawlerResult.execution?.state === 'failed'
+          ? crawlerResult.execution
+          : unavailableChecks.length
+            ? {
+                state: 'partial' as const,
+                reason: `Unavailable checks: ${unavailableChecks.join(', ')}`,
+              }
+            : { state: 'complete' as const },
+      unavailableChecks,
       data: {
-        scores: psiResult.scores,
+        ...(psiResult.scores ? { scores: psiResult.scores } : {}),
         coreWebVitals: psiResult.coreWebVitals,
         schemaAnalysis: schemaAnalysis ?? undefined,
         conversionAnalysis: conversionAnalysis ?? undefined,
@@ -98,7 +143,7 @@ export async function runWebsiteModule(
     logger.error({ error }, '[WebsiteModule] Analysis failed');
 
     try {
-      tracker?.addApiCall('PAGESPEED');
+      tracker?.addApiCall('LIGHTHOUSE');
       const psiResult = await getPageSpeedFindings(input.url);
 
       return {
@@ -106,34 +151,33 @@ export async function runWebsiteModule(
         evidenceSnapshots: [
           {
             module: 'website',
-            source: 'PageSpeed Insights API',
+            source: 'Local Lighthouse',
             rawResponse: psiResult.rawResponse,
           },
         ],
         data: {
-          scores: psiResult.scores,
+          ...(psiResult.scores ? { scores: psiResult.scores } : {}),
           coreWebVitals: psiResult.coreWebVitals,
           finalUrl: psiResult.finalUrl,
         },
       };
     } catch (fallbackError) {
+      // Wave 3 (Step 7/8): a technical module failure (crawler AND the PageSpeed
+      // fallback both failed) must never become a customer-facing Finding. This
+      // previously fabricated a "Website Analysis Failed" PAINKILLER Finding with
+      // `evidence: []`, which the runner's adapter then reported as a normal
+      // COMPLETE result — masking a real failure as an (unflattering) observation.
+      // Return no findings; the caller's own error handling / module status
+      // reflects the failure honestly instead.
+      logger.error(
+        { error: fallbackError, originalError: error, url: input.url },
+        '[WebsiteModule] PageSpeed fallback also failed — returning no findings'
+      );
       return {
-        findings: [
-          {
-            type: 'PAINKILLER',
-            category: 'Technical SEO',
-            title: 'Website Analysis Failed',
-            description: `Unable to analyze website: ${error instanceof Error ? error.message : 'Unknown error'}`,
-            impactScore: 3,
-            confidenceScore: normalizeConfidence(5, '1-10'),
-            evidence: [],
-            metrics: {},
-            effortEstimate: 'LOW',
-            recommendedFix: ['Verify website is accessible and not blocking automated tools'],
-          },
-        ],
+        findings: [],
         evidenceSnapshots: [],
-        data: { scores: {}, coreWebVitals: {}, finalUrl: input.url },
+        data: { coreWebVitals: {}, finalUrl: input.url },
+        execution: { state: 'failed', reason: 'Website crawler and PageSpeed analysis failed' },
       };
     }
   }
@@ -156,9 +200,10 @@ interface PageSpeedResult {
     full?: CoreWebVitalsFull;
     schemaAnalysis?: ReturnType<typeof analyzeSchemaMarkup>;
   };
-  scores: { performance: number; accessibility: number; bestPractices: number; seo: number };
+  scores: { performance: number; accessibility: number; bestPractices: number; seo: number } | null;
   finalUrl: string;
   rawResponse: unknown;
+  execution?: { state: 'complete' | 'unavailable'; reason?: string };
 }
 
 function generateSchemaFindings(
@@ -300,54 +345,18 @@ function generateConversionFindings(
 }
 
 async function getPageSpeedFindings(url: string): Promise<PageSpeedResult> {
-  const pointer = url || PSI_API_URL;
+  const pointer = url;
   const emptyLegacy: CoreWebVitals = { fcp: null, lcp: null, cls: null, tbt: null };
   const empty: PageSpeedResult = {
     findings: [],
     coreWebVitals: emptyLegacy,
-    scores: { performance: 0, accessibility: 0, bestPractices: 0, seo: 0 },
+    scores: null,
     finalUrl: url,
     rawResponse: {},
   };
 
-  if (!process.env.GOOGLE_PAGESPEED_API_KEY) {
-    logger.warn('[WebsiteModule] GOOGLE_PAGESPEED_API_KEY missing, skipping PageSpeed');
-    return empty;
-  }
-
   try {
-    const params = new URLSearchParams();
-    params.append('url', url);
-    params.append('key', process.env.GOOGLE_PAGESPEED_API_KEY);
-    params.append('strategy', 'mobile');
-    ['performance', 'accessibility', 'best-practices', 'seo'].forEach((c) =>
-      params.append('category', c)
-    );
-
-    const data = await withModuleCache<any>(
-      {
-        module: 'website',
-        version: 1,
-        input: { type: 'pagespeed', url },
-      },
-      { ttlSeconds: 24 * 3600 },
-      async () => {
-        return withProviderResilience<any>(
-          {
-            provider: 'pagespeed',
-            operation: 'website:getPageSpeedFindings',
-            degrade: false,
-          },
-          async ({ signal }) => {
-            const res = await fetch(`${PSI_API_URL}?${params.toString()}`, { signal });
-            if (!res.ok) throw new Error(`PSI API failed: ${res.status}`);
-            return await res.json();
-          }
-        );
-      }
-    );
-
-    const lighthouse = data.lighthouseResult;
+    const lighthouse = await getLocalLighthouseReport(url, 'mobile');
     const audits = lighthouse?.audits ?? {};
 
     const cwvFull = extractCoreWebVitalsFromAudits(
@@ -379,7 +388,7 @@ async function getPageSpeedFindings(url: string): Promise<PageSpeedResult> {
       tbt_ms: legacy.tbt,
       inp_ms: legacy.inp,
       ttfb_ms: legacy.ttfb,
-      performanceScore: Math.round((scores.performance ?? 0) * 100),
+      performanceScore: Math.round(scores.performance * 100),
     };
 
     const addCwvFinding = (
@@ -403,7 +412,7 @@ async function getPageSpeedFindings(url: string): Promise<PageSpeedResult> {
         evidence: [
           createEvidence({
             pointer,
-            source: 'pagespeed_v5',
+            source: 'lighthouse_local',
             type: 'metric',
             value: display,
             label: metric,
@@ -493,7 +502,7 @@ async function getPageSpeedFindings(url: string): Promise<PageSpeedResult> {
         evidence: [
           createEvidence({
             pointer,
-            source: 'pagespeed_v5',
+            source: 'lighthouse_local',
             type: 'metric',
             value: cls.toFixed(2),
             label: 'CLS',
@@ -522,7 +531,7 @@ async function getPageSpeedFindings(url: string): Promise<PageSpeedResult> {
           evidence: [
             createEvidence({
               pointer,
-              source: 'pagespeed_v5',
+              source: 'lighthouse_local',
               type: 'metric',
               value: Math.round(inpMs),
               label: 'INP (ms)',
@@ -547,7 +556,7 @@ async function getPageSpeedFindings(url: string): Promise<PageSpeedResult> {
           evidence: [
             createEvidence({
               pointer,
-              source: 'pagespeed_v5',
+              source: 'lighthouse_local',
               type: 'metric',
               value: Math.round(inpMs),
               label: 'INP (ms)',
@@ -576,7 +585,7 @@ async function getPageSpeedFindings(url: string): Promise<PageSpeedResult> {
           evidence: [
             createEvidence({
               pointer,
-              source: 'pagespeed_v5',
+              source: 'lighthouse_local',
               type: 'metric',
               value: ttfbSec.toFixed(2),
               label: 'TTFB (s)',
@@ -607,7 +616,7 @@ async function getPageSpeedFindings(url: string): Promise<PageSpeedResult> {
           evidence: [
             createEvidence({
               pointer,
-              source: 'pagespeed_v5',
+              source: 'lighthouse_local',
               type: 'metric',
               value: Math.round(tbtMs),
               label: 'TBT (ms)',
@@ -632,7 +641,7 @@ async function getPageSpeedFindings(url: string): Promise<PageSpeedResult> {
           evidence: [
             createEvidence({
               pointer,
-              source: 'pagespeed_v5',
+              source: 'lighthouse_local',
               type: 'metric',
               value: Math.round(tbtMs),
               label: 'TBT (ms)',
@@ -659,7 +668,7 @@ async function getPageSpeedFindings(url: string): Promise<PageSpeedResult> {
         evidence: [
           createEvidence({
             pointer,
-            source: 'pagespeed_v5',
+            source: 'lighthouse_local',
             type: 'metric',
             value: cwvFull.totalPageWeightMB.toFixed(2),
             label: 'Page Weight (MB)',
@@ -687,7 +696,7 @@ async function getPageSpeedFindings(url: string): Promise<PageSpeedResult> {
         evidence: [
           createEvidence({
             pointer,
-            source: 'pagespeed_v5',
+            source: 'lighthouse_local',
             type: 'metric',
             value: cwvFull.renderBlockingCount,
             label: 'Render-blocking count',
@@ -714,7 +723,7 @@ async function getPageSpeedFindings(url: string): Promise<PageSpeedResult> {
         evidence: [
           createEvidence({
             pointer,
-            source: 'pagespeed_v5',
+            source: 'lighthouse_local',
             type: 'metric',
             value: Math.round(scores.performance * 100),
             label: 'Performance Score',
@@ -740,7 +749,7 @@ async function getPageSpeedFindings(url: string): Promise<PageSpeedResult> {
         evidence: [
           createEvidence({
             pointer,
-            source: 'pagespeed_v5',
+            source: 'lighthouse_local',
             type: 'metric',
             value: Math.round(scores.performance * 100),
             label: 'Performance Score',
@@ -767,7 +776,7 @@ async function getPageSpeedFindings(url: string): Promise<PageSpeedResult> {
         evidence: [
           createEvidence({
             pointer,
-            source: 'pagespeed_v5',
+            source: 'lighthouse_local',
             type: 'metric',
             value: Math.round(scores.accessibility * 100),
             label: 'Accessibility Score',
@@ -784,16 +793,24 @@ async function getPageSpeedFindings(url: string): Promise<PageSpeedResult> {
       });
     }
 
-    const finalUrl = data.loadingExperience?.origin_fallback ?? url;
+    const finalUrl = lighthouse.finalDisplayedUrl ?? lighthouse.finalUrl ?? url;
     return {
       findings,
       coreWebVitals: { ...legacy, full: cwvFull },
       scores,
       finalUrl,
-      rawResponse: { ...data, coreWebVitals: { ...legacy, full: cwvFull }, finalUrl },
+      rawResponse: {
+        lighthouseResult: lighthouse,
+        coreWebVitals: { ...legacy, full: cwvFull },
+        finalUrl,
+      },
+      execution: { state: 'complete' as const },
     };
   } catch (error) {
     logger.warn({ error }, '[WebsiteModule] PageSpeed failed, skipping');
-    return empty;
+    return {
+      ...empty,
+      execution: { state: 'unavailable' as const, reason: 'Local Lighthouse run failed' },
+    };
   }
 }

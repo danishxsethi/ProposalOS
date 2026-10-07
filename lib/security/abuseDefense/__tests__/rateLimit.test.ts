@@ -100,7 +100,8 @@ describe('Abuse Defense & Rate Limiting Unit Tests', () => {
         expect.any(Number)
       );
 
-      // Test IP Hashing
+      // Test IP Hashing — trusted-proxy-aware (P2-22): only the LAST XFF entry is
+      // appended by trusted infrastructure; earlier hops are client-controlled.
       const ipReq = new Request('https://proposalos.test/api/audit', {
         headers: { 'x-forwarded-for': '9.8.7.6, 5.4.3.2' },
       });
@@ -110,7 +111,7 @@ describe('Abuse Defense & Rate Limiting Unit Tests', () => {
         endpoint: 'test-ip',
       });
 
-      const hashedIp = hashSensitive('9.8.7.6');
+      const hashedIp = hashSensitive('5.4.3.2');
       expect(incSpy).toHaveBeenLastCalledWith(`rl:ip:${hashedIp}:test-ip`, expect.any(Number));
     });
   });

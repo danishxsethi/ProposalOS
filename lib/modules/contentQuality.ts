@@ -1,12 +1,13 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
 import * as cheerio from 'cheerio';
 import { traceable } from 'langsmith/traceable';
 
-import { CostTracker } from '@/lib/costs/costTracker';
+import { BEDROCK_NOVA_2_LITE } from '@/lib/config/models';
+import { CostTracker, trackBedrockUsage } from '@/lib/costs/costTracker';
+import { generateWithLLM } from '@/lib/llm/provider';
 import { logger } from '@/lib/logger';
 
 import { normalizeConfidence } from './findingGenerator';
-import { AuditModuleResult, Finding } from './types';
+import { AuditModuleResult, createEvidence, Finding } from './types';
 
 export interface ContentQualityModuleInput {
   url: string;
@@ -39,6 +40,108 @@ interface ReadabilityMetrics {
   totalWordCount: number;
 }
 
+/**
+ * P2-38: Flesch-Kincaid is an English-specific formula. Applying it to non-English
+ * content produces a meaningless (often wildly wrong) grade level and must not
+ * drive a customer-negative Finding. `code` is the detected ISO-639-1 primary
+ * subtag ('en', 'fr', ...) or 'unknown' when no signal was confidently found.
+ */
+export interface DetectedLanguage {
+  code: string;
+  source: 'html_lang' | 'content_language_meta' | 'heuristic_en_stopwords' | 'unknown';
+  confidence: number; // 0-100
+}
+
+/** Small bounded set used only for the last-resort English heuristic below. */
+const ENGLISH_STOPWORDS = new Set([
+  'the',
+  'and',
+  'is',
+  'are',
+  'was',
+  'were',
+  'for',
+  'with',
+  'that',
+  'this',
+  'you',
+  'your',
+  'our',
+  'we',
+  'have',
+  'has',
+  'from',
+  'about',
+  'services',
+  'service',
+  'business',
+  'contact',
+  'call',
+  'today',
+  'located',
+  'been',
+  'will',
+  'can',
+  'not',
+  'all',
+]);
+
+/**
+ * P2-38: detect the dominant content language before any language-specific
+ * readability formula runs. Priority order (documented per Wave 7B Step 4):
+ * 1. `<html lang>` on any crawled page — the page's own declared language.
+ * 2. `content-language`/`language` `<meta>` tag.
+ * 3. A bounded English-stopword-ratio heuristic over the combined text, only
+ *    when there is enough text to be meaningful (>=50 words).
+ * Returns `code: 'unknown'` (not a guess) when no signal clears its threshold —
+ * ambiguous/short content must not silently become "English".
+ */
+export function detectContentLanguage(
+  crawledPages: Array<{ url: string; html: string }>,
+  combinedText: string
+): DetectedLanguage {
+  for (const page of crawledPages) {
+    if (!page?.html || typeof page.html !== 'string') continue;
+    try {
+      const $ = cheerio.load(page.html);
+      const htmlLang = $('html').attr('lang');
+      if (htmlLang && htmlLang.trim()) {
+        const primary = htmlLang.trim().toLowerCase().split(/[-_]/)[0];
+        if (primary) return { code: primary, source: 'html_lang', confidence: 95 };
+      }
+    } catch {
+      // Malformed HTML on this page — try the next signal/page.
+    }
+  }
+
+  for (const page of crawledPages) {
+    if (!page?.html || typeof page.html !== 'string') continue;
+    try {
+      const $ = cheerio.load(page.html);
+      const metaLang =
+        $('meta[http-equiv="content-language" i]').attr('content') ||
+        $('meta[name="language" i]').attr('content');
+      if (metaLang && metaLang.trim()) {
+        const primary = metaLang.trim().toLowerCase().split(/[-_,]/)[0];
+        if (primary) return { code: primary, source: 'content_language_meta', confidence: 80 };
+      }
+    } catch {
+      // Malformed HTML on this page — try the next page.
+    }
+  }
+
+  const words = combinedText.toLowerCase().match(/\b[a-z']+\b/g) || [];
+  if (words.length < 50) {
+    return { code: 'unknown', source: 'unknown', confidence: 0 };
+  }
+  const stopwordHits = words.filter((w) => ENGLISH_STOPWORDS.has(w)).length;
+  const ratio = stopwordHits / words.length;
+  if (ratio >= 0.12) {
+    return { code: 'en', source: 'heuristic_en_stopwords', confidence: 60 };
+  }
+  return { code: 'unknown', source: 'unknown', confidence: 0 };
+}
+
 interface ContentAnalysis {
   pages: PageContentAnalysis[];
   primaryValueProp: string;
@@ -47,6 +150,7 @@ interface ContentAnalysis {
   weakestPage: string;
   topRecommendations: string[];
   readabilityMetrics: ReadabilityMetrics;
+  detectedLanguage: DetectedLanguage;
 }
 
 /**
@@ -66,17 +170,24 @@ export async function runContentQualityModule(
       throw new Error('No page content available for analysis');
     }
 
-    // Analyze content with Gemini
-    tracker?.addApiCall('GEMINI');
-    const aiAnalysis = await analyzeContentWithAI(pageTexts, input);
+    const aiAnalysis = await analyzeContentWithAI(pageTexts, input, tracker);
 
     // Calculate readability metrics
     const readabilityMetrics = calculateReadabilityMetrics(pageTexts);
+
+    // P2-38: detect language before the (English-specific) Flesch-Kincaid formula
+    // is allowed to drive a Finding. Must run on the same crawled pages used for
+    // analysis, not a guess.
+    const detectedLanguage = detectContentLanguage(
+      input.crawledPages || [],
+      pageTexts.map((p) => p.text).join(' ')
+    );
 
     // Combine analyses
     const fullAnalysis: ContentAnalysis = {
       ...aiAnalysis,
       readabilityMetrics,
+      detectedLanguage,
     };
 
     // Generate findings
@@ -84,7 +195,7 @@ export async function runContentQualityModule(
 
     const evidenceSnapshot = {
       module: 'content_quality',
-      source: 'gemini_analysis',
+      source: 'amazon_bedrock_nova_2_lite',
       rawResponse: fullAnalysis,
       collectedAt: new Date(),
     };
@@ -107,22 +218,12 @@ export async function runContentQualityModule(
     logger.error({ error, url: input.url }, '[ContentQuality] Analysis failed');
 
     return {
-      findings: [
-        {
-          type: 'VITAMIN',
-          category: 'Conversion',
-          title: 'Content Analysis Unavailable',
-          description:
-            'Unable to complete content quality analysis. This may indicate API issues or missing page content.',
-          impactScore: 1,
-          confidenceScore: normalizeConfidence(50, '0-100'),
-          evidence: [],
-          metrics: {},
-          effortEstimate: 'LOW',
-          recommendedFix: ['Try running content analysis again later'],
-        },
-      ],
+      findings: [],
       evidenceSnapshots: [],
+      execution: {
+        state: 'unavailable',
+        reason: error instanceof Error ? error.message : 'Content analysis unavailable',
+      },
     };
   }
 }
@@ -176,21 +277,14 @@ function extractPageTexts(
 }
 
 /**
- * Analyze content with Gemini AI
+ * Analyze site content with Amazon Bedrock
  */
 const analyzeContentWithAI = traceable(
   async (
     pageTexts: Array<{ url: string; text: string; title: string }>,
-    input: ContentQualityModuleInput
+    input: ContentQualityModuleInput,
+    tracker?: CostTracker
   ): Promise<Omit<ContentAnalysis, 'readabilityMetrics'>> => {
-    const apiKey = process.env.GOOGLE_AI_API_KEY;
-    if (!apiKey) {
-      throw new Error('GOOGLE_AI_API_KEY not configured');
-    }
-
-    const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
-
     // Build content summary for prompt
     const contentSummary = pageTexts
       .map((page, index) => {
@@ -239,8 +333,13 @@ Return as structured JSON with this exact format:
   "topRecommendations": ["recommendation 1", "recommendation 2", "recommendation 3"]
 }`;
 
-    const result = await model.generateContent(prompt);
-    const response = result.response.text();
+    const result = await generateWithLLM({
+      model: BEDROCK_NOVA_2_LITE,
+      input: prompt,
+      responseModality: 'json',
+    });
+    trackBedrockUsage(tracker, result, prompt);
+    const response = result.text;
 
     // Extract JSON from response
     const jsonMatch = response.match(/\{[\s\S]*\}/);
@@ -306,7 +405,7 @@ function calculateReadabilityMetrics(
 /**
  * Generate findings from content analysis
  */
-function generateContentFindings(
+export function generateContentFindings(
   analysis: ContentAnalysis,
   input: ContentQualityModuleInput,
   pageTexts: Array<{ url: string; text: string; title: string }>
@@ -326,16 +425,22 @@ function generateContentFindings(
       impactScore: 8,
       confidenceScore: normalizeConfidence(90, '0-100'),
       evidence: [
-        {
+        createEvidence({
+          pointer: input.url,
+          source: 'content_quality',
+          collected_at: new Date().toISOString(),
           type: 'text',
           value: `AI-detected value prop: "${analysis.primaryValueProp}"`,
           label: 'Value Proposition',
-        },
-        {
+        }),
+        createEvidence({
+          pointer: input.url,
+          source: 'content_quality',
+          collected_at: new Date().toISOString(),
           type: 'metric',
           value: homepageAnalysis.clarity,
           label: 'Clarity Score',
-        },
+        }),
       ],
       metrics: {
         clarityScore: homepageAnalysis.clarity,
@@ -360,11 +465,14 @@ function generateContentFindings(
       impactScore: 7,
       confidenceScore: normalizeConfidence(100, '0-100'),
       evidence: [
-        {
+        createEvidence({
+          pointer: input.url,
+          source: 'content_quality',
+          collected_at: new Date().toISOString(),
           type: 'metric',
           value: homepage.text.split(/\s+/).length,
           label: 'Homepage Word Count',
-        },
+        }),
       ],
       metrics: {
         homepageWordCount: homepage.text.split(/\s+/).length,
@@ -389,11 +497,14 @@ function generateContentFindings(
       impactScore: 7,
       confidenceScore: normalizeConfidence(90, '0-100'),
       evidence: [
-        {
+        createEvidence({
+          pointer: input.url,
+          source: 'content_quality',
+          collected_at: new Date().toISOString(),
           type: 'metric',
           value: homepageAnalysis.localRelevance,
           label: 'Local Relevance Score',
-        },
+        }),
       ],
       metrics: {
         localRelevanceScore: homepageAnalysis.localRelevance,
@@ -410,7 +521,13 @@ function generateContentFindings(
   }
 
   // VITAMIN: Reading level too high (>grade 10)
-  if (analysis.readabilityMetrics.fleschKincaidGrade > 10) {
+  // P2-38: Flesch-Kincaid is English-specific. Only evaluate it when the content
+  // was confidently detected as English — otherwise the grade-level number is
+  // meaningless and must not become a customer-negative Finding.
+  if (
+    analysis.detectedLanguage.code === 'en' &&
+    analysis.readabilityMetrics.fleschKincaidGrade > 10
+  ) {
     findings.push({
       type: 'VITAMIN',
       category: 'Conversion',
@@ -419,20 +536,36 @@ function generateContentFindings(
       impactScore: 5,
       confidenceScore: normalizeConfidence(95, '0-100'),
       evidence: [
-        {
+        createEvidence({
+          pointer: input.url,
+          source: 'content_quality',
+          collected_at: new Date().toISOString(),
           type: 'metric',
           value: analysis.readabilityMetrics.fleschKincaidGrade,
           label: 'Flesch-Kincaid Grade',
-        },
-        {
+        }),
+        createEvidence({
+          pointer: input.url,
+          source: 'content_quality',
+          collected_at: new Date().toISOString(),
           type: 'metric',
           value: analysis.readabilityMetrics.avgSentenceLength,
           label: 'Avg Sentence Length',
-        },
+        }),
+        createEvidence({
+          pointer: input.url,
+          source: 'content_quality',
+          collected_at: new Date().toISOString(),
+          type: 'text',
+          value: `${analysis.detectedLanguage.code} (source: ${analysis.detectedLanguage.source})`,
+          label: 'Detected Content Language',
+        }),
       ],
       metrics: {
         readingGrade: analysis.readabilityMetrics.fleschKincaidGrade,
         avgSentenceLength: analysis.readabilityMetrics.avgSentenceLength,
+        detectedLanguage: analysis.detectedLanguage.code,
+        languageSource: analysis.detectedLanguage.source,
       },
       effortEstimate: 'MEDIUM',
       recommendedFix: [
@@ -463,11 +596,16 @@ function generateContentFindings(
       evidence: analysis.contentGaps
         .filter((g) => g.toLowerCase().includes('service'))
         .slice(0, 2)
-        .map((gap) => ({
-          type: 'text',
-          value: gap,
-          label: 'Content Gap',
-        })),
+        .map((gap) =>
+          createEvidence({
+            pointer: input.url,
+            source: 'content_quality',
+            collected_at: new Date().toISOString(),
+            type: 'text',
+            value: gap,
+            label: 'Content Gap',
+          })
+        ),
       metrics: {
         hasServicesPage,
       },
@@ -496,11 +634,14 @@ function generateContentFindings(
       impactScore: 4,
       confidenceScore: normalizeConfidence(90, '0-100'),
       evidence: [
-        {
+        createEvidence({
+          pointer: input.url,
+          source: 'content_quality',
+          collected_at: new Date().toISOString(),
           type: 'text',
           value: 'No About/Team page detected',
           label: 'About Page',
-        },
+        }),
       ],
       metrics: {
         hasAboutPage: false,
@@ -529,11 +670,14 @@ function generateContentFindings(
       impactScore: 5,
       confidenceScore: normalizeConfidence(85, '0-100'),
       evidence: [
-        {
+        createEvidence({
+          pointer: input.url,
+          source: 'content_quality',
+          collected_at: new Date().toISOString(),
           type: 'metric',
           value: Math.round(avgTrustScore),
           label: 'Average Trust Score',
-        },
+        }),
       ],
       metrics: {
         avgTrustScore: Math.round(avgTrustScore),
@@ -560,11 +704,16 @@ function generateContentFindings(
       description: `AI identified ${analysis.contentGaps.length} important content gaps. Customers can't find key information they need to make a decision.`,
       impactScore: analysis.contentGaps.length > 3 ? 6 : 4,
       confidenceScore: normalizeConfidence(85, '0-100'),
-      evidence: topGaps.map((gap) => ({
-        type: 'text',
-        value: gap,
-        label: 'Content Gap',
-      })),
+      evidence: topGaps.map((gap) =>
+        createEvidence({
+          pointer: input.url,
+          source: 'content_quality',
+          collected_at: new Date().toISOString(),
+          type: 'text',
+          value: gap,
+          label: 'Content Gap',
+        })
+      ),
       metrics: {
         contentGapCount: analysis.contentGaps.length,
         contentGaps: topGaps,

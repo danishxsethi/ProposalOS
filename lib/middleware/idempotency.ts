@@ -23,6 +23,8 @@
  *   - Failed transient 5xx responses are NOT cached (safe retry behaviour).
  */
 
+import { createHash } from 'crypto';
+
 import { NextResponse } from 'next/server';
 
 import { IdempotencyConflictError } from '@/lib/api/errors';
@@ -71,7 +73,9 @@ export function extractIdempotencyKey(req: Request): string | null {
 async function hashBody(req: Request): Promise<string> {
   try {
     const body = await req.clone().text();
-    return body ? Buffer.from(body).toString('base64url').substring(0, 20) : 'empty';
+    return body
+      ? createHash('sha256').update(body).digest('hex').substring(0, 32)
+      : 'empty';
   } catch {
     return 'unknown';
   }

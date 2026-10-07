@@ -139,7 +139,7 @@ describe('runWithConcurrency — mock benchmark', () => {
     expect(parMs).toBeLessThan(taskLatencyMs * 3); // headroom for scheduler jitter
 
     // Log for visibility — captured by reporter
-    // eslint-disable-next-line no-console
+     
     console.info(
       `[benchmark] sequential=${seqMs}ms parallel=${parMs}ms ratio=${(seqMs / parMs).toFixed(2)}x`
     );

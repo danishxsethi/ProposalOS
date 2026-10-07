@@ -10,7 +10,7 @@
  */
 
 import { MODEL_CONFIG } from '@/lib/config/models';
-import { generateWithGemini } from '@/lib/llm/provider';
+import { generateWithLLM } from '@/lib/llm/provider';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 import { PiiScrubber } from '@/lib/security/piiScrubber';
@@ -194,7 +194,7 @@ Intent definitions:
 - purchase_intent: Ready to move forward, asking about next steps or how to proceed
 - general: Casual conversation or unclear intent`;
 
-    const result = await generateWithGemini({
+    const result = await generateWithLLM({
       model: MODEL_CONFIG.flash.model,
       input: prompt,
       temperature: 0.2,
@@ -326,7 +326,7 @@ INSTRUCTIONS:
 
 RESPONSE:`;
 
-    const result = await generateWithGemini({
+    const result = await generateWithLLM({
       model: MODEL_CONFIG.flash.model,
       input: prompt,
       temperature: 0.7,

@@ -1,7 +1,8 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
 import { traceable } from 'langsmith/traceable';
 
-import { CostTracker } from '@/lib/costs/costTracker';
+import { BEDROCK_NOVA_2_LITE } from '@/lib/config/models';
+import { CostTracker, trackBedrockUsage } from '@/lib/costs/costTracker';
+import { generateWithLLM } from '@/lib/llm/provider';
 import { logger } from '@/lib/logger';
 import { Finding } from '@/lib/modules/types';
 
@@ -42,15 +43,6 @@ export async function generateActionPlan(
   tracker?: CostTracker
 ): Promise<ActionPlan> {
   logger.info({ businessName: input.businessName }, '[ActionPlan] Generating 90-day plan');
-
-  if (!process.env.GOOGLE_AI_API_KEY) {
-    throw new Error('GOOGLE_AI_API_KEY is missing');
-  }
-
-  const genAI = new GoogleGenerativeAI(process.env.GOOGLE_AI_API_KEY);
-  const model = genAI.getGenerativeModel({ model: 'gemini-1.5-pro' }); // Pro for complex logic
-
-  tracker?.addApiCall('GEMINI_ACTION_PLAN');
 
   // Summarize Findings for Prompt (limit tokens)
   const findingsSummary = input.findings
@@ -93,8 +85,13 @@ export async function generateActionPlan(
     BE SPECIFIC. Do not say "Optimize SEO". Say "Add '${input.city}' to homepage title tag".`;
 
   try {
-    const result = await model.generateContent(prompt);
-    const text = result.response.text();
+    const result = await generateWithLLM({
+      model: BEDROCK_NOVA_2_LITE,
+      input: prompt,
+      responseModality: 'json',
+    });
+    trackBedrockUsage(tracker, result, prompt);
+    const text = result.text;
     const cleanJson = text.replace(/```json|```/g, '').trim();
     const rawPlan = JSON.parse(cleanJson);
 

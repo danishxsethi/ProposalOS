@@ -17,6 +17,7 @@ import { z } from 'zod';
 
 import { generateTraceId, InternalError, NotFoundError, UnauthorizedError } from '@/lib/api/errors';
 import { getServerSession } from '@/lib/auth';
+import { logger } from '@/lib/logger';
 import { withRateLimit } from '@/lib/middleware/rateLimit';
 import { normalizeVertical } from '@/lib/outreach/sprint2/config';
 import { prisma } from '@/lib/prisma';
@@ -188,7 +189,7 @@ async function handleGetLeads(req: NextRequest): Promise<NextResponse> {
     response.headers.set('X-Trace-Id', traceId);
     return response;
   } catch (error) {
-    console.error('Error fetching outreach leads:', error);
+    logger.error('Error fetching outreach leads:', error);
     const internalError = new InternalError('Failed to fetch outreach leads', {
       originalError: error instanceof Error ? error.message : String(error),
     });

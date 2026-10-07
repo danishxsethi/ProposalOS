@@ -63,6 +63,9 @@ export class RedisCache {
           }
           return Math.min(times * 100, 3000);
         },
+        ...(redisUrl.startsWith('rediss://')
+          ? { tls: { rejectUnauthorized: false } }
+          : {}),
       });
 
       this.client.on('error', (err: Error) => {

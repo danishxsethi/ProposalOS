@@ -1,12 +1,11 @@
-import { randomUUID } from 'crypto';
-
 import { EffortLevel, FindingType, OutreachLeadStage, ProspectLeadStatus } from '@prisma/client';
 
-import { runAudit } from '@/lib/audit/runner';
+import { dispatchAuditExecution } from '@/lib/audit/dispatch';
+import { persistFindings } from '@/lib/audit/findingPersistence';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
-import { ProposalQAService } from '@/lib/proposal/ProposalQAService';
 import { generateProposal } from '@/lib/proposal/runner';
+import { processAuditJob } from '@/lib/queue/auditJobWorker';
 import { runWithTenantAsync } from '@/lib/tenant/context';
 
 export interface AuditProposalLoopResult {
@@ -96,49 +95,75 @@ export class AutomatedOutreachOrchestrator {
             // Simulated / Sandboxed offline-safe crawling & findings generation
             await prisma.audit.update({
               where: { id: audit.id },
-              data: { status: 'COMPLETE' },
+              data: { status: 'DEGRADED', trustState: 'DEGRADED_REVIEW_REQUIRED' },
             });
 
-            // Create mock audit findings so the LangChain proposal graph has input data
-            await prisma.finding.createMany({
-              data: [
-                {
-                  id: randomUUID(),
-                  auditId: audit.id,
-                  tenantId,
-                  module: 'SEO',
-                  category: 'SEO',
-                  type: FindingType.PAINKILLER,
-                  title: 'Missing Sitemap and Robot.txt',
-                  description:
-                    'The site has no robot.txt or sitemap configured, reducing indexation speed. Reduces search visibility and organic ranking significantly.',
-                  impactScore: 8,
-                  confidenceScore: 9,
-                  effortEstimate: EffortLevel.LOW,
-                  evidence: [{ url: 'https://example.com' }],
-                },
-                {
-                  id: randomUUID(),
-                  auditId: audit.id,
-                  tenantId,
-                  module: 'PERFORMANCE',
-                  category: 'PERFORMANCE',
-                  type: FindingType.PAINKILLER,
-                  title: 'Slow Largest Contentful Paint (LCP)',
-                  description:
-                    'Hero banner images do not use fetchpriority=high or modern avif compression. Leads to higher user bounce rate.',
-                  impactScore: 6,
-                  confidenceScore: 8,
-                  effortEstimate: EffortLevel.MEDIUM,
-                  evidence: [{ url: 'https://example.com' }],
-                },
-              ],
-            });
+            // Create mock audit findings so the LangChain proposal graph has input data.
+            // Wave 3 (Step 2/4): routed through the one validated persistence boundary
+            // instead of a direct prisma.finding.createMany, and the evidence pointer
+            // is now an honestly-labeled sandbox provenance URI
+            // (`sandbox://outreach-simulate/...`) rather than the fabricated pseudo-URL
+            // `https://example.com` this used to carry — that placeholder domain is
+            // rejected by the contract (P1-25/P2-36) as fabricated evidence. This mode
+            // is a sandboxed test fixture, not a real crawl; the sandbox:// scheme
+            // reflects that truthfully instead of impersonating a real observed source.
+            const { rejected } = await persistFindings(audit.id, tenantId, [
+              {
+                module: 'SEO',
+                category: 'SEO',
+                type: FindingType.PAINKILLER,
+                title: 'Missing Sitemap and Robot.txt',
+                description:
+                  'The site has no robot.txt or sitemap configured, reducing indexation speed. Reduces search visibility and organic ranking significantly.',
+                impactScore: 8,
+                confidenceScore: 9,
+                effortEstimate: EffortLevel.LOW,
+                evidence: [
+                  {
+                    pointer: `sandbox://outreach-simulate/${audit.id}#robots-sitemap`,
+                    source: 'outreach_simulate_sandbox',
+                    collected_at: new Date().toISOString(),
+                    type: 'text',
+                    value: 'simulated: robots.txt/sitemap absent',
+                  },
+                ],
+              },
+              {
+                module: 'PERFORMANCE',
+                category: 'PERFORMANCE',
+                type: FindingType.PAINKILLER,
+                title: 'Slow Largest Contentful Paint (LCP)',
+                description:
+                  'Hero banner images do not use fetchpriority=high or modern avif compression. Leads to higher user bounce rate.',
+                impactScore: 6,
+                confidenceScore: 8,
+                effortEstimate: EffortLevel.MEDIUM,
+                evidence: [
+                  {
+                    pointer: `sandbox://outreach-simulate/${audit.id}#lcp`,
+                    source: 'outreach_simulate_sandbox',
+                    collected_at: new Date().toISOString(),
+                    type: 'text',
+                    value: 'simulated: LCP hero image not optimized',
+                  },
+                ],
+              },
+            ]);
+            if (rejected.length > 0) {
+              logger.warn(
+                { auditId: audit.id, rejected },
+                '[AutomatedOutreachOrchestrator] Simulated findings rejected by contract'
+              );
+            }
 
-            logger.info({ auditId: audit.id }, 'Simulated audit completed successfully');
+            logger.info(
+              { auditId: audit.id, trustState: 'DEGRADED_REVIEW_REQUIRED' },
+              'Sandbox observations persisted; proposal publication is blocked'
+            );
           } else {
             // Execute real crawler
-            await runAudit(audit.id);
+            const job = await dispatchAuditExecution({ tenantId, auditId: audit.id, push: false });
+            await processAuditJob(job.id);
           }
 
           // Fetch the completed audit
@@ -149,7 +174,8 @@ export class AutomatedOutreachOrchestrator {
 
           if (
             !completedAudit ||
-            completedAudit.status === 'FAILED' ||
+            completedAudit.status !== 'COMPLETE' ||
+            completedAudit.trustState !== 'TRUSTED' ||
             completedAudit.findings.length === 0
           ) {
             // Crawl failed
@@ -174,121 +200,7 @@ export class AutomatedOutreachOrchestrator {
           // 2. Trigger Proposal Generation (internally runs ProposalQAService evaluation loops)
           let proposalResult;
           if (simulate) {
-            // Create a mock proposal and evaluate it to ensure fast, deterministic tests
-            const findingIds = completedAudit?.findings.map((f) => f.id) || [];
-            const cityName = lead.city || 'Unknown';
-            const industryName = lead.vertical || 'Unknown';
-
-            const mockProposalContent = {
-              executiveSummary: `Highly targeted growth strategy for ${lead.businessName} (Industry: ${industryName}) in ${cityName}. Our audit identified 4 critical issues, leading to a 35% revenue loss and slow 4.5s speed. Fixing these can drive a 50% increase in bookings and positive conversion.`,
-              painClusters: [],
-              tiers: {
-                essentials: {
-                  name: 'Essentials',
-                  description: 'Core fixes',
-                  findingIds: findingIds,
-                  deliveryTime: '5 business days',
-                  recommended: false,
-                  roi: {
-                    monthlyValue: 500,
-                    ratio: 1.5,
-                    scenarios: {
-                      best: 1000,
-                      base: 500,
-                      worst: 100,
-                      assumptions: ['Cooperation', 'Traffic volume stable'],
-                    },
-                  },
-                },
-                growth: {
-                  name: 'Growth',
-                  description: 'SEO + Perf fixes',
-                  findingIds: findingIds,
-                  deliveryTime: '10 business days',
-                  recommended: true,
-                  roi: {
-                    monthlyValue: 1500,
-                    ratio: 2.0,
-                    scenarios: {
-                      best: 3000,
-                      base: 1500,
-                      worst: 300,
-                      assumptions: ['Cooperation', 'Traffic volume stable'],
-                    },
-                  },
-                },
-                premium: {
-                  name: 'Premium',
-                  description: 'Full service',
-                  findingIds: findingIds,
-                  deliveryTime: '15 business days',
-                  recommended: false,
-                  roi: {
-                    monthlyValue: 4000,
-                    ratio: 2.5,
-                    scenarios: {
-                      best: 8000,
-                      base: 4000,
-                      worst: 800,
-                      assumptions: ['Cooperation', 'Traffic volume stable'],
-                    },
-                  },
-                },
-              },
-              pricing: {
-                essentials: 999,
-                growth: 1999,
-                premium: 3999,
-                currency: 'USD',
-              },
-              assumptions: [
-                'Assumes cooperation with technical staff.',
-                'Assumes standard CMS access is provided.',
-              ],
-              disclaimers: ['Estimates only.'],
-              nextSteps: [
-                'Step 1: Setup Sitemap and Robots.txt. Impact: High. Effort: Low. Timeline: 2 days.',
-                'Step 2: Optimize hero banner image delivery. Impact: High. Effort: Medium. Timeline: 3 days.',
-                'Step 3: Schedule review call. Impact: High. Effort: Low. Timeline: 1 day.',
-              ],
-            };
-
-            // Run the actual ProposalQAService evaluate method
-            const evaluation = ProposalQAService.evaluateProposal(
-              mockProposalContent as any,
-              completedAudit.findings,
-              lead.businessName,
-              lead.city,
-              { industry: lead.vertical }
-            );
-
-            // Create proposal record in db
-            const proposal = await prisma.proposal.create({
-              data: {
-                auditId: audit.id,
-                tenantId,
-                version: 1,
-                executiveSummary: mockProposalContent.executiveSummary,
-                painClusters: [] as any,
-                tierEssentials: mockProposalContent.tiers.essentials as any,
-                tierGrowth: mockProposalContent.tiers.growth as any,
-                tierPremium: mockProposalContent.tiers.premium as any,
-                pricing: mockProposalContent.pricing as any,
-                assumptions: mockProposalContent.assumptions,
-                disclaimers: mockProposalContent.disclaimers,
-                nextSteps: mockProposalContent.nextSteps,
-                status: evaluation.passed ? 'READY' : 'DRAFT',
-                qaScore: evaluation.autoQAStatus.score,
-                qaResults: JSON.parse(JSON.stringify(evaluation)),
-              },
-            });
-
-            proposalResult = {
-              success: true,
-              proposalId: proposal.id,
-              status: proposal.status,
-              evaluation,
-            };
+            proposalResult = await generateProposal(audit.id);
           } else {
             proposalResult = await generateProposal(audit.id);
           }

@@ -1,16 +1,27 @@
-import chromium from '@sparticuz/chromium';
-import puppeteer from 'puppeteer-core';
-
 import { CostTracker } from '@/lib/costs/costTracker';
 import { logger } from '@/lib/logger';
-import { withProviderResilience } from '@/lib/resilience/withProviderResilience';
+import { getLocalLighthouseReport } from '@/lib/performance/localLighthouse';
+import { acquireSharedBrowser, releaseSharedBrowser } from '@/lib/security/browserLauncher';
+import { safePageGoto } from '@/lib/security/safeBrowser';
 
 import { normalizeConfidence } from './findingGenerator';
-import { AuditModuleResult, Finding } from './types';
+import { AuditModuleResult, createEvidence, Finding } from './types';
 
 export interface MobileUXModuleInput {
   url: string;
   businessName: string;
+  signal?: AbortSignal;
+  /**
+   * P1-38 (Wave 7): the `website` module (dependsOn: ['website']) already runs a
+   * real mobile-strategy Lighthouse check for this same URL. When that succeeded,
+   * its score is forwarded here so this module reuses it instead of making a
+   * second mobile browser run — the desktop comparison call
+   * (genuinely new data `website` never fetches) is unaffected.
+   */
+  reusedMobileScore?: number | null;
+  /** P2-43: audit identity used to share one Puppeteer Browser process across
+   * accessibility/mobileUX/conversion instead of each launching its own. */
+  auditId?: string;
 }
 
 interface TouchTargetViolation {
@@ -42,14 +53,15 @@ interface MobileAnalysis {
   hasPWASupport: boolean;
 
   // Performance
-  timeToInteractive: number;
-  largestContentfulPaint: number;
-  cumulativeLayoutShift: number;
-  totalBlockingTime: number;
+  domInteractive: number | null;
+  largestContentfulPaint: number | null;
+  cumulativeLayoutShift: number | null;
+  totalBlockingTime: number | null;
 
   // PageSpeed mobile
-  mobilePerformanceScore: number;
+  mobilePerformanceScore: number | null;
   desktopPerformanceScore?: number;
+  pageSpeedStatus: 'available' | 'unavailable';
 }
 
 /**
@@ -62,8 +74,14 @@ export async function runMobileUXModule(
   logger.info({ url: input.url }, '[MobileUX] Starting mobile analysis');
 
   try {
-    const analysis = await analyzeMobileUX(input.url, tracker);
-    const findings = generateMobileFindings(analysis, input.url, input.businessName);
+    const analysis = await analyzeMobileUX(
+      input.url,
+      tracker,
+      input.signal,
+      input.reusedMobileScore,
+      input.auditId
+    );
+    const findings = generateMobileFindings(analysis, input.url);
 
     const evidenceSnapshot = {
       module: 'mobile_ux',
@@ -85,27 +103,22 @@ export async function runMobileUXModule(
     return {
       findings,
       evidenceSnapshots: [evidenceSnapshot],
+      execution:
+        analysis.pageSpeedStatus === 'available'
+          ? { state: 'complete' }
+          : { state: 'partial', reason: 'Lighthouse metrics were unavailable' },
     };
   } catch (error) {
+    if (input.signal?.aborted) throw input.signal.reason ?? error;
     logger.error({ error, url: input.url }, '[MobileUX] Analysis failed');
 
     return {
-      findings: [
-        {
-          type: 'VITAMIN',
-          category: 'Performance',
-          title: 'Mobile Analysis Unavailable',
-          description:
-            'Unable to complete mobile UX analysis. This may indicate browser issues or network problems.',
-          impactScore: 1,
-          confidenceScore: normalizeConfidence(50, '0-100'),
-          evidence: [],
-          metrics: {},
-          effortEstimate: 'LOW',
-          recommendedFix: ['Try running mobile analysis again later'],
-        },
-      ],
+      findings: [],
       evidenceSnapshots: [],
+      execution: {
+        state: 'failed',
+        reason: error instanceof Error ? error.message : 'Mobile browser analysis failed',
+      },
     };
   }
 }
@@ -113,8 +126,14 @@ export async function runMobileUXModule(
 /**
  * Analyze mobile UX using Puppeteer
  */
-async function analyzeMobileUX(url: string, tracker?: CostTracker): Promise<MobileAnalysis> {
-  const browser = await launchBrowser();
+async function analyzeMobileUX(
+  url: string,
+  tracker?: CostTracker,
+  signal?: AbortSignal,
+  reusedMobileScore?: number | null,
+  auditId?: string
+): Promise<MobileAnalysis> {
+  const { browser, key: browserKey } = await acquireSharedBrowser(auditId);
   const page = await browser.newPage();
 
   try {
@@ -127,11 +146,37 @@ async function analyzeMobileUX(url: string, tracker?: CostTracker): Promise<Mobi
       hasTouch: true,
     });
 
+    await page.evaluateOnNewDocument(() => {
+      const state = { cls: 0, lcp: null as number | null, tbt: 0 };
+      (window as unknown as { __proposalMobileMetrics: typeof state }).__proposalMobileMetrics =
+        state;
+      try {
+        new PerformanceObserver((list) => {
+          for (const entry of list.getEntries() as Array<
+            PerformanceEntry & { hadRecentInput?: boolean; value?: number }
+          >) {
+            if (!entry.hadRecentInput && typeof entry.value === 'number') state.cls += entry.value;
+          }
+        }).observe({ type: 'layout-shift', buffered: true });
+      } catch {}
+      try {
+        new PerformanceObserver((list) => {
+          const latest = list.getEntries().at(-1);
+          if (latest) state.lcp = latest.startTime;
+        }).observe({ type: 'largest-contentful-paint', buffered: true });
+      } catch {}
+      try {
+        new PerformanceObserver((list) => {
+          for (const entry of list.getEntries()) state.tbt += Math.max(0, entry.duration - 50);
+        }).observe({ type: 'longtask', buffered: true });
+      } catch {}
+    });
+
     // Navigate to page
-    await page.goto(url, { waitUntil: 'networkidle2', timeout: 15000 });
+    await safePageGoto(page, url, { waitUntil: 'networkidle2', timeout: 15000 }, signal);
 
     // Wait for any animations/transitions
-    await new Promise((r) => setTimeout(r, 2000));
+    await waitForDelay(2000, signal);
 
     // Analyze layout
     const layoutMetrics = await page.evaluate(() => {
@@ -183,7 +228,7 @@ async function analyzeMobileUX(url: string, tracker?: CostTracker): Promise<Mobi
       const violations: any[] = [];
       const positions: Array<{ x: number; y: number; width: number; height: number }> = [];
 
-      elements.forEach((el, index) => {
+      elements.forEach((el) => {
         const rect = el.getBoundingClientRect();
         const width = rect.width;
         const height = rect.height;
@@ -294,31 +339,24 @@ async function analyzeMobileUX(url: string, tracker?: CostTracker): Promise<Mobi
     // Get performance metrics
     const performanceMetrics = await page.evaluate(() => {
       const perfData = performance.getEntriesByType('navigation')[0] as any;
-      const paintEntries = performance.getEntriesByType('paint');
-
-      const tti = perfData?.domInteractive || 0;
-      const lcp = paintEntries.find((e) => e.name === 'largest-contentful-paint')?.startTime || 0;
-
-      // Layout shift (simplified - would need PerformanceObserver for real CLS)
-      const cls = 0; // Placeholder
-
-      // Total blocking time (simplified)
-      const tbt = perfData?.domContentLoadedEventEnd - perfData?.domContentLoadedEventStart || 0;
+      const observed = (
+        window as unknown as {
+          __proposalMobileMetrics?: { cls: number; lcp: number | null; tbt: number };
+        }
+      ).__proposalMobileMetrics;
 
       return {
-        timeToInteractive: Math.round(tti),
-        largestContentfulPaint: Math.round(lcp),
-        cumulativeLayoutShift: cls,
-        totalBlockingTime: Math.round(tbt),
+        domInteractive:
+          typeof perfData?.domInteractive === 'number' ? Math.round(perfData.domInteractive) : null,
+        largestContentfulPaint: typeof observed?.lcp === 'number' ? Math.round(observed.lcp) : null,
+        cumulativeLayoutShift:
+          typeof observed?.cls === 'number' ? Number(observed.cls.toFixed(4)) : null,
+        totalBlockingTime: typeof observed?.tbt === 'number' ? Math.round(observed.tbt) : null,
       };
     });
 
-    // Get PageSpeed mobile score
-    tracker?.addApiCall('PAGESPEED');
-    const pagespeedData = await fetchPageSpeedMobile(url);
-
-    await page.close();
-    await browser.close();
+    // Get local Lighthouse mobile score
+    const pagespeedData = await fetchPageSpeedMobile(url, tracker, signal, reusedMobileScore);
 
     return {
       ...layoutMetrics,
@@ -326,130 +364,100 @@ async function analyzeMobileUX(url: string, tracker?: CostTracker): Promise<Mobi
       totalClickableElements: touchTargetData.totalClickableElements,
       ...mobileFeatures,
       ...performanceMetrics,
-      mobilePerformanceScore: pagespeedData.mobileScore,
+      mobilePerformanceScore: pagespeedData.mobileScore ?? null,
       desktopPerformanceScore: pagespeedData.desktopScore,
+      pageSpeedStatus: pagespeedData.status,
     };
   } catch (error) {
     logger.error({ error, url }, '[MobileUX] Puppeteer analysis failed');
     throw error;
   } finally {
-    await browser.close();
+    await page.close().catch(() => undefined);
+    await releaseSharedBrowser(browserKey);
   }
 }
 
-async function launchBrowser() {
-  const fs = require('fs');
-  const localPaths = [
-    process.env.CHROME_EXECUTABLE_PATH,
-    '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-    '/Applications/Chromium.app/Contents/MacOS/Chromium',
-    '/usr/bin/google-chrome',
-    '/usr/bin/chromium-browser',
-  ].filter(Boolean) as string[];
-
-  let executablePath: string | undefined;
-  for (const p of localPaths) {
-    if (p && fs.existsSync(p)) {
-      executablePath = p;
-      break;
+function waitForDelay(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(signal.reason ?? new DOMException('Aborted', 'AbortError'));
+      return;
     }
-  }
-
-  if (!executablePath) {
-    try {
-      executablePath = await chromium.executablePath();
-    } catch {
-      // Ignore
-    }
-  }
-
-  if (!executablePath) {
-    throw new Error('Chromium not found. Install Chrome or set CHROME_EXECUTABLE_PATH.');
-  }
-
-  return puppeteer.launch({
-    args: ['--no-sandbox', '--disable-setuid-sandbox'],
-    defaultViewport: { width: 1920, height: 1080, deviceScaleFactor: 1 },
-    executablePath,
-    headless: true,
+    const onAbort = () => {
+      clearTimeout(timer);
+      reject(signal?.reason ?? new DOMException('Aborted', 'AbortError'));
+    };
+    const timer = setTimeout(() => {
+      signal?.removeEventListener('abort', onAbort);
+      resolve();
+    }, ms);
+    signal?.addEventListener('abort', onAbort, { once: true });
   });
 }
 
 /**
- * Fetch PageSpeed Insights for mobile and desktop
+ * Run local Lighthouse for mobile and desktop. The website module forwards its
+ * mobile result so the same expensive browser run is not repeated.
  */
 async function fetchPageSpeedMobile(
-  url: string
-): Promise<{ mobileScore: number; desktopScore?: number }> {
+  url: string,
+  tracker?: CostTracker,
+  signal?: AbortSignal,
+  reusedMobileScore?: number | null
+): Promise<{ status: 'available' | 'unavailable'; mobileScore?: number; desktopScore?: number }> {
   try {
-    const apiKey = process.env.GOOGLE_PAGESPEED_API_KEY;
-    if (!apiKey) {
-      logger.warn('[MobileUX] No PageSpeed API key, skipping PageSpeed check');
-      return { mobileScore: 0 };
+    // P1-38 (Wave 7): `website` already performed a mobile Lighthouse run for
+    // this URL. Reuse its score instead of launching Chromium again.
+    let mobileScore: number;
+    if (typeof reusedMobileScore === 'number') {
+      mobileScore = reusedMobileScore;
+    } else {
+      tracker?.addApiCall('LIGHTHOUSE');
+      const report = await getLocalLighthouseReport(url, 'mobile', signal);
+      const score = report.categories?.performance?.score;
+      if (typeof score !== 'number') return { status: 'unavailable' };
+      mobileScore = Math.round(score * 100);
     }
-
-    // Mobile strategy
-    const mobileUrl = `https://www.googleapis.com/pagespeedonline/v5/runPagespeed?url=${encodeURIComponent(url)}&strategy=mobile&key=${apiKey}`;
-    const mobileData = await withProviderResilience<any>(
-      {
-        provider: 'pagespeed',
-        operation: 'mobileUX:fetchPageSpeedMobile:mobile',
-        degrade: true,
-        fallbackValue: { lighthouseResult: { categories: { performance: { score: 0 } } } },
-      },
-      async () => {
-        const mobileRes = await fetch(mobileUrl);
-        if (!mobileRes.ok)
-          throw new Error(`HTTP error ${mobileRes.status}: ${mobileRes.statusText}`);
-        return await mobileRes.json();
-      }
-    );
-
-    const mobileScore = Math.round(
-      (mobileData.lighthouseResult?.categories?.performance?.score || 0) * 100
-    );
 
     // Try to get desktop score for comparison
     let desktopScore: number | undefined;
     try {
-      const desktopUrl = `https://www.googleapis.com/pagespeedonline/v5/runPagespeed?url=${encodeURIComponent(url)}&strategy=desktop&key=${apiKey}`;
-      const desktopData = await withProviderResilience<any>(
-        {
-          provider: 'pagespeed',
-          operation: 'mobileUX:fetchPageSpeedMobile:desktop',
-          degrade: true,
-          fallbackValue: { lighthouseResult: { categories: { performance: { score: 0 } } } },
-        },
-        async () => {
-          const desktopRes = await fetch(desktopUrl);
-          if (!desktopRes.ok)
-            throw new Error(`HTTP error ${desktopRes.status}: ${desktopRes.statusText}`);
-          return await desktopRes.json();
-        }
-      );
-      desktopScore = Math.round(
-        (desktopData.lighthouseResult?.categories?.performance?.score || 0) * 100
-      );
+      tracker?.addApiCall('LIGHTHOUSE');
+      const report = await getLocalLighthouseReport(url, 'desktop', signal);
+      const score = report.categories?.performance?.score;
+      if (typeof score === 'number') desktopScore = Math.round(score * 100);
     } catch {
       // Desktop score is optional
     }
 
-    return { mobileScore, desktopScore };
+    return { status: 'available', mobileScore, desktopScore };
   } catch (error) {
-    logger.warn({ error }, '[MobileUX] PageSpeed fetch failed');
-    return { mobileScore: 0 };
+    if (signal?.aborted) throw signal.reason ?? error;
+    logger.warn({ error }, '[MobileUX] Lighthouse run failed');
+    return { status: 'unavailable' };
   }
 }
 
 /**
  * Generate findings from mobile analysis
  */
-function generateMobileFindings(
-  analysis: MobileAnalysis,
-  url: string,
-  businessName: string
-): Finding[] {
+function generateMobileFindings(analysis: MobileAnalysis, url: string): Finding[] {
   const findings: Finding[] = [];
+  const collectedAt = new Date().toISOString();
+  const evidence = (
+    pointer: string,
+    value: string | number,
+    label: string,
+    type: 'text' | 'metric' = 'text'
+  ) =>
+    createEvidence({
+      pointer,
+      source: 'mobile_browser_analysis',
+      collected_at: collectedAt,
+      type,
+      value,
+      label,
+    });
 
   // PAINKILLER: No mobile viewport meta tag
   if (!analysis.hasViewportMeta) {
@@ -462,12 +470,7 @@ function generateMobileFindings(
       impactScore: 9,
       confidenceScore: normalizeConfidence(100, '0-100'),
       evidence: [
-        {
-          type: 'text',
-          value:
-            'Meta tag missing: <meta name="viewport" content="width=device-width, initial-scale=1">',
-          label: 'Viewport Meta',
-        },
+        evidence(`${url}#meta[name=viewport]`, 'Viewport meta tag absent', 'Viewport Meta'),
       ],
       metrics: {
         hasViewportMeta: false,
@@ -492,11 +495,7 @@ function generateMobileFindings(
       impactScore: 9,
       confidenceScore: normalizeConfidence(100, '0-100'),
       evidence: [
-        {
-          type: 'text',
-          value: 'Content width exceeds viewport width',
-          label: 'Horizontal Overflow',
-        },
+        evidence(`${url}#document-body`, 'Content width exceeds viewport', 'Horizontal Overflow'),
       ],
       metrics: {
         hasHorizontalOverflow: true,
@@ -512,7 +511,7 @@ function generateMobileFindings(
   }
 
   // PAINKILLER: Mobile performance score <30
-  if (analysis.mobilePerformanceScore < 30 && analysis.mobilePerformanceScore > 0) {
+  if (analysis.mobilePerformanceScore !== null && analysis.mobilePerformanceScore < 30) {
     findings.push({
       type: 'PAINKILLER',
       category: 'Performance',
@@ -521,15 +520,20 @@ function generateMobileFindings(
       impactScore: 8,
       confidenceScore: normalizeConfidence(95, '0-100'),
       evidence: [
-        {
+        createEvidence({
+          pointer: url,
+          source: 'lighthouse_local',
+          collected_at: collectedAt,
           type: 'metric',
           value: analysis.mobilePerformanceScore,
-          label: 'Mobile Performance Score',
-        },
+          label: 'Mobile Lab Performance Score',
+        }),
       ],
       metrics: {
         mobilePerformanceScore: analysis.mobilePerformanceScore,
-        timeToInteractive: analysis.timeToInteractive,
+        domInteractiveMs: analysis.domInteractive,
+        formFactor: 'mobile',
+        dataType: 'lab',
       },
       effortEstimate: 'HIGH',
       recommendedFix: [
@@ -553,14 +557,9 @@ function generateMobileFindings(
         '60% of site traffic is mobile. Make it easy for mobile users to call you with one tap by wrapping phone numbers in tel: links.',
       impactScore: 7,
       confidenceScore: normalizeConfidence(95, '0-100'),
-      evidence: [
-        {
-          type: 'text',
-          value: 'No tel: links detected',
-          label: 'Click-to-Call',
-        },
-      ],
+      evidence: [evidence(`${url}#a[href^=tel]`, 'No tel: links detected', 'Click-to-Call')],
       metrics: {
+        schemaFingerprint: 'contact:click-to-call',
         hasClickToCall: false,
       },
       effortEstimate: 'LOW',
@@ -581,11 +580,15 @@ function generateMobileFindings(
       description: `Found ${analysis.touchTargetViolations.length} touch target issues. Buttons and links should be at least 44x44px with 8px spacing for easy tapping.`,
       impactScore: 6,
       confidenceScore: normalizeConfidence(90, '0-100'),
-      evidence: analysis.touchTargetViolations.slice(0, 5).map((v) => ({
-        type: 'text',
-        value: `${v.element}: ${v.width}x${v.height}px - ${v.issue}`,
-        label: 'Touch Target Violation',
-      })),
+      evidence: analysis.touchTargetViolations
+        .slice(0, 5)
+        .map((violation) =>
+          evidence(
+            `${url}#${encodeURIComponent(violation.element)}`,
+            `${violation.width}x${violation.height}px - ${violation.issue}`,
+            'Touch Target Violation'
+          )
+        ),
       metrics: {
         violationCount: analysis.touchTargetViolations.length,
         totalClickable: analysis.totalClickableElements,
@@ -602,8 +605,8 @@ function generateMobileFindings(
 
   // VITAMIN: Mobile score significantly lower than desktop
   if (
-    analysis.desktopPerformanceScore &&
-    analysis.mobilePerformanceScore > 0 &&
+    analysis.desktopPerformanceScore !== undefined &&
+    analysis.mobilePerformanceScore !== null &&
     analysis.desktopPerformanceScore - analysis.mobilePerformanceScore > 20
   ) {
     findings.push({
@@ -614,11 +617,14 @@ function generateMobileFindings(
       impactScore: 5,
       confidenceScore: normalizeConfidence(95, '0-100'),
       evidence: [
-        {
-          type: 'metric',
-          value: `Mobile: ${analysis.mobilePerformanceScore}, Desktop: ${analysis.desktopPerformanceScore}`,
-          label: 'Performance Comparison',
-        },
+        createEvidence({
+          pointer: url,
+          source: 'lighthouse_local',
+          collected_at: collectedAt,
+          type: 'text',
+          value: `Mobile ${analysis.mobilePerformanceScore}; desktop ${analysis.desktopPerformanceScore}`,
+          label: 'Lab Performance Comparison',
+        }),
       ],
       metrics: {
         mobileScore: analysis.mobilePerformanceScore,
@@ -646,11 +652,7 @@ function generateMobileFindings(
       impactScore: 4,
       confidenceScore: normalizeConfidence(85, '0-100'),
       evidence: [
-        {
-          type: 'text',
-          value: 'No sticky bottom CTA detected',
-          label: 'Bottom CTA Bar',
-        },
+        evidence(`${url}#document-body`, 'No fixed bottom CTA detected', 'Bottom CTA Bar'),
       ],
       metrics: {
         hasBottomCTA: false,
@@ -676,11 +678,11 @@ function generateMobileFindings(
       impactScore: 4,
       confidenceScore: normalizeConfidence(90, '0-100'),
       evidence: [
-        {
-          type: 'text',
-          value: 'No Google Maps or Apple Maps links found',
-          label: 'Directions Link',
-        },
+        evidence(
+          `${url}#a[href*=maps]`,
+          'No Google Maps or Apple Maps links found',
+          'Directions Link'
+        ),
       ],
       metrics: {
         hasMapDirections: false,
@@ -705,11 +707,7 @@ function generateMobileFindings(
       impactScore: 3,
       confidenceScore: normalizeConfidence(90, '0-100'),
       evidence: [
-        {
-          type: 'metric',
-          value: analysis.smallTextCount,
-          label: 'Small Text Elements',
-        },
+        evidence(`${url}#text-elements`, analysis.smallTextCount, 'Small Text Elements', 'metric'),
       ],
       metrics: {
         smallTextCount: analysis.smallTextCount,

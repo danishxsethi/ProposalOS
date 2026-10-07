@@ -2,14 +2,20 @@
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { createEvidence } from '@/lib/modules/types';
+import { buildProposalGrounding } from '@/lib/proposal/grounding';
+
 const mocks = vi.hoisted(() => ({
   auth: vi.fn(),
   validateApiKey: vi.fn(),
   auditFindFirst: vi.fn(),
   evidenceFindMany: vi.fn(),
   proposalCreate: vi.fn(),
+  proposalUpdate: vi.fn(),
+  compileProposal: vi.fn(),
   auditUpdate: vi.fn(),
   invokeDiagnosisGraphWithTimeout: vi.fn(),
+  invokeProposalGraphWithTimeout: vi.fn(),
   runProposalPipeline: vi.fn(),
   runAutoQA: vi.fn(),
   evaluateProposal: vi.fn(),
@@ -30,6 +36,7 @@ vi.mock('@/lib/logger', () => ({
     info: vi.fn(),
     warn: vi.fn(),
     debug: vi.fn(),
+    error: vi.fn(),
   },
   logError: vi.fn(),
 }));
@@ -43,10 +50,12 @@ vi.mock('@/lib/prisma', () => ({
     evidenceSnapshot: {
       findMany: mocks.evidenceFindMany,
     },
-    proposal: {
-      create: mocks.proposalCreate,
-    },
+    proposal: { create: mocks.proposalCreate, update: mocks.proposalUpdate },
   },
+}));
+vi.mock('@/lib/proposal/compiler', () => ({
+  compileAndPersistProposal: mocks.compileProposal,
+  getCurrentProposalVersion: vi.fn().mockResolvedValue(1),
 }));
 
 vi.mock('@/lib/tenant/context', () => ({
@@ -85,6 +94,10 @@ vi.mock('@/lib/graph/diagnosis-graph', () => ({
   invokeDiagnosisGraphWithTimeout: mocks.invokeDiagnosisGraphWithTimeout,
 }));
 
+vi.mock('@/lib/graph/proposal-graph', () => ({
+  invokeProposalGraphWithTimeout: mocks.invokeProposalGraphWithTimeout,
+}));
+
 vi.mock('@/lib/proposal', () => ({
   runProposalPipeline: mocks.runProposalPipeline,
 }));
@@ -101,6 +114,92 @@ vi.mock('@/lib/proposal/ProposalQAService', () => ({
 
 import { POST } from '@/app/api/audit/[id]/regenerate/route';
 
+function finding() {
+  return {
+    id: 'finding-1',
+    auditId: 'audit-1',
+    tenantId: 'tenant-a',
+    module: 'performance',
+    category: 'Performance',
+    type: 'PAINKILLER',
+    title: 'Slow site',
+    description: 'Slow site delivery was measured.',
+    impactScore: 8,
+    confidenceScore: 9,
+    evidence: [
+      createEvidence({
+        pointer: 'https://acme.test/',
+        source: 'pagespeed_v5',
+        value: 4200,
+        label: 'LCP',
+      }),
+    ],
+    metrics: { lcpMs: 4200 },
+    effortEstimate: 'MEDIUM',
+    recommendedFix: ['Address Slow site'],
+  } as any;
+}
+
+function proposalResult() {
+  const findings = [finding()];
+  const proposal: any = {
+    executiveSummary: 'Acme Dental: Validated audit finding: Slow site.',
+    painClusters: [
+      {
+        id: 'cluster-1',
+        rootCause: 'Slow site',
+        severity: 'high',
+        findingIds: ['finding-1'],
+      },
+    ],
+    topActions: [
+      {
+        findingId: 'finding-1',
+        title: 'Slow site',
+        impact: 8,
+        effort: 'MEDIUM',
+        timeline: '14-21 days',
+      },
+    ],
+    tiers: {
+      essentials: {
+        name: 'Essentials',
+        description: 'Addresses: Slow site',
+        findingIds: ['finding-1'],
+        deliveryTime: '5 business days',
+        price: 100,
+        features: ['Address Slow site'],
+      },
+      growth: {
+        name: 'Growth',
+        description: 'Addresses: Slow site',
+        findingIds: ['finding-1'],
+        deliveryTime: '10 business days',
+        price: 200,
+        features: ['Address Slow site'],
+      },
+      premium: {
+        name: 'Premium',
+        description: 'Addresses: Slow site',
+        findingIds: ['finding-1'],
+        deliveryTime: '15 business days',
+        price: 300,
+        features: ['Address Slow site'],
+      },
+    },
+    pricing: { essentials: 100, growth: 200, premium: 300, currency: 'USD' },
+    assumptions: ['Scope requires confirmation'],
+    disclaimers: ['Automated findings require review'],
+    nextSteps: ['Review and approve a tier'],
+  };
+  proposal.grounding = buildProposalGrounding(
+    proposal,
+    { auditId: 'audit-1', tenantId: 'tenant-a', findings },
+    ['finding-1']
+  );
+  return proposal;
+}
+
 describe('audit regenerate authorization', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -112,20 +211,11 @@ describe('audit regenerate authorization', () => {
     mocks.validateApiKey.mockResolvedValue(null);
     mocks.evidenceFindMany.mockResolvedValue([]);
     mocks.invokeDiagnosisGraphWithTimeout.mockResolvedValue({
+      resultState: 'trusted',
       clusters: [{ findingIds: ['finding-1'] }],
     });
-    mocks.runProposalPipeline.mockResolvedValue({
-      executiveSummary: 'Updated summary',
-      tiers: {
-        essentials: { name: 'Essentials', findingIds: ['finding-1'], deliveryTime: '5 days' },
-        growth: { name: 'Growth', findingIds: ['finding-1'], deliveryTime: '10 days' },
-        premium: { name: 'Premium', findingIds: ['finding-1'], deliveryTime: '15 days' },
-      },
-      pricing: { essentials: 100, growth: 200, premium: 300, currency: 'USD' },
-      assumptions: ['Access required'],
-      disclaimers: ['Results may vary'],
-      nextSteps: ['Reply to schedule'],
-    });
+    mocks.runProposalPipeline.mockResolvedValue(proposalResult());
+    mocks.invokeProposalGraphWithTimeout.mockResolvedValue({ completeProposal: proposalResult() });
     mocks.runAutoQA.mockReturnValue({
       score: 75,
       passedChecks: 10,
@@ -152,10 +242,24 @@ describe('audit regenerate authorization', () => {
         webLinkToken: 'token-2',
         executiveSummary: args?.data?.executiveSummary ?? 'Updated summary',
         pricing: args?.data?.pricing ?? { essentials: 100 },
-        status: args?.data?.status ?? 'READY',
+        status: args?.data?.status ?? 'DRAFT',
       };
     });
+    mocks.proposalUpdate.mockImplementation(async (args: any) => ({
+      id: 'proposal-2',
+      version: 1,
+      webLinkToken: 'token-2',
+      executiveSummary: 'Updated summary',
+      pricing: { essentials: 100 },
+      status: args?.data?.status ?? 'READY',
+    }));
     mocks.auditUpdate.mockResolvedValue({});
+    mocks.compileProposal.mockResolvedValue({
+      proposalRecord: { id: 'proposal-2', version: 1, webLinkToken: 'token-2', status: 'READY' },
+      proposal: { executiveSummary: 'Compiled proposal', pricing: {} },
+      evaluation: { autoQAStatus: { score: 75 }, dimensions: {}, overallScore: 75, passed: true, feedbackLogs: [] },
+      costTracker: { getTotalCents: () => 11 },
+    });
 
     // Bridge evaluateProposal to runAutoQA
     mocks.evaluateProposal.mockImplementation(
@@ -230,10 +334,13 @@ describe('audit regenerate authorization', () => {
     mocks.auditFindFirst.mockResolvedValue({
       id: 'audit-1',
       tenantId: 'tenant-a',
+      status: 'COMPLETE',
+      trustState: 'TRUSTED',
       businessName: 'Acme Dental',
       businessIndustry: 'Dental',
       businessCity: 'Regina',
-      findings: [{ id: 'finding-1', impactScore: 8, type: 'PAINKILLER', evidence: [] }],
+      businessUrl: null,
+      findings: [finding()],
       proposals: [],
     });
 
@@ -247,18 +354,10 @@ describe('audit regenerate authorization', () => {
       id: 'proposal-2',
       version: 1,
       webLinkToken: 'token-2',
-      status: 'READY', // QA score 75 >= 60 → READY
+      status: 'READY', // QA score 75 and eligible grounding → READY
       regenerationsRemaining: 2,
       costCents: 11,
     });
-    expect(mocks.proposalCreate).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({
-          auditId: 'audit-1',
-          tenantId: 'tenant-a',
-          status: 'READY',
-        }),
-      })
-    );
+    expect(mocks.compileProposal).toHaveBeenCalledWith({ auditId: 'audit-1', tenantId: 'tenant-a', version: 1 });
   });
 });

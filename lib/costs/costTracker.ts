@@ -13,42 +13,33 @@ import { CostCapExceededError, TenantBudgetExceededError } from './errors';
 
 export const COSTS = {
   PAGESPEED_COST_CENTS: 0,
+  LIGHTHOUSE_COST_CENTS: 0,
+  // P2-27: raw same-origin HTML fetches (e.g. techStack's homepage fetch) carry no
+  // per-call provider fee, but the call itself must still be visible to CostTracker
+  // so usage/bounds reporting reflects every real network call an audit made.
+  WEBSITE_FETCH_COST_CENTS: 0,
   PLACES_TEXT_SEARCH_CENTS: 3, // $0.032 -> 3 cents
   PLACES_DETAILS_CENTS: 2, // $0.017 -> 2 cents
   SERP_API_CENTS: 1, // $0.01 -> 1 cent
-  GEMINI_FLASH_PER_1K_INPUT_CENTS: 0.01,
-  GEMINI_FLASH_PER_1K_OUTPUT_CENTS: 0.03,
-  GEMINI_PRO_PER_1K_INPUT_CENTS: 0.07,
-  GEMINI_PRO_PER_1K_OUTPUT_CENTS: 0.21,
-  GEMINI_31_PRO_PER_1K_INPUT_CENTS: 0.125, // $1.25 / 1M = 0.125 cents / 1K
-  GEMINI_31_PRO_PER_1K_OUTPUT_CENTS: 0.5, // $5.00 / 1M = 0.50 cents / 1K
+  BEDROCK_NOVA_MICRO_PER_1K_INPUT_CENTS: 0.0035,
+  BEDROCK_NOVA_MICRO_PER_1K_OUTPUT_CENTS: 0.014,
+  BEDROCK_NOVA_2_LITE_PER_1K_INPUT_CENTS: 0.03,
+  BEDROCK_NOVA_2_LITE_PER_1K_OUTPUT_CENTS: 0.25,
 };
-
-// User only specified input costs. I will stick to their request for input primarily
-// but logic should support output if needed.
-// "GEMINI_FLASH_PER_1K_INPUT_CENTS = 0.01 (essentially free)"
-// "GEMINI_PRO_PER_1K_INPUT_CENTS = 0.07"
 
 export type ApiType =
   | 'PAGESPEED'
+  | 'LIGHTHOUSE'
+  | 'WEBSITE_FETCH'
   | 'PLACES_TEXT_SEARCH'
   | 'PLACES_DETAILS'
   | 'SERP_API'
   | 'SERP'
   | 'PLACES_DETAILS_DEEP'
-  | 'GEMINI_FLASH'
-  | 'GEMINI_PRO'
-  | 'GEMINI'
-  | 'GEMINI_STRATEGY'
-  | 'GEMINI_KEYWORD_GEN'
-  | 'GEMINI_PHOTO_ANALYSIS'
   | 'SERP_API_SEARCH'
   | 'CRAWLER_COMPETITOR'
-  | 'GBP_COMPETITOR'
-  | 'GEMINI_ACTION_PLAN'
-  | 'GEMINI_REVIEW_RESPONSE'
-  | 'GEMINI_31_PRO';
-export type LlmModel = 'GEMINI_FLASH' | 'GEMINI_PRO' | 'GEMINI_31_PRO';
+  | 'GBP_COMPETITOR';
+export type LlmModel = 'BEDROCK_NOVA_MICRO' | 'BEDROCK_NOVA_2_LITE';
 
 /**
  * Pricing tier budget configurations
@@ -275,7 +266,7 @@ export class CostTracker {
   private tenantId?: string;
   private tenantTier?: TenantTier;
   private alertTriggered: boolean = false;
-  private trackedGeminiSpend: Record<string, number> = {}; // Per-model spend tracking
+  private trackedLlmSpend: Record<string, number> = {}; // Per-model spend tracking
 
   constructor(options?: {
     capCents?: number;
@@ -298,6 +289,18 @@ export class CostTracker {
     this.alertThresholdCents = (this.capCents * alertPercent) / 100;
   }
 
+  hasBudgetForApiCall(api: ApiType, count: number = 1): boolean {
+    const costPerCall =
+      api === 'PLACES_TEXT_SEARCH'
+        ? COSTS.PLACES_TEXT_SEARCH_CENTS
+        : api === 'PLACES_DETAILS'
+          ? COSTS.PLACES_DETAILS_CENTS
+          : api === 'SERP_API' || api === 'SERP'
+            ? COSTS.SERP_API_CENTS
+            : 0;
+    return this.totalCents + costPerCall * count <= this.capCents;
+  }
+
   /**
    * Add cost for standard API calls
    */
@@ -306,6 +309,12 @@ export class CostTracker {
     switch (api) {
       case 'PAGESPEED':
         costPerCall = COSTS.PAGESPEED_COST_CENTS;
+        break;
+      case 'LIGHTHOUSE':
+        costPerCall = COSTS.LIGHTHOUSE_COST_CENTS;
+        break;
+      case 'WEBSITE_FETCH':
+        costPerCall = COSTS.WEBSITE_FETCH_COST_CENTS;
         break;
       case 'PLACES_TEXT_SEARCH':
         costPerCall = COSTS.PLACES_TEXT_SEARCH_CENTS;
@@ -357,17 +366,13 @@ export class CostTracker {
     let outputCostPer1k = 0;
 
     switch (model) {
-      case 'GEMINI_FLASH':
-        inputCostPer1k = COSTS.GEMINI_FLASH_PER_1K_INPUT_CENTS;
-        outputCostPer1k = COSTS.GEMINI_FLASH_PER_1K_OUTPUT_CENTS;
+      case 'BEDROCK_NOVA_MICRO':
+        inputCostPer1k = COSTS.BEDROCK_NOVA_MICRO_PER_1K_INPUT_CENTS;
+        outputCostPer1k = COSTS.BEDROCK_NOVA_MICRO_PER_1K_OUTPUT_CENTS;
         break;
-      case 'GEMINI_PRO':
-        inputCostPer1k = COSTS.GEMINI_PRO_PER_1K_INPUT_CENTS;
-        outputCostPer1k = COSTS.GEMINI_PRO_PER_1K_OUTPUT_CENTS;
-        break;
-      case 'GEMINI_31_PRO':
-        inputCostPer1k = COSTS.GEMINI_31_PRO_PER_1K_INPUT_CENTS;
-        outputCostPer1k = COSTS.GEMINI_31_PRO_PER_1K_OUTPUT_CENTS;
+      case 'BEDROCK_NOVA_2_LITE':
+        inputCostPer1k = COSTS.BEDROCK_NOVA_2_LITE_PER_1K_INPUT_CENTS;
+        outputCostPer1k = COSTS.BEDROCK_NOVA_2_LITE_PER_1K_OUTPUT_CENTS;
         break;
     }
 
@@ -377,9 +382,9 @@ export class CostTracker {
 
     this.totalCents += cost;
 
-    // P1: Track Gemini spend per model for tenant reporting
+    // Track LLM spend per model for tenant reporting.
     const modelKey = `LLM_${model}`;
-    this.trackedGeminiSpend[modelKey] = (this.trackedGeminiSpend[modelKey] || 0) + cost;
+    this.trackedLlmSpend[modelKey] = (this.trackedLlmSpend[modelKey] || 0) + cost;
 
     this.usage[modelKey] = (this.usage[modelKey] || 0) + 1;
     this.usage[`${modelKey}_INPUT_TOKENS`] =
@@ -435,13 +440,16 @@ export class CostTracker {
   }
 
   /**
-   * Get detailed usage report with Gemini spend breakdown
+   * Get detailed usage report with per-model LLM spend breakdown
    */
   getReport() {
+    const llmSpendByModel = { ...this.trackedLlmSpend };
     return {
       totalCents: this.getTotalCents(),
       usage: this.usage,
-      geminiSpendByModel: { ...this.trackedGeminiSpend },
+      llmSpendByModel,
+      /** @deprecated Retained for consumers of historical cost-report payloads. */
+      geminiSpendByModel: llmSpendByModel,
       tenantId: this.tenantId,
       tenantTier: this.tenantTier,
     };
@@ -491,14 +499,139 @@ export function getTierBudget(tier: TenantTier): (typeof TIER_BUDGETS)[TenantTie
 }
 
 /**
- * Check if tenant has exceeded daily audit limit
+ * Check if tenant has exceeded daily audit limit.
+ * Uses Redis-backed tracker for cross-instance coordination.
  */
-export function checkDailyAuditLimit(tenantId: string): {
+export async function checkDailyAuditLimitRedis(
+  tenantId: string,
+  tier: TenantTier
+): Promise<{
+  allowed: boolean;
+  todayCount: number;
+  limit: number;
+  remaining: number;
+}> {
+  const { checkAndIncrementDailyAudit } = await import('./redisSpendTracker');
+  const result = await checkAndIncrementDailyAudit(tenantId, tier);
+  return {
+    allowed: result.allowed,
+    todayCount: result.todayCount,
+    limit: result.limit,
+    remaining: Math.max(0, result.limit - result.todayCount),
+  };
+}
+
+/**
+ * Reserve budget for a new audit (pre-flight) — ATOMIC.
+ *
+ * Implements RESERVE-THEN-SETTLE:
+ * - Atomically increments the global spend by the tier's perAuditCapCents
+ * - Returns allowed=false if this would exceed the monthly budget
+ * - After audit completion, call settleAuditSpend() to release unused reservation
+ *
+ * Worst-case overshoot: ZERO (cap enforced at reservation time, atomically).
+ * Worst-case under-utilization: N_concurrent × (perAuditCapCents - actualCost).
+ * This is conservative but guarantees the cap is never breached.
+ */
+export async function reserveAuditBudget(
+  tenantId: string,
+  tier: TenantTier
+): Promise<{
+  allowed: boolean;
+  reservedCents: number;
+  currentSpendCents: number;
+  capCents: number;
+  reason?: string;
+}> {
+  const { checkAndAddSpend } = await import('./redisSpendTracker');
+  const budget = TIER_BUDGETS[tier];
+  const reservationCents = budget.perAuditCapCents;
+  const result = await checkAndAddSpend(tenantId, reservationCents, tier);
+  return { ...result, reservedCents: reservationCents };
+}
+
+/**
+ * Settle an audit's actual cost — release unused reservation back to budget.
+ *
+ * Call AFTER the audit completes with the real cost from CostTracker.getTotalCents().
+ * If actual < reserved, the difference is released (INCRBYFLOAT negative delta).
+ */
+export async function settleAuditSpend(
+  tenantId: string,
+  reservedCents: number,
+  actualCents: number,
+  tier: TenantTier
+): Promise<void> {
+  const delta = actualCents - reservedCents;
+  if (delta >= 0) return; // No release needed (exact or over — over shouldn't happen)
+
+  const now = new Date();
+  const monthKey = `spend:${tenantId}:monthly:${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}`;
+  try {
+    const { getSharedStore } = await import('@/lib/store/shared');
+    const store = await getSharedStore();
+    await store.incrementFloat(monthKey, delta, 31 * 24 * 3600); // negative delta = release
+    logger.info(
+      { tenantId, reserved: reservedCents, actual: actualCents, released: -delta },
+      '[SpendTracker] Settled audit — released unused reservation'
+    );
+  } catch {
+    // Non-critical: reservation stays (conservative — budget slightly over-reserved)
+    logger.warn({ tenantId }, '[SpendTracker] Failed to release reservation (conservative)');
+  }
+}
+
+/**
+ * Check if tenant has budget for a new audit (pre-flight) — atomic increment.
+ * Reserves the estimatedCostCents against the monthly cap.
+ * @deprecated Use reserveAuditBudget() for proper reserve-then-settle semantics.
+ */
+export async function checkMonthlyBudget(
+  tenantId: string,
+  tier: TenantTier,
+  estimatedCostCents: number
+): Promise<{ allowed: boolean; currentSpendCents: number; capCents: number; reason?: string }> {
+  const { checkAndAddSpend } = await import('./redisSpendTracker');
+  return checkAndAddSpend(tenantId, estimatedCostCents, tier);
+}
+
+/**
+ * @deprecated Use settleAuditSpend() for proper reserve-then-settle.
+ */
+export async function reportAuditSpend(
+  tenantId: string,
+  actualCostCents: number,
+  tier: TenantTier
+): Promise<void> {
+  const { getCurrentMonthlySpend } = await import('./redisSpendTracker');
+  const current = await getCurrentMonthlySpend(tenantId);
+  logger.info(
+    { tenantId, actualCostCents, currentMonthlySpend: current, tier },
+    '[SpendTracker] Audit spend reported (legacy)'
+  );
+}
+
+/**
+ * Check if tenant has exceeded daily audit limit (legacy in-memory — kept for backward compat)
+ */
+export function checkDailyAuditLimit(
+  tenantId: string,
+  isInternalOps = false
+): {
   allowed: boolean;
   todayCount: number;
   limit: number;
   remaining: number;
 } {
+  if (isInternalOps) {
+    return {
+      allowed: true,
+      todayCount: 0,
+      limit: Number.MAX_SAFE_INTEGER,
+      remaining: Number.MAX_SAFE_INTEGER,
+    };
+  }
+
   const record = globalSpendTracker.getRecord(tenantId);
   if (!record) {
     return {
@@ -532,4 +665,28 @@ export function getGlobalSpendSummary() {
  */
 export function incrementAuditCount(tenantId: string): void {
   globalSpendTracker.incrementAuditCount(tenantId);
+}
+
+/** Record actual Bedrock token usage against the audit and tenant spend caps. */
+export function trackBedrockUsage(
+  tracker: CostTracker | undefined,
+  response: {
+    model?: string;
+    provider?: string;
+    cached?: boolean;
+    text?: string;
+    usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number };
+  },
+  input: string
+): void {
+  if (!tracker || response.cached || (response.provider && response.provider !== 'bedrock')) return;
+
+  const model: LlmModel = response.model?.includes('nova-2-lite')
+    ? 'BEDROCK_NOVA_2_LITE'
+    : 'BEDROCK_NOVA_MICRO';
+  tracker.addLlmCall(
+    model,
+    response.usageMetadata?.promptTokenCount ?? Math.ceil(input.length / 4),
+    response.usageMetadata?.candidatesTokenCount ?? Math.ceil((response.text?.length || 0) / 4)
+  );
 }
