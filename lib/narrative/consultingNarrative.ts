@@ -1,9 +1,8 @@
 import fs from 'fs';
 import path from 'path';
 
-import { GoogleGenerativeAI } from '@google/generative-ai';
-
-import { GEMINI_FLASH, GEMINI_PRO } from '@/lib/config/models';
+import { BEDROCK_NOVA_2_LITE } from '@/lib/config/models';
+import { generateWithLLM } from '@/lib/llm/provider';
 import { logger } from '@/lib/logger';
 import { Finding } from '@/lib/modules/types';
 
@@ -43,13 +42,7 @@ export async function generateConsultingNarrative(
 ): Promise<ConsultingNarrative> {
   logger.info({ businessName: input.businessName }, '[Narrative] Generating consulting narrative');
 
-  const apiKey = process.env.GOOGLE_AI_API_KEY;
-  if (!apiKey) {
-    throw new Error('GOOGLE_AI_API_KEY not configured');
-  }
-
-  const genAI = new GoogleGenerativeAI(apiKey);
-  const model = genAI.getGenerativeModel({ model: GEMINI_PRO }); // Pro for quality
+  const model = BEDROCK_NOVA_2_LITE;
 
   // Generate executive overview
   const executiveOverview = await generateExecutiveOverview(model, input);
@@ -84,7 +77,7 @@ export async function generateConsultingNarrative(
 /**
  * Generate executive overview
  */
-async function generateExecutiveOverview(model: any, input: NarrativeInput): Promise<string> {
+async function generateExecutiveOverview(model: string, input: NarrativeInput): Promise<string> {
   // Load prompt template
   const promptTemplate = loadPromptTemplate('exec-overview-v2.txt');
 
@@ -112,8 +105,7 @@ async function generateExecutiveOverview(model: any, input: NarrativeInput): Pro
     .replace(/{key_metrics}/g, keyMetrics)
     .replace(/{competitor_data}/g, competitorSummary);
 
-  const result = await model.generateContent(prompt);
-  const text = result.response.text().trim();
+  const text = (await generateText(model, prompt)).trim();
 
   // Add inline evidence references
   return addEvidenceReferences(text, input);
@@ -123,7 +115,7 @@ async function generateExecutiveOverview(model: any, input: NarrativeInput): Pro
  * Generate cluster deep dives
  */
 async function generateClusterDeepDives(
-  model: any,
+  model: string,
   input: NarrativeInput
 ): Promise<Array<{ clusterName: string; narrative: string }>> {
   const promptTemplate = loadPromptTemplate('cluster-deep-dive-v2.txt');
@@ -154,8 +146,7 @@ async function generateClusterDeepDives(
       .replace(/{evidence_items}/g, evidenceItems)
       .replace(/{business_name}/g, input.businessName);
 
-    const result = await model.generateContent(prompt);
-    const narrative = result.response.text().trim();
+    const narrative = (await generateText(model, prompt)).trim();
 
     deepDives.push({
       clusterName,
@@ -169,7 +160,10 @@ async function generateClusterDeepDives(
 /**
  * Generate competitive positioning summary
  */
-async function generateCompetitivePositioning(model: any, input: NarrativeInput): Promise<string> {
+async function generateCompetitivePositioning(
+  model: string,
+  input: NarrativeInput
+): Promise<string> {
   const promptTemplate = loadPromptTemplate('competitive-summary-v2.txt');
 
   const competitors = input.competitorData?.competitors || [];
@@ -187,14 +181,13 @@ async function generateCompetitivePositioning(model: any, input: NarrativeInput)
     .replace(/{comparison_matrix}/g, comparisonMatrix)
     .replace(/{key_differentiators}/g, keyDifferentiators);
 
-  const result = await model.generateContent(prompt);
-  return result.response.text().trim();
+  return (await generateText(model, prompt)).trim();
 }
 
 /**
  * Generate opportunity summary
  */
-async function generateOpportunitySummary(model: any, input: NarrativeInput): Promise<string> {
+async function generateOpportunitySummary(model: string, input: NarrativeInput): Promise<string> {
   const promptTemplate = loadPromptTemplate('opportunity-summary-v2.txt');
 
   // Calculate total estimated value
@@ -230,10 +223,14 @@ async function generateOpportunitySummary(model: any, input: NarrativeInput): Pr
     .replace(/{quick_wins}/g, quickWins || 'None identified')
     .replace(/{business_name}/g, input.businessName);
 
-  const result = await model.generateContent(prompt);
-  const text = result.response.text().trim();
+  const text = (await generateText(model, prompt)).trim();
 
   return addEvidenceReferences(text, input);
+}
+
+async function generateText(model: string, input: string): Promise<string> {
+  const result = await generateWithLLM({ model, input });
+  return result.text;
 }
 
 /**

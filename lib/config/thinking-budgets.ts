@@ -1,7 +1,7 @@
 /**
  * Thinking Budgets Configuration
  *
- * Maps LangGraph node identifiers to their allowed reasoning token limits for Gemini 3.1 Pro.
+ * Historical thinking-token settings for the optional Google adapter. Bedrock Nova requests ignore these values.
  * 0 indicates reasoning is disabled.
  */
 

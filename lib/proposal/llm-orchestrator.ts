@@ -2,16 +2,16 @@ import { Finding } from '@prisma/client';
 import { RunTree } from 'langsmith';
 import { z } from 'zod';
 
-import { GEMINI_FLASH, GEMINI_PRO } from '@/lib/config/models';
+import { BEDROCK_NOVA_2_LITE } from '@/lib/config/models';
 
 import { buildProposalGrounding } from './grounding';
 import { getPricing } from './pricing';
 import { validateCompleteProposal } from './schemas';
 import { OrganizationSegment, ProposalPricing, ProposalResult } from './types';
 import { generateAssumptions, generateDisclaimers, generateNextSteps } from './validation';
-import { CostTracker } from '../costs/costTracker';
+import { COSTS, CostTracker, trackBedrockUsage } from '../costs/costTracker';
 import { PainCluster } from '../diagnosis/types';
-import { generateWithGemini, LLMCallOptions } from '../llm/provider';
+import { generateWithLLM, LLMCallOptions } from '../llm/provider';
 import { logger } from '../logger';
 import { PiiScrubber } from '../security/piiScrubber';
 import { traceLlmCall } from '../tracing';
@@ -48,7 +48,7 @@ export class ProposalLLMOrchestrator {
 
   constructor(options: LLMOrchestrationOptions = {}) {
     this.defaultOptions = {
-      model: process.env.PROPOSAL_MODEL || GEMINI_PRO,
+      model: process.env.BEDROCK_MODEL_ID || BEDROCK_NOVA_2_LITE,
       temperature: 0.2,
       maxOutputTokens: 4096,
       thinkingBudget: 128,
@@ -252,7 +252,7 @@ Observed metric index: ${keyMetricsText.slice(0, 20_000)}`;
           tags: ['exec_summary', opts.model || 'unknown-model', 'proposal_generation'],
         },
         async () => {
-          return generateWithGemini(llmOptions);
+          return generateWithLLM(llmOptions);
         }
       );
 
@@ -267,16 +267,12 @@ Observed metric index: ${keyMetricsText.slice(0, 20_000)}`;
 
       // Calculate cost
       const cost = usage
-        ? (usage.promptTokenCount || 0) * 0.000125 + (usage.candidatesTokenCount || 0) * 0.000375
+        ? ((usage.promptTokenCount || 0) / 1000) * COSTS.BEDROCK_NOVA_2_LITE_PER_1K_INPUT_CENTS +
+          ((usage.candidatesTokenCount || 0) / 1000) * COSTS.BEDROCK_NOVA_2_LITE_PER_1K_OUTPUT_CENTS
         : undefined;
 
       if (opts.costTracker && usage) {
-        opts.costTracker.addLlmCall(
-          opts.model as any,
-          usage.promptTokenCount || 0,
-          usage.candidatesTokenCount || 0,
-          usage.thoughtsTokenCount || 0
-        );
+        trackBedrockUsage(opts.costTracker, result, prompt);
       }
 
       const parsed = z
@@ -301,7 +297,10 @@ Observed metric index: ${keyMetricsText.slice(0, 20_000)}`;
       const content =
         parsed.text.length <= 500
           ? parsed.text
-          : `${parsed.text.slice(0, 497).replace(/\s+\S*$/, '').trim()}...`;
+          : `${parsed.text
+              .slice(0, 497)
+              .replace(/\s+\S*$/, '')
+              .trim()}...`;
 
       return {
         content,
@@ -444,8 +443,8 @@ Observed metric index: ${keyMetricsText.slice(0, 20_000)}`;
     const estimatedInputTokens = Math.ceil(inputLengthChars / 4);
     const maxOutputTokens = options.maxOutputTokens || 1024;
 
-    // Context window for Gemini models
-    const contextWindow = 1000000; // 1M tokens for Gemini models
+    // Nova 2 Lite supports a 1M-token context window.
+    const contextWindow = 1000000;
     const totalEstimated = estimatedInputTokens + maxOutputTokens;
 
     if (totalEstimated > contextWindow) {

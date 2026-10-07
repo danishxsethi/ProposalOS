@@ -50,14 +50,14 @@ See [Architecture](docs/ARCHITECTURE.md) for detailed system design.
 
 ## Tech Stack
 
-| Category  | Technology                           |
-| --------- | ------------------------------------ |
-| Framework | Next.js 16 (App Router) + TypeScript |
-| Database  | PostgreSQL + Prisma ORM              |
-| AI        | Vertex AI (Gemini 2.0)               |
-| Caching   | Redis                                |
-| Hosting   | Google Cloud Run                     |
-| Storage   | Google Cloud Storage                 |
+| Category  | Technology                                |
+| --------- | ----------------------------------------- |
+| Framework | Next.js 16 (App Router) + TypeScript      |
+| Database  | PostgreSQL + Prisma ORM                   |
+| AI        | Amazon Bedrock (Nova Micro + Nova 2 Lite) |
+| Caching   | Redis                                     |
+| Hosting   | Google Cloud Run                          |
+| Storage   | Google Cloud Storage                      |
 
 ## Prerequisites
 
@@ -128,11 +128,14 @@ DATABASE_URL="postgresql://postgres:password@localhost:5435/proposal_engine"
 API_KEY="your-api-key-here"
 NEXTAUTH_SECRET="your-nextauth-secret-here-32chars-min"
 
-# Google APIs (required for audits)
+# Google APIs (required for audit data)
 GOOGLE_PLACES_API_KEY="..."
 GOOGLE_PAGESPEED_API_KEY="..."
-GOOGLE_AI_API_KEY="..."
-GCP_PROJECT_ID="..."
+
+# LLM inference through Amazon Bedrock
+LLM_PRIMARY_PROVIDER="bedrock"
+BEDROCK_ENABLED="true"
+AWS_REGION="us-east-2"
 
 # External APIs (required)
 SERP_API_KEY="..."
@@ -304,4 +307,4 @@ Private - Not Open Source
 
 ---
 
-**Built with ❤️ using Next.js, Prisma, and Gemini**
+**Built with ❤️ using Next.js, Prisma, and Amazon Bedrock**

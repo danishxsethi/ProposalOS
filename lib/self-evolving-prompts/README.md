@@ -90,7 +90,7 @@ await logPerformance({
   latencyMs: 1250,
   inputTokens: 500,
   outputTokens: 300,
-  metadata: { model: 'gemini-pro' },
+  metadata: { model: 'us.amazon.nova-2-lite-v1:0' },
 });
 
 // Get aggregate metrics

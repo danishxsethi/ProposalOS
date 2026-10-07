@@ -17,7 +17,7 @@ dotenv.config({ path: path.join(process.cwd(), '.env') });
 
 import * as fs from 'fs-extra';
 
-import { mapsIntelligence } from '../lib/maps/googleMapsProvider';
+import { mapsIntelligence } from '../lib/maps/serpMapsProvider';
 
 const RATE_LIMIT_MS = 200;
 const OUTPUT_DIR = path.join(process.cwd(), 'scripts', 'output');
@@ -154,8 +154,13 @@ function extractDisplayName(place: PlaceResult): string {
 }
 
 async function searchPlaces(query: string, maxResults: number = 10): Promise<PlaceResult[]> {
-  const result = await mapsIntelligence.searchText({ query, maxResults, fieldProfile: 'IDENTITY_MINIMAL' });
-  if (result.status === 'FAILED' || result.status === 'UNAVAILABLE') throw new Error(result.error?.message ?? 'Maps provider unavailable');
+  const result = await mapsIntelligence.searchText({
+    query,
+    maxResults,
+    fieldProfile: 'IDENTITY_MINIMAL',
+  });
+  if (result.status === 'FAILED' || result.status === 'UNAVAILABLE')
+    throw new Error(result.error?.message ?? 'Maps provider unavailable');
   return (result.data ?? []).map((place) => ({
     id: place.placeId,
     name: `places/${place.placeId}`,

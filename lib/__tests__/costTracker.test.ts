@@ -18,12 +18,10 @@ describe('Cost Tracker', () => {
 
   it('should accumulate AI token costs', () => {
     const tracker = new CostTracker();
-    // 1000 input tokens at $0.01/1k = 0.01 cents
-    // 1000 output tokens at $0.03/1k = 0.03 cents
-    // total = 0.04 cents
-    tracker.addLlmCall('GEMINI_FLASH', 1000, 1000);
+    // 1000 input tokens at $0.0035/1k + 1000 output tokens at $0.014/1k = 0.0175 cents.
+    tracker.addLlmCall('BEDROCK_NOVA_MICRO', 1000, 1000);
 
     const report = tracker.getReport();
-    expect(report.totalCents).toBe(1); // Math.ceil(0.04) = 1
+    expect(report.totalCents).toBe(1); // Math.ceil(0.0175) = 1
   });
 });

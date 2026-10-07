@@ -127,7 +127,11 @@ function adaptAuditModuleResult(data: {
         error: observation.execution.reason || 'Provider unavailable',
       };
     case 'failed':
-      return { status: 'FAILED', data: null, error: observation.execution.reason || 'Module failed' };
+      return {
+        status: 'FAILED',
+        data: null,
+        error: observation.execution.reason || 'Module failed',
+      };
     case 'complete':
       return { status: 'COMPLETE', data };
     default: {
@@ -155,7 +159,14 @@ function adaptLegacyModuleResult(data: unknown, label: string): ModuleResult {
   if (value.execution && typeof value.execution === 'object') {
     const execution = value.execution as Record<string, unknown>;
     if (['complete', 'partial', 'unavailable', 'failed'].includes(String(execution.state))) {
-      return adaptAuditModuleResult(data as { findings: unknown[]; evidenceSnapshots: unknown[]; unavailableChecks?: string[]; execution: { state: 'complete' | 'partial' | 'unavailable' | 'failed'; reason?: string } });
+      return adaptAuditModuleResult(
+        data as {
+          findings: unknown[];
+          evidenceSnapshots: unknown[];
+          unavailableChecks?: string[];
+          execution: { state: 'complete' | 'partial' | 'unavailable' | 'failed'; reason?: string };
+        }
+      );
     }
   }
   if (value.status === 'success' && value.data && typeof value.data === 'object') {
@@ -163,7 +174,17 @@ function adaptLegacyModuleResult(data: unknown, label: string): ModuleResult {
     if (nested.execution && typeof nested.execution === 'object') {
       const state = (nested.execution as Record<string, unknown>).state;
       if (['complete', 'partial', 'unavailable', 'failed'].includes(String(state))) {
-        return adaptAuditModuleResult(nested as { findings: unknown[]; evidenceSnapshots: unknown[]; unavailableChecks?: string[]; execution: { state: 'complete' | 'partial' | 'unavailable' | 'failed'; reason?: string } });
+        return adaptAuditModuleResult(
+          nested as {
+            findings: unknown[];
+            evidenceSnapshots: unknown[];
+            unavailableChecks?: string[];
+            execution: {
+              state: 'complete' | 'partial' | 'unavailable' | 'failed';
+              reason?: string;
+            };
+          }
+        );
       }
     }
     if (nested.status === 'error') {
@@ -179,9 +200,17 @@ function adaptLegacyModuleResult(data: unknown, label: string): ModuleResult {
     return { status: 'COMPLETE', data: value.data };
   }
   if (Array.isArray(value.findings) && Array.isArray(value.evidenceSnapshots)) {
-    const result = data as { findings: unknown[]; evidenceSnapshots: unknown[]; unavailableChecks?: string[] };
+    const result = data as {
+      findings: unknown[];
+      evidenceSnapshots: unknown[];
+      unavailableChecks?: string[];
+    };
     if (result.unavailableChecks?.length) {
-      return { status: result.findings.length ? 'PARTIAL' : 'UNAVAILABLE', data: result, error: result.unavailableChecks.join(', ') };
+      return {
+        status: result.findings.length ? 'PARTIAL' : 'UNAVAILABLE',
+        data: result,
+        error: result.unavailableChecks.join(', '),
+      };
     }
     return { status: 'COMPLETE', data: result };
   }
@@ -230,7 +259,7 @@ const websiteAdapter = async (input: ModuleInput, tracker: CostTracker): Promise
   // P1-27 (Wave 7): forward auditId so runWebsiteModule's internal crawl call and
   // the sibling `websiteCrawler` module's own call coalesce into one real crawl
   // (see lib/modules/websiteCrawlerModule.ts's single-flight cache).
-      const data = await runWebsiteModule({ url: input.url, auditId: input.auditId }, tracker);
+  const data = await runWebsiteModule({ url: input.url, auditId: input.auditId }, tracker);
   return adaptLegacyModuleResult(data, 'Website');
 };
 
@@ -260,8 +289,16 @@ const gbpAdapter = async (input: ModuleInput, tracker: CostTracker): Promise<Mod
   const legacy = raw as unknown as Record<string, any>;
   const normalized = adaptLegacyModuleResult(legacy, 'GBP');
   const gbpObservation = normalized.data as Record<string, unknown> | null;
-  if (normalized.status === 'COMPLETE' && !gbpObservation?.placeId && !gbpObservation?.identityConfidence) {
-    return { status: 'UNAVAILABLE', data: normalized.data, error: 'Business listing identity was not confirmed' };
+  if (
+    normalized.status === 'COMPLETE' &&
+    !gbpObservation?.placeId &&
+    !gbpObservation?.identityConfidence
+  ) {
+    return {
+      status: 'UNAVAILABLE',
+      data: normalized.data,
+      error: 'Business listing identity was not confirmed',
+    };
   }
   return normalized;
 };
@@ -286,7 +323,10 @@ const techStackAdapter = async (
   tracker: CostTracker
 ): Promise<ModuleResult> => {
   if (!input.url) throw new Error('url required');
-  const data = await runTechStackModule({ url: input.url, signal: input.signal, auditId: input.auditId }, tracker);
+  const data = await runTechStackModule(
+    { url: input.url, signal: input.signal, auditId: input.auditId },
+    tracker
+  );
   return adaptLegacyModuleResult(data, 'Accessibility');
 };
 
@@ -333,11 +373,17 @@ const reputationAdapter = async (
   trace: any
 ): Promise<ModuleResult> => {
   const gbpData = input.dependencyResults?.gbp;
-  if (!gbpData) return { status: 'UNAVAILABLE', data: null, error: 'Business profile result unavailable' };
+  if (!gbpData)
+    return { status: 'UNAVAILABLE', data: null, error: 'Business profile result unavailable' };
   if (gbpData.identityConfidence === 'ambiguous' || gbpData.identityStatus === 'AMBIGUOUS') {
-    return { status: 'PARTIAL', data: null, error: 'GBP identity match ambiguous — reputation analysis withheld' };
+    return {
+      status: 'PARTIAL',
+      data: null,
+      error: 'GBP identity match ambiguous — reputation analysis withheld',
+    };
   }
-  if (gbpData.reviewsUnavailable === true) return { status: 'UNAVAILABLE', data: null, error: 'Reviews could not be retrieved' };
+  if (gbpData.reviewsUnavailable === true)
+    return { status: 'UNAVAILABLE', data: null, error: 'Reviews could not be retrieved' };
   if (!gbpData.reviews || gbpData.reviews.length === 0)
     return { status: 'SKIPPED', data: null, error: 'No reviews were available to analyze' };
   const data = await runReputationModule(
@@ -401,7 +447,10 @@ const gbpDeepAdapter = async (input: ModuleInput, tracker: CostTracker): Promise
   // finding (extractFindingsFromRegistryResult) already discloses this to the
   // customer — gbpDeep's deep-analysis findings are withheld here rather than
   // duplicated or presented as definitive.
-    if ((gbpData?.identityConfidence === 'ambiguous' || gbpData?.identityStatus === 'AMBIGUOUS') && result.status === 'COMPLETE') {
+  if (
+    (gbpData?.identityConfidence === 'ambiguous' || gbpData?.identityStatus === 'AMBIGUOUS') &&
+    result.status === 'COMPLETE'
+  ) {
     return {
       status: 'PARTIAL',
       data: { ...result.data, findings: [] },
@@ -453,11 +502,11 @@ const accessibilityAdapter = async (
 
 const mobileUXAdapter = async (input: ModuleInput, tracker: CostTracker): Promise<ModuleResult> => {
   if (!input.url) throw new Error('url required');
-  // P1-38 (Wave 7): reuse `website`'s already-fetched mobile PageSpeed score
-  // instead of making a second, duplicate billable mobile PageSpeed call. Only
+  // P1-38 (Wave 7): reuse `website`'s already-fetched mobile Lighthouse score
+  // instead of launching a second browser run. Only
   // trusted when `website`'s own PageSpeed call genuinely succeeded — `coreWebVitals.full`
   // is only populated on the real success path (lib/modules/website.ts), never on
-  // a missing-key or fetch-failure fallback — so a missing/failed website PageSpeed
+  // a missing-key or fetch-failure fallback — so a failed website Lighthouse run
   // check correctly falls through to mobileUX's own independent fetch attempt.
   const websiteData = input.dependencyResults?.website;
   // dependencyResults holds the module's full AuditModuleResult; the PSI payload
@@ -491,8 +540,10 @@ const contentQualityAdapter = async (
   // pages of HTML per audit is not evidence worth storing) plus the homepage's
   // raw HTML. Content analysis needs HTML, so analyze the homepage (the highest
   // value page) with real HTML and keep the other pages as titled metadata.
-  const metricPages: Array<{ url: string; title?: string | null; wordCount?: number }> = Array.isArray(crawlRaw.crawledPages) ? crawlRaw.crawledPages : [];
-  const homepageHtml: string | null = typeof crawlRaw.html === 'string' && crawlRaw.html.length > 0 ? crawlRaw.html : null;
+  const metricPages: Array<{ url: string; title?: string | null; wordCount?: number }> =
+    Array.isArray(crawlRaw.crawledPages) ? crawlRaw.crawledPages : [];
+  const homepageHtml: string | null =
+    typeof crawlRaw.html === 'string' && crawlRaw.html.length > 0 ? crawlRaw.html : null;
   const crawledPages = homepageHtml
     ? [{ url: input.url, html: homepageHtml, title: metricPages[0]?.title ?? undefined }]
     : [];
@@ -609,7 +660,8 @@ const schemaMarkupAdapter = async (input: ModuleInput): Promise<ModuleResult> =>
   // honestly (fixed alongside P1-33 — fetch/parse failure used to always be
   // laundered into an outer 'success'). Provider/fetch failure must never be
   // reported as COMPLETE.
-  if (legacy?.status === 'failed' || legacy?.status === 'error') return adaptLegacyModuleResult(legacy, 'Schema markup');
+  if (legacy?.status === 'failed' || legacy?.status === 'error')
+    return adaptLegacyModuleResult(legacy, 'Schema markup');
   return adaptLegacyModuleResult(legacy, 'Schema markup');
 };
 
@@ -712,7 +764,8 @@ const competitorStrategyAdapter = async (
     (c): c is typeof c & { website: string } =>
       !!c.website && !!c.name && normalizeBusinessName(c.name) !== selfNormalized
   );
-  if (!compData) return { status: 'UNAVAILABLE', data: null, error: 'Competitor search unavailable' };
+  if (!compData)
+    return { status: 'UNAVAILABLE', data: null, error: 'Competitor search unavailable' };
   if (!topComp) return { status: 'SKIPPED', data: null, error: 'No major competitor identified' };
   const data = await runCompetitorStrategyModule(
     {
@@ -727,7 +780,12 @@ const competitorStrategyAdapter = async (
     tracker
   );
   const result = adaptAuditModuleResult(data);
-  if (result.status === 'UNAVAILABLE' && Array.isArray(data.findings) && data.findings.length === 0 && data.evidenceSnapshots.length > 0) {
+  if (
+    result.status === 'UNAVAILABLE' &&
+    Array.isArray(data.findings) &&
+    data.findings.length === 0 &&
+    data.evidenceSnapshots.length > 0
+  ) {
     return { status: 'COMPLETE', data };
   }
   return result;
@@ -753,13 +811,16 @@ const visionAdapter = async (input: ModuleInput, tracker: CostTracker): Promise<
 
 // P1-7: Adapters for previously dead modules — using existing utility functions
 const coreWebVitalsAdapter = async (input: ModuleInput): Promise<ModuleResult> => {
-  // Reads from the website (PageSpeed) module output which contains Lighthouse audits
+  // Reads from the website module output which contains Lighthouse audits
   const websiteData = input.dependencyResults?.website;
-  // The website module stores the PageSpeed payload as an evidence snapshot
-  // (source 'PageSpeed Insights API'); read that shape as well as legacy shapes.
+  // The website module stores the local Lighthouse report as an evidence snapshot;
+  // also accept the legacy payload shape during deployment transition.
   const psiSnapshot = Array.isArray(websiteData?.evidenceSnapshots)
-    ? websiteData.evidenceSnapshots.find((s: { source?: string; rawResponse?: { lighthouseResult?: unknown } }) =>
-        s?.source === 'PageSpeed Insights API' || s?.rawResponse?.lighthouseResult
+    ? websiteData.evidenceSnapshots.find(
+        (s: { source?: string; rawResponse?: { lighthouseResult?: unknown } }) =>
+          s?.source === 'Local Lighthouse' ||
+          s?.source === 'PageSpeed Insights API' ||
+          s?.rawResponse?.lighthouseResult
       )
     : null;
   const lighthouseAudits =
@@ -803,7 +864,10 @@ const coreWebVitalsAdapter = async (input: ModuleInput): Promise<ModuleResult> =
       description: `LCP is ${cwv.lcp.rating} (threshold: good < ${cwv.lcp.thresholdGood}s) — visitors wait about ${Math.floor(Number(cwv.lcp.value))}s for content to appear, hurting engagement and SEO.`,
       impactScore: cwv.lcp.rating === 'poor' ? 8 : 5,
       confidenceScore: 9,
-      evidence: cwvEvidence('Largest Contentful Paint (s, mobile lab)', Number(cwv.lcp.value.toFixed(2))),
+      evidence: cwvEvidence(
+        'Largest Contentful Paint (s, mobile lab)',
+        Number(cwv.lcp.value.toFixed(2))
+      ),
       metrics: { lcpSeconds: Number(cwv.lcp.value.toFixed(2)), rating: cwv.lcp.rating },
       effortEstimate: 'HIGH',
       recommendedFix: [
@@ -823,7 +887,10 @@ const coreWebVitalsAdapter = async (input: ModuleInput): Promise<ModuleResult> =
       description: `CLS is ${cwv.cls.rating} (threshold: good < ${cwv.cls.thresholdGood}). Layout shifts hurt UX and SEO.`,
       impactScore: cwv.cls.rating === 'poor' ? 7 : 4,
       confidenceScore: 9,
-      evidence: cwvEvidence('Cumulative Layout Shift (mobile lab)', Number(cwv.cls.value.toFixed(3))),
+      evidence: cwvEvidence(
+        'Cumulative Layout Shift (mobile lab)',
+        Number(cwv.cls.value.toFixed(3))
+      ),
       metrics: { cls: Number(cwv.cls.value.toFixed(3)), rating: cwv.cls.rating },
       effortEstimate: 'MEDIUM',
       recommendedFix: [
@@ -968,7 +1035,10 @@ const schemaAnalysisAdapter = async (input: ModuleInput): Promise<ModuleResult> 
       description: analysis.hasLocalBusinessOrOrganization.recommendation,
       impactScore: 8,
       confidenceScore: 9,
-      evidence: schemaEvidence('Structured data detected on homepage', `LocalBusiness/Organization absent; detected: ${detectedTypes}`),
+      evidence: schemaEvidence(
+        'Structured data detected on homepage',
+        `LocalBusiness/Organization absent; detected: ${detectedTypes}`
+      ),
       metrics: { schemaFingerprint: 'schema-missing:LocalBusiness' },
       effortEstimate: 'LOW',
       recommendedFix: [
@@ -985,7 +1055,10 @@ const schemaAnalysisAdapter = async (input: ModuleInput): Promise<ModuleResult> 
       description: analysis.hasReviewAggregateRating.recommendation,
       impactScore: 5,
       confidenceScore: 9,
-      evidence: schemaEvidence('Structured data detected on homepage', `AggregateRating absent; detected: ${detectedTypes}`),
+      evidence: schemaEvidence(
+        'Structured data detected on homepage',
+        `AggregateRating absent; detected: ${detectedTypes}`
+      ),
       metrics: { schemaFingerprint: 'schema-missing:AggregateRating' },
       effortEstimate: 'LOW',
       recommendedFix: [
@@ -1002,7 +1075,10 @@ const schemaAnalysisAdapter = async (input: ModuleInput): Promise<ModuleResult> 
       description: analysis.hasFaq.recommendation,
       impactScore: 3,
       confidenceScore: 8,
-      evidence: schemaEvidence('Structured data detected on homepage', `FAQPage absent; detected: ${detectedTypes}`),
+      evidence: schemaEvidence(
+        'Structured data detected on homepage',
+        `FAQPage absent; detected: ${detectedTypes}`
+      ),
       metrics: { schemaFingerprint: 'schema-missing:FAQPage' },
       effortEstimate: 'LOW',
       recommendedFix: ['Add FAQPage JSON-LD to any page with Q&A content to unlock rich results'],
@@ -1177,12 +1253,33 @@ export function extractFindingsFromRegistryResult(
 
   if (moduleName === 'gbp' && rd.identityConfidence === 'ambiguous') {
     findings.push({
-      module: 'gbp', category: 'Visibility', type: 'VITAMIN', title: 'Google Business Profile Match Needs Manual Confirmation',
+      module: 'gbp',
+      category: 'Visibility',
+      type: 'VITAMIN',
+      title: 'Google Business Profile Match Needs Manual Confirmation',
       description: `A possible Google Maps business match was found for ${input.businessName ?? 'this business'}, but identity is ambiguous. Specific profile findings are withheld until the correct listing is confirmed.`,
-      impactScore: 0, confidenceScore: 4, evidence: [], metrics: { identityConfidence: 'ambiguous', identityStatus: rd.identityStatus, candidatesConsidered: rd.candidatesConsidered ?? null },
-      effortEstimate: 'LOW', recommendedFix: ['Confirm the correct business location or Place ID'],
+      impactScore: 0,
+      confidenceScore: 4,
+      evidence: [],
+      metrics: {
+        identityConfidence: 'ambiguous',
+        identityStatus: rd.identityStatus,
+        candidatesConsidered: rd.candidatesConsidered ?? null,
+      },
+      effortEstimate: 'LOW',
+      recommendedFix: ['Confirm the correct business location or Place ID'],
     });
-    snapshots.push({ source: 'Places API identity observation', rawResponse: { placeId: rd.placeId, identityStatus: rd.identityStatus, identityConfidence: rd.matchConfidenceScore, candidateCount: rd.candidatesConsidered, alternateCandidates: rd.alternateCandidateNames, mapsProvenance: rd.mapsProvenance } });
+    snapshots.push({
+      source: 'SerpApi Google Maps identity observation',
+      rawResponse: {
+        placeId: rd.placeId,
+        identityStatus: rd.identityStatus,
+        identityConfidence: rd.matchConfidenceScore,
+        candidateCount: rd.candidatesConsidered,
+        alternateCandidates: rd.alternateCandidateNames,
+        mapsProvenance: rd.mapsProvenance,
+      },
+    });
     return { findings, snapshots };
   }
 
@@ -1219,10 +1316,12 @@ export function extractFindingsFromRegistryResult(
         confidenceScore: 4,
         evidence: [
           createEvidence({
-            pointer: rd.placeId
-              ? `https://places.googleapis.com/v1/places/${rd.placeId}`
-              : input.url || 'https://www.google.com/maps',
-            source: 'places_api_v1',
+            pointer:
+              rd.mapsUri ||
+              (rd.placeId
+                ? `https://www.google.com/maps/search/?api=1&query_place_id=${encodeURIComponent(rd.placeId)}`
+                : input.url || 'https://www.google.com/maps'),
+            source: 'serpapi_google_maps',
             type: 'text',
             value: `matchConfidenceScore=${rd.matchConfidenceScore ?? 'unknown'}, candidatesConsidered=${rd.candidatesConsidered ?? 'unknown'}`,
             label: 'GBP Identity Match',
@@ -1341,20 +1440,25 @@ const REQUIRED_AUDIT_MODULES = new Set([
  */
 const OBSERVED_STATES = new Set<ModuleResult['status']>(['COMPLETE', 'PARTIAL']);
 
-export function assessAuditResult(results: Map<string, ModuleResult>, rejectedFindingCount: number) {
+export function assessAuditResult(
+  results: Map<string, ModuleResult>,
+  rejectedFindingCount: number
+) {
   const required = [...REQUIRED_AUDIT_MODULES];
-  const completeRequired = required.filter((name) => OBSERVED_STATES.has(results.get(name)?.status as ModuleResult['status'])).length;
-  const failures = required.filter((name) => !OBSERVED_STATES.has(results.get(name)?.status as ModuleResult['status']));
-  const status = completeRequired === required.length
-    ? 'COMPLETE'
-    : completeRequired > 0
-      ? 'PARTIAL'
-      : 'FAILED';
-  const trustState = status === 'FAILED'
-    ? 'FAILED'
-    : status === 'COMPLETE' && rejectedFindingCount === 0
-      ? 'TRUSTED'
-      : 'DEGRADED_REVIEW_REQUIRED';
+  const completeRequired = required.filter((name) =>
+    OBSERVED_STATES.has(results.get(name)?.status as ModuleResult['status'])
+  ).length;
+  const failures = required.filter(
+    (name) => !OBSERVED_STATES.has(results.get(name)?.status as ModuleResult['status'])
+  );
+  const status =
+    completeRequired === required.length ? 'COMPLETE' : completeRequired > 0 ? 'PARTIAL' : 'FAILED';
+  const trustState =
+    status === 'FAILED'
+      ? 'FAILED'
+      : status === 'COMPLETE' && rejectedFindingCount === 0
+        ? 'TRUSTED'
+        : 'DEGRADED_REVIEW_REQUIRED';
   return { status, trustState, incompleteRequiredModules: failures } as const;
 }
 
@@ -1364,7 +1468,7 @@ export function assessAuditResult(results: Map<string, ModuleResult>, rejectedFi
  * Per-phase concurrency limit.
  *
  * Phase 2 has the most modules (≈18) and many of them call AI providers.
- * A bounded limit prevents thundering herd on Gemini/Vertex/Lighthouse and
+ * A bounded limit prevents thundering herd on Bedrock/Lighthouse and
  * keeps tail latency predictable.  Tunable via env without code change.
  *
  * Default of 6 is conservative for free-tier quotas; production should
@@ -1892,7 +1996,12 @@ async function runAuditInternal(auditId: string, signal?: AbortSignal) {
           if (res.status === 'COMPLETE' || res.status === 'PARTIAL') {
             if (res.status === 'COMPLETE') modulesCompleted.push(modName);
             const ext = extractFindingsFromRegistryResult(modName, res, moduleInput);
-            if (modName === 'gbp' && res.status === 'PARTIAL') modulesFailed.push({ module: modName, status: 'PARTIAL', error: res.error ?? 'Business identity is ambiguous' });
+            if (modName === 'gbp' && res.status === 'PARTIAL')
+              modulesFailed.push({
+                module: modName,
+                status: 'PARTIAL',
+                error: res.error ?? 'Business identity is ambiguous',
+              });
 
             // Wave 3 (Step 5): the one shared adapter/aggregation boundary every
             // module's raw finding output must pass through before it can become a
@@ -1908,16 +2017,26 @@ async function runAuditInternal(auditId: string, signal?: AbortSignal) {
 
             for (const snap of ext.snapshots) {
               const snapshotRaw = snap.rawResponse ?? snap;
-              const persistedRaw = modName === 'gbp' && snapshotRaw && typeof snapshotRaw === 'object'
-                ? {
-                    placeId: (snapshotRaw as Record<string, unknown>).placeId ?? null,
-                    identityStatus: (snapshotRaw as Record<string, unknown>).identityStatus ?? null,
-                    identityConfidence: (snapshotRaw as Record<string, unknown>).identityConfidence ?? null,
-                    matchConfidenceScore: (snapshotRaw as Record<string, unknown>).matchConfidenceScore ?? null,
-                    candidatesConsidered: (snapshotRaw as Record<string, unknown>).candidatesConsidered ?? null,
-                    fieldProfile: ((snapshotRaw as Record<string, unknown>).mapsProvenance as Record<string, unknown> | undefined)?.fieldProfile ?? null,
-                  }
-                : snapshotRaw;
+              const persistedRaw =
+                modName === 'gbp' && snapshotRaw && typeof snapshotRaw === 'object'
+                  ? {
+                      placeId: (snapshotRaw as Record<string, unknown>).placeId ?? null,
+                      identityStatus:
+                        (snapshotRaw as Record<string, unknown>).identityStatus ?? null,
+                      identityConfidence:
+                        (snapshotRaw as Record<string, unknown>).identityConfidence ?? null,
+                      matchConfidenceScore:
+                        (snapshotRaw as Record<string, unknown>).matchConfidenceScore ?? null,
+                      candidatesConsidered:
+                        (snapshotRaw as Record<string, unknown>).candidatesConsidered ?? null,
+                      fieldProfile:
+                        (
+                          (snapshotRaw as Record<string, unknown>).mapsProvenance as
+                            | Record<string, unknown>
+                            | undefined
+                        )?.fieldProfile ?? null,
+                    }
+                  : snapshotRaw;
               evidenceToPersist.push({
                 module: modName,
                 source: String(snap.source || modName),
@@ -1995,7 +2114,10 @@ async function runAuditInternal(auditId: string, signal?: AbortSignal) {
 
         // Trust is not a percentage: every required module and critical identity check
         // must complete before the audit may claim COMPLETE.
-        if (finalStatus === 'COMPLETE' && (failedCriticalModules.length > 0 || incompleteRequiredModules.length > 0)) {
+        if (
+          finalStatus === 'COMPLETE' &&
+          (failedCriticalModules.length > 0 || incompleteRequiredModules.length > 0)
+        ) {
           finalStatus = completedRequiredModules > 0 ? 'PARTIAL' : 'FAILED';
           logger.warn(
             {
@@ -2046,10 +2168,13 @@ async function runAuditInternal(auditId: string, signal?: AbortSignal) {
         });
 
         const moduleResults = Object.fromEntries(
-          Array.from(results.entries()).map(([module, result]) => [module, {
-            status: result.status,
-            error: result.error ?? null,
-          }])
+          Array.from(results.entries()).map(([module, result]) => [
+            module,
+            {
+              status: result.status,
+              error: result.error ?? null,
+            },
+          ])
         );
         let trustState = assessAuditResult(results, rejectedFindings.length).trustState;
 

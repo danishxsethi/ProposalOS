@@ -1,7 +1,8 @@
 import { withModuleCache } from '@/lib/cache/moduleCache';
 import { logger } from '@/lib/logger';
-import { mapsIntelligence } from '@/lib/maps/googleMapsProvider';
+import { mapsIntelligence } from '@/lib/maps/serpMapsProvider';
 import { runSocialModule } from '@/lib/modules/social';
+import { getLocalLighthouseReport } from '@/lib/performance/localLighthouse';
 import { withProviderResilience } from '@/lib/resilience/withProviderResilience';
 
 import { normalizeVertical, VERTICAL_SEARCH_QUERIES } from './config';
@@ -110,53 +111,18 @@ async function fetchWebsiteSignals(website: string | null | undefined): Promise<
   }
 
   const isHttps = normalizedWebsite.startsWith('https://');
-  const key = process.env.GOOGLE_PAGESPEED_API_KEY;
-  if (!key) {
-    return { performanceScore: null, accessibilityScore: null, lcpSeconds: null, isHttps };
-  }
-
-  const params = new URLSearchParams({
-    url: normalizedWebsite,
-    key,
-    strategy: 'mobile',
-  });
-  params.append('category', 'performance');
-  params.append('category', 'accessibility');
-
   const data = await withModuleCache<any>(
     {
       module: 'outreach_qualification',
-      version: 1,
-      input: { type: 'pagespeed_mobile', website: normalizedWebsite },
+      version: 2,
+      input: { type: 'local_lighthouse_mobile', website: normalizedWebsite },
     },
     { ttlSeconds: 12 * 3600 },
-    async () => {
-      return withProviderResilience<any>(
-        {
-          provider: 'pagespeed',
-          operation: 'outreach_qualification:pagespeed_mobile',
-          degrade: true,
-          fallbackValue: { lighthouseResult: {} },
-        },
-        async () => {
-          const res = await fetch(
-            `https://www.googleapis.com/pagespeedonline/v5/runPagespeed?${params.toString()}`
-          );
-          if (!res.ok) {
-            const text = await res.text();
-            throw new Error(`PageSpeed failed (${res.status}): ${text}`);
-          }
-          return await res.json();
-        }
-      );
-    }
+    () => getLocalLighthouseReport(normalizedWebsite, 'mobile')
   );
 
-  const lighthouse =
-    (data as { lighthouseResult?: Record<string, unknown> }).lighthouseResult ?? {};
-  const categories =
-    (lighthouse.categories as Record<string, { score?: number }> | undefined) ?? {};
-  const audits = (lighthouse.audits as Record<string, { numericValue?: number }> | undefined) ?? {};
+  const categories = data.categories ?? {};
+  const audits = data.audits ?? {};
 
   const performanceScoreRaw = categories.performance?.score;
   const accessibilityScoreRaw = categories.accessibility?.score;
@@ -176,15 +142,34 @@ async function fetchWebsiteSignals(website: string | null | undefined): Promise<
 }
 
 async function fetchGbpSignals(input: QualifiableLeadInput): Promise<GbpSignals> {
-  const result = await mapsIntelligence.resolveBusiness({ businessName: input.businessName, city: toLocation(input.city, input.state), domain: input.website, fieldProfile: 'GBP_DEEP' });
-  const blank = (status: GbpSignals['status'], found = false): GbpSignals => ({ status, found, rating: null, reviewCount: 0, photoCount: 0, hasHours: false, ownerResponseRate: null, ownerResponseConfidence: 'unknown' });
+  const result = await mapsIntelligence.resolveBusiness({
+    businessName: input.businessName,
+    city: toLocation(input.city, input.state),
+    domain: input.website,
+    fieldProfile: 'GBP_DEEP',
+  });
+  const blank = (status: GbpSignals['status'], found = false): GbpSignals => ({
+    status,
+    found,
+    rating: null,
+    reviewCount: 0,
+    photoCount: 0,
+    hasHours: false,
+    ownerResponseRate: null,
+    ownerResponseConfidence: 'unknown',
+  });
   if (result.status !== 'COMPLETE' || !result.data) return blank(result.status, false);
   if (result.data.identityStatus !== 'CONFIRMED') return blank('PARTIAL');
   return {
-    status: 'COMPLETE', found: true, placeId: result.data.placeId,
-    rating: result.data.rating, reviewCount: result.data.reviewCount ?? input.reviewCount ?? 0,
-    photoCount: result.data.photos.length, hasHours: !!result.data.openingHours,
-    ownerResponseRate: null, ownerResponseConfidence: 'unknown',
+    status: 'COMPLETE',
+    found: true,
+    placeId: result.data.placeId,
+    rating: result.data.rating,
+    reviewCount: result.data.reviewCount ?? input.reviewCount ?? 0,
+    photoCount: result.data.photos.length,
+    hasHours: !!result.data.openingHours,
+    ownerResponseRate: null,
+    ownerResponseConfidence: 'unknown',
   };
 }
 
@@ -421,32 +406,34 @@ export async function qualifyLead(
           ? 8
           : 0;
 
-  const gbpNeglectedScore = gbpSignals.status !== 'COMPLETE'
-    ? 0
-    : !gbpSignals.found
-    ? 15
-    : Math.min(
-        15,
-        (gbpSignals.photoCount < 5 ? 7 : 0) +
-          (gbpSignals.reviewCount < 20 ? 5 : 0) +
-          (!gbpSignals.hasHours ? 3 : 0)
-      );
+  const gbpNeglectedScore =
+    gbpSignals.status !== 'COMPLETE'
+      ? 0
+      : !gbpSignals.found
+        ? 15
+        : Math.min(
+            15,
+            (gbpSignals.photoCount < 5 ? 7 : 0) +
+              (gbpSignals.reviewCount < 20 ? 5 : 0) +
+              (!gbpSignals.hasHours ? 3 : 0)
+          );
 
   const noSslScore = websiteSignals.isHttps ? 0 : 10;
 
-  const zeroReviewResponseScore = gbpSignals.status !== 'COMPLETE'
-    ? 0
-    : !gbpSignals.found
-    ? 5
-    : gbpSignals.reviewCount === 0
-      ? 10
-      : gbpSignals.ownerResponseRate === null
+  const zeroReviewResponseScore =
+    gbpSignals.status !== 'COMPLETE'
+      ? 0
+      : !gbpSignals.found
         ? 5
-        : gbpSignals.ownerResponseRate === 0
+        : gbpSignals.reviewCount === 0
           ? 10
-          : gbpSignals.ownerResponseRate < 0.2
-            ? 6
-            : 0;
+          : gbpSignals.ownerResponseRate === null
+            ? 5
+            : gbpSignals.ownerResponseRate === 0
+              ? 10
+              : gbpSignals.ownerResponseRate < 0.2
+                ? 6
+                : 0;
 
   const socialDeadScore =
     socialSignals.profileCount === 0
@@ -532,7 +519,11 @@ export async function qualifyLead(
     competitorSignals
   );
   if (gbpSignals.status !== 'COMPLETE') {
-    topFindings.splice(0, topFindings.length, 'Local business profile could not be confidently checked; manual review required');
+    topFindings.splice(
+      0,
+      topFindings.length,
+      'Local business profile could not be confidently checked; manual review required'
+    );
   }
   const summarySnippet = buildSummarySnippet(painScore, topFindings);
 

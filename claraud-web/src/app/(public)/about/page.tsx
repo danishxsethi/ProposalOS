@@ -10,7 +10,7 @@ const stats = [
   { label: 'Audit dimensions', value: '30+' },
   { label: 'Average scan time', value: '30s' },
   { label: 'First scan, always free', value: '$0' },
-  { label: 'Uptime on Google Cloud', value: '99.9%' },
+  { label: 'AI platform', value: 'AWS Bedrock' },
 ];
 
 const team = [
@@ -124,11 +124,11 @@ export default function AboutPage() {
           <div className="flex flex-wrap justify-center items-center gap-4 md:gap-8 text-text-secondary font-medium">
             <span className="flex items-center gap-2 bg-white/5 px-4 py-2 rounded-full border border-white/10">
               <CheckCircle2 className="w-4 h-4 text-blue-400" />
-              Powered by Google Cloud
+              Hosted on AWS
             </span>
             <span className="flex items-center gap-2 bg-white/5 px-4 py-2 rounded-full border border-white/10">
               <CheckCircle2 className="w-4 h-4 text-blue-400" />
-              Vertex AI
+              AWS Bedrock
             </span>
             <span className="flex items-center gap-2 bg-white/5 px-4 py-2 rounded-full border border-white/10">
               Built in Canada 🇨🇦

@@ -10,7 +10,7 @@ This document provides comprehensive documentation for all external integrations
 
 | Integration                       | Purpose                                      | SLA    | Retry         | Circuit Breaker | Fallback        |
 | --------------------------------- | -------------------------------------------- | ------ | ------------- | --------------- | --------------- |
-| **Google Vertex AI / Gemini**     | LLM for audit analysis & proposal generation | 99.9%  | ✅ 3 attempts | ✅ Yes          | Cached response |
+| **Amazon Bedrock (Nova)**         | LLM for audit analysis & proposal generation | —      | ✅ 3 attempts | ✅ Yes          | Cached response |
 | **Google PageSpeed Insights API** | Website performance audits                   | 99%    | ✅ 2 attempts | ✅ Yes          | None (free API) |
 | **Google Places API**             | GBP data, reviews, business info             | 99.9%  | ✅ 3 attempts | ✅ Yes          | None            |
 | **Resend Email API**              | Transactional and outreach emails            | 99.9%  | ✅ 3 attempts | ✅ Yes          | Queue for retry |
@@ -24,25 +24,19 @@ This document provides comprehensive documentation for all external integrations
 
 ### Model Version Pinning
 
-All LLM models are pinned to specific versions to prevent breaking changes:
+The application routes LLM requests to the Bedrock inference profiles:
 
 ```typescript
 // lib/integrations/config.ts
 export const MODEL_VERSIONS = {
-  GEMINI_FLASH: 'gemini-2.0-flash-001',
-  GEMINI_PRO: 'gemini-2.0-pro-exp-02-05',
-  GEMINI_15_PRO: 'gemini-1.5-pro-002',
-  GEMINI_15_FLASH: 'gemini-1.5-flash-002',
+  NOVA_MICRO: 'us.amazon.nova-micro-v1:0',
+  NOVA_2_LITE: 'us.amazon.nova-2-lite-v1:0',
 };
 ```
 
-### LLM Fallback Chain
+### LLM Routing and Failure Handling
 
-When the primary model fails, requests automatically fall back through the chain:
-
-```
-Gemini Pro → Gemini 1.5 Pro → Gemini Flash → Gemini 1.5 Flash → Cached Response
-```
+All application model calls use Amazon Bedrock. Task configuration selects Nova Micro for lower-cost text tasks and Nova 2 Lite for complex analysis and multimodal inputs. Transient provider errors use bounded retries and circuit breaking; a cached response may be returned when one exists. The AWS runtime has no Google, OpenAI, or Anthropic model fallback.
 
 ### Retry Configuration
 
@@ -116,15 +110,15 @@ import {
 } from '@/lib/integrations';
 
 // Check if call is allowed
-const { allowed, state, retryAfterMs } = canMakeIntegrationCall('GEMINI');
+const { allowed, state, retryAfterMs } = canMakeIntegrationCall('BEDROCK');
 if (!allowed) {
   throw new Error(`Circuit breaker OPEN. Retry after ${retryAfterMs}ms`);
 }
 
 // Or use the circuit breaker directly
-const breaker = getCircuitBreaker('GEMINI');
+const breaker = getCircuitBreaker('BEDROCK');
 try {
-  const result = await breaker.execute(() => callGemini());
+  const result = await breaker.execute(() => callBedrockModel());
   // Success is automatically recorded
 } catch (error) {
   // Failure is automatically recorded
@@ -151,29 +145,30 @@ async function resilientApiCall() {
 
 ## Integration Details
 
-### Google Vertex AI / Gemini
+### Amazon Bedrock (Nova)
 
 **Configuration:**
 
-- **Timeout:** 30s
-- **Max Retries:** 3
-- **Circuit Breaker:** Enabled
-- **Fallback:** Cached response
+- `LLM_PRIMARY_PROVIDER=bedrock`
+- `BEDROCK_ENABLED=true`
+- `AWS_REGION=us-east-2`
+- ECS uses its task role; local runs use the AWS SDK default credential chain.
 
-**Features:**
+**Model routing:**
 
-- Token budget enforcement (context window validation)
-- Cost tracking per tenant with hard cap ($2.00) and soft alert (80%)
-- Request caching with 24h TTL
-- Automatic model fallback chain
-- Rate limit handling with retry-after support
+- Nova Micro handles lower-cost text tasks.
+- Nova 2 Lite handles proposals, analysis, and multimodal input.
+- Calls retry on throttling and service errors, then use a cached response when available. They do not fall back to another cloud provider.
 
-**Failure Modes:**
+**Failure modes:**
 
-- 429 Rate Limit: Retries with exponential backoff
-- 5xx Server Error: Retries with exponential backoff
-- Network Error: Retries with exponential backoff
-- Budget Exceeded: Returns error (no retry, triggers fallback)
+- Access denied: check the ECS task role's scoped Bedrock permissions.
+- Throttling and 5xx service errors: retry with backoff.
+- Bedrock disabled: requests fail closed without making an inference call.
+
+### Legacy Google Generative AI adapter (historical)
+
+The legacy adapter code remains in the repository, but AWS task definitions select Bedrock and provide no Google AI key.
 
 ### Google PageSpeed Insights API
 
@@ -312,7 +307,7 @@ const status = getAllCircuitBreakersStatus();
 console.log(status);
 // Output:
 // {
-//   GEMINI: { state: 'CLOSED', failureCount: 0, ... },
+//   BEDROCK: { state: 'CLOSED', failureCount: 0, ... },
 //   PAGESPEED: { state: 'OPEN', failureCount: 5, ... },
 // }
 ```
@@ -323,7 +318,7 @@ console.log(status);
 import { resetCircuitBreaker, resetAllCircuitBreakers } from '@/lib/integrations';
 
 // Reset specific integration
-resetCircuitBreaker('GEMINI');
+resetCircuitBreaker('BEDROCK');
 
 // Reset all
 resetAllCircuitBreakers();
@@ -341,7 +336,7 @@ tracker.addApiCall('PAGESPEED');
 tracker.addApiCall('PLACES_DETAILS');
 
 // Track LLM usage
-tracker.addLlmCall('GEMINI_PRO', inputTokens, outputTokens);
+tracker.addLlmCall('BEDROCK_NOVA_2_LITE', inputTokens, outputTokens);
 
 // Get report
 const report = tracker.getReport();
@@ -415,7 +410,7 @@ describe('Retry Wrapper', () => {
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                  │
 │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐          │
-│  │    Gemini    │  │  PageSpeed   │  │    Places    │          │
+│  │  Bedrock LLM │  │  PageSpeed   │  │    Places    │          │
 │  │     LLM      │  │   Insights   │  │     API      │          │
 │  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘          │
 │         │                 │                 │                   │

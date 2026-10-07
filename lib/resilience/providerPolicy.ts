@@ -7,13 +7,10 @@
 import { ProviderName, ProviderPolicy } from './types';
 
 export const PROVIDER_POLICIES: Record<ProviderName, ProviderPolicy> = {
-  pagespeed: {
-    // Lighthouse mobile runs measured live at 20-35s (perf+seo) and up to 88s
-    // with all four categories; an 8s cap made PSI fail on 100% of audits
-    // (no Core Web Vitals, no performance findings). Phase-1 modules run in
-    // parallel so this does not serialize the phase; the website module's own
-    // timeout (60s) remains the hard ceiling.
-    timeoutMs: 45000,
+  lighthouse: {
+    // One Chromium/Lighthouse run per task at a time; local browser work is
+    // bounded by the API module timeout and does not retry or make billable API calls.
+    timeoutMs: 60000,
     maxAttempts: 1,
     baseDelayMs: 500,
     maxDelayMs: 10000,
@@ -28,29 +25,7 @@ export const PROVIDER_POLICIES: Record<ProviderName, ProviderPolicy> = {
       'rate limit',
     ],
     rateLimitWindowMs: 60000,
-    rateLimitMaxCalls: 30,
-    circuitBreakerFailureThreshold: 5,
-    circuitBreakerCooldownMs: 60000,
-    tenantScopingRequired: false,
-    degradationAllowed: true,
-  },
-  'google-places': {
-    timeoutMs: 15000,
-    maxAttempts: 3,
-    baseDelayMs: 500,
-    maxDelayMs: 10000,
-    jitter: true,
-    retryableStatusCodes: [408, 429, 500, 502, 503, 504],
-    retryableErrorKinds: [
-      'timeout',
-      'econnreset',
-      'etimedout',
-      'enotfound',
-      'econnrefused',
-      'rate limit',
-    ],
-    rateLimitWindowMs: 60000,
-    rateLimitMaxCalls: 120,
+    rateLimitMaxCalls: 4,
     circuitBreakerFailureThreshold: 5,
     circuitBreakerCooldownMs: 60000,
     tenantScopingRequired: false,
@@ -100,43 +75,18 @@ export const PROVIDER_POLICIES: Record<ProviderName, ProviderPolicy> = {
     tenantScopingRequired: false,
     degradationAllowed: true,
   },
-  gemini: {
-    timeoutMs: 30000,
-    maxAttempts: 3,
+  bedrock: {
+    timeoutMs: 60000,
+    maxAttempts: 2,
     baseDelayMs: 1000,
     maxDelayMs: 10000,
     jitter: true,
-    retryableStatusCodes: [408, 429, 500, 502, 503, 504],
+    retryableStatusCodes: [429, 500, 502, 503, 504],
     retryableErrorKinds: [
-      'timeout',
-      'econnreset',
-      'etimedout',
-      'enotfound',
-      'econnrefused',
-      'rate limit',
-      'overloaded',
-    ],
-    rateLimitWindowMs: 60000,
-    rateLimitMaxCalls: 60,
-    circuitBreakerFailureThreshold: 5,
-    circuitBreakerCooldownMs: 60000,
-    tenantScopingRequired: false,
-    degradationAllowed: true,
-  },
-  vertex: {
-    timeoutMs: 30000,
-    maxAttempts: 3,
-    baseDelayMs: 1000,
-    maxDelayMs: 10000,
-    jitter: true,
-    retryableStatusCodes: [408, 429, 500, 502, 503, 504],
-    retryableErrorKinds: [
-      'timeout',
-      'econnreset',
-      'etimedout',
-      'enotfound',
-      'econnrefused',
-      'rate limit',
+      'throttlingexception',
+      'serviceunavailableexception',
+      'internalserverexception',
+      'modelnotreadyexception',
       'overloaded',
     ],
     rateLimitWindowMs: 60000,

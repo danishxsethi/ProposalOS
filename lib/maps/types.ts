@@ -10,20 +10,23 @@ export type MapsOperation =
   | 'validateAddress';
 
 export interface MapsProvenance {
-  provider: 'google_maps_platform';
+  provider: 'serpapi_google_maps';
   operation: MapsOperation;
   fieldProfile: string;
   collectedAt: string;
   requestFingerprint: string;
   cache: 'HIT' | 'MISS' | 'BYPASS' | 'NOT_CACHEABLE';
-  costClass: 'NO_BILLABLE_CALL' | 'PLACES_TEXT_SEARCH' | 'PLACES_DETAILS' | 'GEOCODING' | 'ROUTES';
+  costClass: 'NO_BILLABLE_CALL' | 'SERP_API';
 }
 
 export interface MapsResult<T> {
   status: MapsResultStatus;
   data: T | null;
   provenance: MapsProvenance;
-  error?: { code: 'NOT_CONFIGURED' | 'NOT_FOUND' | 'RATE_LIMITED' | 'PROVIDER_ERROR' | 'COST_CAP_EXCEEDED'; message: string };
+  error?: {
+    code: 'NOT_CONFIGURED' | 'NOT_FOUND' | 'RATE_LIMITED' | 'PROVIDER_ERROR' | 'COST_CAP_EXCEEDED';
+    message: string;
+  };
 }
 
 export interface PlacesCandidate {
@@ -45,7 +48,7 @@ export interface PlacesCandidate {
 }
 
 export interface NormalizedPlace {
-  provider: 'google_maps_platform';
+  provider: 'serpapi_google_maps';
   placeId: string;
   displayName: string | null;
   formattedAddress: string | null;
@@ -63,13 +66,23 @@ export interface NormalizedPlace {
   paymentOptions: unknown | null;
   accessibilityOptions: unknown | null;
   amenities: unknown | null;
-  reviews: Array<{ rating: number | null; publishTime: string | null; text: string | null; authorName: string | null }>;
+  reviews: Array<{
+    rating: number | null;
+    publishTime: string | null;
+    text: string | null;
+    authorName: string | null;
+  }>;
   photos: Array<{ name: string; widthPx: number | null; heightPx: number | null }>;
   providerAttributions: string[];
   identityStatus: PlaceIdentityStatus;
   identityConfidence: number | null;
   candidateCount: number;
-  alternateCandidates: Array<{ placeId: string; displayName: string | null; formattedAddress: string | null; score: number }>;
+  alternateCandidates: Array<{
+    placeId: string;
+    displayName: string | null;
+    formattedAddress: string | null;
+    score: number;
+  }>;
   collectedAt: string;
   fieldProfile: string;
 }
@@ -119,10 +132,48 @@ export interface RouteMatrixInput {
 export interface MapsIntelligenceProvider {
   searchText(input: PlaceSearchInput): Promise<MapsResult<PlacesCandidate[]>>;
   searchNearby(input: NearbySearchInput): Promise<MapsResult<PlacesCandidate[]>>;
-  getPlace(placeId: string, fieldProfile?: PlaceSearchInput['fieldProfile']): Promise<MapsResult<NormalizedPlace>>;
+  getPlace(
+    placeId: string,
+    fieldProfile?: PlaceSearchInput['fieldProfile']
+  ): Promise<MapsResult<NormalizedPlace>>;
   resolveBusiness(input: BusinessResolutionInput): Promise<MapsResult<NormalizedPlace>>;
-  geocode(input: GeocodeInput): Promise<MapsResult<{ latitude: number; longitude: number; formattedAddress: string; placeId: string | null }>>;
-  reverseGeocode(latitude: number, longitude: number): Promise<MapsResult<{ latitude: number; longitude: number; formattedAddress: string; placeId: string | null }>>;
-  routeMatrix(input: RouteMatrixInput): Promise<MapsResult<Array<{ originIndex: number; destinationIndex: number; distanceMeters: number | null; durationSeconds: number | null; status: string }>>>;
-  validateAddress?(input: GeocodeInput): Promise<MapsResult<{ verdict: string; formattedAddress: string | null; placeId: string | null }>>;
+  geocode(
+    input: GeocodeInput
+  ): Promise<
+    MapsResult<{
+      latitude: number;
+      longitude: number;
+      formattedAddress: string;
+      placeId: string | null;
+    }>
+  >;
+  reverseGeocode(
+    latitude: number,
+    longitude: number
+  ): Promise<
+    MapsResult<{
+      latitude: number;
+      longitude: number;
+      formattedAddress: string;
+      placeId: string | null;
+    }>
+  >;
+  routeMatrix(
+    input: RouteMatrixInput
+  ): Promise<
+    MapsResult<
+      Array<{
+        originIndex: number;
+        destinationIndex: number;
+        distanceMeters: number | null;
+        durationSeconds: number | null;
+        status: string;
+      }>
+    >
+  >;
+  validateAddress?(
+    input: GeocodeInput
+  ): Promise<
+    MapsResult<{ verdict: string; formattedAddress: string | null; placeId: string | null }>
+  >;
 }

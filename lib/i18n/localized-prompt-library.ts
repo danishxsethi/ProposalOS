@@ -350,7 +350,7 @@ export class LocalizedPromptLibrary {
       locale: row.locale,
       promptText: row.prompt_text,
       culturalContext: row.cultural_context ?? '',
-      thinkingBudget: 4096,
+      thinkingBudget: 0,
       createdAt: new Date(row.created_at),
       approvalStatus: row.approval_status as 'pending' | 'approved' | 'rejected',
       nativeSpeakerReview: row.native_speaker_review ?? undefined,

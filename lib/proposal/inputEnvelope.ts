@@ -1,5 +1,5 @@
 import { validateFinding } from '@/lib/audit/findingContract';
-import { GEMINI_FLASH, GEMINI_PRO } from '@/lib/config/models';
+import { BEDROCK_NOVA_2_LITE } from '@/lib/config/models';
 
 import type { Audit, EvidenceSnapshot, Finding } from '@prisma/client';
 
@@ -25,7 +25,7 @@ export interface ProposalInputEnvelope {
   proposalGraphVersion: 'proposal-graph-v1';
   qaVersion: 1;
   promptVersion: string;
-  modelProvider: 'google-generative-ai';
+  modelProvider: 'amazon-bedrock';
   model: string;
 }
 
@@ -77,7 +77,7 @@ export function buildPublicProposalInputEnvelope(
     proposalGraphVersion: 'proposal-graph-v1',
     qaVersion: 1,
     promptVersion: process.env.PROPOSAL_PROMPT_VERSION ?? 'unversioned',
-    modelProvider: 'google-generative-ai',
-    model: process.env.GEMINI_PROPOSAL_MODEL ?? GEMINI_FLASH,
+    modelProvider: 'amazon-bedrock',
+    model: BEDROCK_NOVA_2_LITE,
   };
 }

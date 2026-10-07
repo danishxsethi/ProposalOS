@@ -1,13 +1,12 @@
 import { RunTree } from 'langsmith';
 
-import { GEMINI_FLASH, GEMINI_PRO } from '@/lib/config/models';
+import { BEDROCK_NOVA_MICRO } from '@/lib/config/models';
 import { CostTracker } from '@/lib/costs/costTracker';
-import { generateWithGemini } from '@/lib/llm/provider';
+import { generateWithLLM } from '@/lib/llm/provider';
 import { logger } from '@/lib/logger';
 import { traceLlmCall } from '@/lib/tracing';
 
 import { LegacyAuditModuleResult } from './types';
-
 
 export interface ReputationModuleInput {
   reviews: any[]; // Reviews from GBP module
@@ -37,7 +36,7 @@ interface ReputationAnalysisResult {
 
 /**
  * Reputation & Reviews Module
- * Analyzes Google reviews using Gemini to extract sentiment, themes, and response patterns
+ * Analyzes Google reviews using Amazon Bedrock to extract sentiment, themes, and response patterns
  */
 export async function runReputationModule(
   input: ReputationModuleInput,
@@ -61,10 +60,7 @@ export async function runReputationModule(
   }
 
   try {
-    // Routed through the canonical LLM façade: API-key or Vertex auth, retry,
-    // circuit breaker, output validation and real token-based cost accounting.
-    // (Previously hardcoded to the Vertex SDK → failed with "GCP_PROJECT_ID not
-    // found" on every API-key deployment.)
+    // Use the shared Bedrock façade for retry, validation, and token accounting.
 
     // Extract review text for analysis
     const reviewsForAnalysis = input.reviews.slice(0, 5).map((r: any) => ({
@@ -103,24 +99,27 @@ Return JSON in this exact format:
           reviewCount: reviewsForAnalysis.length,
           reviews: reviewsForAnalysis,
         },
-        tags: ['reputation', 'gemini-flash'],
+        tags: ['reputation', 'bedrock-nova-micro'],
         parent: parentTrace,
       },
       async () => {
-        const llm = await generateWithGemini({
-          model: GEMINI_FLASH,
+        const llm = await generateWithLLM({
+          model: BEDROCK_NOVA_MICRO,
           input: prompt,
           temperature: 0,
           maxOutputTokens: 4096,
           responseModality: 'json',
           node: 'reputation.review_analysis',
-        } as Parameters<typeof generateWithGemini>[0]);
+        } as Parameters<typeof generateWithLLM>[0]);
         const promptTokens = llm.usageMetadata?.promptTokenCount ?? 500;
         const completionTokens = llm.usageMetadata?.candidatesTokenCount ?? 200;
-        tracker?.addLlmCall('GEMINI_FLASH', promptTokens, completionTokens);
-        const responseText = String(llm.text ?? '').replace(/^```(?:json)?\s*|\s*```$/g, '').trim();
+        tracker?.addLlmCall('BEDROCK_NOVA_MICRO', promptTokens, completionTokens);
+        const responseText = String(llm.text ?? '')
+          .replace(/^```(?:json)?\s*|\s*```$/g, '')
+          .trim();
         const analysis = JSON.parse(responseText);
-        if (!Array.isArray(analysis?.reviews)) throw new Error('Reputation analysis returned no reviews array');
+        if (!Array.isArray(analysis?.reviews))
+          throw new Error('Reputation analysis returned no reviews array');
 
         // Calculate metrics
         const negativeCount = analysis.reviews.filter(
@@ -177,7 +176,7 @@ Return JSON in this exact format:
         // which is internal to the `traceLlmCall` closure above. Cost is already
         // tracked via `tracker?.addLlmCall(...)` (fixed estimate) at call start;
         // this callback only supplies the tracing metadata `traceLlmCall` expects.
-        return { prompt: 0, completion: 0, model: GEMINI_FLASH };
+        return { prompt: 0, completion: 0, model: BEDROCK_NOVA_MICRO };
       }
     );
   } catch (error) {

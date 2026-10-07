@@ -29,10 +29,10 @@ export function normalizeConfidence(
   return Math.max(1, Math.min(10, Math.round(raw)));
 }
 
-const PSI_POINTER = 'https://www.googleapis.com/pagespeedonline/v5/runPagespeed';
-const PLACES_POINTER = 'https://places.googleapis.com';
+const PSI_POINTER = 'local_lighthouse';
+const PLACES_POINTER = 'https://www.google.com/maps/search/';
 const SERPAPI_POINTER = 'https://serpapi.com';
-const GOOGLE_REVIEWS_POINTER = 'https://maps.googleapis.com/maps/api/place/details';
+const GOOGLE_REVIEWS_POINTER = SERPAPI_POINTER;
 
 export interface Finding {
   module: string;
@@ -146,7 +146,9 @@ function generateCwvFindingsFromFull(cwvFull: CoreWebVitalsFull, pointer: string
       type,
       title,
       description: desc,
-      evidence: [createEvidence({ pointer, source: 'pagespeed_v5', type: 'metric', value, label })],
+      evidence: [
+        createEvidence({ pointer, source: 'lighthouse_local', type: 'metric', value, label }),
+      ],
       metrics: { ...cwvMetrics },
       impactScore: impact,
       confidenceScore: normalizeConfidence(95, '0-100'),
@@ -298,7 +300,7 @@ function generateCwvFindingsFromFull(cwvFull: CoreWebVitalsFull, pointer: string
       evidence: [
         createEvidence({
           pointer,
-          source: 'pagespeed_v5',
+          source: 'lighthouse_local',
           type: 'metric',
           value: cwvFull.totalPageWeightMB.toFixed(2),
           label: 'Page Weight (MB)',
@@ -326,7 +328,7 @@ function generateCwvFindingsFromFull(cwvFull: CoreWebVitalsFull, pointer: string
       evidence: [
         createEvidence({
           pointer,
-          source: 'pagespeed_v5',
+          source: 'lighthouse_local',
           type: 'metric',
           value: cwvFull.renderBlockingCount,
           label: 'Render-blocking count',
@@ -418,7 +420,7 @@ export function generateWebsiteFindings(data: any): Finding[] {
           evidence: [
             createEvidence({
               pointer,
-              source: 'pagespeed_v5',
+              source: 'lighthouse_local',
               type: 'metric',
               value: Math.round(lcpMs),
               label: 'LCP (ms)',
@@ -445,7 +447,7 @@ export function generateWebsiteFindings(data: any): Finding[] {
           evidence: [
             createEvidence({
               pointer,
-              source: 'pagespeed_v5',
+              source: 'lighthouse_local',
               type: 'metric',
               value: Math.round(lcpMs),
               label: 'LCP (ms)',
@@ -472,7 +474,7 @@ export function generateWebsiteFindings(data: any): Finding[] {
           evidence: [
             createEvidence({
               pointer,
-              source: 'pagespeed_v5',
+              source: 'lighthouse_local',
               type: 'metric',
               value: Math.round(fcpMs),
               label: 'FCP (ms)',
@@ -495,7 +497,7 @@ export function generateWebsiteFindings(data: any): Finding[] {
           evidence: [
             createEvidence({
               pointer,
-              source: 'pagespeed_v5',
+              source: 'lighthouse_local',
               type: 'metric',
               value: Math.round(fcpMs),
               label: 'FCP (ms)',
@@ -522,7 +524,7 @@ export function generateWebsiteFindings(data: any): Finding[] {
           evidence: [
             createEvidence({
               pointer,
-              source: 'pagespeed_v5',
+              source: 'lighthouse_local',
               type: 'metric',
               value: cls.toFixed(2),
               label: 'CLS',
@@ -545,7 +547,7 @@ export function generateWebsiteFindings(data: any): Finding[] {
           evidence: [
             createEvidence({
               pointer,
-              source: 'pagespeed_v5',
+              source: 'lighthouse_local',
               type: 'metric',
               value: cls.toFixed(2),
               label: 'CLS',
@@ -572,7 +574,7 @@ export function generateWebsiteFindings(data: any): Finding[] {
           evidence: [
             createEvidence({
               pointer,
-              source: 'pagespeed_v5',
+              source: 'lighthouse_local',
               type: 'metric',
               value: Math.round(tbtMs),
               label: 'TBT (ms)',
@@ -595,7 +597,7 @@ export function generateWebsiteFindings(data: any): Finding[] {
           evidence: [
             createEvidence({
               pointer,
-              source: 'pagespeed_v5',
+              source: 'lighthouse_local',
               type: 'metric',
               value: Math.round(tbtMs),
               label: 'TBT (ms)',
@@ -639,7 +641,7 @@ export function generateWebsiteFindings(data: any): Finding[] {
       evidence: [
         createEvidence({
           pointer: finalUrl || PSI_POINTER,
-          source: 'pagespeed_v5',
+          source: 'lighthouse_local',
           type: 'score',
           value: perfScore,
           label: 'Performance Score',
@@ -671,7 +673,7 @@ export function generateWebsiteFindings(data: any): Finding[] {
       evidence: [
         createEvidence({
           pointer: finalUrl || PSI_POINTER,
-          source: 'pagespeed_v5',
+          source: 'lighthouse_local',
           type: 'score',
           value: seoScore,
           label: 'SEO Score',
@@ -704,7 +706,7 @@ export function generateWebsiteFindings(data: any): Finding[] {
       evidence: [
         createEvidence({
           pointer: finalUrl || PSI_POINTER,
-          source: 'pagespeed_v5',
+          source: 'lighthouse_local',
           type: 'score',
           value: a11yScore,
           label: 'Accessibility Score',
@@ -1778,7 +1780,7 @@ export function generateGBPFindings(
       evidence: [
         createEvidence({
           pointer: gbpPointer,
-          source: 'places_api_v1',
+          source: 'serpapi_google_maps',
           type: 'metric',
           value: rating,
           label: 'Rating',
@@ -1809,7 +1811,7 @@ export function generateGBPFindings(
       evidence: [
         createEvidence({
           pointer: gbpPointer,
-          source: 'places_api_v1',
+          source: 'serpapi_google_maps',
           type: 'metric',
           value: 'none',
           label: 'Website',
@@ -1839,7 +1841,7 @@ export function generateGBPFindings(
       evidence: [
         createEvidence({
           pointer: gbpPointer,
-          source: 'places_api_v1',
+          source: 'serpapi_google_maps',
           type: 'metric',
           value: photoCount,
           label: 'Photo Count',
@@ -1869,7 +1871,7 @@ export function generateGBPFindings(
       evidence: [
         createEvidence({
           pointer: gbpPointer,
-          source: 'places_api_v1',
+          source: 'serpapi_google_maps',
           type: 'metric',
           value: 0,
           label: 'Opening Hours',

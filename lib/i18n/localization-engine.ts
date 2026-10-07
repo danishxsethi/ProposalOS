@@ -1,5 +1,5 @@
-import { GEMINI_FLASH, GEMINI_PRO } from '@/lib/config/models';
-import { generateWithGemini } from '@/lib/llm/provider';
+import { BEDROCK_NOVA_2_LITE, BEDROCK_NOVA_MICRO } from '@/lib/config/models';
+import { generateWithLLM } from '@/lib/llm/provider';
 import { logger } from '@/lib/logger';
 import {
   formatCurrency,
@@ -25,14 +25,13 @@ import {
 } from './types';
 
 /**
- * Real Gemini API client for localization using standard provider
+ * Bedrock client for localization using the shared LLM provider.
  */
-class GeminiClient {
-  async callWithThinkingBudget(prompt: string, thinkingBudget: number = 4096): Promise<string> {
-    const response = await generateWithGemini({
-      model: GEMINI_PRO,
+class LocalizationLLMClient {
+  async generate(prompt: string): Promise<string> {
+    const response = await generateWithLLM({
+      model: BEDROCK_NOVA_2_LITE,
       input: prompt,
-      thinkingBudget: thinkingBudget,
       metadata: { node: 'localization_engine' },
     });
     return response.text;
@@ -46,14 +45,14 @@ class GeminiClient {
  */
 export class LocalizationEngine {
   private localeConfigManager: LocaleConfigManager;
-  private geminiClient: GeminiClient;
+  private llmClient: LocalizationLLMClient;
   private localeConfigs: Map<string, LocaleConfig> = new Map();
   /** In-memory translation cache: key = sha256(content:locale), value = translated string */
   private translationCache: Map<string, string> = new Map();
 
   constructor(localeConfigManager: LocaleConfigManager) {
     this.localeConfigManager = localeConfigManager;
-    this.geminiClient = new GeminiClient();
+    this.llmClient = new LocalizationLLMClient();
   }
 
   /**
@@ -71,7 +70,7 @@ export class LocalizationEngine {
 
   /**
    * Localizes a prompt for a specific locale with cultural context
-   * Calls Gemini 3.1 Pro with 4,096 token thinking budget
+   * Uses Nova 2 Lite to adapt the prompt to the target market.
    * Implements prompt rewriting with cultural context (not translation)
    * Covers all 7 localization dimensions
    *
@@ -97,12 +96,15 @@ export class LocalizationEngine {
     // Get localization dimensions
     const dimensions = this.getLocalizationDimensions(locale, localeConfig);
 
-    // Build Gemini prompt for localization
-    const geminiPrompt = this.buildLocalizationPrompt(basePrompt, locale, localeConfig, dimensions);
+    const localizationPrompt = this.buildLocalizationPrompt(
+      basePrompt,
+      locale,
+      localeConfig,
+      dimensions
+    );
 
     try {
-      // Call Gemini with 4,096 token thinking budget
-      const localizedText = await this.geminiClient.callWithThinkingBudget(geminiPrompt, 4096);
+      const localizedText = await this.llmClient.generate(localizationPrompt);
 
       // Extract cultural context from response
       const culturalContext = this.extractCulturalContext(localizedText, dimensions);
@@ -112,7 +114,7 @@ export class LocalizationEngine {
         locale,
         promptText: localizedText,
         culturalContext,
-        thinkingBudget: 4096,
+        thinkingBudget: 0,
         createdAt: new Date(),
         approvalStatus: 'pending',
       };
@@ -245,7 +247,7 @@ export class LocalizationEngine {
       locale: 'en-US',
       promptText: basePrompt,
       culturalContext: 'Fallback to en-US variant',
-      thinkingBudget: 4096,
+      thinkingBudget: 0,
       createdAt: new Date(),
       approvalStatus: 'pending',
     };
@@ -279,19 +281,18 @@ Consider:
 4. Cultural communication style and tone
 5. Local business practices and market norms
 
-Use your full 4,096 token thinking budget to deeply understand the market context
-and create a culturally appropriate prompt.`;
+Use the supplied context to create a culturally appropriate, precise prompt for this market.`;
   }
 
   private extractCulturalContext(response: string, dimensions: LocalizationDimensions): string {
-    // Extract cultural context from Gemini response
+    // Extract cultural context from the model response.
     const lines = response.split('\n');
     const contextLines = lines.filter((line) => !line.includes('THINKING'));
     return contextLines.join('\n').trim();
   }
 
   /**
-   * Translates a text string to the target locale using Gemini Flash.
+   * Translates a text string to the target locale using Nova Micro.
    * Caches results in-memory to avoid redundant API calls.
    * Falls back to original text on LLM error.
    */
@@ -307,8 +308,8 @@ and create a culturally appropriate prompt.`;
     const fullPrompt = `${systemPrompt}\n\n${text}`;
 
     try {
-      const response = await generateWithGemini({
-        model: process.env.GEMINI_FLASH_MODEL || GEMINI_FLASH,
+      const response = await generateWithLLM({
+        model: BEDROCK_NOVA_MICRO,
         input: fullPrompt,
         temperature: 0.1, // Low temperature for consistent translations
         maxOutputTokens: 2048,
@@ -337,7 +338,7 @@ and create a culturally appropriate prompt.`;
           locale
         ),
         locale,
-        culturalContext: `Translated to ${locale} via Gemini Flash`,
+        culturalContext: `Translated to ${locale} via Amazon Nova Micro`,
       }))
     );
   }
@@ -352,7 +353,7 @@ and create a culturally appropriate prompt.`;
         originalRecommendation: rec,
         localizedText: await this.translateContent(rec.text || rec.description || '', locale),
         locale,
-        culturalContext: `Translated to ${locale} via Gemini Flash`,
+        culturalContext: `Translated to ${locale} via Amazon Nova Micro`,
       }))
     );
   }

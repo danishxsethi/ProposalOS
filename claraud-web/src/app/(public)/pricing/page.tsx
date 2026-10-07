@@ -100,7 +100,7 @@ const faqs = [
   },
   {
     q: 'Is my data secure?',
-    a: "Yes. We're hosted on Google Cloud with 256-bit encryption. We never store sensitive business data beyond what's needed for your report. GDPR and PIPEDA compliant.",
+    a: 'Yes. We use AWS infrastructure with encryption in transit and at rest. We store data needed to provide your reports; see our Privacy Policy for details about data use and third-party providers.',
   },
 ];
 

@@ -7,7 +7,6 @@
  * Requirements: 2.5, 9.5, 11.3, 11.4
  */
 
-import { FEATURE_FLAGS } from '@/lib/config/feature-flags';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 
@@ -64,13 +63,8 @@ export async function processStage(
     return [];
   }
 
-  // Process with concurrency limit using Promise pool pattern
-  let dynamicConcurrentLimit = config.concurrencyLimit;
-  if (FEATURE_FLAGS.GEMINI_31_PRO_TRAFFIC_PCT > 0) {
-    // Gemini 3.1 Pro has significantly lower quota bounds out of the box
-    dynamicConcurrentLimit = Math.min(dynamicConcurrentLimit, 5);
-  }
-
+  // Process with concurrency limit using Promise pool pattern.
+  const dynamicConcurrentLimit = config.concurrencyLimit;
   const results = await processWithConcurrencyLimit(
     prospects,
     dynamicConcurrentLimit,

@@ -6,7 +6,7 @@
  * This module initializes the OpenTelemetry SDK with:
  * - HTTP instrumentation for automatic request tracing
  * - PostgreSQL instrumentation for database query tracing
- * - OTLP exporter for GCP Cloud Trace compatibility
+ * - Optional OTLP exporter for a configured collector
  * - Resource attributes for service identification
  *
  * Usage: Import this module in instrumentation.ts to enable distributed tracing.
@@ -34,10 +34,6 @@ const OTEL_COLLECTOR_URL = process.env.OTEL_COLLECTOR_URL; // gRPC endpoint for 
 const OTEL_EXPORTER_MODE = process.env.OTEL_EXPORTER_MODE || 'grpc'; // 'grpc' or 'http'
 const OTEL_CONSOLE_EXPORT = process.env.OTEL_CONSOLE_EXPORT === 'true';
 
-// GCP Cloud Trace specific configuration
-const GCP_PROJECT_ID = process.env.GCP_PROJECT_ID;
-const isGCP = !!GCP_PROJECT_ID || process.env.K_SERVICE; // K_SERVICE is set on Cloud Run
-
 let sdk: NodeSDK | undefined;
 
 /**
@@ -56,17 +52,14 @@ export function initializeOpenTelemetry(): void {
       [ATTR_SERVICE_NAME]: OTEL_SERVICE_NAME,
       [ATTR_SERVICE_VERSION]: process.env.npm_package_version || '0.1.0',
       [ATTR_DEPLOYMENT_ENVIRONMENT_NAME]: process.env.NODE_ENV || 'development',
-      ...(GCP_PROJECT_ID && {
-        ['gcp.project_id']: GCP_PROJECT_ID,
-      }),
-      ...(process.env.K_SERVICE && {
-        ['gcp.cloud_run.service']: process.env.K_SERVICE,
-        ['gcp.cloud_run.revision']: process.env.K_REVISION,
+      ...(process.env.AWS_REGION && {
+        ['cloud.provider']: 'aws',
+        ['cloud.region']: process.env.AWS_REGION,
       }),
     });
 
-    // Configure trace exporter based on mode and environment
-    let traceExporter: OTLPTraceExporter | HTTPTraceExporter | ConsoleSpanExporter;
+    // Export only to an explicitly configured collector (or the console in local dev).
+    let traceExporter: OTLPTraceExporter | HTTPTraceExporter | ConsoleSpanExporter | undefined;
 
     if (OTEL_CONSOLE_EXPORT) {
       traceExporter = new ConsoleSpanExporter();
@@ -83,20 +76,16 @@ export function initializeOpenTelemetry(): void {
         });
         logger.info({ url: OTEL_COLLECTOR_URL }, '[OpenTelemetry] Using gRPC OTLP exporter');
       }
-    } else if (isGCP) {
-      // On GCP, use gRPC exporter with default endpoint for Cloud Trace
-      traceExporter = new OTLPTraceExporter();
-      logger.info('[OpenTelemetry] Using default gRPC exporter for GCP Cloud Trace');
     } else {
-      // Default to console exporter in development
-      traceExporter = new ConsoleSpanExporter();
-      logger.info('[OpenTelemetry] No collector URL configured, using console exporter');
+      logger.info('[OpenTelemetry] No trace collector configured; traces will not be exported');
     }
 
     // Initialize the SDK with auto-instrumentations
     sdk = new NodeSDK({
       resource: resource as any,
-      spanProcessor: new BatchSpanProcessor(traceExporter as any) as any,
+      ...(traceExporter && {
+        spanProcessor: new BatchSpanProcessor(traceExporter as any) as any,
+      }),
       instrumentations: [
         getNodeAutoInstrumentations({
           // HTTP instrumentation

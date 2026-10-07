@@ -188,7 +188,7 @@ fi
 
 # Run sample audit if API keys are configured
 log_info "Checking if sample audit can run..."
-if grep -q "GOOGLE_PLACES_API_KEY=\"\"" .env.local 2>/dev/null; then
+if grep -q "SERP_API_KEY=\"\"" .env.local 2>/dev/null; then
     log_warning "API keys not configured - sample audit skipped"
     log_info "To test the pipeline, fill in API keys and run:"
     echo "   curl -X POST http://localhost:3000/api/audit \\"
@@ -218,9 +218,9 @@ echo ""
 echo "Next steps:"
 echo ""
 echo -e "  ${YELLOW}1.${NC} Edit .env.local and fill in required API keys:"
-echo "     - GOOGLE_PLACES_API_KEY"
-echo "     - GOOGLE_PAGESPEED_API_KEY"
-echo "     - GOOGLE_AI_API_KEY"
+echo "     - LLM_PRIMARY_PROVIDER=bedrock"
+echo "     - BEDROCK_ENABLED=true"
+echo "     - AWS_REGION=us-east-2 (use AWS CLI credentials locally)"
 echo "     - SERP_API_KEY"
 echo "     - And other required keys"
 echo ""

@@ -45,9 +45,8 @@ export function Footer() {
         <div>
           <h4 className="font-semibold text-white mb-4">Trust</h4>
           <ul className="space-y-3 text-sm text-text-secondary">
-            <li className="flex items-center gap-2">✓ Powered by Google Cloud</li>
-            <li className="flex items-center gap-2">✓ GDPR & PIPEDA Compliant</li>
-            <li className="flex items-center gap-2">✓ 256-bit Encryption</li>
+            <li className="flex items-center gap-2">✓ Powered by AWS</li>
+            <li className="flex items-center gap-2">✓ Encrypted in transit and at rest</li>
           </ul>
         </div>
       </div>

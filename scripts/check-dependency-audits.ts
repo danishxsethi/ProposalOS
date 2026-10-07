@@ -16,17 +16,35 @@ type AuditReport = {
 };
 
 function runAudit(omitDev: boolean): AuditReport {
-  const result = spawnSync(
-    'npm',
-    ['audit', ...(omitDev ? ['--omit=dev'] : []), '--audit-level=high', '--json'],
-    { encoding: 'utf8' }
-  );
+  const args = ['audit', ...(omitDev ? ['--omit=dev'] : []), '--audit-level=high', '--json'];
+  const npmExecPath = process.env.npm_execpath;
+  const result = npmExecPath
+    ? spawnSync(process.execPath, [npmExecPath, ...args], { encoding: 'utf8' })
+    : spawnSync('npm', args, {
+        encoding: 'utf8',
+        // Windows exposes npm as a .cmd shim, which requires a shell to spawn.
+        shell: process.platform === 'win32',
+      });
+
+  if (result.error) {
+    throw new Error(`Unable to run npm audit: ${result.error.message}`);
+  }
+
+  const stdout = result.stdout ?? '';
+  if (!stdout.trim()) {
+    process.stderr.write(result.stderr || 'npm audit returned no JSON output\n');
+    throw new Error(`npm audit returned no report (exit ${result.status ?? 'unknown'})`);
+  }
+
   let report: AuditReport;
   try {
-    report = JSON.parse(result.stdout) as AuditReport;
+    report = JSON.parse(stdout) as AuditReport;
   } catch {
-    process.stderr.write(result.stderr || result.stdout || 'npm audit returned no JSON output\n');
+    process.stderr.write(result.stderr || stdout);
     throw new Error('Unable to parse npm audit JSON');
+  }
+  if (!report || typeof report !== 'object') {
+    throw new Error('npm audit JSON did not contain a report object');
   }
 
   mkdirSync(join(process.cwd(), 'docs/security/audit-evidence'), { recursive: true });

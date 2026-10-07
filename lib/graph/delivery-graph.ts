@@ -1,4 +1,3 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
 import { Annotation, StateGraph } from '@langchain/langgraph';
 import { Finding, ProjectStatus } from '@prisma/client';
 
@@ -317,7 +316,12 @@ async function trigger_reaudit(state: typeof DeliveryState.State) {
 
     // 2. Actually run the audit (blocks until complete)
     try {
-      const job = await dispatchAuditExecution({ tenantId: state.tenantId, auditId: reAudit.id, push: false, generateProposal: false });
+      const job = await dispatchAuditExecution({
+        tenantId: state.tenantId,
+        auditId: reAudit.id,
+        push: false,
+        generateProposal: false,
+      });
       await processAuditJob(job.id);
     } catch (e) {
       logger.error({ error: e }, '[ReAudit] runAudit() failed — continuing with empty re-audit');

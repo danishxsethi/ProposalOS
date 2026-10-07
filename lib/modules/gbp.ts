@@ -1,5 +1,5 @@
 import { logger } from '@/lib/logger';
-import { mapsIntelligence, normalizeGooglePlaceToLegacy } from '@/lib/maps/googleMapsProvider';
+import { mapsIntelligence, normalizePlaceToLegacy } from '@/lib/maps/serpMapsProvider';
 
 import { GBPModuleInput, LegacyAuditModuleResult } from './types';
 
@@ -95,28 +95,40 @@ export async function runGBPModule(
     });
     if (resolution.status === 'UNAVAILABLE' || resolution.status === 'FAILED') {
       return {
-        moduleId: 'gbp-audit', status: 'failed', timestamp: new Date().toISOString(),
-        data: null, error: resolution.error?.message ?? 'Maps provider unavailable',
+        moduleId: 'gbp-audit',
+        status: 'failed',
+        timestamp: new Date().toISOString(),
+        data: null,
+        error: resolution.error?.message ?? 'Maps provider unavailable',
       };
     }
     if (resolution.data?.identityStatus === 'NOT_FOUND' || !resolution.data) {
       throw new Error(`Business not found: ${input.businessName} in ${input.city}`);
     }
-    const identityConfidence = resolution.data.identityStatus === 'CONFIRMED' ? 'high' : 'ambiguous';
+    const identityConfidence =
+      resolution.data.identityStatus === 'CONFIRMED' ? 'high' : 'ambiguous';
     if (resolution.data.identityStatus !== 'CONFIRMED') {
       return {
-        moduleId: 'gbp-audit', status: 'success', timestamp: new Date().toISOString(),
+        moduleId: 'gbp-audit',
+        status: 'success',
+        timestamp: new Date().toISOString(),
         data: {
-          placeId: resolution.data.placeId, name: resolution.data.displayName,
-          address: resolution.data.formattedAddress, identityStatus: resolution.data.identityStatus,
-          identityConfidence, matchConfidenceScore: resolution.data.identityConfidence,
+          placeId: resolution.data.placeId,
+          mapsUri: resolution.data.mapsUri,
+          name: resolution.data.displayName,
+          address: resolution.data.formattedAddress,
+          identityStatus: resolution.data.identityStatus,
+          identityConfidence,
+          matchConfidenceScore: resolution.data.identityConfidence,
           candidatesConsidered: resolution.data.candidateCount,
-          alternateCandidateNames: resolution.data.alternateCandidates.map((candidate) => candidate.displayName).filter((name): name is string => !!name),
+          alternateCandidateNames: resolution.data.alternateCandidates
+            .map((candidate) => candidate.displayName)
+            .filter((name): name is string => !!name),
           mapsProvenance: resolution.provenance,
         },
       };
     }
-    const details = normalizeGooglePlaceToLegacy(resolution.data) as Record<string, any>;
+    const details = normalizePlaceToLegacy(resolution.data) as Record<string, any>;
 
     const phone = details.nationalPhoneNumber || details.internationalPhoneNumber;
     const description = details.editorialSummary?.text;
@@ -168,7 +180,9 @@ export async function runGBPModule(
         identityConfidence,
         matchConfidenceScore: resolution.data.identityConfidence ?? 0,
         candidatesConsidered: resolution.data.candidateCount,
-        alternateCandidateNames: resolution.data.alternateCandidates.map((candidate) => candidate.displayName).filter((name): name is string => !!name),
+        alternateCandidateNames: resolution.data.alternateCandidates
+          .map((candidate) => candidate.displayName)
+          .filter((name): name is string => !!name),
         mapsProvenance: resolution.provenance,
       },
     };

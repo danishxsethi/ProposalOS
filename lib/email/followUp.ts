@@ -4,7 +4,7 @@
  */
 import { MODEL_CONFIG } from '@/lib/config/models';
 import type { CostTracker } from '@/lib/costs/costTracker';
-import { generateWithGemini } from '@/lib/llm/provider';
+import { generateWithLLM } from '@/lib/llm/provider';
 
 import type { AuditForEmail, FollowUpSequence, PlaybookForEmail, ProposalForEmail } from './types';
 
@@ -120,7 +120,7 @@ Generate exactly 3 emails. Return valid JSON only:
 Replace [link] with: ${proposalUrl}
 Return ONLY the JSON object.`;
 
-  const result = await generateWithGemini({
+  const result = await generateWithLLM({
     model: MODEL_CONFIG.flash.model,
     input: prompt,
     temperature: 0.5,
@@ -132,7 +132,7 @@ Return ONLY the JSON object.`;
   if (tracker && result.usageMetadata) {
     const usage = result.usageMetadata;
     tracker.addLlmCall(
-      'GEMINI_FLASH',
+      'BEDROCK_NOVA_MICRO',
       usage.promptTokenCount ?? 0,
       usage.candidatesTokenCount ?? 0,
       usage.thoughtsTokenCount ?? 0

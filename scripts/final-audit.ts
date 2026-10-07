@@ -124,11 +124,10 @@ async function check3_EnvVars(): Promise<void> {
     const required = [
       'DATABASE_URL',
       'API_KEY',
-      'GOOGLE_PAGESPEED_API_KEY',
-      'GOOGLE_PLACES_API_KEY',
       'SERP_API_KEY',
-      'GCP_PROJECT_ID',
-      'GOOGLE_AI_API_KEY',
+      'LLM_PRIMARY_PROVIDER',
+      'BEDROCK_ENABLED',
+      'AWS_REGION',
     ];
     const missing = required.filter((r) => !documented.has(r));
     if (missing.length > 0) {
@@ -143,11 +142,10 @@ async function check4_StartupValidation(): Promise<void> {
     const hasAll =
       process.env.DATABASE_URL &&
       process.env.API_KEY &&
-      process.env.GOOGLE_PAGESPEED_API_KEY &&
-      process.env.GOOGLE_PLACES_API_KEY &&
       process.env.SERP_API_KEY &&
-      process.env.GCP_PROJECT_ID &&
-      process.env.GOOGLE_AI_API_KEY;
+      process.env.LLM_PRIMARY_PROVIDER === 'bedrock' &&
+      process.env.BEDROCK_ENABLED === 'true' &&
+      process.env.AWS_REGION;
     if (!hasAll) {
       return { pass: true, detail: 'OK (validation skipped when vars missing)' };
     }
@@ -263,8 +261,8 @@ async function check10_Competitor(): Promise<void> {
 
 async function check11_EmailQuality(): Promise<void> {
   await runCheck('Email quality', async () => {
-    if (!process.env.GOOGLE_AI_API_KEY) {
-      return { pass: true, detail: 'SKIPPED (GOOGLE_AI_API_KEY not set)' };
+    if (process.env.LLM_PRIMARY_PROVIDER !== 'bedrock' || process.env.BEDROCK_ENABLED !== 'true') {
+      return { pass: true, detail: 'SKIPPED (Bedrock inference is not enabled)' };
     }
     const { runEmailPipeline } = await import('../lib/email');
     const mockAudit = {

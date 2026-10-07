@@ -5,12 +5,10 @@
  */
 
 export type ProviderName =
-  | 'pagespeed'
-  | 'google-places'
+  | 'lighthouse'
   | 'serpapi'
   | 'yelp'
-  | 'gemini'
-  | 'vertex'
+  | 'bedrock'
   | 'resend'
   | 'stripe'
   | 'crawler'

@@ -1,0 +1,9 @@
+terraform {
+  backend "s3" {
+    bucket       = "proposalos-terraform-state-410432886960-us-east-2"
+    key          = "bootstrap/terraform.tfstate"
+    region       = "us-east-2"
+    encrypt      = true
+    use_lockfile = true
+  }
+}

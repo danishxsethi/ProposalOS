@@ -27,21 +27,6 @@
 
 export const FEATURE_FLAGS = {
   // ==========================================
-  // MODEL ROUTING
-  // ==========================================
-  /**
-   * Enable Gemini 3.1 Pro for diagnosis/proposal tasks
-   * Traffic percentage controlled by GEMINI_31_PRO_TRAFFIC_PCT
-   */
-  GEMINI_31_PRO_ENABLED: process.env.GEMINI_31_PRO_ENABLED === 'true',
-
-  /**
-   * Percentage of traffic to route to Gemini 3.1 Pro (0-100)
-   * Used for A/B testing when GEMINI_31_PRO_ENABLED is true
-   */
-  GEMINI_31_PRO_TRAFFIC_PCT: parseInt(process.env.GEMINI_31_PRO_TRAFFIC_PCT || '0'),
-
-  // ==========================================
   // PER-FEATURE TOGGLES
   // ==========================================
   /**

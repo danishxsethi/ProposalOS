@@ -1,13 +1,17 @@
-import { NextResponse } from 'next/server';
+import { randomUUID } from 'crypto';
 
-import { Storage } from '@google-cloud/storage';
+import { NextResponse } from 'next/server';
 
 import { logger } from '@/lib/logger';
 import { withAuth } from '@/lib/middleware/auth';
+import { createPublicTenantLogoUrl, uploadToS3 } from '@/lib/storage';
 import { getTenantId } from '@/lib/tenant/context';
 
-const storage = new Storage();
-const bucketName = process.env.GCS_BUCKET_NAME || 'proposal-engine-assets';
+const LOGO_TYPES: Record<string, string> = {
+  'image/jpeg': '.jpg',
+  'image/png': '.png',
+  'image/webp': '.webp',
+};
 
 export const POST = withAuth(async (req: Request) => {
   try {
@@ -15,40 +19,27 @@ export const POST = withAuth(async (req: Request) => {
     if (!tenantId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     const formData = await req.formData();
-    const file = formData.get('file') as File;
+    const file = formData.get('file');
 
-    if (!file) {
+    if (!(file instanceof File)) {
       return NextResponse.json({ error: 'No file provided' }, { status: 400 });
     }
 
     if (file.size > 2 * 1024 * 1024) {
-      // 2MB
       return NextResponse.json({ error: 'File too large (max 2MB)' }, { status: 400 });
     }
 
-    const buffer = Buffer.from(await file.arrayBuffer());
-    const ext = file.name.split('.').pop();
-    const filename = `${tenantId}/logo_${Date.now()}.${ext}`;
+    const extension = LOGO_TYPES[file.type];
+    if (!extension) {
+      return NextResponse.json({ error: 'Use a PNG, JPEG, or WebP logo' }, { status: 415 });
+    }
 
-    const blob = storage.bucket(bucketName).file(filename);
-    const blobStream = blob.createWriteStream({
-      resumable: false,
-      metadata: {
-        contentType: file.type,
-      },
-    });
+    const key = `logos/${tenantId}/logo_${Date.now()}_${randomUUID()}${extension}`;
+    await uploadToS3(Buffer.from(await file.arrayBuffer()), key, file.type);
 
-    await new Promise((resolve, reject) => {
-      blobStream.on('finish', resolve);
-      blobStream.on('error', reject);
-      blobStream.end(buffer);
-    });
-
-    const publicUrl = `https://storage.googleapis.com/${bucketName}/${filename}`;
-
-    return NextResponse.json({ url: publicUrl });
+    return NextResponse.json({ url: createPublicTenantLogoUrl(tenantId, key) });
   } catch (error) {
-    logger.error('Upload error:', error);
+    logger.error({ error }, 'Logo upload error');
     return NextResponse.json({ error: 'Upload failed' }, { status: 500 });
   }
 });

@@ -1,7 +1,6 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
-
-import { GEMINI_FLASH, GEMINI_PRO } from '@/lib/config/models';
-import { CostTracker } from '@/lib/costs/costTracker';
+import { BEDROCK_NOVA_2_LITE } from '@/lib/config/models';
+import { CostTracker, trackBedrockUsage } from '@/lib/costs/costTracker';
+import { generateWithLLM } from '@/lib/llm/provider';
 import { logger } from '@/lib/logger';
 
 import { normalizeConfidence } from './findingGenerator';
@@ -47,10 +46,6 @@ export async function runCompetitorStrategyModule(
     '[CompetitorStrategy] Starting deep analysis'
   );
 
-  if (!process.env.GOOGLE_AI_API_KEY) {
-    throw new Error('GOOGLE_AI_API_KEY is missing');
-  }
-
   try {
     // 1. Mini-Audit Target Business (if not already known, but usually we iterate this)
     // For efficiency, we assume we might leverage existing audit data, but here we run a fresh lightweight check or expect inputs.
@@ -92,7 +87,11 @@ export async function runCompetitorStrategyModule(
       // gbpDeep returns evidenceSnapshots: [] when the competitor listing could
       // not be resolved (ambiguous/unavailable) — read defensively, never crash.
       gbp: (() => {
-        const raw = (competitorGbp?.evidenceSnapshots?.[0] as { rawResponse?: Record<string, unknown> } | undefined)?.rawResponse;
+        const raw = (
+          competitorGbp?.evidenceSnapshots?.[0] as
+            | { rawResponse?: Record<string, unknown> }
+            | undefined
+        )?.rawResponse;
         const reviews = (raw?.reviews ?? {}) as Record<string, unknown>;
         const completeness = (raw?.completeness ?? {}) as Record<string, unknown>;
         if (!raw) return 'Not found';
@@ -121,7 +120,7 @@ export async function runCompetitorStrategyModule(
 
     const evidenceSnapshot = {
       module: 'competitor_strategy',
-      source: 'gemini_comparative',
+      source: 'bedrock_comparative',
       rawResponse: analysis,
       collectedAt: new Date(),
     };
@@ -147,13 +146,16 @@ export async function runCompetitorStrategyModule(
     return {
       findings: [],
       evidenceSnapshots: [],
-      execution: { state: 'unavailable', reason: error instanceof Error ? error.message : 'Competitor strategy unavailable' },
+      execution: {
+        state: 'unavailable',
+        reason: error instanceof Error ? error.message : 'Competitor strategy unavailable',
+      },
     };
   }
 }
 
 /**
- * Generate Comparative Analysis with Gemini
+ * Generate comparative analysis with Bedrock
  */
 async function generateStrategicAnalysis(
   me: any,
@@ -161,11 +163,6 @@ async function generateStrategicAnalysis(
   context: CompetitorStrategyInput,
   tracker?: CostTracker
 ): Promise<StrategicAnalysis> {
-  const genAI = new GoogleGenerativeAI(process.env.GOOGLE_AI_API_KEY!);
-  const model = genAI.getGenerativeModel({ model: GEMINI_PRO });
-
-  tracker?.addApiCall('GEMINI_STRATEGY');
-
   const prompt = `Compare these two local businesses in ${context.industry}:
 
     BUSINESS A (Audited Client): ${JSON.stringify(me)}
@@ -192,8 +189,13 @@ async function generateStrategicAnalysis(
     }
     `;
 
-  const result = await model.generateContent(prompt);
-  const text = result.response.text();
+  const result = await generateWithLLM({
+    model: BEDROCK_NOVA_2_LITE,
+    input: prompt,
+    responseModality: 'json',
+  });
+  trackBedrockUsage(tracker, result, prompt);
+  const text = result.text;
   const cleanJson = text.replace(/```json|```/g, '').trim();
 
   return JSON.parse(cleanJson);
@@ -220,13 +222,15 @@ function generateStrategyFindings(
         description: `${input.competitorName} is using this to win customers. ${insight.recommendation}`,
         impactScore: 6,
         confidenceScore: normalizeConfidence(90, '0-100'),
-        evidence: [createEvidence({
-          pointer: input.competitorWebsite,
-          source: 'competitor_strategy',
-          type: 'text',
-          value: insight.observation,
-          label: 'Competitor Tactic',
-        })],
+        evidence: [
+          createEvidence({
+            pointer: input.competitorWebsite,
+            source: 'competitor_strategy',
+            type: 'text',
+            value: insight.observation,
+            label: 'Competitor Tactic',
+          }),
+        ],
         metrics: {},
         effortEstimate: 'MEDIUM',
         recommendedFix: [insight.recommendation],
@@ -242,13 +246,15 @@ function generateStrategyFindings(
       description: `You have an edge over ${input.competitorName} in these areas: ${analysis.ourAdvantages.join(', ')}.`,
       impactScore: 3,
       confidenceScore: normalizeConfidence(80, '0-100'),
-      evidence: [createEvidence({
-        pointer: input.websiteUrl,
-        source: 'competitor_strategy_comparison',
-        type: 'text',
-        value: analysis.ourAdvantages.join('; '),
-        label: 'Comparison basis',
-      })],
+      evidence: [
+        createEvidence({
+          pointer: input.websiteUrl,
+          source: 'competitor_strategy_comparison',
+          type: 'text',
+          value: analysis.ourAdvantages.join('; '),
+          label: 'Comparison basis',
+        }),
+      ],
       metrics: {},
       effortEstimate: 'LOW',
       recommendedFix: ['Double down on these strengths'],

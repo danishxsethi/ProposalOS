@@ -1,7 +1,8 @@
-import { generateWithGemini } from '../../lib/llm/provider';
+import { BEDROCK_NOVA_2_LITE, BEDROCK_NOVA_MICRO } from '../../lib/config/models';
+import { generateWithLLM } from '../../lib/llm/provider';
 
 async function runComparison() {
-  console.log('Running A/B Model Comparison: gemini-1.5-pro vs Gemini 3.1 Pro (Canary)');
+  console.log('Running Bedrock model comparison: Nova Micro vs Nova 2 Lite');
 
   const prompt = `You are an expert copywriter. Generate a 2-sentence executive summary based on the following findings:
 - Finding 1: Website takes 8.5 seconds to load (Critical).
@@ -10,18 +11,17 @@ async function runComparison() {
 
 Ensure you include specific numbers in the summary.`;
 
-  const baselineModel = 'gemini-1.5-pro';
-  const challengerModel = 'gemini-2.5-flash'; // Simulating 3.1 Pro via the provider feature flag or just passing a different capable model for local tests if 3.1 isn't available
+  const baselineModel = BEDROCK_NOVA_MICRO;
+  const challengerModel = BEDROCK_NOVA_2_LITE;
 
-  const runModel = async (modelName: string, name: string, thinkingBudget?: number) => {
+  const runModel = async (modelName: string, name: string) => {
     const start = Date.now();
     try {
-      const result = await generateWithGemini({
+      const result = await generateWithLLM({
         model: modelName,
         input: prompt,
         temperature: 0.2,
         maxOutputTokens: 512,
-        thinkingBudget,
         metadata: { node: 'test_node' },
       });
       const duration = Date.now() - start;
@@ -45,8 +45,8 @@ Ensure you include specific numbers in the summary.`;
   };
 
   const results = await Promise.all([
-    runModel(baselineModel, 'Baseline (1.5 Pro)'),
-    runModel(challengerModel, 'Challenger (3.1 Pro Canary)', 1024),
+    runModel(baselineModel, 'Nova Micro (low-cost text)'),
+    runModel(challengerModel, 'Nova 2 Lite (multimodal / complex)'),
   ]);
 
   console.table(
@@ -55,7 +55,6 @@ Ensure you include specific numbers in the summary.`;
       'Duration (ms)': r.durationMs,
       'Prompt Tokens': r.usage.promptTokenCount || 0,
       'Completion Tokens': r.usage.candidatesTokenCount || 0,
-      'Thinking Tokens': r.usage.thoughtsTokenCount || 0,
       'Response Length': r.text.length,
       Success: r.success,
     }))

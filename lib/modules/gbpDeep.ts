@@ -1,12 +1,10 @@
 import { CostTracker } from '@/lib/costs/costTracker';
 import { logger } from '@/lib/logger';
-import { mapsIntelligence, normalizeGooglePlaceToLegacy } from '@/lib/maps/googleMapsProvider';
+import { mapsIntelligence, normalizePlaceToLegacy } from '@/lib/maps/serpMapsProvider';
 
 import { normalizeConfidence } from './findingGenerator';
 import { scorePlaceCandidate } from './gbp';
 import { AuditModuleResult, createEvidence, Finding, GBPModuleInput } from './types';
-
-const PLACES_API_BASE = 'https://places.googleapis.com/v1';
 
 export interface GbpDeepModuleInput extends GBPModuleInput {
   placeId?: string; // Optional if known from basic GBP module
@@ -73,11 +71,11 @@ export async function runGbpDeepModule(
   logger.info({ businessName: input.businessName }, '[GBPDeep] Starting deep analysis');
 
   if (input.signal?.aborted) throw input.signal.reason ?? new Error('Places lookup cancelled');
-  if (!input.placeData && !process.env.GOOGLE_PLACES_API_KEY) {
+  if (!input.placeData && !process.env.SERP_API_KEY) {
     return {
       findings: [],
       evidenceSnapshots: [],
-      execution: { state: 'unavailable', reason: 'GOOGLE_PLACES_API_KEY is missing' },
+      execution: { state: 'unavailable', reason: 'SERP_API_KEY is missing' },
     };
   }
 
@@ -94,19 +92,37 @@ export async function runGbpDeepModule(
         fieldProfile: 'GBP_DEEP',
       });
       if (resolution.status === 'FAILED' || resolution.status === 'UNAVAILABLE') {
-        if (input.signal?.aborted) throw input.signal.reason ?? new Error('Places lookup cancelled');
-        return { findings: [], evidenceSnapshots: [], execution: { state: resolution.status === 'FAILED' ? 'failed' : 'unavailable', reason: resolution.error?.message ?? 'Maps provider unavailable' } };
+        if (input.signal?.aborted)
+          throw input.signal.reason ?? new Error('Places lookup cancelled');
+        return {
+          findings: [],
+          evidenceSnapshots: [],
+          execution: {
+            state: resolution.status === 'FAILED' ? 'failed' : 'unavailable',
+            reason: resolution.error?.message ?? 'Maps provider unavailable',
+          },
+        };
       }
-      if (!resolution.data) return { findings: [], evidenceSnapshots: [], execution: { state: 'partial', reason: 'No place candidate found' } };
+      if (!resolution.data)
+        return {
+          findings: [],
+          evidenceSnapshots: [],
+          execution: { state: 'partial', reason: 'No place candidate found' },
+        };
       placeId = resolution.data.placeId;
-      details = normalizeGooglePlaceToLegacy(resolution.data);
+      details = normalizePlaceToLegacy(resolution.data);
       details.id = resolution.data.placeId;
       details.websiteUri = resolution.data.website;
       details.userRatingCount = resolution.data.reviewCount;
-      details.displayName = resolution.data.displayName ? { text: resolution.data.displayName } : undefined;
+      details.displayName = resolution.data.displayName
+        ? { text: resolution.data.displayName }
+        : undefined;
       details.formattedAddress = resolution.data.formattedAddress;
-      details.primaryTypeDisplayName = resolution.data.primaryType ? { text: resolution.data.primaryType } : undefined;
-      details.identityConfidence = resolution.data.identityStatus === 'CONFIRMED' ? 'high' : 'ambiguous';
+      details.primaryTypeDisplayName = resolution.data.primaryType
+        ? { text: resolution.data.primaryType }
+        : undefined;
+      details.identityConfidence =
+        resolution.data.identityStatus === 'CONFIRMED' ? 'high' : 'ambiguous';
       details.identityStatus = resolution.data.identityStatus;
       details.mapsProvenance = resolution.provenance;
     }
@@ -124,15 +140,18 @@ export async function runGbpDeepModule(
     // 4. Generate Findings
     const collectedAt = new Date().toISOString();
     const resolvedPlaceId = details.id || placeId;
-    const placeRecordPointer = `${PLACES_API_BASE}/places/${resolvedPlaceId}`;
+    const placeRecordPointer =
+      typeof details.mapsUri === 'string'
+        ? details.mapsUri
+        : `https://www.google.com/maps/search/?api=1&query_place_id=${encodeURIComponent(resolvedPlaceId)}`;
     const findings = generateGbpFindings(analysis, placeRecordPointer, collectedAt);
     const photoAnalysisUnavailable =
       analysis.photos.totalCount > 0 &&
-      (!process.env.GOOGLE_AI_API_KEY || !analysis.photos.aiAnalysis?.length);
+      (process.env.BEDROCK_ENABLED !== 'true' || !analysis.photos.aiAnalysis?.length);
 
     const evidenceSnapshot = {
       module: 'gbp_deep',
-      source: input.placeData ? 'canonical_gbp_dependency' : 'places_api_v1',
+      source: input.placeData ? 'canonical_gbp_dependency' : 'serpapi_google_maps',
       rawResponse: {
         completeness: analysis.completeness,
         claimedStatus: analysis.claimedStatus,
@@ -200,7 +219,7 @@ export async function runGbpDeepModule(
 }
 
 function dependencyPlaceToApiShape(place: Record<string, any>): Record<string, any> {
-  if (place.provider === 'google_maps_platform') return normalizeGooglePlaceToLegacy(place as any);
+  if (place.provider === 'serpapi_google_maps') return normalizePlaceToLegacy(place as any);
   return {
     id: place.placeId,
     displayName: place.name ? { text: place.name } : undefined,
@@ -258,7 +277,7 @@ async function analyzeGbpData(
   };
 
   // AI Photo Scoring
-  if (photos.length > 0 && process.env.GOOGLE_AI_API_KEY) {
+  if (photos.length > 0 && process.env.BEDROCK_ENABLED === 'true') {
     // Places photo media requires the secret-bearing media URL; it is not sent
     // through generic derived-URL fetches. Photo interpretation stays unavailable
     // until it can be fetched through an explicit credential-safe client path.
@@ -316,7 +335,7 @@ async function analyzeGbpData(
 }
 
 /**
- * AI Photo Analysis with Gemini
+ * AI Photo Analysis with Amazon Bedrock
  */
 /**
  * Generate Findings.
@@ -349,7 +368,7 @@ export function generateGbpFindings(
       evidence: [
         createEvidence({
           pointer: `${placeRecordPointer}#editorialSummary`,
-          source: 'places_api_v1',
+          source: 'serpapi_google_maps',
           collected_at: collectedAt,
           type: 'text',
           value: 'editorialSummary field absent',
@@ -377,7 +396,7 @@ export function generateGbpFindings(
       evidence: [
         createEvidence({
           pointer: `${placeRecordPointer}#reviews`,
-          source: 'places_api_v1',
+          source: 'serpapi_google_maps',
           collected_at: collectedAt,
           type: 'metric',
           value: reviews.daysSinceLastReview,
@@ -407,7 +426,7 @@ export function generateGbpFindings(
       evidence: [
         createEvidence({
           pointer: `${placeRecordPointer}#photos`,
-          source: 'places_api_v1',
+          source: 'serpapi_google_maps',
           collected_at: collectedAt,
           type: 'metric',
           value: photos.totalCount,
@@ -437,7 +456,7 @@ export function generateGbpFindings(
       evidence: poorPhotos.map((p) =>
         createEvidence({
           pointer: p.photoUrl,
-          source: 'gemini_photo_analysis',
+          source: 'ai_photo_analysis',
           collected_at: collectedAt,
           type: 'text',
           value: `Quality Score: ${p.scores.quality}/10 (${p.flags.join(', ')})`,
@@ -466,7 +485,7 @@ export function generateGbpFindings(
       evidence: [
         createEvidence({
           pointer: `${placeRecordPointer}#attributes`,
-          source: 'places_api_v1',
+          source: 'serpapi_google_maps',
           collected_at: collectedAt,
           type: 'text',
           value: 'paymentOptions/accessibilityOptions/amenities fields absent',
@@ -496,7 +515,7 @@ export function generateGbpFindings(
       evidence: [
         createEvidence({
           pointer: `${placeRecordPointer}#reviews`,
-          source: 'places_api_v1',
+          source: 'serpapi_google_maps',
           collected_at: collectedAt,
           type: 'metric',
           value: reviews.velocity.toFixed(1),

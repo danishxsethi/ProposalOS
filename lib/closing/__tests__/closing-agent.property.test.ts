@@ -51,7 +51,7 @@ vi.mock('../memory', () => {
 });
 
 vi.mock('@/lib/llm/provider', () => ({
-  generateWithGemini: vi.fn().mockResolvedValue({ text: 'Test response' }),
+  generateWithLLM: vi.fn().mockResolvedValue({ text: 'Test response' }),
 }));
 
 describe('Closing Agent - Property-Based Tests', () => {

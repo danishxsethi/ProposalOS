@@ -1,8 +1,8 @@
-import { GEMINI_FLASH, GEMINI_PRO } from '@/lib/config/models';
+import { BEDROCK_NOVA_2_LITE, BEDROCK_NOVA_MICRO } from '@/lib/config/models';
 
 /**
  * External Integration Configuration
- * 
+ *
  * Centralized configuration for all third-party integrations with:
  * - Pinned model versions
  * - Fallback chains
@@ -15,24 +15,15 @@ import { GEMINI_FLASH, GEMINI_PRO } from '@/lib/config/models';
  * Model version pinning - prevents breaking changes from upstream
  */
 export const MODEL_VERSIONS = {
-  // Gemini models - pinned to specific versions for stability
-  GEMINI_FLASH: GEMINI_FLASH,
-  GEMINI_PRO: GEMINI_PRO,
-  GEMINI_15_PRO: GEMINI_PRO,
-  GEMINI_15_FLASH: GEMINI_FLASH,
-  // Fallback chain: Pro → 1.5 Pro → Flash → 1.5 Flash
+  NOVA_MICRO: BEDROCK_NOVA_MICRO,
+  NOVA_2_LITE: BEDROCK_NOVA_2_LITE,
 } as const;
 
 /**
  * Fallback chain for LLM requests
  * Used when primary model fails or is rate limited
  */
-export const LLM_FALLBACK_CHAIN = [
-  MODEL_VERSIONS.GEMINI_PRO,
-  MODEL_VERSIONS.GEMINI_15_PRO,
-  MODEL_VERSIONS.GEMINI_FLASH,
-  MODEL_VERSIONS.GEMINI_15_FLASH,
-] as const;
+export const LLM_FALLBACK_CHAIN = [MODEL_VERSIONS.NOVA_2_LITE, MODEL_VERSIONS.NOVA_MICRO] as const;
 
 /**
  * Integration configurations with SLA, timeouts, and fallback behavior
@@ -51,9 +42,9 @@ export interface IntegrationConfig {
 }
 
 export const INTEGRATIONS: Record<string, IntegrationConfig> = {
-  // LLM / Vertex AI
-  GEMINI: {
-    name: 'Google Vertex AI / Gemini',
+  // Amazon Bedrock
+  BEDROCK: {
+    name: 'Amazon Bedrock (Nova)',
     purpose: 'Audit analysis, proposal generation, content creation',
     sla: '99.9%',
     timeoutMs: 30000,
@@ -64,25 +55,25 @@ export const INTEGRATIONS: Record<string, IntegrationConfig> = {
     cacheEnabled: true,
     cacheTtlHours: 24,
   },
-  
-  // PageSpeed Insights
-  PAGESPEED: {
-    name: 'Google PageSpeed Insights API',
-    purpose: 'Website performance audits',
-    sla: '99%',
-    timeoutMs: 30000,
-    maxRetries: 2,
-    retryDelayMs: 500,
+
+  // Local Lighthouse
+  LIGHTHOUSE: {
+    name: 'Local Lighthouse (Chromium)',
+    purpose: 'Website performance audits in the AWS application task',
+    sla: 'Best effort',
+    timeoutMs: 60000,
+    maxRetries: 0,
+    retryDelayMs: 0,
     circuitBreakerEnabled: true,
     fallback: 'none',
     cacheEnabled: true,
-    cacheTtlHours: 24,
+    cacheTtlHours: 6,
   },
-  
-  // Google Places API
-  PLACES: {
-    name: 'Google Places API',
-    purpose: 'GBP data, reviews, business information',
+
+  // SerpApi Maps
+  SERP_MAPS: {
+    name: 'SerpApi Google Maps',
+    purpose: 'Business discovery and public profile details',
     sla: '99.9%',
     timeoutMs: 15000,
     maxRetries: 3,
@@ -92,7 +83,7 @@ export const INTEGRATIONS: Record<string, IntegrationConfig> = {
     cacheEnabled: true,
     cacheTtlHours: 1,
   },
-  
+
   // Resend Email
   RESEND: {
     name: 'Resend Email API',
@@ -106,7 +97,7 @@ export const INTEGRATIONS: Record<string, IntegrationConfig> = {
     cacheEnabled: false,
     cacheTtlHours: 0,
   },
-  
+
   // Stripe
   STRIPE: {
     name: 'Stripe Payments',
@@ -120,7 +111,7 @@ export const INTEGRATIONS: Record<string, IntegrationConfig> = {
     cacheEnabled: false,
     cacheTtlHours: 0,
   },
-  
+
   // Internal Website Crawler
   WEBSITE_CRAWLER: {
     name: 'Internal Website Crawler',
@@ -134,7 +125,7 @@ export const INTEGRATIONS: Record<string, IntegrationConfig> = {
     cacheEnabled: false,
     cacheTtlHours: 0,
   },
-  
+
   // Slack Alerts
   SLACK: {
     name: 'Slack Webhook',
@@ -209,26 +200,32 @@ export function isRetryableError(error: any): boolean {
   const statusCode = error?.status || error?.response?.status;
   const errorCode = error?.code;
   const errorMessage = error?.message?.toLowerCase() || '';
-  
+
   // Check status code
   if (statusCode && RETRY_CONFIG.retryableStatusCodes.includes(statusCode)) {
     return true;
   }
-  
+
   // Check error code
-  if (errorCode && RETRY_CONFIG.retryableErrorPatterns.some(
-    pattern => errorCode.toLowerCase().includes(pattern.toLowerCase())
-  )) {
+  if (
+    errorCode &&
+    RETRY_CONFIG.retryableErrorPatterns.some((pattern) =>
+      errorCode.toLowerCase().includes(pattern.toLowerCase())
+    )
+  ) {
     return true;
   }
-  
+
   // Check error message
-  if (errorMessage && RETRY_CONFIG.retryableErrorPatterns.some(
-    pattern => errorMessage.includes(pattern.toLowerCase())
-  )) {
+  if (
+    errorMessage &&
+    RETRY_CONFIG.retryableErrorPatterns.some((pattern) =>
+      errorMessage.includes(pattern.toLowerCase())
+    )
+  ) {
     return true;
   }
-  
+
   return false;
 }
 

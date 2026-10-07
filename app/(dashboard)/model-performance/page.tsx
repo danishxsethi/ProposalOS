@@ -35,8 +35,8 @@ export default function ModelPerformanceDashboard() {
   return (
     <div className="p-8 max-w-7xl mx-auto space-y-8">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">Model Performance & Canary Rollout</h1>
-        <p className="text-gray-500">Real-time telemetry for Gemini 1.5 Pro vs 3.1 Pro</p>
+        <h1 className="text-2xl font-bold tracking-tight">Model Performance</h1>
+        <p className="text-gray-500">Sample telemetry for Amazon Nova Micro and Nova 2 Lite</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -77,8 +77,18 @@ export default function ModelPerformanceDashboard() {
                 <YAxis />
                 <Tooltip />
                 <Legend />
-                <Line type="monotone" dataKey="pro15" stroke={COLORS[0]} name="Gemini 1.5 Pro" />
-                <Line type="monotone" dataKey="pro31" stroke={COLORS[1]} name="Gemini 3.1 Pro" />
+                <Line
+                  type="monotone"
+                  dataKey="novaMicro"
+                  stroke={COLORS[0]}
+                  name="Amazon Nova Micro"
+                />
+                <Line
+                  type="monotone"
+                  dataKey="nova2Lite"
+                  stroke={COLORS[1]}
+                  name="Amazon Nova 2 Lite"
+                />
               </LineChart>
             </ResponsiveContainer>
           </div>
@@ -95,8 +105,18 @@ export default function ModelPerformanceDashboard() {
                 <YAxis domain={[80, 100]} />
                 <Tooltip />
                 <Legend />
-                <Line type="monotone" dataKey="pro15" stroke={COLORS[0]} name="Gemini 1.5 Pro" />
-                <Line type="monotone" dataKey="pro31" stroke={COLORS[1]} name="Gemini 3.1 Pro" />
+                <Line
+                  type="monotone"
+                  dataKey="novaMicro"
+                  stroke={COLORS[0]}
+                  name="Amazon Nova Micro"
+                />
+                <Line
+                  type="monotone"
+                  dataKey="nova2Lite"
+                  stroke={COLORS[1]}
+                  name="Amazon Nova 2 Lite"
+                />
               </LineChart>
             </ResponsiveContainer>
           </div>
@@ -118,22 +138,6 @@ export default function ModelPerformanceDashboard() {
           </div>
         </div>
 
-        {/* Widget 5: Thinking Token Usage */}
-        <div className="border rounded-xl p-4 shadow-sm bg-white lg:col-span-2">
-          <h3 className="font-semibold mb-2">Thinking Tokens by Pipeline Node</h3>
-          <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={metrics.thinkingTokens}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="node" />
-                <YAxis />
-                <Tooltip />
-                <Bar dataKey="tokens" fill="#F59E0B" name="Thinking Tokens" />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-
         {/* Widget 6: Error Rates */}
         <div className="border rounded-xl p-4 shadow-sm bg-white">
           <h3 className="font-semibold mb-2">Error Counts</h3>
@@ -145,8 +149,18 @@ export default function ModelPerformanceDashboard() {
                 <YAxis />
                 <Tooltip />
                 <Legend />
-                <Line type="monotone" dataKey="pro15" stroke={COLORS[0]} name="Gemini 1.5 Pro" />
-                <Line type="monotone" dataKey="pro31" stroke={COLORS[1]} name="Gemini 3.1 Pro" />
+                <Line
+                  type="monotone"
+                  dataKey="novaMicro"
+                  stroke={COLORS[0]}
+                  name="Amazon Nova Micro"
+                />
+                <Line
+                  type="monotone"
+                  dataKey="nova2Lite"
+                  stroke={COLORS[1]}
+                  name="Amazon Nova 2 Lite"
+                />
               </LineChart>
             </ResponsiveContainer>
           </div>

@@ -1,8 +1,7 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
-
 import { withModuleCache } from '@/lib/cache/moduleCache';
-import { GEMINI_FLASH, GEMINI_PRO } from '@/lib/config/models';
-import { CostTracker } from '@/lib/costs/costTracker';
+import { BEDROCK_NOVA_MICRO } from '@/lib/config/models';
+import { CostTracker, trackBedrockUsage } from '@/lib/costs/costTracker';
+import { generateWithLLM } from '@/lib/llm/provider';
 import { logger } from '@/lib/logger';
 import { withProviderResilience } from '@/lib/resilience/withProviderResilience';
 
@@ -51,12 +50,12 @@ export async function runKeywordGapModule(
 ): Promise<AuditModuleResult> {
   logger.info({ businessName: input.businessName }, '[KeywordGap] Starting analysis');
 
-  if (!process.env.GOOGLE_AI_API_KEY || !process.env.SERP_API_KEY) {
-    throw new Error('Missing API keys for Keyword Gap module');
+  if (!process.env.SERP_API_KEY) {
+    throw new Error('SERP_API_KEY is missing for Keyword Gap module');
   }
 
   try {
-    // 1. Generate Target Keywords (Gemini)
+    // 1. Generate Target Keywords (Amazon Bedrock)
     const keywords = await generateKeywordList(input, tracker);
 
     // 2. Check Rankings (SerpAPI) - Top 10 only to manage costs
@@ -94,23 +93,21 @@ export async function runKeywordGapModule(
     return {
       findings: [],
       evidenceSnapshots: [],
-      execution: { state: 'unavailable', reason: error instanceof Error ? error.message : 'Keyword analysis unavailable' },
+      execution: {
+        state: 'unavailable',
+        reason: error instanceof Error ? error.message : 'Keyword analysis unavailable',
+      },
     };
   }
 }
 
 /**
- * Generate keyword list using Gemini Flash
+ * Generate keyword list using Amazon Nova Micro
  */
 async function generateKeywordList(
   input: KeywordGapInput,
   tracker?: CostTracker
 ): Promise<Keyword[]> {
-  const genAI = new GoogleGenerativeAI(process.env.GOOGLE_AI_API_KEY!);
-  const model = genAI.getGenerativeModel({ model: GEMINI_FLASH });
-
-  tracker?.addApiCall('GEMINI_KEYWORD_GEN');
-
   const prompt = `For a ${input.industry} business in ${input.city}, list the top 20 keywords a potential customer would search for.
     Include a mix of:
     - Primary service keywords (e.g., 'emergency plumber ${input.city}')
@@ -125,20 +122,26 @@ async function generateKeywordList(
     {
       module: 'keyword_gap',
       version: 1,
-      input: { type: 'keyword_gen_gemini', industry: input.industry, city: input.city },
+      input: { type: 'keyword_gen_bedrock', industry: input.industry, city: input.city },
     },
     { ttlSeconds: 30 * 24 * 60 * 60 },
     async () => {
       return withProviderResilience<string>(
         {
-          provider: 'gemini',
+          provider: 'bedrock',
           operation: 'keywordGap:generateKeywordList',
           degrade: true,
           fallbackValue: '[]',
         },
         async () => {
-          const res = await model.generateContent(prompt);
-          return res.response.text();
+          const res = await generateWithLLM({
+            model: BEDROCK_NOVA_MICRO,
+            input: prompt,
+            responseModality: 'json',
+            maxOutputTokens: 2048,
+          });
+          trackBedrockUsage(tracker, res, prompt);
+          return res.text;
         }
       );
     }
@@ -332,7 +335,16 @@ function generateKeywordFindings(analysis: KeywordGapAnalysis, input: KeywordGap
       evidence: rankings
         .filter((r) => r.rank === null)
         .slice(0, 3)
-        .map((r) => (createEvidence({ pointer: `https://www.google.com/search?q=${encodeURIComponent(r.keyword + ' ' + input.city)}`, source: 'keyword_gap', collected_at: new Date().toISOString(), type: 'text', value: r.keyword, label: 'Missed Keyword' }))),
+        .map((r) =>
+          createEvidence({
+            pointer: `https://www.google.com/search?q=${encodeURIComponent(r.keyword + ' ' + input.city)}`,
+            source: 'keyword_gap',
+            collected_at: new Date().toISOString(),
+            type: 'text',
+            value: r.keyword,
+            label: 'Missed Keyword',
+          })
+        ),
       metrics: { gapCount: summary.gaps },
       effortEstimate: 'HIGH',
       recommendedFix: ['Launch SEO content campaign targeting these gaps'],

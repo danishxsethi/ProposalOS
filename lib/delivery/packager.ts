@@ -1,6 +1,5 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
-
-import { GEMINI_FLASH, GEMINI_PRO } from '@/lib/config/models';
+import { BEDROCK_NOVA_MICRO } from '@/lib/config/models';
+import { generateWithLLM } from '@/lib/llm/provider';
 import { logger } from '@/lib/logger';
 
 import { getGenerator } from './generators';
@@ -97,15 +96,8 @@ ${artifact.content.substring(0, 500)}...
 Provide concise, numbered steps that a non-technical person can follow.`;
 
   try {
-    const apiKey = process.env.GOOGLE_AI_API_KEY;
-    if (!apiKey) {
-      return 'See artifact content for implementation details.';
-    }
-
-    const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: GEMINI_FLASH });
-    const result = await model.generateContent(prompt);
-    const response = result.response.text();
+    const result = await generateWithLLM({ model: BEDROCK_NOVA_MICRO, input: prompt });
+    const response = result.text;
 
     return response || 'See artifact content for implementation details.';
   } catch (error) {

@@ -1,7 +1,8 @@
 import { withModuleCache } from '@/lib/cache/moduleCache';
 import { CostTracker } from '@/lib/costs/costTracker';
 import { logger } from '@/lib/logger';
-import { mapsIntelligence, normalizeGooglePlaceToLegacy } from '@/lib/maps/googleMapsProvider';
+import { mapsIntelligence, normalizePlaceToLegacy } from '@/lib/maps/serpMapsProvider';
+import { getLocalLighthouseReport } from '@/lib/performance/localLighthouse';
 import { withProviderResilience } from '@/lib/resilience/withProviderResilience';
 
 import {
@@ -13,10 +14,11 @@ import {
 } from './types';
 
 const SERP_API_BASE = 'https://serpapi.com/search';
-const PSI_API_URL = 'https://www.googleapis.com/pagespeedonline/v5/runPagespeed';
 
 /** SerpAPI google_local puts the site under `links.website` (with GBP UTM params). */
-function serpWebsite(r: { website?: string; links?: { website?: string } } | null | undefined): string | undefined {
+function serpWebsite(
+  r: { website?: string; links?: { website?: string } } | null | undefined
+): string | undefined {
   const raw = r?.links?.website ?? r?.website;
   if (!raw || typeof raw !== 'string') return undefined;
   try {
@@ -39,10 +41,7 @@ export async function runCompetitorModule(
 ): Promise<LegacyAuditModuleResult> {
   logger.info({ keyword: input.keyword, location: input.location }, '[CompetitorModule] Searching');
 
-  if (
-    !process.env.SERP_API_KEY ||
-    !process.env.GOOGLE_PAGESPEED_API_KEY
-  ) {
+  if (!process.env.SERP_API_KEY) {
     return {
       moduleId: 'competitor-audit',
       status: 'success',
@@ -51,7 +50,7 @@ export async function runCompetitorModule(
         competitorSearchStatus: 'not_configured',
         execution: {
           state: 'unavailable',
-          reason: 'Competitor providers are not fully configured (SERP or PageSpeed)',
+          reason: 'Competitor provider is not configured (SERP_API_KEY)',
         },
       },
     };
@@ -116,10 +115,13 @@ export async function runCompetitorModule(
     const resolveWebsiteByName = async (name: string): Promise<string | undefined> => {
       try {
         const res = await withModuleCache<string | undefined>(
-          { module: 'competitor', version: 1, input: { type: 'website_by_name', name, location: input.location } },
+          {
+            module: 'competitor',
+            version: 1,
+            input: { type: 'website_by_name', name, location: input.location },
+          },
           { ttlSeconds: 24 * 3600 },
           async () => {
-            tracker?.addApiCall('PLACES_TEXT_SEARCH');
             const found = await mapsIntelligence.searchText({
               query: `${name} ${input.location}`,
               city: input.location,
@@ -127,9 +129,19 @@ export async function runCompetitorModule(
               fieldProfile: 'COMPETITOR',
             });
             if (found.status !== 'COMPLETE' || !found.data?.length) return undefined;
-            const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+            const norm = (s: string) =>
+              s
+                .toLowerCase()
+                .replace(/[^a-z0-9]+/g, ' ')
+                .trim();
             const want = norm(name);
-            const match = found.data.find((c) => c.displayName && (norm(c.displayName) === want || norm(c.displayName).includes(want) || want.includes(norm(c.displayName))));
+            const match = found.data.find(
+              (c) =>
+                c.displayName &&
+                (norm(c.displayName) === want ||
+                  norm(c.displayName).includes(want) ||
+                  want.includes(norm(c.displayName)))
+            );
             return (match ?? found.data[0])?.website ?? undefined;
           }
         );
@@ -143,14 +155,14 @@ export async function runCompetitorModule(
       try {
         const result = await mapsIntelligence.getPlace(placeId, 'COMPETITOR');
         if (result.status !== 'COMPLETE' || !result.data) return null;
-        return normalizeGooglePlaceToLegacy(result.data);
+        return normalizePlaceToLegacy(result.data);
       } catch (e) {
         logger.warn({ businessName: name }, 'Failed to fetch place details');
         return null;
       }
     };
 
-    /** Lightweight PageSpeed audit — performance, SEO, accessibility, load time (mobile) */
+    /** Lightweight local Lighthouse audit — performance, SEO, accessibility, load time (mobile) */
     const runLightweightPageSpeed = async (
       url: string
     ): Promise<{
@@ -168,54 +180,22 @@ export async function runCompetitorModule(
         loadTimeSeconds: 0,
       };
       if (!url) return empty;
-      tracker?.addApiCall('PAGESPEED');
       try {
-        const psParams = new URLSearchParams({
-          url,
-          key: process.env.GOOGLE_PAGESPEED_API_KEY as string,
-          strategy: 'mobile',
-        });
-        // performance only: seo/accessibility double Lighthouse time (measured 20-35s → 45-88s)
-        // and the competitor comparison consumes performance + load time.
-        psParams.append('category', 'performance');
-        const psData = await withModuleCache<any>(
+        tracker?.addApiCall('LIGHTHOUSE');
+        const lighthouse = await withModuleCache<any>(
           {
             module: 'competitor',
-            version: 1,
-            input: { type: 'psi_light', url },
+            version: 2,
+            input: { type: 'local_lighthouse_mobile', url },
           },
           { ttlSeconds: 24 * 3600 },
-          async () => {
-            return withProviderResilience<any>(
-              {
-                provider: 'pagespeed',
-                operation: 'competitor:psi_light',
-                degrade: true,
-                fallbackValue: {
-                  lighthouseResult: {
-                    categories: {
-                      performance: { score: 0 },
-                      seo: { score: 0 },
-                      accessibility: { score: 0 },
-                    },
-                    audits: {},
-                  },
-                },
-              },
-              async () => {
-                const res = await fetch(`${PSI_API_URL}?${psParams.toString()}`);
-                if (!res.ok) throw new Error(`HTTP error ${res.status}: ${res.statusText}`);
-                return await res.json();
-              }
-            );
-          }
+          () => getLocalLighthouseReport(url, 'mobile')
         );
 
-        const lh = psData.lighthouseResult;
-        const audits = lh?.audits ?? {};
-        const perf = (lh?.categories?.performance?.score ?? 0) * 100;
-        const seo = (lh?.categories?.seo?.score ?? 0) * 100;
-        const a11y = (lh?.categories?.accessibility?.score ?? 0) * 100;
+        const audits = lighthouse?.audits ?? {};
+        const perf = (lighthouse?.categories?.performance?.score ?? 0) * 100;
+        const seo = (lighthouse?.categories?.seo?.score ?? 0) * 100;
+        const a11y = (lighthouse?.categories?.accessibility?.score ?? 0) * 100;
         const fcpMs =
           audits['first-contentful-paint']?.numericValue ??
           audits['largest-contentful-paint']?.numericValue ??
@@ -230,7 +210,7 @@ export async function runCompetitorModule(
           loadTimeSeconds: Math.round(loadTimeSeconds * 10) / 10,
         };
       } catch (e) {
-        logger.warn({ url }, 'Failed to run PageSpeed');
+        logger.warn({ url }, 'Failed to run local Lighthouse');
         return empty;
       }
     };
@@ -281,8 +261,7 @@ export async function runCompetitorModule(
     const category = selfResult.type;
     const businessName = input.keyword;
 
-    // Fetch Self Details + Lightweight PageSpeed. The PSI call is slow (20-35s
-    // measured); start it now and await it together with the competitor PSI
+    // Fetch self details + local Lighthouse. Start it now and await it with the competitor runs
     // calls below so the module wall is max() of the calls, not their sum.
     let selfDetails = null;
     const selfPlacesId = placesApiId(selfResult.place_id);

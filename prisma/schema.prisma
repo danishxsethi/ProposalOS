@@ -1802,7 +1802,7 @@ model DeliveryBundle {
   id            String   @id @default(uuid())
   tenantId      String
   proposalId    String   @unique
-  zipUrl        String? // GCS URL
+  zipUrl        String? // Stable app-mediated URL for the private S3 bundle
   readmeContent String?  @db.Text
   artifactCount Int      @default(0)
   status        String   @default("assembling") // 'assembling', 'ready', 'failed'

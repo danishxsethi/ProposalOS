@@ -1,4 +1,4 @@
-FROM node:20-alpine AS base
+FROM public.ecr.aws/docker/library/node:24-alpine AS base
 RUN apk add --no-cache libc6-compat openssl
 
 # Install dependencies only when needed
@@ -23,6 +23,18 @@ RUN npx prisma generate
 # build time on Cloud Run. They are injected at runtime via Secret Manager. The running
 # server validates all required env vars via instrumentation.ts on startup.
 ENV SKIP_ENV_VALIDATION=true
+ARG NEXT_PUBLIC_APP_URL
+ARG NEXT_PUBLIC_BASE_URL
+ARG NEXT_PUBLIC_APP_VERSION
+ARG NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
+ARG DATABASE_URL=postgresql://build:build@localhost:5432/build
+ARG AWS_REGION=us-east-2
+ENV NEXT_PUBLIC_APP_URL=$NEXT_PUBLIC_APP_URL \
+    NEXT_PUBLIC_BASE_URL=$NEXT_PUBLIC_BASE_URL \
+    NEXT_PUBLIC_APP_VERSION=$NEXT_PUBLIC_APP_VERSION \
+    NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=$NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY \
+    DATABASE_URL=$DATABASE_URL \
+    AWS_REGION=$AWS_REGION
 RUN npm run build
 
 # Production image, copy all the files and run next

@@ -8,10 +8,9 @@ require('dotenv').config({ path: '.env.local' });
 
 const tests = {
   database: false,
-  pageSpeed: false,
-  places: false,
+  lighthouseRuntime: false,
   serp: false,
-  vertexAI: false,
+  bedrockConfig: false,
 };
 
 async function testDatabase() {
@@ -31,65 +30,20 @@ async function testDatabase() {
   }
 }
 
-async function testPageSpeed() {
-  console.log('\n🚀 Testing PageSpeed Insights API...');
+function testLighthouseRuntime() {
+  console.log('\n🚦 Checking local Lighthouse runtime...');
   try {
-    const key = process.env.GOOGLE_PAGESPEED_API_KEY;
-    if (!key) throw new Error('GOOGLE_PAGESPEED_API_KEY not set');
-
-    const url = 'https://www.google.com';
-    const response = await fetch(
-      `https://www.googleapis.com/pagespeedonline/v5/runPagespeed?url=${url}&key=${key}&strategy=mobile&category=performance`
-    );
-
-    if (!response.ok) {
-      const error = await response.text();
-      throw new Error(`API returned ${response.status}: ${error}`);
+    const [major, minor] = process.versions.node.split('.').map(Number);
+    if (major < 22 || (major === 22 && minor < 19)) {
+      throw new Error('Node.js 22.19 or newer is required');
     }
-
-    const data = await response.json();
-    const score = Math.round((data.lighthouseResult?.categories?.performance?.score || 0) * 100);
-    console.log(`   ✅ PageSpeed API working (test score: ${score}/100)`);
+    require.resolve('lighthouse');
+    require.resolve('puppeteer-core');
+    require.resolve('@sparticuz/chromium');
+    console.log('   ✅ Local Lighthouse and Chromium packages are available');
     return true;
   } catch (error) {
-    console.log(`   ❌ PageSpeed failed: ${error.message}`);
-    return false;
-  }
-}
-
-async function testPlaces() {
-  console.log('\n📍 Testing Google Places API...');
-  try {
-    const key = process.env.GOOGLE_PLACES_API_KEY;
-    if (!key) throw new Error('GOOGLE_PLACES_API_KEY not set');
-
-    const response = await fetch('https://places.googleapis.com/v1/places:searchText', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Goog-Api-Key': key,
-        'X-Goog-FieldMask': 'places.name,places.id',
-      },
-      body: JSON.stringify({
-        textQuery: 'Google Sydney',
-        maxResultCount: 1,
-      }),
-    });
-
-    if (!response.ok) {
-      const error = await response.text();
-      throw new Error(`API returned ${response.status}: ${error}`);
-    }
-
-    const data = await response.json();
-    if (data.places && data.places.length > 0) {
-      console.log(`   ✅ Places API working (found: ${data.places[0].name})`);
-      return true;
-    } else {
-      throw new Error('No results returned');
-    }
-  } catch (error) {
-    console.log(`   ❌ Places failed: ${error.message}`);
+    console.log(`   ❌ Lighthouse runtime unavailable: ${error.message}`);
     return false;
   }
 }
@@ -128,30 +82,23 @@ async function testSerp() {
   }
 }
 
-async function testVertexAI() {
-  console.log('\n🤖 Testing Vertex AI (Gemini)...');
+async function testBedrockConfig() {
+  console.log('\n🤖 Checking Amazon Bedrock configuration...');
   try {
-    const projectId = process.env.GCP_PROJECT_ID;
-    const region = process.env.GCP_REGION || 'us-central1';
+    if (process.env.LLM_PRIMARY_PROVIDER !== 'bedrock') {
+      throw new Error('LLM_PRIMARY_PROVIDER must be set to bedrock');
+    }
+    if (process.env.BEDROCK_ENABLED !== 'true') {
+      throw new Error('BEDROCK_ENABLED must be true');
+    }
+    if (!(process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION)) {
+      throw new Error('AWS_REGION or AWS_DEFAULT_REGION must be set');
+    }
 
-    if (!projectId) throw new Error('GCP_PROJECT_ID not set');
-
-    const { VertexAI } = require('@google-cloud/vertexai');
-    const vertexAI = new VertexAI({ project: projectId, location: region });
-    const model = vertexAI.getGenerativeModel({
-      model: 'gemini-2.0-flash',
-      generationConfig: { temperature: 0, maxOutputTokens: 50 },
-    });
-
-    const result = await model.generateContent('Say "Hello" in one word');
-    const response = result.response;
-    const text = response.candidates?.[0]?.content?.parts?.[0]?.text || '';
-
-    console.log(`   ✅ Vertex AI working (response: "${text.trim()}")`);
+    console.log('   ✅ Bedrock configuration present (no model inference sent)');
     return true;
   } catch (error) {
-    console.log(`   ❌ Vertex AI failed: ${error.message}`);
-    console.log(`      Check: gcloud auth application-default login`);
+    console.log(`   ❌ Bedrock configuration incomplete: ${error.message}`);
     return false;
   }
 }
@@ -161,10 +108,9 @@ async function runAllTests() {
   console.log('━'.repeat(50));
 
   tests.database = await testDatabase();
-  tests.pageSpeed = await testPageSpeed();
-  tests.places = await testPlaces();
+  tests.lighthouseRuntime = testLighthouseRuntime();
   tests.serp = await testSerp();
-  tests.vertexAI = await testVertexAI();
+  tests.bedrockConfig = await testBedrockConfig();
 
   console.log('\n' + '━'.repeat(50));
   console.log('\n📊 RESULTS:\n');

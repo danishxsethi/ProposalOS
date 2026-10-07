@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 import { validateCustomerClaim } from '@/lib/claims/claimContract';
-import { generateWithGemini } from '@/lib/llm/provider';
+import { generateWithLLM } from '@/lib/llm/provider';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 import { ProposalGroundingSchema } from '@/lib/proposal/grounding';
@@ -163,8 +163,8 @@ export async function runClosingAgent(
 
   let raw: string;
   try {
-    const result = await generateWithGemini({
-      model: process.env.LLM_MODEL_PROPOSAL || 'gemini-2.5-flash',
+    const result = await generateWithLLM({
+      model: process.env.BEDROCK_FAST_MODEL_ID || 'us.amazon.nova-micro-v1:0',
       input: prompt,
       temperature: 0,
       maxOutputTokens: 500,
@@ -206,7 +206,7 @@ export async function runClosingAgent(
         recommendation: false,
         provenance: {
           producer: 'closing.agent',
-          model: process.env.LLM_MODEL_PROPOSAL || 'gemini-2.5-flash',
+          model: process.env.BEDROCK_FAST_MODEL_ID || 'us.amazon.nova-micro-v1:0',
         },
       },
       {

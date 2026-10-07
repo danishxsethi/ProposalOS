@@ -1,19 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
-  generateContent: vi.fn(),
+  generateWithLLM: vi.fn(),
   launch: vi.fn(),
   safeFetch: vi.fn(),
   safePageGoto: vi.fn(),
 }));
 
-vi.mock('@google/generative-ai', () => ({
-  GoogleGenerativeAI: class {
-    getGenerativeModel() {
-      return { generateContent: mocks.generateContent };
-    }
-  },
-}));
+vi.mock('@/lib/llm/provider', () => ({ generateWithLLM: mocks.generateWithLLM }));
 vi.mock('@sparticuz/chromium', () => ({
   default: { executablePath: vi.fn(async () => '/tmp/chromium') },
 }));
@@ -67,18 +61,18 @@ describe('privacy technical/legal claim boundary', () => {
     vi.clearAllMocks();
     mocks.safePageGoto.mockResolvedValue(null);
     mocks.safeFetch.mockResolvedValue(new Response('<main>Privacy policy</main>', { status: 200 }));
-    mocks.generateContent.mockResolvedValue({
-      response: {
-        text: () =>
-          JSON.stringify({
-            completenessScore: 8,
-            hasContactInfo: true,
-            hasUserRightsLanguage: true,
-            lastUpdated: null,
-            isGenericTemplate: false,
-            missingTechnicalSections: [],
-          }),
-      },
+    mocks.generateWithLLM.mockResolvedValue({
+      text: JSON.stringify({
+        completenessScore: 8,
+        hasContactInfo: true,
+        hasUserRightsLanguage: true,
+        lastUpdated: null,
+        isGenericTemplate: false,
+        missingTechnicalSections: [],
+      }),
+      model: 'us.amazon.nova-micro-v1:0',
+      provider: 'bedrock',
+      usageMetadata: { promptTokenCount: 10, candidatesTokenCount: 5 },
     });
   });
 
@@ -168,8 +162,10 @@ describe('privacy technical/legal claim boundary', () => {
       city: 'Regina',
     });
 
-    expect(mocks.generateContent).toHaveBeenCalledWith(
-      expect.stringMatching(/untrusted data[\s\S]*<UNTRUSTED_POLICY_TEXT>/i)
+    expect(mocks.generateWithLLM).toHaveBeenCalledWith(
+      expect.objectContaining({
+        input: expect.stringMatching(/untrusted data[\s\S]*<UNTRUSTED_POLICY_TEXT>/i),
+      })
     );
   });
 });

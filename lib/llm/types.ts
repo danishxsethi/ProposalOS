@@ -5,16 +5,13 @@
  * Enables provider switching and fallback chains.
  */
 
-import { MultimodalContent } from './provider';
+import type { MultimodalContent } from './provider';
 
 /**
  * Supported LLM providers
  */
 export enum LLMProvider {
-  GOOGLE_AI = 'google-ai',
-  GOOGLE_VERTEX = 'google-vertex',
-  OPENAI = 'openai',
-  ANTHROPIC = 'anthropic',
+  BEDROCK = 'bedrock',
 }
 
 /**
@@ -41,6 +38,7 @@ export interface ProviderCallOptions {
   responseModality?: 'text' | 'json' | 'multimodal';
   tools?: any[];
   toolConfig?: any;
+  signal?: AbortSignal;
   metadata?: {
     node?: string;
     auditId?: string;

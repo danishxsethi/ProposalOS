@@ -1,9 +1,9 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
 import * as cheerio from 'cheerio';
 import { traceable } from 'langsmith/traceable';
 
-import { GEMINI_FLASH, GEMINI_PRO } from '@/lib/config/models';
-import { CostTracker } from '@/lib/costs/costTracker';
+import { BEDROCK_NOVA_2_LITE } from '@/lib/config/models';
+import { CostTracker, trackBedrockUsage } from '@/lib/costs/costTracker';
+import { generateWithLLM } from '@/lib/llm/provider';
 import { logger } from '@/lib/logger';
 
 import { normalizeConfidence } from './findingGenerator';
@@ -170,9 +170,7 @@ export async function runContentQualityModule(
       throw new Error('No page content available for analysis');
     }
 
-    // Analyze content with Gemini
-    tracker?.addApiCall('GEMINI');
-    const aiAnalysis = await analyzeContentWithAI(pageTexts, input);
+    const aiAnalysis = await analyzeContentWithAI(pageTexts, input, tracker);
 
     // Calculate readability metrics
     const readabilityMetrics = calculateReadabilityMetrics(pageTexts);
@@ -197,7 +195,7 @@ export async function runContentQualityModule(
 
     const evidenceSnapshot = {
       module: 'content_quality',
-      source: 'gemini_analysis',
+      source: 'amazon_bedrock_nova_2_lite',
       rawResponse: fullAnalysis,
       collectedAt: new Date(),
     };
@@ -222,7 +220,10 @@ export async function runContentQualityModule(
     return {
       findings: [],
       evidenceSnapshots: [],
-      execution: { state: 'unavailable', reason: error instanceof Error ? error.message : 'Content analysis unavailable' },
+      execution: {
+        state: 'unavailable',
+        reason: error instanceof Error ? error.message : 'Content analysis unavailable',
+      },
     };
   }
 }
@@ -276,21 +277,14 @@ function extractPageTexts(
 }
 
 /**
- * Analyze content with Gemini AI
+ * Analyze site content with Amazon Bedrock
  */
 const analyzeContentWithAI = traceable(
   async (
     pageTexts: Array<{ url: string; text: string; title: string }>,
-    input: ContentQualityModuleInput
+    input: ContentQualityModuleInput,
+    tracker?: CostTracker
   ): Promise<Omit<ContentAnalysis, 'readabilityMetrics'>> => {
-    const apiKey = process.env.GOOGLE_AI_API_KEY;
-    if (!apiKey) {
-      throw new Error('GOOGLE_AI_API_KEY not configured');
-    }
-
-    const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: GEMINI_FLASH });
-
     // Build content summary for prompt
     const contentSummary = pageTexts
       .map((page, index) => {
@@ -339,8 +333,13 @@ Return as structured JSON with this exact format:
   "topRecommendations": ["recommendation 1", "recommendation 2", "recommendation 3"]
 }`;
 
-    const result = await model.generateContent(prompt);
-    const response = result.response.text();
+    const result = await generateWithLLM({
+      model: BEDROCK_NOVA_2_LITE,
+      input: prompt,
+      responseModality: 'json',
+    });
+    trackBedrockUsage(tracker, result, prompt);
+    const response = result.text;
 
     // Extract JSON from response
     const jsonMatch = response.match(/\{[\s\S]*\}/);
@@ -426,8 +425,22 @@ export function generateContentFindings(
       impactScore: 8,
       confidenceScore: normalizeConfidence(90, '0-100'),
       evidence: [
-        createEvidence({ pointer: input.url, source: 'content_quality', collected_at: new Date().toISOString(), type: 'text', value: `AI-detected value prop: "${analysis.primaryValueProp}"`, label: 'Value Proposition' }),
-        createEvidence({ pointer: input.url, source: 'content_quality', collected_at: new Date().toISOString(), type: 'metric', value: homepageAnalysis.clarity, label: 'Clarity Score' }),
+        createEvidence({
+          pointer: input.url,
+          source: 'content_quality',
+          collected_at: new Date().toISOString(),
+          type: 'text',
+          value: `AI-detected value prop: "${analysis.primaryValueProp}"`,
+          label: 'Value Proposition',
+        }),
+        createEvidence({
+          pointer: input.url,
+          source: 'content_quality',
+          collected_at: new Date().toISOString(),
+          type: 'metric',
+          value: homepageAnalysis.clarity,
+          label: 'Clarity Score',
+        }),
       ],
       metrics: {
         clarityScore: homepageAnalysis.clarity,
@@ -452,7 +465,14 @@ export function generateContentFindings(
       impactScore: 7,
       confidenceScore: normalizeConfidence(100, '0-100'),
       evidence: [
-        createEvidence({ pointer: input.url, source: 'content_quality', collected_at: new Date().toISOString(), type: 'metric', value: homepage.text.split(/\s+/).length, label: 'Homepage Word Count' }),
+        createEvidence({
+          pointer: input.url,
+          source: 'content_quality',
+          collected_at: new Date().toISOString(),
+          type: 'metric',
+          value: homepage.text.split(/\s+/).length,
+          label: 'Homepage Word Count',
+        }),
       ],
       metrics: {
         homepageWordCount: homepage.text.split(/\s+/).length,
@@ -477,7 +497,14 @@ export function generateContentFindings(
       impactScore: 7,
       confidenceScore: normalizeConfidence(90, '0-100'),
       evidence: [
-        createEvidence({ pointer: input.url, source: 'content_quality', collected_at: new Date().toISOString(), type: 'metric', value: homepageAnalysis.localRelevance, label: 'Local Relevance Score' }),
+        createEvidence({
+          pointer: input.url,
+          source: 'content_quality',
+          collected_at: new Date().toISOString(),
+          type: 'metric',
+          value: homepageAnalysis.localRelevance,
+          label: 'Local Relevance Score',
+        }),
       ],
       metrics: {
         localRelevanceScore: homepageAnalysis.localRelevance,
@@ -509,9 +536,30 @@ export function generateContentFindings(
       impactScore: 5,
       confidenceScore: normalizeConfidence(95, '0-100'),
       evidence: [
-        createEvidence({ pointer: input.url, source: 'content_quality', collected_at: new Date().toISOString(), type: 'metric', value: analysis.readabilityMetrics.fleschKincaidGrade, label: 'Flesch-Kincaid Grade' }),
-        createEvidence({ pointer: input.url, source: 'content_quality', collected_at: new Date().toISOString(), type: 'metric', value: analysis.readabilityMetrics.avgSentenceLength, label: 'Avg Sentence Length' }),
-        createEvidence({ pointer: input.url, source: 'content_quality', collected_at: new Date().toISOString(), type: 'text', value: `${analysis.detectedLanguage.code} (source: ${analysis.detectedLanguage.source})`, label: 'Detected Content Language' }),
+        createEvidence({
+          pointer: input.url,
+          source: 'content_quality',
+          collected_at: new Date().toISOString(),
+          type: 'metric',
+          value: analysis.readabilityMetrics.fleschKincaidGrade,
+          label: 'Flesch-Kincaid Grade',
+        }),
+        createEvidence({
+          pointer: input.url,
+          source: 'content_quality',
+          collected_at: new Date().toISOString(),
+          type: 'metric',
+          value: analysis.readabilityMetrics.avgSentenceLength,
+          label: 'Avg Sentence Length',
+        }),
+        createEvidence({
+          pointer: input.url,
+          source: 'content_quality',
+          collected_at: new Date().toISOString(),
+          type: 'text',
+          value: `${analysis.detectedLanguage.code} (source: ${analysis.detectedLanguage.source})`,
+          label: 'Detected Content Language',
+        }),
       ],
       metrics: {
         readingGrade: analysis.readabilityMetrics.fleschKincaidGrade,
@@ -548,7 +596,16 @@ export function generateContentFindings(
       evidence: analysis.contentGaps
         .filter((g) => g.toLowerCase().includes('service'))
         .slice(0, 2)
-        .map((gap) => (createEvidence({ pointer: input.url, source: 'content_quality', collected_at: new Date().toISOString(), type: 'text', value: gap, label: 'Content Gap' }))),
+        .map((gap) =>
+          createEvidence({
+            pointer: input.url,
+            source: 'content_quality',
+            collected_at: new Date().toISOString(),
+            type: 'text',
+            value: gap,
+            label: 'Content Gap',
+          })
+        ),
       metrics: {
         hasServicesPage,
       },
@@ -577,7 +634,14 @@ export function generateContentFindings(
       impactScore: 4,
       confidenceScore: normalizeConfidence(90, '0-100'),
       evidence: [
-        createEvidence({ pointer: input.url, source: 'content_quality', collected_at: new Date().toISOString(), type: 'text', value: 'No About/Team page detected', label: 'About Page' }),
+        createEvidence({
+          pointer: input.url,
+          source: 'content_quality',
+          collected_at: new Date().toISOString(),
+          type: 'text',
+          value: 'No About/Team page detected',
+          label: 'About Page',
+        }),
       ],
       metrics: {
         hasAboutPage: false,
@@ -606,7 +670,14 @@ export function generateContentFindings(
       impactScore: 5,
       confidenceScore: normalizeConfidence(85, '0-100'),
       evidence: [
-        createEvidence({ pointer: input.url, source: 'content_quality', collected_at: new Date().toISOString(), type: 'metric', value: Math.round(avgTrustScore), label: 'Average Trust Score' }),
+        createEvidence({
+          pointer: input.url,
+          source: 'content_quality',
+          collected_at: new Date().toISOString(),
+          type: 'metric',
+          value: Math.round(avgTrustScore),
+          label: 'Average Trust Score',
+        }),
       ],
       metrics: {
         avgTrustScore: Math.round(avgTrustScore),
@@ -633,7 +704,16 @@ export function generateContentFindings(
       description: `AI identified ${analysis.contentGaps.length} important content gaps. Customers can't find key information they need to make a decision.`,
       impactScore: analysis.contentGaps.length > 3 ? 6 : 4,
       confidenceScore: normalizeConfidence(85, '0-100'),
-      evidence: topGaps.map((gap) => (createEvidence({ pointer: input.url, source: 'content_quality', collected_at: new Date().toISOString(), type: 'text', value: gap, label: 'Content Gap' }))),
+      evidence: topGaps.map((gap) =>
+        createEvidence({
+          pointer: input.url,
+          source: 'content_quality',
+          collected_at: new Date().toISOString(),
+          type: 'text',
+          value: gap,
+          label: 'Content Gap',
+        })
+      ),
       metrics: {
         contentGapCount: analysis.contentGaps.length,
         contentGaps: topGaps,

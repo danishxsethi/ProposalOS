@@ -8,10 +8,9 @@ class ProposalEngineClient {
   constructor() {
     this.baseUrl =
       process.env.PROPOSAL_ENGINE_API_URL ||
-      'https://proposal-engine-staging-ouitkhk5xq-uc.a.run.app';
-    this.apiKey =
-      process.env.PROPOSAL_ENGINE_API_KEY ||
-      'local-dev-api-key-change-in-production';
+      process.env.NEXT_PUBLIC_APP_URL ||
+      'https://claraud.com';
+    this.apiKey = process.env.PROPOSAL_ENGINE_API_KEY || '';
   }
 
   private async fetch<T>(path: string, options?: RequestInit): Promise<T | null> {
@@ -24,20 +23,17 @@ class ProposalEngineClient {
     const timeoutId = setTimeout(() => controller.abort(), this.timeout);
 
     try {
-      const internalOpsKey =
-        process.env.INTERNAL_OPS_KEY ||
-        'a03c963c3aa4d8af8da4815b5ddbad236436e506a2d5a0cdee951d46903df263';
-      const tenantId =
-        process.env.DEFAULT_TENANT_ID || '4a9e4e82-961f-4b3d-93da-0cbe4603c458';
+      const internalOpsKey = process.env.INTERNAL_OPS_KEY;
+      const tenantId = process.env.DEFAULT_TENANT_ID;
 
       const response = await fetch(`${this.baseUrl}${path}`, {
         ...options,
         signal: controller.signal,
         headers: {
           'Content-Type': 'application/json',
-          'X-API-Key': this.apiKey,
-          'x-internal-ops-key': internalOpsKey,
-          'x-tenant-id': tenantId,
+          ...(this.apiKey ? { 'X-API-Key': this.apiKey } : {}),
+          ...(internalOpsKey ? { 'x-internal-ops-key': internalOpsKey } : {}),
+          ...(tenantId ? { 'x-tenant-id': tenantId } : {}),
           ...options?.headers,
         },
       });

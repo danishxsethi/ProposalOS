@@ -1,0 +1,10 @@
+FROM postgres:15-alpine
+
+RUN apk add --no-cache aws-cli bash jq openssl
+
+COPY scripts/migration/import-staging-export.sh /usr/local/bin/import-staging-export
+RUN chmod 0555 /usr/local/bin/import-staging-export \
+  && bash -n /usr/local/bin/import-staging-export
+
+USER postgres
+ENTRYPOINT ["/bin/bash", "/usr/local/bin/import-staging-export"]

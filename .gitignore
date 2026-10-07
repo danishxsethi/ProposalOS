@@ -84,7 +84,16 @@ fix_confidence.ts
 .terraform/
 *.tfstate
 *.tfstate.backup
+*.tfplan
+*.tfvars
+*.tfvars.json
+infra/aws/**/backend.tf
+infra/aws/**/$plan
+.provider-mirror/
 crash.log
+
+# Local release archives retained for production provenance/recovery
+/build-artifacts/
 
 # Cache store
 lib/cache/store/

@@ -71,12 +71,12 @@ export const ALERT_RULES: AlertRule[] = [
     tier: 'P1',
   },
   {
-    name: 'gemini_api_key_expired',
-    metric: 'gemini_auth_failures',
+    name: 'bedrock_access_denied',
+    metric: 'bedrock_access_denied_errors',
     windowMs: 15 * 60 * 1000, // 15 minutes
     threshold: 5,
     condition: 'gt',
-    description: 'Gemini API key expired or invalid - multiple auth failures',
+    description: 'Amazon Bedrock rejected multiple model requests due to access permissions',
     tier: 'P1',
   },
   {

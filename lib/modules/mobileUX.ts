@@ -1,8 +1,6 @@
-import { z } from 'zod';
-
 import { CostTracker } from '@/lib/costs/costTracker';
 import { logger } from '@/lib/logger';
-import { withProviderResilience } from '@/lib/resilience/withProviderResilience';
+import { getLocalLighthouseReport } from '@/lib/performance/localLighthouse';
 import { acquireSharedBrowser, releaseSharedBrowser } from '@/lib/security/browserLauncher';
 import { safePageGoto } from '@/lib/security/safeBrowser';
 
@@ -15,9 +13,9 @@ export interface MobileUXModuleInput {
   signal?: AbortSignal;
   /**
    * P1-38 (Wave 7): the `website` module (dependsOn: ['website']) already runs a
-   * real mobile-strategy PageSpeed check for this same URL. When that succeeded,
+   * real mobile-strategy Lighthouse check for this same URL. When that succeeded,
    * its score is forwarded here so this module reuses it instead of making a
-   * second, duplicate billable mobile PageSpeed call — the desktop comparison call
+   * second mobile browser run — the desktop comparison call
    * (genuinely new data `website` never fetches) is unaffected.
    */
   reusedMobileScore?: number | null;
@@ -66,14 +64,6 @@ interface MobileAnalysis {
   pageSpeedStatus: 'available' | 'unavailable';
 }
 
-const PageSpeedResponseSchema = z.object({
-  lighthouseResult: z.object({
-    categories: z.object({
-      performance: z.object({ score: z.number().min(0).max(1) }),
-    }),
-  }),
-});
-
 /**
  * Run mobile UX analysis module
  */
@@ -116,7 +106,7 @@ export async function runMobileUXModule(
       execution:
         analysis.pageSpeedStatus === 'available'
           ? { state: 'complete' }
-          : { state: 'partial', reason: 'PageSpeed metrics were unavailable' },
+          : { state: 'partial', reason: 'Lighthouse metrics were unavailable' },
     };
   } catch (error) {
     if (input.signal?.aborted) throw input.signal.reason ?? error;
@@ -365,7 +355,7 @@ async function analyzeMobileUX(
       };
     });
 
-    // Get PageSpeed mobile score
+    // Get local Lighthouse mobile score
     const pagespeedData = await fetchPageSpeedMobile(url, tracker, signal, reusedMobileScore);
 
     return {
@@ -406,7 +396,8 @@ function waitForDelay(ms: number, signal?: AbortSignal): Promise<void> {
 }
 
 /**
- * Fetch PageSpeed Insights for mobile and desktop
+ * Run local Lighthouse for mobile and desktop. The website module forwards its
+ * mobile result so the same expensive browser run is not repeated.
  */
 async function fetchPageSpeedMobile(
   url: string,
@@ -415,63 +406,26 @@ async function fetchPageSpeedMobile(
   reusedMobileScore?: number | null
 ): Promise<{ status: 'available' | 'unavailable'; mobileScore?: number; desktopScore?: number }> {
   try {
-    const apiKey = process.env.GOOGLE_PAGESPEED_API_KEY;
-    if (!apiKey) {
-      logger.warn('[MobileUX] No PageSpeed API key, skipping PageSpeed check');
-      return { status: 'unavailable' };
-    }
-
-    // P1-38 (Wave 7): `website` (dependsOn: ['website']) already performed a real
-    // mobile-strategy PageSpeed call for this same URL. Reuse its score instead of
-    // making a second duplicate billable mobile call.
+    // P1-38 (Wave 7): `website` already performed a mobile Lighthouse run for
+    // this URL. Reuse its score instead of launching Chromium again.
     let mobileScore: number;
     if (typeof reusedMobileScore === 'number') {
       mobileScore = reusedMobileScore;
     } else {
-      // Mobile strategy
-      const mobileUrl = `https://www.googleapis.com/pagespeedonline/v5/runPagespeed?url=${encodeURIComponent(url)}&strategy=mobile&key=${apiKey}`;
-      const mobileData = await withProviderResilience<unknown>(
-        {
-          provider: 'pagespeed',
-          operation: 'mobileUX:fetchPageSpeedMobile:mobile',
-          signal,
-          degrade: false,
-          policy: { timeoutMs: 45000, maxAttempts: 1 },
-        },
-        async ({ signal: providerSignal }) => {
-          tracker?.addApiCall('PAGESPEED');
-          const mobileRes = await fetch(mobileUrl, { signal: providerSignal });
-          if (!mobileRes.ok)
-            throw new Error(`HTTP error ${mobileRes.status}: ${mobileRes.statusText}`);
-          return await mobileRes.json();
-        }
-      );
-      const mobileParsed = PageSpeedResponseSchema.parse(mobileData);
-      mobileScore = Math.round(mobileParsed.lighthouseResult.categories.performance.score * 100);
+      tracker?.addApiCall('LIGHTHOUSE');
+      const report = await getLocalLighthouseReport(url, 'mobile', signal);
+      const score = report.categories?.performance?.score;
+      if (typeof score !== 'number') return { status: 'unavailable' };
+      mobileScore = Math.round(score * 100);
     }
 
     // Try to get desktop score for comparison
     let desktopScore: number | undefined;
     try {
-      const desktopUrl = `https://www.googleapis.com/pagespeedonline/v5/runPagespeed?url=${encodeURIComponent(url)}&strategy=desktop&key=${apiKey}`;
-      const desktopData = await withProviderResilience<unknown>(
-        {
-          provider: 'pagespeed',
-          operation: 'mobileUX:fetchPageSpeedMobile:desktop',
-          signal,
-          degrade: false,
-          policy: { timeoutMs: 45000, maxAttempts: 1 },
-        },
-        async ({ signal: providerSignal }) => {
-          tracker?.addApiCall('PAGESPEED');
-          const desktopRes = await fetch(desktopUrl, { signal: providerSignal });
-          if (!desktopRes.ok)
-            throw new Error(`HTTP error ${desktopRes.status}: ${desktopRes.statusText}`);
-          return await desktopRes.json();
-        }
-      );
-      const desktopParsed = PageSpeedResponseSchema.parse(desktopData);
-      desktopScore = Math.round(desktopParsed.lighthouseResult.categories.performance.score * 100);
+      tracker?.addApiCall('LIGHTHOUSE');
+      const report = await getLocalLighthouseReport(url, 'desktop', signal);
+      const score = report.categories?.performance?.score;
+      if (typeof score === 'number') desktopScore = Math.round(score * 100);
     } catch {
       // Desktop score is optional
     }
@@ -479,7 +433,7 @@ async function fetchPageSpeedMobile(
     return { status: 'available', mobileScore, desktopScore };
   } catch (error) {
     if (signal?.aborted) throw signal.reason ?? error;
-    logger.warn({ error }, '[MobileUX] PageSpeed fetch failed');
+    logger.warn({ error }, '[MobileUX] Lighthouse run failed');
     return { status: 'unavailable' };
   }
 }
@@ -567,8 +521,8 @@ function generateMobileFindings(analysis: MobileAnalysis, url: string): Finding[
       confidenceScore: normalizeConfidence(95, '0-100'),
       evidence: [
         createEvidence({
-          pointer: `https://www.googleapis.com/pagespeedonline/v5/runPagespeed?url=${encodeURIComponent(url)}&strategy=mobile`,
-          source: 'pagespeed_v5',
+          pointer: url,
+          source: 'lighthouse_local',
           collected_at: collectedAt,
           type: 'metric',
           value: analysis.mobilePerformanceScore,
@@ -664,8 +618,8 @@ function generateMobileFindings(analysis: MobileAnalysis, url: string): Finding[
       confidenceScore: normalizeConfidence(95, '0-100'),
       evidence: [
         createEvidence({
-          pointer: `https://www.googleapis.com/pagespeedonline/v5/runPagespeed?url=${encodeURIComponent(url)}`,
-          source: 'pagespeed_v5',
+          pointer: url,
+          source: 'lighthouse_local',
           collected_at: collectedAt,
           type: 'text',
           value: `Mobile ${analysis.mobilePerformanceScore}; desktop ${analysis.desktopPerformanceScore}`,

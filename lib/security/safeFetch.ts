@@ -47,9 +47,6 @@ const RESPONSE_DERIVED_URL_ALLOWLIST = [
   'lh4.googleusercontent.com',
   'lh5.googleusercontent.com',
   'lh6.googleusercontent.com',
-  'places.googleapis.com',
-  'maps.googleapis.com',
-  'streetviewpixels-pa.googleapis.com',
 ];
 
 // ─── Error type ───────────────────────────────────────────────────────────────

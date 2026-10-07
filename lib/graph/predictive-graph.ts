@@ -20,7 +20,7 @@
 
 import { Annotation, StateGraph } from '@langchain/langgraph';
 
-import { generateWithGemini } from '@/lib/llm/provider';
+import { generateWithLLM } from '@/lib/llm/provider';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 

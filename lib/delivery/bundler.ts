@@ -4,7 +4,7 @@ import archiver from 'archiver';
 
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
-import { uploadToGCS } from '@/lib/storage';
+import { createProtectedObjectUrl, uploadToS3 } from '@/lib/storage';
 
 import { ImplementationPackage } from './packager';
 
@@ -97,7 +97,7 @@ export async function assembleBundle(
 }
 
 /**
- * Upload bundle to GCS
+ * Upload a private delivery bundle to S3
  */
 export async function uploadBundle(
   buffer: Buffer,
@@ -109,16 +109,13 @@ export async function uploadBundle(
       'DELIVERY_STORAGE_UNAVAILABLE: a private, access-controlled delivery storage adapter is required'
     );
   }
-  const fileName = `delivery-bundles/${tenantId}/${proposalId}-${Date.now()}.zip`;
+  const fileName = `delivery-bundles/${tenantId}/${proposalId}/${Date.now()}.zip`;
 
   try {
-    const url = await uploadToGCS(buffer, fileName, 'application/zip');
-    if (!url) {
-      throw new Error('Failed to get upload URL from GCS');
-    }
-    return url;
+    const reference = await uploadToS3(buffer, fileName, 'application/zip');
+    return createProtectedObjectUrl(reference);
   } catch (error) {
-    logger.error({ error }, 'Failed to upload bundle to GCS');
+    logger.error({ error }, 'Failed to upload bundle to S3');
     throw error;
   }
 }

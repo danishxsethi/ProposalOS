@@ -43,7 +43,12 @@ export interface WebsiteModuleInput {
 }
 
 // Finding types
-export type FindingType = 'PAINKILLER' | 'VITAMIN' | 'VISUAL_UX' | 'VISUAL_DESIGN' | 'VISUAL_COMPARISON';
+export type FindingType =
+  | 'PAINKILLER'
+  | 'VITAMIN'
+  | 'VISUAL_UX'
+  | 'VISUAL_DESIGN'
+  | 'VISUAL_COMPARISON';
 export type EffortLevel = 'LOW' | 'MEDIUM' | 'HIGH';
 
 export interface Finding {
@@ -73,7 +78,7 @@ export interface EvidenceItem {
 export interface Evidence {
   pointer: string; // URL, API endpoint, or data source reference (REQUIRED)
   collected_at: string; // ISO 8601 timestamp (REQUIRED)
-  source: string; // Module that collected this (e.g., 'pagespeed_v5', 'places_api_v1')
+  source: string; // Module that collected this (e.g., 'lighthouse_local', 'serpapi_google_maps')
   type?: string; // Type of evidence (e.g., 'score', 'metric', 'review')
   value?: string | number; // The actual data point
   label?: string; // Human-readable label
@@ -167,7 +172,7 @@ export function assertRealPointer(pointer: string, source: string): string {
  * function should paper over.
  *
  * @param opts.pointer - URL, API endpoint, or data source reference (REQUIRED, real)
- * @param opts.source - Module that collected this (e.g., 'pagespeed_v5', 'places_api_v1')
+ * @param opts.source - Module that collected this (e.g., 'lighthouse_local', 'serpapi_google_maps')
  * @param opts.collected_at - ISO 8601 timestamp. Defaults to now, which is truthful for
  *   the common case where evidence is constructed synchronously right after collection;
  *   pass an explicit value when representing a historical observation.

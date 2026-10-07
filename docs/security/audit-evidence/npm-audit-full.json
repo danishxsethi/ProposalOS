@@ -1,20 +1,120 @@
 {
   "auditReportVersion": 2,
   "vulnerabilities": {
-    "@google-cloud/storage": {
-      "name": "@google-cloud/storage",
+    "@next/eslint-plugin-next": {
+      "name": "@next/eslint-plugin-next",
+      "severity": "high",
+      "isDirect": false,
+      "via": ["fast-glob"],
+      "effects": ["eslint-config-next"],
+      "range": ">=14.3.0-canary.0",
+      "nodes": ["node_modules/@next/eslint-plugin-next"],
+      "fixAvailable": {
+        "name": "eslint-config-next",
+        "version": "14.2.35",
+        "isSemVerMajor": true
+      }
+    },
+    "@opentelemetry/instrumentation-pg": {
+      "name": "@opentelemetry/instrumentation-pg",
       "severity": "moderate",
       "isDirect": true,
       "via": [
-        "teeny-request",
-        "uuid"
+        {
+          "source": 1241247,
+          "name": "@opentelemetry/instrumentation-pg",
+          "dependency": "@opentelemetry/instrumentation-pg",
+          "title": "Multiple @opentelemetry/instrumentation-* packages expose database username via unconditional db.user span attribute",
+          "url": "https://github.com/advisories/GHSA-qqmp-wf37-98f9",
+          "severity": "moderate",
+          "cwe": ["CWE-532"],
+          "cvss": {
+            "score": 5.8,
+            "vectorString": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:C/C:L/I:N/A:N"
+          },
+          "range": "<0.73.0"
+        }
       ],
       "effects": [],
-      "range": "2.2.0 - 2.5.0 || 5.19.0 - 8.0.0",
-      "nodes": [
-        "node_modules/@google-cloud/storage"
+      "range": "<0.73.0",
+      "nodes": ["node_modules/@opentelemetry/instrumentation-pg"],
+      "fixAvailable": {
+        "name": "@opentelemetry/instrumentation-pg",
+        "version": "0.75.0",
+        "isSemVerMajor": true
+      }
+    },
+    "basic-ftp": {
+      "name": "basic-ftp",
+      "severity": "high",
+      "isDirect": false,
+      "via": [
+        {
+          "source": 1240853,
+          "name": "basic-ftp",
+          "dependency": "basic-ftp",
+          "title": "basic-ftp: Quadratic-time CPU denial of service in Client.list() Unix directory-listing parser (RE_LINE backtracking)",
+          "url": "https://github.com/advisories/GHSA-c475-qrg2-pj4r",
+          "severity": "high",
+          "cwe": ["CWE-1333"],
+          "cvss": {
+            "score": 0,
+            "vectorString": null
+          },
+          "range": "<=6.2.0"
+        }
       ],
-      "fixAvailable": true
+      "effects": ["get-uri"],
+      "range": "<=6.2.0",
+      "nodes": ["node_modules/basic-ftp"],
+      "fixAvailable": {
+        "name": "release-it",
+        "version": "15.10.3",
+        "isSemVerMajor": true
+      }
+    },
+    "braces": {
+      "name": "braces",
+      "severity": "high",
+      "isDirect": false,
+      "via": [
+        {
+          "source": 1240992,
+          "name": "braces",
+          "dependency": "braces",
+          "title": "braces vulnerable to stack-exhaustion denial of service through deeply nested patterns",
+          "url": "https://github.com/advisories/GHSA-vfj7-8cjw-p6xm",
+          "severity": "high",
+          "cwe": ["CWE-674"],
+          "cvss": {
+            "score": 7.5,
+            "vectorString": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H"
+          },
+          "range": "<=3.0.3"
+        }
+      ],
+      "effects": ["chokidar", "micromatch"],
+      "range": "*",
+      "nodes": ["node_modules/braces"],
+      "fixAvailable": {
+        "name": "tailwindcss",
+        "version": "4.3.3",
+        "isSemVerMajor": true
+      }
+    },
+    "chokidar": {
+      "name": "chokidar",
+      "severity": "high",
+      "isDirect": false,
+      "via": ["braces"],
+      "effects": ["tailwindcss"],
+      "range": "2.0.0 - 3.6.0",
+      "nodes": ["node_modules/tailwindcss/node_modules/chokidar"],
+      "fixAvailable": {
+        "name": "tailwindcss",
+        "version": "4.3.3",
+        "isSemVerMajor": true
+      }
     },
     "esbuild": {
       "name": "esbuild",
@@ -28,9 +128,7 @@
           "title": "esbuild allows arbitrary file read when running the development server on Windows",
           "url": "https://github.com/advisories/GHSA-g7r4-m6w7-qqqr",
           "severity": "low",
-          "cwe": [
-            "CWE-22"
-          ],
+          "cwe": ["CWE-22"],
           "cvss": {
             "score": 2.5,
             "vectorString": "CVSS:3.1/AV:L/AC:H/PR:L/UI:N/S:U/C:N/I:L/A:N"
@@ -40,40 +138,159 @@
       ],
       "effects": [],
       "range": "0.27.3 - 0.28.0",
-      "nodes": [
-        "node_modules/esbuild"
-      ],
+      "nodes": ["node_modules/esbuild"],
       "fixAvailable": true
     },
-    "gaxios": {
-      "name": "gaxios",
-      "severity": "moderate",
-      "isDirect": false,
-      "via": [
-        "uuid"
-      ],
+    "eslint-config-next": {
+      "name": "eslint-config-next",
+      "severity": "high",
+      "isDirect": true,
+      "via": ["@next/eslint-plugin-next"],
       "effects": [],
-      "range": "6.4.0 - 6.7.1",
-      "nodes": [
-        "node_modules/gaxios"
-      ],
+      "range": ">=14.3.0-canary.0",
+      "nodes": ["node_modules/eslint-config-next"],
+      "fixAvailable": {
+        "name": "eslint-config-next",
+        "version": "14.2.35",
+        "isSemVerMajor": true
+      }
+    },
+    "fast-glob": {
+      "name": "fast-glob",
+      "severity": "high",
+      "isDirect": false,
+      "via": ["micromatch"],
+      "effects": ["@next/eslint-plugin-next"],
+      "range": "*",
+      "nodes": ["node_modules/fast-glob", "node_modules/tailwindcss/node_modules/fast-glob"],
+      "fixAvailable": {
+        "name": "eslint-config-next",
+        "version": "14.2.35",
+        "isSemVerMajor": true
+      }
+    },
+    "get-uri": {
+      "name": "get-uri",
+      "severity": "high",
+      "isDirect": false,
+      "via": ["basic-ftp"],
+      "effects": ["pac-proxy-agent"],
+      "range": ">=5.0.0",
+      "nodes": ["node_modules/get-uri"],
+      "fixAvailable": {
+        "name": "release-it",
+        "version": "15.10.3",
+        "isSemVerMajor": true
+      }
+    },
+    "micromatch": {
+      "name": "micromatch",
+      "severity": "high",
+      "isDirect": false,
+      "via": ["braces"],
+      "effects": ["fast-glob", "tailwindcss"],
+      "range": ">=0.2.0",
+      "nodes": ["node_modules/micromatch"],
+      "fixAvailable": {
+        "name": "tailwindcss",
+        "version": "4.3.3",
+        "isSemVerMajor": true
+      }
+    },
+    "pac-proxy-agent": {
+      "name": "pac-proxy-agent",
+      "severity": "high",
+      "isDirect": false,
+      "via": ["get-uri"],
+      "effects": ["proxy-agent"],
+      "range": ">=6.0.0",
+      "nodes": ["node_modules/pac-proxy-agent"],
+      "fixAvailable": {
+        "name": "release-it",
+        "version": "15.10.3",
+        "isSemVerMajor": true
+      }
+    },
+    "postcss-nested": {
+      "name": "postcss-nested",
+      "severity": "moderate",
+      "isDirect": false,
+      "via": ["postcss-selector-parser"],
+      "effects": [],
+      "range": "2.0.3 - 6.2.0",
+      "nodes": ["node_modules/postcss-nested"],
       "fixAvailable": true
     },
-    "teeny-request": {
-      "name": "teeny-request",
+    "postcss-selector-parser": {
+      "name": "postcss-selector-parser",
       "severity": "moderate",
       "isDirect": false,
       "via": [
-        "uuid"
+        {
+          "source": 1241232,
+          "name": "postcss-selector-parser",
+          "dependency": "postcss-selector-parser",
+          "title": "PostCSS: Quadratic complexity in flat selector parsing allows CPU exhaustion",
+          "url": "https://github.com/advisories/GHSA-rj75-hqrm-r3gf",
+          "severity": "moderate",
+          "cwe": ["CWE-400", "CWE-407"],
+          "cvss": {
+            "score": 5.9,
+            "vectorString": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:N/I:N/A:H"
+          },
+          "range": "<7.1.6"
+        }
       ],
-      "effects": [
-        "@google-cloud/storage"
-      ],
-      "range": "3.9.1 - 9.0.0",
-      "nodes": [
-        "node_modules/teeny-request"
-      ],
-      "fixAvailable": true
+      "effects": ["postcss-nested", "tailwindcss"],
+      "range": "<7.1.6",
+      "nodes": ["node_modules/postcss-selector-parser"],
+      "fixAvailable": {
+        "name": "tailwindcss",
+        "version": "4.3.3",
+        "isSemVerMajor": true
+      }
+    },
+    "proxy-agent": {
+      "name": "proxy-agent",
+      "severity": "high",
+      "isDirect": false,
+      "via": ["pac-proxy-agent"],
+      "effects": ["release-it"],
+      "range": ">=6.0.0",
+      "nodes": ["node_modules/proxy-agent"],
+      "fixAvailable": {
+        "name": "release-it",
+        "version": "15.10.3",
+        "isSemVerMajor": true
+      }
+    },
+    "release-it": {
+      "name": "release-it",
+      "severity": "high",
+      "isDirect": true,
+      "via": ["proxy-agent"],
+      "effects": [],
+      "range": "0.0.0-pl.0 || >=15.10.4",
+      "nodes": ["node_modules/release-it"],
+      "fixAvailable": {
+        "name": "release-it",
+        "version": "15.10.3",
+        "isSemVerMajor": true
+      }
+    },
+    "tailwindcss": {
+      "name": "tailwindcss",
+      "severity": "high",
+      "isDirect": true,
+      "via": ["chokidar", "fast-glob", "micromatch", "postcss-nested", "postcss-selector-parser"],
+      "effects": [],
+      "range": "<=0.0.0-oxide-insiders.ff2c25f || 0.5.0 - 3.4.19",
+      "nodes": ["node_modules/tailwindcss"],
+      "fixAvailable": {
+        "name": "tailwindcss",
+        "version": "4.3.3",
+        "isSemVerMajor": true
+      }
     },
     "uuid": {
       "name": "uuid",
@@ -87,10 +304,7 @@
           "title": "uuid: Missing buffer bounds check in v3/v5/v6 when buf is provided",
           "url": "https://github.com/advisories/GHSA-w5hq-g745-h8pq",
           "severity": "moderate",
-          "cwe": [
-            "CWE-787",
-            "CWE-1285"
-          ],
+          "cwe": ["CWE-787", "CWE-1285"],
           "cvss": {
             "score": 7.5,
             "vectorString": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:H/A:N"
@@ -98,17 +312,9 @@
           "range": "<11.1.1"
         }
       ],
-      "effects": [
-        "@google-cloud/storage",
-        "gaxios",
-        "teeny-request"
-      ],
+      "effects": [],
       "range": "<11.1.1",
-      "nodes": [
-        "node_modules/@google-cloud/storage/node_modules/uuid",
-        "node_modules/teeny-request/node_modules/uuid",
-        "node_modules/uuid"
-      ],
+      "nodes": ["node_modules/uuid"],
       "fixAvailable": {
         "name": "uuid",
         "version": "14.0.2",
@@ -121,17 +327,17 @@
       "info": 0,
       "low": 1,
       "moderate": 4,
-      "high": 0,
+      "high": 12,
       "critical": 0,
-      "total": 5
+      "total": 17
     },
     "dependencies": {
-      "prod": 817,
-      "dev": 873,
+      "prod": 829,
+      "dev": 890,
       "optional": 119,
       "peer": 0,
       "peerOptional": 0,
-      "total": 1731
+      "total": 1760
     }
   }
 }

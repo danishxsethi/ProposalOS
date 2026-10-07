@@ -1,6 +1,7 @@
 name: Test Suite
 
 on:
+  workflow_call:
   push:
     branches: [main, 'remediation/**', 'execution/**']
   pull_request:
@@ -72,3 +73,45 @@ jobs:
           name: qualification-artifacts
           path: docs/audits/2026-09-18-proposal-os-ground-up-ga-audit/artifacts/
           if-no-files-found: ignore
+
+  claraud-web:
+    name: Build Claraud web application
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24.x'
+          cache: 'npm'
+          cache-dependency-path: claraud-web/package-lock.json
+
+      - name: Install Claraud web dependencies
+        run: npm ci --legacy-peer-deps
+        working-directory: claraud-web
+
+      - name: Enforce production dependency advisory policy
+        run: npm audit --omit=dev --audit-level=high
+        working-directory: claraud-web
+
+      - name: Point shared Prisma output at Claraud dependencies
+        run: ln -s ./claraud-web/node_modules ./node_modules
+
+      - name: Generate Prisma Client
+        run: npx prisma generate --schema=../prisma/schema.prisma
+        working-directory: claraud-web
+
+      - name: Remove temporary Prisma output link
+        run: rm ../node_modules
+        working-directory: claraud-web
+
+      - name: Build Claraud web
+        run: npm run build
+        working-directory: claraud-web
+        env:
+          NEXT_PUBLIC_APP_URL: https://claraud.com
+          NEXT_PUBLIC_BASE_URL: https://claraud.com
+          NEXT_PUBLIC_APP_VERSION: ci
+          NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: pk_test_ci_public

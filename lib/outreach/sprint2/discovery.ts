@@ -2,7 +2,7 @@ import { createHash } from 'crypto';
 
 import { withModuleCache } from '@/lib/cache/moduleCache';
 import { logger } from '@/lib/logger';
-import { mapsIntelligence } from '@/lib/maps/googleMapsProvider';
+import { mapsIntelligence } from '@/lib/maps/serpMapsProvider';
 import { withProviderResilience } from '@/lib/resilience/withProviderResilience';
 
 import { normalizeVertical, VERTICAL_SEARCH_QUERIES } from './config';
@@ -174,7 +174,13 @@ async function discoverFromGooglePlaces(input: DiscoveryInput): Promise<SourceDi
 
   for (const phrase of queries) {
     queryCount += 1;
-    const response = await mapsIntelligence.searchText({ query: phrase, city: input.city, region: input.state ?? undefined, maxResults: Math.min(20, maxPerQuery), fieldProfile: 'IDENTITY_MINIMAL' });
+    const response = await mapsIntelligence.searchText({
+      query: phrase,
+      city: input.city,
+      region: input.state ?? undefined,
+      maxResults: Math.min(20, maxPerQuery),
+      fieldProfile: 'IDENTITY_MINIMAL',
+    });
     if (response.status !== 'COMPLETE' || !response.data) continue;
 
     for (const place of response.data) {
@@ -182,12 +188,14 @@ async function discoverFromGooglePlaces(input: DiscoveryInput): Promise<SourceDi
       if (!businessName || isLikelyChain(businessName)) continue;
 
       if (place.identityStatus !== 'CONFIRMED') continue;
-      const placeId = place.placeId || createFallbackId('google_places', [
-              businessName,
-              String(place.formattedAddress ?? ''),
-              input.city,
-              input.state,
-            ]);
+      const placeId =
+        place.placeId ||
+        createFallbackId('google_places', [
+          businessName,
+          String(place.formattedAddress ?? ''),
+          input.city,
+          input.state,
+        ]);
 
       businesses.push({
         source: 'google_places',
