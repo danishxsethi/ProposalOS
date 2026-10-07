@@ -15,7 +15,7 @@ jobs:
       - name: Use Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20.x'
+          node-version: '24.x'
           cache: 'npm'
 
       - name: Install dependencies
@@ -34,6 +34,8 @@ jobs:
         run: npm run lint -- --max-warnings=99999
 
       - name: Validate Prisma schema
+        env:
+          DATABASE_URL: postgresql://test:test@localhost:5432/test_db
         run: npx prisma validate
 
       - name: Start canonical local Postgres and PgBouncer stack
