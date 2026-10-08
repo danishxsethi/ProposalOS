@@ -303,12 +303,11 @@ describe('SSRF: validateForBrowserNavigation', () => {
 // ─── 7. safeFetchResponseDerived host allowlist ──────────────────────────────
 
 describe('SSRF: safeFetchResponseDerived', () => {
-  it('allows googleapis.com host', async () => {
-    allowUrl();
-    const res = await safeFetchResponseDerived(
-      'https://places.googleapis.com/v1/places/abc123/media?key=xyz'
-    );
-    expect(res.status).toBe(200);
+  it('rejects Places API URLs outside the response-derived photo CDN allowlist', async () => {
+    await expect(
+      safeFetchResponseDerived('https://places.googleapis.com/v1/places/abc123/media?key=xyz')
+    ).rejects.toThrow(/not in allowlist/);
+    expect(mockFetch).not.toHaveBeenCalled();
   });
 
   it('allows googleusercontent.com host', async () => {

@@ -382,7 +382,8 @@ const ALLOWED_RAW_FETCH: AllowedRawFetch[] = [
     file: 'lib/maps/googleMapsProvider.ts',
     line: 238,
     host: 'places.googleapis.com',
-    reason: 'Fixed hosts places.googleapis.com/maps.googleapis.com via mapsIntelligence — Places/Geocode/Routes, all fixed Google APIs, key from env',
+    reason:
+      'Fixed hosts places.googleapis.com/maps.googleapis.com via mapsIntelligence — Places/Geocode/Routes, all fixed Google APIs, key from env',
   },
   {
     file: 'lib/maps/googleMapsProvider.ts',
@@ -577,12 +578,9 @@ describe('SSRF fetch boundary [#5]', () => {
       'lib/modules/websiteCrawler.ts',
       'lib/modules/seoDeep.ts',
       'lib/modules/website.ts',
-      'lib/modules/emailFinder.ts',
-      'lib/modules/schemaMarkup.ts',
-      'lib/modules/techStack.ts',
+      'lib/audit/collectors/htmlCollector.ts',
       'lib/modules/privacyCompliance.ts',
       'lib/modules/security.ts',
-      'lib/modules/social.ts',
       'lib/modules/paidSearch.ts',
       'lib/modules/videoPresence.ts',
       'lib/utils/urlExtractor.ts',
@@ -596,6 +594,26 @@ describe('SSRF fetch boundary [#5]', () => {
       if (!fs.existsSync(fullPath)) continue;
       const content = fs.readFileSync(fullPath, 'utf-8');
       expect(content).toContain("from '@/lib/security/safeFetch'");
+    }
+  });
+
+  it('HTML consumers delegate requests to the shared SSRF-aware collector', () => {
+    const filesUsingSharedHtmlCollector = [
+      'lib/modules/emailFinder.ts',
+      'lib/modules/schemaMarkup.ts',
+      'lib/modules/techStack.ts',
+      'lib/modules/social.ts',
+    ];
+
+    for (const relPath of filesUsingSharedHtmlCollector) {
+      const fullPath = path.join(rootDir, relPath);
+      if (!fs.existsSync(fullPath)) continue;
+
+      const content = fs.readFileSync(fullPath, 'utf-8');
+      expect(content).toContain(
+        "import { collectHtml } from '@/lib/audit/collectors/htmlCollector'"
+      );
+      expect(content).toMatch(/await collectHtml\(/);
     }
   });
 });

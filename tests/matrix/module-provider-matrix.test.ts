@@ -144,11 +144,11 @@ const MODULE_PROVIDERS: Record<string, string[]> = {
  */
 const MODULE_ALLOWED_RAW_FETCH: Array<{ file: string; line: number; host: string }> = [
   { file: 'lib/modules/seoDeep.ts', line: 297, host: 'serpapi.com' },
-{ file: 'lib/modules/competitor.ts', line: 154, host: 'googleapis.com' },
+  { file: 'lib/modules/competitor.ts', line: 154, host: 'googleapis.com' },
   { file: 'lib/modules/competitor.ts', line: 90, host: 'serpapi.com' },
   { file: 'lib/modules/competitor.ts', line: 172, host: 'googleapis.com' },
-  { file: 'lib/modules/competitor.ts', line: 231, host: 'serpapi.com' },
-  { file: 'lib/modules/competitor.ts', line: 298, host: 'serpapi.com' },
+  { file: 'lib/modules/competitor.ts', line: 245, host: 'serpapi.com' },
+  { file: 'lib/modules/competitor.ts', line: 311, host: 'serpapi.com' },
   { file: 'lib/modules/keywordGap.ts', line: 196, host: 'serpapi.com' },
   { file: 'lib/modules/paidSearch.ts', line: 158, host: 'serpapi.com' },
   { file: 'lib/modules/paidSearch.ts', line: 236, host: 'serpapi.com' },
@@ -507,9 +507,10 @@ describe('module/provider/failure/identity qualification matrix', () => {
     it('emits module-matrix.json derived from the live registry', () => {
       const runnerSource = fs.readFileSync(path.join(rootDir, 'lib/audit/runner.ts'), 'utf-8');
       const modules = MODULE_REGISTRY.map((mod) => {
-        const adapterBody = runnerSource.match(
-          new RegExp(`const ${mod.name}Adapter = async[\\s\\S]*?\\n\\};`)
-        )?.[0] ?? '';
+        const adapterBody =
+          runnerSource.match(
+            new RegExp(`const ${mod.name}Adapter = async[\\s\\S]*?\\n\\};`)
+          )?.[0] ?? '';
         const rawFetchOffenders = MODULE_SOURCE_FILES[mod.name].flatMap((f) =>
           rawFetchViolations(f)
         );
@@ -560,10 +561,9 @@ describe('module/provider/failure/identity qualification matrix', () => {
         source: 'lib/audit/runner.ts::MODULE_REGISTRY',
         expectedModuleCount: EXPECTED_MODULE_COUNT,
         actualModuleCount: modules.length,
-        qualified: modules.length === EXPECTED_MODULE_COUNT &&
-          modules.every(
-            (m) => m.providerBoundary.qualified && m.failurePropagation.qualified
-          ),
+        qualified:
+          modules.length === EXPECTED_MODULE_COUNT &&
+          modules.every((m) => m.providerBoundary.qualified && m.failurePropagation.qualified),
         modules,
       };
 
