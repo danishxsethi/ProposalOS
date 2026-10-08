@@ -109,13 +109,13 @@ const ALLOWED_RAW_FETCH: AllowedRawFetch[] = [
   },
   {
     file: 'lib/modules/competitor.ts',
-    line: 231,
+    line: 245,
     host: 'serpapi.com',
     reason: 'Fixed host; self-search keyword in query params',
   },
   {
     file: 'lib/modules/competitor.ts',
-    line: 298,
+    line: 311,
     host: 'serpapi.com',
     reason: 'Fixed host; category/location in params (competitor second pass)',
   },
@@ -281,13 +281,13 @@ const ALLOWED_RAW_FETCH: AllowedRawFetch[] = [
   },
   {
     file: 'lib/outreach/sprint2/discovery.ts',
-    line: 304,
+    line: 257,
     host: 'serpapi.com',
     reason: 'Fixed host; keyword in query params',
   },
   {
     file: 'lib/outreach/sprint2/discovery.ts',
-    line: 383,
+    line: 336,
     host: 'serpapi.com',
     reason: 'Fixed host; keyword in query params',
   },
@@ -347,7 +347,7 @@ const ALLOWED_RAW_FETCH: AllowedRawFetch[] = [
   },
   {
     file: 'lib/outreach/sprint2/qualification.ts',
-    line: 390,
+    line: 245,
     host: 'serpapi.com',
     reason: 'Fixed host; query in params',
   },

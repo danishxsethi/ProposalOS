@@ -134,6 +134,8 @@ describe('Auth & Session Architecture Boundary Tests', () => {
     const exemptExact = [
       'checkout/route.ts',
       'health/route.ts',
+      // Public ALB liveness probe, same class as health/route.ts; no session auth by design
+      'health/live/route.ts',
       'openapi/route.ts',
       'metrics/route.ts',
       'predictions/route.ts',
