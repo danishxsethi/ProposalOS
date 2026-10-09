@@ -1,65 +1,66 @@
 # ProposalOS AWS acceptance ledger
 
-**Authoritative progress ledger — 2026-10-09**<br>
-**Source under review:** `75f1c5dcf412b5b37339dd438fda9d5db809e7c3` (local branch `codex/final-ci-qualification`)<br>
-**Current technical verdict:** `SOURCE_RC_BLOCKED`<br>
-**Current commercial verdict:** `DEMO_NOT_READY`
+**Evidence snapshot:** 2026-10-09 23:50 UTC
+**Latest completed CI source:** PR #6, code/test head fd85f2793df8fa94af5251dab2febb034d2ad408
+**Source verdict:** CLEAN_SOURCE_RC_PUBLISHED
+**Runtime acceptance:** BLOCKED
+**No AWS or GCP changes were made for this update.**
 
-## Live AWS readback
+## Last verified runtime readback
 
-Read-only inventory in `us-east-2` confirms the existing production services are active: API service desired/running `1/1` on task definition `proposalos-production-api:3`; web service desired/running `1/1` on `proposalos-production-web:2`.
+The previous read-only inventory in us-east-2 found production ECS API and web services at desired/running 1/1. This session did not repeat the live infrastructure read.
 
-| Runtime | Current identity | Source provenance |
-|---|---|---|
-| API | ECR tag `production-20261006-1`, digest `sha256:1065d5f2ec153b20f22c5410ee30a6c2d7a1f813a15d4541fb244b9ddf29a5f9` | `DEPLOY_COMMIT` absent; task-definition tags absent |
-| Web | ECR tag `production-20261006-1`, digest `sha256:4ece21bead608148a7a5a3e6e8f136ef883d175144bb79dc476a14f8fb405a65` | `DEPLOY_COMMIT` absent; task-definition tags absent |
+| Runtime | Previously observed identity                                                                                  | Provenance                                    |
+| ------- | ------------------------------------------------------------------------------------------------------------- | --------------------------------------------- |
+| API     | ECR tag production-20261006-1; digest sha256:1065d5f2ec153b20f22c5410ee30a6c2d7a1f813a15d4541fb244b9ddf29a5f9 | DEPLOY_COMMIT and task-definition tags absent |
+| Web     | ECR tag production-20261006-1; digest sha256:4ece21bead608148a7a5a3e6e8f136ef883d175144bb79dc476a14f8fb405a65 | DEPLOY_COMMIT and task-definition tags absent |
 
-The existing deployment cannot be attributed to a reviewed Git commit. The ECR digests above identify the currently referenced images only.
+Those images cannot be attributed to a reviewed Git SHA. They were not replaced. The existing RDS, Redis, and five-minute audit-sweep scheduler were observed active in the prior inventory; cost, scheduler behavior, tenant isolation, and restore were not qualified. No live runtime verification was done against PR #6.
 
-- RDS is available on PostgreSQL 15.19, private, encrypted, Multi-AZ, deletion-protected, with seven days of backups. A restore was not tested.
-- Redis is available as `cache.t4g.micro`, with transit and at-rest encryption enabled. Tenant/queue runtime qualification was not performed.
-- Scheduler `proposalos-production-audit-sweep` is **enabled** at `rate(5 minutes)` and targets the production ECS cluster using `ProposalOSProductionAuditSweepScheduler`. Its target input was deliberately not read; task behavior and spend were not validated.
-- The two inspected CodeBuild projects use S3 source archives. This does not establish source provenance for the currently serving ECS images.
-- Recurring AWS cost was not measured. Production compute, Multi-AZ RDS, Redis, and the five-minute scheduler remain live; this is not an idle or zero-cost posture.
+## GitHub OIDC and release path
 
-## Source-to-production identity
+The Terraform source in infra/aws/proposalos-production/github-actions.tf restricts the audience to sts.amazonaws.com and expects the transferred repository subject:
 
-The corrected Terraform source in `infra/aws/proposalos-production/github-actions.tf` allows only audience `sts.amazonaws.com` and subject `repo:Danish-Sethi@324834111/ProposalOS@1158247398:ref:refs/heads/main`. The repository API confirms owner ID `324834111` and repository ID `1158247398`. GitHub’s [OIDC documentation](https://docs.github.com/en/actions/reference/security/oidc) describes the immutable owner/repository subject form for transferred repositories.
+repo:Danish-Sethi@324834111/ProposalOS@1158247398:ref:refs/heads/main
 
-The deployed role `ProposalOSGitHubActionsProductionDeploy` still trusts only the two old-owner subjects (`danishxsethi/ProposalOS` and `danishxsethi@92055628/ProposalOS@1158247398`), with the audience restriction intact. There is no wildcard subject. Source and deployed trust differ; the old owner identity remains in the live trust policy. No IAM policy was applied.
+The prior read-only AWS IAM readback showed the deployed production role still trusted the two old-owner subjects. Source and deployed trust therefore differ. No IAM update was applied. The production workflow is workflow_dispatch-only, requires main and explicit production confirmation, and was not run.
 
-The production workflow is `workflow_dispatch` only. Its deploy job requires `refs/heads/main` and an explicit `confirm_production=true`; a feature-branch push or pull request cannot deploy. The workflow builds SHA-tagged images with the Git revision label, resolves immutable digests, migrates before service rollout, and verifies task digests and `/api/health` version. It has not run for this candidate. Its live IAM trust must be corrected by an owner-approved operation before any production promotion.
+Promotion still requires owner-reviewed IAM trust correction, normal CI on the exact release SHA, a SHA-labelled build with immutable ECR digests, explicit deployment approval, post-deploy digest/health verification, and a tested rollback path. PR #6 is a draft review branch and has not been deployed.
 
-## GitHub and GCP controls
+## CI at this source snapshot
 
-- Repository is public under `Danish-Sethi`; repo ID `1158247398`, organization ID `324834111`.
-- GitHub Actions default workflow permissions are read-only. No branch protection, ruleset, or deployment environment was found; release approval governance is a gap.
-- Test Suite runs for pull requests and uses Node 24, a dependency advisory gate, typecheck/lint, Prisma, Docker PostgreSQL/PgBouncer replay, deterministic tests, and a Claraud build.
-- Exact candidate checks are absent because the source commit was not published. Existing PR #5 checks failed on October 8: Test Suite and Claraud build run `37811073144`; Gitleaks runs `37811046946` and `37811073142`.
-- Google Cloud Build trigger inventory for project `proposal-487522` returned zero triggers. Project billing readback returned `false`. No GCP build was activated or disabled. GCP recovery resources and retirement state were not inventoried here.
+GitHub run 38005912371 on fd85f2793df8fa94af5251dab2febb034d2ad408:
 
-## Source and runtime qualification
+- Claraud web build: PASS, job 114074546618.
+- Typecheck, root lint, Prisma schema validation, disposable Postgres/PgBouncer startup, and empty-database migration replay: PASS, job 114074546718.
+- Migration replay passed. Deterministic tests finished 2,824 passed, 10 failed, and 13 skipped. The 10 failures were in three RLS-related suites; Prisma could not reach localhost:6432, and the shim test reported only a generic stack-readiness error. This run does not qualify tenant isolation.
+- Full dependency advisory policy: FAIL, job 114074546727. Production tree had zero findings; the full tree had 12 HIGH, 2 moderate, and 1 low findings, concentrated in GHSA-vfj7-8cjw-p6xm and GHSA-c475-qrg2-pj4r. No exception or threshold reduction was applied.
+- Gitleaks push run 38005908798 and PR run 38005912406: PASS.
 
-| Gate | Status | Evidence still required |
-|---|---|---|
-| Reviewed source SHA and CI | BLOCKED | Resolve unpublished token-shaped literals, publish clean review history, and pass checks on exact candidate SHA |
-| Image provenance | BLOCKED | Build SHA and immutable digests from reviewed commit; prove runtime task definitions reference them |
-| Database/RLS | BLOCKED | Disposable empty replay, schema drift, cross-tenant denial, transaction context, queue and recovery tests |
-| S3/private delivery | BLOCKED | Verify signed/private read and write behavior with test tenant data |
-| Browser/egress security | BLOCKED | Chromium interception, DNS rebinding/redirect/private-network controls, and egress boundary tests |
-| Scheduler and worker authority | BLOCKED | Read-only target review without sensitive input, job ownership/idempotency evidence, explicit schedule approval |
-| Bedrock proposal quality | BLOCKED | Real authorized audit cohort, grounded evidence, degraded behavior, human quality score, latency and cost |
-| Rollback/recovery | PARTIAL | Backup configuration observed; restore, rollback, and GCP recovery window not exercised |
+## Acceptance ledger
 
-All six paid-pilot gates remain blocked: release/runtime/tenant integrity; unsafe public/outbound containment; a genuinely trustworthy proposal; agreement/payment; fulfillment/verification; repeatable proof in one vertical. The unsafe Claraud routes are closed in source but the serving release is older. Three historical share links remain unknown and GitHub alert #11 remains open.
+| Gate                           | State   | Remaining evidence                                                                                            |
+| ------------------------------ | ------- | ------------------------------------------------------------------------------------------------------------- |
+| Candidate source publication   | PASS    | Draft PR #6; not merged                                                                                       |
+| Required CI                    | BLOCKED | Dependency policy failed; deterministic tests had 10 RLS connection failures                                  |
+| Clean-SHA image provenance     | BLOCKED | Build and immutable ECR digest from reviewed approved SHA                                                     |
+| DB parity and tenant isolation | BLOCKED | Resolve PgBouncer connectivity and pass RLS/queue tests; then verify production parity and private data paths |
+| Signed/private S3 delivery     | BLOCKED | Authenticated test-tenant read/write verification                                                             |
+| Browser and outbound egress    | BLOCKED | Chromium interception, DNS rebinding, redirect/private/metadata blocking, bounded egress                      |
+| Worker/scheduler authority     | BLOCKED | Safe read-only task behavior review, ownership/idempotency evidence, schedule approval                        |
+| Bedrock quality                | BLOCKED | Authorized evidence-backed audit cohort, human QA, latency and cost                                           |
+| Rollback and recovery          | PARTIAL | Backups observed; restore and rollback not exercised                                                          |
+| GCP retirement                 | BLOCKED | Recovery window and dependent services not requalified                                                        |
 
-## Promotion conditions
+The prior GCP readback found billing disabled and zero Cloud Build triggers for project proposal-487522. Neither was changed, and GCP was not retired. Three already-public proposal-share tokens remain UNKNOWN / OWNER_ACTION_REQUIRED; GitHub alert #11 remains unresolved. Those issues require separate owner action before pilot acceptance.
 
-1. Resolve the local-history publication blocker without rewriting preserved history or exposing unverified bearer-like values.
-2. Obtain green required CI on one exact reviewed SHA, including disposable database and security tests.
-3. Owner-review and apply the exact main-only OIDC trust update; verify via a no-deploy OIDC test that does not print a JWT.
-4. Review migrations and artifacts, record image digests, approve the manual production release, verify health and runtime SHA, and keep a tested rollback path.
-5. Contain historical share links only after a super-admin dry run maps the fingerprints to the exact records and the owner separately approves revocation.
-6. Requalify actual AWS runtime data parity, private storage, tenant isolation, schedule behavior, browser egress, and recovery before a paid pilot.
+A follow-up test-only CI change is prepared but not yet run: it uses 127.0.0.1 for the PgBouncer test endpoint, adds an authenticated app_user SQL probe after listener readiness, and reports the failed endpoint without exposing credentials. The current result remains FAIL until a new CI run proves otherwise.
 
-No AWS/GCP resource, IAM trust, database, schedule, production image, or customer record was changed in this session.
+## Owner-controlled steps before promotion
+
+1. Resolve the full-tree dependency policy with a compatible fix or an exact, explicitly approved, review-dated exception.
+2. Close historical token and Google-key exposure decisions using the canonical revocation/credential process; do not test exposed URLs.
+3. Review and apply the minimal main-only OIDC trust correction; then conduct a no-deploy, redacted OIDC verification.
+4. Accept required CI on the exact reviewed SHA and approve a production release separately.
+5. Verify runtime digest, source SHA, data/storage/tenant behavior, schedule authority, and rollback before treating AWS as accepted.
+6. Keep GCP recovery available until the agreed rollback window closes; do not retire it as part of this source task.

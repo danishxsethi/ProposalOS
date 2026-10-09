@@ -13,7 +13,7 @@ const directUrl =
   `postgresql://postgres:password@localhost:5435/${rlsTestDatabase}`;
 const appUrl =
   process.env.PROPOSALOS_RLS_APP_URL ||
-  `postgresql://app_user:password@localhost:6432/${rlsTestDatabase}?pgbouncer=true`;
+  `postgresql://app_user:password@127.0.0.1:6432/${rlsTestDatabase}?pgbouncer=true`;
 
 const admin = new PrismaClient({ datasources: { db: { url: directUrl } } });
 const app = createExtendedPrismaClient(new PrismaClient({ datasources: { db: { url: appUrl } } }));
@@ -30,20 +30,38 @@ describe('Tenant RLS isolation (PostgreSQL app_user role)', () => {
   beforeAll(async () => {
     tenantA = randomUUID();
     tenantB = randomUUID();
-    await runWithTenantBypass('test-fixture:create-tenants', () => admin.tenant.createMany({ data: [
-      { id: tenantA, name: 'RLS Tenant A', slug: `rls-a-${tenantA}` },
-      { id: tenantB, name: 'RLS Tenant B', slug: `rls-b-${tenantB}` },
-    ] }));
-    const rows = await runWithTenantBypass('test-fixture:create-audits', () => admin.audit.createManyAndReturn({ data: [
-      { tenantId: tenantA, businessName: 'RLS A', status: 'COMPLETE' },
-      { tenantId: tenantB, businessName: 'RLS B', status: 'COMPLETE' },
-    ] }));
+    await runWithTenantBypass('test-fixture:create-tenants', () =>
+      admin.tenant.createMany({
+        data: [
+          { id: tenantA, name: 'RLS Tenant A', slug: `rls-a-${tenantA}` },
+          { id: tenantB, name: 'RLS Tenant B', slug: `rls-b-${tenantB}` },
+        ],
+      })
+    );
+    const rows = await runWithTenantBypass('test-fixture:create-audits', () =>
+      admin.audit.createManyAndReturn({
+        data: [
+          { tenantId: tenantA, businessName: 'RLS A', status: 'COMPLETE' },
+          { tenantId: tenantB, businessName: 'RLS B', status: 'COMPLETE' },
+        ],
+      })
+    );
     auditA = rows.find((row) => row.tenantId === tenantA)!.id;
     auditB = rows.find((row) => row.tenantId === tenantB)!.id;
-    const finding = await runWithTenantBypass('test-fixture:create-finding', () => admin.finding.create({ data: {
-      tenantId: tenantB, auditId: auditB, module: 'website', category: 'SEO', type: 'PAINKILLER',
-      title: 'RLS Tenant B finding', impactScore: 8, confidenceScore: 9,
-    } }));
+    const finding = await runWithTenantBypass('test-fixture:create-finding', () =>
+      admin.finding.create({
+        data: {
+          tenantId: tenantB,
+          auditId: auditB,
+          module: 'website',
+          category: 'SEO',
+          type: 'PAINKILLER',
+          title: 'RLS Tenant B finding',
+          impactScore: 8,
+          confidenceScore: 9,
+        },
+      })
+    );
     findingB = finding.id;
     const evidence = await runWithTenantBypass('test-fixture:create-evidence', () =>
       admin.evidenceSnapshot.create({
@@ -66,7 +84,9 @@ describe('Tenant RLS isolation (PostgreSQL app_user role)', () => {
   });
 
   afterAll(async () => {
-    await runWithTenantBypass('test-fixture:delete-tenants', () => admin.tenant.deleteMany({ where: { id: { in: [tenantA, tenantB] } } }));
+    await runWithTenantBypass('test-fixture:delete-tenants', () =>
+      admin.tenant.deleteMany({ where: { id: { in: [tenantA, tenantB] } } })
+    );
     await Promise.all([admin.$disconnect(), app.$disconnect()]);
   });
 
@@ -77,22 +97,30 @@ describe('Tenant RLS isolation (PostgreSQL app_user role)', () => {
   });
 
   it('tenant A cannot address tenant B audit by globally unique id', async () => {
-    const row = await runWithTenantAsync(tenantA, () => app.audit.findUnique({ where: { id: auditB } }));
+    const row = await runWithTenantAsync(tenantA, () =>
+      app.audit.findUnique({ where: { id: auditB } })
+    );
     expect(row).toBeNull();
   });
 
   it('tenant A cannot read tenant B finding by globally unique id or forged tenant filter', async () => {
-    const byId = await runWithTenantAsync(tenantA, () => app.finding.findUnique({ where: { id: findingB } }));
-    const byForgedFilter = await runWithTenantAsync(tenantA, () => app.finding.findMany({ where: { tenantId: tenantB } }));
+    const byId = await runWithTenantAsync(tenantA, () =>
+      app.finding.findUnique({ where: { id: findingB } })
+    );
+    const byForgedFilter = await runWithTenantAsync(tenantA, () =>
+      app.finding.findMany({ where: { tenantId: tenantB } })
+    );
     expect(byId).toBeNull();
     expect(byForgedFilter).toEqual([]);
   });
 
   it('tenant A cannot resolve tenant B evidence or proposal records', async () => {
-    const [evidence, proposal] = await runWithTenantAsync(tenantA, async () => Promise.all([
-      app.evidenceSnapshot.findUnique({ where: { id: evidenceB } }),
-      app.proposal.findUnique({ where: { id: proposalB } }),
-    ]));
+    const [evidence, proposal] = await runWithTenantAsync(tenantA, async () =>
+      Promise.all([
+        app.evidenceSnapshot.findUnique({ where: { id: evidenceB } }),
+        app.proposal.findUnique({ where: { id: proposalB } }),
+      ])
+    );
 
     expect(evidence).toBeNull();
     expect(proposal).toBeNull();

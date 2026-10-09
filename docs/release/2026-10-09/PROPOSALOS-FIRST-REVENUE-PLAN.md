@@ -1,47 +1,44 @@
 # ProposalOS first-revenue plan
 
-**Status:** operator-assisted pilot concept only; no offer is live and no customer commitment has been made.
+**Status:** operator-assisted pilot hypothesis; not ready for sale.
+**Source snapshot:** PR #6 code/test head fd85f2793df8fa94af5251dab2febb034d2ad408.
 
-**Candidate context:** `75f1c5dcf412b5b37339dd438fda9d5db809e7c3` on `codex/final-ci-qualification`.
+## Initial customer and delivery path
 
-## One vertical hypothesis
+Start with US small businesses in home services, initially HVAC/plumbing operators. This is a segment hypothesis, not validated demand. It matches an existing home-services playbook and a narrow website/local-presence review can be delivered manually. The first path is direct, operator-assisted fulfillment. Agency resale and self-serve SaaS are later paths after repeatable delivery is demonstrated.
 
-Start with **HVAC and home services** as a single hypothesis. The current codebase has a plumber/HVAC playbook label and the proposed review can use public website evidence. However, accessible prospects, audit reliability, fulfillment capacity, and willingness to pay have not been demonstrated. Do not describe this vertical as validated; the public Claraud scan flow remains paused.
+## Offer and pricing hypothesis
 
-## Narrow offer proposal
+**Working offer:** one owner-authorized business website and local-presence review; evidence-linked observed issues; a prioritized remediation plan; one operator-led review call. Exclude implementation, rankings/leads guarantees, unsupported competitor comparisons, invented financial impact, and ongoing monitoring.
 
-**Working name:** Evidence-first local presence review.<br>
-**Scope:** one owner-authorized business website; an operator-reviewed report of observed site and local-presence issues; retrievable evidence for each finding; a short prioritized remediation roadmap; one 45-minute review call.<br>
-**Exclusions:** implementation, ranking or lead guarantees, revenue-loss estimates, competitor performance claims without verified data, ongoing monitoring, and agency resale.
+**Internal price-test hypothesis:** USD $500 for a fixed-scope one-time review. This is only a discovery anchor, not market validation, a published price, a quote, or permission to charge. The earlier CAD $500 idea remains a separate unvalidated Canadian hypothesis and is not evidence for US willingness to pay. Confirm scope, taxes, seller identity, agreement, refund/correction terms, delivery time, and fulfillment capacity before offering a price to anyone.
 
-**Price hypothesis:** CAD $500 one-time before applicable tax. This is a proposed owner decision, not a published price, quote, or validated willingness-to-pay. A current Canadian comparator lists audits from CAD $500 to $1,900, while another lists CAD $397 launch pricing and CAD $497 regular pricing; their scope and quality claims do not validate ProposalOS delivery. See [JPL Digital’s audit pricing](https://jpldigital.ca/seo-audits/) and [Studio DMLA’s website audit](https://studio-dmla.ca/website-health-audit), checked 2026-10-09.
+## Fulfillment and acceptance
 
-Do not promise a turnaround until five real audits establish operator time and quality. Do not take payment until a reviewed sample, customer agreement, invoice path, taxes, refund terms, legal seller identity, and fulfillment capacity are confirmed.
+1. Obtain an opt-in introduction and written authorization for the target website and scope.
+2. Confirm the owner’s goals, service area, customer-provided constraints, and permitted data.
+3. Run only after the source/runtime, disposable data-path, SSRF/egress, and provider-budget gates are satisfied.
+4. A human reviews each evidence source, finding, recommendation, price, and claim. Withhold results for degraded or unsupported evidence.
+5. Deliver privately with a review call. Record corrections and approval. Measure operator time and the same evidence again only with customer authorization.
+6. Use a manually reviewed agreement and invoice process. No autonomous checkout, charge, email, or fulfillment has been qualified.
 
-## Path A delivery and customer flow
+## Current readiness
 
-Use internal operator-assisted fulfillment for the first pilot. No agency partner is approved or contracted. The owner/operator must review evidence, recommendations, scope, pricing, and customer terms before delivery.
+- Validated segment or customer demand: **none**
+- Complete real audits and accepted proposals: **0**
+- Demonstration deliverable with independently scored QA: **none**
+- Approved warm/design-partner cohort or outreach: **none**
+- Agreement, invoice, and payment path: **not qualified**
+- Fulfillment effort, latency, and cost: **not measured**
 
-1. Warm, opt-in introduction; confirm the recipient is open to a conversation. No campaign or prospect scraping.
-2. Discovery call: goals and service area; current website/tools; access and authorization; the customer’s own priorities; constraints and success measures.
-3. After qualification, issue a written one-site scope, price, assumptions, exclusions, and delivery date. Customer accepts in writing.
-4. Collect only the authorized website and minimum context. Use a manual invoice only after the seller/payment process is verified. No automated charge path is qualified.
-5. Run evidence collection only after product/runtime gates pass. Operator checks every statement, source, feasibility, and customer-specific detail; withhold the report if trust state is degraded.
-6. Deliver the report and review call; record customer acceptance and requested corrections. Agree separate implementation scope before any work beyond diagnosis.
-7. With customer authorization, compare before/after observations using the same evidence method. Report observations, not causal business outcomes that were not measured.
+No outreach, customer contact, charge, or commitment was made. The public sample report is synthetic and cannot serve as proof of delivery.
 
-## Reusable operator artifacts
+## Minimum path to the first paid pilot
 
-**Discovery agenda (30 minutes):** (1) business and service area, (2) website and lead sources, (3) customer-stated problems, (4) authorization/access boundaries, (5) desired decision and next step. End with a scope decision; do not promise outcomes.
+1. Pass the disposable database/RLS and joined fixture-journey gates; resolve the source dependency-policy blocker.
+2. Qualify one authorized real US home-services website with a bounded network policy and explicit provider/model cost ceiling.
+3. Produce and human-score one evidence-backed report and proposal; record actual cost and fulfillment time.
+4. Confirm the customer’s acceptance of scope, price, agreement, privacy/retention terms, and delivery date.
+5. Have the owner approve any outreach and customer-facing terms. Invoice manually only after seller, tax, refund, and fulfillment details are verified.
 
-**Unsent follow-up draft:** “Thanks for speaking with me. I’ll confirm whether the one-site evidence review fits your goals and send a written scope, price, assumptions, and timing if it does. I won’t begin a scan or access private systems without your authorization.”
-
-**Manual tracker fields:** lead source and permission; business/vertical; authorized URL; discovery date; eligibility decision; scope/version; customer agreement; invoice status; run/source identity; evidence review; QA score; delivery date; corrections; customer feedback; verification date; retention/deletion date.
-
-**Onboarding/fulfillment checklist:** written consent and domain ownership or authorization; scope and exclusions accepted; test/data boundaries explained; run linked to source SHA and provider; evidence reviewed; degraded modules disclosed; claims/pricing approved; private delivery tested; support contact and correction window agreed; customer data retention documented.
-
-There are no names in an approved warm/design-partner cohort, no agreement or invoice has been created, and no outreach has been sent. A future outreach plan requires owner approval of the recipient list, data source, channel, jurisdiction, consent/opt-out handling, and message before anything is sent.
-
-## Readiness and shortest supported path
-
-The offer is **not pilot-ready**: there is no real audit-to-proposal proof, approved demonstration deliverable, scored QA cohort, verified fulfillment capacity, agreed seller/payment path, or customer authorization. The fastest supported route is to first clear the source publication and CI blockers; complete isolated database and browser-network qualification; run five authorized audits across three industries; review and score the resulting proposals; then approve one offer, agreement/invoice template, fulfillment owner, and opt-in design-partner cohort. Do not publish pricing or accept money before those steps pass.
+Do not use the USD or CAD hypothesis in public copy until willingness to pay and delivery economics are tested.

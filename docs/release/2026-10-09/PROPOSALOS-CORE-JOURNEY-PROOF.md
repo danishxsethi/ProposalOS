@@ -1,50 +1,48 @@
 # ProposalOS core-journey proof
 
-**Candidate source:** `75f1c5dcf412b5b37339dd438fda9d5db809e7c3` on `codex/final-ci-qualification`<br>
-**Qualification status:** no current end-to-end customer journey is qualified.
+**Evidence snapshot:** 2026-10-09 23:50 UTC
+**Code/test head:** fd85f2793df8fa94af5251dab2febb034d2ad408 on codex/clean-release-candidate-20261009
+**Journey verdict:** CORE_JOURNEY_BLOCKED
+**Completed end-to-end journeys:** 0
 
 ## Journey status
 
-| Step | Evidence in this session | Status |
-|---|---|---|
-| Create or choose a business | No authenticated tenant/database journey executed | NOT RUN |
-| Submit an authorized website URL | Claraud public scan intake is deliberately disabled and returns 503 | BLOCKED BY DESIGN |
-| Collect evidence and run audit modules | No approved properties, disposable database, or live provider invocation | NOT RUN |
-| Produce diagnosis and a three-tier proposal | No live audit result; no proposal artifact generated | NOT RUN |
-| Review evidence, scope, and claims | Unit and source checks cover trust boundaries only; no real report review | NOT QUALIFIED |
-| Securely share or download | Resolver/revocation unit coverage passed; no live share created, no actual PDF verified. Claraud PDF action says unavailable | PARTIAL SOURCE EVIDENCE |
-| Record customer follow-up | No email, direct message, payment, or customer record created | NOT RUN |
+| Step                                     | Verified evidence                                                                                                                                                                 | Result                                    |
+| ---------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------- |
+| Business intake and URL validation       | The authenticated POST /api/audit route validates input, persists a queued audit, and dispatches durable work. Its integration test mocks auth, Prisma, extraction, and dispatch. | Route behavior covered; no joined journey |
+| Data collection and evidence persistence | No worker was run on an authorized target or controlled HTTP fixture. Public Claraud scan intake remains disabled.                                                                | NOT RUN                                   |
+| Diagnosis                                | The diagnosis route requires a COMPLETE, TRUSTED audit, evidence snapshots, and complete module status. Existing tests mock persistence and graph calls.                          | Unit/route coverage only                  |
+| Proposal and QA                          | Proposal auto-ready tests exercise route status logic, but mock Prisma and the proposal compiler/QA boundary. No proposal was generated from an audit run.                        | Fixture unit evidence only                |
+| Authenticated preview                    | No preview was rendered from a persisted journey in this session.                                                                                                                 | NOT RUN                                   |
+| Public secure view or PDF                | No share link was created or resolved, and no PDF was generated or inspected.                                                                                                     | NOT RUN                                   |
+| Recorded next action                     | No customer follow-up, email, payment, or external action was performed.                                                                                                          | NOT RUN                                   |
 
-## What was verified
+The CI run on this candidate started the disposable PostgreSQL/PgBouncer services and passed the clean-database migration replay. The deterministic suite finished with 2,824 passed, 10 failed, and 13 skipped. All 10 failures were in three RLS-related suites that could not connect to localhost:6432. This is a connection failure and leaves tenant/RLS qualification blocked; it is not evidence of a data-isolation breach. A CI-only IPv4 endpoint and authenticated SQL preflight correction is prepared but still needs a fresh run.
 
-The focused local suite passed **47 tests across 10 files** on Node 24. It includes fail-closed Claraud public routes, synthetic sample-report labeling, cache namespace clearing, canonical proposal path handling, proposal share-token revocation and route authorization, revoked-token resolution, Stripe checkout authorization, and SSRF/auth architecture boundaries. All provider and persistence behavior in these tests is mocked or source-inspected; this is not a live product run.
+## Safety boundary and first blocker
 
-The revocation tests cover the super-admin route, rate-limited entry point, no-store dry run, explicit apply confirmation, exact target snapshot, tenant/proposal identity binding, audit record, idempotency, conflict handling, and invalidation through the resolver. The source Prisma wrapper places model queries inside the current interactive transaction. The unit test propagates audit-write failure, but PostgreSQL rollback and actual role middleware were not integration-tested. No revocation was executed against production.
+The existing Playwright file tests/e2e/critical-flows.test.ts is not a safe fixture journey to run as written: it targets example.com and ten external domains and includes a test-email flow. It was not run. Do not use it against a live site or email service. The public Claraud scan intake returns 503 by design while browser egress is unqualified.
 
-The public sample report is explicitly synthetic and states that no real website was audited. It is suitable only as a UI walkthrough, not as customer evidence. The Claraud report viewer suppresses unverified competitor comparisons and ROI claims, and the PDF control is disabled because no complete PDF path was proven in this session.
+The smallest product blocker is the absence of a controlled end-to-end harness that connects the actual intake, durable worker, evidence persistence, trusted diagnosis, proposal QA, authenticated preview, and safe delivery against disposable tenant data. Current route tests cover these boundaries separately with mocked persistence and providers; they cannot demonstrate the whole chain. No live Bedrock call was made because there is no approved inference budget, and arbitrary browser egress has not been qualified.
 
-## Historical runs are not current acceptance
+## Counts and measurements
 
-The preserved R4 and R7 summaries each report one run, zero trusted audits, one degraded audit, zero failed runs, and zero proposals. R4 records 55.358 seconds and $0.14; R7 records 83.101 seconds and $0.14. They are September 28 historical evidence, not runs of source commit `75f1c5d`, and they do not qualify a trusted customer proposal.
+- Real non-mocked business audit runs: **0**
+- Complete fixture route journeys: **0**
+- Real provider/Bedrock calls: **0**
+- Genuine proposals produced from an audit run: **0**
+- Independently scored proposal QA results: **0**
+- Candidate journey latency and provider cost: **not measured**
+- Customer-ready PDF or secure viewer artifact: **none**
 
-## Measured results
+The public sample report is synthetic and explicitly does not represent an audited business. Historical R4/R7 records are not this candidate’s evidence: each reported one degraded audit, zero trusted audits, and zero proposals.
 
-- Qualified real audit runs on this candidate: **0**
-- Audit modules executed against a real business property: **0**
-- Real Bedrock/provider calls: **0**
-- Customer proposals produced and independently scored: **0**
-- Proposal QA scores: **none**
-- Current audit-to-proposal latency or provider cost: **not measured**
-- Screenshots or customer-ready PDF artifacts: **none**
+## Minimum next proof
 
-No website was audited during this work. There was no approved property list or customer authorization, no isolated PostgreSQL/PgBouncer service, and no completed production-source-to-image provenance. The public scan path remains intentionally paused because browser request interception, DNS rebinding defense, redirect restrictions, private/metadata blocking, and bounded egress have not been proven.
+1. Use the CI disposable Postgres/PgBouncer stack, or another isolated ephemeral database, and complete migration, RLS, and queue-ownership checks.
+2. Add a controlled fixture test that invokes the real API handlers and durable worker path while stubbing only outbound collection/model calls and disabling email, billing, outreach, and external jobs.
+3. Carry the same persisted fixture through diagnosis, proposal QA, authenticated preview, and a locally generated PDF or validated secure web response.
+4. Record every stub explicitly. This proves a fixture journey only.
+5. Separately authorize a property, network boundary, Bedrock model, and inference-cost ceiling before the first real audit. Review and score that proposal before calling it accepted.
 
-## Exact next qualification sequence
-
-1. Provide an isolated disposable PostgreSQL/PgBouncer test environment and pass migration replay, tenant/RLS, queue ownership, and recovery tests without production data.
-2. Approve a small set of representative website properties, permission scope, provider/model use, and a cost ceiling. Do not use customer URLs as tests without approval.
-3. Run at least five complete audits across three industries on one reviewed source/image identity; record actual modules, evidence, degraded states, latency, cost, and operator effort.
-4. Withhold proposals when evidence or module quality is insufficient. Independently score every output against a written evidence, feasibility, pricing, and claim rubric; the initial target is at least 8/10.
-5. Verify proposal viewer, private storage, PDF, revocation, and follow-up in the same tenant context using test data, then repeat the full user journey end to end.
-
-Until those steps pass, the product is **not demo-ready** and no sample report should be represented as a customer result.
+Until a joined fixture journey passes, the core journey remains blocked. A real audit or customer-ready proposal has not been demonstrated.

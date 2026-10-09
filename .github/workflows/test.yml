@@ -76,7 +76,7 @@ jobs:
           PROPOSALOS_PGBOUNCER_CONTAINER: proposalos-pgbouncer
           PROPOSALOS_POSTGRES_CONTAINER: proposal_engine_db
           PROPOSALOS_RLS_SET_ROLE_PASSWORD: '0'
-          PROPOSALOS_PGBOUNCER_HOST: localhost
+          PROPOSALOS_PGBOUNCER_HOST: 127.0.0.1
           PROPOSALOS_PGBOUNCER_PORT: '6432'
           PROPOSALOS_TEST_DB_PORT: '5435'
           NODE_ENV: test

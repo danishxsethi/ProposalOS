@@ -1,59 +1,61 @@
-# ProposalOS RC execution report
+# ProposalOS clean release-candidate execution report
 
-**As of:** 2026-10-09<br>
-**Repository:** `Danish-Sethi/ProposalOS` (public; repository ID `1158247398`)<br>
-**Working branch:** `codex/final-ci-qualification`<br>
-**Source commit:** `75f1c5dcf412b5b37339dd438fda9d5db809e7c3` (`security: close public Claraud surfaces and trust claims`)<br>
-**Technical verdict:** `SOURCE_RC_BLOCKED`<br>
-**Commercial verdict:** `DEMO_NOT_READY`
+**Evidence snapshot:** 2026-10-09 23:50 UTC
+**Repository:** Danish-Sethi/ProposalOS (public; repository ID 1158247398)
+**Candidate:** branch codex/clean-release-candidate-20261009, draft PR #6 against codex/ssrf-collector-boundary
+**Code/test head at snapshot:** fd85f2793df8fa94af5251dab2febb034d2ad408
+**Technical verdict:** CLEAN_SOURCE_RC_PUBLISHED; CI acceptance remains blocked
+**Product verdict:** CORE_JOURNEY_BLOCKED
+**Commercial verdict:** PILOT_NOT_READY
 
-## Source identity and preservation
+This report update is a documentation-only follow-up to the code/test head above. The exact final branch SHA is the head of PR #6 after this report commit.
 
-The source chain is `main c5afb72 → AWS base 820598c → PR #4 785425f → PR #5 347852d → local qualification commits f836134, 9738f49, 926b21e, c7b3df8, 617a126, 0d0bbaa → 75f1c5d`. The local branch descends from PR #5. At the source commit, it is 132 commits ahead of `main` and differs across 1,195 paths.
+## Candidate integrity and preservation
 
-Exact protected identities: `main c5afb723638a90e88c93067f8c2893dc1666d879`; VM backup `4a77f4c5f4137e4598f2a9ee0621ae2e5188d72b`; AWS backup/base `820598c3e06d69c79a0724c6460a67b8d8ab704b`; PR #4 `785425ff07082b366e1c8ea17ac74c0119f66b9b`; PR #5 `347852d35473a0f60ce5521ff1d2d07295ddd5f7`. The six qualification ancestors are `f836134e3cb840dc01f2b529ec81428e54d3e888`, `9738f49f55cd998ca76bbd449ecb186c9ec67cc8`, `926b21e44121ba3e36cfb563441df0d4f57fa2a2`, `c7b3df802d6fc7536fc9b9d863276a2ebe5f325c`, `617a1260dcf20021b79a15c60cd639d4d5c780f3`, and `0d0bbaa2ef5fbbe2b8ea493c01f63aa622b80fb9`. The current source commit is `75f1c5dcf412b5b37339dd438fda9d5db809e7c3`.
+The candidate starts at published PR #5 head 347852d35473a0f60ce5521ff1d2d07295ddd5f7. Source snapshot 0e9e57f849521be399bfade6985de585cab50a3b has the exact Git tree of intended local source 75f1c5dcf412b5b37339dd438fda9d5db809e7c3 (tree 9294530c37cb34568f8e18c90eeeed24282f4fc1). Documentation snapshot ac7c2027818aa85255730fa40af9adb9b5c656b2 has the exact tree of intended local documentation state 312026a815786a0d3a5709cc724a376a19ec8868 (tree 1c119407b4921add66c880163f2e524c982dbbf2). Follow-up commits split independent CI jobs and align stale tests with current service contracts; they do not include either suspect local-only commit.
 
-The remote preservation refs were read again and still resolve to VM backup `4a77f4c`, AWS backup/base `820598c`, PR #4 `785425f`, PR #5 `347852d`, and `main c5afb72`. PR #4 and PR #5 remain open, draft, and unmerged. No protected ref, original checkout, production service, or history was changed. The source commit is local only; it was not pushed and no new PR was opened.
+The candidate descends from PR #5. Commits 617a1260dcf20021b79a15c60cd639d4d5c780f3 and 0d0bbaa2ef5fbbe2b8ea493c01f63aa622b80fb9 are not ancestors. No force push, merge, deployment, protected-ref edit, or production mutation occurred. PR #4 and #5 remain open drafts.
 
-The encrypted local bundle `ProposalOS-qualification-0d0bbaa.bundle.enc` has ciphertext SHA-256 `0725F4860699D6C72B5DF39D01510F1DE5FE5F36EC4EAC69383C690FA7573F24`, matching its local recovery note. It predates source commit `75f1c5d`; its independent decryption was blocked by desktop policy, so recovery is not independently verified and it is not a portable off-device backup. Five older plaintext artifacts remain under `%TEMP%`: `ProposalOS-qualification-9738f49.bundle`, `ProposalOS-qualification-9738f49.pass`, `ProposalOS-qualification-9738f49.crypt.cjs`, `ProposalOS-qualification-9738f49.verify.bundle`, and `ProposalOS-qualification-9738f49.openssl.bundle`. They were not removed because the prerequisite recovery verification is unavailable. Do not treat the ciphertext hash as proof of decryptability.
+Protected refs last verified: main c5afb723638a90e88c93067f8c2893dc1666d879; VM backup 4a77f4c5f4137e4598f2a9ee0621ae2e5188d72b; AWS base/backup 820598c3e06d69c79a0724c6460a67b8d8ab704b; PR #4 785425ff07082b366e1c8ea17ac74c0119f66b9b; PR #5 347852d35473a0f60ce5521ff1d2d07295ddd5f7.
 
-The audit evidence files `docs/security/audit-evidence/npm-audit-full.json` and `npm-audit-production.json` were regenerated locally and intentionally excluded from the source commit.
+The encrypted local bundle ProposalOS-qualification-0d0bbaa.bundle.enc has recorded ciphertext SHA-256 0725F4860699D6C72B5DF39D01510F1DE5FE5F36EC4EAC69383C690FA7573F24, matching its note, but decryption and recovery were not independently verified because desktop policy blocked that operation. It predates the final source and documentation. Five older plaintext artifacts remain under %TEMP% and were not removed because recovery was not verified: ProposalOS-qualification-9738f49.bundle, ProposalOS-qualification-9738f49.pass, ProposalOS-qualification-9738f49.crypt.cjs, ProposalOS-qualification-9738f49.verify.bundle, and ProposalOS-qualification-9738f49.openssl.bundle. Do not treat the public candidate as a substitute for a verified portable encrypted backup.
 
-## Work completed
+## Publication and secret scanning
 
-- Redis cache clearing is limited to ProposalOS cache keys; the application no longer calls a database-wide Redis flush or exposes destructive shared-store clearing.
-- Claraud public lead/email and scan intake now fails closed. The public scan form and test-email endpoint are disabled while browser egress and the real delivery path remain unqualified.
-- Public marketing, pricing, industry, blog, sample-report, and report-viewer copy no longer presents unverified customers, metrics, competitor comparisons, ROI, pricing, or delivery claims as facts. The sample report is explicitly synthetic. Tokenized reports are noindex, avoid sending share tokens to analytics, and disclose preliminary status; unsupported PDF delivery is disabled.
-- Added focused regression tests and corrected the canonical proposal-compiler path test for Windows separators.
+Draft PR #6 is at https://github.com/Danish-Sethi/ProposalOS/pull/6, base codex/ssrf-collector-boundary. The clean candidate’s new ancestry excludes the two suspect commits. Gitleaks 8.30.0 scanned all four candidate commits after PR #5 with redaction and found zero findings; the PR and push Gitleaks workflows also passed on fd85f2793df8fa94af5251dab2febb034d2ad408. The staged/worktree diff scan was clean.
 
-## Local qualification evidence
+A full-directory scan still identifies one inherited generic-key-shaped value in scripts/migration/production-legacy-migrations.json. The blob is identical to PR #5; it was not newly introduced or changed here. Its provenance is unresolved and should be handled as a separate historical fixture/secret decision. Three already-public proposal-share tokens remain UNKNOWN / OWNER_ACTION_REQUIRED. GitHub secret-scanning alert #11 for a Google-key-shaped fixture remains unresolved; no token URL was opened, no production record inspected, and no credential or token was revoked.
 
-| Check | Result |
-|---|---|
-| Root TypeScript (`npx tsc --noEmit`) | PASS |
-| Root ESLint | PASS, 0 errors and 1,825 existing warnings |
-| Claraud changed TS/TSX files ESLint | PASS |
-| Claraud full-repository ESLint | BLOCKED: 102 errors and 53 warnings; modified TS/TSX paths pass targeted lint, but findings were not compared with the base. CI does not run this command |
-| Focused security/regression set | PASS: 10 files, 47 tests, Node 24 |
-| Root production build | PASS with fake build-only environment values and loopback port 1 database URL; no provider call or database connection |
-| Claraud production build | PASS, 36 static pages generated |
-| Prisma schema validation | PASS |
-| Dependency policy | BLOCKED: production tree 0 critical/high/moderate/low; full tree 0 critical, 12 high, 2 moderate, 1 low |
-| PostgreSQL migration replay, tenant/RLS integration | BLOCKED: no disposable PostgreSQL/PgBouncer runtime available; production/staging were not used |
-| Browser/Chromium SSRF and production egress | NOT QUALIFIED |
+## Qualification evidence
 
-The 12 high findings remain in two development-tool advisory clusters: `GHSA-vfj7-8cjw-p6xm` (`braces`, no fixed release in the audited tree) and `GHSA-c475-qrg2-pj4r` (`basic-ftp`, fixed 6.2.1 is outside the current `get-uri` 5.x range). No major upgrade or exception was applied. See the [braces advisory](https://github.com/advisories/GHSA-vfj7-8cjw-p6xm) and [basic-ftp advisory](https://github.com/advisories/GHSA-c475-qrg2-pj4r).
+| Gate                                       | Evidence at snapshot                                                 | Result                                                                                                       |
+| ------------------------------------------ | -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| GitHub candidate CI                        | Run 38005912371, exact head fd85f2793df8fa94af5251dab2febb034d2ad408 | FAIL                                                                                                         |
+| TypeScript                                 | Test job 114074546718                                                | PASS                                                                                                         |
+| Root lint                                  | Test job 114074546718; zero-error gate                               | PASS                                                                                                         |
+| Prisma schema                              | Test job 114074546718                                                | PASS                                                                                                         |
+| Disposable PostgreSQL/PgBouncer startup    | Test job 114074546718                                                | PASS                                                                                                         |
+| Empty-database migration replay/drift gate | Test job 114074546718                                                | PASS                                                                                                         |
+| Deterministic tests and tenant/RLS         | Test job 114074546718                                                | FAIL: 10 failed, 2,824 passed, 13 skipped; three RLS suites could not connect to PgBouncer at localhost:6432 |
+| Claraud build                              | Job 114074546618 in run 38005912371                                  | PASS                                                                                                         |
+| Dependency advisory policy                 | Job 114074546727 in run 38005912371                                  | FAIL                                                                                                         |
+| Gitleaks                                   | Push run 38005908798; PR run 38005912406                             | PASS                                                                                                         |
 
-## Security and publication gate
+Production dependency audit reports zero findings. The full dependency tree reports 12 HIGH, 2 moderate, and 1 low findings. The HIGHs cluster into two development-tool advisories:
 
-The current staged source diff passed Gitleaks 8.30.0 with redaction: zero findings. A scan of unpublished history from PR #5 to the prior local tip found two `generic-api-key` findings in test files in commit `617a126`; those exact values do not appear in any of the 20 currently published GitHub branches. The later `0d0bbaa` commit changed the tests to generate values at runtime, but that does not remove the earlier literals from the commit graph. Their provenance is unverified, so pushing this ancestry would publish them for the first time. The branch is preserved locally and publication is blocked pending owner classification or an approved way to produce a clean review history.
+| Advisory                                                                 | Locked package path and reachability                                                                                                                                                                   | Fix status                                                                                                                                                                                                                               | Owner decision if no compatible fix is validated                                                                                                                                                                                        |
+| ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [GHSA-vfj7-8cjw-p6xm](https://github.com/advisories/GHSA-vfj7-8cjw-p6xm) | braces 3.0.3 through Tailwind 3.4.19 (chokidar/micromatch) and Next ESLint tooling (fast-glob/micromatch). Dev-only; affected operation is parsing deeply nested brace patterns in build/lint tooling. | GitHub advisory lists no patched braces release. No dependency-tree removal was validated.                                                                                                                                               | Approve only a temporary exception for this exact advisory and enumerated dev-only paths, expiring in 30 days, with a production-tree zero-HIGH gate and recheck after upstream updates. Not approved or implemented.                   |
+| [GHSA-c475-qrg2-pj4r](https://github.com/advisories/GHSA-c475-qrg2-pj4r) | basic-ftp 5.3.1 through release-it 19.2.4 → proxy-agent 6.5.0 → pac-proxy-agent 7.2.0 → get-uri 6.0.5. Dev-only; exploit requires the FTP client to parse an attacker-controlled directory listing.    | Advisory fix is basic-ftp 6.2.1; get-uri 6.0.5 requests ^5.0.2. The latest inspected get-uri 8.0.1 still requests ^5.3.1, so no semver-compatible parent update removes the finding. A cross-major basic-ftp override was not validated. | Prefer a separately tested compatible parent release/override. If none is available, request an exact, dev-only exception expiring in 30 days, preserving the production gate and requiring a fresh audit. Not approved or implemented. |
 
-Separately, three bearer-like proposal-share values in already-public Git history remain `UNKNOWN / OWNER_ACTION_REQUIRED`; no old URL was opened and no production record was inspected or changed. GitHub secret-scanning alert #11 (`google_api_key`) remains open. Its fixture provenance and provider validity are unknown; no rotation was performed.
+The paths and versions above came from npm explain on the candidate lockfile and the current package metadata. No threshold was lowered, no broad suppression added, and no exception or major upgrade applied. Both advisories remain release-blocking under the repository’s full-tree HIGH policy.
 
-The public `/api/lead`, `/api/scan`, and test-email surfaces are fail-closed in this source candidate, but AWS still serves the October 6 release. These source changes have not contained those surfaces in production.
+Prior local evidence remains: root TypeScript and lint passed; the root and Claraud builds passed; Prisma schema validation passed. Claraud full-repository lint previously reported 102 errors and 53 warnings; that baseline was not compared against PR #5 and is not a required CI job. It is not claimed as passing.
 
-## CI and final decision
+## Security and operations still open
 
-No GitHub Actions run exists for source commit `75f1c5dcf412b5b37339dd438fda9d5db809e7c3` because it has not been published. The latest PR #5 checks remain failed: Test Suite and Claraud build in run `37811073144`, and Gitleaks runs `37811046946` and `37811073142`. PR #4/#5 remain unchanged. A local build or earlier historical acceptance does not satisfy CI for this SHA.
+AWS still serves the October 6 images without clean Git-SHA provenance. The source Terraform contains the transferred-owner OIDC subject, while the last live IAM readback still had old-owner subjects; no IAM update or deployment occurred. Three public share-token dispositions, GHAS alert #11, browser/Chromium egress qualification, production data parity, private S3 delivery, scheduler authority, rollback exercise, and GCP retirement remain open. Historical GCP billing was read as disabled and the Cloud Build trigger inventory as empty; neither was changed in this work.
 
-**Verdict:** `SOURCE_RC_BLOCKED` / `DEMO_NOT_READY`. The immediate owner action is to classify the two unpublished test literals as synthetic from independent provenance, or authorize a safe review-history strategy. Do not paste token values into chat. After that, rerun the full redacted scan and only then publish a draft PR against `codex/ssrf-collector-boundary`.
+The RLS test failure was a connection failure, not a reported cross-tenant data leak: the job could not reach localhost:6432, and the shim suite hid its underlying psql error behind a generic stack-readiness message. Clean-database migration replay passed against direct PostgreSQL. A follow-up change now targets PgBouncer at 127.0.0.1, adds an authenticated app_user SQL preflight, and makes connection diagnostics identify the failed endpoint without printing a connection string. That correction has not yet been pushed or run in CI.
+
+**Decision at this snapshot:** the clean source candidate is published and reviewable, but it is not CI-accepted. The dependency policy and RLS integration checks failed. No merge, deploy, live audit, provider call, customer outreach, email, payment, AWS/GCP mutation, or production database operation occurred.

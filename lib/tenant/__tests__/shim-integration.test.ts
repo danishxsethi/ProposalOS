@@ -6,15 +6,27 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 
 const REPO_ROOT = process.cwd();
 const TEST_DB = process.env.PROPOSALOS_RLS_TEST_DB || 'proposal_rls_smoke';
+const DB_HOST = process.env.PROPOSALOS_TEST_DB_HOST || 'localhost';
+const DB_PORT = process.env.PROPOSALOS_TEST_DB_PORT || '5435';
+const POOL_HOST = process.env.PROPOSALOS_PGBOUNCER_HOST || 'localhost';
+const POOL_PORT = process.env.PROPOSALOS_PGBOUNCER_PORT || '6432';
 const POSTGRES_PASSWORD = process.env.PROPOSALOS_TEST_DB_ADMIN_PASSWORD || 'password';
 const APP_PASSWORD = process.env.PROPOSALOS_TEST_DB_APP_PASSWORD || 'password';
-const DIRECT_URL = process.env.PROPOSALOS_RLS_DIRECT_URL ||
-  `postgresql://postgres:${POSTGRES_PASSWORD}@localhost:5435/${TEST_DB}`;
-const POOLED_POSTGRES_URL = `postgresql://postgres:${POSTGRES_PASSWORD}@localhost:6432/${TEST_DB}?pgbouncer=true`;
-const POOLED_APP_USER_URL = process.env.PROPOSALOS_RLS_APP_URL ||
-  `postgresql://app_user:${APP_PASSWORD}@localhost:6432/${TEST_DB}?pgbouncer=true`;
-const RLS_MIGRATION_PATH = resolve(REPO_ROOT, 'prisma/migrations/20260429093000_enable_rls/migration.sql');
-const BYPASS_MIGRATION_PATH = resolve(REPO_ROOT, 'prisma/migrations/20260501014500_rls_bypass_policies/migration.sql');
+const DIRECT_URL =
+  process.env.PROPOSALOS_RLS_DIRECT_URL ||
+  `postgresql://postgres:${POSTGRES_PASSWORD}@${DB_HOST}:${DB_PORT}/${TEST_DB}`;
+const POOLED_POSTGRES_URL = `postgresql://postgres:${POSTGRES_PASSWORD}@${POOL_HOST}:${POOL_PORT}/${TEST_DB}?pgbouncer=true`;
+const POOLED_APP_USER_URL =
+  process.env.PROPOSALOS_RLS_APP_URL ||
+  `postgresql://app_user:${APP_PASSWORD}@${POOL_HOST}:${POOL_PORT}/${TEST_DB}?pgbouncer=true`;
+const RLS_MIGRATION_PATH = resolve(
+  REPO_ROOT,
+  'prisma/migrations/20260429093000_enable_rls/migration.sql'
+);
+const BYPASS_MIGRATION_PATH = resolve(
+  REPO_ROOT,
+  'prisma/migrations/20260501014500_rls_bypass_policies/migration.sql'
+);
 
 type RuntimeModules = {
   prisma: PrismaClient;
@@ -56,21 +68,26 @@ function runShell(command: string) {
 function ensureLocalStack() {
   try {
     runShell(
-      `PGPASSWORD=${POSTGRES_PASSWORD} psql -h localhost -p 5435 -U postgres -d ${TEST_DB} -c 'SELECT 1'`
+      `PGPASSWORD=${POSTGRES_PASSWORD} psql -X -w -h ${DB_HOST} -p ${DB_PORT} -U postgres -d ${TEST_DB} -c 'SELECT 1'`
     );
+  } catch {
+    throw new Error(`Direct PostgreSQL SQL probe failed at ${DB_HOST}:${DB_PORT}/${TEST_DB}.`);
+  }
+
+  try {
     runShell(
-      `PGPASSWORD=${POSTGRES_PASSWORD} psql -h localhost -p 6432 -U app_user -d ${TEST_DB} -c 'SELECT 1'`
+      `PGPASSWORD=${APP_PASSWORD} psql -X -w -h ${POOL_HOST} -p ${POOL_PORT} -U app_user -d ${TEST_DB} -c 'SELECT 1'`
     );
   } catch {
     throw new Error(
-      'Local Postgres + PgBouncer stack is not ready for shim integration tests. Start the Phase 2.2 local stack before running this suite.'
+      `Authenticated app_user SQL probe failed through PgBouncer at ${POOL_HOST}:${POOL_PORT}/${TEST_DB}.`
     );
   }
 }
 
 function assertPooledEndpointConfiguration() {
   const poolMode = runShell(
-    `PGPASSWORD=${POSTGRES_PASSWORD} psql -h localhost -p 6432 -U postgres -d pgbouncer -tAc 'SHOW CONFIG' | awk -F'|' '$1=="pool_mode"{print $2}'`
+    `PGPASSWORD=${POSTGRES_PASSWORD} psql -X -w -h ${POOL_HOST} -p ${POOL_PORT} -U postgres -d pgbouncer -tAc 'SHOW CONFIG' | awk -F'|' '$1=="pool_mode"{print $2}'`
   )
     .trim()
     .split('\n')
@@ -80,11 +97,19 @@ function assertPooledEndpointConfiguration() {
     throw new Error(`Expected PgBouncer pool_mode=transaction, received "${poolMode}"`);
   }
 
+  let pooledUrl: URL;
+  try {
+    pooledUrl = new URL(POOLED_APP_USER_URL);
+  } catch {
+    throw new Error('Expected a valid pooled app URL for the RLS test endpoint.');
+  }
   if (
-    !POOLED_APP_USER_URL.includes('localhost:6432') ||
-    !POOLED_APP_USER_URL.includes('pgbouncer=true')
+    pooledUrl.hostname !== POOL_HOST ||
+    pooledUrl.port !== POOL_PORT ||
+    pooledUrl.pathname !== `/${TEST_DB}` ||
+    pooledUrl.searchParams.get('pgbouncer') !== 'true'
   ) {
-    throw new Error(`Expected pooled app URL to target PgBouncer: ${POOLED_APP_USER_URL}`);
+    throw new Error(`Expected pooled app URL to target ${POOL_HOST}:${POOL_PORT}/${TEST_DB}.`);
   }
 }
 
@@ -93,9 +118,7 @@ function resetSchemaAndRls() {
     `PGPASSWORD=${POSTGRES_PASSWORD} psql -h localhost -p 5435 -U postgres -d ${TEST_DB} -c 'DROP SCHEMA public CASCADE; CREATE SCHEMA public;'`
   );
 
-  runShell(
-    `DATABASE_URL='${DIRECT_URL}' DIRECT_URL='${DIRECT_URL}' npx prisma migrate deploy`
-  );
+  runShell(`DATABASE_URL='${DIRECT_URL}' DIRECT_URL='${DIRECT_URL}' npx prisma migrate deploy`);
 
   runShell(
     `PGPASSWORD=${POSTGRES_PASSWORD} psql -h localhost -p 5435 -U postgres -d ${TEST_DB} -c 'GRANT ALL ON SCHEMA public TO app_user; GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO app_user; GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO app_user;'`

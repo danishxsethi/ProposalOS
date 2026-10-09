@@ -72,6 +72,16 @@ if ! pg_isready -h "$POOL_HOST" -p "$POOL_PORT" -U "$APP_USER" -d "$RLS_DB" >/de
   exit 3
 fi
 
+# pg_isready only confirms that a listener answers; it does not verify client
+# authentication or that PgBouncer can reach the target database. Exercise the
+# same restricted role and endpoint that the RLS tests use before starting Vitest.
+if ! PGPASSWORD="$APP_PASSWORD" psql -X -w -v ON_ERROR_STOP=1 -h "$POOL_HOST" -p "$POOL_PORT" \
+  -U "$APP_USER" -d "$RLS_DB" -tAc 'SELECT 1' >/dev/null; then
+  printf 'PgBouncer answered readiness but the authenticated app_user SQL probe failed at %s:%s for database %s.\n' \
+    "$POOL_HOST" "$POOL_PORT" "$RLS_DB" >&2
+  exit 3
+fi
+
 printf 'Test DB bootstrap complete. App DB: %s; RLS DB: %s; RLS endpoint: %s:%s (transaction pool).\n' \
   "$APP_DB" "$RLS_DB" "$POOL_HOST" "$POOL_PORT"
 
