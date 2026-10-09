@@ -11,20 +11,14 @@
 import { NextResponse } from 'next/server';
 
 import { logger } from '@/lib/logger';
+import { verifyAdminOrCronAuth } from '@/lib/middleware/adminAuth';
 import { prisma } from '@/lib/prisma';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(req: Request) {
-  // Admin-only: require CRON_SECRET or ADMIN_API_KEY header
-  const authHeader = req.headers.get('authorization');
-  const isValid =
-    (process.env.ADMIN_API_KEY && authHeader === `Bearer ${process.env.ADMIN_API_KEY}`) ||
-    (process.env.CRON_SECRET && authHeader === `Bearer ${process.env.CRON_SECRET}`);
-
-  if (!isValid) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const authError = await verifyAdminOrCronAuth(req);
+  if (authError) return authError;
 
   const { searchParams } = new URL(req.url);
   const graphName = searchParams.get('graphName') ?? undefined;

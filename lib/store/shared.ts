@@ -79,7 +79,8 @@ export interface SharedStore {
   del(key: string): Promise<void>;
 
   /**
-   * Clear all keys in the store. Mainly for admin/tests.
+   * Clear an isolated in-memory store. Production adapters intentionally omit
+   * this operation because they share Redis with queues, rate limits, and locks.
    */
   clear?(): Promise<void>;
 }
@@ -193,9 +194,6 @@ function makeUpstashAdapter(config: { url: string; token: string }): SharedStore
     async del(key) {
       await request(`/del/${encodeURIComponent(key)}`, { method: 'POST' });
     },
-    async clear() {
-      await request(`/flushdb`, { method: 'POST' });
-    },
   };
 }
 
@@ -295,9 +293,6 @@ function makeRedisAdapter(redis: import('ioredis').Redis): SharedStore {
     },
     async del(key) {
       await redis.del(key);
-    },
-    async clear() {
-      await redis.flushdb();
     },
   };
 }

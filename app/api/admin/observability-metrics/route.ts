@@ -14,18 +14,14 @@
 
 import { NextResponse } from 'next/server';
 
+import { verifyAdminOrCronAuth } from '@/lib/middleware/adminAuth';
 import { prisma } from '@/lib/prisma';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(req: Request) {
-  const authHeader = req.headers.get('authorization');
-  const isValid =
-    (process.env.ADMIN_API_KEY && authHeader === `Bearer ${process.env.ADMIN_API_KEY}`) ||
-    (process.env.CRON_SECRET && authHeader === `Bearer ${process.env.CRON_SECRET}`);
-  if (!isValid) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const authError = await verifyAdminOrCronAuth(req);
+  if (authError) return authError;
 
   const { searchParams } = new URL(req.url);
   const nameFilter = searchParams.get('name') ?? undefined;

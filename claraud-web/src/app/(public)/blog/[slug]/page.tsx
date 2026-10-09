@@ -1,10 +1,11 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 
-import { ArrowLeft, Clock, User } from 'lucide-react';
+import type { ComponentPropsWithoutRef } from 'react';
+
+import { ArrowLeft, Clock } from 'lucide-react';
 import { MDXRemote } from 'next-mdx-remote/rsc';
 
-import { ScanInput } from '@/components/scan/scan-input';
 import { JsonLd } from '@/components/shared/json-ld';
 import { SectionWrapper } from '@/components/shared/section-wrapper';
 import { Badge } from '@/components/ui/badge';
@@ -28,55 +29,52 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
 }
 
 const components = {
-  h1: (props: any) => (
+  h1: (props: ComponentPropsWithoutRef<'h1'>) => (
     <h1 className="text-3xl md:text-4xl font-bold text-white mb-6 mt-12" {...props} />
   ),
-  h2: (props: any) => (
+  h2: (props: ComponentPropsWithoutRef<'h2'>) => (
     <h2 className="text-2xl md:text-3xl font-bold text-white mb-4 mt-10" {...props} />
   ),
-  h3: (props: any) => (
+  h3: (props: ComponentPropsWithoutRef<'h3'>) => (
     <h3 className="text-xl md:text-2xl font-bold text-white mb-4 mt-8" {...props} />
   ),
-  p: (props: any) => <p className="text-text-secondary text-lg leading-relaxed mb-6" {...props} />,
-  ul: (props: any) => (
+  p: (props: ComponentPropsWithoutRef<'p'>) => (
+    <p className="text-text-secondary text-lg leading-relaxed mb-6" {...props} />
+  ),
+  ul: (props: ComponentPropsWithoutRef<'ul'>) => (
     <ul className="list-disc list-inside mb-6 space-y-2 text-text-secondary" {...props} />
   ),
-  ol: (props: any) => (
+  ol: (props: ComponentPropsWithoutRef<'ol'>) => (
     <ol className="list-decimal list-inside mb-6 space-y-2 text-text-secondary" {...props} />
   ),
-  li: (props: any) => <li className="text-lg" {...props} />,
-  blockquote: (props: any) => (
+  li: (props: ComponentPropsWithoutRef<'li'>) => <li className="text-lg" {...props} />,
+  blockquote: (props: ComponentPropsWithoutRef<'blockquote'>) => (
     <blockquote
       className="border-l-4 border-blue-500 pl-6 py-2 italic bg-blue-500/5 rounded-r-xl mb-6 text-white"
       {...props}
     />
   ),
-  code: (props: any) => (
+  code: (props: ComponentPropsWithoutRef<'code'>) => (
     <code
       className="bg-white/10 rounded px-1.5 py-0.5 text-blue-400 font-mono text-sm"
       {...props}
     />
   ),
-  pre: (props: any) => (
+  pre: (props: ComponentPropsWithoutRef<'pre'>) => (
     <pre
       className="bg-[#0d1117] p-6 rounded-2xl border border-white/10 overflow-x-auto mb-8 font-mono text-sm"
       {...props}
     />
   ),
-  strong: (props: any) => <strong className="text-white font-bold" {...props} />,
-  a: (props: any) => (
+  strong: (props: ComponentPropsWithoutRef<'strong'>) => (
+    <strong className="text-white font-bold" {...props} />
+  ),
+  a: ({ href, ...props }: ComponentPropsWithoutRef<'a'>) => (
     <Link
       className="text-blue-400 hover:text-blue-300 underline transition-colors"
       {...props}
-      href={props.href || '#'}
+      href={href || '#'}
     />
-  ),
-  ScanCTA: () => (
-    <div className="my-12 p-8 glass rounded-3xl border border-blue-500/30 text-center">
-      <h3 className="text-xl font-bold text-white mb-4">Want to know your exact score?</h3>
-      <p className="text-text-secondary mb-6">Run a free 30-second audit of your business.</p>
-      <ScanInput variant="compact" />
-    </div>
   ),
 };
 
@@ -200,11 +198,12 @@ export default async function BlogPost({ params }: { params: Promise<{ slug: str
               Found this helpful?
             </h3>
             <p className="text-text-secondary mb-8 relative z-10 text-lg">
-              Scan your business for free and get actionable insights in 30 seconds.
+              Claraud is qualifying its operator-assisted pilot. Public self-service scan intake is
+              paused.
             </p>
-            <div className="max-w-md mx-auto relative z-10">
-              <ScanInput />
-            </div>
+            <Link href="/pricing" className="relative z-10 text-blue-300 underline">
+              Check pilot availability
+            </Link>
           </div>
         </div>
       </SectionWrapper>

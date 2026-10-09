@@ -21,20 +21,25 @@
  * - Max 5 redirect hops (prevent infinite loops)
  * - Blocks cloud metadata endpoints (169.254.169.254, metadata.google.internal)
  *
- * Known residual (TOCTOU / DNS rebinding):
- * - validateUrl resolves DNS at validation time; fetch() re-resolves at connect time.
- *   An attacker can return a public IP at validation, then a private IP at connect
- *   (DNS TTL = 0 rebinding). Proper mitigation requires pinning the resolved IP
- *   for the connection (e.g., custom DNS resolver or undici dispatcher). This is
- *   tracked as a Stage-1 residual — safeFetch reduces but does not eliminate the
- *   attack surface. The redirect-chain validation closes the most common SSRF
- *   bypass (open redirect to metadata).
+ * DNS rebinding protection:
+ * - urlValidator resolves all A/AAAA records with the OS resolver, rejects any
+ *   non-public address, and returns the approved set.
+ * - Each request hop uses a dedicated Undici dispatcher that returns only that
+ *   validated set to the connector. The URL hostname remains unchanged, keeping
+ *   normal TLS SNI and certificate hostname verification enabled.
+ * - Caller-supplied and global proxy dispatchers are not used.
+ *
+ * Browser navigation is separate: Chromium resolves names itself. Request
+ * interception revalidates each URL but cannot pin Chromium's socket address;
+ * arbitrary browser audits still require enforced network egress isolation.
  *
  * Fix for register #5 — SSRF urlValidator built but not wired. [#5]
  */
 
+import { Agent } from 'undici';
+
 import { logger } from '@/lib/logger';
-import { validateUrl } from '@/lib/security/urlValidator';
+import { type ResolvedAddress, validateUrl } from '@/lib/security/urlValidator';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -56,9 +61,10 @@ export class SsrfBlockedError extends Error {
   public readonly reason: string;
 
   constructor(url: string, reason: string) {
-    super(`SSRF blocked: ${url} — ${reason}`);
+    const safeUrl = safeUrlForDiagnostics(url);
+    super(`SSRF blocked: ${safeUrl} — ${reason}`);
     this.name = 'SsrfBlockedError';
-    this.blockedUrl = url;
+    this.blockedUrl = safeUrl;
     this.reason = reason;
   }
 }
@@ -128,34 +134,48 @@ export async function safeFetch(
   const followRedirects = options.followRedirects !== false;
   const maxResponseBytes = options.maxResponseBytes ?? MAX_RESPONSE_BYTES;
 
-  let currentUrl = await validateAndThrow(url, allowHttp);
+  let target = await validateAndThrow(url, allowHttp);
+  let currentUrl = target.url;
   let redirectCount = 0;
   init = withBrowserHeaders(init);
 
   while (true) {
-    const response = await fetch(currentUrl, {
-      ...init,
-      redirect: 'manual', // Intercept redirects for re-validation
-      signal: options.signal ?? init?.signal,
-    });
+    const dispatcher = createPinnedDispatcher(currentUrl, target.resolvedAddresses);
+    let response: Response;
+    try {
+      response = await fetch(currentUrl, {
+        ...init,
+        dispatcher,
+        redirect: 'manual', // Intercept redirects for re-validation
+        signal: options.signal ?? init?.signal,
+      } as RequestInit & { dispatcher: Agent });
+    } catch (error) {
+      await dispatcher.destroy(error instanceof Error ? error : null).catch(() => undefined);
+      throw error;
+    }
 
     if (!isRedirect(response.status) || !followRedirects) {
-      return limitResponseBody(response, maxResponseBytes);
+      return limitResponseBody(response, maxResponseBytes, dispatcher);
     }
 
     // Redirect limit
     redirectCount++;
     if (redirectCount > maxRedirects) {
+      await response.body?.cancel().catch(() => undefined);
+      await closeDispatcher(dispatcher);
       throw new SsrfBlockedError(currentUrl, `Exceeded maximum redirect limit (${maxRedirects})`);
     }
 
     // Extract and validate the redirect target
     const location = response.headers.get('location');
     if (!location) {
+      await response.body?.cancel().catch(() => undefined);
+      await closeDispatcher(dispatcher);
       throw new SsrfBlockedError(currentUrl, 'Redirect with no Location header');
     }
 
     await response.body?.cancel().catch(() => undefined);
+    await closeDispatcher(dispatcher);
 
     // Resolve relative redirect URLs against the current URL
     let nextUrl: string;
@@ -166,10 +186,16 @@ export async function safeFetch(
     }
 
     // Re-validate the redirect target
-    nextUrl = await validateAndThrow(nextUrl, allowHttp);
+    target = await validateAndThrow(nextUrl, allowHttp);
+    nextUrl = target.url;
 
     logger.info(
-      { event: 'ssrf.redirect_followed', from: currentUrl, to: nextUrl, hop: redirectCount },
+      {
+        event: 'ssrf.redirect_followed',
+        fromHost: new URL(currentUrl).hostname,
+        toHost: new URL(nextUrl).hostname,
+        hop: redirectCount,
+      },
       `Following validated redirect (hop ${redirectCount})`
     );
 
@@ -255,7 +281,22 @@ function isRedirect(status: number): boolean {
   return [301, 302, 303, 307, 308].includes(status);
 }
 
-async function validateAndThrow(url: string, allowHttp: boolean): Promise<string> {
+interface ValidatedTarget {
+  url: string;
+  resolvedAddresses: ResolvedAddress[];
+}
+
+type PinnedLookup = (
+  hostname: string,
+  options: { all?: boolean; family?: number | 'IPv4' | 'IPv6' },
+  callback: (
+    error: NodeJS.ErrnoException | null,
+    address: string | Array<{ address: string; family: number }>,
+    family?: number
+  ) => void
+) => void;
+
+async function validateAndThrow(url: string, allowHttp: boolean): Promise<ValidatedTarget> {
   // Block dangerous schemes before even trying to parse
   const lowerUrl = url.toLowerCase().trim();
   if (
@@ -266,7 +307,7 @@ async function validateAndThrow(url: string, allowHttp: boolean): Promise<string
     lowerUrl.startsWith('javascript:')
   ) {
     logger.warn(
-      { event: 'ssrf.blocked', url, reason: 'dangerous_scheme' },
+      { event: 'ssrf.blocked', url: safeUrlForDiagnostics(url), reason: 'dangerous_scheme' },
       `SSRF blocked: dangerous scheme`
     );
     throw new SsrfBlockedError(url, `Blocked scheme: ${lowerUrl.split(':')[0]}`);
@@ -286,13 +327,67 @@ async function validateAndThrow(url: string, allowHttp: boolean): Promise<string
 
   if (!validation.isValid) {
     logger.warn(
-      { event: 'ssrf.blocked', url, reason: validation.error },
+      { event: 'ssrf.blocked', url: safeUrlForDiagnostics(url), reason: validation.error },
       `SSRF blocked: ${validation.error}`
     );
     throw new SsrfBlockedError(url, validation.error ?? 'blocked by SSRF policy');
   }
 
-  return validation.sanitizedUrl ?? url;
+  const resolvedAddresses = validation.resolvedAddresses;
+  if (!resolvedAddresses?.length) {
+    throw new SsrfBlockedError(url, 'DNS validation returned no connection addresses');
+  }
+
+  return { url: validation.sanitizedUrl ?? url, resolvedAddresses };
+}
+
+function createPinnedDispatcher(url: string, addresses: ResolvedAddress[]): Agent {
+  const expectedHost = normalizeLookupHost(new URL(url).hostname);
+  const lookup: PinnedLookup = (hostname, options, callback) => {
+    if (normalizeLookupHost(hostname) !== expectedHost) {
+      const error = Object.assign(new Error('Pinned DNS hostname mismatch'), { code: 'ENOTFOUND' });
+      callback(error, options.all ? [] : '', 0);
+      return;
+    }
+
+    const requestedFamily =
+      options.family === 'IPv4' ? 4 : options.family === 'IPv6' ? 6 : options.family;
+    const candidates = addresses.filter(
+      (record) => !requestedFamily || record.family === requestedFamily
+    );
+    if (candidates.length === 0) {
+      const error = Object.assign(new Error('No validated address matches the requested family'), {
+        code: 'ENOTFOUND',
+      });
+      callback(error, options.all ? [] : '', 0);
+      return;
+    }
+
+    if (options.all) callback(null, candidates);
+    else {
+      const first = candidates[0]!;
+      callback(null, first.address, first.family);
+    }
+  };
+
+  return new Agent({ connect: { lookup } });
+}
+
+function normalizeLookupHost(hostname: string): string {
+  return hostname.toLowerCase().replace(/^\[|\]$/g, '').replace(/\.$/, '');
+}
+
+function safeUrlForDiagnostics(value: string): string {
+  try {
+    const parsed = new URL(value);
+    return `${parsed.protocol}//${parsed.host}`;
+  } catch {
+    return '<invalid-url>';
+  }
+}
+
+async function closeDispatcher(dispatcher: Agent): Promise<void> {
+  await dispatcher.close().catch(() => undefined);
 }
 
 function stripSensitiveRedirectHeaders(
@@ -309,42 +404,69 @@ function stripSensitiveRedirectHeaders(
   return { ...init, headers };
 }
 
-function limitResponseBody(response: Response, maxBytes: number): Response {
-  if (maxBytes <= 0) return response;
+async function limitResponseBody(
+  response: Response,
+  maxBytes: number,
+  dispatcher: Agent
+): Promise<Response> {
+  if (!response.body) {
+    await closeDispatcher(dispatcher);
+    return response;
+  }
+
   const contentLength = Number(response.headers.get('content-length'));
-  if (Number.isFinite(contentLength) && contentLength > maxBytes) {
-    void response.body?.cancel();
+  if (maxBytes > 0 && Number.isFinite(contentLength) && contentLength > maxBytes) {
+    await response.body.cancel().catch(() => undefined);
+    await closeDispatcher(dispatcher);
     throw new SsrfBlockedError(
       response.url || 'response',
       `Response exceeds ${maxBytes} byte limit`
     );
   }
-  if (!response.body) return response;
 
   let consumed = 0;
   const reader = response.body.getReader();
+  let dispatcherClosed = false;
+  const close = async () => {
+    if (dispatcherClosed) return;
+    dispatcherClosed = true;
+    await closeDispatcher(dispatcher);
+  };
+
   const body = new ReadableStream<Uint8Array>({
     async pull(controller) {
-      const chunk = await reader.read();
-      if (chunk.done) {
-        controller.close();
-        return;
+      try {
+        const chunk = await reader.read();
+        if (chunk.done) {
+          await close();
+          controller.close();
+          return;
+        }
+        consumed += chunk.value.byteLength;
+        if (maxBytes > 0 && consumed > maxBytes) {
+          await reader.cancel();
+          await close();
+          controller.error(
+            new SsrfBlockedError(
+              response.url || 'response',
+              `Response exceeds ${maxBytes} byte limit`
+            )
+          );
+          return;
+        }
+        controller.enqueue(chunk.value);
+      } catch (error) {
+        await reader.cancel().catch(() => undefined);
+        await close();
+        controller.error(error);
       }
-      consumed += chunk.value.byteLength;
-      if (consumed > maxBytes) {
-        await reader.cancel();
-        controller.error(
-          new SsrfBlockedError(
-            response.url || 'response',
-            `Response exceeds ${maxBytes} byte limit`
-          )
-        );
-        return;
-      }
-      controller.enqueue(chunk.value);
     },
     async cancel() {
-      await reader.cancel();
+      try {
+        await reader.cancel();
+      } finally {
+        await close();
+      }
     },
   });
 

@@ -5,33 +5,34 @@ import Link from 'next/link';
 // Mock Data for Demo
 const MOCK_PROPOSAL = {
   id: 'demo',
-  businessName: 'Acme Dental Studio',
-  overallScore: 42,
+  businessName: 'Sample Local Services (fictional)',
+  overallScore: 'EXAMPLE',
   findings: [
     {
-      title: 'Mobile Load Speed is 4.2s (Slow)',
+      title: 'Example: verify the mobile contact path',
       type: 'PAINKILLER',
-      category: 'PERFORMANCE',
+      category: 'CONVERSION',
       impactScore: 90,
     },
     {
-      title: 'Missing Google Business Categories',
+      title: 'Example: verify service-area page coverage',
       type: 'PAINKILLER',
-      category: 'SEO',
+      category: 'LOCAL PRESENCE',
       impactScore: 85,
     },
     {
-      title: 'Competitor "SmileDirect" ranks higher for "Invisalign"',
+      title: 'Example: measure mobile performance before recommending changes',
       type: 'VITAMIN',
-      category: 'COMPETITIVE',
+      category: 'PERFORMANCE',
       impactScore: 60,
     },
   ],
   sections: {
     intro:
-      'Acme Dental Studio has a strong local presence but is losing 20-30% of traffic due to slow mobile performance.',
-    strategy: 'We recommend a 3-month sprint to fix technical SEO and optimize the GBP profile.',
-    pricing: 2500,
+      'Synthetic demo only. No real website was audited, and this page makes no claims about traffic, rankings, revenue, or results.',
+    strategy:
+      'For a real engagement, an operator would first collect dated evidence, verify each observation with the business, and agree on a feasible scope.',
+    pricing: 'Not quoted in this synthetic demo',
   },
 };
 
@@ -58,7 +59,10 @@ export default function SampleReportPage() {
 
       <div className="container mx-auto px-4 py-12 max-w-5xl">
         <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-2xl">
-          {/* Fake Proposal Viewer Context */}
+          <div className="border-b border-amber-500/40 bg-amber-950/40 px-8 py-4 text-sm font-semibold text-amber-200">
+            Synthetic demonstration — no real business, website, or audit data
+          </div>
+          {/* Synthetic proposal-viewer example */}
           <div className="p-8 border-b border-slate-800">
             <div className="flex justify-between items-center mb-8">
               <div>
@@ -90,13 +94,13 @@ export default function SampleReportPage() {
             </div>
 
             <div className="mt-12 p-6 bg-indigo-900/20 border border-indigo-500/30 rounded-xl">
-              <h3 className="text-lg font-bold text-white mb-2">Project Investment</h3>
+              <h3 className="text-lg font-bold text-white mb-2">Pricing</h3>
               <div className="flex items-baseline gap-2">
-                <span className="text-3xl font-bold text-white">
-                  ${MOCK_PROPOSAL.sections.pricing.toLocaleString()}
-                </span>
-                <span className="text-slate-500">/ one-time</span>
+                <span className="text-xl font-bold text-white">{MOCK_PROPOSAL.sections.pricing}</span>
               </div>
+              <p className="mt-2 text-sm text-slate-400">
+                A real proposal requires verified evidence, an agreed scope, and an approved price.
+              </p>
             </div>
           </div>
         </div>

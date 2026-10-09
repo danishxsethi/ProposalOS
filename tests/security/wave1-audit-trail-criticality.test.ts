@@ -8,9 +8,9 @@
  * those categories can never be silently swallowed as if the destructive/security action's
  * audit trail succeeded.
  *
- * Non-critical categories (e.g. audit.*, proposal.*) must remain best-effort (logged, not
- * rethrown) -- this is a criticality classification, not a blanket "block every request"
- * change.
+ * Non-critical categories (e.g. audit.* and ordinary proposal.* events) remain best-effort.
+ * Revoking a public bearer link is a security-critical proposal event and must fail closed
+ * if its durable audit record cannot be written.
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -90,11 +90,25 @@ describe('recordAuditTrailEvent — criticality classification', () => {
     ).rejects.toThrow('DB write failed');
   });
 
+  it('rethrows on write failure for public proposal access revocation', async () => {
+    const { recordAuditTrailEvent } = await importAuditTrail();
+    await expect(
+      recordAuditTrailEvent({ eventType: 'proposal.access_revoked', tenantId: 'tenant-1' })
+    ).rejects.toThrow('DB write failed');
+  });
+
   it('does NOT rethrow for non-critical event categories -- logs and swallows', async () => {
     const { recordAuditTrailEvent } = await importAuditTrail();
     await expect(
+      recordAuditTrailEvent({ eventType: 'proposal.status_changed', tenantId: 'tenant-1' })
+    ).resolves.toBeUndefined();
+    await expect(
       recordAuditTrailEvent({ eventType: 'audit.completed', tenantId: 'tenant-1' })
     ).resolves.toBeUndefined();
+    expect(mocks.loggerWarn).toHaveBeenCalledWith(
+      expect.objectContaining({ event: 'audit_trail.write_failed', eventType: 'proposal.status_changed' }),
+      expect.any(String)
+    );
     expect(mocks.loggerWarn).toHaveBeenCalledWith(
       expect.objectContaining({ event: 'audit_trail.write_failed', eventType: 'audit.completed' }),
       expect.any(String)

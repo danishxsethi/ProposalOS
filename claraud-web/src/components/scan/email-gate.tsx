@@ -1,25 +1,12 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-
 import { useRouter } from 'next/navigation';
 
-import { zodResolver } from '@hookform/resolvers/zod';
 import { motion } from 'framer-motion';
-import { ArrowRight, Loader2, Lock } from 'lucide-react';
-import { useForm } from 'react-hook-form';
-import { z } from 'zod';
+import { ArrowRight, Lock } from 'lucide-react';
 
 import { AnimatedCounter } from '@/components/shared/animated-counter';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-
-const emailGateSchema = z.object({
-  email: z.string().email('Please enter a valid email address'),
-  name: z.string().optional(),
-});
-type EmailGateForm = z.infer<typeof emailGateSchema>;
 
 interface EmailGateProps {
   token: string;
@@ -28,24 +15,8 @@ interface EmailGateProps {
   categoryScores: Record<string, number>;
 }
 
-export function EmailGate({ token, overallScore, businessUrl, categoryScores }: EmailGateProps) {
-  const [returningEmail, setReturningEmail] = useState<string | null>(null);
+export function EmailGate({ token, overallScore, businessUrl }: EmailGateProps) {
   const router = useRouter();
-
-  const {
-    register,
-    handleSubmit,
-    formState: { errors, isSubmitting },
-  } = useForm<EmailGateForm>({
-    resolver: zodResolver(emailGateSchema),
-    mode: 'onChange', // Validate on change (debounced implicitly by react-hook-form internals if configured, or just on blur/change)
-    defaultValues: { email: '', name: '' },
-  });
-
-  useEffect(() => {
-    const stored = localStorage.getItem('claraud_user_email');
-    if (stored) setReturningEmail(stored);
-  }, []);
 
   const getLetterGrade = (score: number) => {
     if (score >= 90) return { grade: 'A+', color: 'text-green-400' };
@@ -57,33 +28,6 @@ export function EmailGate({ token, overallScore, businessUrl, categoryScores }: 
   };
 
   const { grade, color } = getLetterGrade(overallScore * 10);
-
-  const handleSkip = () => {
-    router.push(`/report/${token}`);
-  };
-
-  const onSubmit = async (data: EmailGateForm) => {
-    try {
-      const res = await fetch('/api/lead', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: data.email,
-          name: data.name,
-          businessUrl,
-          scanToken: token,
-          scores: categoryScores,
-        }),
-      });
-
-      if (res.ok) {
-        localStorage.setItem('claraud_user_email', data.email);
-        router.push(`/report/${token}`);
-      }
-    } catch (err) {
-      console.error('Lead capture failed:', err);
-    }
-  };
 
   return (
     <motion.div
@@ -109,83 +53,27 @@ export function EmailGate({ token, overallScore, businessUrl, categoryScores }: 
               <AnimatedCounter value={Math.round(overallScore * 10)} duration={2} />
             </div>
             <div className={`text-sm font-bold uppercase tracking-widest ${color}`}>
-              Grade: {grade}
+              Preliminary grade: {grade}
             </div>
           </div>
 
-          <h2 className="text-2xl font-bold text-white mb-2">Audit Complete.</h2>
+          <h2 className="text-2xl font-bold text-white mb-2">Report view</h2>
           <p className="text-text-secondary text-sm">
-            Enter your email to unlock the full 30-point analysis for <strong>{businessUrl}</strong>
-            .
+            Email delivery is paused. This page will not collect an email address. You can open the
+            current report for <strong>{businessUrl}</strong> without sharing contact details.
+          </p>
+          <p className="text-text-secondary text-xs mt-3">
+            Treat this score and its findings as preliminary until a reviewer verifies the evidence.
           </p>
         </div>
 
-        {returningEmail && (
-          <div className="mb-6 p-4 bg-accent-primary/10 border border-accent-primary/20 rounded-xl text-center">
-            <p className="text-sm text-white mb-2">Welcome back!</p>
-            <Button
-              variant="ghost"
-              className="w-full text-accent-primary hover:text-accent-primary/80 hover:bg-accent-primary/10"
-              onClick={handleSkip}
-            >
-              Continue as {returningEmail} →
-            </Button>
-          </div>
-        )}
-
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-          <div className="space-y-1 text-left">
-            <Label htmlFor="name" className="text-text-secondary text-xs">
-              Name (Optional)
-            </Label>
-            <Input
-              id="name"
-              type="text"
-              placeholder="Your full name"
-              {...register('name')}
-              className="bg-bg-input border-white/10 text-white h-11"
-              aria-invalid={!!errors.name}
-            />
-            {errors.name && (
-              <p className="text-red-400 text-xs mt-1 font-medium">{errors.name.message}</p>
-            )}
-          </div>
-
-          <div className="space-y-1 text-left">
-            <Label htmlFor="email" className="text-text-secondary text-xs">
-              Work Email <span className="text-red-500">*</span>
-            </Label>
-            <Input
-              id="email"
-              type="email"
-              placeholder="name@company.com"
-              {...register('email')}
-              className={`bg-bg-input text-white h-11 ${errors.email ? 'border-red-500/50' : 'border-white/10'}`}
-              aria-invalid={!!errors.email}
-            />
-            {errors.email && (
-              <p className="text-red-400 text-xs mt-1 font-medium">{errors.email.message}</p>
-            )}
-          </div>
-
-          <Button
-            type="submit"
-            disabled={isSubmitting}
-            className="w-full h-12 gradient-btn font-bold text-base mt-2"
-          >
-            {isSubmitting ? (
-              <Loader2 className="w-5 h-5 animate-spin" />
-            ) : (
-              <>
-                Unlock Full Report <ArrowRight className="ml-2 w-5 h-5" />
-              </>
-            )}
-          </Button>
-        </form>
-
-        <p className="text-[10px] text-text-secondary text-center mt-6 uppercase tracking-wider font-bold opacity-50">
-          🔒 Secure and confidential. We never spam.
-        </p>
+        <Button
+          type="button"
+          className="w-full h-12 gradient-btn font-bold text-base"
+          onClick={() => router.push(`/report/${token}`)}
+        >
+          View report <ArrowRight className="ml-2 w-5 h-5" />
+        </Button>
       </motion.div>
     </motion.div>
   );

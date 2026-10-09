@@ -8,7 +8,7 @@ import { generatePdfFromHtml } from '../lib/pdf/generatePdf';
 const PROVEN_PROPOSALS = [
   {
     id: 'e943703e-5902-426e-824e-82219d0da230',
-    webLinkToken: 'f9df6fcc-8017-41ac-9786-6d2f5132c9b5',
+    webLinkToken: 'synthetic-proposal-token-1',
     createdAt: new Date('2026-09-04T02:58:32.563Z'),
     pricing: { essentials: 797, growth: 2497, premium: 4997 },
     audit: {
@@ -84,7 +84,7 @@ const PROVEN_PROPOSALS = [
   },
   {
     id: '08ab2b5a-2102-4fab-aa4f-c57cf9f1e072',
-    webLinkToken: '21b22567-44ca-47d9-8ccc-1151ebf459ef',
+    webLinkToken: 'synthetic-proposal-token-2',
     createdAt: new Date('2026-09-04T03:09:13.106Z'),
     pricing: { essentials: 797, growth: 2497, premium: 4997 },
     audit: {
@@ -139,7 +139,7 @@ const PROVEN_PROPOSALS = [
   },
   {
     id: '375e86a7-69a1-43c9-9b2d-edce216bd4a4',
-    webLinkToken: 'db30c9e9-a0fd-42dc-9ff7-4c2dd1f7a923',
+    webLinkToken: 'synthetic-proposal-token-3',
     createdAt: new Date('2026-09-04T03:13:43.674Z'),
     pricing: { essentials: 397, growth: 1197, premium: 2397 },
     audit: {
@@ -210,8 +210,7 @@ async function main() {
   const results: Array<{ name: string; pdfSize: number; outputPath: string }> = [];
 
   for (const proposal of PROVEN_PROPOSALS) {
-    console.log(`\n📄 Processing: ${proposal.audit.businessName} (Token: ${proposal.webLinkToken})...`);
-
+    console.log(`\n📄 Processing: ${proposal.audit.businessName}...`);
     // Render PdfTemplate component to static HTML
     const templateElement = React.createElement(PdfTemplate as any, { proposal, branding });
     const contentHtml = await (PdfTemplate as any)({ proposal, branding });

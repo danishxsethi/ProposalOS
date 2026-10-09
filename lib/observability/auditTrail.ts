@@ -43,6 +43,7 @@ export type AuditTrailEventType =
   // Proposals
   | 'proposal.status_changed'
   | 'proposal.viewed'
+  | 'proposal.access_revoked'
   // API Keys
   | 'apikey.created'
   | 'apikey.revoked'
@@ -369,7 +370,8 @@ export async function recordAuditTrailEvent(input: AuditTrailEventInput): Promis
       input.eventType.startsWith('session.') ||
       input.eventType.startsWith('apikey.') ||
       input.eventType.startsWith('data.deletion') ||
-      input.eventType.startsWith('role.');
+      input.eventType.startsWith('role.') ||
+      input.eventType === 'proposal.access_revoked';
     if (isCritical) {
       throw error;
     }

@@ -1,13 +1,9 @@
 'use client';
 
-import { useState } from 'react';
-
 import {
-  Download,
   ExternalLink,
   Link2,
   Linkedin,
-  Loader2,
   Mail,
   Share2,
   Twitter,
@@ -40,7 +36,6 @@ export function ReportHeader({
   token,
 }: ReportHeaderProps) {
   const { captureEvent } = usePostHog();
-  const [isDownloading, setIsDownloading] = useState(false);
 
   const getScoreColor = (score: number) => {
     if (score >= 8) return 'text-green-500';
@@ -62,33 +57,7 @@ export function ReportHeader({
   const copyLink = () => {
     navigator.clipboard.writeText(`${window.location.origin}/report/${token}`);
     toast.success('Link copied to clipboard');
-    captureEvent('share_clicked', { platform: 'copy', token });
-  };
-
-  const downloadPdf = async () => {
-    setIsDownloading(true);
-    try {
-      const res = await fetch(`/api/report/${token}/pdf`);
-      if (!res.ok) {
-        toast.error('PDF generation coming soon');
-        return;
-      }
-      const blob = await res.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${businessName.toLowerCase().replace(/\\s+/g, '-')}-audit-report.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      a.remove();
-      toast.success('Download started');
-      captureEvent('pdf_downloaded', { token });
-    } catch (err) {
-      toast.error('PDF generation coming soon');
-    } finally {
-      setIsDownloading(false);
-    }
+    captureEvent('share_clicked', { platform: 'copy' });
   };
 
   return (
@@ -98,7 +67,7 @@ export function ReportHeader({
         <div className="flex-1">
           <h1 className="text-3xl lg:text-4xl font-bold text-white mb-2">{businessName}</h1>
           <a
-            href={`https://${businessUrl}`}
+            href={businessUrl.startsWith('http') ? businessUrl : `https://${businessUrl}`}
             target="_blank"
             rel="noopener noreferrer"
             className="flex items-center gap-2 text-text-secondary hover:text-blue-400 transition-colors group"
@@ -118,7 +87,7 @@ export function ReportHeader({
               {overallScore.toFixed(1)}
             </div>
             <div className="text-[10px] uppercase tracking-[0.2em] font-bold text-text-secondary mt-1">
-              Overall Score / 10
+              Preliminary score / 10
             </div>
           </div>
           <Badge
@@ -179,40 +148,26 @@ export function ReportHeader({
 
           <Button
             variant="outline"
-            className="hidden sm:flex border-white/10 hover:bg-white/5"
-            onClick={downloadPdf}
-            disabled={isDownloading}
-            aria-label={isDownloading ? 'Generating PDF' : 'Download PDF'}
+            className="hidden sm:flex border-white/10"
+            disabled
+            aria-label="PDF download unavailable"
+            title="PDF export is not available yet"
           >
-            {isDownloading ? (
-              <Loader2 className="w-4 h-4 mr-2 animate-spin" aria-hidden="true" />
-            ) : (
-              <Download className="w-4 h-4 mr-2" aria-hidden="true" />
-            )}
-            PDF
+            PDF unavailable
           </Button>
 
           <Button
             className="flex-1 lg:flex-none gradient-btn font-bold px-8 shadow-lg shadow-blue-500/20"
             asChild
           >
-            <a href={`/proposal/${token}`}>Get Action Plan →</a>
+            <a href={`/proposal/${token}`}>View Proposal →</a>
           </Button>
         </div>
       </div>
 
-      <div className="flex items-center gap-2 text-[10px] text-text-secondary font-medium tracking-tight mt-8">
-        <span>
-          Audited on{' '}
-          {new Date().toLocaleDateString('en-US', {
-            month: 'long',
-            day: 'numeric',
-            year: 'numeric',
-          })}
-        </span>
-        <span className="opacity-20">•</span>
-        <span>Powered by Claraud AI Engine</span>
-      </div>
+      <p className="mt-8 text-xs text-text-secondary">
+        Preliminary findings require evidence review before they are used to make business decisions.
+      </p>
 
       <div className="w-full h-px bg-gradient-to-r from-transparent via-white/10 to-transparent mt-8" />
     </div>

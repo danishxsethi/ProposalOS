@@ -70,6 +70,7 @@ describe('Audit trail architectural boundary and immutability tests', () => {
       path.join(rootDir, 'lib/auth.ts'),
       path.join(rootDir, 'app/api/case-study/[auditId]/generate/route.ts'),
       path.join(rootDir, 'app/api/proposal/token/[token]/status/route.ts'),
+      path.join(rootDir, 'lib/proposal/shareTokenRevocation.ts'),
       path.join(rootDir, 'app/api/settings/api-keys/route.ts'),
       path.join(rootDir, 'app/api/settings/api-keys/[id]/route.ts'),
       path.join(rootDir, 'lib/queue/auditJobWorker.ts'),

@@ -12,7 +12,8 @@
  * - Port blocking
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
+import { promises as dnsPromises } from 'node:dns';
 import { validateUrl } from '@/lib/security/urlValidator';
 
 describe('URL Validator - SSRF Prevention', () => {
@@ -120,6 +121,55 @@ describe('URL Validator - SSRF Prevention', () => {
     it('should reject IPv6 unique local fc00::', async () => {
       const result = await validateUrl('https://[fc00::1]');
       expect(result.isValid).toBe(false);
+    });
+
+    it.each([
+      'https://100.64.0.1',
+      'https://192.0.2.1',
+      'https://198.18.0.1',
+      'https://203.0.113.1',
+      'https://[::]',
+      'https://[::ffff:127.0.0.1]',
+      'https://[2001:db8::1]',
+    ])('should reject non-public special-use address %s', async (url) => {
+      const result = await validateUrl(url);
+      expect(result.isValid).toBe(false);
+    });
+  });
+
+  describe('Pinned DNS validation', () => {
+    it('returns the complete validated address set for connection pinning', async () => {
+      const lookup = vi.spyOn(dnsPromises, 'lookup').mockResolvedValue([
+        { address: '93.184.216.34', family: 4 },
+        { address: '2606:4700:4700::1111', family: 6 },
+      ]);
+
+      try {
+        const result = await validateUrl('https://dual-stack.invalid');
+        expect(result.isValid).toBe(true);
+        expect(result.resolvedAddresses).toEqual([
+          { address: '93.184.216.34', family: 4 },
+          { address: '2606:4700:4700::1111', family: 6 },
+        ]);
+        expect(lookup).toHaveBeenCalledWith('dual-stack.invalid', { all: true, verbatim: true });
+      } finally {
+        lookup.mockRestore();
+      }
+    });
+
+    it('rejects the entire answer when any DNS record is non-public', async () => {
+      const lookup = vi.spyOn(dnsPromises, 'lookup').mockResolvedValue([
+        { address: '93.184.216.34', family: 4 },
+        { address: '10.0.0.7', family: 4 },
+      ]);
+
+      try {
+        const result = await validateUrl('https://mixed-answer.invalid');
+        expect(result.isValid).toBe(false);
+        expect(result.error).toMatch(/resolves to blocked IP/);
+      } finally {
+        lookup.mockRestore();
+      }
     });
   });
 

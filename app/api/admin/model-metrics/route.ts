@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 
-export async function GET(request: Request) {
+import { withAuth } from '@/lib/middleware/auth';
+
+export const GET = withAuth(async () => {
   // In a full production implementation, these metrics would aggregate:
   // 1. LangSmith traces for latency and tokens
   // 2. CostTracker DB rows for average dollars
@@ -35,4 +37,4 @@ export async function GET(request: Request) {
   };
 
   return NextResponse.json(mockMetrics);
-}
+});

@@ -14,23 +14,10 @@
 
 import ipaddr from 'ipaddr.js';
 
-// IP ranges that should be blocked to prevent SSRF
-const BLOCKED_IP_RANGES = [
-  // IPv4 private ranges
-  { range: ipaddr.parse('10.0.0.0'), mask: 8 }, // 10.0.0.0/8
-  { range: ipaddr.parse('172.16.0.0'), mask: 12 }, // 172.16.0.0/12
-  { range: ipaddr.parse('192.168.0.0'), mask: 16 }, // 192.168.0.0/16
-  { range: ipaddr.parse('127.0.0.0'), mask: 8 }, // 127.0.0.0/8 (loopback)
-  { range: ipaddr.parse('0.0.0.0'), mask: 8 }, // 0.0.0.0/8
-  { range: ipaddr.parse('169.254.0.0'), mask: 16 }, // 169.254.0.0/16 (link-local)
-  { range: ipaddr.parse('224.0.0.0'), mask: 4 }, // 224.0.0.0/4 (multicast)
-  { range: ipaddr.parse('240.0.0.0'), mask: 4 }, // 240.0.0.0/4 (reserved)
-  // IPv6 private ranges
-  { range: ipaddr.parse('::1'), mask: 128 }, // ::1/128 (loopback)
-  { range: ipaddr.parse('fe80::'), mask: 10 }, // fe80::/10 (link-local)
-  { range: ipaddr.parse('fc00::'), mask: 7 }, // fc00::/7 (unique local)
-  { range: ipaddr.parse('::ffff:0:0'), mask: 96 }, // ::ffff:0:0/96 (IPv4-mapped)
-];
+export interface ResolvedAddress {
+  address: string;
+  family: 4 | 6;
+}
 
 // Special hostnames that should be blocked
 const BLOCKED_HOSTNAMES = [
@@ -47,26 +34,28 @@ export interface UrlValidationResult {
   isValid: boolean;
   error?: string;
   sanitizedUrl?: string;
+  /** Exact OS-resolved IPs that passed validation; safeFetch pins sockets to them. */
+  resolvedAddresses?: ResolvedAddress[];
 }
 
 /**
  * Check if an IP address is in a blocked range
  */
 function isIpBlocked(ip: ipaddr.IPv4 | ipaddr.IPv6): boolean {
-  for (const blocked of BLOCKED_IP_RANGES) {
-    if (ip.kind() === blocked.range.kind() && ip.match(blocked.range, blocked.mask)) {
-      return true;
-    }
-  }
-  return false;
+  // Only globally routable unicast addresses are valid fetch destinations.
+  // This also blocks CGNAT, documentation, benchmarking, multicast,
+  // unspecified, reserved, and IPv4-mapped IPv6 ranges.
+  return ip.range() !== 'unicast';
 }
 
 /**
  * Validate hostname/IP to prevent SSRF
  */
-async function validateHost(host: string): Promise<{ valid: boolean; error?: string }> {
+async function validateHost(
+  host: string
+): Promise<{ valid: boolean; error?: string; addresses?: ResolvedAddress[] }> {
   // Check against blocked hostnames
-  const lowerHost = host.toLowerCase().replace(/\.$/, '');
+  const lowerHost = host.toLowerCase().replace(/^\[|\]$/g, '').replace(/\.$/, '');
   if (
     BLOCKED_HOSTNAMES.some((blocked) => lowerHost === blocked || lowerHost.endsWith(`.${blocked}`))
   ) {
@@ -77,73 +66,78 @@ async function validateHost(host: string): Promise<{ valid: boolean; error?: str
   try {
     let ip: ipaddr.IPv4 | ipaddr.IPv6;
 
-    if (ipaddr.IPv6.isValid(host)) {
-      ip = ipaddr.parse(host) as ipaddr.IPv6;
-      // Handle IPv4-mapped IPv6 addresses
-      if (ip.isIPv4MappedAddress()) {
-        ip = ip.toIPv4Address();
-      }
-    } else if (ipaddr.IPv4.isValid(host)) {
-      ip = ipaddr.parse(host) as ipaddr.IPv4;
+    if (ipaddr.IPv6.isValid(lowerHost)) {
+      ip = ipaddr.parse(lowerHost) as ipaddr.IPv6;
+    } else if (ipaddr.IPv4.isValid(lowerHost)) {
+      ip = ipaddr.parse(lowerHost) as ipaddr.IPv4;
     } else {
       // Not an IP, will be resolved via DNS
-      return await validateDns(host);
+      return await validateDns(lowerHost);
     }
 
     if (isIpBlocked(ip)) {
       return { valid: false, error: `Blocked IP address: ${host}` };
     }
 
-    return { valid: true };
+    return {
+      valid: true,
+      addresses: [{ address: ip.toString(), family: ip.kind() === 'ipv4' ? 4 : 6 }],
+    };
   } catch {
     // Invalid IP format, will be validated as hostname
-    return await validateDns(host);
+    return await validateDns(lowerHost);
   }
 }
 
 /**
  * Validate hostname by resolving DNS and checking resulting IPs
  */
-async function validateDns(hostname: string): Promise<{ valid: boolean; error?: string }> {
-  const dns = await import('dns').then((m) => m.promises);
+async function validateDns(
+  hostname: string
+): Promise<{ valid: boolean; error?: string; addresses?: ResolvedAddress[] }> {
+  const dns = await import('node:dns').then((m) => m.promises);
 
   try {
-    // Resolve all addresses for the hostname
-    const addresses = await dns.resolve(hostname);
+    // Resolve with the OS lookup used by Node connections, then pass this exact
+    // answer set to safeFetch so connection setup cannot perform a second lookup.
+    const addresses = await dns.lookup(hostname, { all: true, verbatim: true });
 
     if (addresses.length === 0) {
       return { valid: false, error: `No DNS records found for: ${hostname}` };
     }
 
-    // Check each resolved IP
-    for (const addr of addresses) {
+    // Check every A/AAAA address; reject mixed public/private answer sets.
+    const resolvedAddresses: ResolvedAddress[] = [];
+    for (const record of addresses) {
       let ip: ipaddr.IPv4 | ipaddr.IPv6;
 
       try {
-        if (ipaddr.IPv6.isValid(addr)) {
-          ip = ipaddr.parse(addr) as ipaddr.IPv6;
-          if (ip.isIPv4MappedAddress()) {
-            ip = ip.toIPv4Address();
-          }
-        } else if (ipaddr.IPv4.isValid(addr)) {
-          ip = ipaddr.parse(addr) as ipaddr.IPv4;
+        if (ipaddr.IPv6.isValid(record.address)) {
+          ip = ipaddr.parse(record.address) as ipaddr.IPv6;
+        } else if (ipaddr.IPv4.isValid(record.address)) {
+          ip = ipaddr.parse(record.address) as ipaddr.IPv4;
         } else {
-          continue;
+          return { valid: false, error: `DNS returned an invalid IP address for: ${hostname}` };
         }
 
         if (isIpBlocked(ip)) {
           return {
             valid: false,
-            error: `DNS resolution blocked: ${hostname} resolves to blocked IP ${addr}`,
+            error: `DNS resolution blocked: ${hostname} resolves to blocked IP ${record.address}`,
           };
         }
       } catch {
-        continue;
+        return { valid: false, error: `DNS returned an invalid IP address for: ${hostname}` };
       }
+
+      resolvedAddresses.push({
+        address: ip.toString(),
+        family: ip.kind() === 'ipv4' ? 4 : 6,
+      });
     }
 
-    return { valid: true };
-  } catch (error) {
+    return { valid: true, addresses: resolvedAddresses };
+  } catch {
     return {
       valid: false,
       error: `DNS resolution failed for: ${hostname}`,
@@ -242,6 +236,7 @@ export async function validateUrl(
   return {
     isValid: true,
     sanitizedUrl,
+    resolvedAddresses: hostValidation.addresses,
   };
 }
 

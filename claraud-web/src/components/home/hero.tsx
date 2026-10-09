@@ -3,7 +3,6 @@
 import { motion } from 'framer-motion';
 
 import { ScanInput } from '@/components/scan/scan-input';
-import { SectionWrapper } from '@/components/shared/section-wrapper';
 
 export function Hero() {
   return (
@@ -37,7 +36,7 @@ export function Hero() {
           className="mb-4"
         >
           <span className="inline-block px-4 py-1.5 glass border border-white/10 rounded-full text-sm text-text-secondary font-medium mb-6">
-            🚀 Free AI business audit — no signup required
+            Operator-reviewed website diagnostics · Pilot intake paused
           </span>
         </motion.div>
 
@@ -47,8 +46,8 @@ export function Hero() {
           transition={{ duration: 0.6, delay: 0.1 }}
           className="text-5xl md:text-6xl lg:text-7xl font-extrabold tracking-tight mb-6 leading-[1.08]"
         >
-          <span className="block text-white">Your business has blind spots.</span>
-          <span className="block gradient-text mt-1">We find them in 30 seconds.</span>
+          <span className="block text-white">Make website decisions with evidence.</span>
+          <span className="block gradient-text mt-1">Reviewed by a person.</span>
         </motion.h1>
 
         <motion.p
@@ -57,8 +56,8 @@ export function Hero() {
           transition={{ duration: 0.6, delay: 0.2 }}
           className="text-lg md:text-xl text-text-secondary max-w-2xl mx-auto mb-12 leading-relaxed"
         >
-          Claraud's AI engine audits your website, Google presence, competitors, reviews, and social
-          media — then builds you a personalized action plan to grow.
+          Claraud is being qualified for operator-assisted website diagnostics. Public self-service
+          scans are paused while usage limits and browser network safeguards are verified.
         </motion.p>
 
         <motion.div
@@ -81,26 +80,8 @@ export function Hero() {
           className="flex flex-col items-center border-t border-white/10 pt-10 w-full max-w-4xl mt-8"
         >
           <p className="text-sm text-text-secondary mb-6 font-medium tracking-wide">
-            Trusted by <span className="text-white font-semibold">2,800+</span> businesses across
-            North America
+            No customer count, measured outcomes, or performance results are claimed.
           </p>
-          <div className="flex flex-wrap justify-center gap-6 md:gap-10 opacity-30 grayscale">
-            {[
-              'Apex Dental',
-              'Riverfront Law',
-              'CoolAir HVAC',
-              'Bamboo Kitchen',
-              'NorthPoint Realty',
-              'FitCore',
-            ].map((biz) => (
-              <div
-                key={biz}
-                className="h-7 flex items-center justify-center bg-white/20 rounded px-4 text-xs font-semibold text-white tracking-wide"
-              >
-                {biz}
-              </div>
-            ))}
-          </div>
         </motion.div>
       </div>
     </section>

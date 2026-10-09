@@ -297,7 +297,7 @@ async function fetchOrganicRanking(
             degrade: false,
           },
           async () => {
-            const res = await fetch(serpUrl);
+            const res = await fetch(serpUrl, { redirect: 'error' });
             if (!res.ok) {
               throw new Error(`HTTP error ${res.status}: ${res.statusText}`);
             }

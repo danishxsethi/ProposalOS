@@ -242,7 +242,9 @@ async function fetchCompetitorSignals(
           fallbackValue: { local_results: [] },
         },
         async () => {
-          const res = await fetch(`https://serpapi.com/search.json?${params.toString()}`);
+          const res = await fetch(`https://serpapi.com/search.json?${params.toString()}`, {
+            redirect: 'error',
+          });
           if (!res.ok) {
             const text = await res.text();
             throw new Error(`SerpAPI competitors failed (${res.status}): ${text}`);

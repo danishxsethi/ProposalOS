@@ -3,7 +3,6 @@ import { notFound } from 'next/navigation';
 import { Award, Search, Share2, Shield, Smartphone, Zap } from 'lucide-react';
 import { Metadata } from 'next';
 
-import { CompetitorTable } from '@/components/report/competitor-table';
 import { FindingsList } from '@/components/report/findings-list';
 import { ReportCTA } from '@/components/report/report-cta';
 import { ReportHeader } from '@/components/report/report-header';
@@ -13,31 +12,12 @@ import { Badge } from '@/components/ui/badge';
 import { ReportData } from '@/lib/types';
 
 // SEO - Dynamic Metadata
-export async function generateMetadata({
-  params,
-}: {
-  params: { token: string };
-}): Promise<Metadata> {
-  const { token } = await params;
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
-
-  try {
-    const res = await fetch(`${baseUrl}/api/report/${token}`, { cache: 'no-store' });
-    if (!res.ok) throw new Error();
-    const data: ReportData = await res.json();
-
-    return {
-      title: `${data.businessName} — AI Business Audit | Score: ${data.overallScore.toFixed(1)}/10`,
-      description: `Claraud AI audited ${data.businessName} across 30 dimensions. Overall score: ${data.overallScore.toFixed(1)}/10. Top finding: ${data.findings[0]?.title || 'Multiple critical issues identified.'}`,
-      openGraph: {
-        title: `${data.businessName} AI Audit Report`,
-        description: `View the full AI audit for ${data.businessName}.`,
-        images: [`/api/og/${token}`],
-      },
-    };
-  } catch (e) {
-    return { title: 'Audit Report | Claraud AI' };
-  }
+export function generateMetadata(): Metadata {
+  return {
+    title: 'Preliminary Audit Report | Claraud',
+    description: 'A token-protected preliminary report. Review evidence before acting.',
+    robots: { index: false, follow: false },
+  };
 }
 
 export default async function ReportPage({ params }: { params: { token: string } }) {
@@ -49,11 +29,11 @@ export default async function ReportPage({ params }: { params: { token: string }
     const res = await fetch(`${baseUrl}/api/report/${token}`, { cache: 'no-store' });
     if (!res.ok) return notFound();
     reportData = await res.json();
-  } catch (e) {
+  } catch {
     return notFound();
   }
 
-  const categoryIcons: Record<string, any> = {
+  const categoryIcons: Record<string, typeof Smartphone> = {
     website: Smartphone,
     google: Shield,
     seo: Search,
@@ -85,27 +65,20 @@ export default async function ReportPage({ params }: { params: { token: string }
           <ScoreOverview categories={reportData.categories} />
         </SectionWrapper>
 
+        <aside
+          role="note"
+          className="mb-12 rounded-xl border border-amber-400/20 bg-amber-400/5 p-5 text-sm text-text-secondary"
+        >
+          Preliminary report: verify each observation and its source before relying on it. This view
+          does not establish lost revenue, competitor performance, or expected results.
+        </aside>
+
         {/* Section 2: Top Findings */}
         <SectionWrapper className="mb-32">
           <FindingsList findings={reportData.findings} limit={5} />
         </SectionWrapper>
 
-        {/* Section 3: Comparison */}
-        <SectionWrapper className="mb-32">
-          <CompetitorTable
-            businessName={reportData.businessName}
-            businessUrl={reportData.businessUrl}
-            userMetrics={{
-              overallScore: reportData.overallScore,
-              reviewCount: 41,
-              pageSpeed: 62,
-              gbpCompleteness: 62,
-            }}
-            competitors={reportData.competitors}
-          />
-        </SectionWrapper>
-
-        {/* Section 4: All Findings (Grouped) */}
+        {/* Section 3: All Findings (Grouped) */}
         <SectionWrapper className="mb-32" id="all-findings">
           <h2 className="text-3xl font-extrabold text-white mb-10 tracking-tight">
             Complete Audit Findings

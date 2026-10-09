@@ -1,74 +1,22 @@
-import { Metadata } from 'next';
+import type { Metadata } from 'next';
 
-import { AgencyCta } from '@/components/home/agency-cta';
-import { FinalCta } from '@/components/home/final-cta';
 import { Hero } from '@/components/home/hero';
 import { HowItWorks } from '@/components/home/how-it-works';
-import { IndustryVerticals } from '@/components/home/industry-verticals';
-import { PricingPreview } from '@/components/home/pricing-preview';
-import { ProblemSection } from '@/components/home/problem-section';
-import { SocialProof } from '@/components/home/social-proof';
-import { WhatWeAudit } from '@/components/home/what-we-audit';
-import { StickyScanBar } from '@/components/layout/sticky-scan-bar';
-import { JsonLd } from '@/components/shared/json-ld';
 
 export const metadata: Metadata = {
-  title: 'Claraud — AI-Powered Business Audit & Growth Platform',
-  description: 'Free 30-second AI audit. 30+ dimensions. Personalized action plan.',
+  title: 'Claraud — Operator-Reviewed Website Diagnostics',
+  description:
+    'Claraud is qualifying an operator-assisted website diagnostic workflow. Public self-service scans are currently paused.',
   openGraph: {
     images: ['/api/og/default'],
   },
 };
 
 export default function Home() {
-  const schemas = [
-    {
-      '@context': 'https://schema.org',
-      '@type': 'Organization',
-      name: 'Claraud',
-      url: 'https://claraud.com',
-      logo: 'https://claraud.com/logo.png',
-      sameAs: ['https://twitter.com/claraud', 'https://linkedin.com/company/claraud'],
-    },
-    {
-      '@context': 'https://schema.org',
-      '@type': 'WebSite',
-      url: 'https://claraud.com',
-      potentialAction: {
-        '@type': 'SearchAction',
-        target: 'https://claraud.com/scan?url={search_term_string}',
-        'query-input': 'required name=search_term_string',
-      },
-    },
-    {
-      '@context': 'https://schema.org',
-      '@type': 'SoftwareApplication',
-      name: 'Claraud AI Audit',
-      operatingSystem: 'All',
-      applicationCategory: 'BusinessApplication',
-      offers: {
-        '@type': 'Offer',
-        price: '0',
-        priceCurrency: 'USD',
-      },
-    },
-  ];
-
   return (
-    <>
-      {schemas.map((s, i) => (
-        <JsonLd key={i} data={s} />
-      ))}
+    <main>
       <Hero />
-      <ProblemSection />
       <HowItWorks />
-      <WhatWeAudit />
-      <SocialProof />
-      <IndustryVerticals />
-      <PricingPreview />
-      <AgencyCta />
-      <FinalCta />
-      <StickyScanBar />
-    </>
+    </main>
   );
 }
