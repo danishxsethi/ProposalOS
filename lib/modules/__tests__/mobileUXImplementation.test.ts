@@ -10,6 +10,8 @@ vi.mock('@/lib/resilience/withProviderResilience', () => ({
   ) => fn({ signal: options.signal || new AbortController().signal }),
 }));
 vi.mock('@/lib/security/safeBrowser', () => ({ safePageGoto: vi.fn() }));
+const { getLocalLighthouseReport } = vi.hoisted(() => ({ getLocalLighthouseReport: vi.fn() }));
+vi.mock('@/lib/performance/localLighthouse', () => ({ getLocalLighthouseReport }));
 vi.mock('@sparticuz/chromium', () => ({
   default: { executablePath: vi.fn(async () => '/tmp/chromium') },
 }));
@@ -81,7 +83,6 @@ function installBrowserFixture(options: { unhealthy?: boolean } = {}) {
 describe('mobileUX measured metrics implementation', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    delete process.env.GOOGLE_PAGESPEED_API_KEY;
     vi.mocked(safePageGoto).mockResolvedValue(null as never);
   });
 
@@ -91,28 +92,9 @@ describe('mobileUX measured metrics implementation', () => {
 
   it('uses observed browser metrics and validated PageSpeed scores with valid evidence', async () => {
     installBrowserFixture({ unhealthy: true });
-    process.env.GOOGLE_PAGESPEED_API_KEY = 'test-key';
-    vi.stubGlobal(
-      'fetch',
-      vi
-        .fn()
-        .mockResolvedValueOnce(
-          new Response(
-            JSON.stringify({
-              lighthouseResult: { categories: { performance: { score: 0.22 } } },
-            }),
-            { status: 200 }
-          )
-        )
-        .mockResolvedValueOnce(
-          new Response(
-            JSON.stringify({
-              lighthouseResult: { categories: { performance: { score: 0.7 } } },
-            }),
-            { status: 200 }
-          )
-        )
-    );
+    vi.mocked(getLocalLighthouseReport).mockImplementation(async (_url, strategy) => ({
+      categories: { performance: { score: strategy === 'mobile' ? 0.22 : 0.7 } },
+    }));
     const tracker = new Tracker();
 
     const result = await runMobileUXModule(
@@ -127,15 +109,16 @@ describe('mobileUX measured metrics implementation', () => {
       mobilePerformanceScore: 22,
       pageSpeedStatus: 'available',
     });
-    expect(tracker.calls).toEqual(['PAGESPEED', 'PAGESPEED']);
+    expect(tracker.calls).toEqual(['LIGHTHOUSE', 'LIGHTHOUSE']);
     expect(result.findings.length).toBeGreaterThan(0);
     for (const finding of result.findings) {
       expect(validateFinding({ ...finding, module: 'mobileUX' }).success).toBe(true);
     }
   });
 
-  it('returns PARTIAL with absent PageSpeed metrics and no phantom call when unconfigured', async () => {
+  it('returns PARTIAL when the local Lighthouse report has no performance score', async () => {
     installBrowserFixture();
+    vi.mocked(getLocalLighthouseReport).mockResolvedValue({ categories: {} });
     const tracker = new Tracker();
     const result = await runMobileUXModule(
       { url: 'https://acme.test', businessName: 'Acme' },
@@ -145,16 +128,12 @@ describe('mobileUX measured metrics implementation', () => {
     expect(result.execution?.state).toBe('partial');
     expect(result.evidenceSnapshots[0].rawResponse.mobilePerformanceScore).toBeNull();
     expect(result.evidenceSnapshots[0].rawResponse.pageSpeedStatus).toBe('unavailable');
-    expect(tracker.calls).toEqual([]);
+    expect(tracker.calls).toEqual(['LIGHTHOUSE']);
   });
 
-  it('treats malformed PageSpeed output as unavailable rather than score zero', async () => {
+  it('treats a missing local performance score as unavailable rather than score zero', async () => {
     installBrowserFixture();
-    process.env.GOOGLE_PAGESPEED_API_KEY = 'test-key';
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async () => new Response(JSON.stringify({ lighthouseResult: {} }), { status: 200 }))
-    );
+    vi.mocked(getLocalLighthouseReport).mockResolvedValue({ categories: {} });
     const result = await runMobileUXModule({
       url: 'https://acme.test',
       businessName: 'Acme',

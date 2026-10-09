@@ -184,15 +184,15 @@ describe('LocalizedPromptLibrary - Property-Based Tests', () => {
   // ── Property 26 ─────────────────────────────────────────────────────────────
 
   /**
-   * Feature: deep-localization-cross-tenant-intelligence, Property 26: Variant Gemini Budget
+   * Feature: deep-localization-cross-tenant-intelligence, Property 26: Bedrock Variant Budget
    *
-   * For any locale variant creation, the Localization_Engine SHALL use Gemini with
-   * 4,096 tokens for thinking budget.
+   * For any locale variant creation, the Bedrock localization path keeps the separately
+   * configurable thinking budget disabled.
    *
    * Validates: Requirements 7.2
    */
-  describe('Property 26: Variant Gemini Budget', () => {
-    it('every created variant should have thinkingBudget of exactly 4,096', async () => {
+  describe('Property 26: Bedrock Variant Budget', () => {
+    it('every created variant should have thinkingBudget disabled', async () => {
       await fc.assert(
         fc.asyncProperty(
           nodeIdArb,
@@ -217,15 +217,14 @@ describe('LocalizedPromptLibrary - Property-Based Tests', () => {
               culturalContext ?? undefined
             );
 
-            // The thinking budget must always be exactly 4,096
-            expect(variant.thinkingBudget).toBe(4096);
+            expect(variant.thinkingBudget).toBe(0);
           }
         ),
         { numRuns: 100 }
       );
     });
 
-    it('every retrieved prompt should carry thinkingBudget of 4,096', async () => {
+    it('every retrieved prompt should carry a disabled thinking budget', async () => {
       await fc.assert(
         fc.asyncProperty(nodeIdArb, supportedLocaleArb, async (nodeId, locale) => {
           const row = makePromptRow({ node_id: nodeId, locale });
@@ -234,7 +233,7 @@ describe('LocalizedPromptLibrary - Property-Based Tests', () => {
           const prompt = await library.getPrompt(nodeId, locale);
 
           expect(prompt).not.toBeNull();
-          expect(prompt!.thinkingBudget).toBe(4096);
+          expect(prompt!.thinkingBudget).toBe(0);
         }),
         { numRuns: 100 }
       );
@@ -575,7 +574,7 @@ describe('LocalizedPromptLibrary - Property-Based Tests', () => {
             expect(variant.culturalContext).toBe(culturalContext);
             expect(variant.approvalStatus).toBe('pending');
             expect(variant.createdAt).toBeInstanceOf(Date);
-            expect(variant.thinkingBudget).toBe(4096);
+            expect(variant.thinkingBudget).toBe(0);
           }
         ),
         { numRuns: 100 }

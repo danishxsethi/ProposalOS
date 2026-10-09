@@ -194,13 +194,13 @@ describe('LocalizationEngine - Property-Based Tests', () => {
   });
 
   /**
-   * Property 6: Gemini Thinking Budget Compliance
-   * Verify 4,096 token budget used
+   * Property 6: Bedrock Localization Thinking Budget
+   * Bedrock localization prompts use no separately configurable thinking budget.
    *
    * Validates: Requirements 2.3
    */
-  describe('Property 6: Gemini Thinking Budget Compliance', () => {
-    it('should always use exactly 4,096 token thinking budget', async () => {
+  describe('Property 6: Bedrock Localization Thinking Budget', () => {
+    it('should always leave the configurable thinking budget disabled', async () => {
       await fc.assert(
         fc.asyncProperty(
           nodeIdArb,
@@ -209,22 +209,21 @@ describe('LocalizationEngine - Property-Based Tests', () => {
           async (nodeId, basePrompt, locale) => {
             const result = await engine.localizePrompt(nodeId, locale, basePrompt);
 
-            // Verify thinking budget is exactly 4,096
-            expect(result.thinkingBudget).toBe(4096);
+            expect(result.thinkingBudget).toBe(0);
           }
         ),
         { numRuns: 20 }
       );
     }, 15000);
 
-    it('should maintain 4,096 token budget for multiple locales', async () => {
+    it('should keep the configurable thinking budget disabled for multiple locales', async () => {
       await fc.assert(
         fc.asyncProperty(nodeIdArb, basePromptArb, async (nodeId, basePrompt) => {
           // Test just a few locales to avoid timeout
           const testLocales = ['en-US', 'de-DE', 'fr-FR'];
           for (const locale of testLocales) {
             const result = await engine.localizePrompt(nodeId, locale, basePrompt);
-            expect(result.thinkingBudget).toBe(4096);
+            expect(result.thinkingBudget).toBe(0);
           }
         }),
         { numRuns: 20 }
