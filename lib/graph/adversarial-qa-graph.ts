@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { BEDROCK_NOVA_MICRO } from '@/lib/config/models';
 import { CostTracker, trackBedrockUsage } from '@/lib/costs/costTracker';
 import { scoreConfidence, softenLanguage } from '@/lib/delivery/confidenceScorer';
+import { isActiveLlmEnabled } from '@/lib/llm/mode';
 import { generateWithLLM } from '@/lib/llm/provider';
 import { logger } from '@/lib/logger';
 
@@ -123,7 +124,7 @@ type QAState = typeof AdversarialQAState.State;
 
 // ─── Helper ───────────────────────────────────────────────────────────────────
 function getModel() {
-  if (process.env.BEDROCK_ENABLED !== 'true') return null;
+  if (!isActiveLlmEnabled()) return null;
   return {
     async generateContent(prompt: string) {
       const res = await generateWithLLM({

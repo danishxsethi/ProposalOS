@@ -171,7 +171,14 @@ async function verify_evidence(state: State): Promise<Partial<State>> {
       staleFindingsCount: staleCount,
       degraded: state.degraded || invalidCount > 0 || staleCount > 0,
       ...(invalidCount > 0 || staleCount > 0
-        ? { errors: [nodeError('verify_evidence', `Evidence eligibility failure: invalid=${invalidCount}, stale=${staleCount}`)] }
+        ? {
+            errors: [
+              nodeError(
+                'verify_evidence',
+                `Evidence eligibility failure: invalid=${invalidCount}, stale=${staleCount}`
+              ),
+            ],
+          }
         : {}),
     };
   } catch (error) {
@@ -427,15 +434,31 @@ function route_prepare_retry(state: State): string {
 async function degrade_and_continue(state: State): Promise<Partial<State>> {
   try {
     logger.warn('[LangGraph:degrade_and_continue] Diagnosis degraded after max retries');
-    // Persist degraded state to DB
+    // Persist degraded state to DB. NOTE: `Audit` has no `error` scalar column —
+    // failure detail belongs in the `modulesFailed` Json array (same convention
+    // as the audit runner's budget-exceeded path). Writing `error:` here made
+    // Prisma throw PrismaClientValidationError, masking the degradation itself.
     if (state.auditId) {
       const { prisma } = await import('@/lib/prisma');
+      const existing = await prisma.audit.findUnique({
+        where: { id: state.auditId },
+        select: { modulesFailed: true },
+      });
+      const prior = Array.isArray((existing as { modulesFailed?: unknown } | null)?.modulesFailed)
+        ? (existing as { modulesFailed: Array<{ module: string; error: string }> }).modulesFailed
+        : [];
       await prisma.audit.update({
         where: { id: state.auditId },
         data: {
           status: 'DEGRADED',
-          error: `Diagnosis degraded: validation failed after ${state.retryCount} retries`,
-        } as any,
+          modulesFailed: [
+            ...prior,
+            {
+              module: 'diagnosis',
+              error: `Diagnosis degraded: validation failed after ${state.retryCount} retries`,
+            },
+          ],
+        },
       });
     }
     return { degraded: true };
@@ -622,13 +645,17 @@ export async function invokeDiagnosisGraphWithTimeout(
   }
 
   if (!initialState.evidenceSnapshots || initialState.evidenceSnapshots.length === 0) {
-    throw new Error('DIAGNOSIS_EVIDENCE_REQUIRED: Evidence snapshots are required for trusted diagnosis');
+    throw new Error(
+      'DIAGNOSIS_EVIDENCE_REQUIRED: Evidence snapshots are required for trusted diagnosis'
+    );
   }
   const invalidEvidenceFindingIds = (initialState.findings ?? [])
     .filter((finding) => !Array.isArray(finding.evidence) || finding.evidence.length === 0)
     .map((finding) => finding.id);
   if (invalidEvidenceFindingIds.length > 0) {
-    throw new Error(`DIAGNOSIS_EVIDENCE_INVALID: Findings without evidence: ${invalidEvidenceFindingIds.join(',')}`);
+    throw new Error(
+      `DIAGNOSIS_EVIDENCE_INVALID: Findings without evidence: ${invalidEvidenceFindingIds.join(',')}`
+    );
   }
 
   const controller = new AbortController();
@@ -650,11 +677,12 @@ export async function invokeDiagnosisGraphWithTimeout(
       timeoutPromise,
     ]);
     const qaMissing = result.errors.some((error) => error.node === 'adversarial_qa');
-    const resultState = result.degraded || result.errors.length > 0 || qaMissing
-      ? 'degraded'
-      : result.validation?.valid
-        ? 'trusted'
-        : 'failed';
+    const resultState =
+      result.degraded || result.errors.length > 0 || qaMissing
+        ? 'degraded'
+        : result.validation?.valid
+          ? 'trusted'
+          : 'failed';
     return { ...result, resultState };
   } catch (error) {
     if (error instanceof Error && error.message.startsWith('DIAGNOSIS_GRAPH_TIMEOUT')) {
