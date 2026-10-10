@@ -1,21 +1,13 @@
 locals {
-  # GitHub OIDC trust for the transferred repository, using GitHub's immutable
-  # identifier claims per AWS's documented guidance (IAM condition keys
-  # `repository_owner_id` / `repository_id` — names on GitHub are mutable; IDs
-  # are not). The earlier subject string "repo:Danish-Sethi@324834111/ProposalOS@1158247398:..."
-  # was malformed: GitHub never issues a `sub` in that shape, so a role trusting
-  # only that value would reject every legitimate workflow token.
   github_actions_main_subjects = [
-    "repo:Danish-Sethi/ProposalOS:ref:refs/heads/main"
+    "repo:Danish-Sethi@324834111/ProposalOS@1158247398:ref:refs/heads/main"
   ]
-  github_repository_owner_id = "324834111"
-  github_repository_id       = "1158247398"
 }
 
 resource "aws_iam_openid_connect_provider" "github_actions" {
   url            = "https://token.actions.githubusercontent.com"
   client_id_list = ["sts.amazonaws.com"]
-  tags = merge(local.common_tags, { Name = "proposalos-github-actions" })
+  tags           = merge(local.common_tags, { Name = "proposalos-github-actions" })
 }
 
 resource "aws_iam_role" "github_actions_production_deploy" {
@@ -32,14 +24,123 @@ resource "aws_iam_role" "github_actions_production_deploy" {
         StringEquals = {
           "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
           "token.actions.githubusercontent.com:sub" = local.github_actions_main_subjects
-          # Immutable identity of the transferred repository (owner + repo IDs):
-          # survives renames and cannot be claimed by a different account.
-          "token.actions.githubusercontent.com:repository_owner_id" = local.github_repository_owner_id
-          "token.actions.githubusercontent.com:repository_id"       = local.github_repository_id
-          "token.actions.githubusercontent.com:ref"                 = "refs/heads/main"
         }
       }
     }]
   })
   tags = merge(local.common_tags, { Name = "proposalos-github-actions-production-deploy" })
+}
+
+resource "aws_iam_role_policy" "github_actions_production_deploy" {
+  name = "ProposalOSProductionImageAndEcsDeploy"
+  role = aws_iam_role.github_actions_production_deploy.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid      = "EcrLogin"
+        Effect   = "Allow"
+        Action   = ["ecr:GetAuthorizationToken"]
+        Resource = "*"
+      },
+      {
+        Sid    = "PublishAndReadOnlyProductionImages"
+        Effect = "Allow"
+        Action = [
+          "ecr:BatchCheckLayerAvailability",
+          "ecr:CompleteLayerUpload",
+          "ecr:DescribeImages",
+          "ecr:GetDownloadUrlForLayer",
+          "ecr:InitiateLayerUpload",
+          "ecr:PutImage",
+          "ecr:UploadLayerPart",
+          "ecr:BatchGetImage"
+        ]
+        Resource = [for name in ["proposalos-production-proposal-engine", "proposalos-production-claraud-web", "proposalos-production-migration-importer"] : "arn:aws:ecr:${var.aws_region}:${var.aws_account_id}:repository/${name}"]
+      },
+      {
+        Sid      = "RegisterTaskDefinitions"
+        Effect   = "Allow"
+        Action   = ["ecs:RegisterTaskDefinition"]
+        Resource = "*"
+      },
+      {
+        Sid      = "ReadAndTagOnlyProductionTaskDefinitions"
+        Effect   = "Allow"
+        Action   = ["ecs:DescribeTaskDefinition", "ecs:TagResource"]
+        Resource = "arn:aws:ecs:${var.aws_region}:${var.aws_account_id}:task-definition/proposalos-production-*:*"
+      },
+      {
+        Sid      = "DescribeProductionCluster"
+        Effect   = "Allow"
+        Action   = ["ecs:DescribeClusters"]
+        Resource = aws_ecs_cluster.production.arn
+      },
+      {
+        Sid      = "DescribeAndUpdateProductionServices"
+        Effect   = "Allow"
+        Action   = ["ecs:DescribeServices", "ecs:UpdateService"]
+        Resource = [aws_ecs_service.api.arn, aws_ecs_service.web.arn]
+      },
+      {
+        Sid      = "RunSchemaMigrationTask"
+        Effect   = "Allow"
+        Action   = ["ecs:RunTask"]
+        Resource = "arn:aws:ecs:${var.aws_region}:${var.aws_account_id}:task-definition/proposalos-production-schema-migrator:*"
+        Condition = {
+          ArnEquals = { "ecs:cluster" = aws_ecs_cluster.production.arn }
+        }
+      },
+      {
+        Sid      = "InspectAndStopProductionTasks"
+        Effect   = "Allow"
+        Action   = ["ecs:DescribeTasks", "ecs:StopTask"]
+        Resource = "arn:aws:ecs:${var.aws_region}:${var.aws_account_id}:task/${aws_ecs_cluster.production.name}/*"
+        Condition = {
+          ArnEquals = { "ecs:cluster" = aws_ecs_cluster.production.arn }
+        }
+      },
+      {
+        Sid      = "ListProductionTasks"
+        Effect   = "Allow"
+        Action   = ["ecs:ListTasks"]
+        Resource = "*"
+        Condition = {
+          ArnEquals = { "ecs:cluster" = aws_ecs_cluster.production.arn }
+        }
+      },
+      {
+        Sid      = "ReadProductionDatabaseEndpointMetadata"
+        Effect   = "Allow"
+        Action   = ["rds:DescribeDBInstances"]
+        Resource = "*"
+      },
+      {
+        Sid      = "ReadMigrationTaskLogs"
+        Effect   = "Allow"
+        Action   = ["logs:DescribeLogStreams", "logs:GetLogEvents"]
+        Resource = "${aws_cloudwatch_log_group.service["migration-importer"].arn}:*"
+      },
+      {
+        Sid    = "PassOnlyProposalOsProductionTaskRoles"
+        Effect = "Allow"
+        Action = ["iam:PassRole"]
+        Resource = [
+          aws_iam_role.api_task.arn,
+          aws_iam_role.api_execution.arn,
+          aws_iam_role.web_task.arn,
+          aws_iam_role.web_execution.arn,
+          aws_iam_role.production_schema_migrator_execution.arn
+        ]
+        Condition = {
+          StringEquals = { "iam:PassedToService" = "ecs-tasks.amazonaws.com" }
+        }
+      }
+    ]
+  })
+}
+
+output "github_actions_production_deploy_role_arn" {
+  value       = aws_iam_role.github_actions_production_deploy.arn
+  description = "OIDC role restricted to GitHub main for immutable image publishing and ProposalOS production ECS deployment."
 }
