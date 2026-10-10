@@ -81,3 +81,34 @@ The journey was not a green-field exercise — it surfaced and fixed eight real,
 2. Replace the fixture LLM with authorized real Bedrock inference on the same evidence-rich fixture; require the same QA thresholds; capture model, latency, and cost. Authorization request: nonproduction AWS identity, least-privilege Bedrock invoke on an approved Nova model in an approved region, small fixed cost ceiling.
 3. First authorized real-business audit (owner-approved domain, bounded crawler egress, cost ceiling), then human review of every finding and proposal.
 4. Resolve the full-tree dependency policy (GHSA-vfj7-8cjw-p6xm, GHSA-c475-qrg2-pj4r) so required CI can pass on a release candidate.
+
+---
+
+## Wave 2 update (2026-10-10, execution branch, commit d1556bc)
+
+### M1 re-verified with commercial-truthfulness gate
+
+A **customer-facing financial-claim gate** (`lib/proposal/financialClaims.ts`) is now enforced end-to-end. The journey's "$13,586/mo lost" headline was traced to its source: heuristic visitor estimates (reviewCount × 150), industry benchmark conversion rates, invented severity floors ($650/$350/$150/$75 monthly minimums), and — worse — fabricated fallback findings with invented dollar values and evidence snippets when an audit returned empty. Corrected:
+
+- Dollar claims appear in customer-facing copy ONLY when the audit contains observed traffic/conversion/revenue inputs. No audit module collects them today, so every current proposal renders observed evidence instead ("48 verified issues found across search, mobile, and reputation").
+- Invented floors removed; fabricated fallback findings removed entirely; modeled impact retained for internal prioritization only; any displayed estimate (future observed-input audits) is labeled "modeled" with documented inputs and assumptions.
+- Observed evidence preserved: verified finding counts, priority issues, competitor standing, per-finding evidence snippets, measured performance/accessibility facts.
+- Journey rerun with the gate: `CONTROLLED_JOINED_JOURNEY_VERIFIED`; the rendered page and 8-page PDF contain **zero** unsupported monetary claims. 10 new regression tests; the conversion rubric now enforces suppression (standard corrected, not lowered).
+
+### M2 preflight complete — inference authorization-blocked
+
+- **Fail-closed LLM budget ceiling** (`lib/llm/budget.ts` + `generateWithLLM` wiring): `LLM_BUDGET_MAX_CENTS` refuses any real-inference call whose worst-case estimate would cross the ceiling, before the provider is reached (AWS Budgets alerts are not hard caps). 7 tests.
+- **Real-inference journey mode** (`JOURNEY_REAL_INFERENCE=1`): switches only the LLM boundary to Bedrock (fixture providers/storage/site unchanged), enforces the ceiling, runs the journey plus bounded regenerations (default 3 generations), and fails the run if ANY fixture-LLM engagement appears in the server log (no silent fallback). Verified: the preflight fails closed today with the exact owner action.
+- **Blocker (M2_AUTHORIZATION_BLOCKED):** no VM-available AWS identity has Bedrock permissions. Verified empirically: `bedrock:ListFoundationModels` is denied for the only active audit identity; the `AWS_BEARER_TOKEN_BEDROCK` present on the VM is a Toolkit-scope bearer token that cannot sign SigV4 `Converse` calls; the only identity with `bedrock:InvokeModel` on the approved Nova models is the ECS task role, which is not reachable from this VM.
+- **Minimal owner action to unblock M2:** grant a NONPRODUCTION AWS identity least-privilege `bedrock:InvokeModel` (+ `bedrock:Converse` where used) scoped to `arn:aws:bedrock:us-east-2::foundation-model/amazon.nova-micro-v1:0` and `.../amazon.nova-2-lite-v1:0`, expose it to the VM (AWS_PROFILE or static keys), and approve the experimental spend ceiling (suggested USD $5 total; enforced fail-closed application-side by `LLM_BUDGET_MAX_CENTS`). Then run `JOURNEY_REAL_INFERENCE=1 npm run journey:controlled`.
+
+### M3 preparation — network boundary qualified, domain not yet approved
+
+- New: **bounded Chromium page-request budget** in the browser guard (default 150 requests/page, fail-closed abort beyond it) — no runaway pages during real audits.
+- New: **reproducible egress-boundary qualification** (`tests/security/browser-egress-boundary.test.ts`) driving the REAL Chromium with the REAL guard: cloud-metadata and private-range requests ABORTED (explicitly observed in the request-failure log), same-origin assets allowed, a 400-asset flood capped by the budget, and production posture refusing loopback navigation (the journey's loopback exception is env-scoped, never a standing production allowance).
+- Existing controls re-verified this wave: SSRF validation with DNS pinning, redirect re-validation, blocked ports, page count/depth caps (8 pages / depth 3), per-page and global timeouts, bounded phase concurrency.
+- **Blocker (M3_AUTHORIZATION_BLOCKED):** no domain has been owner-approved for a real audit. No public scanning was performed.
+
+### M1 independent reproducibility
+
+A dedicated CI job — **"Controlled fixture journey (M1, no real inference)"** — now boots the canonical disposable stack (Postgres + PgBouncer containers, local fixture providers/storage, no credentials, Chrome from the runner image) and runs the full joined journey on every push/PR, uploading the evidence artifact. The job name and evidence explicitly distinguish fixture execution from real inference. Local original artifacts remain in `tests/journey/evidence/` (regenerated per run, gitignored).

@@ -112,3 +112,31 @@ If the owner chooses an exception over the breaking migration, the prepared scop
 - **Compensating controls:** the gate script continues to fail on every other HIGH/CRITICAL advisory (production-tree zero-HIGH check unchanged, verified this session); the exception would be keyed to the exact advisory ID with expiry.
 - **Proposed expiry/review:** 30 days from approval, re-checked against upstream for a patched braces release or the planned Tailwind 4 migration.
 - **Not done:** no exception added, no threshold lowered, no suppression committed. The gate still fails today, correctly.
+
+## Append 3 — Wave 2 (2026-10-10, commits d40634c..d1556bc)
+
+### Terraform regression (URGENT) — fixed and regression-tested
+
+The Wave-1 OIDC commit (d2a6299) was wrong twice; both defects are reverted by restoring `github-actions.tf` byte-identical to the reviewed PR #6 version and adding `tests/security/oidc-trust-policy.test.ts` (9 tests: exact immutable subject, audience, main restriction, deployment-policy presence, no-wildcard checks, SHA-256 content tripwire). `terraform fmt -check` and `terraform validate` pass. Details in the AWS ledger Append 2. **No apply; live IAM untouched.**
+
+### Commercial truthfulness — financial-claim gate
+
+The fixture proposal's "$13,586/mo" revenue-loss headline was traced to invented severity floors, review-count-derived visitor heuristics, and fabricated fallback findings. All removed; a customer-facing financial-claim gate now permits dollar claims only with observed traffic/conversion/revenue inputs (none collected today). The controlled journey re-verified: `CONTROLLED_JOINED_JOURNEY_VERIFIED`, zero unsupported monetary claims in the rendered page and PDF. 10 regression tests; conversion rubric corrected to enforce suppression. Modeled estimates remain for internal prioritization only; any future displayed estimate is labeled "modeled" with documented inputs/assumptions.
+
+### Dependency policy — prepared exception mechanism (NOT auto-approved)
+
+`basic-ftp` (6.2.3) and `esbuild` (0.28.2) remediations from Wave 1 hold. The remaining 7 full-tree HIGHs are all GHSA-vfj7-8cjw-p6xm (braces, dev-only chains; no patched release exists). New gate mechanism (`lib/security/dependencyExceptions.ts` + rewired `scripts/check-dependency-audits.ts`): the single prepared exception (expiry 2026-11-09) activates ONLY via `PROPOSALOS_DEPENDENCY_EXCEPTIONS_APPROVED=true` (owner, in CI), and even then honors it only while unexpired, dev-only (automatic failure if braces becomes production-reachable), with the production zero-HIGH gate unchanged, CRITICAL never excusable, and every other HIGH/CRITICAL still failing. 8 tests cover each rule. **The gate fails today, correctly, and prints the exact activation instruction. No threshold was reduced.**
+
+### CI (Wave 2 additions)
+
+- New job **"Controlled fixture journey (M1, no real inference)"** runs the full joined journey on the disposable stack with local fixtures and no credentials, uploading evidence artifacts.
+- All Wave-2 commits secret-scan clean (PR run 38069405715).
+- Test Suite runs on the Wave-2 head are recorded in the session evidence; the required gates remain: everything green except the dependency-policy job while the braces decision is pending.
+
+### What remains blocked
+
+- **M2 (real inference):** authorization — see the ledger Append 2 for the exact minimal grants and spend ceiling.
+- **M3 (first real audit):** no owner-approved domain; boundary qualification is complete and reproducible.
+- **Braces decision:** the prepared exception awaits explicit owner approval (or the Tailwind 4 migration).
+- **Live IAM trust correction + clean-SHA deployment:** IAM reads denied; apply remains owner-gated.
+- Historical share tokens and GHAS alert #11 remain OWNER_ACTION_REQUIRED, unchanged.

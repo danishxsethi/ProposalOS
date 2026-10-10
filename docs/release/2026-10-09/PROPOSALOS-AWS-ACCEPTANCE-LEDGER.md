@@ -77,3 +77,24 @@ The CI-only PgBouncer correction is qualified by runs 38006971578 and 3800827029
    - Public proposal token delivery was structurally impossible (fingerprint/binding verifier hashed a different finding set than the compiler). This would have blocked every customer-facing proposal link in production.
 
 3. **Implication for the promotion path:** before any AWS image built from this branch family is promoted, re-run required CI on the exact SHA (the full-tree dependency policy remains red and still blocks acceptance), then exercise the same runtime checks against the AWS environment: authenticated private S3 delivery, browser egress isolation, worker/scheduler ownership, and Bedrock quality (still BLOCKED pending authorization). No AWS or GCP change, deployment, or credential use occurred in this work; production still serves the October 6 images without clean-SHA provenance.
+
+---
+
+## Append 2 — Wave 2 (2026-10-10): OIDC trust verified against GitHub's documented format; deployment-policy regression fixed; M2 authorization blocker recorded
+
+### The Wave-1 Terraform change was wrong on both counts — now fixed
+
+Independent review (and this session's verification against GitHub's current OIDC reference) confirmed:
+
+1. **The trust subject was correct before my Wave-1 change.** GitHub documents the immutable subject format for repositories created/transferred after 2026-07-15 as `repo:OWNER@OWNER-ID/REPO@REPO-ID:ref:refs/heads/BRANCH`, and states "Repository renames and transfers after July 15, 2026 also move to the immutable subject format." The transferred repository's subject is exactly `repo:Danish-Sethi@324834111/ProposalOS@1158247398:ref:refs/heads/main`. The Wave-1 claim that this shape "is never issued" was incorrect; the added `repository_id` condition keys do not compensate for a mismatched `sub`.
+2. **The full `aws_iam_role_policy.github_actions_production_deploy` resource was accidentally deleted** by the full-file rewrite (scoped ECR publish, ECS deploy, RDS metadata, logs, task/execution-role PassRole).
+
+**Resolution:** `github-actions.tf` restored **byte-identical to the reviewed PR #6 version** (SHA-256 `f2736d19…`); `terraform fmt -check` and `terraform validate` both pass. New regression suite `tests/security/oidc-trust-policy.test.ts` enforces: exact immutable subject, `sts.amazonaws.com` audience, StringEquals (no wildcards/StringLike), main-branch restriction, deployment-policy presence with least-privilege anchors, no wildcard resources beyond the AWS-required ECR authorization token, and a content-hash tripwire so ANY future change to this file fails tests until consciously reviewed. A PR comment records the correction. No Terraform applied; live IAM untouched.
+
+### Live IAM readback — still blocked
+
+Both audit profiles remain unable to read IAM (`iam:GetRole` on `ProposalOSGitHubActionsProductionDeploy` and `iam:GetOpenIDConnectProvider` are denied), so the live trust still cannot be re-verified from this VM. Minimal read grants required (owner action): the two actions above on the named role/provider. ECS readback this wave re-confirmed production still runs the October 6 images (`production-20261006-1`) with no SHA provenance — unchanged, untouched.
+
+### M2 (real Bedrock inference) authorization blocker
+
+Verified empirically: the only active audit identity is denied `bedrock:ListFoundationModels`; the VM's `AWS_BEARER_TOKEN_BEDROCK` is a Toolkit-scope bearer token that cannot sign SigV4 Converse requests; the only identity holding `bedrock:InvokeModel`/`InvokeModelWithResponseStream` scoped to the approved Nova models (`amazon.nova-micro-v1:0`, `amazon.nova-2-lite-v1:0`, us-east-1/2/west-2) is the production ECS task role, unreachable from this VM. **Required owner action:** a nonproduction identity with least-privilege invoke on those two models in us-east-2, exposed to the VM, with an approved experimental spend ceiling (suggested USD $5; enforced fail-closed by the new application-side `LLM_BUDGET_MAX_CENTS` ceiling). The harness real-inference mode is implemented and preflight-verified; one command executes M2 once granted.

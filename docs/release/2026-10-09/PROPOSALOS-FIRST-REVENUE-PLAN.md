@@ -40,6 +40,17 @@ Counts below are current as of this report. Track prospects by an internal alias
 | QA-reviewed proposal delivered          |       0 | Proposal passes factual, scope, and quality review          |
 | Accepted / paid pilot                   |       0 | Signed terms and manually verified payment                  |
 
+## Commercial truthfulness (Wave 2 update, 2026-10-10)
+
+The journey previously led with an invented "$X/mo lost" headline (heuristic
+visitor estimates, invented severity floors, fabricated fallback findings).
+A financial-claim gate now permits customer-facing dollar claims only with
+observed traffic/conversion/revenue inputs; every current proposal leads with
+verified observed evidence instead. Modeled estimates, when inputs ever exist,
+must be labeled "modeled" with documented inputs and assumptions. This is a
+precondition for any honest customer conversation: the first real proposal a
+prospect sees will contain only claims we can trace to captured evidence.
+
 ## Current readiness
 
 - Validated segment or customer demand: **none**
@@ -56,9 +67,9 @@ No outreach, customer contact, charge, or commitment was made. The public sample
 
 ## Minimum path to the first paid pilot
 
-1. ~~Build and pass the joined fixture-journey test~~ **DONE 2026-10-10** (`CONTROLLED_JOINED_JOURNEY_VERIFIED`). Resolve the source dependency-policy blocker before release acceptance.
-2. Replace fixture inference with authorized real Bedrock inference on the same fixture (owner approves identity, model, region, and a small fixed cost ceiling); keep the same QA thresholds and record model/latency/cost.
-3. Qualify one authorized US HVAC website with a bounded network policy and explicit provider/model cost ceiling; complete a real audit and human-review every finding and the proposal.
+1. ~~Build and pass the joined fixture-journey test~~ **DONE 2026-10-10** (`CONTROLLED_JOINED_JOURNEY_VERIFIED`; re-verified with the financial-claim gate; now also runs as a CI job).
+2. Replace fixture inference with authorized real Bedrock inference on the same fixture — **preflight complete, authorization blocked**: owner grants a nonproduction identity least-privilege invoke on Nova Micro + Nova 2 Lite (us-east-2) and approves the USD $5 experimental ceiling; then `JOURNEY_REAL_INFERENCE=1 npm run journey:controlled` executes the bounded generations.
+3. Qualify one authorized US HVAC website — **crawler/Chromium boundary now reproducibly qualified** (metadata/private aborts, request budget, SSRF/DNS pinning re-verified); blocked only on the owner-approved domain and spend. Complete a real audit and human-review every finding and the proposal.
 4. Have the owner approve a warm introduction only after the demo, scope, agreement, privacy/retention terms, and fulfillment capacity are ready.
 5. Invoice manually only after seller, tax, refund, payment, and delivery details are verified and the customer accepts the terms.
 
