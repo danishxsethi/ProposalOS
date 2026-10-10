@@ -1,7 +1,7 @@
 # ProposalOS first-revenue plan
 
 **Status:** operator-assisted pilot hypothesis; not ready for sale.
-**Evidence snapshot:** 2026-10-10 00:13 UTC
+**Evidence snapshot:** 2026-10-10 00:25 UTC
 **Source snapshot:** PR #6 code/test head 627fe1db61643cb86d8f8cc7c2db22164095c47e.
 
 ## Initial customer and delivery path
@@ -43,7 +43,7 @@ Counts below are current as of this report. Track prospects by an internal alias
 ## Current readiness
 
 - Validated segment or customer demand: **none**
-- Disposable PostgreSQL migration/RLS/queue qualification: **passed on CI run 38006971578**; no joined audit-to-proposal journey is demonstrated
+- Disposable PostgreSQL migration/RLS/queue qualification: **passed on CI run 38008270296**; no joined audit-to-proposal journey is demonstrated
 - Complete real audits and accepted proposals: **0**
 - Demonstration deliverable with independently scored QA: **none**
 - Approved warm/design-partner cohort or outreach: **none**

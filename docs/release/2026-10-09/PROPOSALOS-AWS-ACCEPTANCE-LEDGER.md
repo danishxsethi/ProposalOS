@@ -1,7 +1,7 @@
 # ProposalOS AWS acceptance ledger
 
-**Evidence snapshot:** 2026-10-10 00:13 UTC
-**Latest completed CI source:** PR #6 report-only head 8d1cb3b2ca649b3089c700a5c210ccf21c45161b; code/test head 627fe1db61643cb86d8f8cc7c2db22164095c47e
+**Evidence snapshot:** 2026-10-10 00:25 UTC
+**Latest completed CI source:** PR #6 report-only head d9e9eed8abfce5b432657536aee5f30921ab64aa; code/test head 627fe1db61643cb86d8f8cc7c2db22164095c47e
 **Source verdict:** CLEAN_SOURCE_RC_PUBLISHED
 **Runtime acceptance:** BLOCKED
 **No AWS or GCP changes were made for this update.**
@@ -29,13 +29,13 @@ Promotion still requires owner-reviewed IAM trust correction, normal CI on the e
 
 ## CI at this source snapshot
 
-GitHub run 38007639963 on report-only head 8d1cb3b2ca649b3089c700a5c210ccf21c45161b (code/test changes from 627fe1db61643cb86d8f8cc7c2db22164095c47e):
+GitHub run 38008270296 on report-only head d9e9eed8abfce5b432657536aee5f30921ab64aa (code/test changes from 627fe1db61643cb86d8f8cc7c2db22164095c47e):
 
-- Claraud web build: PASS, job 114080017211.
-- Typecheck, root lint, Prisma schema validation, disposable Postgres/PgBouncer startup with authenticated app_user preflight, and empty-database migration replay: PASS, job 114080017346.
-- Deterministic suite: PASS, 278 test files and 2,847 tests passed, including the disposable RLS and queue tests; job 114080017346.
-- Full dependency advisory policy: FAIL, job 114080017822. Production tree had 0 HIGH/CRITICAL; full tree had 12 HIGH, 2 moderate, and 1 low findings, concentrated in GHSA-vfj7-8cjw-p6xm and GHSA-c475-qrg2-pj4r. No exception or threshold reduction was applied.
-- Gitleaks push run 38007636695 and PR run 38007640130: PASS.
+- Claraud web build: PASS, job 114082033466.
+- Typecheck, root lint, Prisma schema validation, disposable Postgres/PgBouncer startup with authenticated app_user preflight, and empty-database migration replay: PASS, job 114082033379.
+- Deterministic suite: PASS, 278 test files and 2,847 tests passed, including the disposable RLS and queue tests; job 114082033379.
+- Full dependency advisory policy: FAIL, job 114082033211. Production tree had 0 HIGH/CRITICAL; full tree had 12 HIGH, 2 moderate, and 1 low findings, concentrated in GHSA-vfj7-8cjw-p6xm and GHSA-c475-qrg2-pj4r. No exception or threshold reduction was applied.
+- Gitleaks push run 38008265022 and PR run 38008270263: PASS.
 
 ## Acceptance ledger
 
@@ -54,7 +54,7 @@ GitHub run 38007639963 on report-only head 8d1cb3b2ca649b3089c700a5c210ccf21c451
 
 The prior GCP readback found billing disabled and zero Cloud Build triggers for project proposal-487522. Neither was changed, and GCP was not retired. Three already-public proposal-share tokens remain UNKNOWN / OWNER_ACTION_REQUIRED; GitHub alert #11 remains unresolved. Those issues require separate owner action before pilot acceptance.
 
-The CI-only PgBouncer correction is now qualified by run 38006971578: authenticated app_user readiness and all disposable database/RLS tests passed. This did not query or mutate production or AWS databases. Overall CI remains blocked by the separate dependency policy.
+The CI-only PgBouncer correction is qualified by runs 38006971578 and 38008270296: authenticated app_user readiness and all disposable database/RLS tests passed. This did not query or mutate production or AWS databases. Overall CI remains blocked by the separate dependency policy.
 
 ## Owner-controlled steps before promotion
 
