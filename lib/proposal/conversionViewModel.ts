@@ -14,6 +14,7 @@
  * 10. Pricing Urgency / Expiry Date
  */
 
+import { assessRevenueImpact, type RevenueImpactAssessment } from './financialClaims';
 import {
   CANONICAL_OFFERS,
   formatDollar,
@@ -33,8 +34,15 @@ export interface QuantifiedFinding {
   title: string;
   description: string;
   severity: 'Critical' | 'High' | 'Medium' | 'Low';
-  monthlyDollarLoss: number;
-  monthlyDollarFormatted: string;
+  /**
+   * INTERNAL prioritization weight (modeled, not observed). Never shown as a
+   * customer-facing fact: customer-facing dollar strings are null unless the
+   * revenue-impact gate (lib/proposal/financialClaims.ts) confirms observed
+   * traffic/conversion inputs exist.
+   */
+  modeledMonthlyImpact: number;
+  /** Customer-facing dollar string, or null when the financial-claim gate suppresses it. */
+  monthlyDollarFormatted: string | null;
   evidenceSnippets: string[];
   recommendedFix: string;
   isQuickWin: boolean;
@@ -69,18 +77,30 @@ export interface ProposalConversionModel {
     headline: string;
     subheadline: string;
     primaryProblemTitle: string;
-    primaryProblemLossFormatted: string;
-    totalMonthlyBleedFormatted: string;
-    totalAnnualBleedFormatted: string;
+    /** Null when the financial-claim gate suppresses monetary claims. */
+    primaryProblemLossFormatted: string | null;
+    /** Null when the financial-claim gate suppresses monetary claims. */
+    totalMonthlyBleedFormatted: string | null;
+    /** Null when the financial-claim gate suppresses monetary claims. */
+    totalAnnualBleedFormatted: string | null;
   };
 
-  // 2. Executive Summary (Max 3 findings with $ values)
+  // Financial-claim gate result + observed-evidence KPIs (always safe to show).
+  revenueImpact: RevenueImpactAssessment;
+  evidenceKpis: Array<{
+    label: string;
+    value: string;
+    detail: string;
+  }>;
+
+  // 2. Executive Summary (Max 3 findings; dollar framing only when supported)
   executiveSummary: {
     overview: string;
     topThreePoints: Array<{
       title: string;
       metric: string;
-      monthlyLossFormatted: string;
+      /** Null when the financial-claim gate suppresses monetary claims. */
+      monthlyLossFormatted: string | null;
       explanation: string;
     }>;
   };
@@ -99,8 +119,10 @@ export interface ProposalConversionModel {
   pricingTiers: Array<
     OfferTierDefinition & {
       priceFormatted: string;
-      monthlyRoiFormatted: string;
-      roiPaybackDays: number;
+      /** Null when the financial-claim gate suppresses ROI claims. */
+      monthlyRoiFormatted: string | null;
+      /** Null when the financial-claim gate suppresses ROI claims. */
+      roiPaybackDays: number | null;
     }
   >;
 
@@ -201,24 +223,27 @@ export function buildProposalConversionModel(
 
   const rawFindings: any[] = Array.isArray(audit.findings) ? audit.findings : [];
 
-  // Quantify all findings in dollars
+  // Financial-claim gate: dollar figures are customer-facing ONLY when the
+  // audit contains observed traffic/conversion/revenue inputs. Today the
+  // pipeline collects none, so all dollar strings below are null and the
+  // copy uses observed evidence instead. The ROI model remains for internal
+  // prioritization only — never presented as a business fact.
+  const revenueImpact = assessRevenueImpact(audit);
+  const dollarVisible = revenueImpact.supported;
+
+  // Quantify findings for INTERNAL prioritization (modeled, not observed).
   const quantified: QuantifiedFinding[] = rawFindings.map((f: any) => {
     const roi = calculateFindingROI(f, businessIndustry, { findings: rawFindings });
-    // Floor monthly loss based on severity to ensure realistic business value
-    let monthlyLoss = roi.monthlyValue;
+    const modeledMonthlyImpact = Math.max(0, Math.round(roi.monthlyValue));
     const severity = mapFindingSeverity(f);
-    if (severity === 'Critical' && monthlyLoss < 450) monthlyLoss = 650;
-    else if (severity === 'High' && monthlyLoss < 250) monthlyLoss = 350;
-    else if (severity === 'Medium' && monthlyLoss < 100) monthlyLoss = 150;
-    else if (severity === 'Low' && monthlyLoss < 50) monthlyLoss = 75;
 
     return {
       id: f.id || Math.random().toString(36).substring(7),
       title: cleanFindingText(f.title),
       description: cleanFindingText(f.description),
       severity,
-      monthlyDollarLoss: monthlyLoss,
-      monthlyDollarFormatted: formatDollar(monthlyLoss),
+      modeledMonthlyImpact,
+      monthlyDollarFormatted: dollarVisible ? formatDollar(modeledMonthlyImpact) : null,
       evidenceSnippets: extractEvidenceSnippets(f),
       recommendedFix: getRecommendedFixText(f.recommendedFix),
       isQuickWin: isFindingQuickWin(f),
@@ -227,59 +252,32 @@ export function buildProposalConversionModel(
     };
   });
 
-  // Sort descending by monthly dollar loss
-  quantified.sort((a, b) => b.monthlyDollarLoss - a.monthlyDollarLoss);
+  // Rank by modeled impact, then severity — internal ordering only.
+  const severityRank = { Critical: 3, High: 2, Medium: 1, Low: 0 };
+  quantified.sort(
+    (a, b) =>
+      b.modeledMonthlyImpact - a.modeledMonthlyImpact ||
+      severityRank[b.severity] - severityRank[a.severity]
+  );
 
-  // Fallback findings if audit returned empty findings
-  if (quantified.length === 0) {
-    quantified.push({
-      id: 'f-schema',
-      title: 'Missing Core LocalBusiness & Service Structured Data',
-      description: 'Search engines are unable to index rich snippets, reviews, and service catalogs.',
-      severity: 'Critical',
-      monthlyDollarLoss: 950,
-      monthlyDollarFormatted: '$950',
-      evidenceSnippets: ['0 JSON-LD schema entities detected on primary domain.'],
-      recommendedFix: 'Deploy complete LocalBusiness, Review, and Breadcrumb Schema graph.',
-      isQuickWin: false,
-      category: 'Structured Data',
-      module: 'schema',
-    });
-    quantified.push({
-      id: 'f-meta',
-      title: 'Missing or Truncated Search Meta Title and Description',
-      description: 'Search engines display default or truncated snippets, lowering click-through rates.',
-      severity: 'High',
-      monthlyDollarLoss: 450,
-      monthlyDollarFormatted: '$450',
-      evidenceSnippets: ['Meta description missing or under 60 characters.'],
-      recommendedFix: 'Rewrite meta title & description with keyword + conversion hooks.',
-      isQuickWin: true,
-      category: 'Technical SEO',
-      module: 'seo',
-    });
-    quantified.push({
-      id: 'f-conversion',
-      title: 'Uncaptured Mobile Traffic & Missing Booking Integration',
-      description: 'Mobile visitors drop off before completing an appointment or inquiry.',
-      severity: 'High',
-      monthlyDollarLoss: 600,
-      monthlyDollarFormatted: '$600',
-      evidenceSnippets: ['No direct email/booking capture flow observed above the fold.'],
-      recommendedFix: 'Implement instant 1-click mobile appointment/inquiry capture widget.',
-      isQuickWin: true,
-      category: 'Conversion Rate',
-      module: 'cro',
-    });
-  }
+  // NOTE: a previous version fabricated three "fallback findings" with
+  // invented dollar losses and evidence snippets when the audit returned no
+  // findings. That was fabricated evidence and has been removed entirely:
+  // an empty audit renders an honest empty findings list (in practice the
+  // proposal compiler refuses to create proposals for audits with no
+  // evidence-backed findings, so this is legacy-row defense only).
 
-  // Calculate total monthly bleed
-  const totalMonthlyBleed = quantified.reduce((sum, f) => sum + f.monthlyDollarLoss, 0);
+  // Modeled totals — customer-facing ONLY when the financial-claim gate passes.
+  const totalMonthlyBleed = quantified.reduce((sum, f) => sum + f.modeledMonthlyImpact, 0);
   const totalAnnualBleed = totalMonthlyBleed * 12;
+  const totalMonthlyBleedFormatted = dollarVisible ? `${formatDollar(totalMonthlyBleed)}/mo` : null;
+  const totalAnnualBleedFormatted = dollarVisible ? `${formatDollar(totalAnnualBleed)}/yr` : null;
 
-  const primaryProblem = quantified[0]!;
-  const primaryProblemTitle = primaryProblem.title;
-  const primaryProblemLossFormatted = primaryProblem.monthlyDollarFormatted;
+  const primaryProblem = quantified[0];
+  const primaryProblemTitle =
+    primaryProblem?.title ?? 'No verified issues were found for this audit';
+  const primaryProblemLossFormatted =
+    primaryProblem && dollarVisible ? primaryProblem.monthlyDollarFormatted : null;
 
   // Split quick wins vs strategic
   const quickWins = quantified.filter((f) => f.isQuickWin);
@@ -291,13 +289,17 @@ export function buildProposalConversionModel(
     quickWins.push({ ...lastFinding, isQuickWin: true });
   }
 
-  // Executive summary: exactly top 3 findings max, each with $ impact
+  // Executive summary: exactly top 3 findings max; dollar framing only when supported
   const topThree = quantified.slice(0, 3);
   const topThreePoints = topThree.map((f) => ({
     title: f.title,
     metric: f.severity,
     monthlyLossFormatted: f.monthlyDollarFormatted,
-    explanation: f.description || `Costing an estimated ${f.monthlyDollarFormatted}/month in lost customer volume.`,
+    explanation:
+      f.description ||
+      (f.monthlyDollarFormatted
+        ? `Modeled at an estimated ${f.monthlyDollarFormatted}/month in lost customer volume.`
+        : 'Verified against captured audit evidence.'),
   }));
 
   // Resolve Pricing Tiers
@@ -308,10 +310,20 @@ export function buildProposalConversionModel(
   });
 
   const pricingTiers = offers.map((tier) => {
+    // ROI and payback claims require the financial-claim gate; otherwise the
+    // tier card shows the price and scope only.
+    if (!dollarVisible) {
+      return {
+        ...tier,
+        priceFormatted: formatDollar(tier.price),
+        monthlyRoiFormatted: null,
+        roiPaybackDays: null,
+      };
+    }
     const monthlyRecovery = Math.round(
       totalMonthlyBleed * (tier.id === 'starter' ? 0.45 : tier.id === 'growth' ? 0.85 : 1.0)
     );
-    const paybackDays = Math.max(7, Math.round((tier.price / (monthlyRecovery / 30))));
+    const paybackDays = Math.max(7, Math.round(tier.price / (monthlyRecovery / 30)));
     return {
       ...tier,
       priceFormatted: formatDollar(tier.price),
@@ -331,7 +343,8 @@ export function buildProposalConversionModel(
         'Patch high-priority meta titles and descriptions',
         'Verify Rich Results indexing in Google Search Console',
       ],
-      impactSummary: 'Stops immediate technical crawler drop-off and prepares domain for rich search cards.',
+      impactSummary:
+        'Stops immediate technical crawler drop-off and prepares domain for rich search cards.',
     },
     {
       phase: 2,
@@ -368,7 +381,9 @@ export function buildProposalConversionModel(
       : [];
     competitorSummary = {
       rankText: `Rank #${rank} of ${total} in ${businessCity}`,
-      competitorLeadSummary: compReport.summaryStatement || `Competitors currently lead in review volume and structured data.`,
+      competitorLeadSummary:
+        compReport.summaryStatement ||
+        `Competitors currently lead in review volume and structured data.`,
       competitorNames: names,
     };
   }
@@ -396,15 +411,44 @@ export function buildProposalConversionModel(
     singleCtaText: CANONICAL_OFFERS.singleCtaText,
     singleCtaSubtext: CANONICAL_OFFERS.singleCtaSubtext,
     hookHeader: {
-      headline: `${businessName} is losing an estimated ${formatDollar(totalMonthlyBleed)}/mo to local search gaps`,
+      // Financial-claim gate: a definitive dollar-loss headline requires
+      // observed traffic/conversion inputs. Without them, the headline states
+      // the observed evidence instead of inventing a business impact.
+      headline: dollarVisible
+        ? `${businessName} is losing an estimated ${formatDollar(totalMonthlyBleed)}/mo to local search gaps`
+        : `${businessName}: ${quantified.length} verified issues found across search, mobile, and reputation`,
       subheadline: `Forensic Digital Assessment • Prepared for ${businessName} in ${businessCity}`,
       primaryProblemTitle,
       primaryProblemLossFormatted,
-      totalMonthlyBleedFormatted: `${formatDollar(totalMonthlyBleed)}/mo`,
-      totalAnnualBleedFormatted: `${formatDollar(totalAnnualBleed)}/yr`,
+      totalMonthlyBleedFormatted,
+      totalAnnualBleedFormatted,
     },
+    revenueImpact,
+    evidenceKpis: [
+      {
+        label: 'Verified findings',
+        value: `${quantified.length}`,
+        detail: 'Each backed by captured audit evidence',
+      },
+      {
+        label: 'Priority issues',
+        value: `${quantified.filter((f) => f.severity === 'Critical' || f.severity === 'High').length}`,
+        detail: 'Critical or high severity',
+      },
+      ...(competitorSummary
+        ? [
+            {
+              label: 'Local standing',
+              value: competitorSummary.rankText.replace(' in ', ' • ').replace('Rank ', ''),
+              detail: competitorSummary.competitorLeadSummary,
+            },
+          ]
+        : []),
+    ],
     executiveSummary: {
-      overview: `A live technical audit of ${businessName}'s digital footprint identified ${quantified.length} high-impact friction points. Without structured schema, optimized mobile delivery, and aggressive review capture, an estimated ${formatDollar(totalMonthlyBleed)} in monthly customer lifetime value is flowing directly to local competitors.`,
+      overview: dollarVisible
+        ? `A live technical audit of ${businessName}'s digital footprint identified ${quantified.length} high-impact friction points. Without structured schema, optimized mobile delivery, and aggressive review capture, an estimated ${formatDollar(totalMonthlyBleed)} in monthly customer lifetime value is flowing directly to local competitors.`
+        : `A live technical audit of ${businessName}'s digital footprint verified ${quantified.length} issues across structured data, mobile delivery, and local reputation — every one backed by captured evidence and ranked by measured impact. The plan below sequences the fixes by priority.`,
       topThreePoints,
     },
     rankedFindings: quantified,

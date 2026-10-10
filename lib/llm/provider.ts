@@ -20,6 +20,7 @@ import { PiiScrubber } from '@/lib/security/piiScrubber';
 import { PromptPerformanceTracker } from '@/lib/self-evolving-prompts/PromptPerformanceTracker';
 
 import { llmAuditLogger } from './audit-logger';
+import { checkAndReserveSpend, recordSpend } from './budget';
 import { llmCache } from './cache';
 import { isFixtureLlmSelected } from './mode';
 import { validateAndFilter } from './output-validator';
@@ -392,6 +393,16 @@ export async function generateWithLLM(
       }
       // ── End Token Budget Validator ──────────────────
 
+      // Fail-closed spend ceiling (bounded experiments only; fixture responses
+      // cost nothing and skip this). Throws LlmBudgetExceededError BEFORE any
+      // real provider call when LLM_BUDGET_MAX_CENTS would be exceeded.
+      if (!fixtureMode) {
+        checkAndReserveSpend(targetModel, {
+          inputTokens: estimatedInputTokens,
+          outputTokens: opts.maxOutputTokens ?? 2048,
+        });
+      }
+
       // Execute with circuit breaker
       const result = await circuitBreaker.execute<any>(async () => {
         const providerResult = await activeProvider.generateContent({
@@ -596,6 +607,11 @@ export async function generateWithLLM(
         experimentId: opts.metadata?.experimentId,
         variantId: opts.metadata?.variantId,
       });
+
+      // Record actual usage against the spend ceiling (real inference only).
+      if (!fixtureMode) {
+        recordSpend(targetModel, { inputTokens, outputTokens });
+      }
 
       return {
         text,
