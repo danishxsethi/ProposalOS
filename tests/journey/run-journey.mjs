@@ -34,8 +34,8 @@
  *   JOURNEY_NEXT_PORT      — port for the Next server (default 3117)
  *   JOURNEY_EVIDENCE_DIR   — where artifacts are written (default tests/journey/evidence)
  */
-import { createHash, randomBytes, webcrypto } from 'node:crypto';
 import { execFileSync, spawn } from 'node:child_process';
+import { createHash, randomBytes, webcrypto } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -84,7 +84,7 @@ const runLog = [];
 function log(step, detail, extra = {}) {
   const entry = { at: new Date().toISOString(), step, detail, ...extra };
   runLog.push(entry);
-  console.log(`[${entry.at}] [${step}] ${detail}`);
+  console.info(`[${entry.at}] [${step}] ${detail}`);
 }
 
 const timers = {};
@@ -197,15 +197,16 @@ async function startFixtures() {
 
 function buildServerEnv(db, fixtures, chromePath) {
   const workerSecret = `wsec_${randomBytes(24).toString('hex')}`;
-  const preloadPath = path.join(__dirname, 'fixture-fetch-preload.cjs');
+  const preloadPath = path.join(__dirname, 'fixture-fetch-preload.mjs');
+  const preloadUrl = `file://${preloadPath}`;
   return {
     ...process.env,
     NODE_ENV: 'development',
     NEXT_TELEMETRY_DISABLED: '1',
     // The provider fixture interception must be active in EVERY process
-    // (Next dev spawns a separate next-server worker); --require preload is
-    // inherited by children, unlike single-process instrumentation hooks.
-    NODE_OPTIONS: `${process.env.NODE_OPTIONS ? process.env.NODE_OPTIONS + ' ' : ''}--require ${preloadPath}`,
+    // (Next dev spawns a separate next-server worker); an --import preload is
+    // inherited by children via NODE_OPTIONS, unlike single-process hooks.
+    NODE_OPTIONS: `${process.env.NODE_OPTIONS ? process.env.NODE_OPTIONS + ' ' : ''}--import ${preloadUrl}`,
 
     // Database — the server connects as the RLS-enforced app role.
     DATABASE_URL: db.dbUrl,
@@ -682,8 +683,8 @@ async function main() {
     log('cleanup', `disposable database ${db.dbName} dropped`);
   }
 
-  console.log('');
-  console.log(`JOURNEY VERDICT: ${evidence.verdict}`);
+  console.info('');
+  console.info(`JOURNEY VERDICT: ${evidence.verdict}`);
   if (failure) process.exitCode = 1;
 }
 

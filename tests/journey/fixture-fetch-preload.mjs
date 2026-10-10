@@ -17,7 +17,6 @@
  * This file is test harness code: it is never imported by the application and
  * has no effect unless both environment variables are explicitly set.
  */
-'use strict';
 
 (function installProviderFixtureFetchInterception() {
   const fixtureUrl = process.env.PROPOSALOS_PROVIDER_FIXTURE_URL;
@@ -56,8 +55,7 @@
           init?.headers ?? (input instanceof Request ? input.headers : undefined)
         );
         headers.set('x-fixture-original-host', parsed.hostname);
-        // eslint-disable-next-line no-console
-        console.log(
+        console.info(
           `[fixture-fetch-preload] redirecting allowlisted provider call (${parsed.hostname}) to local fixture server`
         );
         return originalFetch(target, { ...init, headers });

@@ -205,8 +205,12 @@ export function startFixtureProviders(config) {
 
       if (path === '/search' || path.startsWith('/search')) {
         // Directory scrapes (Yelp/BBB/YellowPages HTML) carry no engine param.
+        // Yelp scrapes (find_desc) get a plausible listing page; BBB and
+        // YellowPages get an honest zero-results page (the business is absent
+        // there — a real citation finding, not a fabricated listing).
+        const isYelp = url.searchParams.has('find_desc');
         res.writeHead(200, { 'Content-Type': 'text/html', 'x-fixture-provider': 'directory' });
-        res.end(yelpSearchHtml());
+        res.end(isYelp ? yelpSearchHtml() : emptyDirectoryHtml());
         return;
       }
 
