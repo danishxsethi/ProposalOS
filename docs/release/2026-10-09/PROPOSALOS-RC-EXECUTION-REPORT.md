@@ -1,14 +1,14 @@
 # ProposalOS clean release-candidate execution report
 
-**Evidence snapshot:** 2026-10-09 23:50 UTC
+**Evidence snapshot:** 2026-10-10 00:05 UTC
 **Repository:** Danish-Sethi/ProposalOS (public; repository ID 1158247398)
 **Candidate:** branch codex/clean-release-candidate-20261009, draft PR #6 against codex/ssrf-collector-boundary
-**Code/test head at snapshot:** fd85f2793df8fa94af5251dab2febb034d2ad408
-**Technical verdict:** CLEAN_SOURCE_RC_PUBLISHED; CI acceptance remains blocked
+**Code/test head at snapshot:** 627fe1db61643cb86d8f8cc7c2db22164095c47e
+**Technical verdict:** CLEAN_SOURCE_RC_PUBLISHED; full dependency policy still blocks CI acceptance
 **Product verdict:** CORE_JOURNEY_BLOCKED
 **Commercial verdict:** PILOT_NOT_READY
 
-This report update is a documentation-only follow-up to the code/test head above. The exact final branch SHA is the head of PR #6 after this report commit.
+The code/test evidence below is bound to 627fe1db61643cb86d8f8cc7c2db22164095c47e. Any later report-only commit does not change that tested source tree.
 
 ## Candidate integrity and preservation
 
@@ -22,24 +22,24 @@ The encrypted local bundle ProposalOS-qualification-0d0bbaa.bundle.enc has recor
 
 ## Publication and secret scanning
 
-Draft PR #6 is at https://github.com/Danish-Sethi/ProposalOS/pull/6, base codex/ssrf-collector-boundary. The clean candidate’s new ancestry excludes the two suspect commits. Gitleaks 8.30.0 scanned all four candidate commits after PR #5 with redaction and found zero findings; the PR and push Gitleaks workflows also passed on fd85f2793df8fa94af5251dab2febb034d2ad408. The staged/worktree diff scan was clean.
+Draft PR #6 is at https://github.com/Danish-Sethi/ProposalOS/pull/6, base codex/ssrf-collector-boundary. The clean candidate’s new ancestry excludes the two suspect commits. Gitleaks 8.30.0 scanned the five candidate commits after PR #5 with redaction and found zero findings; push run 38006968733 and PR run 38006971555 passed on 627fe1db61643cb86d8f8cc7c2db22164095c47e. The committed range scan was clean.
 
 A full-directory scan still identifies one inherited generic-key-shaped value in scripts/migration/production-legacy-migrations.json. The blob is identical to PR #5; it was not newly introduced or changed here. Its provenance is unresolved and should be handled as a separate historical fixture/secret decision. Three already-public proposal-share tokens remain UNKNOWN / OWNER_ACTION_REQUIRED. GitHub secret-scanning alert #11 for a Google-key-shaped fixture remains unresolved; no token URL was opened, no production record inspected, and no credential or token was revoked.
 
 ## Qualification evidence
 
-| Gate                                       | Evidence at snapshot                                                 | Result                                                                                                       |
-| ------------------------------------------ | -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| GitHub candidate CI                        | Run 38005912371, exact head fd85f2793df8fa94af5251dab2febb034d2ad408 | FAIL                                                                                                         |
-| TypeScript                                 | Test job 114074546718                                                | PASS                                                                                                         |
-| Root lint                                  | Test job 114074546718; zero-error gate                               | PASS                                                                                                         |
-| Prisma schema                              | Test job 114074546718                                                | PASS                                                                                                         |
-| Disposable PostgreSQL/PgBouncer startup    | Test job 114074546718                                                | PASS                                                                                                         |
-| Empty-database migration replay/drift gate | Test job 114074546718                                                | PASS                                                                                                         |
-| Deterministic tests and tenant/RLS         | Test job 114074546718                                                | FAIL: 10 failed, 2,824 passed, 13 skipped; three RLS suites could not connect to PgBouncer at localhost:6432 |
-| Claraud build                              | Job 114074546618 in run 38005912371                                  | PASS                                                                                                         |
-| Dependency advisory policy                 | Job 114074546727 in run 38005912371                                  | FAIL                                                                                                         |
-| Gitleaks                                   | Push run 38005908798; PR run 38005912406                             | PASS                                                                                                         |
+| Gate                                       | Evidence on exact head 627fe1d                          | Result                                                                              |
+| ------------------------------------------ | ------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| GitHub candidate CI                        | Test Suite run 38006971578                              | FAIL overall, only because full dependency policy fails                             |
+| TypeScript                                 | Test job 114077887558                                   | PASS                                                                                |
+| Root lint                                  | Test job 114077887558; zero-error gate                  | PASS                                                                                |
+| Prisma schema                              | Test job 114077887558                                   | PASS                                                                                |
+| Disposable PostgreSQL/PgBouncer startup    | Test job 114077887558; authenticated app_user preflight | PASS                                                                                |
+| Empty-database migration replay/drift gate | Test job 114077887558                                   | PASS                                                                                |
+| Deterministic tests and tenant/RLS         | Test job 114077887558; 278 files                        | PASS: 2,847 tests passed, including disposable database RLS and queue qualification |
+| Claraud build                              | Job 114077887738 in run 38006971578                     | PASS                                                                                |
+| Dependency advisory policy                 | Job 114077887766 in run 38006971578                     | FAIL: production 0 HIGH/CRITICAL; full tree 12 HIGH, 2 moderate, 1 low              |
+| Gitleaks                                   | Push run 38006968733; PR run 38006971555                | PASS                                                                                |
 
 Production dependency audit reports zero findings. The full dependency tree reports 12 HIGH, 2 moderate, and 1 low findings. The HIGHs cluster into two development-tool advisories:
 
@@ -56,6 +56,6 @@ Prior local evidence remains: root TypeScript and lint passed; the root and Clar
 
 AWS still serves the October 6 images without clean Git-SHA provenance. The source Terraform contains the transferred-owner OIDC subject, while the last live IAM readback still had old-owner subjects; no IAM update or deployment occurred. Three public share-token dispositions, GHAS alert #11, browser/Chromium egress qualification, production data parity, private S3 delivery, scheduler authority, rollback exercise, and GCP retirement remain open. Historical GCP billing was read as disabled and the Cloud Build trigger inventory as empty; neither was changed in this work.
 
-The RLS test failure was a connection failure, not a reported cross-tenant data leak: the job could not reach localhost:6432, and the shim suite hid its underlying psql error behind a generic stack-readiness message. Clean-database migration replay passed against direct PostgreSQL. A follow-up change now targets PgBouncer at 127.0.0.1, adds an authenticated app_user SQL preflight, and makes connection diagnostics identify the failed endpoint without printing a connection string. That correction has not yet been pushed or run in CI.
+The earlier RLS failures were connection failures, not reported cross-tenant data leaks. The CI-only correction now targets PgBouncer at 127.0.0.1, performs an authenticated app_user SQL preflight, and identifies failed endpoints without printing connection strings. On exact head 627fe1d, the disposable database migration replay and full deterministic suite passed, including the RLS/queue tests. This qualifies the isolated CI database path; it does not establish production database parity or a joined product journey.
 
-**Decision at this snapshot:** the clean source candidate is published and reviewable, but it is not CI-accepted. The dependency policy and RLS integration checks failed. No merge, deploy, live audit, provider call, customer outreach, email, payment, AWS/GCP mutation, or production database operation occurred.
+**Decision at this snapshot:** the clean candidate is published and reviewable. Test, migration, build, and secret-scan checks pass on 627fe1d. The full dependency policy remains red, so overall CI acceptance is blocked. No merge, deploy, live audit, provider call, customer outreach, email, payment, AWS/GCP mutation, or production database operation occurred.

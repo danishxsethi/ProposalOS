@@ -1,7 +1,7 @@
 # ProposalOS first-revenue plan
 
 **Status:** operator-assisted pilot hypothesis; not ready for sale.
-**Source snapshot:** PR #6 code/test head fd85f2793df8fa94af5251dab2febb034d2ad408.
+**Source snapshot:** PR #6 code/test head 627fe1db61643cb86d8f8cc7c2db22164095c47e.
 
 ## Initial customer and delivery path
 
@@ -25,6 +25,7 @@ Start with US small businesses in home services, initially HVAC/plumbing operato
 ## Current readiness
 
 - Validated segment or customer demand: **none**
+- Disposable PostgreSQL migration/RLS/queue qualification: **passed on CI run 38006971578**; no joined audit-to-proposal journey is demonstrated
 - Complete real audits and accepted proposals: **0**
 - Demonstration deliverable with independently scored QA: **none**
 - Approved warm/design-partner cohort or outreach: **none**
@@ -35,7 +36,7 @@ No outreach, customer contact, charge, or commitment was made. The public sample
 
 ## Minimum path to the first paid pilot
 
-1. Pass the disposable database/RLS and joined fixture-journey gates; resolve the source dependency-policy blocker.
+1. Build and pass the joined fixture-journey test on the qualified disposable database path; resolve the source dependency-policy blocker.
 2. Qualify one authorized real US home-services website with a bounded network policy and explicit provider/model cost ceiling.
 3. Produce and human-score one evidence-backed report and proposal; record actual cost and fulfillment time.
 4. Confirm the customer’s acceptance of scope, price, agreement, privacy/retention terms, and delivery date.
