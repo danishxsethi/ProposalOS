@@ -63,6 +63,14 @@ The journey was not a green-field exercise — it surfaced and fixed eight real,
 - Real provider/Bedrock calls: **0** (fixture LLM provider, labeled)
 - Real authorized business audits: **0** (next milestone)
 
+## Publication
+
+- Draft PR: **https://github.com/Danish-Sethi/ProposalOS/pull/7** (stacked on PR #6, base `codex/clean-release-candidate-20261009`)
+- Branch: `execution/glm53-core-journey-20261009` (11 + 1 commits past PR #6 head 4284e9c)
+- Gitleaks: PASS (PR run 38063105762 and push runs)
+- Test Suite CI: dependency advisory policy fails as expected (braces, see below); all other jobs green on run 38062929646 — **281 files: 280 passed**, with the single failure being a test-only IPv6-loopback assertion in the new fixture-allowlist test, fixed in c101154 (final suite run 38063678928 in flight on that commit)
+- Full-tree dependency state: HIGH **12 → 7** (all remaining = unpatchable GHSA-vfj7-8cjw-p6xm braces, dev-only); GHSA-c475-qrg2-pj4r and GHSA-g7r4-m6w7-qqqr REMEDIATED with validated overrides; production tree 0/0/0/0
+
 ## Journey harness (committed, repeatable)
 
 `tests/journey/run-journey.mjs` + fixture site/providers/S3 + `tests/journey/README.md`. Boots disposable DB → migrates → seeds tenant/API key → starts fixtures → boots the real Next server (`NODE_OPTIONS=--require` preload installs the provider interception in every process) → drives the whole journey over HTTP → writes a structured evidence record and artifacts → tears everything down. Evidence artifacts regenerate per run under `tests/journey/evidence/` (gitignored; curated records live in this document).
