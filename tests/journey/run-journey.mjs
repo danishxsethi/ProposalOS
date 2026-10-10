@@ -114,8 +114,15 @@ async function setupDatabase() {
   await admin.query(`CREATE DATABASE "${dbName}"`);
   await admin.end();
 
-  const dbUrl = `postgresql://${APP_USER}:${APP_PASSWORD}@127.0.0.1:5445/${dbName}`;
-  const adminDbUrl = `postgresql://postgres:glmrc6pw@127.0.0.1:5445/${dbName}`;
+  // Derive host/port/credentials from the admin URL so the harness runs
+  // against ANY local disposable stack (VM container 5445, CI compose 5435).
+  const adminBase = new URL(DB_ADMIN_URL);
+  const dbHost = adminBase.hostname;
+  const dbPort = adminBase.port || '5432';
+  const adminUser = decodeURIComponent(adminBase.username);
+  const adminPassword = decodeURIComponent(adminBase.password);
+  const dbUrl = `postgresql://${APP_USER}:${APP_PASSWORD}@${dbHost}:${dbPort}/${dbName}`;
+  const adminDbUrl = `postgresql://${adminUser}:${adminPassword}@${dbHost}:${dbPort}/${dbName}`;
 
   // Migrate
   execFileSync('npx', ['prisma', 'migrate', 'deploy'], {
