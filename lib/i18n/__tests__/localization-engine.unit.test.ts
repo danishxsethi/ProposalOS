@@ -134,15 +134,15 @@ describe('LocalizationEngine - Unit Tests', () => {
       expect(result.locale).toBe('de-DE');
       expect(result.promptText).toBeDefined();
       expect(result.culturalContext).toBeDefined();
-      expect(result.thinkingBudget).toBe(4096);
+      expect(result.thinkingBudget).toBe(0);
       expect(result.approvalStatus).toBe('pending');
     });
 
-    it('should use 4,096 token thinking budget for Gemini', async () => {
+    it('keeps configurable thinking disabled for the Bedrock localization model', async () => {
       const basePrompt = 'Analyze the website for SEO issues';
       const result = await engine.localizePrompt('node-1', 'fr-FR', basePrompt);
 
-      expect(result.thinkingBudget).toBe(4096);
+      expect(result.thinkingBudget).toBe(0);
     });
 
     it('should fallback to en-US for unsupported locale', async () => {

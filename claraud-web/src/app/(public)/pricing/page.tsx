@@ -1,281 +1,32 @@
-'use client';
+import type { Metadata } from 'next';
+import Link from 'next/link';
 
-import { useEffect } from 'react';
-
-import { motion } from 'framer-motion';
-import { ArrowRight, Check } from 'lucide-react';
-
-import { AgencyTiers } from '@/components/pricing/agency-tiers';
-import { ScanInput } from '@/components/scan/scan-input';
-import { JsonLd } from '@/components/shared/json-ld';
-import { SectionWrapper } from '@/components/shared/section-wrapper';
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from '@/components/ui/accordion';
-import { Button } from '@/components/ui/button';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { usePostHog } from '@/hooks/use-posthog';
-
-const businessTiers = [
-  {
-    name: 'Foundation Sprint',
-    price: '797',
-    tagline: 'Rapid technical patch for immediate crawlability & trust',
-    features: [
-      'Complete LocalBusiness & Service schema deployment (JSON-LD)',
-      'Sitelinks Searchbox & Breadcrumb hierarchy validation',
-      'Meta title & description repair across primary landing pages',
-      'Google Business Profile core fields & category audit',
-      'Independent Rich Results verification proof report',
-      '5 business days turnaround',
-    ],
-    cta: 'Start with a free scan',
-    featured: false,
-  },
-  {
-    name: 'Growth Acceleration',
-    price: '2,497',
-    tagline: 'Complete technical SEO overhaul + automated review surge',
-    features: [
-      'Everything in Foundation Sprint (all schemas & metadata)',
-      'Automated review acceleration workflow & response protocol',
-      'Local citation audit & sync across top 40 directories',
-      'Mobile Core Web Vitals optimization (<1.8s LCP target)',
-      'Competitive gap sprint targeting high-intent local queries',
-      '10 business days turnaround',
-      '30-day dedicated post-launch engineering support',
-    ],
-    cta: 'Start with a free scan',
-    featured: true,
-  },
-  {
-    name: 'Market Dominance',
-    price: '4,997',
-    priceSub: 'or $1,497/mo retainer',
-    tagline: 'Full agency-grade turnkey management & ongoing CRO',
-    features: [
-      'Everything in Growth Acceleration',
-      'Multi-location or multi-page technical architecture rebuild',
-      'Quarterly competitive intelligence & rank defense monitoring',
-      'Bi-weekly conversion rate split-testing on intake forms',
-      'Dedicated Senior Digital Engineer + monthly executive ROI review',
-      '30-Day Measurable Impact Sprint Guarantee',
-    ],
-    cta: 'Start with a free scan',
-    featured: false,
-  },
-];
-
-const faqs = [
-  {
-    q: "What if I don't have a website yet?",
-    a: "No problem. We can audit your Google Business Profile, reviews, social media, and competitive landscape without a website. We'll also include recommendations for building one.",
-  },
-  {
-    q: 'How long until I see results?',
-    a: 'Quick Win fixes can show impact within 1-2 weeks. SEO and content improvements typically take 30-90 days to reflect in rankings. We provide re-audits so you can track progress.',
-  },
-  {
-    q: 'Can I implement the fixes myself?',
-    a: "Absolutely. Every deliverable is designed as a copy-paste action item. You don't need a developer for most fixes. For technical items, we provide exact code snippets.",
-  },
-  {
-    q: 'Do you work with businesses outside Canada?',
-    a: 'Yes. Claraud works with businesses anywhere in the world. Our audit engine uses global APIs and adapts to your local market.',
-  },
-  {
-    q: "What's your refund policy?",
-    a: "If you're not satisfied with your audit report within 7 days, we'll refund 100% of your payment. No questions asked.",
-  },
-  {
-    q: 'How is this different from hiring a marketing agency?',
-    a: 'Agencies charge $3,000-$10,000 for a discovery audit that takes 2-4 weeks. Claraud delivers the same insights in 30 seconds for a fraction of the cost, with actionable deliverables — not a PowerPoint.',
-  },
-  {
-    q: 'What data do you need from me?',
-    a: "Just your website URL or business name. That's it. We pull everything from public APIs — no logins, no access needed.",
-  },
-  {
-    q: 'Is my data secure?',
-    a: 'Yes. We use AWS infrastructure with encryption in transit and at rest. We store data needed to provide your reports; see our Privacy Policy for details about data use and third-party providers.',
-  },
-];
+export const metadata: Metadata = {
+  title: 'Pilot Availability | Claraud',
+  description: 'Claraud is qualifying an operator-assisted diagnostic pilot. No package is available for purchase yet.',
+};
 
 export default function PricingPage() {
-  const { captureEvent } = usePostHog();
-
-  useEffect(() => {
-    captureEvent('pricing_viewed');
-  }, []);
-
-  const pricingSchema = {
-    '@context': 'https://schema.org',
-    '@type': 'ItemList',
-    itemListElement: businessTiers.map((tier, idx) => ({
-      '@type': 'ListItem',
-      position: idx + 1,
-      item: {
-        '@type': 'Product',
-        name: tier.name,
-        description: tier.tagline,
-        offers: {
-          '@type': 'Offer',
-          price: tier.price,
-          priceCurrency: 'USD',
-          availability: 'https://schema.org/InStock',
-        },
-      },
-    })),
-  };
-
   return (
-    <div className="bg-[#0a0a0f] min-h-screen pt-20 pb-20">
-      <JsonLd data={pricingSchema} />
-      <SectionWrapper>
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="text-center mb-16"
-        >
-          <h1 className="text-4xl md:text-6xl font-bold text-white mb-6">
-            Simple pricing for <span className="gradient-text">explosive growth.</span>
-          </h1>
-          <p className="text-text-secondary text-lg max-w-2xl mx-auto">
-            Choose the plan that's right for your business or agency.
-          </p>
-        </motion.div>
-
-        <Tabs
-          defaultValue="business"
-          className="w-full"
-          onValueChange={(val) => captureEvent('pricing_tab_switched', { tab: val })}
-        >
-          <div className="flex justify-center mb-12">
-            <TabsList className="bg-white/5 border border-white/10 p-1 h-auto rounded-full">
-              <TabsTrigger
-                value="business"
-                className="rounded-full px-8 py-2.5 data-[state=active]:bg-blue-600 data-[state=active]:text-white transition-all"
-              >
-                For Businesses
-              </TabsTrigger>
-              <TabsTrigger
-                value="agency"
-                className="rounded-full px-8 py-2.5 data-[state=active]:bg-blue-600 data-[state=active]:text-white transition-all"
-              >
-                For Agencies
-              </TabsTrigger>
-            </TabsList>
-          </div>
-
-          <TabsContent value="business" className="mt-0">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-6xl mx-auto px-4">
-              {businessTiers.map((tier, idx) => (
-                <motion.div
-                  key={tier.name}
-                  initial={{ opacity: 0, y: 20 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  viewport={{ once: true }}
-                  transition={{ duration: 0.5, delay: idx * 0.1 }}
-                  className={`glass rounded-2xl p-8 border ${
-                    tier.featured ? 'border-blue-500/50 ring-2 ring-blue-500/20' : 'border-white/10'
-                  } relative flex flex-col h-full group`}
-                >
-                  {tier.featured && (
-                    <div className="absolute top-0 right-4 bg-gradient-to-r from-blue-600 to-purple-600 text-white text-[10px] font-bold uppercase tracking-widest px-3 py-1 rounded-b-lg">
-                      Most Popular
-                    </div>
-                  )}
-
-                  <div className="mb-8">
-                    <h3 className="text-xl font-bold text-white mb-2">{tier.name}</h3>
-                    <div className="flex flex-col">
-                      <span
-                        className={`text-4xl font-bold ${tier.featured ? 'gradient-text' : 'text-white'}`}
-                      >
-                        ${tier.price}
-                      </span>
-                      <span className="text-text-secondary text-sm mt-1">one-time</span>
-                      {tier.priceSub && (
-                        <span className="text-text-secondary text-xs mt-1">{tier.priceSub}</span>
-                      )}
-                    </div>
-                    <p className="text-text-secondary text-sm mt-4 font-medium">{tier.tagline}</p>
-                  </div>
-
-                  <div className="space-y-4 mb-8 flex-1">
-                    {tier.features.map((feature) => (
-                      <div key={feature} className="flex items-start gap-3 text-sm">
-                        <div className="mt-1 p-0.5 rounded-full bg-blue-500/20 text-blue-400">
-                          <Check className="w-3 h-3" />
-                        </div>
-                        <span className="text-text-secondary">{feature}</span>
-                      </div>
-                    ))}
-                  </div>
-
-                  <Button
-                    asChild
-                    variant={tier.featured ? 'default' : 'outline'}
-                    className={`w-full rounded-xl py-6 h-auto font-bold transition-all ${
-                      tier.featured
-                        ? 'gradient-btn border-none'
-                        : 'border-white/10 hover:bg-white/5 text-white'
-                    }`}
-                    onClick={() => captureEvent('pricing_tier_clicked', { tier: tier.name })}
-                  >
-                    <a href="/scan">
-                      {tier.cta} <ArrowRight className="ml-2 w-4 h-4" />
-                    </a>
-                  </Button>
-                </motion.div>
-              ))}
-            </div>
-          </TabsContent>
-
-          <TabsContent value="agency" className="mt-0">
-            <AgencyTiers />
-          </TabsContent>
-        </Tabs>
-
-        {/* FAQ Section */}
-        <div className="mt-32 max-w-3xl mx-auto px-4">
-          <h2 className="text-3xl font-bold text-white text-center mb-12">
-            Frequently Asked Questions
-          </h2>
-          <Accordion type="single" collapsible className="space-y-4">
-            {faqs.map((faq, idx) => (
-              <AccordionItem
-                key={idx}
-                value={`faq-${idx}`}
-                className="glass border border-white/10 rounded-2xl overflow-hidden px-2"
-              >
-                <AccordionTrigger className="px-4 py-4 hover:no-underline text-left text-white font-semibold">
-                  {faq.q}
-                </AccordionTrigger>
-                <AccordionContent className="px-4 pb-4 text-text-secondary leading-relaxed">
-                  {faq.a}
-                </AccordionContent>
-              </AccordionItem>
-            ))}
-          </Accordion>
-        </div>
-
-        {/* Bottom CTA */}
-        <div className="mt-32 text-center max-w-4xl mx-auto px-4">
-          <h2 className="text-4xl font-bold text-white mb-6">
-            Every plan starts with a free scan.
-          </h2>
-          <div className="max-w-2xl mx-auto">
-            <ScanInput variant="large" />
-          </div>
-          <p className="text-text-secondary mt-6">
-            No credit card required. See your score in 30 seconds.
-          </p>
-        </div>
-      </SectionWrapper>
-    </div>
+    <main className="min-h-screen bg-[#0a0a0f] px-4 py-32 text-center text-white">
+      <div className="mx-auto max-w-2xl">
+        <p className="mb-4 text-sm font-semibold uppercase tracking-widest text-blue-300">
+          Pilot availability
+        </p>
+        <h1 className="mb-6 text-4xl font-bold">Pricing follows a reviewed scope</h1>
+        <p className="mb-5 text-lg text-text-secondary">
+          Claraud is not currently accepting paid orders. A future operator-assisted pilot would
+          require a written scope, an agreed price and currency, and a verified invoice before work
+          begins.
+        </p>
+        <p className="mb-10 text-text-secondary">
+          No performance guarantee, customer result, or automated checkout is offered here. Public
+          self-service scans are paused while request and browser network safeguards are qualified.
+        </p>
+        <Link href="/" className="text-blue-300 underline underline-offset-4">
+          Return to Claraud
+        </Link>
+      </div>
+    </main>
   );
 }

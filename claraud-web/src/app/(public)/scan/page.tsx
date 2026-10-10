@@ -5,7 +5,7 @@ import { Metadata } from 'next';
 import { ScanInput } from '@/components/scan/scan-input';
 
 export const metadata: Metadata = {
-  title: 'Free Business Audit | Claraud',
+  title: 'Self-Service Scans Paused | Claraud',
 };
 
 export default function ScanPage() {
@@ -20,9 +20,12 @@ export default function ScanPage() {
 
       {/* Heading */}
       <div className="w-full max-w-xl text-center mb-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-        <h1 className="text-4xl font-bold text-white tracking-tight mb-3">Scan your business</h1>
+        <h1 className="text-4xl font-bold text-white tracking-tight mb-3">
+          Self-service scans are paused
+        </h1>
         <p className="text-text-secondary">
-          Enter your website URL or business name. Results in 30 seconds.
+          This page will not start a scan. Intake will reopen after usage and browser network controls
+          are qualified.
         </p>
       </div>
 
@@ -31,21 +34,6 @@ export default function ScanPage() {
         <ScanInput variant="large" />
       </div>
 
-      {/* How it works mini-explainer */}
-      <div className="flex items-center gap-4 mt-10 text-sm text-text-secondary animate-in fade-in slide-in-from-bottom-6 duration-1000">
-        {[
-          { icon: '🔍', label: 'Scan' },
-          { icon: '🧠', label: 'Diagnose' },
-          { icon: '🔧', label: 'Fix' },
-        ].map((step, i) => (
-          <div key={step.label} className="flex items-center gap-2">
-            <span className="flex items-center gap-2">
-              <span>{step.icon}</span> <span>{step.label}</span>
-            </span>
-            {i < 2 && <span className="text-white/20 ml-2">→</span>}
-          </div>
-        ))}
-      </div>
     </div>
   );
 }

@@ -86,7 +86,7 @@ export async function runCompetitorModule(
             fallbackValue: { local_results: [] },
           },
           async () => {
-            const res = await fetch(`${SERP_API_BASE}?${p.toString()}`);
+            const res = await fetch(`${SERP_API_BASE}?${p.toString()}`, { redirect: 'error' });
             if (!res.ok) {
               throw new Error(`HTTP error ${res.status}: ${res.statusText}`);
             }
@@ -242,7 +242,7 @@ export async function runCompetitorModule(
             fallbackValue: { local_results: [] },
           },
           async () => {
-            const res = await fetch(`${SERP_API_BASE}?${p.toString()}`);
+            const res = await fetch(`${SERP_API_BASE}?${p.toString()}`, { redirect: 'error' });
             if (!res.ok) {
               throw new Error(`HTTP error ${res.status}: ${res.statusText}`);
             }
@@ -308,7 +308,7 @@ export async function runCompetitorModule(
                 operation: 'competitor:local_competitors_search',
               },
               async () => {
-                const res = await fetch(`${SERP_API_BASE}?${p.toString()}`);
+                const res = await fetch(`${SERP_API_BASE}?${p.toString()}`, { redirect: 'error' });
                 if (!res.ok) {
                   throw new Error(`HTTP error ${res.status}: ${res.statusText}`);
                 }

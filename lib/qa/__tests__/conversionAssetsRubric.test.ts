@@ -6,7 +6,7 @@ import { CANONICAL_OFFERS } from '@/lib/proposal/offers';
 describe('Phase 5: Scoring Rubrics & Adversarial Verification', () => {
   const park56Proposal = {
     id: 'e943703e-5902-426e-824e-82219d0da230',
-    webLinkToken: 'f9df6fcc-8017-41ac-9786-6d2f5132c9b5',
+    webLinkToken: 'synthetic-proposal-token',
     createdAt: new Date('2026-09-04T02:58:32.563Z'),
     pricing: { essentials: 797, growth: 2497, premium: 4997 },
     audit: {

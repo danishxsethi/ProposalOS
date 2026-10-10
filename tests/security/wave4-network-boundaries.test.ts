@@ -9,10 +9,15 @@ import { safeFetch, SsrfBlockedError } from '@/lib/security/safeFetch';
 
 const realFetch = globalThis.fetch;
 const mockFetch = vi.fn();
+const PUBLIC_TEST_ADDRESS = [{ address: '93.184.216.34', family: 4 }];
 
 beforeEach(() => {
   vi.clearAllMocks();
-  validateUrl.mockResolvedValue({ isValid: true });
+  validateUrl.mockResolvedValue({
+    isValid: true,
+    sanitizedUrl: undefined,
+    resolvedAddresses: PUBLIC_TEST_ADDRESS,
+  });
   globalThis.fetch = mockFetch;
 });
 
@@ -23,11 +28,12 @@ afterEach(() => {
 describe('Wave 4 shared network boundary', () => {
   it('strips sensitive headers on a cross-origin redirect', async () => {
     mockFetch
-      .mockResolvedValueOnce({
-        status: 302,
-        headers: new Headers({ location: 'https://other.example/path' }),
-        body: { cancel: vi.fn().mockResolvedValue(undefined) },
-      })
+      .mockResolvedValueOnce(
+        new Response(null, {
+          status: 302,
+          headers: { location: 'https://other.example/path' },
+        })
+      )
       .mockResolvedValueOnce(new Response('ok', { status: 200 }));
 
     await safeFetch('https://start.example/path', {

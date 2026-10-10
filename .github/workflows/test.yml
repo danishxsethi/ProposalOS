@@ -7,14 +7,15 @@ on:
   pull_request:
 
 jobs:
-  test:
+  dependency-policy:
+    name: Dependency advisory policy
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Use Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: '24.x'
           cache: 'npm'
@@ -24,6 +25,21 @@ jobs:
 
       - name: Enforce dependency advisory policy
         run: npm run security:audit:prod
+
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Use Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: '24.x'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
 
       - name: Generate Prisma Client
         run: npx prisma generate
@@ -60,7 +76,7 @@ jobs:
           PROPOSALOS_PGBOUNCER_CONTAINER: proposalos-pgbouncer
           PROPOSALOS_POSTGRES_CONTAINER: proposal_engine_db
           PROPOSALOS_RLS_SET_ROLE_PASSWORD: '0'
-          PROPOSALOS_PGBOUNCER_HOST: localhost
+          PROPOSALOS_PGBOUNCER_HOST: 127.0.0.1
           PROPOSALOS_PGBOUNCER_PORT: '6432'
           PROPOSALOS_TEST_DB_PORT: '5435'
           NODE_ENV: test
@@ -68,7 +84,7 @@ jobs:
 
       - name: Upload qualification artifacts
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: qualification-artifacts
           path: docs/audits/2026-09-18-proposal-os-ground-up-ga-audit/artifacts/
@@ -79,10 +95,10 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Use Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: '24.x'
           cache: 'npm'

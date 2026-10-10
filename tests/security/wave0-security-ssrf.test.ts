@@ -22,9 +22,14 @@ import { CostTracker } from '@/lib/costs/costTracker';
 
 const realFetch = globalThis.fetch;
 const mockFetch = vi.fn();
+const PUBLIC_TEST_ADDRESS = [{ address: '93.184.216.34', family: 4 }];
 
 function allow() {
-  mockValidateUrl.mockResolvedValue({ isValid: true });
+  mockValidateUrl.mockResolvedValue({
+    isValid: true,
+    sanitizedUrl: undefined,
+    resolvedAddresses: PUBLIC_TEST_ADDRESS,
+  });
 }
 function block(reason: string) {
   mockValidateUrl.mockResolvedValue({ isValid: false, error: reason });
@@ -49,14 +54,19 @@ describe('P0-24: security module fetchWithRedirect SSRF controls', () => {
 
   it('revalidates redirect Location and blocks metadata hop', async () => {
     mockValidateUrl
-      .mockResolvedValueOnce({ isValid: true })
+      .mockResolvedValueOnce({
+        isValid: true,
+        sanitizedUrl: undefined,
+        resolvedAddresses: PUBLIC_TEST_ADDRESS,
+      })
       .mockResolvedValueOnce({ isValid: false, error: 'metadata endpoint blocked' });
 
-    mockFetch.mockResolvedValueOnce({
-      status: 302,
-      headers: new Headers({ location: 'http://169.254.169.254/latest/meta-data' }),
-      body: { cancel: async () => undefined },
-    });
+    mockFetch.mockResolvedValueOnce(
+      new Response(null, {
+        status: 302,
+        headers: { location: 'http://169.254.169.254/latest/meta-data' },
+      })
+    );
 
     await expect(fetchWithRedirect('https://example.com/', true)).rejects.toThrow(
       /SSRF blocked|metadata/
@@ -65,11 +75,13 @@ describe('P0-24: security module fetchWithRedirect SSRF controls', () => {
 
   it('caps redirect hops', async () => {
     allow();
-    mockFetch.mockImplementation(async () => ({
-      status: 302,
-      headers: new Headers({ location: 'https://example.com/next' }),
-      body: { cancel: async () => undefined },
-    }));
+    mockFetch.mockImplementation(
+      async () =>
+        new Response(null, {
+          status: 302,
+          headers: { location: 'https://example.com/next' },
+        })
+    );
 
     await expect(fetchWithRedirect('https://example.com/', true)).rejects.toThrow(
       /maximum redirect/i
@@ -78,11 +90,12 @@ describe('P0-24: security module fetchWithRedirect SSRF controls', () => {
 
   it('returns headers without following when followRedirects=false', async () => {
     allow();
-    mockFetch.mockResolvedValueOnce({
-      status: 302,
-      headers: new Headers({ location: 'https://evil.example/x', 'x-test': '1' }),
-      body: { cancel: async () => undefined },
-    });
+    mockFetch.mockResolvedValueOnce(
+      new Response(null, {
+        status: 302,
+        headers: { location: 'https://evil.example/x', 'x-test': '1' },
+      })
+    );
 
     const result = await fetchWithRedirect('https://example.com/', false);
     expect(result.statusCode).toBe(302);
@@ -91,12 +104,7 @@ describe('P0-24: security module fetchWithRedirect SSRF controls', () => {
   });
 
   it('records a completed safe fetch as a zero-cost resource call', async () => {
-    mockFetch.mockResolvedValueOnce({
-      status: 200,
-      url: 'https://example.com/',
-      headers: new Headers(),
-      body: { cancel: async () => undefined },
-    });
+    mockFetch.mockResolvedValueOnce(new Response(null, { status: 200 }));
     const tracker = new CostTracker();
 
     await fetchWithRedirect('https://example.com/', false, undefined, tracker);

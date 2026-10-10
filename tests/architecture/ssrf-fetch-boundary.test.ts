@@ -529,6 +529,42 @@ describe('SSRF fetch boundary [#5]', () => {
     expect(violations).toEqual([]);
   });
 
+  it('pins SerpAPI requests to fixed HTTPS authorities and rejects redirects', () => {
+    const source = (relPath: string) => fs.readFileSync(path.join(rootDir, relPath), 'utf-8');
+    const competitor = source('lib/modules/competitor.ts');
+    const discovery = source('lib/outreach/sprint2/discovery.ts');
+    const qualification = source('lib/outreach/sprint2/qualification.ts');
+    const seoDeep = source('lib/modules/seoDeep.ts');
+    const keywordGap = source('lib/modules/keywordGap.ts');
+
+    expect(competitor).toContain("const SERP_API_BASE = 'https://serpapi.com/search';");
+    expect(
+      competitor.match(
+        /fetch\(\s*`\$\{SERP_API_BASE\}\?\$\{p\.toString\(\)\}`\s*,\s*\{\s*redirect:\s*'error'\s*\}\s*\)/g
+      )
+    ).toHaveLength(3);
+    expect(competitor).toContain('new URLSearchParams');
+
+    expect(
+      discovery.match(
+        /fetch\(\s*`https:\/\/serpapi\.com\/search\.json\?\$\{endpointParams\.toString\(\)\}`\s*,\s*\{\s*redirect:\s*'error'\s*,?\s*\}\s*\)/g
+      )
+    ).toHaveLength(2);
+
+    expect(qualification).toMatch(
+      /fetch\(\s*`https:\/\/serpapi\.com\/search\.json\?\$\{params\.toString\(\)\}`\s*,\s*\{\s*redirect:\s*'error'\s*,?\s*\}\s*\)/
+    );
+
+    expect(seoDeep).toContain("const SERP_API_BASE = 'https://serpapi.com/search';");
+    expect(seoDeep).toContain('const serpUrl = `${SERP_API_BASE}?${p.toString()}`;');
+    expect(seoDeep).toMatch(/fetch\(\s*serpUrl\s*,\s*\{\s*redirect:\s*'error'\s*\}\s*\)/);
+    expect(seoDeep).toContain('new URLSearchParams');
+
+    expect(keywordGap).toContain('https://serpapi.com/search.json?${params.toString()}');
+    expect(keywordGap).toMatch(/fetch\(\s*url\s*,\s*\{\s*redirect:\s*'error'\s*\}\s*\)/);
+    expect(keywordGap).toContain('new URLSearchParams');
+  });
+
   it('all user-influenced page.goto() have validateForBrowserNavigation', () => {
     const violations: string[] = [];
 

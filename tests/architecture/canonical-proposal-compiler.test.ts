@@ -29,7 +29,7 @@ describe('canonical proposal compiler architecture', () => {
     const qaEvaluations: string[] = [];
 
     for (const file of files) {
-      const relative = path.relative(ROOT, file);
+      const relative = path.relative(ROOT, file).split(path.sep).join('/');
       const content = fs.readFileSync(file, 'utf8');
       if (/prisma\.proposal\.create\s*\(/.test(content) && relative !== ALLOWED_CREATE_FILE) {
         directWrites.push(relative);

@@ -35,17 +35,14 @@ describe('Website Scraper Failure Classification', () => {
       // Status 429
       expect(classifyFailure(429, '', {})).toBe('ANTI_BOT');
 
-      // Cloudflare Server Header
-      expect(classifyFailure(200, '', { server: 'cloudflare' })).toBe('ANTI_BOT');
+      // A CDN/WAF server header alone does not prove a challenge page exists.
+      expect(classifyFailure(200, '', { server: 'cloudflare' })).toBe('NONE');
 
-      // Sucuri Server Header
-      expect(classifyFailure(200, '', { server: 'Sucuri/Cloudproxy' })).toBe('ANTI_BOT');
+      expect(classifyFailure(200, '', { server: 'Sucuri/Cloudproxy' })).toBe('NONE');
 
-      // Imperva Server Header
-      expect(classifyFailure(200, '', { server: 'imperva' })).toBe('ANTI_BOT');
+      expect(classifyFailure(200, '', { server: 'imperva' })).toBe('NONE');
 
-      // cf-ray Header
-      expect(classifyFailure(200, '', { 'cf-ray': '12345' })).toBe('ANTI_BOT');
+      expect(classifyFailure(200, '', { 'cf-ray': '12345' })).toBe('NONE');
 
       // cf-challenge keyword in HTML
       expect(

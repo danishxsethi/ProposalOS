@@ -100,7 +100,7 @@ describe('LocalizedPromptLibrary', () => {
       expect(result!.id).toBe('uuid-1');
       expect(result!.promptText).toBe('Analysiere die Website auf SEO-Probleme');
       expect(result!.culturalContext).toBe('German market context');
-      expect(result!.thinkingBudget).toBe(4096);
+      expect(result!.thinkingBudget).toBe(0);
       expect(result!.nativeSpeakerReview).toBe('Looks good');
       expect(result!.createdAt).toBeInstanceOf(Date);
     });
@@ -165,12 +165,12 @@ describe('LocalizedPromptLibrary', () => {
       ).rejects.toThrow('Failed to create variant');
     });
 
-    it('sets thinkingBudget to 4096 on returned variant', async () => {
+    it('keeps the Bedrock thinking budget disabled on returned variants', async () => {
       mockQuery.mockResolvedValueOnce({ rows: [makeRow({ approval_status: 'pending' })] });
 
       const result = await library.createVariant('node-seo-analysis', 'de-DE', 'Some prompt');
 
-      expect(result.thinkingBudget).toBe(4096);
+      expect(result.thinkingBudget).toBe(0);
     });
   });
 

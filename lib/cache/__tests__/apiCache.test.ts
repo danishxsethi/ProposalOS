@@ -2,6 +2,21 @@ import path from 'path';
 import { describe, test, expect, beforeEach, vi, afterEach } from 'vitest';
 import fs from 'fs-extra';
 
+const redisMock = vi.hoisted(() => ({
+  get: vi.fn(),
+  set: vi.fn(),
+  scan: vi.fn(),
+  del: vi.fn(),
+}));
+
+vi.mock('ioredis', () => ({
+  default: class MockRedis {
+    constructor() {
+      return redisMock;
+    }
+  },
+}));
+
 describe('apiCache safety and fallback behavior', () => {
   const originalEnv = { ...process.env };
   const CACHE_DIR = path.join(process.cwd(), 'lib', 'cache', 'store');
@@ -10,6 +25,10 @@ describe('apiCache safety and fallback behavior', () => {
     // Reset env
     process.env = { ...originalEnv };
     vi.resetModules();
+    redisMock.get.mockReset();
+    redisMock.set.mockReset();
+    redisMock.scan.mockReset();
+    redisMock.del.mockReset();
   });
 
   afterEach(async () => {
@@ -34,6 +53,45 @@ describe('apiCache safety and fallback behavior', () => {
     );
 
     expect(fetchFn).not.toHaveBeenCalled();
+  });
+
+  test('clears only the API-cache key namespace in Redis', async () => {
+    process.env.NODE_ENV = 'production';
+    process.env.REDIS_URL = 'redis://isolated-test.invalid:6379';
+    redisMock.scan
+      .mockResolvedValueOnce([
+        '17',
+        ['proposalos-api-cache-audit-1', 'rate-limit:tenant:1', 'proposalos-api-cache-audit-2'],
+      ])
+      .mockResolvedValueOnce(['0', ['proposalos-api-cache-proposal-1']]);
+    redisMock.del.mockResolvedValue(1);
+
+    const { clearCache } = await import('../apiCache');
+    await clearCache();
+
+    expect(redisMock.scan).toHaveBeenNthCalledWith(
+      1,
+      '0',
+      'MATCH',
+      'proposalos-api-cache-*',
+      'COUNT',
+      100
+    );
+    expect(redisMock.scan).toHaveBeenNthCalledWith(
+      2,
+      '17',
+      'MATCH',
+      'proposalos-api-cache-*',
+      'COUNT',
+      100
+    );
+    expect(redisMock.del).toHaveBeenNthCalledWith(
+      1,
+      'proposalos-api-cache-audit-1',
+      'proposalos-api-cache-audit-2'
+    );
+    expect(redisMock.del).toHaveBeenNthCalledWith(2, 'proposalos-api-cache-proposal-1');
+    expect(redisMock).not.toHaveProperty('flushdb');
   });
 
   test('behaves as a silent no-op in dev/test environments when ALLOW_LOCAL_CACHE is not set', async () => {

@@ -25,10 +25,12 @@ import type { runWithTenantAsync as runWithTenantAsyncType } from '../context';
 
 const TEST_DB = process.env.PROPOSALOS_RLS_TEST_DB || 'proposal_rls_smoke';
 const POSTGRES_PASSWORD = process.env.PROPOSALOS_TEST_DB_ADMIN_PASSWORD || 'password';
-const DIRECT_URL = process.env.PROPOSALOS_RLS_DIRECT_URL ||
+const DIRECT_URL =
+  process.env.PROPOSALOS_RLS_DIRECT_URL ||
   `postgresql://postgres:${POSTGRES_PASSWORD}@localhost:5435/${TEST_DB}`;
-const POOLED_APP_USER_URL = process.env.PROPOSALOS_RLS_APP_URL ||
-  `postgresql://app_user:${process.env.PROPOSALOS_TEST_DB_APP_PASSWORD || 'password'}@localhost:6432/${TEST_DB}?pgbouncer=true`;
+const POOLED_APP_USER_URL =
+  process.env.PROPOSALOS_RLS_APP_URL ||
+  `postgresql://app_user:${process.env.PROPOSALOS_TEST_DB_APP_PASSWORD || 'password'}@127.0.0.1:6432/${TEST_DB}?pgbouncer=true`;
 
 // Use a test-specific Prisma client running as superuser for setup and teardown
 const prisma = new PrismaClient({
@@ -127,7 +129,7 @@ describe('Multi-Tenant Isolation Stress Test (100 Tenants)', () => {
             title: `${testTenant.name} - Finding ${i + 1}`,
             description: `This finding belongs to tenant ${testTenant.id}`,
             impactScore: 5 + Math.floor(Math.random() * 5),
-        confidenceScore: 8 + Math.floor(Math.random() * 2),
+            confidenceScore: 8 + Math.floor(Math.random() * 2),
           },
         });
         testTenant.findingIds.push(finding.id);
@@ -349,9 +351,11 @@ describe('Multi-Tenant Isolation Stress Test (100 Tenants)', () => {
     it('should handle 1000 concurrent queries without data leakage', async () => {
       const queries = Array.from({ length: 1000 }, (_, i) => {
         const tenant = testTenants[i % TENANT_COUNT]!;
-        return runWithTenantAsync(tenant.id, () => appPrisma.audit.findMany({
-          where: { tenantId: tenant.id },
-        }));
+        return runWithTenantAsync(tenant.id, () =>
+          appPrisma.audit.findMany({
+            where: { tenantId: tenant.id },
+          })
+        );
       });
 
       const results = await Promise.all(queries);

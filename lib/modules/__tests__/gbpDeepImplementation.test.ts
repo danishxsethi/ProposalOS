@@ -41,7 +41,7 @@ const placeData = {
 describe('gbpDeep honest provider and dependency behavior', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    process.env.GOOGLE_PLACES_API_KEY = 'places-test-key';
+    process.env.SERP_API_KEY = 'serp-test-key';
     vi.mocked(safeFetchResponseDerived).mockResolvedValue(
       new Response(new Uint8Array([1, 2, 3]), {
         status: 200,
@@ -53,7 +53,7 @@ describe('gbpDeep honest provider and dependency behavior', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
-    delete process.env.GOOGLE_PLACES_API_KEY;
+    delete process.env.SERP_API_KEY;
   });
 
   it('reuses canonical GBP details and leaves claimed status unavailable', async () => {
@@ -72,7 +72,7 @@ describe('gbpDeep honest provider and dependency behavior', () => {
     const analysis = result.evidenceSnapshots[0].rawResponse;
     expect(result.execution?.state).toBe('partial');
     expect(analysis.claimedStatus).toEqual({ value: null, basis: 'unavailable' });
-    expect(analysis.photos.aiResults).toBe(0);
+    expect(analysis.photos.aiResults).toBeUndefined();
     expect(tracker.calls).toEqual([]);
     expect(tracker.calls).not.toContain('PLACES_DETAILS_DEEP');
     expect(tracker.calls).not.toContain('PLACES_TEXT_SEARCH');
@@ -87,14 +87,14 @@ describe('gbpDeep honest provider and dependency behavior', () => {
     });
 
     expect(result.execution?.state).toBe('partial');
-    expect(result.evidenceSnapshots[0].rawResponse.photos.aiResults).toBe(0);
+    expect(result.evidenceSnapshots[0].rawResponse.photos.aiResults).toBeUndefined();
     expect(result.findings.some((finding) => finding.title === 'Low-Quality Profile Photos')).toBe(
       false
     );
   });
 
   it('returns unavailable when neither dependency data nor credentials exist', async () => {
-    delete process.env.GOOGLE_PLACES_API_KEY;
+    delete process.env.SERP_API_KEY;
     const tracker = new Tracker();
     const result = await runGbpDeepModule(
       { businessName: 'Acme Dental', city: 'Regina' },
@@ -106,11 +106,10 @@ describe('gbpDeep honest provider and dependency behavior', () => {
   });
 
   it('maps a real Places provider failure to failed, not an empty complete result', async () => {
-    process.env.GOOGLE_PLACES_API_KEY = 'places-test-key';
-    const { GoogleMapsProvider } = await import('@/lib/maps/googleMapsProvider');
-    const { mapsIntelligence } = await import('@/lib/maps/googleMapsProvider');
-    const provider = new GoogleMapsProvider({
-      apiKey: 'places-test-key',
+    process.env.SERP_API_KEY = 'serp-test-key';
+    const { SerpApiMapsProvider, mapsIntelligence } = await import('@/lib/maps/serpMapsProvider');
+    const provider = new SerpApiMapsProvider({
+      apiKey: 'serp-test-key',
       fetchImpl: vi.fn(async () => new Response('', { status: 503 })) as typeof fetch,
     });
     vi.spyOn(mapsIntelligence, 'resolveBusiness').mockImplementation(

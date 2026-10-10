@@ -254,7 +254,9 @@ async function discoverFromYelp(input: DiscoveryInput): Promise<SourceDiscoveryR
           fallbackValue: { organic_results: [] },
         },
         async () => {
-          const res = await fetch(`https://serpapi.com/search.json?${endpointParams.toString()}`);
+          const res = await fetch(`https://serpapi.com/search.json?${endpointParams.toString()}`, {
+            redirect: 'error',
+          });
           if (!res.ok) {
             const text = await res.text();
             throw new Error(`SerpAPI Yelp failed (${res.status}): ${text}`);
@@ -333,7 +335,9 @@ async function discoverFromDirectoryFallback(
           fallbackValue: { local_results: [] },
         },
         async () => {
-          const res = await fetch(`https://serpapi.com/search.json?${endpointParams.toString()}`);
+          const res = await fetch(`https://serpapi.com/search.json?${endpointParams.toString()}`, {
+            redirect: 'error',
+          });
           if (!res.ok) {
             const text = await res.text();
             throw new Error(`SerpAPI local failed (${res.status}): ${text}`);

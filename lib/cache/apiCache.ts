@@ -9,6 +9,7 @@ import { logger } from '@/lib/logger';
 import { Metrics } from '../metrics';
 
 const CACHE_DIR = path.join(process.cwd(), 'lib', 'cache', 'store');
+const CACHE_KEY_PREFIX = 'proposalos-api-cache-';
 const USE_REDIS = !!process.env.REDIS_URL;
 const ALLOW_LOCAL_CACHE = process.env.ALLOW_LOCAL_CACHE === 'true';
 const IS_PROD = process.env.NODE_ENV === 'production';
@@ -47,7 +48,8 @@ interface CacheEntry<T> {
 function generateKey(apiName: string, params: Record<string, any>): string {
   const paramString = JSON.stringify(params, Object.keys(params).sort());
   const hash = crypto.createHash('sha256').update(paramString).digest('hex');
-  return `${apiName}:${hash}`;
+  const safeApiName = apiName.replace(/[^a-zA-Z0-9_-]/g, '-').slice(0, 80) || 'api';
+  return `${CACHE_KEY_PREFIX}${safeApiName}-${hash}`;
 }
 
 /**
@@ -138,7 +140,19 @@ export async function cachedFetch<T>(
  */
 export async function clearCache(): Promise<void> {
   if (USE_REDIS && redis) {
-    await redis.flushdb();
+    let cursor = '0';
+    do {
+      const [nextCursor, keys] = await redis.scan(
+        cursor,
+        'MATCH',
+        `${CACHE_KEY_PREFIX}*`,
+        'COUNT',
+        100
+      );
+      const cacheKeys = keys.filter((key) => key.startsWith(CACHE_KEY_PREFIX));
+      if (cacheKeys.length > 0) await redis.del(...cacheKeys);
+      cursor = nextCursor;
+    } while (cursor !== '0');
     logger.info('[Cache] Redis cleared');
   } else if (!IS_PROD && ALLOW_LOCAL_CACHE) {
     await fs.emptyDir(CACHE_DIR);

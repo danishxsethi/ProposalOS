@@ -17,6 +17,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { createServer } from 'node:http';
 
 // ─── Mock validateUrl to control SSRF decisions without real DNS ──────────────
 
@@ -46,7 +47,11 @@ import {
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function allowUrl() {
-  mockValidateUrl.mockResolvedValue({ isValid: true, sanitizedUrl: undefined });
+  mockValidateUrl.mockResolvedValue({
+    isValid: true,
+    sanitizedUrl: undefined,
+    resolvedAddresses: [{ address: '93.184.216.34', family: 4 }],
+  });
 }
 
 function blockUrl(reason: string) {
@@ -55,7 +60,11 @@ function blockUrl(reason: string) {
 
 function allowThenBlock(reason: string) {
   mockValidateUrl
-    .mockResolvedValueOnce({ isValid: true, sanitizedUrl: undefined })
+    .mockResolvedValueOnce({
+      isValid: true,
+      sanitizedUrl: undefined,
+      resolvedAddresses: [{ address: '93.184.216.34', family: 4 }],
+    })
     .mockResolvedValueOnce({ isValid: false, error: reason });
 }
 
@@ -348,6 +357,45 @@ describe('SSRF: safeFetch general', () => {
     const res = await safeFetch('http://example.com/page');
     expect(res.status).toBe(200);
     expect(mockFetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('connects to the validated address without resolving the hostname again', async () => {
+    const server = createServer((_request, response) => response.end('pinned destination'));
+    const port = await new Promise<number>((resolve, reject) => {
+      server.once('error', reject);
+      server.listen(0, '127.0.0.1', () => {
+        const address = server.address();
+        if (!address || typeof address === 'string') reject(new Error('Test server did not bind'));
+        else resolve(address.port);
+      });
+    });
+
+    const url = `http://dns-rebinding-test.invalid:${port}/`;
+    globalThis.fetch = realFetch;
+    mockValidateUrl.mockResolvedValue({
+      isValid: true,
+      sanitizedUrl: url,
+      // Test-only approval maps the reserved .invalid hostname to this local
+      // socket. A second DNS lookup would fail because .invalid never resolves.
+      resolvedAddresses: [{ address: '127.0.0.1', family: 4 }],
+    });
+
+    try {
+      const response = await safeFetch(url);
+      await expect(response.text()).resolves.toBe('pinned destination');
+      expect(mockValidateUrl).toHaveBeenCalledTimes(1);
+    } finally {
+      await new Promise<void>((resolve, reject) => {
+        server.close((error) => (error ? reject(error) : resolve()));
+      });
+    }
+  });
+
+  it('fails closed when validation does not provide a pinned address set', async () => {
+    mockValidateUrl.mockResolvedValue({ isValid: true, sanitizedUrl: 'https://example.com/' });
+
+    await expect(safeFetch('https://example.com/')).rejects.toThrow(/no connection addresses/i);
+    expect(mockFetch).not.toHaveBeenCalled();
   });
 
   it('blocks dangerous ports (Redis 6379)', async () => {

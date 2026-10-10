@@ -9,21 +9,20 @@ const steps = [
   {
     number: 1,
     icon: <Radar className="w-8 h-8 text-blue-400" />,
-    title: 'Scan',
-    description: 'Enter your URL. Our AI audits 30+ dimensions in 30 seconds.',
+    title: 'Scope',
+    description: 'A reviewer works from a website and scope the business has authorized.',
   },
   {
     number: 2,
     icon: <Brain className="w-8 h-8 text-purple-400" />,
     title: 'Diagnose',
-    description: 'AI clusters your issues, ranks by impact, and identifies root causes.',
+    description: 'Each proposed finding is checked against retrievable evidence and its limits.',
   },
   {
     number: 3,
     icon: <Wrench className="w-8 h-8 text-green-400" />,
-    title: 'Fix',
-    description:
-      'Get a prioritized action plan with pricing, ROI projections, and one-click delivery.',
+    title: 'Plan',
+    description: 'Receive practical next steps with assumptions stated and outcomes unpromised.',
   },
 ];
 
@@ -59,8 +58,11 @@ export function HowItWorks() {
         className="text-center mb-16"
       >
         <h2 className="text-4xl md:text-5xl font-bold tracking-tight text-white">
-          Three steps. <span className="gradient-text">Zero guesswork.</span>
+          <span className="gradient-text">Proposed pilot workflow</span>
         </h2>
+        <p className="text-text-secondary mt-4">
+          Self-service intake is paused. A customer-facing pilot is not yet available.
+        </p>
       </motion.div>
 
       <div className="relative max-w-5xl mx-auto px-4">

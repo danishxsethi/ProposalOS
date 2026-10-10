@@ -20,6 +20,7 @@ describe('Wave 4 browser boundary', () => {
   it('validates navigation and blocks an unsafe subresource', async () => {
     const handlers: Record<string, (value: any) => Promise<void> | void> = {};
     const page = {
+      evaluateOnNewDocument: vi.fn().mockResolvedValue(undefined),
       setRequestInterception: vi.fn().mockResolvedValue(undefined),
       on: vi.fn((event, handler) => {
         handlers[event] = handler;

@@ -5,8 +5,10 @@
  * `{pointer: 'unknown', ...}`, a fabricated value that passed every shape check.
  */
 import { describe, expect, it } from 'vitest';
-
 import { containsSecretLike, createEvidence, isPlaceholderPointer } from '../types';
+
+// Build a key-shaped test value without committing an API-looking literal.
+const syntheticGoogleApiKey = `AIza${'A'.repeat(35)}`;
 
 describe('createEvidence (P1-25)', () => {
   it('accepts a real URL pointer', () => {
@@ -63,7 +65,7 @@ describe('createEvidence (P1-25)', () => {
   it('rejects a secret-looking pointer', () => {
     expect(() =>
       createEvidence({
-        pointer: 'https://x.com?key=AIzaSyA1b2C3d4E5f6G7h8I9j0K1l2M3n4O5p6Q',
+        pointer: `https://x.com?key=${syntheticGoogleApiKey}`,
         source: 'x',
       })
     ).toThrow(/secret/);
@@ -114,7 +116,7 @@ describe('isPlaceholderPointer', () => {
 
 describe('containsSecretLike', () => {
   it('flags common credential shapes', () => {
-    expect(containsSecretLike('AIzaSyA1b2C3d4E5f6G7h8I9j0K1l2M3n4O5p6Q')).toBe(true);
+    expect(containsSecretLike(syntheticGoogleApiKey)).toBe(true);
     expect(containsSecretLike('sk-abcdefghijklmnopqrstuvwxyz')).toBe(true);
     expect(containsSecretLike('Bearer abcdef123456.ghijkl789012')).toBe(true);
     expect(containsSecretLike('-----BEGIN RSA PRIVATE KEY-----')).toBe(true);

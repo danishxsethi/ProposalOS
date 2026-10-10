@@ -106,7 +106,6 @@ describe('Auth & Session Architecture Boundary Tests', () => {
     const apiDir = path.join(rootDir, 'app/api');
 
     const exemptPrefixes = [
-      'auth/',
       'public/',
       'widget/',
       'outreach/track/',
@@ -116,7 +115,6 @@ describe('Auth & Session Architecture Boundary Tests', () => {
       'client/',
       'cron/',
       'worker/',
-      'admin/',
       'billing/',
       'cache/',
       'prompt/',
@@ -132,6 +130,9 @@ describe('Auth & Session Architecture Boundary Tests', () => {
     ];
 
     const exemptExact = [
+      // Public auth entry points: registration is rate-limited; NextAuth owns its callback flow.
+      'auth/register/route.ts',
+      'auth/[...nextauth]/route.ts',
       'checkout/route.ts',
       'health/route.ts',
       // Public ALB liveness probe, same class as health/route.ts; no session auth by design
@@ -149,7 +150,7 @@ describe('Auth & Session Architecture Boundary Tests', () => {
     const exemptSubstring = ['[token]', 'proposal/[id]/chat'];
 
     const isPublicOrExemptRoute = (filePath: string) => {
-      const relative = path.relative(apiDir, filePath);
+      const relative = path.relative(apiDir, filePath).split(path.sep).join('/');
 
       const hasPrefix = exemptPrefixes.some((pref) => relative.startsWith(pref));
       if (hasPrefix) return true;
@@ -175,8 +176,10 @@ describe('Auth & Session Architecture Boundary Tests', () => {
             const content = fs.readFileSync(fullPath, 'utf8');
             const hasAuthHelper =
               content.includes('withAuth') ||
+              content.includes('withRole(') ||
               content.includes('getServerSession') ||
               content.includes('verifyCronAuth') ||
+              content.includes('verifyAdminOrCronAuth') ||
               content.includes('verifyWorkerAuth') ||
               content.includes('validateApiKey') ||
               content.includes('getTenantId') ||
@@ -184,7 +187,7 @@ describe('Auth & Session Architecture Boundary Tests', () => {
 
             if (!hasAuthHelper) {
               throw new Error(
-                `Architectural Violation: Protected API route is missing approved authentication or session helpers (withAuth, getServerSession): ${path.relative(rootDir, fullPath)}`
+                `Architectural Violation: Protected API route is missing approved authentication or session helpers (withAuth, withRole, verifyAdminOrCronAuth, getServerSession): ${path.relative(rootDir, fullPath)}`
               );
             }
           }

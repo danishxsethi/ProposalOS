@@ -1,7 +1,6 @@
 locals {
   github_actions_main_subjects = [
-    "repo:danishxsethi/ProposalOS:ref:refs/heads/main",
-    "repo:danishxsethi@92055628/ProposalOS@1158247398:ref:refs/heads/main"
+    "repo:Danish-Sethi@324834111/ProposalOS@1158247398:ref:refs/heads/main"
   ]
 }
 

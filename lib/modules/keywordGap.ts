@@ -197,7 +197,7 @@ async function checkRankings(
               fallbackValue: { organic_results: [], local_results: [] },
             },
             async () => {
-              const res = await fetch(url);
+              const res = await fetch(url, { redirect: 'error' });
               if (!res.ok) {
                 throw new Error(`HTTP error ${res.status}: ${res.statusText}`);
               }

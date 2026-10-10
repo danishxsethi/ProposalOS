@@ -9,7 +9,8 @@ export function Footer() {
         <div>
           <h3 className="font-bold text-xl gradient-text lowercase mb-4">claraud</h3>
           <p className="text-sm text-text-secondary leading-relaxed">
-            AI-powered business audit tool that uncovers hidden growth opportunities in 30 seconds.
+            Website diagnostic workflows are being qualified for operator-assisted pilots. Public
+            self-service scan intake is paused.
           </p>
         </div>
         <div>
@@ -43,11 +44,10 @@ export function Footer() {
           </ul>
         </div>
         <div>
-          <h4 className="font-semibold text-white mb-4">Trust</h4>
-          <ul className="space-y-3 text-sm text-text-secondary">
-            <li className="flex items-center gap-2">✓ Powered by AWS</li>
-            <li className="flex items-center gap-2">✓ Encrypted in transit and at rest</li>
-          </ul>
+          <h4 className="font-semibold text-white mb-4">Availability</h4>
+          <p className="text-sm leading-relaxed text-text-secondary">
+            Public scan intake and paid pilot orders are paused while the service is qualified.
+          </p>
         </div>
       </div>
       <div className="container border-t border-white/10 pt-8 flex flex-col md:flex-row justify-between items-center text-xs text-text-secondary">

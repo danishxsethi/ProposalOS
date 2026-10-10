@@ -14,18 +14,18 @@ const jetbrainsMono = JetBrains_Mono({ subsets: ['latin'], variable: '--font-jet
 export const metadata: Metadata = {
   metadataBase: new URL('https://claraud.com'),
   title: {
-    default: 'Claraud — AI Business Audit | Free Website & Marketing Audit',
+    default: 'Claraud — Operator-Reviewed Website Diagnostics',
     template: '%s | Claraud',
   },
   description:
-    'Free 30-second AI audit of your website, Google presence, competitors, reviews, and social media. Get a personalized action plan to grow.',
+    'Claraud is qualifying an operator-assisted website diagnostic workflow. Public self-service scans are currently paused.',
   keywords: [
     'website audit',
     'business audit',
     'SEO audit',
     'Google Business Profile',
     'marketing audit',
-    'free website audit',
+    'operator-reviewed website diagnostics',
   ],
   authors: [{ name: 'Claraud' }],
   creator: 'Claraud',
@@ -34,15 +34,14 @@ export const metadata: Metadata = {
     locale: 'en_US',
     url: 'https://claraud.com',
     siteName: 'Claraud',
-    title: 'Claraud — AI Business Audit',
-    description:
-      'Free 30-second AI audit of your website, Google presence, competitors, reviews, and social media.',
+    title: 'Claraud — Operator-Reviewed Website Diagnostics',
+    description: 'Public self-service scans are paused while the diagnostic workflow is qualified.',
     images: [{ url: '/api/og/default' }],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Claraud — AI Business Audit',
-    description: 'Free 30-second AI audit. 30+ dimensions. Personalized action plan.',
+    title: 'Claraud — Operator-Reviewed Website Diagnostics',
+    description: 'Public self-service scans are paused while the diagnostic workflow is qualified.',
     creator: '@tryclaraud',
     images: ['/api/og/default'],
   },

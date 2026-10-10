@@ -1,7 +1,5 @@
 'use client';
 
-import Image from 'next/image';
-
 import { motion } from 'framer-motion';
 
 import { Button } from '@/components/ui/button';
@@ -15,7 +13,7 @@ export function ReportCTA({ token }: ReportCTAProps) {
   const { captureEvent } = usePostHog();
 
   const onClick = () => {
-    captureEvent('proposal_clicked', { token });
+    captureEvent('proposal_clicked');
   };
 
   return (
@@ -32,11 +30,12 @@ export function ReportCTA({ token }: ReportCTAProps) {
 
         <div className="relative z-10 max-w-2xl mx-auto">
           <h2 className="text-4xl lg:text-5xl font-black text-white mb-6 tracking-tight">
-            Ready to fix these issues?
+            Review the proposed next steps
           </h2>
           <p className="text-lg lg:text-xl text-text-secondary mb-10 leading-relaxed font-medium">
-            We've built a <span className="text-blue-400">personalized action plan</span> with exact
-            pricing, timelines, and projected ROI to leapfrog your competitors.
+            Review the proposal details and the evidence behind each recommendation. Scope, price,
+            timing, and any outcome estimate must be confirmed for the specific business before
+            work is agreed.
           </p>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
@@ -45,47 +44,9 @@ export function ReportCTA({ token }: ReportCTAProps) {
               onClick={onClick}
               asChild
             >
-              <a href={`/proposal/${token}`}>View Your Action Plan →</a>
+              <a href={`/proposal/${token}`}>View Proposal →</a>
             </Button>
 
-            <Button
-              variant="ghost"
-              className="text-text-secondary hover:text-white h-16 px-10 font-bold w-full sm:w-auto"
-              onClick={() => {
-                const header = document.querySelector('header') || document.body;
-                header.scrollIntoView({ behavior: 'smooth' });
-              }}
-            >
-              Or share this report
-            </Button>
-          </div>
-
-          <div className="mt-12 flex items-center justify-center gap-8 grayscale opacity-40 group-hover:grayscale-0 group-hover:opacity-100 transition-all duration-700">
-            <div className="text-[10px] font-bold uppercase tracking-[0.3em] text-text-secondary">
-              Compatible with
-            </div>
-            <div className="h-6 w-px bg-white/10" />
-            <Image
-              src="/placeholder.svg"
-              alt="Google"
-              width={20}
-              height={20}
-              className="h-5 w-auto invert"
-            />
-            <Image
-              src="/placeholder.svg"
-              alt="Instagram"
-              width={20}
-              height={20}
-              className="h-5 w-auto invert"
-            />
-            <Image
-              src="/placeholder.svg"
-              alt="Stripe"
-              width={20}
-              height={20}
-              className="h-5 w-auto invert"
-            />
           </div>
         </div>
       </div>

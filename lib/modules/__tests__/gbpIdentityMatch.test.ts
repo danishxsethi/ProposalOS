@@ -23,58 +23,58 @@ import { runGBPModule } from '../gbp';
 import { runGbpDeepModule } from '../gbpDeep';
 
 function textSearchResponse(places: unknown[]) {
-  return { places };
+  return { local_results: places };
 }
 
-function detailsResponse() {
+function detailsResponse(placeId: string) {
   return {
-    id: 'place-1',
-    displayName: { text: 'Acme Dental' },
-    formattedAddress: '123 Main St, Regina',
-    rating: 4.5,
-    userRatingCount: 20,
-    editorialSummary: { text: 'Family dentistry' },
-    paymentOptions: { acceptsCreditCards: true },
+    place_results: {
+      place_id: placeId,
+      title: 'Acme Dental',
+      address: '123 Main St, Regina',
+      website: 'https://acme-dental.test',
+      reviews: 20,
+      type: 'Dental clinic',
+    },
   };
+}
+
+function installMapsResponseFixture(searchPlaces: unknown[]) {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (input: string | URL | Request) => {
+      const requestUrl = new URL(String(input));
+      if (requestUrl.searchParams.get('type') === 'search') {
+        return new Response(JSON.stringify(textSearchResponse(searchPlaces)), { status: 200 });
+      }
+      return new Response(
+        JSON.stringify(detailsResponse(requestUrl.searchParams.get('place_id') ?? '')),
+        { status: 200 }
+      );
+    })
+  );
 }
 
 describe('runGBPModule identity disambiguation (P1-29)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    process.env.GOOGLE_PLACES_API_KEY = 'places-test-key';
+    process.env.SERP_API_KEY = 'serp-test-key';
   });
 
   afterEach(() => {
     vi.unstubAllGlobals();
-    delete process.env.GOOGLE_PLACES_API_KEY;
+    delete process.env.SERP_API_KEY;
   });
 
   it('selects the exact-name, same-city candidate over an unrelated same-name-elsewhere candidate and reports high confidence', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async (url: string) => {
-        if (url.includes('searchText')) {
-          return new Response(
-            JSON.stringify(
-              textSearchResponse([
-                {
-                  id: 'place-wrong-city',
-                  displayName: { text: 'Acme Dental' },
-                  formattedAddress: '9 Other Ave, Springfield',
-                },
-                {
-                  id: 'place-1',
-                  displayName: { text: 'Acme Dental' },
-                  formattedAddress: '123 Main St, Regina',
-                },
-              ])
-            ),
-            { status: 200 }
-          );
-        }
-        return new Response(JSON.stringify(detailsResponse()), { status: 200 });
-      })
-    );
+    installMapsResponseFixture([
+      {
+        place_id: 'place-wrong-city',
+        title: 'Acme Dental',
+        address: '9 Other Ave, Springfield',
+      },
+      { place_id: 'place-1', title: 'Acme Dental', address: '123 Main St, Regina' },
+    ]);
 
     const result = await runGBPModule({ businessName: 'Acme Dental', city: 'Regina' });
 
@@ -85,31 +85,10 @@ describe('runGBPModule identity disambiguation (P1-29)', () => {
   });
 
   it('flags an ambiguous match and records real alternate candidates when multiple identically-named businesses are returned (franchise/common-name risk)', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async (url: string) => {
-        if (url.includes('searchText')) {
-          return new Response(
-            JSON.stringify(
-              textSearchResponse([
-                {
-                  id: 'place-1',
-                  displayName: { text: 'Acme Dental' },
-                  formattedAddress: '123 Main St',
-                },
-                {
-                  id: 'place-2',
-                  displayName: { text: 'Acme Dental' },
-                  formattedAddress: '456 Side St',
-                },
-              ])
-            ),
-            { status: 200 }
-          );
-        }
-        return new Response(JSON.stringify(detailsResponse()), { status: 200 });
-      })
-    );
+    installMapsResponseFixture([
+      { place_id: 'place-1', title: 'Acme Dental', address: '123 Main St' },
+      { place_id: 'place-2', title: 'Acme Dental', address: '456 Side St' },
+    ]);
 
     const result = await runGBPModule({ businessName: 'Acme Dental', city: '' });
 
@@ -127,43 +106,22 @@ describe('runGBPModule identity disambiguation (P1-29)', () => {
 describe('runGbpDeepModule independent fallback resolution reuses the same disambiguation (P1-29)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    process.env.GOOGLE_PLACES_API_KEY = 'places-test-key';
+    process.env.SERP_API_KEY = 'serp-test-key';
   });
 
   afterEach(() => {
     vi.unstubAllGlobals();
-    delete process.env.GOOGLE_PLACES_API_KEY;
+    delete process.env.SERP_API_KEY;
   });
 
   it('resolves the correctly-addressed candidate out of multiple same-name results when no canonical gbp dependency is available', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async (url: string) => {
-        if (String(url).includes('searchText')) {
-          return new Response(
-            JSON.stringify(
-              textSearchResponse([
-                {
-                  id: 'wrong-place',
-                  displayName: { text: 'Acme Dental' },
-                  formattedAddress: '9 Other Ave, Springfield',
-                },
-                {
-                  id: 'right-place',
-                  displayName: { text: 'Acme Dental' },
-                  formattedAddress: '123 Main St, Regina',
-                },
-              ])
-            ),
-            { status: 200 }
-          );
-        }
-        return new Response(JSON.stringify(detailsResponse()), { status: 200 });
-      })
-    );
+    installMapsResponseFixture([
+      { place_id: 'wrong-place', title: 'Acme Dental', address: '9 Other Ave, Springfield' },
+      { place_id: 'right-place', title: 'Acme Dental', address: '123 Main St, Regina' },
+    ]);
 
     const result = await runGbpDeepModule({ businessName: 'Acme Dental', city: 'Regina' });
-    expect(result.evidenceSnapshots[0]?.source).toBe('places_api_v1');
+    expect(result.evidenceSnapshots[0]?.source).toBe('serpapi_google_maps');
     // The details fetch is keyed by the resolved placeId — confirmed indirectly via
     // a successful, non-failed, non-unavailable execution state using the mocked
     // details response tied to the disambiguated candidate.

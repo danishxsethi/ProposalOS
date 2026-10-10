@@ -70,7 +70,7 @@ export function Navbar() {
           ))}
           <ThemeToggle />
           <Button className="gradient-btn font-bold px-6 rounded-full" asChild>
-            <Link href="/scan">Scan Free &rarr;</Link>
+            <Link href="/scan">Scans paused</Link>
           </Button>
         </nav>
 
@@ -111,7 +111,7 @@ export function Navbar() {
                 <ThemeToggle />
                 <Button className="gradient-btn font-bold py-6 text-lg rounded-2xl" asChild>
                   <Link href="/scan" onClick={() => setIsOpen(false)}>
-                    Scan Free &rarr;
+                    Scans paused
                   </Link>
                 </Button>
               </div>

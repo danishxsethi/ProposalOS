@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
 
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { cleanupDb } from '@/lib/__tests__/utils/cleanup';
 import { withTestSystemSetup, withTestTenant } from '@/lib/__tests__/utils/testPrincipal';
@@ -12,15 +12,19 @@ import { POST } from '../route';
 describe('Partner Matching Cron', () => {
   let tenantId: string;
   let partnerId: string;
+  const testCronSecret = 'proposalos-test-cron-secret';
 
   beforeEach(async () => {
+    vi.stubEnv('CRON_SECRET', testCronSecret);
     // Create test tenant
-    const tenant = await withTestSystemSetup(() => prisma.tenant.create({
-      data: {
-        name: 'Test Tenant',
-        slug: `test-${Date.now()}`,
-      },
-    }));
+    const tenant = await withTestSystemSetup(() =>
+      prisma.tenant.create({
+        data: {
+          name: 'Test Tenant',
+          slug: `test-${Date.now()}`,
+        },
+      })
+    );
     tenantId = tenant.id;
 
     // Create test partner
@@ -36,7 +40,11 @@ describe('Partner Matching Cron', () => {
   });
 
   afterEach(async () => {
-    await cleanupDb(prisma);
+    try {
+      await cleanupDb(prisma);
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 
   it('should require valid cron secret', async () => {
@@ -54,64 +62,68 @@ describe('Partner Matching Cron', () => {
   it('should match and deliver leads to partners', async () => {
     // Create test prospects
     const prospects = await Promise.all([
-      withTestTenant(tenantId, () => prisma.prospectLead.create({
-        data: {
-          tenantId,
-          businessName: 'Dental Practice',
-          website: 'https://dental.com',
-          city: 'New York',
-          vertical: 'dentistry',
-          painScore: 75,
-          painBreakdown: {
-            websiteSpeed: 10,
-            mobileBroken: 10,
-            gbpNeglected: 10,
-            noSsl: 10,
-            zeroReviewResponses: 10,
-            socialMediaDead: 10,
-            competitorsOutperforming: 10,
-            accessibilityViolations: 0,
+      withTestTenant(tenantId, () =>
+        prisma.prospectLead.create({
+          data: {
+            tenantId,
+            businessName: 'Dental Practice',
+            website: 'https://dental.com',
+            city: 'New York',
+            vertical: 'dentistry',
+            painScore: 75,
+            painBreakdown: {
+              websiteSpeed: 10,
+              mobileBroken: 10,
+              gbpNeglected: 10,
+              noSsl: 10,
+              zeroReviewResponses: 10,
+              socialMediaDead: 10,
+              competitorsOutperforming: 10,
+              accessibilityViolations: 0,
+            },
+            decisionMakerName: 'Dr. Smith',
+            decisionMakerTitle: 'Owner',
+            decisionMakerEmail: 'dr.smith@dental.com',
+            status: 'QUALIFIED',
+            source: 'test',
+            sourceExternalId: 'test-2',
           },
-          decisionMakerName: 'Dr. Smith',
-          decisionMakerTitle: 'Owner',
-          decisionMakerEmail: 'dr.smith@dental.com',
-          status: 'QUALIFIED',
-          source: 'test',
-          sourceExternalId: 'test-2',
-        },
-      })),
-      withTestTenant(tenantId, () => prisma.prospectLead.create({
-        data: {
-          tenantId,
-          businessName: 'HVAC Company',
-          website: 'https://hvac.com',
-          city: 'Los Angeles',
-          vertical: 'hvac',
-          painScore: 70,
-          painBreakdown: {
-            websiteSpeed: 10,
-            mobileBroken: 10,
-            gbpNeglected: 10,
-            noSsl: 10,
-            zeroReviewResponses: 10,
-            socialMediaDead: 10,
-            competitorsOutperforming: 10,
-            accessibilityViolations: 0,
+        })
+      ),
+      withTestTenant(tenantId, () =>
+        prisma.prospectLead.create({
+          data: {
+            tenantId,
+            businessName: 'HVAC Company',
+            website: 'https://hvac.com',
+            city: 'Los Angeles',
+            vertical: 'hvac',
+            painScore: 70,
+            painBreakdown: {
+              websiteSpeed: 10,
+              mobileBroken: 10,
+              gbpNeglected: 10,
+              noSsl: 10,
+              zeroReviewResponses: 10,
+              socialMediaDead: 10,
+              competitorsOutperforming: 10,
+              accessibilityViolations: 0,
+            },
+            decisionMakerName: 'John Doe',
+            decisionMakerTitle: 'Owner',
+            decisionMakerEmail: 'john@plumbing.com',
+            status: 'QUALIFIED',
+            source: 'test',
+            sourceExternalId: 'test-3',
           },
-          decisionMakerName: 'John Doe',
-          decisionMakerTitle: 'Owner',
-          decisionMakerEmail: 'john@plumbing.com',
-          status: 'QUALIFIED',
-          source: 'test',
-          sourceExternalId: 'test-3',
-        },
-      })),
+        })
+      ),
     ]);
 
     const request = new NextRequest('http://localhost:3000/api/cron/partner-matching', {
       method: 'POST',
       headers: {
-        authorization: `Bearer ${process.env.CRON_SECRET}`,
+        authorization: `Bearer ${testCronSecret}`,
       },
     });
 
@@ -128,7 +140,7 @@ describe('Partner Matching Cron', () => {
     const request = new NextRequest('http://localhost:3000/api/cron/partner-matching', {
       method: 'POST',
       headers: {
-        authorization: `Bearer ${process.env.CRON_SECRET}`,
+        authorization: `Bearer ${testCronSecret}`,
       },
     });
 
@@ -144,7 +156,7 @@ describe('Partner Matching Cron', () => {
     const request = new NextRequest('http://localhost:3000/api/cron/partner-matching', {
       method: 'POST',
       headers: {
-        authorization: `Bearer ${process.env.CRON_SECRET}`,
+        authorization: `Bearer ${testCronSecret}`,
       },
     });
 
