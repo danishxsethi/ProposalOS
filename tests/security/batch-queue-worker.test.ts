@@ -354,7 +354,10 @@ describe('Worker — processAuditJob', () => {
     mocks.auditJobFindUnique.mockResolvedValue(mockJob({ status: 'QUEUED' }));
     mocks.auditJobUpdateMany.mockResolvedValue({ count: 1 });
     mocks.runAudit.mockResolvedValue(undefined);
-    mocks.auditFindUnique.mockResolvedValue({ status: 'COMPLETE', trustState: 'DEGRADED_REVIEW_REQUIRED' });
+    mocks.auditFindUnique.mockResolvedValue({
+      status: 'COMPLETE',
+      trustState: 'DEGRADED_REVIEW_REQUIRED',
+    });
     mocks.generateProposal.mockResolvedValue(undefined);
 
     const result = await processAuditJob('job-1');
@@ -381,10 +384,10 @@ describe('Worker — processAuditJob', () => {
         data: expect.objectContaining({ status: 'QUEUED', errorMessage: 'API timeout' }),
       })
     );
-    expect(mocks.auditUpdate).toHaveBeenCalledWith({
-      where: { id: 'audit-1' },
-      data: expect.objectContaining({ status: 'FAILED', trustState: 'FAILED' }),
-    });
+    // Retryable failure: the job requeues, but the AUDIT must NOT be flipped
+    // to FAILED while another attempt may still succeed. (The old behavior
+    // marked the audit terminal on attempt 1 of 3 — a false failure state.)
+    expect(mocks.auditUpdate).not.toHaveBeenCalled();
   });
 
   it('moves to DEAD after maxAttempts exhausted', async () => {
@@ -405,6 +408,11 @@ describe('Worker — processAuditJob', () => {
         data: expect.objectContaining({ status: 'DEAD' }),
       })
     );
+    // Retries exhausted: NOW the audit goes terminal (FAILED).
+    expect(mocks.auditUpdate).toHaveBeenCalledWith({
+      where: { id: 'audit-1' },
+      data: expect.objectContaining({ status: 'FAILED', trustState: 'FAILED' }),
+    });
   });
 
   it('returns NOT_FOUND for unknown jobId', async () => {
