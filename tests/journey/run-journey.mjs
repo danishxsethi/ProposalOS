@@ -59,6 +59,14 @@ const APP_PASSWORD = 'app_user';
 const NEXT_PORT = Number(process.env.JOURNEY_NEXT_PORT || 3117);
 const NEXT_URL = `http://127.0.0.1:${NEXT_PORT}`;
 
+// M2 real-inference mode: JOURNEY_REAL_INFERENCE=1 switches the LLM boundary
+// from the deterministic fixture provider to real Amazon Bedrock inference
+// (everything else stays fixture: providers, storage, site). Requires an
+// AWS credential on the VM and enforces the fail-closed LLM budget ceiling.
+const REAL_INFERENCE = process.env.JOURNEY_REAL_INFERENCE === '1' || process.argv.includes('--real-inference');
+const REAL_INFERENCE_BUDGET_CENTS = process.env.JOURNEY_BEDROCK_BUDGET_CENTS || '500'; // USD $5 ceiling
+const REAL_INFERENCE_GENERATIONS = Number(process.env.JOURNEY_GENERATIONS || 3);
+
 const BUSINESS = {
   name: 'Summit Ridge Heating & Air',
   city: 'Denver',
@@ -243,9 +251,21 @@ function buildServerEnv(db, fixtures, chromePath) {
     AWS_ACCESS_KEY_ID: 'journey-fixture-key',
     AWS_SECRET_ACCESS_KEY: 'journey-fixture-secret',
 
-    // LLM → deterministic fixture provider (labeled; no real inference)
-    PROPOSALOS_FIXTURE_LLM_ENABLED: 'true',
-    LLM_PRIMARY_PROVIDER: 'fixture',
+    // LLM boundary: deterministic fixture provider (labeled; no real inference)
+    // OR real Bedrock inference in JOURNEY_REAL_INFERENCE mode, guarded by the
+    // fail-closed application-side spend ceiling.
+    ...(REAL_INFERENCE
+      ? {
+          BEDROCK_ENABLED: 'true',
+          LLM_BUDGET_MAX_CENTS: REAL_INFERENCE_BUDGET_CENTS,
+          BEDROCK_FAST_MODEL_ID: process.env.BEDROCK_FAST_MODEL_ID || 'us.amazon.nova-micro-v1:0',
+          BEDROCK_MODEL_ID: process.env.BEDROCK_MODEL_ID || 'us.amazon.nova-2-lite-v1:0',
+          BEDROCK_VISION_MODEL_ID: process.env.BEDROCK_VISION_MODEL_ID || 'us.amazon.nova-2-lite-v1:0',
+        }
+      : {
+          PROPOSALOS_FIXTURE_LLM_ENABLED: 'true',
+          LLM_PRIMARY_PROVIDER: 'fixture',
+        }),
 
     // SSRF: strictly-scoped loopback allowlist (hostname + IP-literal) for the
     // fixture site and the loopback-only fixture servers (S3 presigned URLs).
@@ -569,6 +589,53 @@ async function runJourney(db, workerSecret) {
     { httpStatus: pdfResponse.status, bytes: pdfBuffer.length, pdfPath }
   );
 
+  // Step 8b (real-inference mode only): additional bounded generations.
+  // The journey itself is generation 1; each regeneration re-runs diagnosis +
+  // proposal graphs against the same real evidence, inside the budget ceiling.
+  if (REAL_INFERENCE) {
+    const generations = [];
+    for (let i = 0; i < Math.max(0, REAL_INFERENCE_GENERATIONS - 1); i++) {
+      timeStart(`regeneration-${i + 2}`);
+      try {
+        const regenResponse = await fetch(`${NEXT_URL}/api/audit/${auditId}/regenerate`, {
+          method: 'POST',
+          headers: authHeaders,
+        });
+        const regenText = await regenResponse.text();
+        let regenBody = {};
+        try { regenBody = JSON.parse(regenText); } catch { regenBody = { raw: regenText.slice(0, 200) }; }
+        const ms = timeEnd(`regeneration-${i + 2}`);
+        const latest = await admin.query(
+          `SELECT id, version, status, "qaScore", "createdAt" FROM "Proposal" WHERE "auditId" = $1 ORDER BY version DESC LIMIT 1`,
+          [auditId]
+        );
+        generations.push({
+          generation: i + 2,
+          httpStatus: regenResponse.status,
+          latencyMs: ms,
+          latestProposal: latest.rows[0] ?? null,
+          error: regenResponse.ok ? null : regenBody.error ?? regenText.slice(0, 120),
+        });
+        record(
+          'regeneration',
+          regenResponse.ok,
+          `generation ${i + 2}: POST /api/audit/[id]/regenerate -> ${regenResponse.status} (v${latest.rows[0]?.version ?? '?'}, QA ${latest.rows[0]?.qaScore ?? '?'})`,
+          { generation: i + 2, httpStatus: regenResponse.status, latencyMs: ms }
+        );
+      } catch (error) {
+        generations.push({ generation: i + 2, error: String(error).slice(0, 200) });
+        record('regeneration', false, `generation ${i + 2} failed: ${String(error).slice(0, 120)}`, {});
+      }
+    }
+    journey.steps.push({
+      step: 'bounded-generations',
+      ok: generations.every((g) => g.httpStatus === 200),
+      detail: `${generations.length} additional bounded generations requested (budget ceiling ${REAL_INFERENCE_BUDGET_CENTS} cents)`,
+      generations,
+      at: new Date().toISOString(),
+    });
+  }
+
   // Step 9: worker job final state
   const jobFinal = await admin.query(
     `SELECT status, attempts, "errorMessage" FROM audit_jobs WHERE "auditId" = $1 ORDER BY "createdAt" DESC LIMIT 1`,
@@ -604,10 +671,37 @@ function resolveChromePath() {
   );
 }
 
+/**
+ * M2 preflight: verify a real AWS credential path exists BEFORE booting
+ * anything. Fails closed with the exact owner action otherwise.
+ */
+function preflightRealInference() {
+  const hasProfile = Boolean(process.env.AWS_PROFILE);
+  const hasStaticKeys = Boolean(
+    process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY
+  );
+  if (!hasProfile && !hasStaticKeys) {
+    throw new Error(
+      [
+        'M2 AUTHORIZATION BLOCKED: no AWS credential available for real Bedrock inference.',
+        'Required (owner action): grant a NONPRODUCTION AWS identity least-privilege',
+        '  bedrock:InvokeModel / bedrock:Converse access to the approved Nova models',
+        '  (us.amazon.nova-micro-v1:0, us.amazon.nova-2-lite-v1:0) in us-east-2,',
+        '  with an explicit cost ceiling (suggested maximum experimental spend: USD $5 total),',
+        '  and expose it to this VM (AWS_PROFILE or static keys). Do not use AWS root;',
+        '  do not use production secrets.',
+        'Once authorized, rerun: JOURNEY_REAL_INFERENCE=1 npm run journey:controlled',
+      ].join('\n')
+    );
+  }
+  log('preflight', `real-inference credential path detected (${hasProfile ? 'AWS_PROFILE' : 'static keys'})`);
+}
+
 async function main() {
   fs.mkdirSync(EVIDENCE_DIR, { recursive: true });
   const startedAt = Date.now();
   log('start', `controlled joined journey starting (run ${RUN_ID})`);
+  if (REAL_INFERENCE) preflightRealInference();
 
   const chromePath = resolveChromePath();
   log('preflight', `Chrome binary: ${chromePath}`);
@@ -630,6 +724,21 @@ async function main() {
     log('error', `journey failed: ${error.message}`);
   }
 
+  // M2 guard: in real-inference mode, ANY fixture-LLM engagement is a failure.
+  // The journey must not silently fall back to the deterministic fixture.
+  let silentFixtureFallback = null;
+  if (REAL_INFERENCE && server) {
+    const serverLogContent = fs.readFileSync(server.serverLogPath, 'utf8');
+    const fixtureHits = (serverLogContent.match(/Fixture LLM mode active/g) || []).length;
+    silentFixtureFallback = fixtureHits > 0;
+    if (silentFixtureFallback) {
+      log('error', 'REAL-INFERENCE GUARD FAILED: the deterministic fixture LLM engaged instead of real Bedrock inference');
+      failure = failure ?? new Error('Silent fixture fallback during real-inference run');
+    } else {
+      log('journey', 'real-inference guard OK: zero fixture-LLM engagements in the server log');
+    }
+  }
+
   // Teardown (best-effort, evidence is written first)
   const s3Objects = fixtures ? fixtures.s3.listObjects() : [];
   const evidence = {
@@ -638,9 +747,12 @@ async function main() {
     finishedAt: new Date().toISOString(),
     durationMs: Date.now() - startedAt,
     sourceSha: execFileSync('git', ['rev-parse', 'HEAD'], { cwd: REPO_ROOT }).toString().trim(),
-    verdict: failure || (journeyResult && journeyResult.steps.some((step) => !step.ok))
-      ? 'FAILED'
-      : 'CONTROLLED_JOINED_JOURNEY_VERIFIED',
+    verdict:
+      failure || silentFixtureFallback || (journeyResult && journeyResult.steps.some((step) => !step.ok))
+        ? 'FAILED'
+        : REAL_INFERENCE
+          ? 'REAL_INFERENCE_JOURNEY_VERIFIED'
+          : 'CONTROLLED_JOINED_JOURNEY_VERIFIED',
     failure: failure ? { message: failure.message, stack: failure.stack } : null,
     environment: {
       node: process.version,
@@ -650,7 +762,11 @@ async function main() {
       fixtureProvidersUrl: fixtures?.providers.url,
       fixtureS3Url: fixtures?.s3.url,
       nextUrl: NEXT_URL,
-      llm: 'deterministic fixture provider (PROPOSALOS_FIXTURE_LLM_ENABLED=true) — NO real inference',
+      llm: REAL_INFERENCE
+        ? `REAL Amazon Bedrock inference (budget ceiling ${REAL_INFERENCE_BUDGET_CENTS} cents, fail-closed); models: ${process.env.BEDROCK_MODEL_ID || 'us.amazon.nova-2-lite-v1:0'} + ${process.env.BEDROCK_FAST_MODEL_ID || 'us.amazon.nova-micro-v1:0'}`
+        : 'deterministic fixture provider (PROPOSALOS_FIXTURE_LLM_ENABLED=true) — NO real inference',
+      realInferenceMode: REAL_INFERENCE,
+      silentFixtureFallback,
       email: 'disabled (RESEND_API_KEY unset)',
       outbound: `only ${PROVIDER_FIXTURE_HOSTS} redirected to local fixtures; everything else blocked or loopback`,
     },
