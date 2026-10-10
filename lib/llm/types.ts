@@ -12,6 +12,12 @@ import type { MultimodalContent } from './provider';
  */
 export enum LLMProvider {
   BEDROCK = 'bedrock',
+  /**
+   * Test-scoped deterministic fixture provider (controlled joined journey / CI
+   * fixture qualification). Refuses to activate in production — see
+   * lib/llm/mode.ts. Never used for real customer inference.
+   */
+  FIXTURE = 'fixture',
 }
 
 /**

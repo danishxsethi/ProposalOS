@@ -21,8 +21,10 @@ import { PromptPerformanceTracker } from '@/lib/self-evolving-prompts/PromptPerf
 
 import { llmAuditLogger } from './audit-logger';
 import { llmCache } from './cache';
+import { isFixtureLlmSelected } from './mode';
 import { validateAndFilter } from './output-validator';
 import { bedrockProvider } from './providers/bedrock';
+import { fixtureProvider } from './providers/fixture';
 import { LLMProvider } from './types';
 
 /**
@@ -259,13 +261,22 @@ export async function generateWithLLM(
   }
 
   const configuredProvider = process.env.LLM_PRIMARY_PROVIDER;
-  if (configuredProvider && configuredProvider !== LLMProvider.BEDROCK) {
-    throw new Error(
-      `Unsupported LLM_PRIMARY_PROVIDER "${configuredProvider}"; ProposalOS uses Amazon Bedrock`
+  const fixtureMode = isFixtureLlmSelected();
+  if (fixtureMode) {
+    // Test-scoped deterministic provider (refuses in production — see mode.ts).
+    logger.info(
+      { event: 'llm.fixture_mode', node: opts.metadata?.node },
+      'Fixture LLM mode active: responses are deterministic and explicitly not real inference'
     );
-  }
-  if (process.env.BEDROCK_ENABLED !== 'true') {
-    throw new Error('Amazon Bedrock is disabled; set BEDROCK_ENABLED=true to enable it');
+  } else {
+    if (configuredProvider && configuredProvider !== LLMProvider.BEDROCK) {
+      throw new Error(
+        `Unsupported LLM_PRIMARY_PROVIDER "${configuredProvider}"; ProposalOS uses Amazon Bedrock`
+      );
+    }
+    if (process.env.BEDROCK_ENABLED !== 'true') {
+      throw new Error('Amazon Bedrock is disabled; set BEDROCK_ENABLED=true to enable it');
+    }
   }
 
   let inputText = '';
@@ -280,7 +291,8 @@ export async function generateWithLLM(
     }
   }
 
-  const targetModel = bedrockProvider.resolveModelId(opts.model, opts.input);
+  const activeProvider = fixtureMode ? fixtureProvider : bedrockProvider;
+  const targetModel = activeProvider.resolveModelId(opts.model, opts.input);
 
   // Check cache before making API call
   const useCache = opts.metadata?.useCache !== false;
@@ -382,8 +394,8 @@ export async function generateWithLLM(
 
       // Execute with circuit breaker
       const result = await circuitBreaker.execute<any>(async () => {
-        const bedrockResult = await bedrockProvider.generateContent({
-          provider: LLMProvider.BEDROCK,
+        const providerResult = await activeProvider.generateContent({
+          provider: fixtureMode ? LLMProvider.FIXTURE : LLMProvider.BEDROCK,
           model: targetModel,
           input: opts.input,
           temperature: opts.temperature,
@@ -394,6 +406,7 @@ export async function generateWithLLM(
           signal: abortController.signal,
           metadata: opts.metadata,
         });
+        const bedrockResult = providerResult;
         return {
           response: {
             candidates: [
@@ -544,7 +557,7 @@ export async function generateWithLLM(
           {
             text,
             model: targetModel,
-            provider: LLMProvider.BEDROCK,
+            provider: fixtureMode ? LLMProvider.FIXTURE : LLMProvider.BEDROCK,
             functionCalls,
             usageMetadata: usage
               ? {
@@ -587,7 +600,7 @@ export async function generateWithLLM(
       return {
         text,
         model: targetModel,
-        provider: LLMProvider.BEDROCK,
+        provider: fixtureMode ? LLMProvider.FIXTURE : LLMProvider.BEDROCK,
         functionCalls,
         usageMetadata: usage
           ? {
@@ -698,22 +711,25 @@ export async function generateWithLLM(
   throw lastError || new Error('LLM call failed after all retries');
 }
 
-// Generate an async stream from Amazon Bedrock.
+// Generate an async stream from the active LLM provider.
 export async function* generateContentStream(
   opts: LLMCallOptions
 ): AsyncGenerator<string, void, unknown> {
-  const configuredProvider = process.env.LLM_PRIMARY_PROVIDER;
-  if (configuredProvider && configuredProvider !== LLMProvider.BEDROCK) {
-    throw new Error(
-      `Unsupported LLM_PRIMARY_PROVIDER "${configuredProvider}"; ProposalOS uses Amazon Bedrock`
-    );
-  }
-  if (process.env.BEDROCK_ENABLED !== 'true') {
-    throw new Error('Amazon Bedrock is disabled; set BEDROCK_ENABLED=true to enable it');
+  const fixtureMode = isFixtureLlmSelected();
+  if (!fixtureMode) {
+    const configuredProvider = process.env.LLM_PRIMARY_PROVIDER;
+    if (configuredProvider && configuredProvider !== LLMProvider.BEDROCK) {
+      throw new Error(
+        `Unsupported LLM_PRIMARY_PROVIDER "${configuredProvider}"; ProposalOS uses Amazon Bedrock`
+      );
+    }
+    if (process.env.BEDROCK_ENABLED !== 'true') {
+      throw new Error('Amazon Bedrock is disabled; set BEDROCK_ENABLED=true to enable it');
+    }
   }
 
-  yield* bedrockProvider.generateContentStream({
-    provider: LLMProvider.BEDROCK,
+  yield* (fixtureMode ? fixtureProvider : bedrockProvider).generateContentStream({
+    provider: fixtureMode ? LLMProvider.FIXTURE : LLMProvider.BEDROCK,
     model: opts.model,
     input: opts.input,
     temperature: opts.temperature,
