@@ -93,6 +93,8 @@ jobs:
   controlled-fixture-journey:
     name: Controlled fixture journey (M1, no real inference)
     runs-on: ubuntu-latest
+    # Bounded: the journey takes ~90s warm; generous ceiling for cold caches.
+    timeout-minutes: 25
 
     steps:
       - uses: actions/checkout@v6

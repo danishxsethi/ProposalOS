@@ -806,9 +806,20 @@ async function main() {
     log('cleanup', `disposable database ${db.dbName} dropped`);
   }
 
+  // Close the local fixture servers explicitly: open server handles keep the
+  // Node event loop alive (observed hanging the CI job after the verdict).
+  if (fixtures) {
+    await Promise.allSettled([
+      new Promise((resolve) => fixtures.site.server.close(() => resolve())),
+      new Promise((resolve) => fixtures.providers.server.close(() => resolve())),
+      new Promise((resolve) => fixtures.s3.server.close(() => resolve())),
+    ]);
+  }
+
   console.info('');
   console.info(`JOURNEY VERDICT: ${evidence.verdict}`);
-  if (failure) process.exitCode = 1;
+  // Hard exit: guarantee CI terminates even if a handle escapes.
+  process.exit(failure ? 1 : 0);
 }
 
 main().catch((error) => {

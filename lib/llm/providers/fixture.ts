@@ -183,12 +183,15 @@ function respondExecutiveSummary(prompt: string): string {
   const findings = parseFindingList(prompt, 'UNTRUSTED_FINDINGS');
   if (findings.length === 0) throw new Error('FIXTURE_LLM_NO_RESPONDER: no findings tag');
 
-  const top = findings.slice(0, 5);
+  // Quote the finding titles verbatim so the customer-claim overlap validator
+  // (which requires substantive term overlap with the cited findings) passes
+  // deterministically regardless of which findings rank in the top five.
   // No numerals (claim contract): no fabricated counts or metrics.
+  const top = findings.slice(0, 5);
+  const quoted = top.map((f) => `“${f.title ?? 'a validated finding'}”`).join(', ');
   const text =
-    `This proposal is based on a verified audit of the site and its presence. The audit confirmed ` +
-    `a set of evidence-backed issues, including ` +
-    `${top.map((f) => f.title ?? 'a validated finding').join('; ')}. ` +
+    `This proposal is based on a verified audit of the site and its local presence. The audit confirmed ` +
+    `a set of evidence-backed issues: ${quoted}. ` +
     `The plan below sequences the corresponding fixes by measured impact, starting with the ` +
     `items most likely to affect how customers find, use, and contact the business.`;
   return JSON.stringify({ text, finding_ids: findings.map((f) => f.id).filter(Boolean) });
