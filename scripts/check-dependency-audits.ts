@@ -2,7 +2,13 @@ import { spawnSync } from 'node:child_process';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-type AuditReport = {
+import {
+  EXCEPTION_APPROVAL_ENV,
+  evaluateAuditGate,
+  type AuditReportLike,
+} from '../lib/security/dependencyExceptions';
+
+type AuditReport = AuditReportLike & {
   metadata?: {
     vulnerabilities?: {
       low?: number;
@@ -69,17 +75,36 @@ function runAudit(omitDev: boolean): AuditReport {
 const production = runAudit(true);
 const allDependencies = runAudit(false);
 
-if ((production.metadata?.vulnerabilities?.critical ?? 0) > 0) {
-  throw new Error('Production dependency audit has CRITICAL advisories');
-}
-if ((production.metadata?.vulnerabilities?.high ?? 0) > 0) {
-  throw new Error('Production dependency audit has HIGH advisories');
-}
-if ((allDependencies.metadata?.vulnerabilities?.critical ?? 0) > 0) {
-  throw new Error('Full dependency audit has CRITICAL advisories');
-}
-if ((allDependencies.metadata?.vulnerabilities?.high ?? 0) > 0) {
-  throw new Error('Full dependency audit has HIGH advisories');
+// The prepared exception mechanism (lib/security/dependencyExceptions.ts)
+// activates ONLY when the owner sets the approval flag in CI. Without it,
+// any HIGH/CRITICAL advisory fails the gate — including the braces advisory.
+const exceptionsApproved = process.env[EXCEPTION_APPROVAL_ENV] === 'true';
+
+const evaluation = evaluateAuditGate({
+  productionReport: production as AuditReportLike,
+  fullReport: allDependencies as AuditReportLike,
+  exceptionsApproved,
+  now: new Date(),
+});
+
+if (!evaluation.pass) {
+  for (const failure of evaluation.failures) {
+    console.error(`DEPENDENCY GATE: ${failure}`);
+  }
+  if (!exceptionsApproved) {
+    console.error(
+      `DEPENDENCY GATE: the prepared exception for GHSA-vfj7-8cjw-p6xm (braces, dev-only, ` +
+        `expires 2026-11-09) is NOT active. It requires explicit owner approval via ` +
+        `${EXCEPTION_APPROVAL_ENV}=true in the CI environment.`
+    );
+  }
+  throw new Error('Dependency audit policy failed');
 }
 
-console.log('Dependency audit policy satisfied: no HIGH or CRITICAL advisories.');
+if (evaluation.excusedAdvisories.length > 0) {
+  console.log(
+    `Dependency audit policy satisfied. Owner-approved exceptions honored: ${evaluation.excusedAdvisories.join(', ')} (dev-only, production reachability and expiry are re-checked every run).`
+  );
+} else {
+  console.log('Dependency audit policy satisfied: no HIGH or CRITICAL advisories.');
+}
