@@ -111,3 +111,7 @@ lib/raos/
 # harness cruft (never commit; regenerated per run)
 scripts/_proposalSmoke.ts
 scripts/_freshProposal.ts
+
+# Controlled joined-journey run artifacts (regenerated per run; evidence records
+# live in docs/release/2026-10-09/)
+tests/journey/evidence/
