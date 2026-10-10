@@ -38,6 +38,38 @@ export interface UrlValidationResult {
   resolvedAddresses?: ResolvedAddress[];
 }
 
+// ─── Test-scoped loopback fixture allowlist ───────────────────────────────────
+//
+// Controlled-journey support (M1): PROPOSALOS_SSRF_TEST_FIXTURE_HOSTS is a
+// comma-separated list of EXACT hostnames that serve the local audit fixture
+// website on loopback. Entries are honored ONLY when ALL of the following hold:
+//   1. NODE_ENV is not 'production' (hard refusal in production), and
+//   2. every OS-resolved address for the hostname is loopback (127.0.0.0/8, ::1).
+// The accommodation can never turn public URLs into private-network access:
+// non-listed hosts, non-loopback resolutions, blocked ports, credential URLs,
+// metadata endpoints and redirect hops keep the full SSRF policy. A listed
+// hostname that resolves to anything other than loopback fails closed.
+
+const TEST_FIXTURE_HOSTS_ENV = 'PROPOSALOS_SSRF_TEST_FIXTURE_HOSTS';
+
+function isTestFixtureHost(host: string): boolean {
+  const raw = process.env[TEST_FIXTURE_HOSTS_ENV];
+  if (!raw || process.env.NODE_ENV === 'production') return false;
+  const lowerHost = host
+    .toLowerCase()
+    .replace(/^\[|\]$/g, '')
+    .replace(/\.$/, '');
+  const listed = raw
+    .split(',')
+    .map((entry) => entry.trim().toLowerCase())
+    .filter(Boolean);
+  return listed.includes(lowerHost);
+}
+
+function isLoopbackAddress(ip: ipaddr.IPv4 | ipaddr.IPv6): boolean {
+  return ip.range() === 'loopback';
+}
+
 /**
  * Check if an IP address is in a blocked range
  */
@@ -54,9 +86,15 @@ function isIpBlocked(ip: ipaddr.IPv4 | ipaddr.IPv6): boolean {
 async function validateHost(
   host: string
 ): Promise<{ valid: boolean; error?: string; addresses?: ResolvedAddress[] }> {
-  // Check against blocked hostnames
-  const lowerHost = host.toLowerCase().replace(/^\[|\]$/g, '').replace(/\.$/, '');
+  const lowerHost = host
+    .toLowerCase()
+    .replace(/^\[|\]$/g, '')
+    .replace(/\.$/, '');
+  // Test-scoped fixture hosts (exact match, loopback-pinned below) skip only the
+  // literal-name blocklist; they still must resolve to loopback to be accepted.
+  const fixtureHost = isTestFixtureHost(lowerHost);
   if (
+    !fixtureHost &&
     BLOCKED_HOSTNAMES.some((blocked) => lowerHost === blocked || lowerHost.endsWith(`.${blocked}`))
   ) {
     return { valid: false, error: `Blocked hostname: ${host}` };
@@ -76,6 +114,14 @@ async function validateHost(
     }
 
     if (isIpBlocked(ip)) {
+      // A listed fixture host is accepted only as a loopback literal; any other
+      // blocked range (private, CGNAT, metadata, …) stays blocked even when listed.
+      if (fixtureHost && isLoopbackAddress(ip)) {
+        return {
+          valid: true,
+          addresses: [{ address: ip.toString(), family: ip.kind() === 'ipv4' ? 4 : 6 }],
+        };
+      }
       return { valid: false, error: `Blocked IP address: ${host}` };
     }
 
@@ -96,6 +142,7 @@ async function validateDns(
   hostname: string
 ): Promise<{ valid: boolean; error?: string; addresses?: ResolvedAddress[] }> {
   const dns = await import('node:dns').then((m) => m.promises);
+  const fixtureHost = isTestFixtureHost(hostname);
 
   try {
     // Resolve with the OS lookup used by Node connections, then pass this exact
@@ -119,15 +166,28 @@ async function validateDns(
         } else {
           return { valid: false, error: `DNS returned an invalid IP address for: ${hostname}` };
         }
+      } catch {
+        return { valid: false, error: `DNS returned an invalid IP address for: ${hostname}` };
+      }
 
-        if (isIpBlocked(ip)) {
+      if (isIpBlocked(ip)) {
+        // Test-scoped fixture hosts are accepted only when EVERY resolved
+        // address is loopback; mixed or non-loopback answer sets fail closed
+        // (a listed name can never reach a non-loopback private address).
+        const allLoopback =
+          fixtureHost &&
+          addresses.every((entry) => {
+            const parsed = ipaddr.IPv6.isValid(entry.address)
+              ? (ipaddr.parse(entry.address) as ipaddr.IPv6)
+              : (ipaddr.parse(entry.address) as ipaddr.IPv4);
+            return isLoopbackAddress(parsed);
+          });
+        if (!allLoopback) {
           return {
             valid: false,
             error: `DNS resolution blocked: ${hostname} resolves to blocked IP ${record.address}`,
           };
         }
-      } catch {
-        return { valid: false, error: `DNS returned an invalid IP address for: ${hostname}` };
       }
 
       resolvedAddresses.push({
