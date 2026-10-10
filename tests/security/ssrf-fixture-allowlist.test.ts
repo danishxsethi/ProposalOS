@@ -93,7 +93,9 @@ describe('SSRF test fixture host allowlist', () => {
     expect(result.sanitizedUrl).toContain(`localhost:${fixturePort}`);
     expect(result.resolvedAddresses?.length).toBeGreaterThan(0);
     for (const address of result.resolvedAddresses!) {
-      expect(address.address.startsWith('127.')).toBe(true);
+      // Loopback can resolve as IPv4 (127.0.0.0/8) or IPv6 (::1) — CI runners
+      // resolve localhost to both.
+      expect(address.address === '::1' || address.address.startsWith('127.')).toBe(true);
     }
   });
 
