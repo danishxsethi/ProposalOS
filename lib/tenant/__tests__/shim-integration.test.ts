@@ -115,16 +115,16 @@ function assertPooledEndpointConfiguration() {
 
 function resetSchemaAndRls() {
   runShell(
-    `PGPASSWORD=${POSTGRES_PASSWORD} psql -h localhost -p 5435 -U postgres -d ${TEST_DB} -c 'DROP SCHEMA public CASCADE; CREATE SCHEMA public;'`
+    `PGPASSWORD=${POSTGRES_PASSWORD} psql -h ${DB_HOST} -p ${DB_PORT} -U postgres -d ${TEST_DB} -c 'DROP SCHEMA public CASCADE; CREATE SCHEMA public;'`
   );
 
   runShell(`DATABASE_URL='${DIRECT_URL}' DIRECT_URL='${DIRECT_URL}' npx prisma migrate deploy`);
 
   runShell(
-    `PGPASSWORD=${POSTGRES_PASSWORD} psql -h localhost -p 5435 -U postgres -d ${TEST_DB} -c 'GRANT ALL ON SCHEMA public TO app_user; GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO app_user; GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO app_user;'`
+    `PGPASSWORD=${POSTGRES_PASSWORD} psql -h ${DB_HOST} -p ${DB_PORT} -U postgres -d ${TEST_DB} -c 'GRANT ALL ON SCHEMA public TO app_user; GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO app_user; GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO app_user;'`
   );
   runShell(
-    `PGPASSWORD=${POSTGRES_PASSWORD} psql -h localhost -p 5435 -U postgres -d ${TEST_DB} -c "ALTER ROLE app_user WITH LOGIN PASSWORD '${POSTGRES_PASSWORD}';"`
+    `PGPASSWORD=${POSTGRES_PASSWORD} psql -h ${DB_HOST} -p ${DB_PORT} -U postgres -d ${TEST_DB} -c "ALTER ROLE app_user WITH LOGIN PASSWORD '${POSTGRES_PASSWORD}';"`
   );
 }
 

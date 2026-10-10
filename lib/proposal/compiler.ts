@@ -35,7 +35,9 @@ interface CompileProposalOptions {
 interface CompiledProposalResult {
   audit: NonNullable<Awaited<ReturnType<typeof prisma.audit.findFirst>>>;
   diagnosis: Awaited<ReturnType<typeof invokeDiagnosisGraphWithTimeout>>;
-  proposal: NonNullable<Awaited<ReturnType<typeof invokeProposalGraphWithTimeout>>['completeProposal']>;
+  proposal: NonNullable<
+    Awaited<ReturnType<typeof invokeProposalGraphWithTimeout>>['completeProposal']
+  >;
   evaluation: ReturnType<typeof ProposalQAService.evaluateProposal>;
   proposalRecord: Awaited<ReturnType<typeof prisma.proposal.create>>;
   costTracker: CostTracker;
@@ -82,11 +84,14 @@ export async function compileAndPersistProposal({
 
   if (!audit) throw new Error(`AUDIT_NOT_FOUND: ${auditId}`);
   assertTrustedAudit(audit);
-  if (audit.findings.length === 0) throw new Error('NO_FINDINGS: No findings for proposal generation');
+  if (audit.findings.length === 0)
+    throw new Error('NO_FINDINGS: No findings for proposal generation');
 
   const invalidFindings = audit.findings.filter((finding) => !validateFinding(finding).success);
   if (invalidFindings.length > 0) {
-    throw new Error(`PROPOSAL_FINDINGS_INVALID: ${invalidFindings.map((finding) => finding.id).join(',')}`);
+    throw new Error(
+      `PROPOSAL_FINDINGS_INVALID: ${invalidFindings.map((finding) => finding.id).join(',')}`
+    );
   }
 
   const version = requestedVersion ?? 1;
@@ -97,17 +102,18 @@ export async function compileAndPersistProposal({
   const completeEvidenceSnapshots = evidenceSnapshots.filter(
     (snapshot) => snapshot.observationStatus === 'COMPLETE'
   );
-  const evidenceBackedFindings = audit.findings.filter(
-    (finding) =>
-      Array.isArray(finding.evidence) &&
-      finding.evidence.length > 0 &&
-      completeEvidenceSnapshots.some((snapshot) => snapshot.module === finding.module)
+  const { buildPublicProposalInputEnvelope, isEvidenceBackedFinding } =
+    await import('./inputEnvelope');
+  const completeModules = new Set(completeEvidenceSnapshots.map((snapshot) => snapshot.module));
+  const evidenceBackedFindings = audit.findings.filter((finding) =>
+    isEvidenceBackedFinding(finding, completeModules)
   );
   if (evidenceBackedFindings.length === 0) {
-    throw new Error('PROPOSAL_EVIDENCE_INCOMPLETE: no Finding is backed by a COMPLETE persisted evidence snapshot');
+    throw new Error(
+      'PROPOSAL_EVIDENCE_INCOMPLETE: no Finding is backed by a COMPLETE persisted evidence snapshot'
+    );
   }
   const findings = evidenceBackedFindings;
-  const { buildPublicProposalInputEnvelope } = await import('./inputEnvelope');
   const envelope = buildPublicProposalInputEnvelope({ ...audit, findings }, evidenceSnapshots);
   const tracker = costTracker;
   const diagnosis = await invokeDiagnosisGraphWithTimeout({
@@ -133,7 +139,8 @@ export async function compileAndPersistProposal({
   if (diagnosis.clusters.length === 0 && allowZeroClusters) {
     return { audit, diagnosis, costTracker: tracker, emptyDiagnosis: true };
   }
-  if (diagnosis.clusters.length === 0) throw new Error('DIAGNOSIS_EMPTY: Diagnosis produced no clusters');
+  if (diagnosis.clusters.length === 0)
+    throw new Error('DIAGNOSIS_EMPTY: Diagnosis produced no clusters');
 
   const proposalState = await invokeProposalGraphWithTimeout({
     businessName: audit.businessName,
@@ -159,13 +166,14 @@ export async function compileAndPersistProposal({
     | { comparisonMatrix?: { business?: unknown; competitors?: unknown[] } }
     | undefined;
   const matrix = competitorEvidence?.comparisonMatrix;
-  const comparisonReport = matrix?.business && matrix.competitors?.length
-    ? generateComparison(
-        matrix.business as Parameters<typeof generateComparison>[0],
-        matrix.competitors as Parameters<typeof generateComparison>[1],
-        audit.businessIndustry || undefined
-      )
-    : undefined;
+  const comparisonReport =
+    matrix?.business && matrix.competitors?.length
+      ? generateComparison(
+          matrix.business as Parameters<typeof generateComparison>[0],
+          matrix.competitors as Parameters<typeof generateComparison>[1],
+          audit.businessIndustry || undefined
+        )
+      : undefined;
 
   const baseProposal = proposalState.completeProposal;
   const multiplier = pricingMultiplier;
@@ -243,25 +251,29 @@ export async function compileAndPersistProposal({
     nextSteps: proposal.nextSteps,
     grounding: qaResults.grounding,
     provenance: qaResults.provenance,
-    findings: envelope.findings.map((finding) => ({
-      id: finding.id,
-      auditId: finding.auditId,
-      tenantId: finding.tenantId,
-      module: finding.module,
-      category: finding.category,
-      type: finding.type,
-      title: finding.title,
-      description: finding.description,
-      impactScore: finding.impactScore,
-      confidenceScore: finding.confidenceScore,
-      effortEstimate: finding.effortEstimate,
-      recommendedFix: finding.recommendedFix,
-      metrics: finding.metrics,
-      evidence: finding.evidence,
-      manuallyEdited: finding.manuallyEdited,
-      excluded: finding.excluded,
-    })).sort((left, right) => left.id.localeCompare(right.id)),
-    evidenceSnapshots: [...completeEvidenceSnapshots].sort((left, right) => left.id.localeCompare(right.id)),
+    findings: envelope.findings
+      .map((finding) => ({
+        id: finding.id,
+        auditId: finding.auditId,
+        tenantId: finding.tenantId,
+        module: finding.module,
+        category: finding.category,
+        type: finding.type,
+        title: finding.title,
+        description: finding.description,
+        impactScore: finding.impactScore,
+        confidenceScore: finding.confidenceScore,
+        effortEstimate: finding.effortEstimate,
+        recommendedFix: finding.recommendedFix,
+        metrics: finding.metrics,
+        evidence: finding.evidence,
+        manuallyEdited: finding.manuallyEdited,
+        excluded: finding.excluded,
+      }))
+      .sort((left, right) => left.id.localeCompare(right.id)),
+    evidenceSnapshots: [...completeEvidenceSnapshots].sort((left, right) =>
+      left.id.localeCompare(right.id)
+    ),
   };
   const approvalFingerprint = proposalPublicationFingerprint(publicationState);
   qaResults.publicationFingerprint = approvalFingerprint;
@@ -290,79 +302,98 @@ export async function compileAndPersistProposal({
       status: 'READY',
     }).length === 0;
 
-  const saved = await prisma.$transaction(async (tx) => {
-    const latestVersion = await tx.proposal.findFirst({
-      where: { auditId, tenantId },
-      orderBy: { version: 'desc' },
-      select: { version: true },
-    });
-    if (version !== (latestVersion?.version ?? 0) + 1) {
-      throw new Error('PROPOSAL_VERSION_STALE: Proposal changed during compilation; regenerate with current version');
-    }
+  const saved = await prisma.$transaction(
+    async (tx) => {
+      const latestVersion = await tx.proposal.findFirst({
+        where: { auditId, tenantId },
+        orderBy: { version: 'desc' },
+        select: { version: true },
+      });
+      if (version !== (latestVersion?.version ?? 0) + 1) {
+        throw new Error(
+          'PROPOSAL_VERSION_STALE: Proposal changed during compilation; regenerate with current version'
+        );
+      }
 
-    const draft = await tx.proposal.create({
-      data: {
-        auditId: audit.id,
-        tenantId: audit.tenantId,
-        version,
-        webLinkToken: randomUUID(),
-        publicationFingerprint: approvalFingerprint,
-        templateId,
-        prospectEmail,
-        executiveSummary: proposal.executiveSummary,
-        painClusters: JSON.parse(JSON.stringify(diagnosis.clusters)),
-        tierEssentials: JSON.parse(JSON.stringify(proposal.tiers.essentials)),
-        tierGrowth: JSON.parse(JSON.stringify(proposal.tiers.growth)),
-        tierPremium: JSON.parse(JSON.stringify(proposal.tiers.premium)),
-        pricing: JSON.parse(JSON.stringify(proposal.pricing)),
-        assumptions: proposal.assumptions,
-        disclaimers: proposal.disclaimers,
-        nextSteps: proposal.nextSteps,
-        comparisonReport: proposal.comparisonReport
-          ? JSON.parse(JSON.stringify(proposal.comparisonReport))
-          : undefined,
-        status: 'DRAFT',
-        qaScore: evaluation.autoQAStatus.score,
-        clientScore: evaluation.autoQAStatus.clientPerfect.score,
-        qaResults: JSON.parse(JSON.stringify(qaResults)),
-        clientScoreResults: JSON.parse(JSON.stringify(evaluation.autoQAStatus.clientPerfect)),
-      },
-    });
-    if (!publicationEligible) return draft;
-
-    const approvedQaResults = JSON.parse(
-      JSON.stringify({
-        ...qaResults,
-        publicationApproval: {
-          version: 1,
-          decision: 'APPROVED',
-          proposalVersion: version,
-          qaVersion: 1,
-          fingerprint: approvalFingerprint,
+      const draft = await tx.proposal.create({
+        data: {
+          auditId: audit.id,
+          tenantId: audit.tenantId,
+          version,
+          webLinkToken: randomUUID(),
+          publicationFingerprint: approvalFingerprint,
+          templateId,
+          prospectEmail,
+          executiveSummary: proposal.executiveSummary,
+          painClusters: JSON.parse(JSON.stringify(diagnosis.clusters)),
+          tierEssentials: JSON.parse(JSON.stringify(proposal.tiers.essentials)),
+          tierGrowth: JSON.parse(JSON.stringify(proposal.tiers.growth)),
+          tierPremium: JSON.parse(JSON.stringify(proposal.tiers.premium)),
+          pricing: JSON.parse(JSON.stringify(proposal.pricing)),
+          assumptions: proposal.assumptions,
+          disclaimers: proposal.disclaimers,
+          nextSteps: proposal.nextSteps,
+          comparisonReport: proposal.comparisonReport
+            ? JSON.parse(JSON.stringify(proposal.comparisonReport))
+            : undefined,
+          status: 'DRAFT',
+          qaScore: evaluation.autoQAStatus.score,
+          clientScore: evaluation.autoQAStatus.clientPerfect.score,
+          qaResults: JSON.parse(JSON.stringify(qaResults)),
+          clientScoreResults: JSON.parse(JSON.stringify(evaluation.autoQAStatus.clientPerfect)),
         },
-      })
-    ) as Prisma.InputJsonValue;
-    const promoted = await tx.proposal.updateMany({
-      where: { id: draft.id, tenantId, version, status: 'DRAFT' },
-      data: { status: 'READY', qaResults: approvedQaResults },
-    });
-    if (promoted.count !== 1) {
-      throw new Error('PROPOSAL_PROMOTION_CONFLICT: Draft changed before publication approval was recorded');
-    }
-    const ready = await tx.proposal.findUnique({ where: { id: draft.id } });
-    if (!ready) throw new Error('PROPOSAL_PROMOTION_CONFLICT: Promoted proposal could not be reloaded');
-    return ready;
-  }, { isolationLevel: 'Serializable' });
+      });
+      if (!publicationEligible) return draft;
+
+      const approvedQaResults = JSON.parse(
+        JSON.stringify({
+          ...qaResults,
+          publicationApproval: {
+            version: 1,
+            decision: 'APPROVED',
+            proposalVersion: version,
+            qaVersion: 1,
+            fingerprint: approvalFingerprint,
+          },
+        })
+      ) as Prisma.InputJsonValue;
+      const promoted = await tx.proposal.updateMany({
+        where: { id: draft.id, tenantId, version, status: 'DRAFT' },
+        data: { status: 'READY', qaResults: approvedQaResults },
+      });
+      if (promoted.count !== 1) {
+        throw new Error(
+          'PROPOSAL_PROMOTION_CONFLICT: Draft changed before publication approval was recorded'
+        );
+      }
+      const ready = await tx.proposal.findUnique({ where: { id: draft.id } });
+      if (!ready)
+        throw new Error('PROPOSAL_PROMOTION_CONFLICT: Promoted proposal could not be reloaded');
+      return ready;
+    },
+    { isolationLevel: 'Serializable' }
+  );
 
   await prisma.audit.update({
     where: { id: audit.id },
     data: { apiCostCents: { increment: tracker.getTotalCents() } },
   });
 
-  return { audit, diagnosis, proposal, evaluation, proposalRecord: saved, costTracker: tracker, diagnosisState: 'trusted' };
+  return {
+    audit,
+    diagnosis,
+    proposal,
+    evaluation,
+    proposalRecord: saved,
+    costTracker: tracker,
+    diagnosisState: 'trusted',
+  };
 }
 
-export async function getCurrentProposalVersion(auditId: string, tenantId: string): Promise<number> {
+export async function getCurrentProposalVersion(
+  auditId: string,
+  tenantId: string
+): Promise<number> {
   const latest = await prisma.proposal.findFirst({
     where: { auditId, tenantId },
     orderBy: { version: 'desc' },

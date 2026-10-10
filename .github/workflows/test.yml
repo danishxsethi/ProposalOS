@@ -90,6 +90,49 @@ jobs:
           path: docs/audits/2026-09-18-proposal-os-ground-up-ga-audit/artifacts/
           if-no-files-found: ignore
 
+  controlled-fixture-journey:
+    name: Controlled fixture journey (M1, no real inference)
+    runs-on: ubuntu-latest
+    # Bounded: the journey takes ~90s warm; generous ceiling for cold caches.
+    timeout-minutes: 25
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Use Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: '24.x'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma Client
+        run: npx prisma generate
+
+      - name: Start canonical local Postgres and PgBouncer stack
+        run: docker compose -f docker-compose.yml up -d --wait postgres && docker compose -f docker-compose.pgbouncer.yml up -d --wait pgbouncer
+
+      - name: Run the controlled joined fixture journey end-to-end
+        # This job runs the REAL product (server, worker, collectors, graphs,
+        # secure view, PDF) against a disposable database and local fixtures.
+        # The LLM boundary is the deterministic fixture provider and external
+        # providers are local fixture servers — this is fixture execution,
+        # explicitly NOT real inference, and uses no credentials.
+        env:
+          JOURNEY_DB_ADMIN_URL: postgresql://postgres:password@127.0.0.1:5435/postgres
+          JOURNEY_NEXT_PORT: '3117'
+        run: node tests/journey/run-journey.mjs
+
+      - name: Upload journey evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: controlled-journey-evidence-${{ github.run_id }}
+          path: tests/journey/evidence/
+          if-no-files-found: warn
+
   claraud-web:
     name: Build Claraud web application
     runs-on: ubuntu-latest

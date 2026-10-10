@@ -238,8 +238,23 @@ export async function runSecurityModule(
       }
     }
 
-    const headerResult = await fetchWithRedirect(secureUrl, false, input.signal, tracker);
-    const headers = headerResult.headers;
+    // An http-only business site has no HTTPS listener at all — TLS/CONNREFUSED
+    // here is a legitimate, reportable security condition ("HTTPS not enabled"),
+    // not a module failure. Fetch best-effort and fall through with empty headers.
+    let headerResult: {
+      statusCode: number;
+      headers: Record<string, string>;
+      finalUrl: string;
+    } | null = null;
+    try {
+      headerResult = await fetchWithRedirect(secureUrl, false, input.signal, tracker);
+    } catch (error) {
+      logger.warn(
+        { host: parsed.host, error: error instanceof Error ? error.message : String(error) },
+        '[SecurityModule] HTTPS fetch unavailable — reporting HTTPS as not enabled'
+      );
+    }
+    const headers = headerResult?.headers ?? {};
 
     const certificate =
       parsed.protocol === 'https' || httpsEnabled

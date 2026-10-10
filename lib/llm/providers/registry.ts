@@ -8,6 +8,7 @@
 
 import { logger } from '@/lib/logger';
 
+import { isFixtureLlmSelected } from '../mode';
 import {
   ClassifiedError,
   ErrorType,
@@ -20,6 +21,7 @@ import {
   ProviderResponse,
 } from '../types';
 import { bedrockProvider } from './bedrock';
+import { fixtureProvider } from './fixture';
 
 /**
  * Provider Registry - manages all available LLM providers
@@ -34,6 +36,22 @@ export class ProviderRegistry {
   }
 
   private initializeProviders(): void {
+    // Test-scoped fixture mode (refuses in production — see lib/llm/mode.ts).
+    if (isFixtureLlmSelected()) {
+      this.defaultPriority = [LLMProvider.FIXTURE];
+      this.register(LLMProvider.FIXTURE, fixtureProvider, 0);
+      this.setEnabled(LLMProvider.FIXTURE, true);
+      for (const provider of this.defaultPriority) {
+        this.healthStatus.set(provider, {
+          provider,
+          healthy: true,
+          lastChecked: new Date(),
+          consecutiveFailures: 0,
+        });
+      }
+      return;
+    }
+
     const requestedPrimary = process.env.LLM_PRIMARY_PROVIDER;
     if (requestedPrimary && requestedPrimary !== LLMProvider.BEDROCK) {
       throw new Error(

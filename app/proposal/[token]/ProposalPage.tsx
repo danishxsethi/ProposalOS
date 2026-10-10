@@ -67,7 +67,8 @@ export default function ProposalPage({ proposal, branding }: ProposalProps) {
     <div className="min-h-screen bg-[#0b132b] text-white selection:bg-[#4361ee]/30 font-sans antialiased">
       {/* ─── Urgency Alert Banner (Sticky Top) ────────────────── */}
       <div className="bg-gradient-to-r from-amber-500/20 via-orange-500/20 to-amber-500/20 border-b border-amber-500/30 px-4 py-2 text-center text-xs sm:text-sm font-medium text-amber-200">
-        <span className="font-bold">⏰ Pricing & Bandwidth Guarantee:</span> Audit findings and sprint pricing locked until{' '}
+        <span className="font-bold">⏰ Pricing & Bandwidth Guarantee:</span> Audit findings and
+        sprint pricing locked until{' '}
         <span className="underline font-bold text-white">{model.expiryDateFormatted}</span>.
       </div>
 
@@ -88,7 +89,12 @@ export default function ProposalPage({ proposal, branding }: ProposalProps) {
               className="px-3.5 py-2 rounded-lg text-xs font-semibold text-white/80 hover:text-white bg-white/5 hover:bg-white/10 border border-white/10 transition-colors flex items-center gap-1.5"
             >
               <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="2"
+                  d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
+                />
               </svg>
               <span>Download PDF</span>
             </a>
@@ -104,23 +110,23 @@ export default function ProposalPage({ proposal, branding }: ProposalProps) {
       </header>
 
       {/* ─── 1. Hook Header (Above the Fold with CTA) ───────────── */}
-      <div ref={heroRef} className="relative overflow-hidden pt-12 pb-16 px-4 sm:px-6 border-b border-white/10 bg-gradient-to-b from-[#0f172a] via-[#0b132b] to-[#0b132b]">
+      <div
+        ref={heroRef}
+        className="relative overflow-hidden pt-12 pb-16 px-4 sm:px-6 border-b border-white/10 bg-gradient-to-b from-[#0f172a] via-[#0b132b] to-[#0b132b]"
+      >
         <div className="max-w-5xl mx-auto text-center">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wider bg-rose-500/10 text-rose-400 border border-rose-500/30 mb-6">
             <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse" />
-            Revenue Bleed Diagnostic • {model.businessCity}
+            Digital Presence Diagnostic • {model.businessCity}
           </div>
 
           <h1 className="text-3xl sm:text-5xl md:text-6xl font-extrabold tracking-tight text-white mb-6 leading-tight">
-            {model.businessName} is losing an estimated{' '}
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-rose-400 to-red-500">
-              {model.hookHeader.totalMonthlyBleedFormatted}
-            </span>{' '}
-            to competitor search gaps
+            {model.hookHeader.headline}
           </h1>
 
           <p className="text-lg sm:text-xl text-white/70 max-w-3xl mx-auto mb-8 leading-relaxed">
-            Forensic analysis of your live web infrastructure identified high-friction gaps in structured schema, mobile delivery, and local citation authority.
+            Forensic analysis of your live web infrastructure identified high-friction gaps in
+            structured schema, mobile delivery, and local citation authority.
           </p>
 
           {/* Above-The-Fold Single CTA Button */}
@@ -135,25 +141,71 @@ export default function ProposalPage({ proposal, branding }: ProposalProps) {
             <span className="text-xs text-white/50">{model.singleCtaSubtext}</span>
           </div>
 
-          {/* KPI Snapshot Pills */}
+          {/* KPI Snapshot Pills — observed evidence always; modeled dollars only
+              when the financial-claim gate confirms observed inputs. */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 max-w-3xl mx-auto">
+            {model.hookHeader.totalMonthlyBleedFormatted ? (
+              <div className="p-4 rounded-xl bg-white/5 border border-white/10 backdrop-blur-sm text-left">
+                <div className="text-xs font-semibold uppercase text-rose-400 tracking-wider">
+                  Estimated Monthly Bleed
+                </div>
+                <div className="text-2xl sm:text-3xl font-extrabold text-white mt-1">
+                  {model.hookHeader.totalMonthlyBleedFormatted}
+                </div>
+                <div className="text-xs text-white/50 mt-0.5">
+                  Modeled estimate — inputs and assumptions listed in the plan
+                </div>
+              </div>
+            ) : (
+              <div className="p-4 rounded-xl bg-white/5 border border-white/10 backdrop-blur-sm text-left">
+                <div className="text-xs font-semibold uppercase text-rose-400 tracking-wider">
+                  {model.evidenceKpis[0]?.label}
+                </div>
+                <div className="text-2xl sm:text-3xl font-extrabold text-white mt-1">
+                  {model.evidenceKpis[0]?.value}
+                </div>
+                <div className="text-xs text-white/50 mt-0.5">{model.evidenceKpis[0]?.detail}</div>
+              </div>
+            )}
             <div className="p-4 rounded-xl bg-white/5 border border-white/10 backdrop-blur-sm text-left">
-              <div className="text-xs font-semibold uppercase text-rose-400 tracking-wider">Estimated Monthly Bleed</div>
-              <div className="text-2xl sm:text-3xl font-extrabold text-white mt-1">{model.hookHeader.totalMonthlyBleedFormatted}</div>
-              <div className="text-xs text-white/50 mt-0.5">Recoverable revenue</div>
-            </div>
-            <div className="p-4 rounded-xl bg-white/5 border border-white/10 backdrop-blur-sm text-left">
-              <div className="text-xs font-semibold uppercase text-indigo-400 tracking-wider">Primary Leak</div>
-              <div className="text-sm font-bold text-white mt-2 truncate" title={model.hookHeader.primaryProblemTitle}>
+              <div className="text-xs font-semibold uppercase text-indigo-400 tracking-wider">
+                Primary Issue
+              </div>
+              <div
+                className="text-sm font-bold text-white mt-2 truncate"
+                title={model.hookHeader.primaryProblemTitle}
+              >
                 {model.hookHeader.primaryProblemTitle}
               </div>
-              <div className="text-xs text-rose-400 font-semibold mt-0.5">-{model.hookHeader.primaryProblemLossFormatted}/mo</div>
+              {model.hookHeader.primaryProblemLossFormatted ? (
+                <div className="text-xs text-rose-400 font-semibold mt-0.5">
+                  -{model.hookHeader.primaryProblemLossFormatted}/mo
+                </div>
+              ) : (
+                <div className="text-xs text-white/50 mt-0.5">
+                  Highest-priority verified finding
+                </div>
+              )}
             </div>
-            <div className="p-4 rounded-xl bg-white/5 border border-white/10 backdrop-blur-sm text-left">
-              <div className="text-xs font-semibold uppercase text-emerald-400 tracking-wider">Sprint Resolution</div>
-              <div className="text-2xl sm:text-3xl font-extrabold text-white mt-1">5–14 Days</div>
-              <div className="text-xs text-white/50 mt-0.5">Rapid code deployment</div>
-            </div>
+            {model.evidenceKpis[1] ? (
+              <div className="p-4 rounded-xl bg-white/5 border border-white/10 backdrop-blur-sm text-left">
+                <div className="text-xs font-semibold uppercase text-emerald-400 tracking-wider">
+                  {model.evidenceKpis[1].label}
+                </div>
+                <div className="text-2xl sm:text-3xl font-extrabold text-white mt-1">
+                  {model.evidenceKpis[1].value}
+                </div>
+                <div className="text-xs text-white/50 mt-0.5">{model.evidenceKpis[1].detail}</div>
+              </div>
+            ) : (
+              <div className="p-4 rounded-xl bg-white/5 border border-white/10 backdrop-blur-sm text-left">
+                <div className="text-xs font-semibold uppercase text-emerald-400 tracking-wider">
+                  Sprint Resolution
+                </div>
+                <div className="text-2xl sm:text-3xl font-extrabold text-white mt-1">5–14 Days</div>
+                <div className="text-xs text-white/50 mt-0.5">Rapid code deployment</div>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -161,7 +213,9 @@ export default function ProposalPage({ proposal, branding }: ProposalProps) {
       {/* ─── 2. Executive Summary (3 Findings Max with $) ────────── */}
       <section className="py-16 px-4 sm:px-6 max-w-5xl mx-auto">
         <div className="mb-8">
-          <span className="text-xs font-bold uppercase tracking-wider text-[#4361ee]">Diagnostic Brief</span>
+          <span className="text-xs font-bold uppercase tracking-wider text-[#4361ee]">
+            Diagnostic Brief
+          </span>
           <h2 className="text-2xl sm:text-3xl font-extrabold text-white mt-1">Executive Summary</h2>
           <p className="text-white/70 text-base mt-2 leading-relaxed">
             {model.executiveSummary.overview}
@@ -184,7 +238,9 @@ export default function ProposalPage({ proposal, branding }: ProposalProps) {
                 <p className="text-sm text-white/60 leading-relaxed">{item.explanation}</p>
               </div>
               <div className="text-left sm:text-right shrink-0 bg-white/5 sm:bg-transparent p-3 sm:p-0 rounded-lg">
-                <div className="text-lg sm:text-xl font-black text-rose-400">-{item.monthlyLossFormatted}</div>
+                <div className="text-lg sm:text-xl font-black text-rose-400">
+                  -{item.monthlyLossFormatted}
+                </div>
                 <div className="text-xs text-white/40">estimated monthly bleed</div>
               </div>
             </div>
@@ -200,14 +256,26 @@ export default function ProposalPage({ proposal, branding }: ProposalProps) {
               <h3 className="text-lg font-bold text-emerald-400">Quick Wins (Do This Week)</h3>
             </div>
             <p className="text-xs text-emerald-200/70 mb-4">
-              High-leverage, fast-turnaround actions that immediate boost crawler visibility and trust:
+              High-leverage, fast-turnaround actions that immediate boost crawler visibility and
+              trust:
             </p>
             <div className="space-y-3">
               {model.quickWins.map((qw, qIdx) => (
-                <div key={qIdx} className="p-3.5 rounded-lg bg-emerald-950/40 border border-emerald-500/20 text-xs">
+                <div
+                  key={qIdx}
+                  className="p-3.5 rounded-lg bg-emerald-950/40 border border-emerald-500/20 text-xs"
+                >
                   <div className="font-bold text-white mb-1">• {qw.title}</div>
                   <div className="text-emerald-300/80">{qw.recommendedFix}</div>
-                  <div className="mt-2 text-[11px] font-semibold text-emerald-400">Impact: +{qw.monthlyDollarFormatted}/mo recovered</div>
+                  {qw.monthlyDollarFormatted ? (
+                    <div className="mt-2 text-[11px] font-semibold text-emerald-400">
+                      Impact: +{qw.monthlyDollarFormatted}/mo recovered (modeled)
+                    </div>
+                  ) : (
+                    <div className="mt-2 text-[11px] font-semibold text-emerald-400">
+                      Verified quick win
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -217,17 +285,30 @@ export default function ProposalPage({ proposal, branding }: ProposalProps) {
           <div className="p-6 rounded-2xl bg-indigo-950/20 border border-indigo-500/30">
             <div className="flex items-center gap-2 mb-4">
               <span className="text-lg">🏗️</span>
-              <h3 className="text-lg font-bold text-indigo-400">Strategic Moats (Sprint Phases 2 & 3)</h3>
+              <h3 className="text-lg font-bold text-indigo-400">
+                Strategic Moats (Sprint Phases 2 & 3)
+              </h3>
             </div>
             <p className="text-xs text-indigo-200/70 mb-4">
               Structural upgrades that create defensible ranking moats against local competitors:
             </p>
             <div className="space-y-3">
               {model.strategicFixes.slice(0, 3).map((sf, sIdx) => (
-                <div key={sIdx} className="p-3.5 rounded-lg bg-indigo-950/40 border border-indigo-500/20 text-xs">
+                <div
+                  key={sIdx}
+                  className="p-3.5 rounded-lg bg-indigo-950/40 border border-indigo-500/20 text-xs"
+                >
                   <div className="font-bold text-white mb-1">• {sf.title}</div>
                   <div className="text-indigo-300/80">{sf.recommendedFix}</div>
-                  <div className="mt-2 text-[11px] font-semibold text-indigo-400">Protection: +{sf.monthlyDollarFormatted}/mo pipeline</div>
+                  {sf.monthlyDollarFormatted ? (
+                    <div className="mt-2 text-[11px] font-semibold text-indigo-400">
+                      Protection: +{sf.monthlyDollarFormatted}/mo pipeline (modeled)
+                    </div>
+                  ) : (
+                    <div className="mt-2 text-[11px] font-semibold text-indigo-400">
+                      Strategic fix
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -239,10 +320,14 @@ export default function ProposalPage({ proposal, branding }: ProposalProps) {
       <section className="py-16 px-4 sm:px-6 bg-[#0f172a]/60 border-t border-b border-white/10">
         <div className="max-w-5xl mx-auto">
           <div className="mb-8">
-            <span className="text-xs font-bold uppercase tracking-wider text-[#4361ee]">Forensic Breakdown</span>
-            <h2 className="text-2xl sm:text-3xl font-extrabold text-white mt-1">What We Found (Ranked by $ Impact)</h2>
+            <span className="text-xs font-bold uppercase tracking-wider text-[#4361ee]">
+              Forensic Breakdown
+            </span>
+            <h2 className="text-2xl sm:text-3xl font-extrabold text-white mt-1">
+              What We Found (Ranked by $ Impact)
+            </h2>
             <p className="text-white/70 text-sm mt-1">
-              Every finding sorted strictly by estimated revenue recovery and conversion impact.
+              Every finding verified against captured evidence and ranked by measured impact.
             </p>
           </div>
 
@@ -264,25 +349,34 @@ export default function ProposalPage({ proposal, branding }: ProposalProps) {
                           f.severity === 'Critical'
                             ? 'bg-red-500/20 text-red-400 border border-red-500/30'
                             : f.severity === 'High'
-                            ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
-                            : 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30'
+                              ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                              : 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30'
                         }`}
                       >
                         {f.severity}
                       </span>
-                      <h3 className="font-bold text-white text-sm sm:text-base truncate">{f.title}</h3>
+                      <h3 className="font-bold text-white text-sm sm:text-base truncate">
+                        {f.title}
+                      </h3>
                     </div>
                     <div className="flex items-center gap-4 shrink-0">
-                      <span className="font-extrabold text-sm sm:text-base text-rose-400">
-                        -{f.monthlyDollarFormatted}/mo
-                      </span>
+                      {f.monthlyDollarFormatted && (
+                        <span className="font-extrabold text-sm sm:text-base text-rose-400">
+                          -{f.monthlyDollarFormatted}/mo
+                        </span>
+                      )}
                       <svg
                         className={`w-4 h-4 text-white/50 transition-transform ${isOpen ? 'rotate-180' : ''}`}
                         fill="none"
                         stroke="currentColor"
                         viewBox="0 0 24 24"
                       >
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth="2"
+                          d="M19 9l-7 7-7-7"
+                        />
                       </svg>
                     </div>
                   </button>
@@ -290,13 +384,17 @@ export default function ProposalPage({ proposal, branding }: ProposalProps) {
                   {isOpen && (
                     <div className="px-5 pb-5 pt-1 border-t border-white/10 bg-black/20 space-y-3 text-xs">
                       <div>
-                        <span className="font-bold text-white/50 uppercase text-[10px] tracking-wider">Observation:</span>
+                        <span className="font-bold text-white/50 uppercase text-[10px] tracking-wider">
+                          Observation:
+                        </span>
                         <p className="text-white/80 mt-1 leading-relaxed">{f.description}</p>
                       </div>
 
                       {f.evidenceSnippets.length > 0 && (
                         <div>
-                          <span className="font-bold text-white/50 uppercase text-[10px] tracking-wider">Audit Evidence:</span>
+                          <span className="font-bold text-white/50 uppercase text-[10px] tracking-wider">
+                            Audit Evidence:
+                          </span>
                           <div className="mt-1 p-2.5 rounded bg-black/40 border border-white/10 font-mono text-[11px] text-emerald-300 break-all">
                             {f.evidenceSnippets[0]}
                           </div>
@@ -304,7 +402,9 @@ export default function ProposalPage({ proposal, branding }: ProposalProps) {
                       )}
 
                       <div>
-                        <span className="font-bold text-white/50 uppercase text-[10px] tracking-wider">Engineered Fix:</span>
+                        <span className="font-bold text-white/50 uppercase text-[10px] tracking-wider">
+                          Engineered Fix:
+                        </span>
                         <p className="text-emerald-400 mt-1 font-medium">{f.recommendedFix}</p>
                       </div>
                     </div>
@@ -319,16 +419,24 @@ export default function ProposalPage({ proposal, branding }: ProposalProps) {
       {/* ─── 5. The Phased Implementation Plan ──────────────────── */}
       <section className="py-16 px-4 sm:px-6 max-w-5xl mx-auto">
         <div className="mb-10 text-center">
-          <span className="text-xs font-bold uppercase tracking-wider text-[#4361ee]">Execution Roadmap</span>
-          <h2 className="text-2xl sm:text-4xl font-extrabold text-white mt-1">The 14-Day Implementation Plan</h2>
+          <span className="text-xs font-bold uppercase tracking-wider text-[#4361ee]">
+            Execution Roadmap
+          </span>
+          <h2 className="text-2xl sm:text-4xl font-extrabold text-white mt-1">
+            The 14-Day Implementation Plan
+          </h2>
           <p className="text-white/60 text-sm max-w-2xl mx-auto mt-2">
-            Turnkey deployment with minimal client workload. We build, test, and verify every fix directly.
+            Turnkey deployment with minimal client workload. We build, test, and verify every fix
+            directly.
           </p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
           {model.roadmap.map((phase) => (
-            <div key={phase.phase} className="p-6 rounded-2xl bg-[#0f172a] border border-white/10 flex flex-col justify-between">
+            <div
+              key={phase.phase}
+              className="p-6 rounded-2xl bg-[#0f172a] border border-white/10 flex flex-col justify-between"
+            >
               <div>
                 <div className="flex justify-between items-center mb-4">
                   <span className="w-7 h-7 rounded-full bg-[#4361ee] text-white font-black text-xs flex items-center justify-center">
@@ -358,11 +466,18 @@ export default function ProposalPage({ proposal, branding }: ProposalProps) {
       </section>
 
       {/* ─── 6. Pricing (3 Tiers with Decoy Anchoring) ──────────── */}
-      <section id="pricing" className="py-16 px-4 sm:px-6 bg-[#0f172a]/70 border-t border-b border-white/10">
+      <section
+        id="pricing"
+        className="py-16 px-4 sm:px-6 bg-[#0f172a]/70 border-t border-b border-white/10"
+      >
         <div className="max-w-5xl mx-auto">
           <div className="mb-10 text-center">
-            <span className="text-xs font-bold uppercase tracking-wider text-emerald-400">Guaranteed Sprint Pricing</span>
-            <h2 className="text-2xl sm:text-4xl font-extrabold text-white mt-1">Select Your Implementation Package</h2>
+            <span className="text-xs font-bold uppercase tracking-wider text-emerald-400">
+              Guaranteed Sprint Pricing
+            </span>
+            <h2 className="text-2xl sm:text-4xl font-extrabold text-white mt-1">
+              Select Your Implementation Package
+            </h2>
             <p className="text-white/60 text-sm max-w-xl mx-auto mt-2">
               Fixed-scope, fixed-price sprints backed by our 100% money-back guarantee.
             </p>
@@ -392,10 +507,12 @@ export default function ProposalPage({ proposal, branding }: ProposalProps) {
                     <span className="text-4xl font-black text-white">{tier.priceFormatted}</span>
                     <span className="text-xs text-white/50 ml-1">one-time sprint</span>
                   </div>
-                  <div className="p-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-xs text-emerald-400 font-semibold mb-6 flex justify-between">
-                    <span>Est. Recovery:</span>
-                    <span>{tier.monthlyRoiFormatted}</span>
-                  </div>
+                  {tier.monthlyRoiFormatted && (
+                    <div className="p-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-xs text-emerald-400 font-semibold mb-6 flex justify-between">
+                      <span>Est. Recovery (modeled):</span>
+                      <span>{tier.monthlyRoiFormatted}</span>
+                    </div>
+                  )}
 
                   <ul className="space-y-2.5 mb-8 text-xs text-white/80">
                     {tier.features.map((feat, fIdx) => (
@@ -454,16 +571,25 @@ export default function ProposalPage({ proposal, branding }: ProposalProps) {
               <div className="text-xs font-bold uppercase text-[#38bdf8] tracking-wider mb-1">
                 Why This Works • Cited Industry Evidence ({model.whyThisWorks.citation})
               </div>
-              <h3 className="text-lg sm:text-xl font-bold text-white mb-2">{model.whyThisWorks.headline}</h3>
-              <p className="text-xs sm:text-sm text-white/70 mb-4 leading-relaxed">{model.whyThisWorks.context}</p>
+              <h3 className="text-lg sm:text-xl font-bold text-white mb-2">
+                {model.whyThisWorks.headline}
+              </h3>
+              <p className="text-xs sm:text-sm text-white/70 mb-4 leading-relaxed">
+                {model.whyThisWorks.context}
+              </p>
               <div className="inline-flex items-center gap-2 px-3 py-1 rounded bg-white/5 border border-white/10 text-xs text-white/60">
                 <span>Verified Metric:</span>
-                <span className="font-bold text-emerald-400">{model.whyThisWorks.statHighlight}</span>
+                <span className="font-bold text-emerald-400">
+                  {model.whyThisWorks.statHighlight}
+                </span>
               </div>
             </div>
             <div className="grid grid-cols-3 gap-3 shrink-0 w-full md:w-auto">
               {model.whyThisWorks.metrics.map((m, mIdx) => (
-                <div key={mIdx} className="p-3 rounded-xl bg-white/5 border border-white/10 text-center">
+                <div
+                  key={mIdx}
+                  className="p-3 rounded-xl bg-white/5 border border-white/10 text-center"
+                >
                   <div className="text-lg font-black text-[#38bdf8]">{m.value}</div>
                   <div className="text-[10px] text-white/70">{m.label}</div>
                   <div className="text-[9px] text-white/40">{m.source}</div>
@@ -494,7 +620,8 @@ export default function ProposalPage({ proposal, branding }: ProposalProps) {
           Ready to Turn Findings into Bookings?
         </h2>
         <p className="text-base text-white/70 max-w-xl mx-auto mb-8">
-          Lock in your reserved sprint pricing and walk through your implementation plan with a senior digital engineer.
+          Lock in your reserved sprint pricing and walk through your implementation plan with a
+          senior digital engineer.
         </p>
         <button
           onClick={() => handleBookingClick('bottom')}
@@ -511,7 +638,8 @@ export default function ProposalPage({ proposal, branding }: ProposalProps) {
       {/* ─── Footer ──────────────────────────────────────────────── */}
       <footer className="py-8 px-4 border-t border-white/10 bg-[#070d1e] text-center text-xs text-white/40 space-y-2">
         <div>
-          Audit generated for <strong className="text-white/70">{model.businessName}</strong> ({model.businessCity}).
+          Audit generated for <strong className="text-white/70">{model.businessName}</strong> (
+          {model.businessCity}).
         </div>
         <div>
           © {new Date().getFullYear()} {brandName} ({model.brandDomain}). All rights reserved.
@@ -523,7 +651,11 @@ export default function ProposalPage({ proposal, branding }: ProposalProps) {
         <div className="fixed bottom-0 left-0 right-0 z-50 p-3 sm:p-4 bg-[#0f172a]/95 backdrop-blur-md border-t border-white/10 shadow-2xl flex items-center justify-between gap-4 max-w-6xl mx-auto rounded-t-2xl sm:mb-2 sm:rounded-2xl sm:inset-x-4">
           <div className="hidden sm:block">
             <div className="text-sm font-bold text-white">{model.businessName} Audit</div>
-            <div className="text-xs text-rose-400 font-semibold">Recover {model.hookHeader.totalMonthlyBleedFormatted}</div>
+            <div className="text-xs text-rose-400 font-semibold">
+              {model.hookHeader.totalMonthlyBleedFormatted
+                ? `Recover ${model.hookHeader.totalMonthlyBleedFormatted}`
+                : `${model.rankedFindings.length} verified issues to fix`}
+            </div>
           </div>
           <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
             <span className="hidden md:inline text-xs text-amber-300 font-medium">

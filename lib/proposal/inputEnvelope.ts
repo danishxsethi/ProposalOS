@@ -42,6 +42,28 @@ type ProposalEnvelopeAudit = Pick<
   | 'completedAt'
 > & { findings: Finding[]; evidence?: EvidenceSnapshot[] };
 
+/**
+ * The exact finding-eligibility rule the proposal compiler uses: a Finding is
+ * proposal-input-eligible only when it carries real evidence AND at least one
+ * COMPLETE persisted evidence snapshot exists for its module.
+ *
+ * Shared with the public proposal access path so both agree on WHICH findings a
+ * proposal was (or could be) compiled from. Without this shared definition, the
+ * public access verifier compared the compiler's evidence-backed subset against
+ * every non-excluded finding and permanently rejected delivery for any audit
+ * that legitimately contains non-evidence-backed findings.
+ */
+export function isEvidenceBackedFinding(
+  finding: { evidence?: unknown; module: string },
+  completeModules: ReadonlySet<string>
+): boolean {
+  return (
+    Array.isArray(finding.evidence) &&
+    finding.evidence.length > 0 &&
+    completeModules.has(finding.module)
+  );
+}
+
 export function buildPublicProposalInputEnvelope(
   audit: ProposalEnvelopeAudit,
   evidenceSnapshots: EvidenceSnapshot[]

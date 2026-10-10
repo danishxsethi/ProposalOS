@@ -37,7 +37,9 @@ export default async function PdfTemplate({ proposal, branding }: PdfTemplatePro
         }}
       >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div style={{ fontSize: '18px', fontWeight: 700, letterSpacing: '0.05em', color: '#38bdf8' }}>
+          <div
+            style={{ fontSize: '18px', fontWeight: 700, letterSpacing: '0.05em', color: '#38bdf8' }}
+          >
             {brandName.toUpperCase()}
           </div>
           <div
@@ -107,9 +109,11 @@ export default async function PdfTemplate({ proposal, branding }: PdfTemplatePro
               fontWeight: 600,
             }}
           >
-            <span>Primary Revenue Leak:</span>
+            <span>Primary Issue:</span>
             <span style={{ color: '#ffffff' }}>{model.hookHeader.primaryProblemTitle}</span>
-            <span>({model.hookHeader.primaryProblemLossFormatted}/mo)</span>
+            {model.hookHeader.primaryProblemLossFormatted && (
+              <span>({model.hookHeader.primaryProblemLossFormatted}/mo modeled)</span>
+            )}
           </div>
         </div>
 
@@ -126,7 +130,9 @@ export default async function PdfTemplate({ proposal, branding }: PdfTemplatePro
         >
           <div>
             <div>Prepared for: Executive Leadership, {model.businessName}</div>
-            <div>Location: {model.businessCity} • Industry: {model.businessIndustry}</div>
+            <div>
+              Location: {model.businessCity} • Industry: {model.businessIndustry}
+            </div>
           </div>
           <div style={{ textAlign: 'right' }}>
             <div>Audit Completed: {model.auditDateFormatted}</div>
@@ -147,10 +153,20 @@ export default async function PdfTemplate({ proposal, branding }: PdfTemplatePro
         }}
       >
         <div style={{ marginBottom: '24px' }}>
-          <div style={{ fontSize: '11px', fontWeight: 700, color: '#4361ee', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+          <div
+            style={{
+              fontSize: '11px',
+              fontWeight: 700,
+              color: '#4361ee',
+              textTransform: 'uppercase',
+              letterSpacing: '0.05em',
+            }}
+          >
             Section 01 • Executive Overview
           </div>
-          <h2 style={{ fontSize: '24px', fontWeight: 800, color: '#0f172a', margin: '4px 0 8px 0' }}>
+          <h2
+            style={{ fontSize: '24px', fontWeight: 800, color: '#0f172a', margin: '4px 0 8px 0' }}
+          >
             Revenue Impact & Diagnostic Summary
           </h2>
           <p style={{ fontSize: '13px', color: '#475569', lineHeight: 1.6, margin: 0 }}>
@@ -159,40 +175,99 @@ export default async function PdfTemplate({ proposal, branding }: PdfTemplatePro
         </div>
 
         {/* Quantified Bleed KPI Cards */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '14px', marginBottom: '24px' }}>
-          <div style={{ padding: '16px', backgroundColor: '#fef2f2', border: '1px solid #fecaca', borderRadius: '8px' }}>
-            <div style={{ fontSize: '11px', fontWeight: 600, color: '#991b1b', textTransform: 'uppercase' }}>
-              Est. Monthly Bleed
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(3, 1fr)',
+            gap: '14px',
+            marginBottom: '24px',
+          }}
+        >
+          <div
+            style={{
+              padding: '16px',
+              backgroundColor: '#fef2f2',
+              border: '1px solid #fecaca',
+              borderRadius: '8px',
+            }}
+          >
+            <div
+              style={{
+                fontSize: '11px',
+                fontWeight: 600,
+                color: '#991b1b',
+                textTransform: 'uppercase',
+              }}
+            >
+              {model.hookHeader.totalMonthlyBleedFormatted
+                ? 'Est. Monthly Bleed (modeled)'
+                : (model.evidenceKpis[0]?.label ?? 'Verified Findings')}
             </div>
             <div style={{ fontSize: '24px', fontWeight: 800, color: '#dc2626', margin: '4px 0' }}>
-              {model.hookHeader.totalMonthlyBleedFormatted}
+              {model.hookHeader.totalMonthlyBleedFormatted ?? model.evidenceKpis[0]?.value}
             </div>
-            <div style={{ fontSize: '11px', color: '#7f1d1d' }}>Recoverable through technical fixes</div>
+            <div style={{ fontSize: '11px', color: '#7f1d1d' }}>
+              {model.evidenceKpis[0]?.detail ?? 'Backed by captured audit evidence'}
+            </div>
           </div>
-          <div style={{ padding: '16px', backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px' }}>
-            <div style={{ fontSize: '11px', fontWeight: 600, color: '#475569', textTransform: 'uppercase' }}>
-              Annual Opportunity
+          <div
+            style={{
+              padding: '16px',
+              backgroundColor: '#f8fafc',
+              border: '1px solid #e2e8f0',
+              borderRadius: '8px',
+            }}
+          >
+            <div
+              style={{
+                fontSize: '11px',
+                fontWeight: 600,
+                color: '#475569',
+                textTransform: 'uppercase',
+              }}
+            >
+              {model.hookHeader.totalAnnualBleedFormatted
+                ? 'Annual Opportunity (modeled)'
+                : (model.evidenceKpis[1]?.label ?? 'Priority Issues')}
             </div>
             <div style={{ fontSize: '24px', fontWeight: 800, color: '#0f172a', margin: '4px 0' }}>
-              {model.hookHeader.totalAnnualBleedFormatted}
+              {model.hookHeader.totalAnnualBleedFormatted ?? model.evidenceKpis[1]?.value}
             </div>
-            <div style={{ fontSize: '11px', color: '#64748b' }}>Cumulative 12-month run-rate</div>
+            <div style={{ fontSize: '11px', color: '#64748b' }}>
+              {model.evidenceKpis[1]?.detail ?? 'Critical or high severity'}
+            </div>
           </div>
-          <div style={{ padding: '16px', backgroundColor: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '8px' }}>
-            <div style={{ fontSize: '11px', fontWeight: 600, color: '#1e40af', textTransform: 'uppercase' }}>
+          <div
+            style={{
+              padding: '16px',
+              backgroundColor: '#eff6ff',
+              border: '1px solid #bfdbfe',
+              borderRadius: '8px',
+            }}
+          >
+            <div
+              style={{
+                fontSize: '11px',
+                fontWeight: 600,
+                color: '#1e40af',
+                textTransform: 'uppercase',
+              }}
+            >
               Implementation Window
             </div>
             <div style={{ fontSize: '24px', fontWeight: 800, color: '#2563eb', margin: '4px 0' }}>
               5–14 Days
             </div>
-            <div style={{ fontSize: '11px', color: '#1e3a8a' }}>Turnaround to live verification</div>
+            <div style={{ fontSize: '11px', color: '#1e3a8a' }}>
+              Turnaround to live verification
+            </div>
           </div>
         </div>
 
         {/* 3 Executive Findings Max (Never a wall of text) */}
         <div style={{ marginBottom: '24px' }}>
           <h3 style={{ fontSize: '15px', fontWeight: 700, color: '#0f172a', marginBottom: '12px' }}>
-            Top 3 High-Friction Drivers (Ranked by Revenue Bleed)
+            Top 3 High-Friction Drivers (Ranked by Measured Impact)
           </h3>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
             {model.executiveSummary.topThreePoints.map((item, idx) => (
@@ -210,7 +285,14 @@ export default async function PdfTemplate({ proposal, branding }: PdfTemplatePro
                 }}
               >
                 <div style={{ flex: 1, paddingRight: '16px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '2px' }}>
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      marginBottom: '2px',
+                    }}
+                  >
                     <span style={{ fontSize: '11px', fontWeight: 700, color: '#ef4444' }}>
                       #{idx + 1}
                     </span>
@@ -269,14 +351,25 @@ export default async function PdfTemplate({ proposal, branding }: PdfTemplatePro
         }}
       >
         <div style={{ marginBottom: '20px' }}>
-          <div style={{ fontSize: '11px', fontWeight: 700, color: '#4361ee', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+          <div
+            style={{
+              fontSize: '11px',
+              fontWeight: 700,
+              color: '#4361ee',
+              textTransform: 'uppercase',
+              letterSpacing: '0.05em',
+            }}
+          >
             Section 02 • Detailed Diagnostics
           </div>
-          <h2 style={{ fontSize: '24px', fontWeight: 800, color: '#0f172a', margin: '4px 0 6px 0' }}>
+          <h2
+            style={{ fontSize: '24px', fontWeight: 800, color: '#0f172a', margin: '4px 0 6px 0' }}
+          >
             All Identified Vulnerabilities
           </h2>
           <p style={{ fontSize: '12px', color: '#64748b', margin: 0 }}>
-            Every finding prioritized by measurable impact on search indexing, local map pack position, and patient/customer conversion.
+            Every finding prioritized by measurable impact on search indexing, local map pack
+            position, and patient/customer conversion.
           </p>
         </div>
 
@@ -292,7 +385,14 @@ export default async function PdfTemplate({ proposal, branding }: PdfTemplatePro
                 pageBreakInside: 'avoid',
               }}
             >
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '6px' }}>
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'flex-start',
+                  marginBottom: '6px',
+                }}
+              >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <span
                     style={{
@@ -305,20 +405,20 @@ export default async function PdfTemplate({ proposal, branding }: PdfTemplatePro
                         f.severity === 'Critical'
                           ? '#fef2f2'
                           : f.severity === 'High'
-                          ? '#fff7ed'
-                          : '#fefce8',
+                            ? '#fff7ed'
+                            : '#fefce8',
                       color:
                         f.severity === 'Critical'
                           ? '#dc2626'
                           : f.severity === 'High'
-                          ? '#ea580c'
-                          : '#ca8a04',
+                            ? '#ea580c'
+                            : '#ca8a04',
                       border:
                         f.severity === 'Critical'
                           ? '1px solid #fecaca'
                           : f.severity === 'High'
-                          ? '1px solid #fed7aa'
-                          : '1px solid #fef08a',
+                            ? '1px solid #fed7aa'
+                            : '1px solid #fef08a',
                     }}
                   >
                     {f.severity}
@@ -327,12 +427,23 @@ export default async function PdfTemplate({ proposal, branding }: PdfTemplatePro
                     {f.title}
                   </span>
                 </div>
-                <div style={{ fontSize: '13px', fontWeight: 800, color: '#dc2626', whiteSpace: 'nowrap' }}>
-                  -{f.monthlyDollarFormatted}/mo
-                </div>
+                {f.monthlyDollarFormatted && (
+                  <div
+                    style={{
+                      fontSize: '13px',
+                      fontWeight: 800,
+                      color: '#dc2626',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    -{f.monthlyDollarFormatted}/mo
+                  </div>
+                )}
               </div>
 
-              <div style={{ fontSize: '11px', color: '#475569', lineHeight: 1.5, marginBottom: '6px' }}>
+              <div
+                style={{ fontSize: '11px', color: '#475569', lineHeight: 1.5, marginBottom: '6px' }}
+              >
                 {f.description}
               </div>
 
@@ -354,7 +465,15 @@ export default async function PdfTemplate({ proposal, branding }: PdfTemplatePro
                 </div>
               )}
 
-              <div style={{ fontSize: '11px', color: '#166534', backgroundColor: '#f0fdf4', padding: '6px 10px', borderRadius: '4px' }}>
+              <div
+                style={{
+                  fontSize: '11px',
+                  color: '#166534',
+                  backgroundColor: '#f0fdf4',
+                  padding: '6px 10px',
+                  borderRadius: '4px',
+                }}
+              >
                 <span style={{ fontWeight: 700 }}>FIX: </span>
                 {f.recommendedFix}
               </div>
@@ -373,14 +492,25 @@ export default async function PdfTemplate({ proposal, branding }: PdfTemplatePro
         }}
       >
         <div style={{ marginBottom: '24px' }}>
-          <div style={{ fontSize: '11px', fontWeight: 700, color: '#4361ee', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+          <div
+            style={{
+              fontSize: '11px',
+              fontWeight: 700,
+              color: '#4361ee',
+              textTransform: 'uppercase',
+              letterSpacing: '0.05em',
+            }}
+          >
             Section 03 • Action Plan
           </div>
-          <h2 style={{ fontSize: '24px', fontWeight: 800, color: '#0f172a', margin: '4px 0 6px 0' }}>
+          <h2
+            style={{ fontSize: '24px', fontWeight: 800, color: '#0f172a', margin: '4px 0 6px 0' }}
+          >
             Implementation Roadmap & Milestones
           </h2>
           <p style={{ fontSize: '12px', color: '#64748b', margin: 0 }}>
-            Structured engineering sprints designed to eliminate risk, deliver rapid validation, and permanently plug revenue leaks.
+            Structured engineering sprints designed to eliminate risk, deliver rapid validation, and
+            permanently plug revenue leaks.
           </p>
         </div>
 
@@ -396,7 +526,14 @@ export default async function PdfTemplate({ proposal, branding }: PdfTemplatePro
                 pageBreakInside: 'avoid',
               }}
             >
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  marginBottom: '8px',
+                }}
+              >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                   <div
                     style={{
@@ -432,7 +569,14 @@ export default async function PdfTemplate({ proposal, branding }: PdfTemplatePro
                 </span>
               </div>
 
-              <ul style={{ margin: '8px 0 10px 0', paddingLeft: '20px', fontSize: '11px', color: '#334155' }}>
+              <ul
+                style={{
+                  margin: '8px 0 10px 0',
+                  paddingLeft: '20px',
+                  fontSize: '11px',
+                  color: '#334155',
+                }}
+              >
                 {phase.deliverables.map((item, dIdx) => (
                   <li key={dIdx} style={{ marginBottom: '4px' }}>
                     {item}
@@ -467,10 +611,20 @@ export default async function PdfTemplate({ proposal, branding }: PdfTemplatePro
         }}
       >
         <div style={{ marginBottom: '20px' }}>
-          <div style={{ fontSize: '11px', fontWeight: 700, color: '#4361ee', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+          <div
+            style={{
+              fontSize: '11px',
+              fontWeight: 700,
+              color: '#4361ee',
+              textTransform: 'uppercase',
+              letterSpacing: '0.05em',
+            }}
+          >
             Section 04 • Commercial Terms
           </div>
-          <h2 style={{ fontSize: '24px', fontWeight: 800, color: '#0f172a', margin: '4px 0 6px 0' }}>
+          <h2
+            style={{ fontSize: '24px', fontWeight: 800, color: '#0f172a', margin: '4px 0 6px 0' }}
+          >
             Implementation Packages & Guarantee
           </h2>
           <div style={{ fontSize: '11px', fontWeight: 600, color: '#dc2626' }}>
@@ -479,7 +633,14 @@ export default async function PdfTemplate({ proposal, branding }: PdfTemplatePro
         </div>
 
         {/* 3 Tiers with Decoy Anchoring */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginBottom: '20px' }}>
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(3, 1fr)',
+            gap: '12px',
+            marginBottom: '20px',
+          }}
+        >
           {model.pricingTiers.map((tier) => (
             <div
               key={tier.id}
@@ -515,17 +676,41 @@ export default async function PdfTemplate({ proposal, branding }: PdfTemplatePro
                 </div>
               )}
               <div>
-                <div style={{ fontSize: '14px', fontWeight: 800, color: '#0f172a' }}>{tier.name}</div>
+                <div style={{ fontSize: '14px', fontWeight: 800, color: '#0f172a' }}>
+                  {tier.name}
+                </div>
                 <div style={{ fontSize: '10px', color: '#64748b', marginBottom: '8px' }}>
                   Delivery: {tier.deliveryTimeline}
                 </div>
-                <div style={{ fontSize: '22px', fontWeight: 800, color: tier.recommended ? '#4361ee' : '#0f172a' }}>
+                <div
+                  style={{
+                    fontSize: '22px',
+                    fontWeight: 800,
+                    color: tier.recommended ? '#4361ee' : '#0f172a',
+                  }}
+                >
                   {tier.priceFormatted}
                 </div>
-                <div style={{ fontSize: '10px', color: '#16a34a', fontWeight: 600, marginBottom: '10px' }}>
-                  Est. Value: {tier.monthlyRoiFormatted}
-                </div>
-                <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: '8px', fontSize: '10px', color: '#334155' }}>
+                {tier.monthlyRoiFormatted && (
+                  <div
+                    style={{
+                      fontSize: '10px',
+                      color: '#16a34a',
+                      fontWeight: 600,
+                      marginBottom: '10px',
+                    }}
+                  >
+                    Est. Value (modeled): {tier.monthlyRoiFormatted}
+                  </div>
+                )}
+                <div
+                  style={{
+                    borderTop: '1px solid #e2e8f0',
+                    paddingTop: '8px',
+                    fontSize: '10px',
+                    color: '#334155',
+                  }}
+                >
                   {tier.features.slice(0, 4).map((feat, fIdx) => (
                     <div key={fIdx} style={{ marginBottom: '4px', display: 'flex', gap: '4px' }}>
                       <span style={{ color: '#4361ee', fontWeight: 800 }}>✓</span>
@@ -569,7 +754,15 @@ export default async function PdfTemplate({ proposal, branding }: PdfTemplatePro
             marginBottom: '20px',
           }}
         >
-          <div style={{ fontSize: '10px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginBottom: '2px' }}>
+          <div
+            style={{
+              fontSize: '10px',
+              fontWeight: 700,
+              color: '#64748b',
+              textTransform: 'uppercase',
+              marginBottom: '2px',
+            }}
+          >
             WHY THIS WORKS • CITED INDUSTRY EVIDENCE ({model.whyThisWorks.citation})
           </div>
           <div style={{ fontSize: '12px', fontWeight: 700, color: '#0f172a', marginBottom: '4px' }}>
@@ -581,7 +774,8 @@ export default async function PdfTemplate({ proposal, branding }: PdfTemplatePro
           <div style={{ display: 'flex', gap: '16px', fontSize: '10px', color: '#334155' }}>
             {model.whyThisWorks.metrics.map((m, mIdx) => (
               <div key={mIdx}>
-                <span style={{ fontWeight: 800, color: '#4361ee' }}>{m.value}</span> {m.label} ({m.source})
+                <span style={{ fontWeight: 800, color: '#4361ee' }}>{m.value}</span> {m.label} (
+                {m.source})
               </div>
             ))}
           </div>
@@ -598,13 +792,30 @@ export default async function PdfTemplate({ proposal, branding }: PdfTemplatePro
               marginBottom: '20px',
             }}
           >
-            <div style={{ fontSize: '10px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginBottom: '2px' }}>
+            <div
+              style={{
+                fontSize: '10px',
+                fontWeight: 700,
+                color: '#64748b',
+                textTransform: 'uppercase',
+                marginBottom: '2px',
+              }}
+            >
               VERIFIED CLIENT BRIEF • {model.realCaseStudy.clientName}
             </div>
-            <div style={{ fontSize: '12px', fontWeight: 700, color: '#0f172a', marginBottom: '4px' }}>
+            <div
+              style={{ fontSize: '12px', fontWeight: 700, color: '#0f172a', marginBottom: '4px' }}
+            >
               {model.realCaseStudy.headline}
             </div>
-            <p style={{ fontSize: '11px', fontStyle: 'italic', color: '#475569', margin: '0 0 6px 0' }}>
+            <p
+              style={{
+                fontSize: '11px',
+                fontStyle: 'italic',
+                color: '#475569',
+                margin: '0 0 6px 0',
+              }}
+            >
               "{model.realCaseStudy.quote}"
             </p>
             <div style={{ fontSize: '10px', color: '#64748b' }}>
@@ -627,7 +838,8 @@ export default async function PdfTemplate({ proposal, branding }: PdfTemplatePro
             Ready to plug your digital revenue leaks?
           </div>
           <div style={{ fontSize: '11px', color: '#94a3b8', marginBottom: '12px' }}>
-            Book a 15-minute briefing to review your technical roadmap and lock in audit sprint pricing.
+            Book a 15-minute briefing to review your technical roadmap and lock in audit sprint
+            pricing.
           </div>
           <a
             href={bookingUrl}

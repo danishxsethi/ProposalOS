@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { buildProposalConversionModel } from '@/lib/proposal/conversionViewModel';
-import { generateFullSequence, renderSequenceTouch, VERTICAL_COPY_PROFILES } from '@/lib/outreach/copyEngine';
+import {
+  generateFullSequence,
+  renderSequenceTouch,
+  VERTICAL_COPY_PROFILES,
+} from '@/lib/outreach/copyEngine';
 import { CANONICAL_OFFERS } from '@/lib/proposal/offers';
 
 describe('Phase 5: Scoring Rubrics & Adversarial Verification', () => {
@@ -37,17 +41,35 @@ describe('Phase 5: Scoring Rubrics & Adversarial Verification', () => {
   describe('Proposal Rubric (Bar: every dimension >= 8/10)', () => {
     const model = buildProposalConversionModel(park56Proposal);
 
-    it('Dimension 1: $-quantified findings (Score: 9.5/10)', () => {
-      expect(model.hookHeader.totalMonthlyBleedFormatted).toMatch(/^\$[\d,]+\/mo$/);
-      expect(model.rankedFindings[0].monthlyDollarLoss).toBeGreaterThan(500);
-      expect(model.rankedFindings[0].monthlyDollarFormatted).toMatch(/^\$[\d,]+$/);
+    it('Dimension 1: findings ranked with evidence, dollars suppressed without observed inputs (Score: 9.5/10)', () => {
+      // The synthetic audit has NO observed traffic/conversion/revenue inputs,
+      // so the financial-claim gate must suppress every dollar claim.
+      expect(model.revenueImpact.supported).toBe(false);
+      expect(model.hookHeader.totalMonthlyBleedFormatted).toBeNull();
+      expect(model.hookHeader.totalAnnualBleedFormatted).toBeNull();
+      expect(model.hookHeader.headline).not.toMatch(/\$[\d,]/);
+      expect(model.executiveSummary.overview).not.toMatch(/\$[\d,]/);
+      expect(model.hookHeader.headline).toContain('verified issues');
+    });
+
+    it('Dimension 1b: internal prioritization still ranks findings deterministically', () => {
+      expect(model.rankedFindings.length).toBeGreaterThan(0);
+      expect(model.rankedFindings[0].modeledMonthlyImpact).toBeGreaterThanOrEqual(
+        model.rankedFindings[1].modeledMonthlyImpact
+      );
+      for (const f of model.rankedFindings) {
+        // No dollar strings surface to customers without observed inputs.
+        expect(f.monthlyDollarFormatted).toBeNull();
+      }
     });
 
     it('Dimension 2: Scannability (Score: 9.5/10)', () => {
       expect(model.executiveSummary.topThreePoints.length).toBeLessThanOrEqual(3);
       for (const pt of model.executiveSummary.topThreePoints) {
         expect(pt.title.length).toBeGreaterThan(0);
-        expect(pt.monthlyLossFormatted.length).toBeGreaterThan(0);
+        // Dollar framing only when the gate supports it.
+        expect(pt.monthlyLossFormatted).toBeNull();
+        expect(pt.explanation.length).toBeGreaterThan(0);
       }
     });
 
@@ -146,7 +168,9 @@ describe('Phase 5: Scoring Rubrics & Adversarial Verification', () => {
 
     it('Dimension 3: Breakup quality (Score: 9.5/10)', () => {
       const breakup = sequence[4];
-      expect(breakup.body).toContain('close your audit file on our end so I don\'t crowd your inbox');
+      expect(breakup.body).toContain(
+        "close your audit file on our end so I don't crowd your inbox"
+      );
       expect(breakup.body).toContain('review the full technical roadmap');
     });
 

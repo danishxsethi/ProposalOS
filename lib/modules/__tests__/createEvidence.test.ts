@@ -58,6 +58,40 @@ describe('createEvidence (P1-25)', () => {
     expect(() => createEvidence({ pointer: 'http://localhost:3000/page', source: 'x' })).toThrow();
   });
 
+  it('rejects loopback pointer domains even when a fixture allowlist is active but does not list them', () => {
+    process.env.PROPOSALOS_SSRF_TEST_FIXTURE_HOSTS = 'localhost';
+    try {
+      expect(() =>
+        createEvidence({ pointer: 'http://127.0.0.1:3000/page', source: 'x' })
+      ).toThrow();
+    } finally {
+      delete process.env.PROPOSALOS_SSRF_TEST_FIXTURE_HOSTS;
+    }
+  });
+
+  it('rejects loopback pointers when NODE_ENV=production even if the allowlist env is set', () => {
+    process.env.PROPOSALOS_SSRF_TEST_FIXTURE_HOSTS = 'localhost,127.0.0.1';
+    process.env.NODE_ENV = 'production';
+    try {
+      expect(() =>
+        createEvidence({ pointer: 'http://localhost:3000/page', source: 'x' })
+      ).toThrow();
+    } finally {
+      delete process.env.PROPOSALOS_SSRF_TEST_FIXTURE_HOSTS;
+      process.env.NODE_ENV = 'test';
+    }
+  });
+
+  it('accepts an allowlisted loopback fixture pointer only in non-production test mode', () => {
+    process.env.PROPOSALOS_SSRF_TEST_FIXTURE_HOSTS = 'localhost,127.0.0.1';
+    try {
+      const e = createEvidence({ pointer: 'http://localhost:3000/page', source: 'x' });
+      expect(e.pointer).toBe('http://localhost:3000/page');
+    } finally {
+      delete process.env.PROPOSALOS_SSRF_TEST_FIXTURE_HOSTS;
+    }
+  });
+
   it('rejects a module-name-only pointer (pointer === source)', () => {
     expect(() => createEvidence({ pointer: 'tech_stack', source: 'tech_stack' })).toThrow();
   });

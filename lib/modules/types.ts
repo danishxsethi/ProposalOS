@@ -109,8 +109,34 @@ export const PLACEHOLDER_POINTER_VALUES: ReadonlySet<string> = new Set([
  * (unlike example.com/example.org, which are real, publicly resolvable domains that a
  * genuine fetch can legitimately target — banning those would reject truthful evidence
  * from an actual successful check, not just fabricated ones).
+ *
+ * Test-scoped exemption (controlled joined journey): when
+ * PROPOSALOS_SSRF_TEST_FIXTURE_HOSTS lists the loopback host AND the process is not
+ * production, a pointer at that exact host is a real, genuinely-fetched fixture
+ * target, so the loopback-placeholder rejection is waived for it. Every other
+ * pointer policy is unchanged; production never activates the exemption.
  */
 const PLACEHOLDER_POINTER_DOMAINS = ['localhost', '127.0.0.1'];
+
+function activeFixtureEvidenceHosts(): Set<string> {
+  const raw = process.env.PROPOSALOS_SSRF_TEST_FIXTURE_HOSTS;
+  if (!raw || process.env.NODE_ENV === 'production') return new Set();
+  return new Set(
+    raw
+      .split(',')
+      .map((entry) => entry.trim().toLowerCase())
+      .filter(Boolean)
+  );
+}
+
+function isTestFixtureEvidencePointer(pointer: string): boolean {
+  try {
+    const parsed = new URL(pointer);
+    return activeFixtureEvidenceHosts().has(parsed.hostname.toLowerCase());
+  } catch {
+    return false;
+  }
+}
 
 /**
  * Returns true if `pointer` is empty, whitespace-only, a known placeholder string, a
@@ -123,7 +149,12 @@ export function isPlaceholderPointer(pointer: string | undefined | null, source?
   if (trimmed.length === 0) return true;
   const lower = trimmed.toLowerCase();
   if (PLACEHOLDER_POINTER_VALUES.has(lower)) return true;
-  if (PLACEHOLDER_POINTER_DOMAINS.some((d) => lower.includes(d))) return true;
+  if (
+    PLACEHOLDER_POINTER_DOMAINS.some((d) => lower.includes(d)) &&
+    !isTestFixtureEvidencePointer(trimmed)
+  ) {
+    return true;
+  }
   if (source && lower === source.trim().toLowerCase()) return true;
   return false;
 }

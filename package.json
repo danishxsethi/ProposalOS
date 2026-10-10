@@ -50,7 +50,8 @@
     "release:minor": "release-it minor",
     "release:major": "release-it major",
     "release:dry": "release-it --dry-run",
-    "changelog": "conventional-changelog -p angular -i CHANGELOG.md -s -r 0"
+    "changelog": "conventional-changelog -p angular -i CHANGELOG.md -s -r 0",
+    "journey:controlled": "node tests/journey/run-journey.mjs"
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.11.3",
@@ -168,12 +169,14 @@
     "pptxgenjs": {
       "image-size": "2.0.4"
     },
-    "vite": "^7.3.6",
+    "vite": "^7.3.7",
     "release-it": {
       "undici": "6.28.1"
     },
     "picomatch": "^4.0.7",
     "protobufjs": "7.6.5",
-    "eslint-plugin-react-hooks": "7.0.1"
+    "eslint-plugin-react-hooks": "7.0.1",
+    "esbuild": "^0.28.2",
+    "basic-ftp": "^6.2.3"
   }
 }

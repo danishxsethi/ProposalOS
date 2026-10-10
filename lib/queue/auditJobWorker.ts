@@ -80,14 +80,20 @@ export async function processAuditJob(
 
   // 3. Claim the job (sets RUNNING, acquires distributed lock)
   const claimed =
-    preclaimedJob ??
-    (await runWithTenantBypass('worker-claim-audit-job', () => claimJob(jobId)));
+    preclaimedJob ?? (await runWithTenantBypass('worker-claim-audit-job', () => claimJob(jobId)));
   if (!claimed) {
     logger.info({ event: 'worker.lock_contention', jobId }, 'Worker: lock contention — skipping');
     return { outcome: 'LOCK_CONTENTION', jobId };
   }
 
-  const { tenantId, auditId, attempts, maxAttempts, leaseToken, generateProposal: shouldGenerateProposal } = claimed;
+  const {
+    tenantId,
+    auditId,
+    attempts,
+    maxAttempts,
+    leaseToken,
+    generateProposal: shouldGenerateProposal,
+  } = claimed;
 
   await recordAuditTrailEvent({
     eventType: 'worker.job_claimed',
@@ -140,11 +146,21 @@ export async function processAuditJob(
           select: { status: true, trustState: true },
         });
 
-        if (shouldGenerateProposal !== false && audit?.status === 'COMPLETE' && audit.trustState === 'TRUSTED') {
+        if (
+          shouldGenerateProposal !== false &&
+          audit?.status === 'COMPLETE' &&
+          audit.trustState === 'TRUSTED'
+        ) {
           await generateProposal(auditId);
         } else {
           logger.warn(
-            { event: 'worker.skipping_proposal', jobId, auditId, auditStatus: audit?.status, trustState: audit?.trustState },
+            {
+              event: 'worker.skipping_proposal',
+              jobId,
+              auditId,
+              auditStatus: audit?.status,
+              trustState: audit?.trustState,
+            },
             'Worker: skipping proposal generation — audit is not trusted or proposal generation was disabled'
           );
         }
@@ -208,19 +224,30 @@ export async function processAuditJob(
     }
 
     // Also mark the underlying Audit record as FAILED so the batch status
-    // route reflects the correct state without joining audit_jobs
-    await runWithTenantAsync(tenantId, () =>
-      prisma.audit.update({
-        where: { id: auditId },
-        data: { status: 'FAILED', trustState: 'FAILED', completedAt: new Date() },
-      })
-    )
-      .catch((e) =>
+    // route reflects the correct state — but ONLY when retries are exhausted.
+    // A retryable failure (e.g. a transient proposal-generation error) must not
+    // flip the audit to FAILED while another attempt may still succeed; the
+    // journey poll reads audit status as product state and would report a
+    // false terminal failure mid-retry.
+    const isDead = attempts >= maxAttempts;
+    if (isDead) {
+      await runWithTenantAsync(tenantId, () =>
+        prisma.audit.update({
+          where: { id: auditId },
+          data: { status: 'FAILED', trustState: 'FAILED', completedAt: new Date() },
+        })
+      ).catch((e) =>
         logger.error(
           { event: 'worker.audit_status_update_failed', jobId, auditId, err: e },
           'Worker: failed to update audit status to FAILED'
         )
       );
+    } else {
+      logger.warn(
+        { event: 'worker.audit_status_preserved_for_retry', jobId, auditId, attempt: attempts },
+        'Worker: attempt failed but retries remain — audit status left unchanged for the next attempt'
+      );
+    }
 
     await recordAuditTrailEvent({
       eventType: 'worker.job_failed',
@@ -236,7 +263,6 @@ export async function processAuditJob(
       },
     }).catch(() => {});
 
-    const isDead = attempts >= maxAttempts;
     return {
       outcome: isDead ? 'DEAD' : 'FAILED',
       jobId,

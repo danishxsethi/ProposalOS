@@ -58,10 +58,15 @@ async function getBrowser(): Promise<Browser> {
   const isLocal = process.env.NODE_ENV === 'development';
 
   if (isLocal) {
-    // Local development - use system Chrome
+    // Local development - use system Chrome. Respect CHROME_EXECUTABLE_PATH when
+    // set (puppeteer-core has no bundled binary and no default path on servers);
+    // without it, keep puppeteer's default channel discovery for dev machines.
     browserInstance = await puppeteer.launch({
       headless: true,
       args: ['--no-sandbox', '--disable-setuid-sandbox'],
+      ...(process.env.CHROME_EXECUTABLE_PATH
+        ? { executablePath: process.env.CHROME_EXECUTABLE_PATH }
+        : {}),
     });
   } else {
     const executablePath = process.env.CHROME_EXECUTABLE_PATH || (await chromium.executablePath());

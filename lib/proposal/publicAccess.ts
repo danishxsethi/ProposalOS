@@ -153,7 +153,7 @@ export async function resolvePublicProposalAccess(token: string): Promise<{
         id: true,
         auditId: true,
         tenantId: true,
-         version: true,
+        version: true,
         status: true,
         publicAccessRevokedAt: true,
         publicationFingerprint: true,
@@ -171,15 +171,15 @@ export async function resolvePublicProposalAccess(token: string): Promise<{
         nextSteps: true,
         assumptions: true,
         disclaimers: true,
-         qaResults: true,
+        qaResults: true,
         audit: {
           select: {
             status: true,
             trustState: true,
             businessName: true,
             businessCity: true,
-        businessIndustry: true,
-        overallScore: true,
+            businessIndustry: true,
+            overallScore: true,
             startedAt: true,
             completedAt: true,
             findings: {
@@ -269,7 +269,17 @@ export async function resolvePublicProposalAccess(token: string): Promise<{
   ) {
     throw new PublicProposalAccessError('Proposal evidence version is stale or incomplete', 404);
   }
-  const findingIds = new Set(proposal.audit.findings.map((finding) => finding.id));
+  // Compare findings against the SAME evidence-backed eligibility set the
+  // compiler builds proposals from (findings with evidence whose module has a
+  // COMPLETE snapshot). Comparing against every non-excluded finding made
+  // delivery impossible for audits that legitimately contain findings the
+  // compiler intentionally excludes from proposal input.
+  const { isEvidenceBackedFinding } = await import('./inputEnvelope');
+  const completeModules = new Set(persistedEvidence.map((snapshot) => snapshot.module));
+  const eligibleFindings = proposal.audit.findings.filter((finding) =>
+    isEvidenceBackedFinding(finding, completeModules)
+  );
+  const findingIds = new Set(eligibleFindings.map((finding) => finding.id));
   if (sourceFindingIds.size === 0 || [...sourceFindingIds].some((id) => !findingIds.has(id))) {
     throw new PublicProposalAccessError('Proposal finding version is stale or incomplete', 404);
   }
@@ -287,7 +297,11 @@ export async function resolvePublicProposalAccess(token: string): Promise<{
     if (sourceIds.length === 0) {
       const claimType = asRecord(claim).claimType;
       const configurationRefs = asRecord(claim).configurationRefs;
-      if (claimType !== 'COMMERCIAL_CONFIGURATION' || !Array.isArray(configurationRefs) || configurationRefs.length === 0) {
+      if (
+        claimType !== 'COMMERCIAL_CONFIGURATION' ||
+        !Array.isArray(configurationRefs) ||
+        configurationRefs.length === 0
+      ) {
         throw new PublicProposalAccessError('Proposal contains an ungrounded public claim', 404);
       }
       continue;
@@ -299,15 +313,17 @@ export async function resolvePublicProposalAccess(token: string): Promise<{
       groundedFindingIds.add(sourceId);
     }
   }
-  const publicationFingerprint = typeof qaResults.publicationFingerprint === 'string'
-    ? qaResults.publicationFingerprint
-    : null;
+  const publicationFingerprint =
+    typeof qaResults.publicationFingerprint === 'string' ? qaResults.publicationFingerprint : null;
   if (publicationFingerprint) {
     const publishedPrices = asRecord(asRecord(grounded.commercial).prices);
     const currentPrices = asRecord(proposal.pricing);
     for (const tier of ['essentials', 'growth', 'premium'] as const) {
       if (publishedPrices[tier] !== currentPrices[tier]) {
-        throw new PublicProposalAccessError('Proposal commercial terms changed after QA approval', 404);
+        throw new PublicProposalAccessError(
+          'Proposal commercial terms changed after QA approval',
+          404
+        );
       }
     }
     for (const tier of ['essentials', 'growth', 'premium'] as const) {
@@ -318,7 +334,9 @@ export async function resolvePublicProposalAccess(token: string): Promise<{
         premium: proposal.tierPremium,
       };
       const currentTier = asRecord(currentTierByName[tier]);
-      const description = groundedClaims.find((claim) => asRecord(claim).claimId === bindings.description);
+      const description = groundedClaims.find(
+        (claim) => asRecord(claim).claimId === bindings.description
+      );
       if (asRecord(description).text !== currentTier.description) {
         throw new PublicProposalAccessError('Proposal tier content changed after QA approval', 404);
       }
@@ -327,26 +345,34 @@ export async function resolvePublicProposalAccess(token: string): Promise<{
       if (
         features.length !== featureBindings.length ||
         features.some((feature, index) => {
-          const claim = groundedClaims.find((item) => asRecord(item).claimId === featureBindings[index]);
+          const claim = groundedClaims.find(
+            (item) => asRecord(item).claimId === featureBindings[index]
+          );
           return asRecord(claim).text !== feature;
         })
       ) {
-        throw new PublicProposalAccessError('Proposal tier features changed after QA approval', 404);
+        throw new PublicProposalAccessError(
+          'Proposal tier features changed after QA approval',
+          404
+        );
       }
       const priceClaim = groundedClaims.find((claim) => asRecord(claim).claimId === bindings.price);
       const priceText = asRecord(priceClaim).text;
-      if (
-        typeof priceText !== 'string' ||
-        !priceText.includes(String(currentPrices[tier]))
-      ) {
+      if (typeof priceText !== 'string' || !priceText.includes(String(currentPrices[tier]))) {
         throw new PublicProposalAccessError('Proposal price claim changed after QA approval', 404);
       }
     }
   }
-  if (groundedClaims.length === 0 || [...sourceFindingIds].some((id) => !groundedFindingIds.has(id))) {
+  if (
+    groundedClaims.length === 0 ||
+    [...sourceFindingIds].some((id) => !groundedFindingIds.has(id))
+  ) {
     throw new PublicProposalAccessError('Proposal finding lineage is incomplete', 404);
   }
-  for (const finding of proposal.audit.findings) {
+  // Verify evidence bindings for the SAME evidence-backed subset the compiler
+  // compiles from (see isEvidenceBackedFinding). Findings from PARTIAL modules
+  // are intentionally outside proposal input and have no binding by design.
+  for (const finding of eligibleFindings) {
     if (!Array.isArray(finding.evidence) || finding.evidence.length === 0) {
       throw new PublicProposalAccessError('Proposal finding is missing evidence', 404);
     }
@@ -368,7 +394,10 @@ export async function resolvePublicProposalAccess(token: string): Promise<{
       ) ||
       findingSourceIds.some((id) => !validSnapshotIds.has(id))
     ) {
-      throw new PublicProposalAccessError('Proposal finding is not bound to persisted audit evidence', 404);
+      throw new PublicProposalAccessError(
+        'Proposal finding is not bound to persisted audit evidence',
+        404
+      );
     }
   }
   if (!['READY', 'SENT', 'VIEWED', 'ACCEPTED', 'PAID'].includes(proposal.status)) {
@@ -378,9 +407,8 @@ export async function resolvePublicProposalAccess(token: string): Promise<{
     throw new PublicProposalAccessError('Proposal version is unavailable', 410);
   }
   const approval = asRecord(qaResults.publicationApproval);
-  const storedFingerprint = typeof qaResults.publicationFingerprint === 'string'
-    ? qaResults.publicationFingerprint
-    : null;
+  const storedFingerprint =
+    typeof qaResults.publicationFingerprint === 'string' ? qaResults.publicationFingerprint : null;
   const currentFingerprint = proposalPublicationFingerprint({
     auditId: proposal.auditId,
     tenantId: proposal.tenantId,
@@ -404,25 +432,32 @@ export async function resolvePublicProposalAccess(token: string): Promise<{
     nextSteps: proposal.nextSteps,
     grounding: qaResults.grounding,
     provenance: qaResults.provenance,
-    findings: proposal.audit.findings.map((finding) => ({
-      id: finding.id,
-      auditId: finding.auditId,
-      tenantId: finding.tenantId,
-      module: finding.module,
-      category: finding.category,
-      type: finding.type,
-      title: finding.title,
-      description: finding.description,
-      impactScore: finding.impactScore,
-      confidenceScore: finding.confidenceScore,
-      effortEstimate: finding.effortEstimate,
-      recommendedFix: finding.recommendedFix,
-      metrics: finding.metrics,
-      evidence: finding.evidence,
-      manuallyEdited: finding.manuallyEdited,
-      excluded: finding.excluded,
-    })).sort((left, right) => left.id.localeCompare(right.id)),
-    evidenceSnapshots: [...persistedEvidence].sort((left, right) => left.id.localeCompare(right.id)),
+    // Fingerprint inputs must match the compiler's publication state EXACTLY:
+    // the evidence-backed finding subset, deterministically id-sorted. Hashing
+    // every finding (impactScore-ordered) made this check unsatisfiable.
+    findings: [...eligibleFindings]
+      .sort((left, right) => left.id.localeCompare(right.id))
+      .map((finding) => ({
+        id: finding.id,
+        auditId: finding.auditId,
+        tenantId: finding.tenantId,
+        module: finding.module,
+        category: finding.category,
+        type: finding.type,
+        title: finding.title,
+        description: finding.description,
+        impactScore: finding.impactScore,
+        confidenceScore: finding.confidenceScore,
+        effortEstimate: finding.effortEstimate,
+        recommendedFix: finding.recommendedFix,
+        metrics: finding.metrics,
+        evidence: finding.evidence,
+        manuallyEdited: finding.manuallyEdited,
+        excluded: finding.excluded,
+      })),
+    evidenceSnapshots: [...persistedEvidence].sort((left, right) =>
+      left.id.localeCompare(right.id)
+    ),
   });
   if (
     approval.proposalVersion !== proposal.version ||
@@ -432,7 +467,10 @@ export async function resolvePublicProposalAccess(token: string): Promise<{
     approval.fingerprint !== storedFingerprint ||
     storedFingerprint !== currentFingerprint
   ) {
-    throw new PublicProposalAccessError('Proposal version has no current publication approval', 404);
+    throw new PublicProposalAccessError(
+      'Proposal version has no current publication approval',
+      404
+    );
   }
 
   try {

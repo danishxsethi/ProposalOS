@@ -2,6 +2,7 @@ import { createHash, randomBytes } from 'crypto';
 
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
+import { runWithTenantBypass } from '@/lib/tenant/context';
 
 export const API_KEY_PREFIX = 'pe_live_';
 
@@ -125,9 +126,12 @@ async function logApiKeyUsage(
   errorMessage?: string
 ): Promise<void> {
   try {
-    // Try to log to database, fall back to logger if model doesn't exist yet
-    await (prisma as any).apiKeyAuditLog
-      ?.create({
+    // Try to log to database, fall back to logger if model doesn't exist yet.
+    // Auth-infrastructure write: runs under the explicit bypass because key
+    // usage accounting is keyed by the API key's own tenant, not the (not yet
+    // resolved) request tenant.
+    await runWithTenantBypass('auth:api-key-usage-log', () =>
+      (prisma as any).apiKeyAuditLog?.create({
         data: {
           keyId,
           tenantId,
@@ -138,13 +142,13 @@ async function logApiKeyUsage(
           timestamp: new Date(),
         },
       })
-      .catch(() => {
-        // Model may not exist yet, log to logger instead
-        logger.info(
-          { keyId, tenantId, action, resource, success, errorMessage },
-          'API key audit log'
-        );
-      });
+    ).catch(() => {
+      // Model may not exist yet, log to logger instead
+      logger.info(
+        { keyId, tenantId, action, resource, success, errorMessage },
+        'API key audit log'
+      );
+    });
   } catch (error) {
     // Don't fail the request if audit logging fails
     logger.error({ error, keyId, tenantId }, 'Failed to log API key usage');
@@ -187,10 +191,17 @@ export async function validateApiKey(
 
   const hash = createHash('sha256').update(rawKey).digest('hex');
 
-  const apiKey = await prisma.apiKey.findUnique({
-    where: { keyHash: hash },
-    include: { tenant: true },
-  });
+  // Auth resolution legitimately crosses tenants: the key hash identifies WHICH
+  // tenant the caller is, so the lookup itself cannot be tenant-scoped. The
+  // RLS-enforced app role requires an explicit bypass for this one read, exactly
+  // like the worker's cross-tenant job load. The handler the key eventually
+  // authorizes still runs strictly inside runWithTenantAsync(validation.tenantId).
+  const apiKey = await runWithTenantBypass('auth:api-key-validation', () =>
+    prisma.apiKey.findUnique({
+      where: { keyHash: hash },
+      include: { tenant: true },
+    })
+  );
 
   if (!apiKey) {
     logger.warn({ hash: hash.substring(0, 8) }, 'API key not found');
@@ -244,12 +255,14 @@ export async function validateApiKey(
     currentUsage = 1;
     remaining = apiKey.rateLimitPerDay - 1;
 
-    prisma.apiKey
-      .update({
+    // Auth-infrastructure write keyed by the API key's own tenant: runs under
+    // the same explicit bypass as the key lookup above.
+    runWithTenantBypass('auth:api-key-usage-reset', () =>
+      prisma.apiKey.update({
         where: { id: apiKey.id },
         data: { usageCount: 1, lastResetAt: now, lastUsedAt: now },
       })
-      .catch((err) => logger.error({ err }, 'Failed to reset API key usage'));
+    ).catch((err) => logger.error({ err }, 'Failed to reset API key usage'));
   } else {
     // Same day - check limit
     if (currentUsage >= apiKey.rateLimitPerDay) {
@@ -276,16 +289,16 @@ export async function validateApiKey(
       } as ApiKeyErrorResult;
     }
 
-    // Increment usage
+    // Increment usage (auth-infrastructure write, same bypass scope as above)
     currentUsage += 1;
     remaining = apiKey.rateLimitPerDay - currentUsage;
 
-    prisma.apiKey
-      .update({
+    runWithTenantBypass('auth:api-key-usage-increment', () =>
+      prisma.apiKey.update({
         where: { id: apiKey.id },
         data: { usageCount: { increment: 1 }, lastUsedAt: now },
       })
-      .catch((err) => logger.error({ err }, 'Failed to update API key usage'));
+    ).catch((err) => logger.error({ err }, 'Failed to update API key usage'));
   }
 
   // Check scope if required
