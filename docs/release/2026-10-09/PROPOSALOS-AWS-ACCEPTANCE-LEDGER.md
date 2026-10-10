@@ -1,7 +1,8 @@
 # ProposalOS AWS acceptance ledger
 
-**Evidence snapshot:** 2026-10-10 00:25 UTC
+**Evidence snapshot:** 2026-10-10 00:25 UTC — updated 2026-10-10 06:05 UTC (local joined journey; no AWS/GCP changes)
 **Latest completed CI source:** PR #6 report-only head d9e9eed8abfce5b432657536aee5f30921ab64aa; code/test head 627fe1db61643cb86d8f8cc7c2db22164095c47e
+**Execution branch:** `execution/glm53-core-journey-20261009` (local joined-journey qualification; not deployed anywhere)
 **Source verdict:** CLEAN_SOURCE_RC_PUBLISHED
 **Runtime acceptance:** BLOCKED
 **No AWS or GCP changes were made for this update.**
@@ -64,3 +65,15 @@ The CI-only PgBouncer correction is qualified by runs 38006971578 and 3800827029
 4. Accept required CI on the exact reviewed SHA and approve a production release separately.
 5. Verify runtime digest, source SHA, data/storage/tenant behavior, schedule authority, and rollback before treating AWS as accepted.
 6. Keep GCP recovery available until the agreed rollback window closes; do not retire it as part of this source task.
+
+---
+
+## Append — local runtime qualification relevant to AWS acceptance (2026-10-10, execution branch, no cloud mutations)
+
+1. **Joined product journey verified locally** (`CONTROLLED_JOINED_JOURNEY_VERIFIED`): real server + real worker + RLS-enforced `app_user` database role + real SSRF-validated collection + real proposal delivery (secure view + PDF). This closes the largest unknown in "Worker/scheduler authority" and "DB parity" pre-work: the application actually completes audit-to-proposal under the tenant/RLS model on a migrated database.
+
+2. **Two RLS-transition defects with direct production impact were found and fixed** on the execution branch:
+   - `pe_live_*` API-key auth fails under the RLS-enforced role (auth resolution now runs under explicit `runWithTenantBypass`). Any AWS deployment that moves the app connection to the RLS-enforced role would have broken all API-key traffic.
+   - Public proposal token delivery was structurally impossible (fingerprint/binding verifier hashed a different finding set than the compiler). This would have blocked every customer-facing proposal link in production.
+
+3. **Implication for the promotion path:** before any AWS image built from this branch family is promoted, re-run required CI on the exact SHA (the full-tree dependency policy remains red and still blocks acceptance), then exercise the same runtime checks against the AWS environment: authenticated private S3 delivery, browser egress isolation, worker/scheduler ownership, and Bedrock quality (still BLOCKED pending authorization). No AWS or GCP change, deployment, or credential use occurred in this work; production still serves the October 6 images without clean-SHA provenance.

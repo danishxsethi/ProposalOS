@@ -1,8 +1,8 @@
 # ProposalOS first-revenue plan
 
 **Status:** operator-assisted pilot hypothesis; not ready for sale.
-**Evidence snapshot:** 2026-10-10 00:25 UTC
-**Source snapshot:** PR #6 code/test head 627fe1db61643cb86d8f8cc7c2db22164095c47e.
+**Evidence snapshot:** 2026-10-10 00:25 UTC — updated 2026-10-10 06:05 UTC (joined journey qualified)
+**Source snapshot:** PR #6 head 4284e9c + execution branch `execution/glm53-core-journey-20261009` (see branch log).
 
 ## Initial customer and delivery path
 
@@ -43,21 +43,22 @@ Counts below are current as of this report. Track prospects by an internal alias
 ## Current readiness
 
 - Validated segment or customer demand: **none**
-- Disposable PostgreSQL migration/RLS/queue qualification: **passed on CI run 38008270296**; no joined audit-to-proposal journey is demonstrated
+- Disposable PostgreSQL migration/RLS/queue qualification: **passed on CI run 38008270296**
+- Joined audit-to-proposal journey: **VERIFIED 2026-10-10 as a controlled fixture journey** (`CONTROLLED_JOINED_JOURNEY_VERIFIED`): intake → durable worker → 23-module collection → 48 evidence-backed findings → trusted diagnosis → READY proposal (QA 86/100) → authenticated review → secure token view → 8-page PDF. Model responses were deterministic fixtures (labeled; no real inference). Latency ~62 s; tracked provider cost 17 cents (fixture accounting). Eight real product defects found and fixed en route (see the execution report append).
 - Complete real audits and accepted proposals: **0**
-- Demonstration deliverable with independently scored QA: **none**
+- Demonstration deliverable with independently scored QA: **fixture-quality demonstration exists** (the journey PDF); an independently scored real-evidence deliverable does not
 - Approved warm/design-partner cohort or outreach: **none**
 - Funnel: **0** through every stage; the activation sequence is not started
 - Agreement, invoice, and payment path: **not qualified**
-- Fulfillment effort, latency, and cost: **not measured**
+- Fulfillment effort, latency, and cost: **fixture-journey measured** (~62 s, 17 cents tracked, single operator review needed); real-audit economics still unmeasured
 
-No outreach, customer contact, charge, or commitment was made. The public sample report is synthetic and cannot serve as proof of delivery.
+No outreach, customer contact, charge, or commitment was made. The public sample report is synthetic and cannot serve as proof of delivery; the fixture-journey deliverable is a controlled demonstration, not customer evidence.
 
 ## Minimum path to the first paid pilot
 
-1. Build and pass the joined fixture-journey test on the qualified disposable database path; resolve the source dependency-policy blocker.
-2. Qualify one authorized US HVAC website with a bounded network policy and explicit provider/model cost ceiling.
-3. Produce and human-score one evidence-backed report and proposal; record actual cost and fulfillment time.
+1. ~~Build and pass the joined fixture-journey test~~ **DONE 2026-10-10** (`CONTROLLED_JOINED_JOURNEY_VERIFIED`). Resolve the source dependency-policy blocker before release acceptance.
+2. Replace fixture inference with authorized real Bedrock inference on the same fixture (owner approves identity, model, region, and a small fixed cost ceiling); keep the same QA thresholds and record model/latency/cost.
+3. Qualify one authorized US HVAC website with a bounded network policy and explicit provider/model cost ceiling; complete a real audit and human-review every finding and the proposal.
 4. Have the owner approve a warm introduction only after the demo, scope, agreement, privacy/retention terms, and fulfillment capacity are ready.
 5. Invoice manually only after seller, tax, refund, payment, and delivery details are verified and the customer accepts the terms.
 

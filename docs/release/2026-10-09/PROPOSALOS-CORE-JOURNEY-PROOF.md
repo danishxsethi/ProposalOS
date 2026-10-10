@@ -1,48 +1,75 @@
 # ProposalOS core-journey proof
 
-**Evidence snapshot:** 2026-10-10 00:25 UTC
-**Code/test head:** 627fe1db61643cb86d8f8cc7c2db22164095c47e on codex/clean-release-candidate-20261009
-**Latest completed CI head:** d9e9eed8abfce5b432657536aee5f30921ab64aa (report-only changes)
-**Journey verdict:** CORE_JOURNEY_BLOCKED
-**Completed end-to-end journeys:** 0
+**Evidence snapshot:** 2026-10-10 06:05 UTC (this update)
+**Code/test head:** branch `execution/glm53-core-journey-20261009` from PR #6 head 4284e9ca94eb8fe524d80e15cebef25fc4902859, plus the controlled-journey commits on that branch (see the branch log)
+**Journey verdict: CONTROLLED_JOINED_JOURNEY_VERIFIED** (fixture journey — deterministic model fixtures; explicitly NOT real inference)
+**Completed joined journeys:** 1 full fixture journey (plus iterative qualification runs)
 
-## Journey status
+## What was proven on 2026-10-10
 
-| Step                                     | Verified evidence                                                                                                                                                                 | Result                                    |
-| ---------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------- |
-| Business intake and URL validation       | The authenticated POST /api/audit route validates input, persists a queued audit, and dispatches durable work. Its integration test mocks auth, Prisma, extraction, and dispatch. | Route behavior covered; no joined journey |
-| Data collection and evidence persistence | No worker was run on an authorized target or controlled HTTP fixture. Public Claraud scan intake remains disabled.                                                                | NOT RUN                                   |
-| Diagnosis                                | The diagnosis route requires a COMPLETE, TRUSTED audit, evidence snapshots, and complete module status. Existing tests mock persistence and graph calls.                          | Unit/route coverage only                  |
-| Proposal and QA                          | Proposal auto-ready tests exercise route status logic, but mock Prisma and the proposal compiler/QA boundary. No proposal was generated from an audit run.                        | Fixture unit evidence only                |
-| Authenticated preview                    | No preview was rendered from a persisted journey in this session.                                                                                                                 | NOT RUN                                   |
-| Public secure view or PDF                | No share link was created or resolved, and no PDF was generated or inspected.                                                                                                     | NOT RUN                                   |
-| Recorded next action                     | No customer follow-up, email, payment, or external action was performed.                                                                                                          | NOT RUN                                   |
+One coherent run through the real product, over real HTTP, against disposable local infrastructure:
 
-On report-only PR head d9e9eed8abfce5b432657536aee5f30921ab64aa, Test Suite run 38008270296 passed clean-database migration replay and the deterministic suite: 278 test files and 2,847 tests passed. The underlying code/test changes are from 627fe1db61643cb86d8f8cc7c2db22164095c47e. This includes the disposable PostgreSQL/PgBouncer RLS and queue qualification that previously failed to connect. The correction uses an IPv4 PgBouncer endpoint and an authenticated app_user SQL preflight. It proves the isolated CI database path, not production parity or the full customer journey.
+| Step                     | Product surface                                                                                                                                                                                                                                                                                                                                                | Result                                                                                                                  |
+| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| 1. Authenticated intake  | Real `POST /api/audit` through the full middleware stack (rate limit → idempotency → auth → role) with a tenant-scoped `pe_live_*` API key                                                                                                                                                                                                                     | PASS — audit created `QUEUED` (intake latency 694 ms)                                                                   |
+| 2. Durable enqueue       | Real `dispatchAuditExecution` → Postgres-backed `audit_jobs` row                                                                                                                                                                                                                                                                                               | PASS — job present, claimed by the real worker push-dispatch path (`WORKER_DISPATCH_URL` self-call)                     |
+| 3. Worker claim          | `processAuditJob` claimed the job (lease, attempts=1) inside the real Next.js server                                                                                                                                                                                                                                                                           | PASS — `RUNNING`                                                                                                        |
+| 4. Real collection       | Real collectors against a controlled loopback fixture website: SSRF-validated `safeFetch` crawl, real local Lighthouse (Chromium), real axe-core accessibility, real Chromium screenshots stored through the real S3 SDK path (local S3-compatible fixture), deterministic fixture responses for external data providers (SerpApi/Yelp/BBB/YellowPages/Google) | PASS — 23 modules completed, 48 findings, 22 evidence groups (20 COMPLETE, 2 honest PARTIAL), tracked API cost 17 cents |
+| 5. Evidence persistence  | Real `EvidenceSnapshot` rows per module, incl. a real homepage screenshot object in object storage                                                                                                                                                                                                                                                             | PASS                                                                                                                    |
+| 6. Diagnosis             | Real LangGraph diagnosis graph; clustering/narratives served by the deterministic fixture LLM provider (labeled `provider: 'fixture'`; NOT real inference); claim/citation contract enforced and passing                                                                                                                                                       | PASS — trusted, validated clusters                                                                                      |
+| 7. Proposal + QA         | Real proposal graph, tier mapping, pricing, grounding; deterministic rule-based ProposalQA                                                                                                                                                                                                                                                                     | PASS — proposal `READY` v1, QA score 86/100, publication approval recorded                                              |
+| 8. Authenticated review  | Real `GET /api/proposals` with the API key                                                                                                                                                                                                                                                                                                                     | PASS — 200, operator sees the proposal                                                                                  |
+| 9. Public secure view    | Real `GET /api/proposal/token/[token]` (token resolution, provenance, publication-fingerprint, evidence-binding verification)                                                                                                                                                                                                                                  | PASS — 200 with the customer-facing payload                                                                             |
+| 10. Proposal page render | Real `/proposal/[token]` server-rendered page                                                                                                                                                                                                                                                                                                                  | PASS — 200, 137,394 chars of real proposal content                                                                      |
+| 11. PDF deliverable      | Real `GET /api/proposal/token/[token]/pdf` → real Chromium print of the real proposal page                                                                                                                                                                                                                                                                     | PASS — 200, 185,314 bytes, 8 pages, valid `%PDF`                                                                        |
+| 12. Final state          | `audit_jobs` SUCCEEDED (attempts 1, no error)                                                                                                                                                                                                                                                                                                                  | PASS                                                                                                                    |
 
-## Safety boundary and first blocker
+End-to-end wall clock: ~62 s for the journey itself (~70 s including harness startup). Full evidence record: `tests/journey/evidence/journey-evidence-2026-10-10T05-33-30.json` (regenerated per run; the harness is `node tests/journey/run-journey.mjs`, documented in `tests/journey/README.md`).
 
-The existing Playwright file tests/e2e/critical-flows.test.ts is not a safe fixture journey to run as written: it targets example.com and ten external domains and includes a test-email flow. It was not run. Do not use it against a live site or email service. The public Claraud scan intake returns 503 by design while browser egress is unqualified.
+The fixture journey's proposal is a genuine product artifact: an 8-page branded PDF ("Summit Ridge Heating & Air is losing an estimated $13,586/mo to local search gaps", competitor review-gap math computed from the collected evidence, tier pricing, prepared-for/audit-date footer).
 
-The smallest product blocker is the absence of a controlled end-to-end harness that connects the actual intake, durable worker, evidence persistence, trusted diagnosis, proposal QA, authenticated preview, and safe delivery against disposable tenant data. Current route tests cover these boundaries separately with mocked persistence and providers; they cannot demonstrate the whole chain. No live Bedrock call was made because there is no approved inference budget, and arbitrary browser egress has not been qualified.
+## What is fixture and what is real (honesty ledger)
 
-## Counts and measurements
+| Boundary                                                                                                                                       | Mode                                                                                                                                                                                                                                  |
+| ---------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Next.js server, routes, middleware, auth, worker, queue, database, RLS/tenant context, LangGraph graphs, proposal QA rules, PDF/page rendering | **REAL** (disposable local PostgreSQL with the RLS-enforced `app_user` role; real Chromium)                                                                                                                                           |
+| Audit target website                                                                                                                           | **Fixture** — loopback site with deliberate detectable conditions and positive controls (`tests/journey/fixture-site.mjs`), reached through the real SSRF-validated collectors via a test-scoped, exact-host, loopback-only allowlist |
+| External data providers (SerpApi, Yelp, BBB, YellowPages, Google)                                                                              | **Fixture** — deterministic responses from a local server; only allowlisted provider hosts are redirected (no request leaves the VM)                                                                                                  |
+| LLM (Bedrock)                                                                                                                                  | **Fixture** — deterministic, labeled `provider: 'fixture'` responses (`lib/llm/providers/fixture.ts`, refused in production, fail-closed on unknown nodes). **No real inference happened in this journey.**                           |
+| Object storage                                                                                                                                 | **Real S3 SDK behavior** against a local S3-compatible fixture endpoint (`AWS_ENDPOINT_URL`), no production objects touched                                                                                                           |
+| Email/outreach/billing                                                                                                                         | **Disabled** (RESEND unset; outreach flags off; no Stripe flows)                                                                                                                                                                      |
 
-- Real non-mocked business audit runs: **0**
-- Complete fixture route journeys: **0**
-- Real provider/Bedrock calls: **0**
-- Genuine proposals produced from an audit run: **0**
-- Independently scored proposal QA results: **0**
-- Candidate journey latency and provider cost: **not measured**
-- Customer-ready PDF or secure viewer artifact: **none**
+## Real product defects the joined journey found and fixed
 
-The public sample report is synthetic and explicitly does not represent an audited business. Historical R4/R7 records are not this candidate’s evidence: each reported one degraded audit, zero trusted audits, and zero proposals.
+The journey was not a green-field exercise — it surfaced and fixed eight real, shipped defects that isolated tests could not catch (all fixed on this branch with regression tests where applicable):
 
-## Minimum next proof
+1. **API-key auth broken under the RLS-enforced role** (`lib/auth/apiKeys.ts`): key validation/usage writes ran without tenant context and failed with `MissingTenantError`; auth resolution now runs under an explicit `runWithTenantBypass` (regression test: `lib/auth/__tests__/apiKeyValidationTenantContext.test.ts`).
+2. **http-only business sites crashed the security module** (`lib/modules/security.ts`): an unconditional HTTPS header fetch threw; now degrades to honest "HTTPS not enabled" findings.
+3. **Screenshot capture ignored `CHROME_EXECUTABLE_PATH` in dev** (`lib/evidence/screenshotCapture.ts`) — no screenshots could be captured on servers without bundled Chrome.
+4. **Diagnosis degrade path wrote a nonexistent `Audit.error` column** (`lib/graph/diagnosis-graph.ts`) — PrismaClientValidationError masked the degradation; now recorded in `modulesFailed` per the schema's convention.
+5. **Public proposal delivery was permanently impossible** (`lib/proposal/publicAccess.ts` + `compiler.ts` + `inputEnvelope.ts`): the publication-fingerprint verifier hashed every finding (impact-ordered) while the compiler intentionally hashes the evidence-backed subset (id-sorted) — the check could never pass. The verifier now recomputes over the identical eligible subset via a shared `isEvidenceBackedFinding` helper; evidence-binding checks also now target the same subset (findings from PARTIAL modules are outside proposal input by design).
+6. **Fixture-site evidence pointers vs. anti-fabrication guard** (`lib/modules/types.ts`): loopback pointers are rejected as placeholders in production (correct); a strictly test-scoped exemption (exact allowlisted host, non-production only) lets genuinely-fetched fixture evidence pass. Regression tests assert production still rejects them.
+7. **Deterministic fixture LLM provider** (`lib/llm/providers/fixture.ts`, `lib/llm/mode.ts`, registry/provider wiring): the controlled-journey test adapter the proof plan called for — labeled, fail-closed, production-refused.
+8. **SSRF test fixture allowlist** (`lib/security/urlValidator.ts`): exact-host, loopback-only, production-refused; redirect re-validation and all other policy untouched (10 regression tests).
 
-1. Add a controlled fixture test that invokes the real intake/API handlers and durable worker against the CI disposable database while stubbing outbound collection/model calls and disabling email, billing, outreach, and external jobs.
-2. Carry the same persisted fixture through evidence persistence, diagnosis, proposal QA, authenticated preview, and a locally generated PDF or validated secure web response.
-3. Record every stub explicitly; this would prove a fixture journey only. Migration replay, RLS, and queue tests now pass separately, but they do not join this full product path.
-4. Separately authorize a property, network boundary, Bedrock model, and inference-cost ceiling before the first real audit. Review and score that proposal before calling it accepted.
+## Counts and measurements (fixture journey)
 
-Until a joined fixture journey passes, the core journey remains blocked. A real audit or customer-ready proposal has not been demonstrated.
+- Real non-mocked **fixture** audit-to-proposal journeys completed end-to-end: **1** (verdict `CONTROLLED_JOINED_JOURNEY_VERIFIED`)
+- Modules completed in the verified run: **23 of 27 canonical** (2 optional UNAVAILABLE honestly recorded — backlinks provider, vision synthesizing no findings; 2 PARTIAL: gbpDeep, socialDeep)
+- Findings persisted with evidence: **48** (45 evidence-backed entered proposal input; the delivery verifier now agrees with the compiler's subset semantics)
+- Evidence snapshot groups: **22**; real screenshot object stored through the S3 path
+- Proposal: `READY` v1, QA **86/100**, publication-approved, secure token view + 8-page PDF (185 KB) delivered
+- Journey wall clock: **~62 s** (audit ~49 s + proposal ~3 s + delivery ~10 s)
+- Real provider/Bedrock calls: **0** (fixture LLM provider, labeled)
+- Real authorized business audits: **0** (next milestone)
+
+## Journey harness (committed, repeatable)
+
+`tests/journey/run-journey.mjs` + fixture site/providers/S3 + `tests/journey/README.md`. Boots disposable DB → migrates → seeds tenant/API key → starts fixtures → boots the real Next server (`NODE_OPTIONS=--require` preload installs the provider interception in every process) → drives the whole journey over HTTP → writes a structured evidence record and artifacts → tears everything down. Evidence artifacts regenerate per run under `tests/journey/evidence/` (gitignored; curated records live in this document).
+
+## Minimum next proof (updated)
+
+1. ~~Joined fixture journey~~ **DONE — CONTROLLED_JOINED_JOURNEY_VERIFIED (2026-10-10).**
+2. Replace the fixture LLM with authorized real Bedrock inference on the same evidence-rich fixture; require the same QA thresholds; capture model, latency, and cost. Authorization request: nonproduction AWS identity, least-privilege Bedrock invoke on an approved Nova model in an approved region, small fixed cost ceiling.
+3. First authorized real-business audit (owner-approved domain, bounded crawler egress, cost ceiling), then human review of every finding and proposal.
+4. Resolve the full-tree dependency policy (GHSA-vfj7-8cjw-p6xm, GHSA-c475-qrg2-pj4r) so required CI can pass on a release candidate.
