@@ -1,7 +1,8 @@
 # ProposalOS core-journey proof
 
-**Evidence snapshot:** 2026-10-10 00:05 UTC
+**Evidence snapshot:** 2026-10-10 00:13 UTC
 **Code/test head:** 627fe1db61643cb86d8f8cc7c2db22164095c47e on codex/clean-release-candidate-20261009
+**Latest completed CI head:** 8d1cb3b2ca649b3089c700a5c210ccf21c45161b (report-only changes)
 **Journey verdict:** CORE_JOURNEY_BLOCKED
 **Completed end-to-end journeys:** 0
 
@@ -17,7 +18,7 @@
 | Public secure view or PDF                | No share link was created or resolved, and no PDF was generated or inspected.                                                                                                     | NOT RUN                                   |
 | Recorded next action                     | No customer follow-up, email, payment, or external action was performed.                                                                                                          | NOT RUN                                   |
 
-On exact head 627fe1db61643cb86d8f8cc7c2db22164095c47e, Test Suite run 38006971578 passed clean-database migration replay and the deterministic suite: 278 test files and 2,847 tests passed. This includes the disposable PostgreSQL/PgBouncer RLS and queue qualification that previously failed to connect. The correction uses an IPv4 PgBouncer endpoint and an authenticated app_user SQL preflight. It proves the isolated CI database path, not production parity or the full customer journey.
+On report-only PR head 8d1cb3b2ca649b3089c700a5c210ccf21c45161b, Test Suite run 38007639963 passed clean-database migration replay and the deterministic suite: 278 test files and 2,847 tests passed. The underlying code/test changes are from 627fe1db61643cb86d8f8cc7c2db22164095c47e. This includes the disposable PostgreSQL/PgBouncer RLS and queue qualification that previously failed to connect. The correction uses an IPv4 PgBouncer endpoint and an authenticated app_user SQL preflight. It proves the isolated CI database path, not production parity or the full customer journey.
 
 ## Safety boundary and first blocker
 
