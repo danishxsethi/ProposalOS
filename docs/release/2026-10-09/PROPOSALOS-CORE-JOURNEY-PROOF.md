@@ -109,6 +109,11 @@ A **customer-facing financial-claim gate** (`lib/proposal/financialClaims.ts`) i
 - Existing controls re-verified this wave: SSRF validation with DNS pinning, redirect re-validation, blocked ports, page count/depth caps (8 pages / depth 3), per-page and global timeouts, bounded phase concurrency.
 - **Blocker (M3_AUTHORIZATION_BLOCKED):** no domain has been owner-approved for a real audit. No public scanning was performed.
 
-### M1 independent reproducibility
+### M1 independent reproducibility — VERIFIED IN CI
 
-A dedicated CI job — **"Controlled fixture journey (M1, no real inference)"** — now boots the canonical disposable stack (Postgres + PgBouncer containers, local fixture providers/storage, no credentials, Chrome from the runner image) and runs the full joined journey on every push/PR, uploading the evidence artifact. The job name and evidence explicitly distinguish fixture execution from real inference. Local original artifacts remain in `tests/journey/evidence/` (regenerated per run, gitignored).
+The dedicated CI job — **"Controlled fixture journey (M1, no real inference)"** — passed on run **38075368512** (job 114281109528, 1m48s wall): `CONTROLLED_JOINED_JOURNEY_VERIFIED` with a 44-second journey against the canonical disposable stack, no credentials, evidence artifact uploaded. Three harness/CI defects found on the way were fixed and re-verified: the runner now derives DB host/port from `JOURNEY_DB_ADMIN_URL` (was hardcoded to the VM's 5445), closes its fixture servers and hard-exits after the verdict (open server handles kept the CI job alive), and has a 25-minute job ceiling. The same run's deterministic test job passed **286 files / 2,910 tests** (up from 278/2,847 at PR #6 — +38 new qualification tests this wave pair). Local original artifacts remain in `tests/journey/evidence/` (regenerated per run, gitignored).
+
+### Journey stability fixes (Wave 2, found via CI + rerun)
+
+- **Worker retry semantics** (`lib/queue/auditJobWorker.ts`): a retryable failure no longer flips the Audit row to FAILED mid-retry — audit status is product state and only goes terminal when retries are exhausted. Otherwise a transient attempt-1 error surfaced as a false terminal failure. Pinned by updated batch-queue-worker tests (retry preserves audit; DEAD marks it terminal).
+- **Deterministic fixture executive summary** (`lib/llm/providers/fixture.ts`): now quotes the cited finding titles verbatim so the customer-claim overlap validator passes regardless of which findings rank in the top five (was flaky by finding mix).
